@@ -2,6 +2,7 @@ import pytest
 from app import app, db, Student, TapEvent, Transaction
 from app.payroll import calculate_payroll
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 # Tolerance for floating point comparisons
 FLOAT_TOLERANCE = 0.0001
@@ -112,6 +113,87 @@ def test_calculate_payroll(client):
 
     post_manual_summary = calculate_payroll(students, last_payroll_time)
     assert post_manual_summary == {}
+
+
+def test_calculate_payroll_ignores_other_class_manual_payment_anchor(client):
+    from app.models import Admin, TeacherBlock, Student, ClassEconomy
+
+    teacher = Admin(username="prof_multiclass", totp_secret="s")
+    db.session.add(teacher)
+    db.session.commit()
+
+    class_a = ClassEconomy(
+        join_code="PAYA01",
+        teacher_id=teacher.id,
+        created_by_admin_id=teacher.id,
+        status="active",
+        is_active=True,
+    )
+    class_b = ClassEconomy(
+        join_code="PAYB01",
+        teacher_id=teacher.id,
+        created_by_admin_id=teacher.id,
+        status="active",
+        is_active=True,
+    )
+    db.session.add_all([class_a, class_b])
+    db.session.flush()
+
+    student = Student(
+        first_name="Multi",
+        last_initial="S",
+        block="A,B",
+        salt=b'salt',
+        has_completed_setup=True,
+    )
+    db.session.add(student)
+    db.session.flush()
+
+    db.session.add_all([
+        TeacherBlock(
+            teacher_id=teacher.id,
+            student_id=student.id,
+            block="A",
+            join_code="PAYA01",
+            class_id=class_a.class_id,
+            is_claimed=True,
+            first_name="Multi",
+            last_initial="S",
+            last_name_hash_by_part=None,
+            first_half_hash='hash-a',
+            salt=b's',
+            dob_sum_hash=None,
+        ),
+        TeacherBlock(
+            teacher_id=teacher.id,
+            student_id=student.id,
+            block="B",
+            join_code="PAYB01",
+            class_id=class_b.class_id,
+            is_claimed=True,
+            first_name="Multi",
+            last_initial="S",
+            last_name_hash_by_part=None,
+            first_half_hash='hash-b',
+            salt=b's',
+            dob_sum_hash=None,
+        ),
+    ])
+
+    now = datetime.now(timezone.utc)
+    db.session.add_all([
+        TapEvent(student_id=student.id, period="A", status="active", timestamp=now - timedelta(minutes=50), join_code="PAYA01"),
+        TapEvent(student_id=student.id, period="A", status="inactive", timestamp=now - timedelta(minutes=40), join_code="PAYA01"),
+        TapEvent(student_id=student.id, period="B", status="active", timestamp=now - timedelta(minutes=30), join_code="PAYB01"),
+        TapEvent(student_id=student.id, period="B", status="inactive", timestamp=now - timedelta(minutes=15), join_code="PAYB01"),
+        Transaction(student_id=student.id, amount=3, type="manual_payment", timestamp=now - timedelta(minutes=5), join_code="PAYA01"),
+    ])
+    db.session.commit()
+
+    summary = calculate_payroll([student], now - timedelta(days=1), teacher_id=teacher.id)
+
+    expected_class_b_only = Decimal("3.75")
+    assert summary == {student.id: expected_class_b_only}
 
 
 def test_get_pay_rate_for_block_default(test_teacher):

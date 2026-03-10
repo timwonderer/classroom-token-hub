@@ -80,7 +80,7 @@
 <ul class="nav nav-tabs mb-4" id="featureSettingsTabs" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="global-tab" data-bs-toggle="tab" data-bs-target="#global" type="button" role="tab">
-            <span class="material-symbols-outlined me-1" style="vertical-align: middle;">public</span>Global Settings
+            <span class="material-symbols-outlined me-1" style="vertical-align: middle;">tune</span>Bulk Apply
         </button>
     </li>
     <li class="nav-item" role="presentation">
@@ -96,13 +96,13 @@
 </ul>
 
 <div class="tab-content" id="featureSettingsTabContent">
-    <!-- GLOBAL SETTINGS TAB -->
+    <!-- BULK APPLY TAB -->
     <div class="tab-pane fade show active" id="global" role="tabpanel">
         <div class="card shadow mb-4">
             <div class="card-header bg-primary text-white">
                 <h5 class="mb-0">
                     <span class="material-symbols-outlined me-2" style="vertical-align: middle;">settings</span>
-                    Global Feature Toggles
+                    Bulk Feature Toggles
                 </h5>
             </div>
             <div class="card-body">
@@ -157,11 +157,11 @@
 
                     <div class="mt-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <div class="alert alert-warning" style="display:block;border-left-width:4px;">
-                            When there is a conflict between Global and Per Period Settings, <strong>Per Period Setting will override Global Settings.</strong> <br><span style="font-size:0.8rem;">Use Per Period Setting to fine-tune specific class features and use the Global Setting to establish your baseline configuration.</span>
+                            Bulk Apply writes the selected values to every current period. <strong>Per-Period Settings can then override individual classes.</strong> <br><span style="font-size:0.8rem;">There is no separate global fallback row anymore; each class stores its own feature settings.</span>
                         </div>
                         <button type="submit" class="btn btn-primary">
                             <span class="material-symbols-outlined me-1" style="vertical-align: middle;">save</span>
-                            Save Global Settings
+                            Apply to All Periods
                         </button>
                     </div>
                 </form>

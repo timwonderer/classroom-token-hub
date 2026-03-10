@@ -1,9 +1,8 @@
-"""Tests verifying settings helpers refuse to fall back to legacy join_code=None rows.
+"""Tests verifying settings helpers refuse to fall back to missing scoped rows.
 
 After the settings fallback hardening, all settings helpers must:
 - Return None (banking, rent) or system defaults (features) when no
   join-code-scoped settings exist for the student's class context.
-- NOT fall back to legacy teacher-global rows with join_code=None.
 """
 from datetime import datetime, timezone
 
@@ -30,7 +29,7 @@ from app.routes.student import (
 
 @pytest.fixture
 def teacher_with_legacy_and_scoped_settings(client):
-    """Create a teacher with both legacy (join_code=None) and scoped settings rows."""
+    """Create a teacher with no scoped settings rows for the active class."""
     teacher = Admin(username="fallback_test_teacher", totp_secret="secret")
     db.session.add(teacher)
     db.session.flush()
@@ -47,7 +46,8 @@ def teacher_with_legacy_and_scoped_settings(client):
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
 
     join_code = "FALL01"
-    db.session.add(ClassEconomy(join_code=join_code, status="active", created_by_admin_id=teacher.id))
+    economy = ClassEconomy(join_code=join_code, teacher_id=teacher.id, status="active", created_by_admin_id=teacher.id)
+    db.session.add(economy)
     db.session.add(ClassMembership(join_code=join_code, admin_id=teacher.id, role="admin", status="active"))
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
@@ -63,23 +63,12 @@ def teacher_with_legacy_and_scoped_settings(client):
         first_half_hash="hash",
     ))
 
-    # --- Legacy (teacher-global) settings rows (join_code=None) ---
+    # Legacy teacher-global rows are still allowed on banking/rent in the current schema.
     db.session.add(BankingSettings(
         teacher_id=teacher.id,
         join_code=None,
         overdraft_protection_enabled=True,
         savings_apy=5.0,
-    ))
-    db.session.add(FeatureSettings(
-        teacher_id=teacher.id,
-        join_code=None,
-        block=None,
-        banking_enabled=True,
-        store_enabled=True,
-        insurance_enabled=True,
-        rent_enabled=True,
-        hall_pass_enabled=True,
-        payroll_enabled=True,
     ))
     db.session.add(RentSettings(
         teacher_id=teacher.id,
@@ -94,6 +83,7 @@ def teacher_with_legacy_and_scoped_settings(client):
         "teacher": teacher,
         "student": student,
         "join_code": join_code,
+        "class_id": economy.class_id,
     }
 
 
@@ -166,8 +156,8 @@ def test_rent_settings_returns_scoped_row(client, teacher_with_legacy_and_scoped
 
 # ---- Feature Settings ----
 
-def test_feature_settings_ignores_legacy_global_row(client, teacher_with_legacy_and_scoped_settings):
-    """When no join-code-scoped FeatureSettings exist, helper returns defaults — not the legacy row."""
+def test_feature_settings_returns_defaults_without_scoped_row(client, teacher_with_legacy_and_scoped_settings):
+    """When no join-code-scoped FeatureSettings exist, helper returns defaults."""
     data = teacher_with_legacy_and_scoped_settings
 
     with client.application.test_request_context():
@@ -188,7 +178,8 @@ def test_feature_settings_returns_scoped_row(client, teacher_with_legacy_and_sco
     db.session.add(FeatureSettings(
         teacher_id=data["teacher"].id,
         join_code=data["join_code"],
-        block=None,
+        class_id=data["class_id"],
+        block="A",
         banking_enabled=False,
         store_enabled=False,
         insurance_enabled=False,

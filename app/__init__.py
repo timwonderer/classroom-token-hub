@@ -623,6 +623,29 @@ def create_app():
             return {'feature_settings': FeatureSettings.get_defaults()}
 
     @app.context_processor
+    def inject_admin_feature_settings():
+        """Inject class-scoped admin feature settings into all templates."""
+        try:
+            from flask import session
+            from app.models import FeatureSettings
+            from app.routes.admin import get_admin_feature_settings_for_join_code
+
+            admin_id = session.get('admin_id')
+            join_code = session.get('current_join_code')
+            if not admin_id:
+                return {'admin_feature_settings': FeatureSettings.get_defaults()}
+            return {
+                'admin_feature_settings': get_admin_feature_settings_for_join_code(
+                    admin_id,
+                    join_code=join_code,
+                )
+            }
+        except Exception as e:
+            app.logger.warning(f"Could not load admin feature settings, falling back to defaults: {e}")
+            from app.models import FeatureSettings
+            return {'admin_feature_settings': FeatureSettings.get_defaults()}
+
+    @app.context_processor
     def inject_class_context():
         """Inject current class context and available classes for student navigation."""
         try:

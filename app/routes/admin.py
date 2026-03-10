@@ -153,6 +153,16 @@ _table_names_cache_lock = threading.Lock()
 # Create blueprint
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
+ADMIN_FEATURE_PATH_PREFIXES = {
+    '/admin/hall-pass': 'hall_pass',
+    '/admin/payroll': 'payroll',
+    '/admin/store': 'store',
+    '/admin/banking': 'banking',
+    '/admin/rent-settings': 'rent',
+    '/admin/rent-waiver': 'rent',
+    '/admin/insurance': 'insurance',
+}
+
 
 @admin_bp.before_request
 def before_request():
@@ -164,6 +174,7 @@ def before_request():
     """
     if request.method == 'GET':
         g.read_only = True
+    return None
 
 
 # -------------------- HELPER FUNCTIONS --------------------
@@ -206,6 +217,147 @@ def parse_dob_input(dob_str):
 
     # If both formats fail, raise error
     raise ValueError("Invalid date format. Please use the date picker.")
+
+
+def _get_admin_feature_name_for_path(path: str) -> str | None:
+    for prefix, feature_name in ADMIN_FEATURE_PATH_PREFIXES.items():
+        if path == prefix or path.startswith(f"{prefix}/"):
+            return feature_name
+    return None
+
+
+def _get_current_admin_join_code(admin_id: int | None) -> str | None:
+    if not admin_id:
+        return None
+    join_code = (session.get('current_join_code') or '').strip()
+    if join_code and _admin_owns_join_code(admin_id, join_code):
+        return join_code
+    return None
+
+
+def get_admin_feature_settings_for_join_code(admin_id: int | None, join_code: str | None = None) -> dict:
+    if not admin_id:
+        return FeatureSettings.get_defaults()
+
+    resolved_join_code = (join_code or _get_current_admin_join_code(admin_id) or '').strip()
+    if not resolved_join_code:
+        return FeatureSettings.get_defaults()
+
+    block_row = (
+        TeacherBlock.query.with_entities(TeacherBlock.block)
+        .filter(
+            TeacherBlock.teacher_id == admin_id,
+            TeacherBlock.join_code == resolved_join_code,
+        )
+        .order_by(TeacherBlock.id.asc())
+        .first()
+    )
+    if not block_row or not block_row[0]:
+        return FeatureSettings.get_defaults()
+
+    settings_row = get_feature_settings_row(
+        admin_id,
+        block=block_row[0].strip().upper(),
+        join_code=resolved_join_code,
+        create=False,
+    )
+    return settings_row.to_dict() if settings_row else FeatureSettings.get_defaults()
+
+
+def is_admin_feature_enabled(feature_name: str, admin_id: int | None = None, join_code: str | None = None) -> bool:
+    settings = get_admin_feature_settings_for_join_code(
+        admin_id or session.get('admin_id'),
+        join_code=join_code,
+    )
+    return bool(settings.get(f'{feature_name}_enabled', True))
+
+
+def get_admin_feature_join_code_options(feature_name: str, admin_id: int | None = None) -> list[dict[str, str]]:
+    resolved_admin_id = admin_id or session.get('admin_id')
+    if not resolved_admin_id:
+        return []
+
+    teacher_blocks = (
+        TeacherBlock.query.with_entities(TeacherBlock.join_code, TeacherBlock.block, TeacherBlock.class_label)
+        .filter(
+            TeacherBlock.teacher_id == resolved_admin_id,
+            TeacherBlock.join_code.isnot(None),
+        )
+        .order_by(TeacherBlock.block.asc(), TeacherBlock.id.asc())
+        .all()
+    )
+
+    options: list[dict[str, str]] = []
+    seen_join_codes: set[str] = set()
+    for join_code, block, class_label in teacher_blocks:
+        if not join_code or join_code in seen_join_codes:
+            continue
+        seen_join_codes.add(join_code)
+        if not is_admin_feature_enabled(feature_name, admin_id=resolved_admin_id, join_code=join_code):
+            continue
+        normalized_block = (block or '').strip().upper()
+        label = class_label or (f"Period {normalized_block}" if normalized_block else join_code)
+        options.append({
+            'join_code': join_code,
+            'block': normalized_block,
+            'label': label,
+        })
+    return options
+
+
+def resolve_admin_feature_join_code(feature_name: str, admin_id: int | None = None, requested_join_code: str | None = None) -> str | None:
+    resolved_admin_id = admin_id or session.get('admin_id')
+    if not resolved_admin_id:
+        return None
+
+    options = get_admin_feature_join_code_options(feature_name, admin_id=resolved_admin_id)
+    enabled_join_codes = {option['join_code'] for option in options}
+    requested = (requested_join_code or '').strip()
+    if requested and requested in enabled_join_codes:
+        return requested
+
+    current_join_code = _get_current_admin_join_code(resolved_admin_id)
+    if current_join_code and current_join_code in enabled_join_codes:
+        return current_join_code
+
+    return options[0]['join_code'] if options else None
+
+
+def require_admin_feature_scope(
+    feature_name: str,
+    *,
+    admin_id: int | None = None,
+    requested_join_code: str | None = None,
+    requested_block: str | None = None,
+    allow_default: bool = True,
+) -> dict:
+    resolved_admin_id = admin_id or session.get('admin_id')
+    options = get_admin_feature_join_code_options(feature_name, admin_id=resolved_admin_id)
+    if not options:
+        abort(404)
+
+    options_by_join_code = {option['join_code']: option for option in options}
+    options_by_block = {option['block']: option for option in options if option.get('block')}
+
+    normalized_join_code = (requested_join_code or '').strip()
+    normalized_block = (requested_block or '').strip().upper()
+
+    if normalized_join_code:
+        option = options_by_join_code.get(normalized_join_code)
+        if not option:
+            abort(404)
+        return option
+
+    if normalized_block:
+        option = options_by_block.get(normalized_block)
+        if not option:
+            abort(404)
+        return option
+
+    if not allow_default:
+        abort(404)
+
+    return options[0]
 
 
 def _parse_dob_date(dob_str):
@@ -435,6 +587,49 @@ def _get_join_codes_by_block(admin_id, blocks):
     return join_codes
 
 
+def _build_payroll_preview_state(teacher_id, students, join_codes_by_block):
+    """Aggregate payroll preview data from class-scoped payroll anchors."""
+    students_by_join_code: dict[str, dict[int, Student]] = defaultdict(dict)
+    for student in students:
+        for raw_block in (student.block or "").split(","):
+            block = raw_block.strip()
+            if not block:
+                continue
+            join_code = join_codes_by_block.get(block)
+            if join_code:
+                students_by_join_code[join_code][student.id] = student
+
+    summary_by_join_code: dict[str, dict[int, Decimal]] = {}
+    anchor_by_join_code: dict[str, datetime | None] = {}
+    updated_at_by_join_code: dict[str, datetime] = {}
+    total_summary: dict[int, Decimal] = defaultdict(lambda: Decimal("0.00"))
+
+    for join_code, students_map in students_by_join_code.items():
+        class_students = list(students_map.values())
+        anchor = ensure_utc(get_last_payroll_time(join_code=join_code))
+        summary, updated_at = get_cached_payroll_with_meta(
+            class_students,
+            anchor,
+            teacher_id=teacher_id,
+            join_code=join_code,
+        )
+        anchor_by_join_code[join_code] = anchor
+        summary_by_join_code[join_code] = summary
+        if updated_at is not None:
+            updated_at_by_join_code[join_code] = ensure_utc(updated_at)
+        for student_id, amount in summary.items():
+            total_summary[student_id] += Decimal(str(amount))
+
+    latest_updated_at = max(updated_at_by_join_code.values()) if updated_at_by_join_code else None
+    return {
+        "summary_by_join_code": summary_by_join_code,
+        "anchor_by_join_code": anchor_by_join_code,
+        "updated_at_by_join_code": updated_at_by_join_code,
+        "total_summary": dict(total_summary),
+        "latest_updated_at": latest_updated_at,
+    }
+
+
 def _student_scope_subquery(include_unassigned=True):
     """Return a subquery of student IDs the current admin can access."""
     return (
@@ -442,6 +637,28 @@ def _student_scope_subquery(include_unassigned=True):
         .with_entities(Student.id)
         .subquery()
     )
+
+
+def _student_scope_subquery_for_join_code(join_code: str, *, include_unassigned: bool = False):
+    """Return a subquery of student IDs scoped to one teacher-owned class."""
+    admin_id = session.get("admin_id")
+    if not admin_id or not join_code:
+        return sa.select(Student.id).where(sa.false()).subquery()
+
+    query = (
+        db.session.query(Student.id)
+        .join(TeacherBlock, TeacherBlock.student_id == Student.id)
+        .filter(
+            TeacherBlock.teacher_id == admin_id,
+            TeacherBlock.join_code == join_code,
+            TeacherBlock.student_id.isnot(None),
+        )
+        .distinct()
+    )
+    if not include_unassigned:
+        query = query.filter(TeacherBlock.is_claimed == True)
+
+    return query.subquery()
 
 
 def _join_code_exists(join_code):
@@ -1119,12 +1336,7 @@ def _link_student_to_admin(student: Student, admin_id):
 
 def _get_feature_settings(teacher_id, block=None):
     """
-    Get feature settings for a teacher, optionally scoped to a specific block.
-
-    Settings are resolved with block-specific overriding global defaults:
-    1. Look for block-specific settings if block is provided
-    2. Fall back to global (block=NULL) settings
-    3. Fall back to system defaults if no settings exist
+    Get class-scoped feature settings for a teacher block.
 
     Args:
         teacher_id: The teacher's admin ID
@@ -1133,25 +1345,11 @@ def _get_feature_settings(teacher_id, block=None):
     Returns:
         dict: Feature settings with all toggle values
     """
-    # Try block-specific settings first
-    if block:
-        block_settings = FeatureSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=block.strip().upper()
-        ).first()
-        if block_settings:
-            return block_settings.to_dict()
-
-    # Fall back to global settings
-    global_settings = FeatureSettings.query.filter_by(
-        teacher_id=teacher_id,
-        block=None
-    ).first()
-
-    if global_settings:
-        return global_settings.to_dict()
-
-    # Return defaults if no settings exist
+    if not block:
+        return FeatureSettings.get_defaults()
+    block_settings = get_feature_settings_row(teacher_id, block=block, create=False)
+    if block_settings:
+        return block_settings.to_dict()
     return FeatureSettings.get_defaults()
 
 
@@ -1713,13 +1911,21 @@ def dashboard():
         })
 
     # --- Payroll Info ---
-    last_payroll_time = get_last_payroll_time()
-    payroll_summary, payroll_updated_at = get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=current_admin_id)
+    dashboard_blocks = sorted({b.strip() for s in students for b in (s.block or "").split(',') if b.strip()})
+    dashboard_join_codes_by_block = _get_join_codes_by_block(current_admin_id, dashboard_blocks)
+    payroll_preview = _build_payroll_preview_state(current_admin_id, students, dashboard_join_codes_by_block)
+    payroll_summary = payroll_preview["total_summary"]
+    payroll_updated_at = payroll_preview["latest_updated_at"]
     total_payroll_estimate = sum(payroll_summary.values())
 
     # Calculate next payroll date (keep in UTC for template conversion)
-    if last_payroll_time:
-        next_payroll_date = last_payroll_time + timedelta(days=14)
+    anchor_candidates = [
+        anchor + timedelta(days=14)
+        for anchor in payroll_preview["anchor_by_join_code"].values()
+        if anchor is not None
+    ]
+    if anchor_candidates:
+        next_payroll_date = min(anchor_candidates)
     else:
         now_utc = utc_now()
         days_until_friday = (4 - now_utc.weekday() + 7) % 7
@@ -4553,19 +4759,32 @@ def _end_of_day_utc(date_obj):
 def store_management():
     """Manage store items - view, create, edit, delete."""
     admin_id = session.get("admin_id")
+    feature_options = get_admin_feature_join_code_options('store', admin_id=admin_id)
+    selected_scope = require_admin_feature_scope(
+        'store',
+        admin_id=admin_id,
+        requested_join_code=request.args.get('join_code'),
+        requested_block=request.args.get('block'),
+    )
+    selected_join_code = selected_scope['join_code']
+    selected_block = selected_scope['block']
     # Lazily expire collective goals whose deadline has passed, refunding pending purchases.
     process_expired_collective_goals(admin_id)
-    student_ids_subq = _student_scope_subquery()
+    student_ids_subq = _student_scope_subquery_for_join_code(selected_join_code)
     form = StoreItemForm()
 
-    # Populate blocks choices from teacher's students
-    blocks = _get_teacher_blocks()
+    # Limit store scope to classes where the feature is enabled.
+    blocks = [option['block'] for option in feature_options if option.get('block')]
     form.blocks.choices = [(block, f"Period {block}") for block in blocks]
     
     # Build class_labels_by_block dictionary for template
     class_labels_by_block = _get_class_labels_for_blocks(admin_id, blocks)
 
     if form.validate_on_submit():
+        submitted_blocks = {block.strip().upper() for block in (form.blocks.data or []) if block}
+        enabled_blocks = {block for block in blocks if block}
+        if submitted_blocks and not submitted_blocks.issubset(enabled_blocks):
+            abort(404)
         new_item = StoreItem(
             teacher_id=admin_id,
             name=form.name.data,
@@ -4604,10 +4823,13 @@ def store_management():
             new_item.set_blocks(form.blocks.data)
         db.session.commit()
         flash(f"'{new_item.name}' has been added to the store.", "success")
-        return redirect(url_for('admin.store_management'))
+        return redirect(url_for('admin.store_management', join_code=selected_join_code))
 
     # Get items for this teacher only (reuse admin_id from above)
-    items = StoreItem.query.filter_by(teacher_id=admin_id).order_by(StoreItem.name).all()
+    items = [
+        item for item in StoreItem.query.filter_by(teacher_id=admin_id).order_by(StoreItem.name).all()
+        if not item.blocks_list or selected_block in {b.strip().upper() for b in item.blocks_list if b}
+    ]
 
     # Get store statistics for overview tab
     from app.models import StudentItem
@@ -4617,6 +4839,7 @@ def store_management():
         StudentItem.query
         .join(Student, StudentItem.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .filter(StudentItem.join_code == selected_join_code)
         .count()
     )
 
@@ -4626,6 +4849,7 @@ def store_management():
         .options(joinedload(StudentItem.student), joinedload(StudentItem.store_item))
         .join(Student, StudentItem.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .filter(StudentItem.join_code == selected_join_code)
         .filter(StudentItem.status == 'processing')
         .order_by(StudentItem.redemption_date.desc())
         .limit(10)
@@ -4638,6 +4862,7 @@ def store_management():
         .options(joinedload(StudentItem.student), joinedload(StudentItem.store_item))
         .join(Student, StudentItem.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .filter(StudentItem.join_code == selected_join_code)
         .order_by(StudentItem.purchase_date.desc())
         .limit(10)
         .all()
@@ -4684,6 +4909,7 @@ def store_management():
             .join(Student, StudentItem.student_id == Student.id)
             .filter(
                 Student.id.in_(sa.select(student_ids_subq)),
+                StudentItem.join_code == selected_join_code,
                 StudentItem.store_item_id.in_(collective_item_ids),
                 StudentItem.join_code.isnot(None),
                 StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
@@ -4707,6 +4933,8 @@ def store_management():
 
             per_class = []
             for jc in sorted(applicable_join_codes):
+                if jc != selected_join_code:
+                    continue
                 count = counts_lookup.get((item.id, jc), 0)
                 if item.collective_goal_type == 'fixed':
                     target = int(item.collective_goal_target or 0)
@@ -4748,6 +4976,7 @@ def store_management():
     live_query = RedemptionAuditLog.query.filter(
         RedemptionAuditLog.teacher_id == admin_id,
         RedemptionAuditLog.source == RedemptionAuditSource.LIVE,
+        RedemptionAuditLog.join_code == selected_join_code,
     )
     if audit_student:
         live_query = live_query.filter(RedemptionAuditLog.student_display_name.ilike(f"%{audit_student}%"))
@@ -4784,6 +5013,7 @@ def store_management():
         .join(StoreItem, StudentItem.store_item_id == StoreItem.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(StoreItem.teacher_id == admin_id)
+        .filter(StudentItem.join_code == selected_join_code)
     )
     if audit_student:
         matching_student_ids = []
@@ -4894,7 +5124,9 @@ def store_management():
                          audit_class=audit_class,
                          audit_action=audit_action,
                          audit_start_date=audit_start_date,
-                         audit_end_date=audit_end_date)
+                         audit_end_date=audit_end_date,
+                         feature_options=feature_options,
+                         selected_feature_scope=selected_scope)
 
 
 @admin_bp.route('/store/edit/<int:item_id>', methods=['GET', 'POST'])
@@ -5183,15 +5415,15 @@ def rent_settings():
     admin_id = session.get("admin_id")
     student_ids_subq = _student_scope_subquery()
     payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True).first()
-
-    # Get teacher's blocks for class selector
-    teacher_blocks = db.session.query(TeacherBlock.block).filter_by(teacher_id=admin_id).distinct().all()
-    teacher_blocks = sorted([b[0] for b in teacher_blocks])
-
-    # Get which class settings to show (default to first block)
-    settings_block = request.args.get('settings_block') or request.form.get('settings_block')
-    if not settings_block and teacher_blocks:
-        settings_block = teacher_blocks[0]
+    feature_options = get_admin_feature_join_code_options('rent', admin_id=admin_id)
+    selected_scope = require_admin_feature_scope(
+        'rent',
+        admin_id=admin_id,
+        requested_join_code=request.values.get('join_code'),
+        requested_block=request.values.get('settings_block'),
+    )
+    teacher_blocks = [option['block'] for option in feature_options]
+    settings_block = selected_scope['block']
 
     # Get or create rent settings for this class
     settings = None
@@ -5218,6 +5450,7 @@ def rent_settings():
                     join_code_map[block] = join_code
 
         for block in blocks_to_update:
+            require_admin_feature_scope('rent', admin_id=admin_id, requested_block=block, allow_default=False)
             # Get or create settings for this class
             block_settings = RentSettings.query.filter_by(teacher_id=admin_id, block=block).first()
             if not block_settings:
@@ -5840,27 +6073,16 @@ def insurance_management():
     """Main insurance management dashboard."""
     admin_id = session.get('admin_id')
     form = InsurancePolicyForm()
-
-    # Get teacher's blocks for class selector
-    teacher_blocks = db.session.query(TeacherBlock.block).filter_by(teacher_id=admin_id).distinct().all()
-    teacher_blocks = sorted([b[0] for b in teacher_blocks])
-
-    # Get which class settings to show (default to first block)
-    settings_block = request.args.get('settings_block') or request.form.get('settings_block')
-    if not settings_block and teacher_blocks:
-        settings_block = teacher_blocks[0]
-
-    # CRITICAL: Get the join_code for the selected block for proper multi-tenancy scoping
-    # All data (policies, enrollments, claims) must be filtered by join_code
-    selected_join_code = None
-    if settings_block:
-        # Find the join_code for this block from TeacherBlock
-        teacher_block_record = TeacherBlock.query.filter_by(
-            teacher_id=admin_id,
-            block=settings_block
-        ).first()
-        if teacher_block_record:
-            selected_join_code = teacher_block_record.join_code
+    feature_options = get_admin_feature_join_code_options('insurance', admin_id=admin_id)
+    selected_scope = require_admin_feature_scope(
+        'insurance',
+        admin_id=admin_id,
+        requested_join_code=request.values.get('join_code'),
+        requested_block=request.values.get('settings_block'),
+    )
+    teacher_blocks = [option['block'] for option in feature_options]
+    settings_block = selected_scope['block']
+    selected_join_code = selected_scope['join_code']
 
     # Get class labels for display
     class_labels_by_block = _get_class_labels_for_blocks(admin_id, teacher_blocks)
@@ -6832,13 +7054,21 @@ def void_transaction(transaction_id):
 @admin_required
 def hall_pass():
     """Manage hall pass requests and active passes."""
-    student_ids_subq = _student_scope_subquery()
-    join_code_scope = _get_admin_owned_join_codes(session.get('admin_id'))
+    admin_id = session.get('admin_id')
+    feature_options = get_admin_feature_join_code_options('hall_pass', admin_id=admin_id)
+    selected_scope = require_admin_feature_scope(
+        'hall_pass',
+        admin_id=admin_id,
+        requested_join_code=request.args.get('join_code'),
+        requested_block=request.args.get('block'),
+    )
+    selected_join_code = selected_scope['join_code']
+    student_ids_subq = _student_scope_subquery_for_join_code(selected_join_code)
     pending_requests = (
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
-        .filter(HallPassLog.join_code.in_(join_code_scope))
+        .filter(HallPassLog.join_code == selected_join_code)
         .filter(HallPassLog.status == 'pending')
         .order_by(HallPassLog.request_time.asc())
         .all()
@@ -6847,7 +7077,7 @@ def hall_pass():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
-        .filter(HallPassLog.join_code.in_(join_code_scope))
+        .filter(HallPassLog.join_code == selected_join_code)
         .filter(HallPassLog.status == 'approved')
         .order_by(HallPassLog.decision_time.asc())
         .all()
@@ -6856,7 +7086,7 @@ def hall_pass():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
-        .filter(HallPassLog.join_code.in_(join_code_scope))
+        .filter(HallPassLog.join_code == selected_join_code)
         .filter(HallPassLog.status == 'left')
         .order_by(HallPassLog.left_time.asc())
         .all()
@@ -6874,7 +7104,7 @@ def hall_pass():
     periods = sorted([p[0] for p in available_periods if p[0]])
 
     # Lazily generate the hall pass verification token if needed
-    teacher_id = session.get('admin_id')
+    teacher_id = admin_id
     teacher = db.session.get(Admin, teacher_id)
     if teacher and not teacher.hall_pass_verify_token:
         teacher.hall_pass_verify_token = Admin.generate_verify_token()
@@ -6895,7 +7125,10 @@ def hall_pass():
         out_of_class=out_of_class,
         available_periods=periods,
         current_page="hall_pass",
-        verify_url=verify_url
+        verify_url=verify_url,
+        feature_options=feature_options,
+        selected_feature_scope=selected_scope,
+        current_join_code=selected_join_code,
     )
 
 
@@ -6903,7 +7136,18 @@ def hall_pass():
 @admin_required
 def hall_pass_setup():
     """Configure hall pass types, queue limits, and simultaneous limits."""
-    return render_template('hall_pass_setup.html')
+    admin_id = session.get('admin_id')
+    selected_scope = require_admin_feature_scope(
+        'hall_pass',
+        admin_id=admin_id,
+        requested_join_code=request.args.get('join_code'),
+    )
+    return render_template(
+        'hall_pass_setup.html',
+        current_join_code=selected_scope['join_code'],
+        feature_options=get_admin_feature_join_code_options('hall_pass', admin_id=admin_id),
+        selected_feature_scope=selected_scope,
+    )
 
 
 # -------------------- ECONOMY HEALTH --------------------
@@ -6913,8 +7157,14 @@ def hall_pass_setup():
 def update_economy_policy():
     admin_id = session.get('admin_id')
     selected_block = (request.form.get('block') or '').strip().upper() or None
+    if not selected_block:
+        flash("Select a class period before updating economy policy.", "warning")
+        return redirect(url_for('admin.economy_health'))
     policy_mode = normalize_policy_mode(request.form.get('policy_mode'))
     settings_row = get_feature_settings_row(admin_id, block=selected_block, create=True)
+    if not settings_row:
+        flash("Class scope not found for the selected period.", "warning")
+        return redirect(url_for('admin.economy_health', block=selected_block))
     settings_row.economy_policy_mode = policy_mode
     settings_row.economy_policy_updated_at = utc_now()
     settings_row.economy_pending_rebalance_json = None
@@ -6934,9 +7184,15 @@ def update_economy_policy():
 def apply_economy_rebalance():
     admin_id = session.get('admin_id')
     selected_block = (request.form.get('block') or '').strip().upper() or None
+    if not selected_block:
+        flash("Select a class period before applying a rebalance.", "warning")
+        return redirect(url_for('admin.economy_health'))
     activation_mode = (request.form.get('activation_mode') or 'next_payroll').strip().lower()
     selected_keys = set(request.form.getlist('selected_changes'))
     settings_row = get_feature_settings_row(admin_id, block=selected_block, create=True)
+    if not settings_row:
+        flash("Class scope not found for the selected period.", "warning")
+        return redirect(url_for('admin.economy_health', block=selected_block, review_rebalance=1))
     allowed_activation_modes = {'immediate', 'next_payroll'}
 
     if activation_mode not in allowed_activation_modes:
@@ -7255,20 +7511,49 @@ def run_payroll():
             flash(error_msg, "admin_error")
             return redirect(url_for('admin.dashboard'))
 
-        # Get last payroll for this teacher (scoped by teacher_id)
+        requested_join_code = None
+        if request.is_json:
+            payload = request.get_json(silent=True) or {}
+            requested_join_code = payload.get('join_code')
+        if not requested_join_code:
+            requested_join_code = request.form.get('join_code')
+        selected_scope = require_admin_feature_scope(
+            'payroll',
+            admin_id=current_admin_id,
+            requested_join_code=requested_join_code,
+        )
+        selected_join_code = selected_scope['join_code']
+
+        # Get last payroll for the selected class only.
         last_payroll_tx = Transaction.query.filter_by(
             type="payroll",
-            teacher_id=current_admin_id
+            teacher_id=current_admin_id,
+            join_code=selected_join_code,
         ).order_by(Transaction.timestamp.desc()).first()
         last_payroll_time = last_payroll_tx.timestamp if last_payroll_tx else None
         current_app.logger.info(f"Run payroll: last payroll at {last_payroll_time}")
 
-        students = _scoped_students().all()
-        # Pass teacher_id to ensure correct payroll settings are used
-        summary = calculate_payroll_breakdown(students, last_payroll_time, teacher_id=current_admin_id)
+        students = (
+            _scoped_students(include_unassigned=False)
+            .join(TeacherBlock, TeacherBlock.student_id == Student.id)
+            .filter(
+                TeacherBlock.teacher_id == current_admin_id,
+                TeacherBlock.join_code == selected_join_code,
+                TeacherBlock.is_claimed == True,
+            )
+            .distinct()
+            .all()
+        )
+        summary = calculate_payroll_breakdown(
+            students,
+            last_payroll_time,
+            teacher_id=current_admin_id,
+        )
 
         count = 0
         for (student_id, join_code), amount in summary.items():
+            if join_code != selected_join_code:
+                continue
             tx = Transaction(
                 student_id=student_id,
                 teacher_id=current_admin_id,
@@ -7284,6 +7569,7 @@ def run_payroll():
 
         settings_rows = FeatureSettings.query.filter(
             FeatureSettings.teacher_id == current_admin_id,
+            FeatureSettings.join_code == selected_join_code,
             FeatureSettings.economy_pending_rebalance_json.isnot(None),
         ).all()
         scheduled_rebalances_applied = 0
@@ -7321,7 +7607,7 @@ def run_payroll():
             return jsonify(status="success", message=success_message), 200
 
         flash(success_message, "admin_success")
-        return redirect(url_for('admin.payroll'))
+        return redirect(url_for('admin.payroll', join_code=selected_join_code))
     except (SQLAlchemyError, Exception) as e:
         db.session.rollback()
         is_db_error = isinstance(e, SQLAlchemyError)
@@ -7344,35 +7630,46 @@ def payroll():
     Enhanced payroll page with tabs for settings, students, rewards, fines, and manual payments.
     """
     pacific = pytz.timezone('America/Los_Angeles')
-    last_payroll_time = get_last_payroll_time()
-
-    # Normalize to UTC to avoid any naive/aware mismatches downstream
-    last_payroll_time = ensure_utc(last_payroll_time)
-
-
     now_utc = utc_now()
 
-    # Get student scope subquery for filtering
-    student_ids_subq = _student_scope_subquery()
-
-    # Get all students
-    students = _scoped_students().all()
-
-    # Get all blocks (split multi-block assignments like "A, B")
-    blocks = sorted({b.strip() for s in students for b in (s.block or "").split(',') if b.strip()})
-
-    # Get admin ID for filtering
     admin_id = session.get("admin_id")
+    feature_options = get_admin_feature_join_code_options('payroll', admin_id=admin_id)
+    selected_scope = require_admin_feature_scope(
+        'payroll',
+        admin_id=admin_id,
+        requested_join_code=request.args.get('join_code'),
+        requested_block=request.args.get('cwi_block') or request.args.get('block'),
+    )
+    selected_join_code = selected_scope['join_code']
+    selected_block = selected_scope['block']
+
+    # Get student scope subquery for filtering
+    student_ids_subq = _student_scope_subquery_for_join_code(selected_join_code)
+
+    # Get class-scoped students and blocks
+    students = (
+        _scoped_students(include_unassigned=False)
+        .join(TeacherBlock, TeacherBlock.student_id == Student.id)
+        .filter(
+            TeacherBlock.teacher_id == admin_id,
+            TeacherBlock.join_code == selected_join_code,
+            TeacherBlock.is_claimed == True,
+        )
+        .distinct()
+        .all()
+    )
+    blocks = [selected_block] if selected_block else []
 
     # Check if payroll settings exist for this teacher
-    has_settings = PayrollSettings.query.filter_by(teacher_id=admin_id).first() is not None
+    has_settings = PayrollSettings.query.filter_by(teacher_id=admin_id, block=selected_block).first() is not None
     show_setup_banner = not has_settings
 
     # Get payroll settings for this teacher, filtered to only include blocks with current students
-    if blocks:
-        block_settings = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True).filter(PayrollSettings.block.in_(blocks)).all()
-    else:
-        block_settings = []
+    block_settings = PayrollSettings.query.filter_by(
+        teacher_id=admin_id,
+        is_active=True,
+        block=selected_block,
+    ).all() if selected_block else []
 
     # Get first block's settings for form pre-population (no global settings)
     default_setting = block_settings[0] if block_settings else None
@@ -7410,8 +7707,13 @@ def payroll():
 
     # Recent payroll activity
     # CRITICAL: Filter by join_code as it is the source of truth for class isolation
-    # Get all join codes for this teacher (from active blocks)
-    my_join_codes = _get_admin_owned_join_codes(admin_id)
+    my_join_codes = [selected_join_code]
+    join_codes_by_block = {selected_block: selected_join_code} if selected_block else {}
+    payroll_preview = _build_payroll_preview_state(admin_id, students, join_codes_by_block)
+    payroll_summary = payroll_preview["total_summary"]
+    payroll_updated_at = payroll_preview["latest_updated_at"]
+    payroll_anchor_by_join_code = payroll_preview["anchor_by_join_code"]
+    payroll_summary_by_join_code = payroll_preview["summary_by_join_code"]
     
     recent_payrolls = (
         Transaction.query
@@ -7423,21 +7725,20 @@ def payroll():
         .all()
     )
 
-    # Calculate payroll estimates
-    payroll_summary, payroll_updated_at = get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=admin_id)
     total_payroll_estimate = sum(payroll_summary.values())
 
     # Build class_labels_by_block dictionary
     class_labels_by_block = _get_class_labels_for_blocks(admin_id, blocks)
 
-    # Build join_codes_by_block dictionary
-    join_codes_by_block = _get_join_codes_by_block(admin_id, blocks)
-
     # Next payroll by block
     next_payroll_by_block = []
     for block in blocks:
+        join_code = join_codes_by_block.get(block)
         block_students = [s for s in students if block in [b.strip() for b in (s.block or '').split(',')]]
-        block_estimate = sum(payroll_summary.get(s.id, 0) for s in block_students)
+        block_estimate = sum(
+            payroll_summary_by_join_code.get(join_code, {}).get(s.id, Decimal("0.00"))
+            for s in block_students
+        ) if join_code else Decimal("0.00")
         setting = settings_by_block.get(block, default_setting)
         block_next_payroll = _compute_next_pay_date(setting, now_utc)
         next_payroll_by_block.append({
@@ -7490,10 +7791,19 @@ def payroll():
     ).group_by(Transaction.student_id).all()
     last_payroll_map = {sid: ts for sid, ts in last_payroll_rows}
 
-    # Batch: Attendance Events
-    # Fetch all events since global last payroll time for these students.
-    # SECURITY: Pass my_join_codes so events from other teachers' classes are excluded.
-    events_map = get_batch_attendance_events(student_ids, last_payroll_time, allowed_join_codes=my_join_codes)
+    events_map_by_join_code = {}
+    for join_code in my_join_codes:
+        anchor = payroll_anchor_by_join_code.get(join_code)
+        scoped_student_ids = [
+            student.id
+            for student in students
+            if any(join_codes_by_block.get(b.strip()) == join_code for b in (student.block or "").split(',') if b.strip())
+        ]
+        events_map_by_join_code[join_code] = get_batch_attendance_events(
+            scoped_student_ids,
+            anchor,
+            allowed_join_codes=[join_code],
+        )
 
     for student in students:
         # Calculate unpaid minutes across all blocks
@@ -7501,13 +7811,16 @@ def payroll():
         student_blocks = [b.strip() for b in (student.block or "").split(',') if b.strip()]
         for block in student_blocks:
             block_upper = block.upper()
-            # Sum up unpaid seconds for all join codes associated with this teacher
-            # (matches logic of calculate_unpaid_attendance_seconds which aggregates by period)
-            for join_code in my_join_codes:
-                key = (student.id, block_upper, join_code)
-                events = events_map.get(key, [])
-                if events:
-                    unpaid_seconds += calculate_seconds_in_memory(events, last_payroll_time)
+            join_code = join_codes_by_block.get(block)
+            if not join_code:
+                continue
+            key = (student.id, block_upper, join_code)
+            events = events_map_by_join_code.get(join_code, {}).get(key, [])
+            if events:
+                unpaid_seconds += calculate_seconds_in_memory(
+                    events,
+                    payroll_anchor_by_join_code.get(join_code),
+                )
 
         unpaid_minutes = unpaid_seconds / 60.0
         estimated_payout = payroll_summary.get(student.id, 0)
@@ -7529,7 +7842,10 @@ def payroll():
 
     # Initialize forms
     settings_form = PayrollSettingsForm()
-    settings_form.block.choices = [('', 'Global (All Blocks)')] + [(b, b) for b in blocks]
+    settings_form.block.choices = (
+        [(selected_block, class_labels_by_block.get(selected_block, selected_block))]
+        if selected_block else []
+    )
 
     reward_form = PayrollRewardForm()
     fine_form = PayrollFineForm()
@@ -7568,7 +7884,7 @@ def payroll():
         })
 
     # CWI Configuration - Get selected block from query param
-    cwi_block = request.args.get('cwi_block', blocks[0] if blocks else None)
+    cwi_block = selected_block
     cwi_setting = None
     if cwi_block:
         # Get the payroll setting for this specific block
@@ -7625,7 +7941,9 @@ def payroll():
         blocks=blocks,
         class_labels_by_block=class_labels_by_block,
         current_page="payroll",
-        format_utc_iso=format_utc_iso
+        format_utc_iso=format_utc_iso,
+        feature_options=feature_options,
+        selected_feature_scope=selected_scope,
     )
 
 
@@ -7636,10 +7954,18 @@ def payroll_settings():
     try:
         # Get current admin ID for teacher scoping
         admin_id = session.get("admin_id")
+        feature_options = get_admin_feature_join_code_options('payroll', admin_id=admin_id)
+        enabled_blocks = {option['block'] for option in feature_options if option.get('block')}
+        selected_scope = require_admin_feature_scope(
+            'payroll',
+            admin_id=admin_id,
+            requested_join_code=request.form.get('join_code'),
+            requested_block=request.form.get('cwi_block') or request.form.get('block'),
+        )
         
         # Get all blocks
         students = _scoped_students().all()
-        blocks = sorted(set(s.block for s in students if s.block))
+        blocks = sorted({s.block for s in students if s.block and s.block in enabled_blocks})
 
         # Determine which mode we're in
         settings_mode = request.form.get('settings_mode', 'simple')
@@ -7773,6 +8099,10 @@ def payroll_settings():
             # Apply to selected blocks only
             target_blocks = selected_blocks
 
+        target_blocks = [block for block in target_blocks if block in enabled_blocks]
+        if not target_blocks:
+            abort(404)
+
         for block_value in target_blocks:
             setting = PayrollSettings.query.filter_by(teacher_id=admin_id, block=block_value).first()
             if not setting:
@@ -7797,7 +8127,7 @@ def payroll_settings():
         current_app.logger.error(f"Error saving payroll settings: {e}")
         flash(f'Error saving payroll settings', 'error')
 
-    return redirect(url_for('admin.payroll'))
+    return redirect(url_for('admin.payroll', join_code=selected_scope['join_code']))
 
 
 @admin_bp.route('/payroll/update-expected-hours', methods=['POST'])
@@ -9260,13 +9590,15 @@ def bulk_update_hall_passes():
 def banking():
     """Banking management page with transactions and settings."""
     admin_id = session.get("admin_id")
-
-    # Get teacher's blocks for class selector
-    teacher_blocks = db.session.query(TeacherBlock.block).filter_by(teacher_id=admin_id).distinct().all()
-    teacher_blocks = sorted([b[0] for b in teacher_blocks])
-
-    # Get which class settings to show (default to first block)
-    settings_block = request.args.get('settings_block', teacher_blocks[0] if teacher_blocks else None)
+    feature_options = get_admin_feature_join_code_options('banking', admin_id=admin_id)
+    selected_scope = require_admin_feature_scope(
+        'banking',
+        admin_id=admin_id,
+        requested_join_code=request.args.get('join_code'),
+        requested_block=request.args.get('settings_block'),
+    )
+    teacher_blocks = [option['block'] for option in feature_options]
+    settings_block = selected_scope['block']
 
     # Get current banking settings for this class
     settings = None
@@ -9795,15 +10127,13 @@ def feature_settings():
         b.strip().upper() for s in students
         for b in (s.block or '').split(',') if b.strip()
     ))
+    join_codes_by_period = _get_join_codes_by_block(admin_id, periods)
 
     if request.method == 'POST':
-        # Handle feature settings update
         try:
-            # Determine if applying to all or selected periods
             apply_to = request.form.get('apply_to', 'all')
             selected_periods = request.form.getlist('selected_periods[]') if apply_to == 'selected' else periods
 
-            # Get feature toggle values
             features_data = {
                 'payroll_enabled': True,  # Always enabled - payroll is mandatory
                 'insurance_enabled': 'insurance_enabled' in request.form,
@@ -9813,33 +10143,11 @@ def feature_settings():
                 'store_enabled': 'store_enabled' in request.form,
             }
 
-            # Apply settings to selected periods
             if apply_to == 'all':
-                # Update global settings
-                global_settings = FeatureSettings.query.filter_by(
-                    teacher_id=admin_id,
-                    block=None
-                ).first()
-
-                if not global_settings:
-                    global_settings = FeatureSettings(teacher_id=admin_id, block=None)
-                    db.session.add(global_settings)
-
-                for key, value in features_data.items():
-                    setattr(global_settings, key, value)
-
-                global_settings.updated_at = utc_now()
-
-                # Also update all period-specific settings
                 for period in periods:
-                    period_settings = FeatureSettings.query.filter_by(
-                        teacher_id=admin_id,
-                        block=period
-                    ).first()
-
+                    period_settings = get_feature_settings_row(admin_id, block=period, create=True)
                     if not period_settings:
-                        period_settings = FeatureSettings(teacher_id=admin_id, block=period)
-                        db.session.add(period_settings)
+                        raise ValueError(f"Missing class scope for period {period}")
 
                     for key, value in features_data.items():
                         setattr(period_settings, key, value)
@@ -9848,19 +10156,11 @@ def feature_settings():
 
                 flash('Feature settings applied to all periods successfully!', 'success')
             else:
-                # Apply to selected periods only
                 for period in selected_periods:
-                    period_settings = FeatureSettings.query.filter_by(
-                        teacher_id=admin_id,
-                        block=period.strip().upper()
-                    ).first()
-
+                    normalized_period = period.strip().upper()
+                    period_settings = get_feature_settings_row(admin_id, block=normalized_period, create=True)
                     if not period_settings:
-                        period_settings = FeatureSettings(
-                            teacher_id=admin_id,
-                            block=period.strip().upper()
-                        )
-                        db.session.add(period_settings)
+                        raise ValueError(f"Missing class scope for period {normalized_period}")
 
                     for key, value in features_data.items():
                         setattr(period_settings, key, value)
@@ -9878,36 +10178,18 @@ def feature_settings():
 
         return redirect(url_for('admin.feature_settings'))
 
-    # GET: Load current settings
-    global_settings = FeatureSettings.query.filter_by(
-        teacher_id=admin_id,
-        block=None
-    ).first()
-
-    if not global_settings:
-        global_settings = FeatureSettings(teacher_id=admin_id, block=None)
-        db.session.add(global_settings)
-        db.session.commit()
-
-    # Load period-specific settings
     period_settings = {}
     for period in periods:
-        settings = FeatureSettings.query.filter_by(
-            teacher_id=admin_id,
-            block=period
-        ).first()
-
-        if settings:
-            period_settings[period] = settings.to_dict()
-        else:
-            period_settings[period] = global_settings.to_dict()
+        settings = get_feature_settings_row(admin_id, block=period, create=False)
+        period_settings[period] = settings.to_dict() if settings else FeatureSettings.get_defaults()
 
     return render_template(
         'admin_feature_settings.html',
         current_page='settings',
-        global_settings=global_settings,
+        global_settings=FeatureSettings.get_defaults(),
         periods=periods,
         period_settings=period_settings,
+        join_codes_by_period=join_codes_by_period,
         features_list=[
             ('insurance_enabled', 'Insurance', 'shield', 'Insurance policies and claims'),
             ('banking_enabled', 'Banking', 'account_balance', 'Savings accounts and interest'),
@@ -9928,15 +10210,9 @@ def update_period_feature_settings(period):
         data = request.get_json()
         period = period.strip().upper()
 
-        # Get or create period settings
-        settings = FeatureSettings.query.filter_by(
-            teacher_id=admin_id,
-            block=period
-        ).first()
-
+        settings = get_feature_settings_row(admin_id, block=period, create=True)
         if not settings:
-            settings = FeatureSettings(teacher_id=admin_id, block=period)
-            db.session.add(settings)
+            return jsonify({'status': 'error', 'message': 'Class scope not found for this period.'}), 400
 
         # Update only the provided features
         feature_map = {
@@ -9989,25 +10265,8 @@ def copy_feature_settings():
             }), 400
 
         # Get source settings
-        source_settings = FeatureSettings.query.filter_by(
-            teacher_id=admin_id,
-            block=source_period
-        ).first()
-
-        if not source_settings:
-            # Use global defaults if no source settings
-            source_settings = FeatureSettings.query.filter_by(
-                teacher_id=admin_id,
-                block=None
-            ).first()
-
-        if not source_settings:
-            return jsonify({
-                'status': 'error',
-                'message': 'No source settings found to copy.'
-            }), 404
-
-        source_dict = source_settings.to_dict()
+        source_settings = get_feature_settings_row(admin_id, block=source_period, create=False)
+        source_dict = source_settings.to_dict() if source_settings else FeatureSettings.get_defaults()
 
         # Define valid feature columns
         valid_feature_columns = {
@@ -10021,14 +10280,12 @@ def copy_feature_settings():
             if period == source_period:
                 continue  # Skip copying to self
 
-            target_settings = FeatureSettings.query.filter_by(
-                teacher_id=admin_id,
-                block=period
-            ).first()
-
+            target_settings = get_feature_settings_row(admin_id, block=period, create=True)
             if not target_settings:
-                target_settings = FeatureSettings(teacher_id=admin_id, block=period)
-                db.session.add(target_settings)
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Class scope not found for period {period}.'
+                }), 400
 
             # Only copy valid feature columns to prevent attribute injection
             for key, value in source_dict.items():

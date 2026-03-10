@@ -5,6 +5,7 @@ from decimal import Decimal
 from app import db
 from app.models import (
     Admin,
+    ClassEconomy,
     FeatureSettings,
     IdentityProfile,
     InsurancePolicy,
@@ -51,6 +52,15 @@ def _create_admin_with_block(block='A', join_code='JOINPOLA'):
     db.session.add(admin)
     db.session.flush()
 
+    economy = ClassEconomy(
+        join_code=join_code,
+        teacher_id=admin.id,
+        created_by_admin_id=admin.id,
+        display_name=f'Period {block}',
+    )
+    db.session.add(economy)
+    db.session.flush()
+
     _create_teacher_block(admin.id, block=block, join_code=join_code)
 
     payroll_settings = PayrollSettings(
@@ -73,11 +83,19 @@ def _create_admin_with_block(block='A', join_code='JOINPOLA'):
     )
     db.session.add_all([payroll_settings, rent_settings])
     db.session.commit()
-    return admin, payroll_settings, rent_settings
+    return admin, payroll_settings, rent_settings, economy
 
 
 def _create_insurance_policy(admin_id, title, premium, block='A'):
     join_code = f"JOIN{block}{admin_id}"
+    if not ClassEconomy.query.filter_by(join_code=join_code).first():
+        db.session.add(ClassEconomy(
+            join_code=join_code,
+            teacher_id=admin_id,
+            created_by_admin_id=admin_id,
+            display_name=f'Period {block}',
+        ))
+        db.session.flush()
     policy = InsurancePolicy(
         teacher_id=admin_id,
         join_code=join_code,
@@ -101,12 +119,12 @@ def _create_insurance_policy(admin_id, title, premium, block='A'):
 
 
 def test_checker_uses_feature_policy_mode_for_recommendations(client):
-    admin, payroll_settings, _ = _create_admin_with_block()
+    admin, payroll_settings, _, economy = _create_admin_with_block()
 
     default_checker = EconomyBalanceChecker(admin.id, 'A', policy_mode='default')
     default_recommendations = default_checker.analyze_economy(payroll_settings).recommendations
 
-    db.session.add(FeatureSettings(teacher_id=admin.id, join_code='JOINPOLA', block='A', economy_policy_mode='tight'))
+    db.session.add(FeatureSettings(teacher_id=admin.id, join_code='JOINPOLA', class_id=economy.class_id, block='A', economy_policy_mode='tight'))
     db.session.commit()
 
     tight_checker = EconomyBalanceChecker(admin.id, 'A')
@@ -123,7 +141,7 @@ def test_checker_uses_feature_policy_mode_for_recommendations(client):
 
 
 def test_comfortable_policy_uses_requested_ratio_profile(client):
-    admin, payroll_settings, _ = _create_admin_with_block()
+    admin, payroll_settings, _, _ = _create_admin_with_block()
 
     checker = EconomyBalanceChecker(admin.id, 'A', policy_mode='comfortable')
     recommendations = checker.analyze_economy(payroll_settings).recommendations
@@ -152,7 +170,7 @@ def test_comfortable_policy_uses_requested_ratio_profile(client):
 
 
 def test_update_economy_policy_creates_block_scoped_settings(client):
-    admin, _, _ = _create_admin_with_block()
+    admin, _, _, _ = _create_admin_with_block()
     _login_admin(client, admin.id)
 
     response = client.post('/admin/economy-policy', data={
@@ -169,24 +187,20 @@ def test_update_economy_policy_creates_block_scoped_settings(client):
     assert settings_row.economy_policy_mode == 'comfortable'
 
 
-def test_get_feature_settings_row_create_preserves_global_fallback_for_reads(client):
-    admin, _, _ = _create_admin_with_block()
-    global_row = FeatureSettings(teacher_id=admin.id, block=None, economy_policy_mode='default')
-    db.session.add(global_row)
-    db.session.commit()
-
+def test_get_feature_settings_row_requires_scoped_class_resolution(client):
+    admin, _, _, _ = _create_admin_with_block()
     read_row = get_feature_settings_row(admin.id, block='A', create=False)
     created_row = get_feature_settings_row(admin.id, block='A', create=True)
     db.session.commit()
 
-    assert read_row.id == global_row.id
-    assert created_row.id != global_row.id
+    assert read_row is None
+    assert created_row is not None
     assert created_row.block == 'A'
     assert created_row.join_code == 'JOINPOLA'
 
 
 def test_rent_warnings_report_single_monthly_conversion(client):
-    admin, payroll_settings, _ = _create_admin_with_block()
+    admin, payroll_settings, _, _ = _create_admin_with_block()
     checker = EconomyBalanceChecker(admin.id, 'A', policy_mode='default')
     cwi = checker.calculate_cwi(payroll_settings).cwi
     high_rent = RentSettings(
@@ -205,9 +219,9 @@ def test_rent_warnings_report_single_monthly_conversion(client):
 
 
 def test_immediate_rebalance_updates_rent_setting(client):
-    admin, payroll_settings, rent_settings = _create_admin_with_block()
+    admin, payroll_settings, rent_settings, economy = _create_admin_with_block()
     _login_admin(client, admin.id)
-    db.session.add(FeatureSettings(teacher_id=admin.id, join_code='JOINPOLA', block='A', economy_policy_mode='tight'))
+    db.session.add(FeatureSettings(teacher_id=admin.id, join_code='JOINPOLA', class_id=economy.class_id, block='A', economy_policy_mode='tight'))
     db.session.commit()
 
     checker = EconomyBalanceChecker(admin.id, 'A', policy_mode='tight')
@@ -226,9 +240,9 @@ def test_immediate_rebalance_updates_rent_setting(client):
 
 
 def test_invalid_activation_mode_is_rejected(client):
-    admin, _, rent_settings = _create_admin_with_block()
+    admin, _, rent_settings, economy = _create_admin_with_block()
     _login_admin(client, admin.id)
-    db.session.add(FeatureSettings(teacher_id=admin.id, join_code='JOINPOLA', block='A', economy_policy_mode='tight'))
+    db.session.add(FeatureSettings(teacher_id=admin.id, join_code='JOINPOLA', class_id=economy.class_id, block='A', economy_policy_mode='tight'))
     db.session.commit()
 
     response = client.post('/admin/economy-policy/rebalance', data={
@@ -243,12 +257,12 @@ def test_invalid_activation_mode_is_rejected(client):
 
 
 def test_rebalance_ignores_cross_teacher_selected_ids(client):
-    admin_a, _, _ = _create_admin_with_block('A', 'JOINPOLA')
-    admin_b, _, _ = _create_admin_with_block('B', 'JOINPOLB')
+    admin_a, _, _, economy_a = _create_admin_with_block('A', 'JOINPOLA')
+    admin_b, _, _, _ = _create_admin_with_block('B', 'JOINPOLB')
     policy_a = _create_insurance_policy(admin_a.id, 'Teacher A Policy', '20.00', block='A')
     policy_b = _create_insurance_policy(admin_b.id, 'Teacher B Policy', '99.00', block='B')
     _login_admin(client, admin_a.id)
-    db.session.add(FeatureSettings(teacher_id=admin_a.id, join_code='JOINPOLA', block='A', economy_policy_mode='tight'))
+    db.session.add(FeatureSettings(teacher_id=admin_a.id, join_code='JOINPOLA', class_id=economy_a.class_id, block='A', economy_policy_mode='tight'))
     db.session.commit()
 
     response = client.post('/admin/economy-policy/rebalance', data={
@@ -266,12 +280,13 @@ def test_rebalance_ignores_cross_teacher_selected_ids(client):
 
 
 def test_run_payroll_applies_scheduled_rebalance(client):
-    admin, _, rent_settings = _create_admin_with_block()
+    admin, _, rent_settings, economy = _create_admin_with_block()
     _login_admin(client, admin.id)
 
     settings_row = FeatureSettings(
         teacher_id=admin.id,
         join_code='JOINPOLA',
+        class_id=economy.class_id,
         block='A',
         economy_policy_mode='tight',
         economy_pending_rebalance_json=json.dumps({

@@ -22,11 +22,26 @@ def test_admin_payroll_displays_scoped_balances_only(client):
     db.session.add(student)
     db.session.flush()
 
+    class_a = ClassEconomy(
+        join_code="PAYA01",
+        teacher_id=teacher_a.id,
+        status="active",
+        is_active=True,
+        created_by_admin_id=teacher_a.id,
+    )
+    class_b = ClassEconomy(
+        join_code="PAYB01",
+        teacher_id=teacher_b.id,
+        status="active",
+        is_active=True,
+        created_by_admin_id=teacher_b.id,
+    )
+    db.session.add_all([class_a, class_b])
+    db.session.flush()
+
     db.session.add_all([
         StudentTeacher(student_id=student.id, teacher_id=teacher_a.id),
         StudentTeacher(student_id=student.id, teacher_id=teacher_b.id),
-        ClassEconomy(join_code="PAYA01", status="active", created_by_admin_id=teacher_a.id),
-        ClassEconomy(join_code="PAYB01", status="active", created_by_admin_id=teacher_b.id),
         ClassMembership(join_code="PAYA01", admin_id=teacher_a.id, role="admin", status="active"),
         ClassMembership(join_code="PAYB01", admin_id=teacher_b.id, role="admin", status="active"),
         ClassMembership(join_code="PAYA01", student_id=student.id, role="student", status="active"),
@@ -35,6 +50,7 @@ def test_admin_payroll_displays_scoped_balances_only(client):
             teacher_id=teacher_a.id,
             block="A",
             join_code="PAYA01",
+            class_id=class_a.class_id,
             student_id=student.id,
             is_claimed=True,
             first_name=student.first_name,
@@ -48,6 +64,7 @@ def test_admin_payroll_displays_scoped_balances_only(client):
             teacher_id=teacher_b.id,
             block="A",
             join_code="PAYB01",
+            class_id=class_b.class_id,
             student_id=student.id,
             is_claimed=True,
             first_name=student.first_name,

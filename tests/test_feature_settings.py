@@ -5,7 +5,31 @@ import os
 import pytest
 import pyotp
 from app import app, db
-from app.models import Admin, FeatureSettings, TeacherOnboarding, TeacherBlock
+from app.models import Admin, ClassEconomy, FeatureSettings, TeacherOnboarding, TeacherBlock
+
+
+def _create_class_scope(admin, block='A', join_code='JOIN_A'):
+    economy = ClassEconomy(
+        join_code=join_code,
+        teacher_id=admin.id,
+        created_by_admin_id=admin.id,
+        display_name=f'Period {block}',
+    )
+    db.session.add(economy)
+    db.session.flush()
+    db.session.add(TeacherBlock(
+        teacher_id=admin.id,
+        block=block,
+        join_code=join_code,
+        first_name='Test',
+        last_initial='T',
+        last_name_hash_by_part=[],
+        dob_sum=0,
+        salt=b'salt',
+        first_half_hash='hash',
+    ))
+    db.session.flush()
+    return economy
 
 
 @pytest.fixture
@@ -26,7 +50,13 @@ class TestFeatureSettings:
 
     def test_feature_settings_model_defaults(self, client, test_admin):
         """Test that FeatureSettings has correct defaults."""
-        settings = FeatureSettings(teacher_id=test_admin.id, block=None)
+        economy = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
+        settings = FeatureSettings(
+            teacher_id=test_admin.id,
+            join_code='JOIN_A',
+            class_id=economy.class_id,
+            block='A',
+        )
         db.session.add(settings)
         db.session.commit()
 
@@ -41,8 +71,11 @@ class TestFeatureSettings:
 
     def test_feature_settings_to_dict(self, client, test_admin):
         """Test the to_dict method returns all features."""
+        economy = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
         settings = FeatureSettings(
             teacher_id=test_admin.id,
+            join_code='JOIN_A',
+            class_id=economy.class_id,
             block='A',
             payroll_enabled=True,
             insurance_enabled=False,
@@ -64,29 +97,25 @@ class TestFeatureSettings:
 
     def test_feature_settings_per_period(self, client, test_admin):
         """Test that different periods can have different settings."""
-        # Create global settings
-        global_settings = FeatureSettings(
-            teacher_id=test_admin.id,
-            block=None,
-            payroll_enabled=True,
-            rent_enabled=True,
-        )
-        db.session.add(global_settings)
+        economy_a = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
+        economy_b = _create_class_scope(test_admin, block='B', join_code='JOIN_B')
 
-        # Create period A settings with different values
         period_a_settings = FeatureSettings(
             teacher_id=test_admin.id,
+            join_code='JOIN_A',
+            class_id=economy_a.class_id,
             block='A',
             payroll_enabled=True,
-            rent_enabled=False,  # Different from global
+            rent_enabled=False,
         )
         db.session.add(period_a_settings)
 
-        # Create period B settings with different values
         period_b_settings = FeatureSettings(
             teacher_id=test_admin.id,
+            join_code='JOIN_B',
+            class_id=economy_b.class_id,
             block='B',
-            payroll_enabled=False,  # Different from global
+            payroll_enabled=False,
             rent_enabled=True,
         )
         db.session.add(period_b_settings)
@@ -108,12 +137,13 @@ class TestFeatureSettings:
 
     def test_unique_constraint_teacher_block(self, client, test_admin):
         """Test that duplicate teacher-join_code-block combinations are prevented."""
-        settings1 = FeatureSettings(teacher_id=test_admin.id, join_code='JOIN_A', block='A')
+        economy = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
+        settings1 = FeatureSettings(teacher_id=test_admin.id, join_code='JOIN_A', class_id=economy.class_id, block='A')
         db.session.add(settings1)
         db.session.commit()
 
         # Try to add another settings for the same teacher-join_code-block
-        settings2 = FeatureSettings(teacher_id=test_admin.id, join_code='JOIN_A', block='A')
+        settings2 = FeatureSettings(teacher_id=test_admin.id, join_code='JOIN_A', class_id=economy.class_id, block='A')
         db.session.add(settings2)
 
         with pytest.raises(Exception):  # Should raise IntegrityError
@@ -270,9 +300,10 @@ class TestTeacherDeletionCascade:
         db.session.commit()
         teacher_id = admin.id
 
-        # Create feature settings for the teacher
-        settings1 = FeatureSettings(teacher_id=teacher_id, block=None)
-        settings2 = FeatureSettings(teacher_id=teacher_id, block='A')
+        economy_a = _create_class_scope(admin, block='A', join_code='TESTA1')
+        economy_b = _create_class_scope(admin, block='B', join_code='TESTB1')
+        settings1 = FeatureSettings(teacher_id=teacher_id, join_code='TESTA1', class_id=economy_a.class_id, block='A')
+        settings2 = FeatureSettings(teacher_id=teacher_id, join_code='TESTB1', class_id=economy_b.class_id, block='B')
         db.session.add(settings1)
         db.session.add(settings2)
         db.session.commit()
@@ -328,9 +359,9 @@ class TestTeacherDeletionCascade:
 
         # Ensure ClassEconomy exists for FK constraints
         if not db.session.get(ClassEconomy, 'TEST123'):
-            db.session.add(ClassEconomy(join_code='TEST123', display_name='Class TEST123'))
+            db.session.add(ClassEconomy(join_code='TEST123', teacher_id=teacher_id, created_by_admin_id=teacher_id, display_name='Class TEST123'))
         if not db.session.get(ClassEconomy, 'TEST456'):
-            db.session.add(ClassEconomy(join_code='TEST456', display_name='Class TEST456'))
+            db.session.add(ClassEconomy(join_code='TEST456', teacher_id=teacher_id, created_by_admin_id=teacher_id, display_name='Class TEST456'))
         db.session.commit()
 
         # Create teacher blocks

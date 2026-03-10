@@ -101,6 +101,31 @@ def _resolve_join_code_for_block(teacher_id: int, block: Optional[str]) -> Optio
     return row[0] if row and row[0] else None
 
 
+def _resolve_class_scope_for_block(teacher_id: int, block: Optional[str]) -> Optional[dict[str, str]]:
+    if not has_app_context() or not block:
+        return None
+
+    from app.models import ClassEconomy
+
+    normalized_block = block.strip().upper()
+    join_code = _resolve_join_code_for_block(teacher_id, normalized_block)
+    if not join_code:
+        return None
+
+    class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
+        join_code=join_code,
+        teacher_id=teacher_id,
+    ).first()
+    if not class_row or not class_row[0]:
+        return None
+
+    return {
+        "join_code": join_code,
+        "class_id": class_row[0],
+        "block": normalized_block,
+    }
+
+
 def get_feature_settings_row(
     teacher_id: int,
     block: Optional[str] = None,
@@ -113,47 +138,48 @@ def get_feature_settings_row(
     from app.extensions import db
     from app.models import FeatureSettings
 
+    scope = None
     normalized_block = block.strip().upper() if block else None
-    normalized_join_code = join_code or _resolve_join_code_for_block(teacher_id, normalized_block)
+    normalized_join_code = (join_code or "").strip().upper() or None
 
-    row = None
-    if normalized_block and normalized_join_code:
-        row = FeatureSettings.query.filter_by(
+    if normalized_block:
+        scope = _resolve_class_scope_for_block(teacher_id, normalized_block)
+    elif normalized_join_code:
+        from app.models import ClassEconomy, TeacherBlock
+
+        class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
+            join_code=normalized_join_code,
             teacher_id=teacher_id,
-            block=normalized_block,
+        ).first()
+        block_row = TeacherBlock.query.with_entities(TeacherBlock.block).filter_by(
+            teacher_id=teacher_id,
             join_code=normalized_join_code,
         ).first()
+        if class_row and class_row[0] and block_row and block_row[0]:
+            scope = {
+                "join_code": normalized_join_code,
+                "class_id": class_row[0],
+                "block": block_row[0].strip().upper(),
+            }
 
-    if row is None and normalized_block:
-        row = FeatureSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=normalized_block,
-        ).order_by(FeatureSettings.join_code.is_(None).desc()).first()
-        if row and normalized_join_code and not row.join_code:
-            row.join_code = normalized_join_code
+    if not scope:
+        return None
 
-    if row is None and normalized_join_code and not normalized_block:
-        row = FeatureSettings.query.filter_by(
-            teacher_id=teacher_id,
-            join_code=normalized_join_code,
-            block=None,
-        ).first()
+    row = FeatureSettings.query.filter_by(
+        teacher_id=teacher_id,
+        class_id=scope["class_id"],
+    ).first()
+    if row or not create:
+        return row
 
-    if row is None and (not normalized_block or not create):
-        row = FeatureSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=None,
-        ).order_by(FeatureSettings.join_code.is_(None).desc()).first()
-
-    if row is None and create:
-        row = FeatureSettings(
-            teacher_id=teacher_id,
-            join_code=normalized_join_code,
-            block=normalized_block,
-        )
-        db.session.add(row)
-        db.session.flush()
-
+    row = FeatureSettings(
+        teacher_id=teacher_id,
+        join_code=scope["join_code"],
+        class_id=scope["class_id"],
+        block=scope["block"],
+    )
+    db.session.add(row)
+    db.session.flush()
     return row
 
 

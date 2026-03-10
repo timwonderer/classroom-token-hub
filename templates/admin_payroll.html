@@ -195,6 +195,25 @@
   </div>
 </div>
 
+<div class="card shadow-sm mb-4">
+  <div class="card-body d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+    <div>
+      <div class="fw-semibold">Class Context</div>
+      <div class="text-muted small">Only classes with payroll enabled are available here.</div>
+    </div>
+    <form method="GET" action="{{ url_for('admin.payroll') }}" class="d-flex align-items-center gap-2">
+      <label for="payrollJoinCode" class="form-label mb-0 small text-muted">Class</label>
+      <select id="payrollJoinCode" name="join_code" class="form-select" onchange="this.form.submit()">
+        {% for option in feature_options %}
+          <option value="{{ option.join_code }}" {% if option.join_code == selected_feature_scope.join_code %}selected{% endif %}>
+            {{ option.label }}
+          </option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+</div>
+
 <!-- Nav Tabs -->
 <ul class="nav nav-tabs mb-4" id="payrollTabs" role="tablist">
   <li class="nav-item" role="presentation">
@@ -560,6 +579,8 @@
 
             <form method="POST" action="{{ url_for('admin.payroll_settings') }}" id="payrollSettingsForm">
               {{ settings_form.hidden_tag() }}
+              <input type="hidden" name="join_code" value="{{ selected_feature_scope.join_code }}">
+              <input type="hidden" name="cwi_block" value="{{ selected_feature_scope.block }}">
               <input type="hidden" name="settings_mode" id="settingsModeInput"
                 value="{% if default_setting and default_setting.settings_mode == 'advanced' %}advanced{% else %}simple{% endif %}">
 
@@ -1861,7 +1882,10 @@
           'X-Requested-With': 'XMLHttpRequest',
           'Content-Type': 'application/json',
           'X-CSRFToken': csrfToken
-        }
+        },
+        body: JSON.stringify({
+          join_code: {{ selected_feature_scope.join_code|tojson }}
+        })
       });
       const payload = await resp.json();
       if (!resp.ok) throw new Error(payload.message || 'Payroll failed');

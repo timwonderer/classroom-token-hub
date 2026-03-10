@@ -24,17 +24,19 @@ from app.models import (
     TapEventReasonCode, HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
     StudentTeacher, TeacherBlock, StudentBlock, StoreItemBlock,
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource, _quantize_currency,
-    ClassMembership,
+    ClassEconomy, ClassMembership,
 )
 from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
 from app.routes.student import (
     get_current_class_context,
     get_current_teacher_id,
+    get_feature_settings_for_student,
     get_rent_settings_for_context,
     _calculate_rent_coverage_due_date,
     _is_student_coverage_period_paid,
     _ensure_rent_hall_pass_top_off,
 )
+from app.utils.economy_policy import get_feature_settings_row
 from app.utils.overdraft import charge_overdraft_fee_if_needed
 from app.utils.store import process_expired_collective_goals
 from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone, local_date_bounds_utc, UTC_MIN
@@ -155,6 +157,70 @@ def _append_redemption_audit_log(*, student_item, student, teacher_id, action, n
         source=RedemptionAuditSource.LIVE,
     ))
     guard_state['inserted'] = True
+
+
+def _get_request_join_code(payload=None):
+    """Resolve explicit class scope from request data or session."""
+    join_code = request.args.get("join_code", "").strip()
+    if not join_code and payload:
+        raw_join_code = payload.get("join_code")
+        if raw_join_code is not None:
+            join_code = str(raw_join_code).strip()
+    if not join_code:
+        join_code = (session.get("current_join_code") or "").strip()
+    return join_code or None
+
+
+def _get_hall_pass_settings_scope(teacher_id, join_code):
+    """Resolve canonical class scope for hall pass settings."""
+    if not teacher_id or not join_code:
+        return None
+
+    class_row = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=teacher_id).first()
+    if not class_row:
+        return None
+
+    seat = (
+        TeacherBlock.query
+        .filter_by(teacher_id=teacher_id, join_code=join_code)
+        .order_by(TeacherBlock.id.desc())
+        .first()
+    )
+    block = seat.block if seat and seat.block else None
+    if not block:
+        return None
+
+    return {
+        "join_code": join_code,
+        "class_id": class_row.class_id,
+        "block": block,
+    }
+
+
+def _get_or_create_hall_pass_settings(teacher_id, join_code):
+    """Return the hall pass settings row for a specific class, creating it if needed."""
+    scope = _get_hall_pass_settings_scope(teacher_id, join_code)
+    if not scope:
+        return None
+
+    settings = HallPassSettings.query.filter_by(class_id=scope["class_id"]).first()
+    if settings:
+        if settings.join_code != scope["join_code"]:
+            settings.join_code = scope["join_code"]
+        if settings.block != scope["block"]:
+            settings.block = scope["block"]
+        return settings
+
+    settings = HallPassSettings(
+        teacher_id=teacher_id,
+        join_code=scope["join_code"],
+        class_id=scope["class_id"],
+        block=scope["block"],
+        queue_enabled=True,
+        queue_limit=10,
+    )
+    db.session.add(settings)
+    return settings
 
 
 def _get_teacher_join_code_scope(admin_id):
@@ -1375,16 +1441,9 @@ def _check_simultaneous_pass_limit(log_entry):
     teacher_block = TeacherBlock.query.filter_by(join_code=log_entry.join_code).first()
     teacher_id = teacher_block.teacher_id if teacher_block else None
     if not teacher_id:
-        # Fallback for legacy data: derive teacher from StudentTeacher link
-        teacher_id = (
-            StudentTeacher.query.with_entities(StudentTeacher.teacher_id)
-            .filter(StudentTeacher.student_id == log_entry.student_id)
-            .scalar()
-        )
-    if not teacher_id:
         return None
 
-    settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+    settings = _get_or_create_hall_pass_settings(teacher_id, log_entry.join_code)
     if not settings:
         return None
 
@@ -1620,22 +1679,14 @@ def get_hall_pass_queue():
 @admin_required
 def hall_pass_settings():
     """Get or update hall pass settings (admin only)"""
-    # CRITICAL: Scope by teacher_id for multi-tenancy
     teacher_id = session.get('admin_id')
     if not teacher_id:
         return jsonify({"status": "error", "message": "Admin ID not found in session"}), 401
 
-    # Query settings scoped to this teacher (block=None means global default for teacher)
-    settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+    join_code = _get_request_join_code()
+    settings = _get_or_create_hall_pass_settings(teacher_id, join_code)
     if not settings:
-        settings = HallPassSettings(
-            teacher_id=teacher_id,
-            block=None,
-            queue_enabled=True,
-            queue_limit=10
-        )
-        db.session.add(settings)
-        db.session.commit()
+        return jsonify({"status": "error", "message": "join_code is required"}), 400
 
     if request.method == 'GET':
         return jsonify({
@@ -1778,9 +1829,19 @@ def hall_pass_history():
 def get_hall_pass_setup():
     """Get teacher's hall pass configuration"""
     teacher_id = session.get('admin_id')
+    join_code = _get_request_join_code()
+    if not join_code:
+        return jsonify({"status": "error", "message": "join_code is required"}), 400
 
-    # Get or create settings for this teacher
-    settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+    scope = _get_hall_pass_settings_scope(teacher_id, join_code)
+    if not scope:
+        return jsonify({"status": "error", "message": "Class scope not found"}), 404
+
+    feature_settings = get_feature_settings_row(teacher_id, block=scope["block"], join_code=join_code, create=False)
+    if feature_settings and not feature_settings.hall_pass_enabled:
+        return jsonify({"status": "error", "message": "Hall pass is disabled for this class"}), 403
+
+    settings = HallPassSettings.query.filter_by(class_id=scope["class_id"]).first()
 
     if not settings:
         # Return default configuration
@@ -1804,6 +1865,9 @@ def save_hall_pass_setup():
     """Save teacher's hall pass configuration"""
     teacher_id = session.get('admin_id')
     data = request.get_json()
+    join_code = _get_request_join_code(data)
+    if not join_code:
+        return jsonify({"status": "error", "message": "join_code is required"}), 400
 
     pass_types = data.get('pass_types', [])
     hall_pass_enabled = data.get('hall_pass_enabled', True)
@@ -1842,22 +1906,17 @@ def save_hall_pass_setup():
                     return jsonify({"status": "error", "message": f"{field} must be a number or blank"}), 400
 
     try:
-        # Get or create settings for this teacher
-        settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
-
+        settings = _get_or_create_hall_pass_settings(teacher_id, join_code)
         if not settings:
-            settings = HallPassSettings(
-                teacher_id=teacher_id,
-                block=None,
-                queue_enabled=hall_pass_enabled,
-                queue_limit=10,
-                pass_types=pass_types
-            )
-            db.session.add(settings)
-        else:
-            settings.queue_enabled = hall_pass_enabled
-            settings.pass_types = pass_types
-            settings.updated_at = utc_now()
+            return jsonify({"status": "error", "message": "Class scope not found"}), 404
+
+        feature_settings = get_feature_settings_row(teacher_id, block=settings.block, join_code=join_code, create=False)
+        if feature_settings and not feature_settings.hall_pass_enabled:
+            return jsonify({"status": "error", "message": "Hall pass is disabled for this class"}), 403
+
+        settings.queue_enabled = hall_pass_enabled
+        settings.pass_types = pass_types
+        settings.updated_at = utc_now()
 
         db.session.commit()
 
@@ -1918,6 +1977,8 @@ def get_available_hall_pass_types():
         if context:
             if context.get('join_code') != join_code:
                 return jsonify({"status": "error", "message": "join_code is out of scope for this session"}), 403
+            if not get_feature_settings_for_student().get("hall_pass_enabled", True):
+                return jsonify({"status": "error", "message": "Hall pass is disabled for this class"}), 403
             resolved_teacher_id = context.get('teacher_id')
         else:
             seat_row = TeacherBlock.query.with_entities(TeacherBlock.teacher_id).filter(
@@ -1939,16 +2000,15 @@ def get_available_hall_pass_types():
 
     settings = None
     if join_code:
-        settings = (
-            HallPassSettings.query.filter(
-                HallPassSettings.teacher_id == resolved_teacher_id,
-                HallPassSettings.join_code == join_code,
-            )
-            .order_by(sa.desc(HallPassSettings.block.isnot(None)))
-            .first()
-        )
+        settings = HallPassSettings.query.filter_by(
+            teacher_id=resolved_teacher_id,
+            join_code=join_code,
+        ).first()
     elif teacher_public_id:
-        settings = HallPassSettings.query.filter_by(teacher_id=resolved_teacher_id, block=None).first()
+        return jsonify({
+            "status": "error",
+            "message": "join_code is required"
+        }), 400
 
     if not settings:
         # Return defaults if not configured
@@ -2279,17 +2339,13 @@ def handle_tap():
 
             teacher_id = teacher_block.teacher_id
 
-            # Query settings scoped to this teacher (block=None means global default)
-            settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+            feature_settings = get_feature_settings_row(teacher_id, block=period, join_code=join_code, create=False)
+            if feature_settings and not feature_settings.hall_pass_enabled:
+                return jsonify({"error": "Hall pass is currently disabled for this class."}), 403
+
+            settings = _get_or_create_hall_pass_settings(teacher_id, join_code)
             if not settings:
-                settings = HallPassSettings(
-                    teacher_id=teacher_id,
-                    block=None,
-                    queue_enabled=True,
-                    queue_limit=10
-                )
-                db.session.add(settings)
-                db.session.commit()
+                return jsonify({"error": "Hall pass settings are not available for this class."}), 400
 
             # Get pass types configuration
             pass_types = settings.get_pass_types()
@@ -2376,7 +2432,7 @@ def handle_tap():
             # Since the student is just requesting, they are still 'active'.
             # We need to return the current state to the UI.
             is_active = True
-            last_payroll_time = get_last_payroll_time(student_id=student.id)
+            last_payroll_time = get_last_payroll_time(student_id=student.id, join_code=join_code)
             duration = calculate_unpaid_attendance_seconds(student.id, period, last_payroll_time, join_code=join_code)
             rate_per_second = get_pay_rate_for_block(block_lookup.get(period, period))
             projected_pay = duration * rate_per_second

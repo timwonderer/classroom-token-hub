@@ -1101,9 +1101,9 @@ class HallPassSettings(db.Model):
     __tablename__ = 'hall_pass_settings'
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
-    join_code = db.Column(db.String(20), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
-    block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
+    join_code = db.Column(db.String(20), nullable=False, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    block = db.Column(db.String(10), nullable=False)
 
     # Queue system toggle
     queue_enabled = db.Column(db.Boolean, default=True, nullable=False)
@@ -1111,9 +1111,7 @@ class HallPassSettings(db.Model):
     # Queue limit (when queue + currently out >= this number, restrict certain passes)
     queue_limit = db.Column(db.Integer, default=10, nullable=False)
 
-    # NEW: Pass type configurations stored as JSON
-    # Format: [{"name": "Bathroom", "queue_limit": 5, "simultaneous_limit": 2}, ...]
-    # If null or empty, fallback to default pass types
+    # Pass type configurations stored as JSON.
     pass_types = db.Column(db.JSON, nullable=True)
 
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
@@ -1134,11 +1132,10 @@ class HallPassSettings(db.Model):
         ]
 
     def get_pass_types(self):
-        """Get pass types with fallback to defaults if not configured."""
+        """Get pass types, defaulting to the built-in set when unset."""
         if not self.pass_types:
             return self.get_default_pass_types()
 
-        # Ensure all pass types have an 'enabled' field (backward compatibility)
         for pt in self.pass_types:
             pt.setdefault('enabled', True)
         return self.pass_types
@@ -2390,11 +2387,7 @@ class BankingSettings(db.Model):
 # -------------------- FEATURE SETTINGS MODEL --------------------
 class FeatureSettings(db.Model):
     """
-    Per-period/block feature toggle settings for a teacher.
-
-    Allows teachers to enable/disable major features on a per-period basis.
-    If block is NULL, settings apply as global defaults for the teacher.
-    Period-specific settings override global defaults.
+    Per-class feature toggle settings for a teacher.
 
     Features that can be toggled:
     - Payroll (time tracking & payments)
@@ -2409,8 +2402,9 @@ class FeatureSettings(db.Model):
     __tablename__ = 'feature_settings'
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
-    join_code = db.Column(db.String(20), nullable=True, index=True)
-    block = db.Column(db.String(10), nullable=True)  # NULL = global defaults for teacher
+    join_code = db.Column(db.String(20), nullable=False, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    block = db.Column(db.String(10), nullable=False)
 
     # Feature toggles - all default to True (enabled)
     payroll_enabled = db.Column(db.Boolean, default=True, nullable=False)
@@ -2439,16 +2433,13 @@ class FeatureSettings(db.Model):
     # Relationships
     teacher = db.relationship('Admin', backref=db.backref('feature_settings', lazy='dynamic', passive_deletes=True))
 
-    # Unique constraint: one settings row per teacher-block combination
     __table_args__ = (
         db.UniqueConstraint('teacher_id', 'join_code', 'block', name='uq_feature_settings_teacher_join_code_block'),
         db.Index('ix_feature_settings_teacher_id', 'teacher_id'),
     )
 
     def __repr__(self):
-        scope = self.join_code or 'legacy'
-        block_str = self.block or 'Global'
-        return f'<FeatureSettings teacher={self.teacher_id} join={scope} block={block_str}>'
+        return f'<FeatureSettings teacher={self.teacher_id} join={self.join_code} block={self.block}>'
 
     def to_dict(self):
         """Return feature settings as a dictionary."""

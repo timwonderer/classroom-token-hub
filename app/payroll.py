@@ -154,16 +154,17 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
     # map: (student_id, block) -> join_code
     student_join_codes = _get_batch_join_codes(teacher_id, student_ids)
 
-    # --- 3. Batch Fetch Last Payroll Times ---
-    # map: student_id -> last_payroll_timestamp
-    student_last_payrolls = _get_batch_last_payroll_times(student_ids)
+    # --- 3. Determine class scope and fetch class-scoped payroll anchors ---
+    teacher_join_codes = list({jc for jc in student_join_codes.values() if jc})
+    student_last_payrolls = _get_batch_last_payroll_times(
+        student_ids,
+        allowed_join_codes=teacher_join_codes,
+    )
 
     # --- 4. Batch Fetch Attendance Events ---
-    # Determine the global anchor to limit event fetching
-    # We must go back at least to the earliest relevant payroll time
+    # Determine the earliest relevant anchor across the scoped classes.
     normalized_global_last_payroll = ensure_utc(last_payroll_time)
 
-    # Filter valid times to find the minimum anchor
     valid_times = [t for t in student_last_payrolls.values() if t]
     if normalized_global_last_payroll:
         valid_times.append(normalized_global_last_payroll)
@@ -171,12 +172,6 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
     # If we have any history, start fetching from the earliest point
     # If no history at all, we technically fetch everything (min_anchor=None)
     min_anchor = min(valid_times) if valid_times else None
-
-    # SECURITY: Restrict events to this teacher's join codes only.
-    # student_join_codes is already scoped to teacher_id; extract unique values.
-    # Use a list (not None) so that an empty set produces in([]) → zero rows
-    # rather than skipping the filter and leaking other tenants' data.
-    teacher_join_codes = list({jc for jc in student_join_codes.values() if jc})
 
     # map: (student_id, period, join_code) -> list of valid events (sorted)
     # Also handles the "initial state" (was active at anchor) logic internally
@@ -199,11 +194,6 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
             seen_blocks.add(norm)
             student_blocks.append(block)
         
-        # Determine specific anchor for this student
-        student_last_pay = student_last_payrolls.get(student.id)
-        possible_anchors = [t for t in [normalized_global_last_payroll, student_last_pay] if t]
-        payroll_anchor = max(possible_anchors) if possible_anchors else None
-
         for block_original in student_blocks:
             block_upper = block_original.upper()
 
@@ -215,6 +205,10 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
             
             if not join_code:
                 continue
+
+            payroll_anchor = student_last_payrolls.get((student.id, join_code))
+            if payroll_anchor is None:
+                payroll_anchor = normalized_global_last_payroll
 
             # Calculate seconds using batched events
             # We only care about events >= payroll_anchor
@@ -270,24 +264,28 @@ def _get_batch_join_codes(teacher_id, student_ids):
             join_codes[key] = seat.join_code
     return join_codes
 
-def _get_batch_last_payroll_times(student_ids):
+def _get_batch_last_payroll_times(student_ids, allowed_join_codes=None):
     """
-    Batch find the last payroll transaction timestamp for each student.
-    Uses a window function technique or grouping to find MAX(timestamp).
+    Batch find the last payroll/manual-payment anchor for each (student, join_code).
     """
     from app.models import Transaction
     from sqlalchemy import func
     
-    # Query: SELECT student_id, MAX(timestamp) FROM transaction WHERE ... GROUP BY student_id
-    results = db.session.query(
+    query = db.session.query(
         Transaction.student_id,
+        Transaction.join_code,
         func.max(Transaction.timestamp)
     ).filter(
         Transaction.student_id.in_(student_ids),
-        Transaction.type.in_(["payroll", "manual_payment"])
-    ).group_by(Transaction.student_id).all()
-    
-    return {row[0]: ensure_utc(row[1]) for row in results}
+        Transaction.type.in_(["payroll", "manual_payment"]),
+        Transaction.join_code.isnot(None),
+    )
+    if allowed_join_codes is not None:
+        query = query.filter(Transaction.join_code.in_(allowed_join_codes))
+
+    results = query.group_by(Transaction.student_id, Transaction.join_code).all()
+
+    return {(student_id, join_code): ensure_utc(ts) for student_id, join_code, ts in results}
 
 
 @with_teacher_id_fallback

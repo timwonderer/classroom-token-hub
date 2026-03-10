@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 
-from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app, has_app_context
+from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app, has_app_context, abort
 from sqlalchemy import or_, func, select, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -67,6 +67,19 @@ from app.services.tlcp import has_recent_error_for_actor
 
 # Create blueprint
 student_bp = Blueprint('student', __name__, url_prefix='/student')
+
+STUDENT_FEATURE_ENDPOINTS = {
+    'student.payroll': 'payroll',
+    'student.transfer': 'banking',
+    'student.student_insurance': 'insurance',
+    'student.purchase_insurance': 'insurance',
+    'student.cancel_insurance': 'insurance',
+    'student.file_claim': 'insurance',
+    'student.view_policy': 'insurance',
+    'student.shop': 'store',
+    'student.rent': 'rent',
+    'student.rent_pay': 'rent',
+}
 
 # Tolerance used to match RentPayment rows with their Transaction rows.
 # This guards against small timestamp drift without weakening ownership checks.
@@ -227,8 +240,7 @@ def get_feature_settings_for_student():
     """
     Get feature settings for the currently logged-in student.
 
-    Returns the merged feature settings for the student's current teacher/period context.
-    Settings cascade: period-specific > global > system defaults.
+    Returns the class-scoped feature settings for the student's current teacher/period context.
 
     Returns:
         dict: Feature settings dictionary with enabled/disabled flags
@@ -251,15 +263,13 @@ def get_feature_settings_for_student():
         return FeatureSettings.get_defaults()
 
     current_block = (context.get('block') or '').strip().upper()
-    base_query = FeatureSettings.query.filter(
-        FeatureSettings.teacher_id == teacher_id,
-        FeatureSettings.join_code == join_code,
-    )
     scoped_settings = None
     if current_block:
-        scoped_settings = base_query.filter(func.upper(FeatureSettings.block) == current_block).first()
-    if not scoped_settings:
-        scoped_settings = base_query.filter(FeatureSettings.block.is_(None)).first()
+        scoped_settings = FeatureSettings.query.filter(
+            FeatureSettings.teacher_id == teacher_id,
+            FeatureSettings.join_code == join_code,
+            func.upper(FeatureSettings.block) == current_block,
+        ).first()
     if scoped_settings:
         return scoped_settings.to_dict()
 
@@ -437,6 +447,10 @@ def check_legacy_profile():
     
     if needs_migration:
         return redirect(url_for('student.complete_profile'))
+
+    feature_name = STUDENT_FEATURE_ENDPOINTS.get(request.endpoint)
+    if feature_name and not is_feature_enabled(feature_name):
+        abort(404)
 
 
 @student_bp.route('/complete-profile', methods=['GET', 'POST'])

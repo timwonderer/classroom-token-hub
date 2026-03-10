@@ -103,6 +103,25 @@
 </div>
 
 <div class="container-fluid">
+    <div class="card shadow-sm mb-4">
+        <div class="card-body d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+            <div>
+                <div class="fw-semibold">Class Context</div>
+                <div class="text-muted small">Only classes with hall pass enabled are available here.</div>
+            </div>
+            <form method="GET" action="{{ url_for('admin.hall_pass') }}" class="d-flex align-items-center gap-2">
+                <label for="hallPassJoinCode" class="form-label mb-0 small text-muted">Class</label>
+                <select id="hallPassJoinCode" name="join_code" class="form-select" onchange="this.form.submit()">
+                    {% for option in feature_options %}
+                        <option value="{{ option.join_code }}" {% if option.join_code == selected_feature_scope.join_code %}selected{% endif %}>
+                            {{ option.label }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+    </div>
+
     <div class="d-flex justify-content-end align-items-center mb-4">
         <div>
             {% if verify_url %}
@@ -143,7 +162,7 @@
                     </div>
                 </div>
                 <div class="col-auto">
-                    <a href="{{ url_for('admin.hall_pass_setup') }}" class="btn btn-outline-primary btn-sm">
+                    <a href="{{ url_for('admin.hall_pass_setup', join_code=current_join_code) }}" class="btn btn-outline-primary btn-sm">
                         <span class="material-symbols-outlined align-middle" style="font-size: 1.1rem;">tune</span>
                         Configure Pass Types
                     </a>
@@ -401,7 +420,8 @@ const settingsSavedIndicator = document.getElementById('settingsSavedIndicator')
 // Load current settings on page load
 function loadQueueSettings() {
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    fetch('/api/hall-pass/settings', {
+    const params = new URLSearchParams({ join_code: {{ current_join_code|tojson }} });
+    fetch(`/api/hall-pass/settings?${params.toString()}`, {
         method: 'GET',
         headers: {
             'X-CSRFToken': csrfToken
@@ -446,6 +466,7 @@ function saveQueueSettings() {
             'X-CSRFToken': csrfToken
         },
         body: JSON.stringify({
+            join_code: {{ current_join_code|tojson }},
             queue_enabled: queueEnabled,
             queue_limit: queueLimit
         })
@@ -499,6 +520,7 @@ function loadHistory(page = 1) {
     if (type) params.append('type', type);
     if (startDate) params.append('start_date', startDate);
     if (endDate) params.append('end_date', endDate);
+    params.append('join_code', {{ current_join_code|tojson }});
 
     fetch(`/api/hall-pass/history?${params.toString()}`)
         .then(response => response.json())

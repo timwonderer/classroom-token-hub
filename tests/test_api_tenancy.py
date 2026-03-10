@@ -93,6 +93,9 @@ def _create_tap_event(student: Student, status: str = "active"):
 
 def _create_claimed_seat(teacher: Admin, student: Student, join_code: str, block: str = "A"):
     """Create a claimed teacher block (seat) for join-code scoped tests."""
+    if not ClassEconomy.query.filter_by(join_code=join_code).first():
+        _create_class_scope(teacher, student, join_code)
+
     seat = TeacherBlock(
         teacher_id=teacher.id,
         block=block,
@@ -116,6 +119,7 @@ def _create_class_scope(teacher: Admin, student: Student, join_code: str):
     """Create the v2 class economy and memberships for a teacher/student pair."""
     db.session.add(ClassEconomy(
         join_code=join_code,
+        teacher_id=teacher.id,
         status="active",
         created_by_admin_id=teacher.id,
     ))
@@ -514,10 +518,12 @@ def test_hall_pass_available_types_accepts_join_code_without_teacher_id(client):
     student = _create_student("JoinCodePassTypes", primary_teacher=teacher)
     _create_claimed_seat(teacher, student, "HALLA1", block="A")
 
+    economy = ClassEconomy.query.filter_by(join_code="HALLA1").first()
     db.session.add(HallPassSettings(
         teacher_id=teacher.id,
         join_code="HALLA1",
-        block=None,
+        class_id=economy.class_id,
+        block="A",
         pass_types=[
             {"name": "Bathroom", "enabled": True},
             {"name": "Office", "enabled": False},
@@ -548,29 +554,18 @@ def test_hall_pass_available_types_rejects_out_of_scope_join_code(client):
     assert payload["status"] == "error"
 
 
-def test_hall_pass_available_types_supports_teacher_public_id(client):
+def test_hall_pass_available_types_requires_join_code(client):
     teacher, _ = _create_admin("teacher-hall-public")
     teacher.teacher_public_id = "crisp-otter-leaf"
     student = _create_student("PublicIdPassTypes", primary_teacher=teacher)
     _create_claimed_seat(teacher, student, "HALLP1", block="A")
 
-    db.session.add(HallPassSettings(
-        teacher_id=teacher.id,
-        block=None,
-        pass_types=[
-            {"name": "Bathroom", "enabled": True},
-            {"name": "Counselor", "enabled": True},
-        ],
-    ))
-    db.session.commit()
-
     _login_student(client, student, join_code="HALLP1")
     response = client.get("/api/hall-pass/available-types?teacher_public_id=crisp-otter-leaf")
 
-    assert response.status_code == 200
+    assert response.status_code == 400
     payload = response.get_json()
-    assert payload["status"] == "success"
-    assert payload["pass_types"] == [{"name": "Bathroom"}, {"name": "Counselor"}]
+    assert payload["status"] == "error"
 
 
 def test_switch_teacher_public_id_updates_join_code_context(client):
