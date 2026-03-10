@@ -49,6 +49,7 @@ from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed, evaluate_overdraft_allowance
 from app.utils.help_content import HELP_ARTICLES
 from app.utils.store import process_expired_collective_goals
+from app.utils.economy_policy import resolve_feature_class
 from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
 from app.attendance import get_all_block_statuses
 from app.payroll import get_pay_rate_for_block
@@ -263,13 +264,13 @@ def get_feature_settings_for_student():
         return FeatureSettings.get_defaults()
 
     current_block = (context.get('block') or '').strip().upper()
-    scoped_settings = None
-    if current_block:
-        scoped_settings = FeatureSettings.query.filter(
-            FeatureSettings.teacher_id == teacher_id,
-            FeatureSettings.join_code == join_code,
-            func.upper(FeatureSettings.block) == current_block,
-        ).first()
+    scoped_feature = resolve_feature_class(
+        teacher_id,
+        'store',
+        block=current_block,
+        join_code=join_code,
+    )
+    scoped_settings = scoped_feature["settings_row"] if scoped_feature else None
     if scoped_settings:
         return scoped_settings.to_dict()
 
@@ -292,9 +293,17 @@ def is_feature_enabled(feature_name):
         if rent_settings:
             return bool(rent_settings.is_enabled)
 
-    settings = get_feature_settings_for_student()
-    feature_key = f"{feature_name}_enabled"
-    return settings.get(feature_key, True)  # Default to enabled
+    context = get_current_class_context()
+    if not context:
+        return False
+
+    scoped_feature = resolve_feature_class(
+        context.get('teacher_id'),
+        feature_name,
+        block=context.get('block'),
+        join_code=context.get('join_code'),
+    )
+    return bool(scoped_feature["enabled"]) if scoped_feature else False
 
 
 def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: int) -> tuple[Decimal, Decimal]:

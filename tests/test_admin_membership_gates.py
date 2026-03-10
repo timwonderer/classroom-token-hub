@@ -17,7 +17,7 @@ def test_set_current_class_requires_membership_even_if_teacherblock_exists(clien
     db.session.add_all([admin_a, admin_b])
     db.session.flush()
 
-    db.session.add(ClassEconomy(join_code="GATE001", status="active", created_by_admin_id=admin_b.id))
+    db.session.add(ClassEconomy(join_code="GATE001", teacher_id=admin_b.id, status="active", created_by_admin_id=admin_b.id))
     db.session.add(ClassMembership(join_code="GATE001", admin_id=admin_b.id, role="admin", status="active"))
     # Stale/legacy seat should not grant access without ClassMembership
     db.session.add(TeacherBlock(
@@ -28,7 +28,7 @@ def test_set_current_class_requires_membership_even_if_teacherblock_exists(clien
         first_name="Legacy",
         last_initial="X",
         last_name_hash_by_part=[],
-        dob_sum=0,
+        dob_sum_hash=None,
         salt=b"salt",
         first_half_hash="hash",
     ))
@@ -47,7 +47,7 @@ def test_delete_join_code_requires_membership_even_if_teacherblock_exists(client
     db.session.add_all([admin_a, admin_b])
     db.session.flush()
 
-    db.session.add(ClassEconomy(join_code="DELG001", status="active", created_by_admin_id=admin_b.id))
+    db.session.add(ClassEconomy(join_code="DELG001", teacher_id=admin_b.id, status="active", created_by_admin_id=admin_b.id))
     db.session.add(ClassMembership(join_code="DELG001", admin_id=admin_b.id, role="admin", status="active"))
     db.session.add(TeacherBlock(
         teacher_id=admin_a.id,
@@ -57,7 +57,7 @@ def test_delete_join_code_requires_membership_even_if_teacherblock_exists(client
         first_name="Legacy",
         last_initial="Y",
         last_name_hash_by_part=[],
-        dob_sum=0,
+        dob_sum_hash=None,
         salt=b"salt",
         first_half_hash="hash",
     ))
@@ -74,7 +74,7 @@ def test_delete_join_code_requires_confirmation(client):
     db.session.add(admin)
     db.session.flush()
 
-    db.session.add(ClassEconomy(join_code="CONF001", status="active", created_by_admin_id=admin.id))
+    db.session.add(ClassEconomy(join_code="CONF001", teacher_id=admin.id, status="active", created_by_admin_id=admin.id))
     db.session.add(ClassMembership(join_code="CONF001", admin_id=admin.id, role="admin", status="active"))
     db.session.commit()
 
@@ -105,8 +105,8 @@ def test_issues_queue_respects_current_join_code_membership_scope(client):
     db.session.flush()
 
     db.session.add_all([
-        ClassEconomy(join_code="ISSGA1", status="active", created_by_admin_id=admin.id),
-        ClassEconomy(join_code="ISSGB1", status="active", created_by_admin_id=admin.id),
+        ClassEconomy(join_code="ISSGA1", teacher_id=admin.id, status="active", created_by_admin_id=admin.id),
+        ClassEconomy(join_code="ISSGB1", teacher_id=admin.id, status="active", created_by_admin_id=admin.id),
         ClassMembership(join_code="ISSGA1", admin_id=admin.id, role="admin", status="active"),
         ClassMembership(join_code="ISSGB1", admin_id=admin.id, role="admin", status="active"),
     ])

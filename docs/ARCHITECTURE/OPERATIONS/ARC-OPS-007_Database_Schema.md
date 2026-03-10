@@ -39,7 +39,6 @@ Represents the canonical class anchor.
 | `is_active` | Boolean | Fast active-state flag |
 | `created_at` / `updated_at` | DateTime | UTC timestamps |
 | `created_by_admin_id` | Integer, nullable | Creation audit pointer |
-| `metadata_json` | JSON, nullable | Optional class metadata payload |
 
 ### `class_memberships`
 
@@ -221,8 +220,6 @@ Many of these tables also carry transitional fields such as `teacher_id`, `seat_
 These remain intentionally present but should not be used to define new v2 behavior:
 
 - `Admin.public_id` -> synonym for `teacher_public_id`
-- `StudentTeacher.admin_id` -> synonym for `teacher_id`
-- `TeacherBlock.dob_sum` -> Python compatibility shim for older fixtures; not a persisted DB column
 - legacy plaintext `username` fields on `teachers` and `system_admins`
 
 ## VII. v2 Contract Summary

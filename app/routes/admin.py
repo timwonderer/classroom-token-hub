@@ -35,6 +35,7 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 import sqlalchemy as sa
 import pyotp
 import pytz
+from werkzeug.exceptions import HTTPException
 
 from app.extensions import db, limiter
 from app.models import (
@@ -62,6 +63,8 @@ from app.utils.economy_policy import (
     POLICY_MODES,
     get_feature_settings_row,
     normalize_policy_mode,
+    resolve_class_scope,
+    resolve_feature_class,
 )
 from app.utils.claim_credentials import (
     compute_primary_claim_hash,
@@ -243,33 +246,26 @@ def get_admin_feature_settings_for_join_code(admin_id: int | None, join_code: st
     if not resolved_join_code:
         return FeatureSettings.get_defaults()
 
-    block_row = (
-        TeacherBlock.query.with_entities(TeacherBlock.block)
-        .filter(
-            TeacherBlock.teacher_id == admin_id,
-            TeacherBlock.join_code == resolved_join_code,
-        )
-        .order_by(TeacherBlock.id.asc())
-        .first()
-    )
-    if not block_row or not block_row[0]:
+    scope = resolve_class_scope(admin_id, join_code=resolved_join_code)
+    if not scope:
         return FeatureSettings.get_defaults()
 
     settings_row = get_feature_settings_row(
         admin_id,
-        block=block_row[0].strip().upper(),
-        join_code=resolved_join_code,
+        block=scope["block"],
+        join_code=scope["join_code"],
         create=False,
     )
     return settings_row.to_dict() if settings_row else FeatureSettings.get_defaults()
 
 
 def is_admin_feature_enabled(feature_name: str, admin_id: int | None = None, join_code: str | None = None) -> bool:
-    settings = get_admin_feature_settings_for_join_code(
+    scope = resolve_feature_class(
         admin_id or session.get('admin_id'),
+        feature_name,
         join_code=join_code,
     )
-    return bool(settings.get(f'{feature_name}_enabled', True))
+    return bool(scope["enabled"]) if scope else False
 
 
 def get_admin_feature_join_code_options(feature_name: str, admin_id: int | None = None) -> list[dict[str, str]]:
@@ -293,12 +289,19 @@ def get_admin_feature_join_code_options(feature_name: str, admin_id: int | None 
         if not join_code or join_code in seen_join_codes:
             continue
         seen_join_codes.add(join_code)
-        if not is_admin_feature_enabled(feature_name, admin_id=resolved_admin_id, join_code=join_code):
+        scope = resolve_feature_class(
+            resolved_admin_id,
+            feature_name,
+            join_code=join_code,
+            block=block,
+        )
+        if not scope or not scope["enabled"]:
             continue
-        normalized_block = (block or '').strip().upper()
-        label = class_label or (f"Period {normalized_block}" if normalized_block else join_code)
+        normalized_block = scope["block"]
+        label = class_label or (f"Period {normalized_block}" if normalized_block else scope["join_code"])
         options.append({
-            'join_code': join_code,
+            'join_code': scope["join_code"],
+            'class_id': scope["class_id"],
             'block': normalized_block,
             'label': label,
         })
@@ -659,6 +662,39 @@ def _student_scope_subquery_for_join_code(join_code: str, *, include_unassigned:
         query = query.filter(TeacherBlock.is_claimed == True)
 
     return query.subquery()
+
+
+def _get_claimed_teacher_block_for_join_code(student_id: int, teacher_id: int, join_code: str):
+    """Return the claimed teacher-block row for one student in one class scope."""
+    if not student_id or not teacher_id or not join_code:
+        return None
+    return (
+        TeacherBlock.query
+        .filter_by(
+            student_id=student_id,
+            teacher_id=teacher_id,
+            join_code=join_code,
+            is_claimed=True,
+        )
+        .first()
+    )
+
+
+def _require_payroll_feature_scope_from_request(admin_id: int, *, allow_default: bool = True) -> dict:
+    """Resolve the canonical payroll class scope from request data."""
+    requested_join_code = None
+    if request.is_json:
+        payload = request.get_json(silent=True) or {}
+        requested_join_code = payload.get('join_code')
+    if not requested_join_code:
+        requested_join_code = request.values.get('join_code')
+    return require_admin_feature_scope(
+        'payroll',
+        admin_id=admin_id,
+        requested_join_code=requested_join_code,
+        requested_block=request.values.get('cwi_block') or request.values.get('block'),
+        allow_default=allow_default,
+    )
 
 
 def _join_code_exists(join_code):
@@ -5134,11 +5170,19 @@ def store_management():
 def edit_store_item(item_id):
     """Edit an existing store item."""
     admin_id = session.get("admin_id")
+    selected_scope = require_admin_feature_scope(
+        'store',
+        admin_id=admin_id,
+        requested_join_code=request.values.get('join_code'),
+        requested_block=request.values.get('block'),
+    )
     item = StoreItem.query.filter_by(id=item_id, teacher_id=admin_id).first_or_404()
+    if item.blocks_list and selected_scope['block'] not in {b.strip().upper() for b in item.blocks_list if b}:
+        abort(404)
     form = StoreItemForm(obj=item)
 
     # Populate blocks choices from teacher's students
-    blocks = _get_teacher_blocks()
+    blocks = [option['block'] for option in get_admin_feature_join_code_options('store', admin_id=admin_id) if option.get('block')]
     form.blocks.choices = [(block, f"Period {block}") for block in blocks]
 
     # Pre-populate selected blocks on GET request (using many-to-many relationship)
@@ -5149,6 +5193,10 @@ def edit_store_item(item_id):
             form.collective_goal_expires_at.data = item.collective_goal_expires_at.date()
 
     if form.validate_on_submit():
+        submitted_blocks = {block.strip().upper() for block in (form.blocks.data or []) if block}
+        enabled_blocks = {block for block in blocks if block}
+        if submitted_blocks and not submitted_blocks.issubset(enabled_blocks):
+            abort(404)
         # Populate other fields first
         form.populate_obj(item)
         # Set blocks using many-to-many relationship
@@ -5160,9 +5208,9 @@ def edit_store_item(item_id):
         )
         db.session.commit()
         flash(f"'{item.name}' has been updated.", "success")
-        return redirect(url_for('admin.store_management'))
+        return redirect(url_for('admin.store_management', join_code=selected_scope['join_code']))
     payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True).first()
-    return render_template('admin_edit_item.html', form=form, item=item, current_page="store", payroll_settings=payroll_settings)
+    return render_template('admin_edit_item.html', form=form, item=item, current_page="store", payroll_settings=payroll_settings, selected_feature_scope=selected_scope)
 
 
 @admin_bp.route('/store/delete/<int:item_id>', methods=['POST'])
@@ -5171,11 +5219,19 @@ def edit_store_item(item_id):
 def delete_store_item(item_id):
     """Deactivate a store item (soft delete)."""
     admin_id = session.get("admin_id")
+    selected_scope = require_admin_feature_scope(
+        'store',
+        admin_id=admin_id,
+        requested_join_code=request.values.get('join_code'),
+        requested_block=request.values.get('block'),
+    )
     item = StoreItem.query.filter_by(id=item_id, teacher_id=admin_id).first_or_404()
+    if item.blocks_list and selected_scope['block'] not in {b.strip().upper() for b in item.blocks_list if b}:
+        abort(404)
 
     # Prevent deletion if linked to rent settings
     if _block_rent_linked_store_item(item):
-        return redirect(url_for('admin.store_management'))
+        return redirect(url_for('admin.store_management', join_code=selected_scope['join_code']))
 
     # For active collective items, refund any pending purchases before deactivating
     # so students are not left with purchased but unredeemable items.
@@ -5192,7 +5248,7 @@ def delete_store_item(item_id):
     item.is_active = False
     db.session.commit()
     flash(f"'{item.name}' has been deactivated and removed from the store.", "success")
-    return redirect(url_for('admin.store_management'))
+    return redirect(url_for('admin.store_management', join_code=selected_scope['join_code']))
 
 
 @admin_bp.route('/store/hard-delete/<int:item_id>', methods=['POST'])
@@ -5200,18 +5256,26 @@ def delete_store_item(item_id):
 def hard_delete_store_item(item_id):
     """Legacy endpoint: hard item deletion is restricted to join-code deletion workflow."""
     admin_id = session.get("admin_id")
+    selected_scope = require_admin_feature_scope(
+        'store',
+        admin_id=admin_id,
+        requested_join_code=request.values.get('join_code'),
+        requested_block=request.values.get('block'),
+    )
     item = StoreItem.query.filter_by(id=item_id, teacher_id=admin_id).first_or_404()
+    if item.blocks_list and selected_scope['block'] not in {b.strip().upper() for b in item.blocks_list if b}:
+        abort(404)
 
     # Prevent deletion if linked to rent settings
     if _block_rent_linked_store_item(item):
-        return redirect(url_for('admin.store_management'))
+        return redirect(url_for('admin.store_management', join_code=selected_scope['join_code']))
 
     flash(
         f"Hard deletion for '{item.name}' is disabled. Deactivate items instead, "
         "or delete the class join code for full scoped cleanup.",
         "error",
     )
-    return redirect(url_for('admin.store_management'))
+    return redirect(url_for('admin.store_management', join_code=selected_scope['join_code']))
 
 
 # -------------------- RENT SETTINGS --------------------
@@ -7511,17 +7575,7 @@ def run_payroll():
             flash(error_msg, "admin_error")
             return redirect(url_for('admin.dashboard'))
 
-        requested_join_code = None
-        if request.is_json:
-            payload = request.get_json(silent=True) or {}
-            requested_join_code = payload.get('join_code')
-        if not requested_join_code:
-            requested_join_code = request.form.get('join_code')
-        selected_scope = require_admin_feature_scope(
-            'payroll',
-            admin_id=current_admin_id,
-            requested_join_code=requested_join_code,
-        )
+        selected_scope = _require_payroll_feature_scope_from_request(current_admin_id)
         selected_join_code = selected_scope['join_code']
 
         # Get last payroll for the selected class only.
@@ -8137,9 +8191,15 @@ def update_expected_weekly_hours():
     try:
         from app.models import _quantize_currency
         admin_id = session.get("admin_id")
+        selected_scope = _require_payroll_feature_scope_from_request(admin_id)
         expected_weekly_hours = _quantize_currency(request.form.get('expected_weekly_hours', '5.0'))
-        cwi_block = request.form.get('cwi_block')
+        cwi_block = selected_scope['block']
         apply_to_all = request.form.get('apply_to_all', 'false').lower() == 'true'
+        enabled_blocks = {
+            option['block']
+            for option in get_admin_feature_join_code_options('payroll', admin_id=admin_id)
+            if option.get('block')
+        }
 
         # Validate expected_weekly_hours is within a reasonable range (0.25 to 80)
         if not (0.25 <= expected_weekly_hours <= 80):
@@ -8148,7 +8208,10 @@ def update_expected_weekly_hours():
 
         if apply_to_all:
             # Update all existing payroll settings
-            settings_to_update = PayrollSettings.query.filter_by(teacher_id=admin_id).all()
+            settings_to_update = PayrollSettings.query.filter(
+                PayrollSettings.teacher_id == admin_id,
+                PayrollSettings.block.in_(enabled_blocks),
+            ).all()
 
             if settings_to_update:
                 for setting in settings_to_update:
@@ -8204,7 +8267,7 @@ def update_expected_weekly_hours():
     if next_url and is_safe_url(next_url, request.host_url):
         return redirect(next_url)  # nosec # Safe: validated by is_safe_url()
 
-    return redirect(url_for('admin.payroll', cwi_block=cwi_block))
+    return redirect(url_for('admin.payroll', join_code=selected_scope['join_code']))
 
 
 # -------------------- PAYROLL REWARDS & FINES --------------------
@@ -8214,10 +8277,11 @@ def update_expected_weekly_hours():
 def payroll_add_reward():
     """Add a new payroll reward."""
     form = PayrollRewardForm()
+    admin_id = session.get("admin_id")
+    selected_scope = _require_payroll_feature_scope_from_request(admin_id)
 
     if form.validate_on_submit():
         try:
-            admin_id = session.get("admin_id")
             reward = PayrollReward(
                 teacher_id=admin_id,
                 name=form.name.data,
@@ -8235,7 +8299,7 @@ def payroll_add_reward():
     else:
         flash('Invalid form data. Please check your inputs.', 'error')
 
-    return redirect(url_for('admin.payroll'))
+    return redirect(url_for('admin.payroll', join_code=selected_scope['join_code']))
 
 
 @admin_bp.route('/payroll/rewards/<int:reward_id>/delete', methods=['POST'])
@@ -8243,11 +8307,14 @@ def payroll_add_reward():
 def payroll_delete_reward(reward_id):
     """Delete a payroll reward."""
     try:
+        _require_payroll_feature_scope_from_request(session.get("admin_id"))
         admin_id = session.get("admin_id")
         reward = PayrollReward.query.filter_by(id=reward_id, teacher_id=admin_id).first_or_404()
         db.session.delete(reward)
         db.session.commit()
         return jsonify({'success': True, 'message': 'Reward deleted successfully'})
+    except HTTPException:
+        raise
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting reward: {e}")
@@ -8259,10 +8326,11 @@ def payroll_delete_reward(reward_id):
 def payroll_add_fine():
     """Add a new payroll fine."""
     form = PayrollFineForm()
+    admin_id = session.get("admin_id")
+    selected_scope = _require_payroll_feature_scope_from_request(admin_id)
 
     if form.validate_on_submit():
         try:
-            admin_id = session.get("admin_id")
             fine = PayrollFine(
                 teacher_id=admin_id,
                 name=form.name.data,
@@ -8280,7 +8348,7 @@ def payroll_add_fine():
     else:
         flash('Invalid form data. Please check your inputs.', 'error')
 
-    return redirect(url_for('admin.payroll'))
+    return redirect(url_for('admin.payroll', join_code=selected_scope['join_code']))
 
 
 @admin_bp.route('/payroll/fines/<int:fine_id>/delete', methods=['POST'])
@@ -8288,11 +8356,14 @@ def payroll_add_fine():
 def payroll_delete_fine(fine_id):
     """Delete a payroll fine."""
     try:
+        _require_payroll_feature_scope_from_request(session.get("admin_id"))
         admin_id = session.get("admin_id")
         fine = PayrollFine.query.filter_by(id=fine_id, teacher_id=admin_id).first_or_404()
         db.session.delete(fine)
         db.session.commit()
         return jsonify({'success': True, 'message': 'Fine deleted successfully'})
+    except HTTPException:
+        raise
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting fine: {e}")
@@ -8305,6 +8376,7 @@ def payroll_edit_reward(reward_id):
     """Edit an existing reward."""
     try:
         from app.models import _quantize_currency
+        _require_payroll_feature_scope_from_request(session.get("admin_id"))
         admin_id = session.get("admin_id")
         reward = PayrollReward.query.filter_by(id=reward_id, teacher_id=admin_id).first_or_404()
         data = request.get_json()
@@ -8316,6 +8388,8 @@ def payroll_edit_reward(reward_id):
 
         db.session.commit()
         return jsonify({'success': True, 'message': 'Reward updated successfully'})
+    except HTTPException:
+        raise
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error editing reward: {e}")
@@ -8328,6 +8402,7 @@ def payroll_edit_fine(fine_id):
     """Edit an existing fine."""
     try:
         from app.models import _quantize_currency
+        _require_payroll_feature_scope_from_request(session.get("admin_id"))
         admin_id = session.get("admin_id")
         fine = PayrollFine.query.filter_by(id=fine_id, teacher_id=admin_id).first_or_404()
         data = request.get_json()
@@ -8339,6 +8414,8 @@ def payroll_edit_fine(fine_id):
 
         db.session.commit()
         return jsonify({'success': True, 'message': 'Fine updated successfully'})
+    except HTTPException:
+        raise
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error editing fine: {e}")
@@ -8350,11 +8427,13 @@ def payroll_edit_fine(fine_id):
 def void_payroll_transaction(transaction_id):
     """Void a single transaction from payroll interface."""
     try:
+        selected_scope = _require_payroll_feature_scope_from_request(session.get("admin_id"))
         transaction = (
             Transaction.query
             .join(Student, Transaction.student_id == Student.id)
             .filter(Transaction.id == transaction_id)
-            .filter(Student.id.in_(sa.select(_student_scope_subquery())))
+            .filter(Student.id.in_(sa.select(_student_scope_subquery_for_join_code(selected_scope['join_code']))))
+            .filter(Transaction.join_code == selected_scope['join_code'])
             .first_or_404()
         )
 
@@ -8389,6 +8468,8 @@ def void_payroll_transaction(transaction_id):
         db.session.commit()
 
         return jsonify({'success': True, 'message': 'Transaction voided successfully'})
+    except HTTPException:
+        raise
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error voiding transaction: {e}")
@@ -8402,11 +8483,12 @@ def void_transactions_bulk():
     try:
         data = request.get_json()
         transaction_ids = data.get('transaction_ids', [])
+        selected_scope = _require_payroll_feature_scope_from_request(session.get("admin_id"))
 
         if not transaction_ids:
             return jsonify({'success': False, 'message': 'No transactions selected'}), 400
 
-        student_ids_subq = _student_scope_subquery()
+        student_ids_subq = _student_scope_subquery_for_join_code(selected_scope['join_code'])
         count = 0
         for tx_id in transaction_ids:
             transaction = (
@@ -8414,6 +8496,7 @@ def void_transactions_bulk():
                 .join(Student, Transaction.student_id == Student.id)
                 .filter(Transaction.id == int(tx_id))
                 .filter(Student.id.in_(sa.select(student_ids_subq)))
+                .filter(Transaction.join_code == selected_scope['join_code'])
                 .first()
             )
             if transaction and not transaction.is_void:
@@ -8448,6 +8531,8 @@ def void_transactions_bulk():
 
         db.session.commit()
         return jsonify({'success': True, 'message': f'{count} transaction(s) voided successfully'})
+    except HTTPException:
+        raise
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error voiding transactions in bulk: {e}")
@@ -8467,24 +8552,25 @@ def payroll_apply_reward(reward_id):
 
         # Get current admin ID for teacher_id
         current_admin_id = session.get('admin_id')
+        selected_scope = _require_payroll_feature_scope_from_request(current_admin_id)
+        selected_join_code = selected_scope['join_code']
 
         count = 0
         for student_id in student_ids:
             student = _get_student_or_404(int(student_id))
             if student:
-                # CRITICAL FIX: Get join_code for this student-teacher pair
-                teacher_block = TeacherBlock.query.filter_by(
-                    student_id=student.id,
-                    teacher_id=current_admin_id,
-                    is_claimed=True
-                ).first()
-
-                join_code = teacher_block.join_code if teacher_block else None
+                teacher_block = _get_claimed_teacher_block_for_join_code(
+                    student.id,
+                    current_admin_id,
+                    selected_join_code,
+                )
+                if not teacher_block:
+                    return jsonify({'success': False, 'message': 'Student is outside the selected class scope'}), 404
 
                 transaction = Transaction(
                     student_id=student.id,
                     teacher_id=current_admin_id,  # CRITICAL: Add teacher_id for multi-tenancy
-                    join_code=join_code,  # CRITICAL: Add join_code for period isolation
+                    join_code=selected_join_code,  # CRITICAL: Add join_code for period isolation
                     amount=reward.amount,
                     description=f"Reward: {reward.name}",
                     account_type='checking',
@@ -8497,6 +8583,8 @@ def payroll_apply_reward(reward_id):
 
         db.session.commit()
         return jsonify({'success': True, 'message': f'Reward "{reward.name}" applied to {count} student(s)!'})
+    except HTTPException:
+        raise
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error applying reward: {e}")
@@ -8516,7 +8604,12 @@ def payroll_apply_fine(fine_id):
 
         # Get current admin ID for teacher_id
         current_admin_id = session.get('admin_id')
-        banking_settings = BankingSettings.query.filter_by(teacher_id=current_admin_id).first()
+        selected_scope = _require_payroll_feature_scope_from_request(current_admin_id)
+        selected_join_code = selected_scope['join_code']
+        banking_settings = BankingSettings.query.filter_by(
+            teacher_id=current_admin_id,
+            block=selected_scope['block'],
+        ).first()
 
         applied_count = 0
         declined_count = 0
@@ -8524,28 +8617,27 @@ def payroll_apply_fine(fine_id):
         for student_id in student_ids:
             student = _get_student_or_404(int(student_id))
             if student:
-                # CRITICAL FIX: Get join_code for this student-teacher pair
-                teacher_block = TeacherBlock.query.filter_by(
-                    student_id=student.id,
-                    teacher_id=current_admin_id,
-                    is_claimed=True
-                ).first()
-
-                join_code = teacher_block.join_code if teacher_block else None
+                teacher_block = _get_claimed_teacher_block_for_join_code(
+                    student.id,
+                    current_admin_id,
+                    selected_join_code,
+                )
+                if not teacher_block:
+                    return jsonify({'success': False, 'message': 'Student is outside the selected class scope'}), 404
 
                 allowed, shortfall, _, _ = evaluate_overdraft_allowance(
                     student,
                     abs(fine.amount),
                     banking_settings,
                     teacher_id=current_admin_id,
-                    join_code=join_code
+                    join_code=selected_join_code
                 )
                 if not allowed:
                     fee_charged, _ = charge_overdraft_fee_if_needed(
                         student,
                         banking_settings,
                         teacher_id=current_admin_id,
-                        join_code=join_code,
+                        join_code=selected_join_code,
                         force=True
                     )
                     if fee_charged:
@@ -8556,7 +8648,7 @@ def payroll_apply_fine(fine_id):
                 transaction = Transaction(
                     student_id=student.id,
                     teacher_id=current_admin_id,  # CRITICAL: Add teacher_id for multi-tenancy
-                    join_code=join_code,  # CRITICAL: Add join_code for period isolation
+                    join_code=selected_join_code,  # CRITICAL: Add join_code for period isolation
                     amount=-abs(fine.amount),  # Negative for fine
                     description=f"Fine: {fine.name}",
                     account_type='checking',
@@ -8571,7 +8663,7 @@ def payroll_apply_fine(fine_id):
                     transfer_tx_withdraw = Transaction(
                         student_id=student.id,
                         teacher_id=current_admin_id,
-                        join_code=join_code,
+                        join_code=selected_join_code,
                         amount=-shortfall,
                         account_type='savings',
                         status=TransactionStatus.PENDING,
@@ -8581,7 +8673,7 @@ def payroll_apply_fine(fine_id):
                     transfer_tx_deposit = Transaction(
                         student_id=student.id,
                         teacher_id=current_admin_id,
-                        join_code=join_code,
+                        join_code=selected_join_code,
                         amount=shortfall,
                         account_type='checking',
                         status=TransactionStatus.PENDING,
@@ -8598,6 +8690,8 @@ def payroll_apply_fine(fine_id):
         if fee_count:
             message += f" Overdraft fee charged for {fee_count}."
         return jsonify({'success': True, 'message': message})
+    except HTTPException:
+        raise
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error applying fine: {e}")
@@ -8624,7 +8718,12 @@ def payroll_manual_payment():
 
             # Get current admin ID for teacher_id
             current_admin_id = session.get('admin_id')
-            banking_settings = BankingSettings.query.filter_by(teacher_id=current_admin_id).first()
+            selected_scope = _require_payroll_feature_scope_from_request(current_admin_id)
+            selected_join_code = selected_scope['join_code']
+            banking_settings = BankingSettings.query.filter_by(
+                teacher_id=current_admin_id,
+                block=selected_scope['block'],
+            ).first()
 
             # Create transactions for each selected student
             applied_count = 0
@@ -8633,14 +8732,14 @@ def payroll_manual_payment():
             for student_id in student_ids:
                 student = _get_student_or_404(int(student_id))
                 if student:
-                    # CRITICAL FIX: Get join_code for this student-teacher pair
-                    teacher_block = TeacherBlock.query.filter_by(
-                        student_id=student.id,
-                        teacher_id=current_admin_id,
-                        is_claimed=True
-                    ).first()
-
-                    join_code = teacher_block.join_code if teacher_block else None
+                    teacher_block = _get_claimed_teacher_block_for_join_code(
+                        student.id,
+                        current_admin_id,
+                        selected_join_code,
+                    )
+                    if not teacher_block:
+                        flash('One or more selected students are outside the selected class scope.', 'error')
+                        return redirect(url_for('admin.payroll', join_code=selected_join_code))
 
                     shortfall = Decimal('0.00')
                     if account_type == 'checking' and amount < 0:
@@ -8649,14 +8748,14 @@ def payroll_manual_payment():
                             abs(amount),
                             banking_settings,
                             teacher_id=current_admin_id,
-                            join_code=join_code
+                            join_code=selected_join_code
                         )
                         if not allowed:
                             fee_charged, _ = charge_overdraft_fee_if_needed(
                                 student,
                                 banking_settings,
                                 teacher_id=current_admin_id,
-                                join_code=join_code,
+                                join_code=selected_join_code,
                                 force=True
                             )
                             if fee_charged:
@@ -8667,7 +8766,7 @@ def payroll_manual_payment():
                     transaction = Transaction(
                         student_id=student.id,
                         teacher_id=current_admin_id,  # CRITICAL: Add teacher_id for multi-tenancy
-                        join_code=join_code,  # CRITICAL: Add join_code for period isolation
+                        join_code=selected_join_code,  # CRITICAL: Add join_code for period isolation
                         amount=amount,
                         description=f"Manual Payment: {description}",
                         account_type=account_type,
@@ -8682,7 +8781,7 @@ def payroll_manual_payment():
                         transfer_tx_withdraw = Transaction(
                             student_id=student.id,
                             teacher_id=current_admin_id,
-                            join_code=join_code,
+                            join_code=selected_join_code,
                             amount=-shortfall,
                             account_type='savings',
                             status=TransactionStatus.PENDING,
@@ -8692,7 +8791,7 @@ def payroll_manual_payment():
                         transfer_tx_deposit = Transaction(
                             student_id=student.id,
                             teacher_id=current_admin_id,
-                            join_code=join_code,
+                            join_code=selected_join_code,
                             amount=shortfall,
                             account_type='checking',
                             status=TransactionStatus.PENDING,
@@ -8708,7 +8807,9 @@ def payroll_manual_payment():
                 message += f" {declined_count} declined for insufficient funds."
             if fee_count:
                 message += f" Overdraft fee charged for {fee_count}."
-            flash(message, 'warning' if declined_count else 'success')
+                flash(message, 'warning' if declined_count else 'success')
+        except HTTPException:
+            raise
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Error sending manual payments: {e}")
@@ -8716,7 +8817,8 @@ def payroll_manual_payment():
     else:
         flash('Invalid form data. Please check your inputs.', 'error')
 
-    return redirect(url_for('admin.payroll'))
+    selected_scope = _require_payroll_feature_scope_from_request(session.get('admin_id'))
+    return redirect(url_for('admin.payroll', join_code=selected_scope['join_code']))
 
 
 # -------------------- ATTENDANCE --------------------
@@ -9792,12 +9894,18 @@ def banking_settings_update():
     form = BankingSettingsForm()
 
     if form.validate_on_submit():
-        settings_block = request.form.get('settings_block')
+        selected_scope = require_admin_feature_scope(
+            'banking',
+            admin_id=admin_id,
+            requested_join_code=request.form.get('join_code'),
+            requested_block=request.form.get('settings_block'),
+        )
+        settings_block = selected_scope['block']
         apply_to_all = request.form.get('apply_to_all') == 'true'
 
-        # Get all teacher blocks
-        teacher_blocks = db.session.query(TeacherBlock.block).filter_by(teacher_id=admin_id).distinct().all()
-        blocks_to_update = [b[0] for b in teacher_blocks] if apply_to_all else [settings_block]
+        feature_options = get_admin_feature_join_code_options('banking', admin_id=admin_id)
+        enabled_blocks = [option['block'] for option in feature_options if option.get('block')]
+        blocks_to_update = enabled_blocks if apply_to_all else [settings_block]
 
         for block in blocks_to_update:
             # Get or create settings for this class
@@ -9846,7 +9954,8 @@ def banking_settings_update():
 
     # Redirect back to the same settings block
     settings_block = request.form.get('settings_block')
-    return redirect(url_for('admin.banking', settings_block=settings_block))
+    join_code = request.form.get('join_code')
+    return redirect(url_for('admin.banking', settings_block=settings_block, join_code=join_code))
 
 
 # -------------------- DELETION REQUESTS --------------------

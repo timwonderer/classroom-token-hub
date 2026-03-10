@@ -320,16 +320,6 @@ class TeacherBlock(db.Model):
     def display_last_initial(self):
         return self.identity_profile.last_initial if self.identity_profile else ""
 
-    @property
-    def dob_sum(self):
-        """Legacy compatibility shim for older fixture/setup code."""
-        return getattr(self, "_legacy_dob_sum", None)
-
-    @dob_sum.setter
-    def dob_sum(self, value):
-        self._legacy_dob_sum = value
-
-
 class Student(db.Model):
     __tablename__ = 'students'
     id = db.Column(db.Integer, primary_key=True)
@@ -704,10 +694,6 @@ class StudentTeacher(db.Model):
         db.Index('ix_student_teachers_teacher_id', 'teacher_id'),
     )
 
-    # Transitional alias for legacy call sites that still use admin_id.
-    admin_id = sa.orm.synonym('teacher_id')
-
-
 class ClassEconomyStatus(enum.Enum):
     """Enum for class economy statuses."""
     ACTIVE = 'active'
@@ -745,7 +731,6 @@ class ClassEconomy(db.Model):
         default=ClassEconomyStatus.ACTIVE
     )
     is_active = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
-    metadata_json = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
     created_by_admin_id = db.Column(
@@ -1080,8 +1065,6 @@ class HallPassLog(db.Model):
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
     reason = db.Column(db.String(50), nullable=False)
     status = db.Column(db.String(20), default='pending', nullable=False) # pending, approved, rejected, left, returned
-    # Legacy field retained for backward compatibility; no longer generated or displayed.
-    pass_number = db.Column(db.String(3), nullable=True, unique=True)
     period = db.Column(db.String(10), nullable=True) # Which period the request was made in
 
     # CRITICAL: join_code is the source of truth for class isolation
@@ -1437,16 +1420,6 @@ def _sync_rent_payment_seat(_mapper, connection, target):
     seat_id = _resolve_seat_id(connection, getattr(target, "student_id", None), getattr(target, "join_code", None))
     if seat_id:
         target.seat_id = seat_id
-
-
-@sa.event.listens_for(TeacherBlock, "before_insert")
-@sa.event.listens_for(TeacherBlock, "before_update")
-def _sync_teacher_block_legacy_dob_sum(_mapper, _connection, target):
-    """Backfill dob_sum_hash when legacy code still assigns dob_sum."""
-    pending_dob_sum = getattr(target, "_legacy_dob_sum", None)
-    if pending_dob_sum is None or target.dob_sum_hash is not None or not target.salt:
-        return
-    target.dob_sum_hash = hash_hmac(str(pending_dob_sum).encode(), target.salt)
 
 
 @sa.event.listens_for(RentWaiver, "before_insert")

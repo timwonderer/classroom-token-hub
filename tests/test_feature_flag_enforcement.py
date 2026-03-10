@@ -8,7 +8,7 @@ students cannot access those routes even via direct URL.
 import pytest
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
-from app.models import Student, Admin, Transaction, TeacherBlock, FeatureSettings, ClassEconomy
+from app.models import Student, Admin, Transaction, TeacherBlock, FeatureSettings, ClassEconomy, PayrollReward, StoreItem
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 
@@ -451,6 +451,56 @@ def test_admin_payroll_rejects_disabled_class_scope(client):
         sess['admin_id'] = teacher.id
 
     response = client.get('/admin/payroll?join_code=PAY2')
+    assert response.status_code == 404
+
+
+def test_admin_payroll_reward_delete_rejects_disabled_class_scope(client):
+    teacher = Admin(username="teacher_admin_payroll_reward_scope", totp_secret="secret_payroll_reward_scope")
+    db.session.add(teacher)
+    db.session.commit()
+
+    _create_admin_feature_scope(teacher, join_code="PRW1", block="1", feature_name="payroll", enabled=True)
+    _create_admin_feature_scope(teacher, join_code="PRW2", block="2", feature_name="payroll", enabled=False)
+    reward = PayrollReward(
+        teacher_id=teacher.id,
+        name="Bonus",
+        amount=5,
+        is_active=True,
+    )
+    db.session.add(reward)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['is_admin'] = True
+        sess['admin_id'] = teacher.id
+
+    response = client.post(f'/admin/payroll/rewards/{reward.id}/delete?join_code=PRW2')
+    assert response.status_code == 404
+
+
+def test_admin_store_delete_rejects_disabled_class_scope(client):
+    teacher = Admin(username="teacher_admin_store_delete_scope", totp_secret="secret_store_delete_scope")
+    db.session.add(teacher)
+    db.session.commit()
+
+    _create_admin_feature_scope(teacher, join_code="STD1", block="1", feature_name="store", enabled=True)
+    _create_admin_feature_scope(teacher, join_code="STD2", block="2", feature_name="store", enabled=False)
+    store_item = StoreItem(
+        teacher_id=teacher.id,
+        name="Pencil",
+        description="Simple item",
+        price=1,
+        item_type='immediate',
+        is_active=True,
+    )
+    db.session.add(store_item)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['is_admin'] = True
+        sess['admin_id'] = teacher.id
+
+    response = client.post(f'/admin/store/delete/{store_item.id}?join_code=STD2', follow_redirects=False)
     assert response.status_code == 404
 
 

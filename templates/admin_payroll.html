@@ -976,6 +976,7 @@
             <!-- Add Reward Form -->
             <form method="POST" action="{{ url_for('admin.payroll_add_reward') }}" class="mb-4">
               {{ reward_form.hidden_tag() }}
+              <input type="hidden" name="join_code" value="{{ selected_feature_scope.join_code }}">
               <div class="mb-2">
                 <label for="reward_name" class="form-label visually-hidden">Reward Name</label>
                 {{ reward_form.name(class="form-control form-control-sm", placeholder="Reward Name", id="reward_name")
@@ -1045,6 +1046,7 @@
             <!-- Add Fine Form -->
             <form method="POST" action="{{ url_for('admin.payroll_add_fine') }}" class="mb-4">
               {{ fine_form.hidden_tag() }}
+              <input type="hidden" name="join_code" value="{{ selected_feature_scope.join_code }}">
               <div class="mb-2">
                 <label for="fine_name" class="form-label visually-hidden">Fine Name</label>
                 {{ fine_form.name(class="form-control form-control-sm", placeholder="Fine Name", id="fine_name") }}
@@ -1919,13 +1921,13 @@
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
     try {
-      const resp = await fetch(`/admin/payroll/rewards/${id}/edit`, {
+      const resp = await fetch(`/admin/payroll/rewards/${id}/edit?join_code=${encodeURIComponent({{ selected_feature_scope.join_code|tojson }})}`, {
         method: 'POST',
         headers: {
           'X-CSRFToken': csrfToken,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ name, description, amount, is_active: isActive })
+        body: JSON.stringify({ name, description, amount, is_active: isActive, join_code: {{ selected_feature_scope.join_code|tojson }} })
       });
 
       const data = await resp.json();
@@ -1945,7 +1947,7 @@
     if (!confirm('Are you sure you want to delete this reward?')) return;
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    fetch(`/admin/payroll/rewards/${rewardId}/delete`, {
+    fetch(`/admin/payroll/rewards/${rewardId}/delete?join_code=${encodeURIComponent({{ selected_feature_scope.join_code|tojson }})}`, {
       method: 'POST',
       headers: {
         'X-CSRFToken': csrfToken,
@@ -1987,13 +1989,13 @@
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
     try {
-      const resp = await fetch(`/admin/payroll/fines/${id}/edit`, {
+      const resp = await fetch(`/admin/payroll/fines/${id}/edit?join_code=${encodeURIComponent({{ selected_feature_scope.join_code|tojson }})}`, {
         method: 'POST',
         headers: {
           'X-CSRFToken': csrfToken,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ name, description, amount, is_active: isActive })
+        body: JSON.stringify({ name, description, amount, is_active: isActive, join_code: {{ selected_feature_scope.join_code|tojson }} })
       });
 
       const data = await resp.json();
@@ -2013,7 +2015,7 @@
     if (!confirm('Are you sure you want to delete this fine?')) return;
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    fetch(`/admin/payroll/fines/${fineId}/delete`, {
+    fetch(`/admin/payroll/fines/${fineId}/delete?join_code=${encodeURIComponent({{ selected_feature_scope.join_code|tojson }})}`, {
       method: 'POST',
       headers: {
         'X-CSRFToken': csrfToken,
@@ -2090,6 +2092,7 @@
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
     const formData = new FormData();
+    formData.append('join_code', {{ selected_feature_scope.join_code|tojson }});
     formData.append('description', description);
     formData.append('amount', amount);
     formData.append('account_type', accountType);
@@ -2128,7 +2131,7 @@
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
     try {
-      const resp = await fetch(`/admin/payroll/transactions/${transactionId}/void`, {
+      const resp = await fetch(`/admin/payroll/transactions/${transactionId}/void?join_code=${encodeURIComponent({{ selected_feature_scope.join_code|tojson }})}`, {
         method: 'POST',
         headers: {
           'X-CSRFToken': csrfToken,
@@ -2168,7 +2171,7 @@
           'X-CSRFToken': csrfToken,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ transaction_ids: selectedIds })
+        body: JSON.stringify({ transaction_ids: selectedIds, join_code: {{ selected_feature_scope.join_code|tojson }} })
       });
 
       const data = await resp.json();

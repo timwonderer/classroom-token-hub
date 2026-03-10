@@ -6,6 +6,14 @@ from flask import has_app_context
 
 
 POLICY_MODE_DEFAULT = "default"
+FEATURE_FLAGS = {
+    "payroll",
+    "insurance",
+    "banking",
+    "rent",
+    "hall_pass",
+    "store",
+}
 
 POLICY_MODES: Dict[str, Dict[str, Any]] = {
     "tight": {
@@ -101,28 +109,80 @@ def _resolve_join_code_for_block(teacher_id: int, block: Optional[str]) -> Optio
     return row[0] if row and row[0] else None
 
 
-def _resolve_class_scope_for_block(teacher_id: int, block: Optional[str]) -> Optional[dict[str, str]]:
-    if not has_app_context() or not block:
+def resolve_class_scope(
+    teacher_id: int,
+    *,
+    block: Optional[str] = None,
+    join_code: Optional[str] = None,
+) -> Optional[dict[str, str]]:
+    if not has_app_context() or not teacher_id:
         return None
 
-    from app.models import ClassEconomy
+    from app.models import ClassEconomy, TeacherBlock
 
-    normalized_block = block.strip().upper()
-    join_code = _resolve_join_code_for_block(teacher_id, normalized_block)
-    if not join_code:
+    normalized_block = block.strip().upper() if block else None
+    normalized_join_code = (join_code or "").strip().upper() or None
+
+    if normalized_block and not normalized_join_code:
+        normalized_join_code = _resolve_join_code_for_block(teacher_id, normalized_block)
+    if normalized_join_code and not normalized_block:
+        block_row = (
+            TeacherBlock.query.with_entities(TeacherBlock.block)
+            .filter(
+                TeacherBlock.teacher_id == teacher_id,
+                TeacherBlock.join_code == normalized_join_code,
+                TeacherBlock.block.isnot(None),
+            )
+            .order_by(TeacherBlock.id.asc())
+            .first()
+        )
+        normalized_block = block_row[0].strip().upper() if block_row and block_row[0] else None
+
+    if not normalized_join_code or not normalized_block:
         return None
 
     class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
-        join_code=join_code,
+        join_code=normalized_join_code,
         teacher_id=teacher_id,
     ).first()
     if not class_row or not class_row[0]:
         return None
 
     return {
-        "join_code": join_code,
+        "join_code": normalized_join_code,
         "class_id": class_row[0],
         "block": normalized_block,
+    }
+
+
+def resolve_feature_class(
+    teacher_id: int,
+    feature_name: str,
+    *,
+    block: Optional[str] = None,
+    join_code: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
+    if feature_name not in FEATURE_FLAGS:
+        raise ValueError(f"Unknown feature flag: {feature_name}")
+
+    scope = resolve_class_scope(teacher_id, block=block, join_code=join_code)
+    if not scope:
+        return None
+
+    row = get_feature_settings_row(
+        teacher_id,
+        block=scope["block"],
+        join_code=scope["join_code"],
+        create=False,
+    )
+    feature_key = f"{feature_name}_enabled"
+    enabled = getattr(row, feature_key, True) if row else True
+
+    return {
+        **scope,
+        "settings_row": row,
+        "enabled": bool(enabled),
+        "feature_name": feature_name,
     }
 
 
@@ -138,30 +198,7 @@ def get_feature_settings_row(
     from app.extensions import db
     from app.models import FeatureSettings
 
-    scope = None
-    normalized_block = block.strip().upper() if block else None
-    normalized_join_code = (join_code or "").strip().upper() or None
-
-    if normalized_block:
-        scope = _resolve_class_scope_for_block(teacher_id, normalized_block)
-    elif normalized_join_code:
-        from app.models import ClassEconomy, TeacherBlock
-
-        class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
-            join_code=normalized_join_code,
-            teacher_id=teacher_id,
-        ).first()
-        block_row = TeacherBlock.query.with_entities(TeacherBlock.block).filter_by(
-            teacher_id=teacher_id,
-            join_code=normalized_join_code,
-        ).first()
-        if class_row and class_row[0] and block_row and block_row[0]:
-            scope = {
-                "join_code": normalized_join_code,
-                "class_id": class_row[0],
-                "block": block_row[0].strip().upper(),
-            }
-
+    scope = resolve_class_scope(teacher_id, block=block, join_code=join_code)
     if not scope:
         return None
 

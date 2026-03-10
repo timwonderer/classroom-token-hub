@@ -8,7 +8,7 @@ without using the terminal, with proper limit enforcement.
 import pytest
 from datetime import datetime, timezone, timedelta
 from app.models import (
-    Student, Admin, HallPassLog, StudentTeacher, HallPassSettings, TapEvent, TeacherBlock
+    Student, Admin, HallPassLog, StudentTeacher, HallPassSettings, TapEvent, TeacherBlock, ClassEconomy
 )
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
@@ -42,9 +42,22 @@ def setup_hall_pass_checkout_test(client):
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.commit()
 
+    economy = ClassEconomy(
+        join_code="TEST123",
+        teacher_id=teacher.id,
+        display_name="Period1",
+        status='active',
+        created_by_admin_id=teacher.id,
+    )
+    db.session.add(economy)
+    db.session.flush()
+
     # Create hall pass settings
     settings = HallPassSettings(
         teacher_id=teacher.id,
+        join_code="TEST123",
+        class_id=economy.class_id,
+        block="Period1",
         queue_enabled=True,
         queue_limit=10,
         pass_types=[
@@ -62,7 +75,6 @@ def setup_hall_pass_checkout_test(client):
         reason="Bathroom",
         status="approved",
         period="Period1",
-        pass_number="A01",
         request_time=now - timedelta(minutes=10),
         decision_time=now - timedelta(minutes=5),
         join_code="TEST123"
@@ -139,7 +151,6 @@ def test_approve_does_not_generate_pass_number(client, setup_hall_pass_checkout_
 
     hall_pass.status = 'pending'
     hall_pass.reason = 'Office'
-    hall_pass.pass_number = None
     hall_pass.decision_time = None
     db.session.commit()
 
@@ -160,7 +171,6 @@ def test_approve_does_not_generate_pass_number(client, setup_hall_pass_checkout_
     db.session.refresh(hall_pass)
     db.session.refresh(student)
     assert hall_pass.status == 'approved'
-    assert hall_pass.pass_number is None
     assert student.hall_passes == 3
 
 
@@ -190,7 +200,6 @@ def test_checkout_blocked_by_simultaneous_limit(client, setup_hall_pass_checkout
             reason="Bathroom",
             status="left",
             period="Period1",
-            pass_number=f"B0{i}",
             request_time=now - timedelta(minutes=15),
             decision_time=now - timedelta(minutes=10),
             left_time=now - timedelta(minutes=5),

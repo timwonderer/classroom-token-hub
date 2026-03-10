@@ -36,7 +36,7 @@ from app.routes.student import (
     _is_student_coverage_period_paid,
     _ensure_rent_hall_pass_top_off,
 )
-from app.utils.economy_policy import get_feature_settings_row
+from app.utils.economy_policy import get_feature_settings_row, resolve_class_scope, resolve_feature_class
 from app.utils.overdraft import charge_overdraft_fee_if_needed
 from app.utils.store import process_expired_collective_goals
 from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone, local_date_bounds_utc, UTC_MIN
@@ -173,28 +173,7 @@ def _get_request_join_code(payload=None):
 
 def _get_hall_pass_settings_scope(teacher_id, join_code):
     """Resolve canonical class scope for hall pass settings."""
-    if not teacher_id or not join_code:
-        return None
-
-    class_row = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=teacher_id).first()
-    if not class_row:
-        return None
-
-    seat = (
-        TeacherBlock.query
-        .filter_by(teacher_id=teacher_id, join_code=join_code)
-        .order_by(TeacherBlock.id.desc())
-        .first()
-    )
-    block = seat.block if seat and seat.block else None
-    if not block:
-        return None
-
-    return {
-        "join_code": join_code,
-        "class_id": class_row.class_id,
-        "block": block,
-    }
+    return resolve_class_scope(teacher_id, join_code=join_code)
 
 
 def _get_or_create_hall_pass_settings(teacher_id, join_code):

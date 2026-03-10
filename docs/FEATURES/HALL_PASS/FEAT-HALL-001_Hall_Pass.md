@@ -32,7 +32,6 @@ Primary table: `hall_pass_logs`
 - `student_id` (required)
 - `reason` (destination/pass type)
 - `status` in: `pending`, `approved`, `rejected`, `left`, `returned`
-- `pass_number` (deprecated, no longer generated or displayed)
 - `period` optional class period snapshot
 - `join_code` class isolation key (authoritative scope)
 - `request_time`, `decision_time`, `left_time`, `return_time`

@@ -58,7 +58,7 @@ def teacher_with_legacy_and_scoped_settings(client):
         first_name="Fallback",
         last_initial="T",
         last_name_hash_by_part=[],
-        dob_sum=0,
+        dob_sum_hash=None,
         salt=b"salt",
         first_half_hash="hash",
     ))

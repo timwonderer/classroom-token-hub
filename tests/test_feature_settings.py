@@ -24,7 +24,7 @@ def _create_class_scope(admin, block='A', join_code='JOIN_A'):
         first_name='Test',
         last_initial='T',
         last_name_hash_by_part=[],
-        dob_sum=0,
+        dob_sum_hash=None,
         salt=b'salt',
         first_half_hash='hash',
     ))

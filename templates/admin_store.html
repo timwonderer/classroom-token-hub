@@ -453,7 +453,7 @@
             </div>
             <div class="card-footer bg-transparent border-0 pt-0">
               <div class="btn-group btn-group-sm" role="group">
-                <a href="{{ url_for('admin.edit_store_item', item_id=item.id) }}" class="btn btn-outline-primary" title="Edit">
+                <a href="{{ url_for('admin.edit_store_item', item_id=item.id, join_code=selected_feature_scope.join_code) }}" class="btn btn-outline-primary" title="Edit">
                   <span class="material-symbols-outlined">edit</span>
                 </a>
                 {% if item.is_rent_linked or item.id in rent_managed_item_ids %}
@@ -933,7 +933,7 @@
     const deactivateForm = deactivateItemModal.querySelector('#deactivateItemForm');
 
     modalItemName.textContent = itemName;
-    deactivateForm.action = `/admin/store/delete/${itemId}`;
+    deactivateForm.action = `/admin/store/delete/${itemId}?join_code=${encodeURIComponent({{ selected_feature_scope.join_code|tojson }})}`;
   });
 
   // Delete modal handler
@@ -947,7 +947,7 @@
     const deleteForm = deleteItemModal.querySelector('#deleteItemForm');
 
     modalItemName.textContent = itemName;
-    deleteForm.action = `/admin/store/hard-delete/${itemId}`;
+    deleteForm.action = `/admin/store/hard-delete/${itemId}?join_code=${encodeURIComponent({{ selected_feature_scope.join_code|tojson }})}`;
   });
 
   // Toggle bundle options

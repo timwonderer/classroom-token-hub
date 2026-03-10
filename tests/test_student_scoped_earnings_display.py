@@ -24,8 +24,8 @@ def _build_multi_class_student():
 
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.add_all([
-        ClassEconomy(join_code="STUDSC1", status="active", created_by_admin_id=teacher.id),
-        ClassEconomy(join_code="STUDSC2", status="active", created_by_admin_id=teacher.id),
+        ClassEconomy(join_code="STUDSC1", teacher_id=teacher.id, status="active", created_by_admin_id=teacher.id),
+        ClassEconomy(join_code="STUDSC2", teacher_id=teacher.id, status="active", created_by_admin_id=teacher.id),
         ClassMembership(join_code="STUDSC1", admin_id=teacher.id, role="admin", status="active"),
         ClassMembership(join_code="STUDSC2", admin_id=teacher.id, role="admin", status="active"),
         ClassMembership(join_code="STUDSC1", student_id=student.id, role="student", status="active"),
@@ -39,7 +39,7 @@ def _build_multi_class_student():
             first_name=student.first_name,
             last_initial=student.last_initial,
             last_name_hash_by_part=[],
-            dob_sum=0,
+            dob_sum_hash=None,
             salt=b"salt",
             first_half_hash="hash-a",
         ),
@@ -52,7 +52,7 @@ def _build_multi_class_student():
             first_name=student.first_name,
             last_initial=student.last_initial,
             last_name_hash_by_part=[],
-            dob_sum=0,
+            dob_sum_hash=None,
             salt=b"salt",
             first_half_hash="hash-b",
         ),
