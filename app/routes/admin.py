@@ -1619,6 +1619,19 @@ def dashboard():
         )
         show_insurance_tier_prompt = legacy_policy_exists
 
+    # Get active system-wide announcements targeting teachers or everyone
+    system_announcements = Announcement.query.filter(
+        Announcement.is_active.is_(True),
+        or_(
+            Announcement.expires_at.is_(None),
+            Announcement.expires_at > utc_now()
+        ),
+        or_(
+            Announcement.audience_type == 'system_wide',
+            Announcement.audience_type == 'all_teachers',
+        )
+    ).order_by(Announcement.created_at.desc()).all()
+
     return render_template(
         'admin_dashboard.html',
         show_recovery_setup=show_recovery_setup,
@@ -1644,6 +1657,7 @@ def dashboard():
         # Lookup table
         student_lookup=student_lookup,
         show_insurance_tier_prompt=show_insurance_tier_prompt,
+        system_announcements=system_announcements,
         current_page="dashboard"
     )
 
