@@ -12,6 +12,7 @@ from app.extensions import db
 from app.models import (
     Admin,
     BankingSettings,
+    ClassFeature,
     ClassEconomy,
     ClassMembership,
     FeatureSettings,
@@ -46,9 +47,9 @@ def teacher_with_legacy_and_scoped_settings(client):
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
 
     join_code = "FALL01"
-    economy = ClassEconomy(join_code=join_code, teacher_id=teacher.id, status="active", created_by_admin_id=teacher.id)
+    economy = ClassEconomy(join_code=join_code, teacher_id=teacher.id, created_by_admin_id=teacher.id)
     db.session.add(economy)
-    db.session.add(ClassMembership(join_code=join_code, admin_id=teacher.id, role="admin", status="active"))
+    db.session.add(ClassMembership(join_code=join_code, admin_id=teacher.id, role="admin"))
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
         block="A",
@@ -173,20 +174,13 @@ def test_feature_settings_returns_defaults_without_scoped_row(client, teacher_wi
 
 
 def test_feature_settings_returns_scoped_row(client, teacher_with_legacy_and_scoped_settings):
-    """When a join-code-scoped FeatureSettings exists, helper returns it."""
+    """When class feature rows are removed, helper reflects the disabled features."""
     data = teacher_with_legacy_and_scoped_settings
-    db.session.add(FeatureSettings(
-        teacher_id=data["teacher"].id,
-        join_code=data["join_code"],
-        class_id=data["class_id"],
-        block="A",
-        banking_enabled=False,
-        store_enabled=False,
-        insurance_enabled=False,
-        rent_enabled=False,
-        hall_pass_enabled=False,
-        payroll_enabled=False,
-    ))
+    for row in ClassFeature.query.filter(
+        ClassFeature.class_id == data["class_id"],
+        ClassFeature.feature_name.in_(["banking", "store", "insurance", "rent", "hall_pass", "payroll"]),
+    ).all():
+        db.session.delete(row)
     db.session.commit()
 
     with client.application.test_request_context():

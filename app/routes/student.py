@@ -49,7 +49,7 @@ from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed, evaluate_overdraft_allowance
 from app.utils.help_content import HELP_ARTICLES
 from app.utils.store import process_expired_collective_goals
-from app.utils.economy_policy import resolve_feature_class
+from app.utils.economy_policy import get_class_feature_settings, resolve_feature_class
 from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
 from app.attendance import get_all_block_statuses
 from app.payroll import get_pay_rate_for_block
@@ -264,15 +264,13 @@ def get_feature_settings_for_student():
         return FeatureSettings.get_defaults()
 
     current_block = (context.get('block') or '').strip().upper()
-    scoped_feature = resolve_feature_class(
+    scoped_features = get_class_feature_settings(
         teacher_id,
-        'store',
         block=current_block,
         join_code=join_code,
     )
-    scoped_settings = scoped_feature["settings_row"] if scoped_feature else None
-    if scoped_settings:
-        return scoped_settings.to_dict()
+    if scoped_features:
+        return scoped_features["features"]
 
     # Return system defaults
     return FeatureSettings.get_defaults()

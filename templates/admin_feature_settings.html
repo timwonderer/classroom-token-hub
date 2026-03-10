@@ -114,25 +114,6 @@
 
                     <div class="collapse show" id="globalFeatureList">
                         <div class="feature-stack">
-                            <!-- Payroll - Required Feature -->
-                            <div class="card feature-card enabled text-primary" style="border-style:solid; border-color:var(--secondary); border-width:4px;background-color:var(--secondary-light);">
-                                <div class="card-body">
-                                    <div class="d-flex align-items-center gap-3">
-                                        <span class="material-symbols-outlined text-primary" style="font-size: 2rem;">payments</span>
-                                        <div class="feature-info">
-                                            <h5 class="card-title mb-0 d-flex align-items-center gap-2" style="font-size:2rem;">
-                                                Payroll
-                                                <span class="badge bg-primary" style="font-size: 0.65rem; font-weight: 600;">Core Engine</span>
-                                                <span class="badge bg-success" style="font-size: 0.65rem; font-weight: 600;">Always Enabled</span>
-                                            </h5>
-                                            <p class="card-text text-primary  mb-0">Classroom Token Hub was designed to be a classroom economy engine from the ground up, and payroll is the heart of that engine. It provides the core functionality for time tracking, student payments, and overall economic flow. It is also the key component of Classroom Wage Index (CWI), a metric used to balance your classroom economy. </p><p class="mb-0">To learn more about payroll and CWI, please visit the Docs & Help site</p>
-                                        </div>
-                                    </div>
-                                    
-                                </div>
-                            </div>
-                            
-                            <!-- Optional Features -->
                             {% for feature_id, feature_name, feature_icon, feature_desc in features_list %}
                             <div class="card feature-card {% if global_settings[feature_id] %}enabled{% else %}disabled{% endif %}">
                                 <div class="card-body">
@@ -157,7 +138,7 @@
 
                     <div class="mt-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <div class="alert alert-warning" style="display:block;border-left-width:4px;">
-                            Bulk Apply writes the selected values to every current period. <strong>Per-Period Settings can then override individual classes.</strong> <br><span style="font-size:0.8rem;">There is no separate global fallback row anymore; each class stores its own feature settings.</span>
+                            Bulk Apply writes the selected values to every current period. <strong>Per-Period Settings can then override individual classes.</strong> <br><span style="font-size:0.8rem;">Feature access is now stored per class by row existence, not by fallback booleans.</span>
                         </div>
                         <button type="submit" class="btn btn-primary">
                             <span class="material-symbols-outlined me-1" style="vertical-align: middle;">save</span>
@@ -206,27 +187,6 @@
                     </h6>
 
                     <div class="feature-stack" id="periodFeatureToggles">
-                        <!-- Payroll - Required Feature -->
-                        <div class="card h-100" style="border-left: 4px solid var(--info); background: linear-gradient(to right, var(--primary-subtle) 0%, white 100%);">
-                            <div class="card-body py-3 d-flex align-items-center justify-content-between gap-3">
-                                <div class="d-flex align-items-center gap-3">
-                                    <span class="material-symbols-outlined text-primary">payments</span>
-                                    <div class="feature-info mb-0">
-                                        <span class="fw-semibold d-flex align-items-center gap-2">
-                                            Payroll
-                                            <span class="badge bg-primary" style="font-size: 0.6rem; font-weight: 600;">REQUIRED</span>
-                                        </span>
-                                        <small class="text-muted">Time tracking and student payments</small>
-                                    </div>
-                                </div>
-                                <div class="text-success fw-bold small d-flex align-items-center gap-1">
-                                    <span class="material-symbols-outlined" style="font-size: 1rem;">check_circle</span>
-                                    Always On
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Optional Features -->
                         {% for feature_id, feature_name, feature_icon, feature_desc in features_list %}
                         <div class="card h-100">
                             <div class="card-body py-3 d-flex align-items-center justify-content-between gap-3">

@@ -694,22 +694,10 @@ class StudentTeacher(db.Model):
         db.Index('ix_student_teachers_teacher_id', 'teacher_id'),
     )
 
-class ClassEconomyStatus(enum.Enum):
-    """Enum for class economy statuses."""
-    ACTIVE = 'active'
-    ARCHIVED = 'archived'
-
-
 class ClassMembershipRole(enum.Enum):
     """Enum for class membership roles."""
     ADMIN = 'admin'
     STUDENT = 'student'
-
-
-class ClassMembershipStatus(enum.Enum):
-    """Enum for class membership statuses."""
-    ACTIVE = 'active'
-    ARCHIVED = 'archived'
 
 
 class ClassEconomy(db.Model):
@@ -725,12 +713,6 @@ class ClassEconomy(db.Model):
         index=True,
     )
     display_name = db.Column(db.String(100), nullable=True)
-    status = db.Column(
-        db.Enum(ClassEconomyStatus, values_callable=lambda x: [e.value for e in x]),
-        nullable=False,
-        default=ClassEconomyStatus.ACTIVE
-    )
-    is_active = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
     created_by_admin_id = db.Column(
@@ -741,6 +723,7 @@ class ClassEconomy(db.Model):
     )
 
     memberships = db.relationship('ClassMembership', backref='economy', cascade='all, delete-orphan', lazy='dynamic')
+    features = db.relationship('ClassFeature', backref='class_economy', cascade='all, delete-orphan', lazy='dynamic')
     teacher = db.relationship(
         'Admin',
         foreign_keys=[teacher_id],
@@ -764,11 +747,6 @@ class ClassMembership(db.Model):
     role = db.Column(
         db.Enum(ClassMembershipRole, values_callable=lambda x: [e.value for e in x]),
         nullable=False
-    )
-    status = db.Column(
-        db.Enum(ClassMembershipStatus, values_callable=lambda x: [e.value for e in x]),
-        nullable=False,
-        default=ClassMembershipStatus.ACTIVE
     )
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
@@ -2358,19 +2336,63 @@ class BankingSettings(db.Model):
 
 
 # -------------------- FEATURE SETTINGS MODEL --------------------
+class ClassFeature(db.Model):
+    """Row existence represents feature enablement for a class."""
+    __tablename__ = 'class_features'
+
+    id = db.Column(db.Integer, primary_key=True)
+    class_id = db.Column(
+        db.String(36),
+        db.ForeignKey('class_economies.class_id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    feature_name = db.Column(db.String(32), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('class_id', 'feature_name', name='uq_class_features_class_feature'),
+        db.CheckConstraint(
+            "feature_name IN ('payroll', 'insurance', 'banking', 'rent', 'hall_pass', 'store')",
+            name='ck_class_features_feature_name',
+        ),
+        db.Index('ix_class_features_feature_name', 'feature_name'),
+    )
+
+    @classmethod
+    def feature_names(cls):
+        return ('payroll', 'insurance', 'banking', 'rent', 'hall_pass', 'store')
+
+    @classmethod
+    def defaults_dict(cls):
+        return {f'{feature_name}_enabled': True for feature_name in cls.feature_names()}
+
+    @classmethod
+    def enabled_names_for_class(cls, class_id):
+        if not class_id:
+            return set()
+        return {
+            feature_name
+            for (feature_name,) in db.session.query(cls.feature_name)
+            .filter(cls.class_id == class_id)
+            .all()
+        }
+
+    @classmethod
+    def feature_map_for_class(cls, class_id):
+        enabled_names = cls.enabled_names_for_class(class_id)
+        return {
+            f'{feature_name}_enabled': feature_name in enabled_names
+            for feature_name in cls.feature_names()
+        }
+
+
 class FeatureSettings(db.Model):
     """
-    Per-class feature toggle settings for a teacher.
+    Per-class economy policy settings.
 
-    Features that can be toggled:
-    - Payroll (time tracking & payments)
-    - Insurance (policy marketplace & claims)
-    - Banking (savings, interest, overdraft)
-    - Rent (housing costs)
-    - Hall Pass (bathroom/water breaks)
-    - Store (marketplace for rewards)
-    - Bug Reports (allow students to report issues)
-    - Bug Rewards (reward students for valid bug reports)
+    Feature enablement lives in ``class_features``. This table only stores
+    policy configuration that applies when a feature is enabled.
     """
     __tablename__ = 'feature_settings'
     id = db.Column(db.Integer, primary_key=True)
@@ -2378,18 +2400,6 @@ class FeatureSettings(db.Model):
     join_code = db.Column(db.String(20), nullable=False, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
     block = db.Column(db.String(10), nullable=False)
-
-    # Feature toggles - all default to True (enabled)
-    payroll_enabled = db.Column(db.Boolean, default=True, nullable=False)
-    insurance_enabled = db.Column(db.Boolean, default=True, nullable=False)
-    banking_enabled = db.Column(db.Boolean, default=True, nullable=False)
-    rent_enabled = db.Column(db.Boolean, default=True, nullable=False)
-    hall_pass_enabled = db.Column(db.Boolean, default=True, nullable=False)
-    store_enabled = db.Column(db.Boolean, default=True, nullable=False)
-
-    # Bug report settings
-    bug_reports_enabled = db.Column(db.Boolean, default=True, nullable=False)
-    bug_rewards_enabled = db.Column(db.Boolean, default=True, nullable=False)
 
     # Economy policy and rebalance tracking
     economy_policy_mode = db.Column(db.String(20), default='default', nullable=False)
@@ -2415,31 +2425,29 @@ class FeatureSettings(db.Model):
         return f'<FeatureSettings teacher={self.teacher_id} join={self.join_code} block={self.block}>'
 
     def to_dict(self):
-        """Return feature settings as a dictionary."""
-        return {
-            'payroll_enabled': self.payroll_enabled,
-            'insurance_enabled': self.insurance_enabled,
-            'banking_enabled': self.banking_enabled,
-            'rent_enabled': self.rent_enabled,
-            'hall_pass_enabled': self.hall_pass_enabled,
-            'store_enabled': self.store_enabled,
-            'bug_reports_enabled': self.bug_reports_enabled,
-            'bug_rewards_enabled': self.bug_rewards_enabled,
-        }
+        """Return enabled class features as a dictionary."""
+        return ClassFeature.feature_map_for_class(self.class_id)
 
     @classmethod
     def get_defaults(cls):
-        """Return default feature settings dictionary."""
-        return {
-            'payroll_enabled': True,  # Always enabled - payroll is mandatory
-            'insurance_enabled': True,
-            'banking_enabled': True,
-            'rent_enabled': True,
-            'hall_pass_enabled': True,
-            'store_enabled': True,
-            'bug_reports_enabled': True,
-            'bug_rewards_enabled': True,
-        }
+        """Return the default feature map for newly created classes."""
+        return ClassFeature.defaults_dict()
+
+
+@event.listens_for(ClassEconomy, 'after_insert')
+def _seed_default_class_features(mapper, connection, target):
+    """New classes start with every supported feature enabled by default."""
+    connection.execute(
+        sa.insert(ClassFeature.__table__),
+        [
+            {
+                'class_id': target.class_id,
+                'feature_name': feature_name,
+                'created_at': utc_now(),
+            }
+            for feature_name in ClassFeature.feature_names()
+        ],
+    )
 
 
 # -------------------- TEACHER ONBOARDING MODEL --------------------

@@ -5,7 +5,7 @@ import os
 import pytest
 import pyotp
 from app import app, db
-from app.models import Admin, ClassEconomy, FeatureSettings, TeacherOnboarding, TeacherBlock
+from app.models import Admin, ClassEconomy, ClassFeature, FeatureSettings, TeacherOnboarding, TeacherBlock
 
 
 def _create_class_scope(admin, block='A', join_code='JOIN_A'):
@@ -45,106 +45,60 @@ def test_admin():
     return admin
 
 
-class TestFeatureSettings:
-    """Tests for the FeatureSettings model and routes."""
+class TestClassFeatures:
+    """Tests for class feature row-existence semantics."""
 
-    def test_feature_settings_model_defaults(self, client, test_admin):
-        """Test that FeatureSettings has correct defaults."""
+    def test_class_feature_defaults(self, client, test_admin):
+        """New classes start with all supported features enabled."""
         economy = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
-        settings = FeatureSettings(
-            teacher_id=test_admin.id,
-            join_code='JOIN_A',
-            class_id=economy.class_id,
-            block='A',
-        )
-        db.session.add(settings)
         db.session.commit()
 
-        assert settings.payroll_enabled is True
-        assert settings.insurance_enabled is True
-        assert settings.banking_enabled is True
-        assert settings.rent_enabled is True
-        assert settings.hall_pass_enabled is True
-        assert settings.store_enabled is True
-        assert settings.bug_reports_enabled is True
-        assert settings.bug_rewards_enabled is True
+        enabled_names = ClassFeature.enabled_names_for_class(economy.class_id)
+        assert enabled_names == set(ClassFeature.feature_names())
 
-    def test_feature_settings_to_dict(self, client, test_admin):
-        """Test the to_dict method returns all features."""
+    def test_feature_settings_to_dict_reads_class_features(self, client, test_admin):
+        """Policy rows expose feature state from class_features."""
         economy = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
         settings = FeatureSettings(
             teacher_id=test_admin.id,
             join_code='JOIN_A',
             class_id=economy.class_id,
             block='A',
-            payroll_enabled=True,
-            insurance_enabled=False,
-            banking_enabled=True,
-            rent_enabled=False,
-            hall_pass_enabled=True,
-            store_enabled=True,
-            bug_reports_enabled=False,
-            bug_rewards_enabled=True,
         )
         db.session.add(settings)
+        for row in ClassFeature.query.filter_by(class_id=economy.class_id).all():
+            if row.feature_name in {"insurance", "rent"}:
+                db.session.delete(row)
         db.session.commit()
 
         settings_dict = settings.to_dict()
         assert settings_dict['payroll_enabled'] is True
         assert settings_dict['insurance_enabled'] is False
         assert settings_dict['rent_enabled'] is False
-        assert settings_dict['bug_reports_enabled'] is False
 
-    def test_feature_settings_per_period(self, client, test_admin):
+    def test_class_features_per_period(self, client, test_admin):
         """Test that different periods can have different settings."""
         economy_a = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
         economy_b = _create_class_scope(test_admin, block='B', join_code='JOIN_B')
-
-        period_a_settings = FeatureSettings(
-            teacher_id=test_admin.id,
-            join_code='JOIN_A',
-            class_id=economy_a.class_id,
-            block='A',
-            payroll_enabled=True,
-            rent_enabled=False,
-        )
-        db.session.add(period_a_settings)
-
-        period_b_settings = FeatureSettings(
-            teacher_id=test_admin.id,
-            join_code='JOIN_B',
-            class_id=economy_b.class_id,
-            block='B',
-            payroll_enabled=False,
-            rent_enabled=True,
-        )
-        db.session.add(period_b_settings)
-
+        for row in ClassFeature.query.filter_by(class_id=economy_a.class_id).all():
+            if row.feature_name == 'rent':
+                db.session.delete(row)
+        for row in ClassFeature.query.filter_by(class_id=economy_b.class_id).all():
+            if row.feature_name == 'payroll':
+                db.session.delete(row)
         db.session.commit()
 
-        # Verify each period has its own settings
-        settings_a = FeatureSettings.query.filter_by(
-            teacher_id=test_admin.id, block='A'
-        ).first()
-        settings_b = FeatureSettings.query.filter_by(
-            teacher_id=test_admin.id, block='B'
-        ).first()
+        settings_a = ClassFeature.feature_map_for_class(economy_a.class_id)
+        settings_b = ClassFeature.feature_map_for_class(economy_b.class_id)
+        assert settings_a['rent_enabled'] is False
+        assert settings_b['rent_enabled'] is True
+        assert settings_a['payroll_enabled'] is True
+        assert settings_b['payroll_enabled'] is False
 
-        assert settings_a.rent_enabled is False
-        assert settings_b.rent_enabled is True
-        assert settings_a.payroll_enabled is True
-        assert settings_b.payroll_enabled is False
-
-    def test_unique_constraint_teacher_block(self, client, test_admin):
-        """Test that duplicate teacher-join_code-block combinations are prevented."""
+    def test_unique_constraint_class_feature(self, client, test_admin):
+        """Duplicate feature rows for the same class are prevented."""
         economy = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
-        settings1 = FeatureSettings(teacher_id=test_admin.id, join_code='JOIN_A', class_id=economy.class_id, block='A')
-        db.session.add(settings1)
-        db.session.commit()
-
-        # Try to add another settings for the same teacher-join_code-block
-        settings2 = FeatureSettings(teacher_id=test_admin.id, join_code='JOIN_A', class_id=economy.class_id, block='A')
-        db.session.add(settings2)
+        db.session.add(ClassFeature(class_id=economy.class_id, feature_name='rent'))
 
         with pytest.raises(Exception):  # Should raise IntegrityError
             db.session.commit()
@@ -289,8 +243,8 @@ class TestOnboardingRoutes:
 class TestTeacherDeletionCascade:
     """Tests for CASCADE deletion when a teacher is deleted."""
 
-    def test_feature_settings_cascade_on_teacher_delete(self, client_with_fk):
-        """Test that FeatureSettings are CASCADE deleted when teacher is deleted."""
+    def test_class_features_cascade_on_teacher_delete(self, client_with_fk):
+        """Class features are removed when their teacher-owned class is deleted."""
         # Create a teacher
         admin = Admin(
             username='cascade_test_teacher',
@@ -302,21 +256,19 @@ class TestTeacherDeletionCascade:
 
         economy_a = _create_class_scope(admin, block='A', join_code='TESTA1')
         economy_b = _create_class_scope(admin, block='B', join_code='TESTB1')
-        settings1 = FeatureSettings(teacher_id=teacher_id, join_code='TESTA1', class_id=economy_a.class_id, block='A')
-        settings2 = FeatureSettings(teacher_id=teacher_id, join_code='TESTB1', class_id=economy_b.class_id, block='B')
-        db.session.add(settings1)
-        db.session.add(settings2)
         db.session.commit()
 
-        # Verify settings exist
-        assert FeatureSettings.query.filter_by(teacher_id=teacher_id).count() == 2
+        assert ClassFeature.query.join(ClassEconomy, ClassFeature.class_id == ClassEconomy.class_id).filter(
+            ClassEconomy.teacher_id == teacher_id
+        ).count() == len(ClassFeature.feature_names()) * 2
 
         # Delete the teacher
         db.session.delete(admin)
         db.session.commit()
 
-        # Verify feature settings were CASCADE deleted
-        assert FeatureSettings.query.filter_by(teacher_id=teacher_id).count() == 0
+        assert ClassFeature.query.join(ClassEconomy, ClassFeature.class_id == ClassEconomy.class_id).filter(
+            ClassEconomy.teacher_id == teacher_id
+        ).count() == 0
 
     def test_teacher_onboarding_cascade_on_teacher_delete(self, client_with_fk):
         """Test that TeacherOnboarding is CASCADE deleted when teacher is deleted."""

@@ -35,10 +35,13 @@ Represents the canonical class anchor.
 | `join_code` | String(20), PK | Public class join token |
 | `teacher_id` | Integer | Owning teacher |
 | `display_name` | String(100), nullable | Human-readable class name |
-| `status` | Enum(`active`, `archived`) | Lifecycle status |
-| `is_active` | Boolean | Fast active-state flag |
 | `created_at` / `updated_at` | DateTime | UTC timestamps |
 | `created_by_admin_id` | Integer, nullable | Creation audit pointer |
+
+Lifecycle rule:
+- row exists = class exists
+- row deleted = class is gone
+- there is no archived/inactive class state in v2
 
 ### `class_memberships`
 
@@ -51,14 +54,13 @@ Represents admin or student membership in a class economy.
 | `admin_id` | Integer, nullable | FK to `teachers.id`; used for teacher memberships |
 | `student_id` | Integer, nullable | FK to `students.id`; used for student memberships |
 | `role` | Enum(`admin`, `student`) | Runtime role |
-| `status` | Enum(`active`, `archived`) | Membership status |
 | `created_at` / `updated_at` | DateTime | UTC timestamps |
 
 Constraints:
 - unique (`join_code`, `admin_id`)
 - unique (`join_code`, `student_id`)
 - XOR check: exactly one of `admin_id` or `student_id` must be set
-- DB-level role/status consistency hardened by migration `a11213ca4afb`
+- membership row existence is the active-state contract; there is no archived membership state
 
 ### `teachers`
 
@@ -149,12 +151,28 @@ Important fields:
 
 ### `feature_settings`
 
-Class-scoped feature toggles.
+Class-scoped economy policy settings.
 
 Important fields:
 - `teacher_id`
 - `join_code`
-- per-feature enablement fields used by student/admin flows
+- `class_id`
+- `economy_policy_mode`
+- rebalance audit fields
+
+Feature enablement no longer lives here.
+
+### `class_features`
+
+Class-scoped feature enablement table.
+
+Important fields:
+- `class_id`
+- `feature_name`
+
+Contract:
+- row exists = feature enabled for that class
+- row missing = feature disabled for that class
 
 ### `announcements`
 

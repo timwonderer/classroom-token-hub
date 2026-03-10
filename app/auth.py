@@ -262,13 +262,12 @@ def ensure_admin_join_code(admin_id):
     if join_code and membership_table_exists:
         if db.session.query(
             sa.exists().where(
-                sa.and_(
-                    ClassMembership.admin_id == admin_id,
-                    ClassMembership.join_code == join_code,
-                    ClassMembership.role == 'admin',
-                    ClassMembership.status == 'active',
-                )
+            sa.and_(
+                ClassMembership.admin_id == admin_id,
+                ClassMembership.join_code == join_code,
+                ClassMembership.role == 'admin',
             )
+        )
         ).scalar():
             return
         session.pop('current_join_code', None)
@@ -279,7 +278,6 @@ def ensure_admin_join_code(admin_id):
             .filter(
                 ClassMembership.admin_id == admin_id,
                 ClassMembership.role == 'admin',
-                ClassMembership.status == 'active',
                 ClassMembership.join_code.isnot(None),
             )
             .order_by(ClassMembership.join_code)

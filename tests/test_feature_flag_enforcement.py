@@ -8,7 +8,7 @@ students cannot access those routes even via direct URL.
 import pytest
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
-from app.models import Student, Admin, Transaction, TeacherBlock, FeatureSettings, ClassEconomy, PayrollReward, StoreItem
+from app.models import Student, Admin, Transaction, TeacherBlock, ClassEconomy, ClassFeature, PayrollReward, StoreItem
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 
@@ -49,7 +49,6 @@ def setup_student_with_disabled_banking(client):
         join_code=join_code,
         teacher_id=teacher.id,
         display_name='Math Period 1B',
-        status='active',
         created_by_admin_id=teacher.id
     )
     db.session.add(economy)
@@ -86,20 +85,11 @@ def setup_student_with_disabled_banking(client):
     db.session.add(tx)
     db.session.commit()
 
-    # Create feature settings with banking disabled (join-code scoped)
-    feature_settings = FeatureSettings(
-        teacher_id=teacher.id,
-        join_code=join_code,
-        class_id=economy.class_id,
-        block="Period1",
-        banking_enabled=False,  # Disable banking
-        payroll_enabled=False,  # Disable payroll
-        insurance_enabled=True,
-        rent_enabled=True,
-        hall_pass_enabled=True,
-        store_enabled=True
-    )
-    db.session.add(feature_settings)
+    for row in ClassFeature.query.filter(
+        ClassFeature.class_id == economy.class_id,
+        ClassFeature.feature_name.in_(["banking", "payroll"]),
+    ).all():
+        db.session.delete(row)
     db.session.commit()
 
     return {
@@ -214,7 +204,6 @@ def setup_student_with_enabled_banking(client):
         join_code=join_code,
         teacher_id=teacher.id,
         display_name='Math Period 2C',
-        status='active',
         created_by_admin_id=teacher.id
     )
     db.session.add(economy)
@@ -251,20 +240,6 @@ def setup_student_with_enabled_banking(client):
     db.session.add(tx)
     db.session.commit()
 
-    # Create feature settings with banking ENABLED (join-code scoped)
-    feature_settings = FeatureSettings(
-        teacher_id=teacher.id,
-        join_code=join_code,
-        class_id=economy.class_id,
-        block="Period2",
-        banking_enabled=True,  # Enable banking
-        payroll_enabled=True,  # Enable payroll
-        insurance_enabled=True,
-        rent_enabled=True,
-        hall_pass_enabled=True,
-        store_enabled=True
-    )
-    db.session.add(feature_settings)
     db.session.commit()
 
     return {
@@ -333,7 +308,6 @@ def test_admin_banking_rejects_disabled_class_scope(client):
         join_code=join_code,
         teacher_id=teacher.id,
         display_name='Banking Period A',
-        status='active',
         created_by_admin_id=teacher.id,
     )
     db.session.add(economy)
@@ -352,13 +326,8 @@ def test_admin_banking_rejects_disabled_class_scope(client):
         is_claimed=False,
     ))
 
-    db.session.add(FeatureSettings(
-        teacher_id=teacher.id,
-        join_code=join_code,
-        class_id=economy.class_id,
-        block="A",
-        banking_enabled=False,
-    ))
+    for row in ClassFeature.query.filter_by(class_id=economy.class_id, feature_name='banking').all():
+        db.session.delete(row)
     db.session.commit()
 
     with client.session_transaction() as sess:
@@ -374,7 +343,6 @@ def _create_admin_feature_scope(teacher, *, join_code, block, feature_name, enab
         join_code=join_code,
         teacher_id=teacher.id,
         display_name=f'{feature_name.title()} Period {block}',
-        status='active',
         created_by_admin_id=teacher.id,
     )
     db.session.add(economy)
@@ -393,14 +361,9 @@ def _create_admin_feature_scope(teacher, *, join_code, block, feature_name, enab
         is_claimed=False,
     ))
 
-    kwargs = {
-        'teacher_id': teacher.id,
-        'join_code': join_code,
-        'class_id': economy.class_id,
-        'block': block,
-        f'{feature_name}_enabled': enabled,
-    }
-    db.session.add(FeatureSettings(**kwargs))
+    if not enabled:
+        for row in ClassFeature.query.filter_by(class_id=economy.class_id, feature_name=feature_name).all():
+            db.session.delete(row)
 
 
 def test_admin_store_rejects_disabled_class_scope(client):
@@ -530,7 +493,6 @@ def test_student_rent_rejects_disabled_feature_scope(client):
         join_code=join_code,
         teacher_id=teacher.id,
         display_name='Rent Period 3',
-        status='active',
         created_by_admin_id=teacher.id,
     )
     db.session.add(economy)
@@ -551,13 +513,8 @@ def test_student_rent_rejects_disabled_feature_scope(client):
         claimed_at=datetime.now(timezone.utc)
     ))
 
-    db.session.add(FeatureSettings(
-        teacher_id=teacher.id,
-        join_code=join_code,
-        class_id=economy.class_id,
-        block="Period3",
-        rent_enabled=False,
-    ))
+    for row in ClassFeature.query.filter_by(class_id=economy.class_id, feature_name='rent').all():
+        db.session.delete(row)
     db.session.commit()
 
     with client.session_transaction() as sess:

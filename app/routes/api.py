@@ -36,7 +36,7 @@ from app.routes.student import (
     _is_student_coverage_period_paid,
     _ensure_rent_hall_pass_top_off,
 )
-from app.utils.economy_policy import get_feature_settings_row, resolve_class_scope, resolve_feature_class
+from app.utils.economy_policy import resolve_class_scope, resolve_feature_class
 from app.utils.overdraft import charge_overdraft_fee_if_needed
 from app.utils.store import process_expired_collective_goals
 from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone, local_date_bounds_utc, UTC_MIN
@@ -209,7 +209,6 @@ def _get_teacher_join_code_scope(admin_id):
         .filter(
             ClassMembership.admin_id == admin_id,
             ClassMembership.role == 'admin',
-            ClassMembership.status == 'active',
             ClassMembership.join_code.isnot(None),
         )
         .distinct()
@@ -220,7 +219,6 @@ def _get_teacher_join_code_scope(admin_id):
             sa.and_(
                 ClassMembership.admin_id == admin_id,
                 ClassMembership.role == 'admin',
-                ClassMembership.status == 'active',
                 ClassMembership.join_code.isnot(None),
             )
         )
@@ -239,7 +237,6 @@ def _admin_has_join_code_scope(admin_id, join_code):
                 ClassMembership.admin_id == admin_id,
                 ClassMembership.join_code == join_code,
                 ClassMembership.role == 'admin',
-                ClassMembership.status == 'active',
             )
         )
     ).scalar()
@@ -1816,8 +1813,8 @@ def get_hall_pass_setup():
     if not scope:
         return jsonify({"status": "error", "message": "Class scope not found"}), 404
 
-    feature_settings = get_feature_settings_row(teacher_id, block=scope["block"], join_code=join_code, create=False)
-    if feature_settings and not feature_settings.hall_pass_enabled:
+    feature_scope = resolve_feature_class(teacher_id, 'hall_pass', block=scope["block"], join_code=join_code)
+    if feature_scope and not feature_scope["enabled"]:
         return jsonify({"status": "error", "message": "Hall pass is disabled for this class"}), 403
 
     settings = HallPassSettings.query.filter_by(class_id=scope["class_id"]).first()
@@ -1889,8 +1886,8 @@ def save_hall_pass_setup():
         if not settings:
             return jsonify({"status": "error", "message": "Class scope not found"}), 404
 
-        feature_settings = get_feature_settings_row(teacher_id, block=settings.block, join_code=join_code, create=False)
-        if feature_settings and not feature_settings.hall_pass_enabled:
+        feature_scope = resolve_feature_class(teacher_id, 'hall_pass', block=settings.block, join_code=join_code)
+        if feature_scope and not feature_scope["enabled"]:
             return jsonify({"status": "error", "message": "Hall pass is disabled for this class"}), 403
 
         settings.queue_enabled = hall_pass_enabled
@@ -2318,8 +2315,8 @@ def handle_tap():
 
             teacher_id = teacher_block.teacher_id
 
-            feature_settings = get_feature_settings_row(teacher_id, block=period, join_code=join_code, create=False)
-            if feature_settings and not feature_settings.hall_pass_enabled:
+            feature_scope = resolve_feature_class(teacher_id, 'hall_pass', block=period, join_code=join_code)
+            if feature_scope and not feature_scope["enabled"]:
                 return jsonify({"error": "Hall pass is currently disabled for this class."}), 403
 
             settings = _get_or_create_hall_pass_settings(teacher_id, join_code)
@@ -2614,7 +2611,6 @@ def get_tap_entries(student_id):
                     ClassMembership.join_code == current_join_code,
                     ClassMembership.student_id == student_id,
                     ClassMembership.role == 'student',
-                    ClassMembership.status == 'active',
                 )
             )
         ).scalar()

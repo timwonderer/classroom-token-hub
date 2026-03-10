@@ -169,21 +169,53 @@ def resolve_feature_class(
     if not scope:
         return None
 
-    row = get_feature_settings_row(
-        teacher_id,
-        block=scope["block"],
-        join_code=scope["join_code"],
-        create=False,
-    )
-    feature_key = f"{feature_name}_enabled"
-    enabled = getattr(row, feature_key, True) if row else True
+    from app.models import ClassFeature
+
+    enabled = feature_name in ClassFeature.enabled_names_for_class(scope["class_id"])
 
     return {
         **scope,
-        "settings_row": row,
         "enabled": bool(enabled),
         "feature_name": feature_name,
     }
+
+
+def get_class_feature_settings(
+    teacher_id: int,
+    *,
+    block: Optional[str] = None,
+    join_code: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
+    if not has_app_context():
+        return None
+
+    from app.models import ClassFeature
+
+    scope = resolve_class_scope(teacher_id, block=block, join_code=join_code)
+    if not scope:
+        return None
+    return {
+        **scope,
+        "features": ClassFeature.feature_map_for_class(scope["class_id"]),
+    }
+
+
+def replace_enabled_class_features(class_id: str, enabled_features: set[str]) -> None:
+    from app.extensions import db
+    from app.models import ClassFeature
+
+    valid_features = set(ClassFeature.feature_names())
+    requested_features = {name for name in enabled_features if name in valid_features}
+    existing_rows = ClassFeature.query.filter_by(class_id=class_id).all()
+    existing_names = {row.feature_name for row in existing_rows}
+
+    for row in existing_rows:
+        if row.feature_name not in requested_features:
+            db.session.delete(row)
+
+    missing_names = requested_features - existing_names
+    for feature_name in sorted(missing_names):
+        db.session.add(ClassFeature(class_id=class_id, feature_name=feature_name))
 
 
 def get_feature_settings_row(

@@ -61,8 +61,10 @@ from app.utils.join_code import generate_join_code
 from app.utils.economy_balance import EconomyBalanceChecker
 from app.utils.economy_policy import (
     POLICY_MODES,
+    get_class_feature_settings,
     get_feature_settings_row,
     normalize_policy_mode,
+    replace_enabled_class_features,
     resolve_class_scope,
     resolve_feature_class,
 )
@@ -250,13 +252,12 @@ def get_admin_feature_settings_for_join_code(admin_id: int | None, join_code: st
     if not scope:
         return FeatureSettings.get_defaults()
 
-    settings_row = get_feature_settings_row(
+    scoped_features = get_class_feature_settings(
         admin_id,
         block=scope["block"],
         join_code=scope["join_code"],
-        create=False,
     )
-    return settings_row.to_dict() if settings_row else FeatureSettings.get_defaults()
+    return scoped_features["features"] if scoped_features else FeatureSettings.get_defaults()
 
 
 def is_admin_feature_enabled(feature_name: str, admin_id: int | None = None, join_code: str | None = None) -> bool:
@@ -395,8 +396,6 @@ def _resolve_class_id(teacher_id: int, join_code: str) -> str:
         join_code=join_code,
         teacher_id=teacher_id,
         created_by_admin_id=teacher_id,
-        is_active=True,
-        status="active",
     )
     db.session.add(row)
     db.session.flush()
@@ -1093,7 +1092,6 @@ def _get_admin_owned_join_codes(admin_id):
         .filter(
             ClassMembership.admin_id == admin_id,
             ClassMembership.role == 'admin',
-            ClassMembership.status == 'active',
         )
         .distinct()
         .all()
@@ -1112,7 +1110,6 @@ def _admin_owns_join_code(admin_id, join_code):
                 ClassMembership.admin_id == admin_id,
                 ClassMembership.join_code == join_code,
                 ClassMembership.role == 'admin',
-                ClassMembership.status == 'active',
             )
         )
     ).scalar()
@@ -1264,8 +1261,6 @@ def _ensure_join_code_anchors(teacher_id, join_code, class_label=None):
             teacher_id=teacher_id,
             created_by_admin_id=teacher_id,
             display_name=class_label,
-            status="active",
-            is_active=True,
         )
         db.session.add(economy)
 
@@ -1278,7 +1273,6 @@ def _ensure_join_code_anchors(teacher_id, join_code, class_label=None):
             join_code=join_code,
             admin_id=teacher_id,
             role="admin",
-            status="active",
         ))
 
     try:
@@ -1383,9 +1377,9 @@ def _get_feature_settings(teacher_id, block=None):
     """
     if not block:
         return FeatureSettings.get_defaults()
-    block_settings = get_feature_settings_row(teacher_id, block=block, create=False)
-    if block_settings:
-        return block_settings.to_dict()
+    scoped_features = get_class_feature_settings(teacher_id, block=block)
+    if scoped_features:
+        return scoped_features["features"]
     return FeatureSettings.get_defaults()
 
 
@@ -9077,7 +9071,6 @@ def export_students():
                 db.session.query(ClassMembership.student_id).filter(
                     ClassMembership.join_code == selected_join_code,
                     ClassMembership.role == 'student',
-                    ClassMembership.status == 'active',
                     ClassMembership.student_id.isnot(None),
                 )
             )
@@ -10243,38 +10236,27 @@ def feature_settings():
             apply_to = request.form.get('apply_to', 'all')
             selected_periods = request.form.getlist('selected_periods[]') if apply_to == 'selected' else periods
 
-            features_data = {
-                'payroll_enabled': True,  # Always enabled - payroll is mandatory
-                'insurance_enabled': 'insurance_enabled' in request.form,
-                'banking_enabled': 'banking_enabled' in request.form,
-                'rent_enabled': 'rent_enabled' in request.form,
-                'hall_pass_enabled': 'hall_pass_enabled' in request.form,
-                'store_enabled': 'store_enabled' in request.form,
+            enabled_features = {
+                feature_name
+                for feature_name in ('payroll', 'insurance', 'banking', 'rent', 'hall_pass', 'store')
+                if f'{feature_name}_enabled' in request.form
             }
 
             if apply_to == 'all':
                 for period in periods:
-                    period_settings = get_feature_settings_row(admin_id, block=period, create=True)
-                    if not period_settings:
+                    scope = resolve_class_scope(admin_id, block=period)
+                    if not scope:
                         raise ValueError(f"Missing class scope for period {period}")
-
-                    for key, value in features_data.items():
-                        setattr(period_settings, key, value)
-
-                    period_settings.updated_at = utc_now()
+                    replace_enabled_class_features(scope["class_id"], enabled_features)
 
                 flash('Feature settings applied to all periods successfully!', 'success')
             else:
                 for period in selected_periods:
                     normalized_period = period.strip().upper()
-                    period_settings = get_feature_settings_row(admin_id, block=normalized_period, create=True)
-                    if not period_settings:
+                    scope = resolve_class_scope(admin_id, block=normalized_period)
+                    if not scope:
                         raise ValueError(f"Missing class scope for period {normalized_period}")
-
-                    for key, value in features_data.items():
-                        setattr(period_settings, key, value)
-
-                    period_settings.updated_at = utc_now()
+                    replace_enabled_class_features(scope["class_id"], enabled_features)
 
                 flash(f'Feature settings applied to {len(selected_periods)} period(s) successfully!', 'success')
 
@@ -10289,8 +10271,8 @@ def feature_settings():
 
     period_settings = {}
     for period in periods:
-        settings = get_feature_settings_row(admin_id, block=period, create=False)
-        period_settings[period] = settings.to_dict() if settings else FeatureSettings.get_defaults()
+        scoped_features = get_class_feature_settings(admin_id, block=period)
+        period_settings[period] = scoped_features["features"] if scoped_features else FeatureSettings.get_defaults()
 
     return render_template(
         'admin_feature_settings.html',
@@ -10300,6 +10282,7 @@ def feature_settings():
         period_settings=period_settings,
         join_codes_by_period=join_codes_by_period,
         features_list=[
+            ('payroll_enabled', 'Payroll', 'payments', 'Time tracking and student payments'),
             ('insurance_enabled', 'Insurance', 'shield', 'Insurance policies and claims'),
             ('banking_enabled', 'Banking', 'account_balance', 'Savings accounts and interest'),
             ('rent_enabled', 'Rent', 'home', 'Housing costs and payments'),
@@ -10319,35 +10302,30 @@ def update_period_feature_settings(period):
         data = request.get_json()
         period = period.strip().upper()
 
-        settings = get_feature_settings_row(admin_id, block=period, create=True)
-        if not settings:
+        scope = resolve_class_scope(admin_id, block=period)
+        if not scope:
             return jsonify({'status': 'error', 'message': 'Class scope not found for this period.'}), 400
 
-        # Update only the provided features
-        feature_map = {
-            'payroll': 'payroll_enabled',
-            'insurance': 'insurance_enabled',
-            'banking': 'banking_enabled',
-            'rent': 'rent_enabled',
-            'hall_pass': 'hall_pass_enabled',
-            'store': 'store_enabled',
+        current_features = get_class_feature_settings(admin_id, block=period)
+        enabled_features = {
+            feature_name
+            for feature_name in ('payroll', 'insurance', 'banking', 'rent', 'hall_pass', 'store')
+            if current_features and current_features["features"].get(f'{feature_name}_enabled')
         }
-
-        for feature_key, db_column in feature_map.items():
-            if feature_key in data:
-                # Payroll is always enabled and cannot be disabled
-                if db_column == 'payroll_enabled':
-                    setattr(settings, db_column, True)
+        for feature_name in ('payroll', 'insurance', 'banking', 'rent', 'hall_pass', 'store'):
+            if feature_name in data:
+                if bool(data[feature_name]):
+                    enabled_features.add(feature_name)
                 else:
-                    setattr(settings, db_column, bool(data[feature_key]))
+                    enabled_features.discard(feature_name)
 
-        settings.updated_at = utc_now()
+        replace_enabled_class_features(scope["class_id"], enabled_features)
         db.session.commit()
 
         return jsonify({
             'status': 'success',
             'message': f'Settings updated for Period {period}',
-            'settings': settings.to_dict()
+            'settings': get_class_feature_settings(admin_id, block=period)["features"]
         })
 
     except Exception as e:
@@ -10374,14 +10352,13 @@ def copy_feature_settings():
             }), 400
 
         # Get source settings
-        source_settings = get_feature_settings_row(admin_id, block=source_period, create=False)
-        source_dict = source_settings.to_dict() if source_settings else FeatureSettings.get_defaults()
-
-        # Define valid feature columns
-        valid_feature_columns = {
-            'payroll_enabled', 'insurance_enabled', 'banking_enabled',
-            'rent_enabled', 'hall_pass_enabled', 'store_enabled',
-        }
+        source_scope = resolve_class_scope(admin_id, block=source_period)
+        if not source_scope:
+            return jsonify({
+                'status': 'error',
+                'message': f'Class scope not found for period {source_period}.'
+            }), 400
+        source_dict = get_class_feature_settings(admin_id, block=source_period)["features"]
 
         # Copy to target periods
         copied_count = 0
@@ -10389,23 +10366,21 @@ def copy_feature_settings():
             if period == source_period:
                 continue  # Skip copying to self
 
-            target_settings = get_feature_settings_row(admin_id, block=period, create=True)
-            if not target_settings:
+            target_scope = resolve_class_scope(admin_id, block=period)
+            if not target_scope:
                 return jsonify({
                     'status': 'error',
                     'message': f'Class scope not found for period {period}.'
                 }), 400
 
-            # Only copy valid feature columns to prevent attribute injection
-            for key, value in source_dict.items():
-                if key in valid_feature_columns:
-                    # Payroll is always enabled and cannot be disabled
-                    if key == 'payroll_enabled':
-                        setattr(target_settings, key, True)
-                    else:
-                        setattr(target_settings, key, value)
-
-            target_settings.updated_at = utc_now()
+            replace_enabled_class_features(
+                target_scope["class_id"],
+                {
+                    feature_name
+                    for feature_name in ('payroll', 'insurance', 'banking', 'rent', 'hall_pass', 'store')
+                    if source_dict.get(f'{feature_name}_enabled')
+                },
+            )
             copied_count += 1
 
         db.session.commit()
