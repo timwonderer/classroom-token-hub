@@ -53,15 +53,18 @@ jobs:
 
     # SECURITY FIX: Add SSH host key verification to prevent MITM attacks
     - name: Set up SSH host key verification
+      env:
+        KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
       run: |
         mkdir -p ~/.ssh
         chmod 700 ~/.ssh
-        echo "${{ secrets.KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+        echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
         chmod 644 ~/.ssh/known_hosts
         echo "✓ SSH host key verification enabled"
 
     - name: Update maintenance mode on server
       env:
+        PRODUCTION_SERVER_IP: ${{ secrets.PRODUCTION_SERVER_IP }}
         INPUT_ENABLED: ${{ inputs.enabled }}
         INPUT_MESSAGE: ${{ inputs.message }}
         INPUT_EXPECTED_END: ${{ inputs.expected_end }}
@@ -76,8 +79,7 @@ jobs:
 
         SSH_ENV_VARS="MODE_VALUE=$(printf %q "${MODE_VALUE}") MESSAGE=$(printf %q "${INPUT_MESSAGE}") EXPECTED_END=$(printf %q "${INPUT_EXPECTED_END}") CONTACT=$(printf %q "${INPUT_CONTACT}") BADGE_TYPE=$(printf %q "${INPUT_BADGE_TYPE}") STATUS_DESCRIPTION=$(printf %q "${INPUT_STATUS_DESCRIPTION}")"
 
-        # SECURITY: Removed -o StrictHostKeyChecking=no (now uses known_hosts)
-        ssh root@${{ secrets.PRODUCTION_SERVER_IP }} "export ${SSH_ENV_VARS}; bash -s" << 'EOF'
+        ssh root@"$PRODUCTION_SERVER_IP" "export ${SSH_ENV_VARS}; bash -s" << 'EOF'
           set -e
 
           echo 'Navigating to project directory...'
