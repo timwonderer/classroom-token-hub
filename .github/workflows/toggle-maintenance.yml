@@ -61,20 +61,20 @@ jobs:
         echo "✓ SSH host key verification enabled"
 
     - name: Update maintenance mode on server
+      env:
+        INPUT_ENABLED: ${{ inputs.enabled }}
+        INPUT_MESSAGE: ${{ inputs.message }}
+        INPUT_EXPECTED_END: ${{ inputs.expected_end }}
+        INPUT_CONTACT: ${{ inputs.contact }}
+        INPUT_BADGE_TYPE: ${{ inputs.badge_type }}
+        INPUT_STATUS_DESCRIPTION: ${{ inputs.status_description }}
       run: |
-        ENABLED="${{ inputs.enabled }}"
         MODE_VALUE="false"
-        if [ "$ENABLED" = "true" ]; then
+        if [ "$INPUT_ENABLED" = "true" ]; then
           MODE_VALUE="true"
         fi
 
-        MESSAGE="${{ inputs.message }}"
-        EXPECTED_END="${{ inputs.expected_end }}"
-        CONTACT="${{ inputs.contact }}"
-        BADGE_TYPE="${{ inputs.badge_type }}"
-        STATUS_DESCRIPTION="${{ inputs.status_description }}"
-
-        SSH_ENV_VARS="MODE_VALUE=$(printf %q "${MODE_VALUE}") MESSAGE=$(printf %q "${MESSAGE}") EXPECTED_END=$(printf %q "${EXPECTED_END}") CONTACT=$(printf %q "${CONTACT}") BADGE_TYPE=$(printf %q "${BADGE_TYPE}") STATUS_DESCRIPTION=$(printf %q "${STATUS_DESCRIPTION}")"
+        SSH_ENV_VARS="MODE_VALUE=$(printf %q "${MODE_VALUE}") MESSAGE=$(printf %q "${INPUT_MESSAGE}") EXPECTED_END=$(printf %q "${INPUT_EXPECTED_END}") CONTACT=$(printf %q "${INPUT_CONTACT}") BADGE_TYPE=$(printf %q "${INPUT_BADGE_TYPE}") STATUS_DESCRIPTION=$(printf %q "${INPUT_STATUS_DESCRIPTION}")"
 
         # SECURITY: Removed -o StrictHostKeyChecking=no (now uses known_hosts)
         ssh root@${{ secrets.PRODUCTION_SERVER_IP }} "export ${SSH_ENV_VARS}; bash -s" << 'EOF'
@@ -118,12 +118,17 @@ jobs:
         EOF
 
     - name: Summary
+      env:
+        INPUT_ENABLED: ${{ inputs.enabled }}
+        INPUT_BADGE_TYPE: ${{ inputs.badge_type }}
+        INPUT_MESSAGE: ${{ inputs.message }}
+        INPUT_STATUS_DESCRIPTION: ${{ inputs.status_description }}
       run: |
-        if [ "${{ inputs.enabled }}" = "true" ]; then
+        if [ "$INPUT_ENABLED" = "true" ]; then
           echo "Maintenance mode ENABLED"
-          echo "Badge type: ${{ inputs.badge_type }}"
-          echo "Message: ${{ inputs.message }}"
-          echo "Status: ${{ inputs.status_description }}"
+          echo "Badge type: $INPUT_BADGE_TYPE"
+          echo "Message: $INPUT_MESSAGE"
+          echo "Status: $INPUT_STATUS_DESCRIPTION"
         else
           echo "Maintenance mode DISABLED - Site is live"
         fi
