@@ -23,31 +23,30 @@ jobs:
 
     # SECURITY FIX: Add SSH host key verification to prevent MITM attacks
     - name: Set up SSH host key verification
+      env:
+        KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
       run: |
         mkdir -p ~/.ssh
         chmod 700 ~/.ssh
-        echo "${{ secrets.KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+        printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
         chmod 644 ~/.ssh/known_hosts
         echo "✓ SSH host key verification enabled"
 
     - name: Deploy to DO Production Server
+      env:
+        PRODUCTION_SERVER_IP: ${{ secrets.PRODUCTION_SERVER_IP }}
+        TURNSTILE_SITE: ${{ secrets.TURNSTILE_SITE_KEY }}
+        TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET_KEY }}
+        PASSWORDLESS_API_KEY: ${{ secrets.PASSWORDLESS_API_KEY }}
+        PASSWORDLESS_API_PUBLIC: ${{ secrets.PASSWORDLESS_API_PUBLIC }}
+        DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
       run: |
-        # Intentionally avoid defaults: empty means "no override", so current server state is preserved.
-        MAINT_MODE="${{ vars.MAINTENANCE_MODE }}"
-        MAINT_MESSAGE="${{ vars.MAINTENANCE_MESSAGE }}"
-        MAINT_END="${{ vars.MAINTENANCE_EXPECTED_END }}"
-        MAINT_CONTACT="${{ vars.MAINTENANCE_CONTACT }}"
-        TURNSTILE_SITE="${{ secrets.TURNSTILE_SITE_KEY || '' }}"
-        TURNSTILE_SECRET="${{ secrets.TURNSTILE_SECRET_KEY || '' }}"
-        PASSWORDLESS_API_KEY="${{ secrets.PASSWORDLESS_API_KEY || '' }}"
-        PASSWORDLESS_API_PUBLIC="${{ secrets.PASSWORDLESS_API_PUBLIC || '' }}"
-        DIGITALOCEAN_ACCESS_TOKEN="${{ secrets.DIGITALOCEAN_ACCESS_TOKEN || '' }}"
-
-        SSH_ENV_VARS="MAINT_MODE=$(printf %q "$MAINT_MODE") MAINT_MESSAGE=$(printf %q "$MAINT_MESSAGE") MAINT_END=$(printf %q "$MAINT_END") MAINT_CONTACT=$(printf %q "$MAINT_CONTACT") TURNSTILE_SITE=$(printf %q "$TURNSTILE_SITE") TURNSTILE_SECRET=$(printf %q "$TURNSTILE_SECRET") PASSWORDLESS_API_KEY=$(printf %q "$PASSWORDLESS_API_KEY") PASSWORDLESS_API_PUBLIC=$(printf %q "$PASSWORDLESS_API_PUBLIC") DIGITALOCEAN_ACCESS_TOKEN=$(printf %q "$DIGITALOCEAN_ACCESS_TOKEN")"
+        # Maintenance mode is managed exclusively by the toggle-maintenance workflow.
+        # This deploy workflow never touches MAINTENANCE_* variables in .env.
+        SSH_ENV_VARS="TURNSTILE_SITE=$(printf %q "$TURNSTILE_SITE") TURNSTILE_SECRET=$(printf %q "$TURNSTILE_SECRET") PASSWORDLESS_API_KEY=$(printf %q "$PASSWORDLESS_API_KEY") PASSWORDLESS_API_PUBLIC=$(printf %q "$PASSWORDLESS_API_PUBLIC") DIGITALOCEAN_ACCESS_TOKEN=$(printf %q "$DIGITALOCEAN_ACCESS_TOKEN")"
 
         # Connect to the production server and deploy
-        # SECURITY: Removed -o StrictHostKeyChecking=no (now uses known_hosts)
-        ssh root@${{ secrets.PRODUCTION_SERVER_IP }} "export ${SSH_ENV_VARS}; bash -s" << 'EOF'
+        ssh root@"$PRODUCTION_SERVER_IP" "export ${SSH_ENV_VARS}; bash -s" << 'EOF'
 
           set -e  # Exit immediately if a command exits with a non-zero status
 
@@ -63,88 +62,25 @@ jobs:
           echo 'Activating virtual environment...'
           source venv/bin/activate
 
-          echo 'Updating environment variables...'
+          echo 'Updating environment variables (preserving maintenance state)...'
           # SECURITY: Set restrictive file permissions before writing secrets
           touch .env
           chmod 600 .env
 
-          # Preserve current maintenance settings unless explicit override values are supplied from workflow vars.
-          CURRENT_MAINT_MODE="$(grep -E '^MAINTENANCE_MODE=' .env | tail -1 | cut -d= -f2- || true)"
-          CURRENT_MAINT_MESSAGE="$(grep -E '^MAINTENANCE_MESSAGE=' .env | tail -1 | cut -d= -f2- || true)"
-          CURRENT_MAINT_END="$(grep -E '^MAINTENANCE_EXPECTED_END=' .env | tail -1 | cut -d= -f2- || true)"
-          CURRENT_MAINT_CONTACT="$(grep -E '^MAINTENANCE_CONTACT=' .env | tail -1 | cut -d= -f2- || true)"
+          # Maintenance mode variables are NOT touched here.
+          # They are managed exclusively by the toggle-maintenance workflow
+          # so maintenance persists across deploys until manually toggled off.
 
-          # Normalize values that might already be wrapped in double quotes from prior writes.
-          strip_wrapping_quotes() {
-            local value="$1"
-            if [[ "$value" == \"*\" && "$value" == *\" ]]; then
-              value="${value#\"}"
-              value="${value%\"}"
-            fi
-            printf '%s' "$value"
-          }
+          # Log current maintenance state for visibility
+          CURRENT_MAINT="$(grep -E '^MAINTENANCE_MODE=' .env | tail -1 | cut -d= -f2- || echo 'not set')"
+          echo "ℹ Current MAINTENANCE_MODE=${CURRENT_MAINT} (preserved, use toggle-maintenance workflow to change)"
 
-          CURRENT_MAINT_MESSAGE="$(strip_wrapping_quotes "$CURRENT_MAINT_MESSAGE")"
-          CURRENT_MAINT_END="$(strip_wrapping_quotes "$CURRENT_MAINT_END")"
-          CURRENT_MAINT_CONTACT="$(strip_wrapping_quotes "$CURRENT_MAINT_CONTACT")"
-          CURRENT_MAINT_MODE="$(strip_wrapping_quotes "$CURRENT_MAINT_MODE")"
-
-          EFFECTIVE_MAINT_MODE="$CURRENT_MAINT_MODE"
-          EFFECTIVE_MAINT_MESSAGE="$CURRENT_MAINT_MESSAGE"
-          EFFECTIVE_MAINT_END="$CURRENT_MAINT_END"
-          EFFECTIVE_MAINT_CONTACT="$CURRENT_MAINT_CONTACT"
-
-          if [ -n "${MAINT_MODE}" ]; then
-            EFFECTIVE_MAINT_MODE="${MAINT_MODE}"
-          fi
-          if [ -n "${MAINT_MESSAGE}" ]; then
-            EFFECTIVE_MAINT_MESSAGE="${MAINT_MESSAGE}"
-          fi
-          if [ -n "${MAINT_END}" ]; then
-            EFFECTIVE_MAINT_END="${MAINT_END}"
-          fi
-          if [ -n "${MAINT_CONTACT}" ]; then
-            EFFECTIVE_MAINT_CONTACT="${MAINT_CONTACT}"
-          fi
-
-          # Normalize mode to supported boolean values only.
-          EFFECTIVE_MAINT_MODE="$(echo "${EFFECTIVE_MAINT_MODE}" | tr '[:upper:]' '[:lower:]')"
-          case "${EFFECTIVE_MAINT_MODE}" in
-            true|false|'')
-              ;;
-            *)
-              echo "⚠ Invalid MAINTENANCE_MODE '${EFFECTIVE_MAINT_MODE}', defaulting to false"
-              EFFECTIVE_MAINT_MODE="false"
-              ;;
-          esac
-
-          # Default to disabled only when maintenance mode has never been set.
-          if [ -z "${EFFECTIVE_MAINT_MODE}" ]; then
-            EFFECTIVE_MAINT_MODE="false"
-          fi
-
-          # Remove old variables if they exist
-          sed -i '/^MAINTENANCE_MODE=/d' .env 2>/dev/null || true
-          sed -i '/^MAINTENANCE_MESSAGE=/d' .env 2>/dev/null || true
-          sed -i '/^MAINTENANCE_EXPECTED_END=/d' .env 2>/dev/null || true
-          sed -i '/^MAINTENANCE_CONTACT=/d' .env 2>/dev/null || true
+          # Remove old non-maintenance variables before re-adding
           sed -i '/^TURNSTILE_SITE_KEY=/d' .env 2>/dev/null || true
           sed -i '/^TURNSTILE_SECRET_KEY=/d' .env 2>/dev/null || true
           sed -i '/^PASSWORDLESS_API_KEY=/d' .env 2>/dev/null || true
           sed -i '/^PASSWORDLESS_API_PUBLIC=/d' .env 2>/dev/null || true
           sed -i '/^DIGITALOCEAN_ACCESS_TOKEN=/d' .env 2>/dev/null || true
-
-          # Add maintenance variables using effective values (preserved unless explicitly overridden)
-          EFFECTIVE_MAINT_MESSAGE="$(printf '%s' "${EFFECTIVE_MAINT_MESSAGE}" | tr -d '\r\n')"
-          EFFECTIVE_MAINT_END="$(printf '%s' "${EFFECTIVE_MAINT_END}" | tr -d '\r\n')"
-          EFFECTIVE_MAINT_CONTACT="$(printf '%s' "${EFFECTIVE_MAINT_CONTACT}" | tr -d '\r\n')"
-          SAFE_MAINT_MESSAGE="${EFFECTIVE_MAINT_MESSAGE//\"/\\\"}"
-          SAFE_MAINT_END="${EFFECTIVE_MAINT_END//\"/\\\"}"
-          SAFE_MAINT_CONTACT="${EFFECTIVE_MAINT_CONTACT//\"/\\\"}"
-          echo "MAINTENANCE_MODE=${EFFECTIVE_MAINT_MODE}" >> .env
-          echo "MAINTENANCE_MESSAGE=\"${SAFE_MAINT_MESSAGE}\"" >> .env
-          echo "MAINTENANCE_EXPECTED_END=\"${SAFE_MAINT_END}\"" >> .env
-          echo "MAINTENANCE_CONTACT=\"${SAFE_MAINT_CONTACT}\"" >> .env
 
           # Add Turnstile keys if provided
           if [ -n "${TURNSTILE_SITE}" ]; then
