@@ -25,7 +25,7 @@ from app.extensions import db, limiter
 from app.models import (
     Student, Transaction, TransactionStatus, TapEvent, StoreItem, StoreItemBlock, StudentItem,
     RentSettings, RentPayment, InsurancePolicy, StudentInsurance, InsuranceClaim,
-    BankingSettings, UserReport, FeatureSettings, Issue
+    BankingSettings, UserReport, FeatureSettings, Issue, Seat, User
 )
 from app.auth import (
     admin_required,
@@ -93,6 +93,73 @@ RENT_PAYMENT_MATCH_TOLERANCE_SECONDS = 300
 
 
 # -------------------- PERIOD SELECTION HELPERS --------------------
+
+def _find_linked_user_for_student(student_id: int | None) -> User | None:
+    if not student_id:
+        return None
+    return (
+        User.query
+        .join(Seat, Seat.user_id == User.id)
+        .filter(
+            Seat.student_id == student_id,
+            Seat.user_id.isnot(None),
+        )
+        .order_by(Seat.id.asc())
+        .first()
+    )
+
+
+def _get_or_create_bridge_seat_for_teacher_block(teacher_block, student_id: int | None = None) -> Seat | None:
+    if not teacher_block or not teacher_block.join_code:
+        return None
+
+    seat = (
+        Seat.query.filter_by(
+            join_code=teacher_block.join_code,
+            student_id=student_id or teacher_block.student_id,
+        )
+        .order_by(Seat.id.asc())
+        .first()
+    )
+    if seat:
+        if seat.block_identifier is None and teacher_block.block:
+            seat.block_identifier = teacher_block.block
+        if seat.block is None and teacher_block.block:
+            seat.block = teacher_block.block
+        if not seat.claimed_at and teacher_block.claimed_at:
+            seat.claimed_at = teacher_block.claimed_at
+        return seat
+
+    seat = Seat(
+        user_id=None,
+        class_id=getattr(teacher_block, "class_id", None),
+        role='student',
+        block_identifier=teacher_block.block,
+        join_code=teacher_block.join_code,
+        student_id=student_id or teacher_block.student_id,
+        block=teacher_block.block,
+        claimed_at=teacher_block.claimed_at,
+    )
+    db.session.add(seat)
+    db.session.flush()
+    return seat
+
+
+def _get_claimed_setup_state():
+    seat_id = session.get('claimed_seat_id')
+    student_id = session.get('claimed_student_id')
+    user_id = session.get('claimed_user_id')
+
+    seat = db.session.get(Seat, seat_id) if seat_id else None
+    student = db.session.get(Student, student_id) if student_id else None
+    user = db.session.get(User, user_id) if user_id else None
+
+    if seat and not student and seat.student_id:
+        student = db.session.get(Student, seat.student_id)
+    if seat and not user and seat.user_id:
+        user = db.session.get(User, seat.user_id)
+
+    return seat, student, user
 
 def get_current_class_context():
     """Get the currently selected class context (join_code, teacher_id, block).
@@ -760,7 +827,15 @@ def claim_account():
                 return redirect(url_for('student.login'))
             else:
                 # Continue setup process
+                bridge_seat = _get_or_create_bridge_seat_for_teacher_block(matched_seat, existing_student.id)
+                linked_user = _find_linked_user_for_student(existing_student.id)
+                if bridge_seat and linked_user and bridge_seat.user_id != linked_user.id:
+                    bridge_seat.user_id = linked_user.id
+                db.session.commit()
+
                 session['claimed_student_id'] = existing_student.id
+                session['claimed_seat_id'] = bridge_seat.id if bridge_seat else None
+                session['claimed_user_id'] = linked_user.id if linked_user else None
                 session.pop('generated_username', None)
                 session.pop('theme_prompt', None)
                 session.pop('theme_slug', None)
@@ -822,7 +897,15 @@ def claim_account():
                     flash("This seat has been linked to your existing account. Please log in.", "claim")
                     return redirect(url_for('student.login'))
                 else:
+                    bridge_seat = _get_or_create_bridge_seat_for_teacher_block(matched_seat, existing_by_hash.id)
+                    linked_user = _find_linked_user_for_student(existing_by_hash.id)
+                    if bridge_seat and linked_user and bridge_seat.user_id != linked_user.id:
+                        bridge_seat.user_id = linked_user.id
+                    db.session.commit()
+
                     session['claimed_student_id'] = existing_by_hash.id
+                    session['claimed_seat_id'] = bridge_seat.id if bridge_seat else None
+                    session['claimed_user_id'] = linked_user.id if linked_user else None
                     session.pop('generated_username', None)
                     session.pop('theme_prompt', None)
                     session.pop('theme_slug', None)
@@ -850,10 +933,13 @@ def claim_account():
             teacher_id=matched_seat.teacher_id
         )
         db.session.add(link)
+        bridge_seat = _get_or_create_bridge_seat_for_teacher_block(matched_seat, new_student.id)
         db.session.commit()
 
         # Start setup flow
         session['claimed_student_id'] = new_student.id
+        session['claimed_seat_id'] = bridge_seat.id if bridge_seat else None
+        session.pop('claimed_user_id', None)
         session.pop('generated_username', None)
         session.pop('theme_prompt', None)
         session.pop('theme_slug', None)
@@ -867,11 +953,10 @@ def claim_account():
 def create_username():
     """PAGE 2: Create Username - Generate themed username."""
     # Only allow if claimed
-    student_id = session.get('claimed_student_id')
-    if not student_id:
+    seat, student, user = _get_claimed_setup_state()
+    if not student:
         flash("Please claim your account first.", "setup")
         return redirect(url_for('student.claim_account'))
-    student = db.session.get(Student, student_id)
     if not student or student.has_completed_setup:
         flash("Invalid or already setup account.", "setup")
         return redirect(url_for('student.login'))
@@ -901,10 +986,31 @@ def create_username():
         username = f"{adjective}{write_in_word}{numeric_segment}{initials}"
         # Save username plaintext in session for display
         session['generated_username'] = username
-        # Hash and store in DB
+        user = user or _find_linked_user_for_student(student.id)
+        if not user:
+            user = User(
+                username=username,
+                password_hash=generate_password_hash(secrets.token_urlsafe(24)),
+            )
+            db.session.add(user)
+            db.session.flush()
+        else:
+            user.username = username
+
+        if seat and seat.user_id != user.id:
+            seat.user_id = user.id
+            seat.claimed_at = seat.claimed_at or utc_now()
+
+        # Hash and store in legacy student auth fields during the bridge period.
         student.username_hash = hash_username(username, student.salt)
         student.username_lookup_hash = hash_username_lookup(username)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash("That username is unavailable. Please try another word.", "setup")
+            return redirect(url_for('student.create_username'))
+        session['claimed_user_id'] = user.id
         # Clear theme prompt from session
         session.pop('theme_prompt', None)
         session.pop('theme_slug', None)
@@ -916,12 +1022,11 @@ def create_username():
 def setup_pin_passphrase():
     """PAGE 3: Setup PIN & Passphrase - Secure the account."""
     # Only allow if claimed and username generated
-    student_id = session.get('claimed_student_id')
+    seat, student, user = _get_claimed_setup_state()
     username = session.get('generated_username')
-    if not student_id or not username:
+    if not student or not username:
         flash("Please complete previous steps.", "setup")
         return redirect(url_for('student.claim_account'))
-    student = db.session.get(Student, student_id)
     if not student or student.has_completed_setup:
         flash("Invalid or already setup account.", "setup")
         return redirect(url_for('student.login'))
@@ -936,6 +1041,12 @@ def setup_pin_passphrase():
         student.pin_hash = generate_password_hash(pin)
         student.passphrase_hash = generate_password_hash(passphrase)
         student.has_completed_setup = True
+        if user:
+            user.password_hash = generate_password_hash(passphrase)
+        if seat and user and seat.user_id != user.id:
+            seat.user_id = user.id
+        if seat and not seat.claimed_at:
+            seat.claimed_at = utc_now()
         if student.recovery_status == 'to_be_claimed':
             # Complete recovery only after credentials are successfully re-established.
             student.reset_code = None
@@ -948,6 +1059,8 @@ def setup_pin_passphrase():
         db.session.commit()
         # Clear session onboarding keys
         session.pop('claimed_student_id', None)
+        session.pop('claimed_seat_id', None)
+        session.pop('claimed_user_id', None)
         session.pop('generated_username', None)
         flash("Setup completed successfully!", "setup")
         return redirect(url_for('student.setup_complete'))
@@ -3825,6 +3938,8 @@ def login():
         session.pop('last_activity', None)
         # Explicitly clear other potential student-related session keys
         session.pop('claimed_student_id', None)
+        session.pop('claimed_seat_id', None)
+        session.pop('claimed_user_id', None)
         session.pop('generated_username', None)
         clear_teacher_display_name_cache()
 

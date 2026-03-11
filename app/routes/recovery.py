@@ -4,13 +4,64 @@ from datetime import timedelta
 import secrets
 
 from app.extensions import db
-from app.models import Student, TeacherBlock
+from app.models import Seat, Student, TeacherBlock, User
 from app.auth import admin_required, get_student_for_admin
 from app.utils.time import utc_now, ensure_utc
 from app.extensions import limiter
 
 recovery_bp = Blueprint('recovery', __name__, url_prefix='/recovery')
 RESET_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def _find_linked_user_for_student(student_id: int | None) -> User | None:
+    if not student_id:
+        return None
+    return (
+        User.query
+        .join(Seat, Seat.user_id == User.id)
+        .filter(
+            Seat.student_id == student_id,
+            Seat.user_id.isnot(None),
+        )
+        .order_by(Seat.id.asc())
+        .first()
+    )
+
+
+def _get_or_create_bridge_seat_for_teacher_block(teacher_block) -> Seat | None:
+    if not teacher_block or not teacher_block.join_code:
+        return None
+
+    seat = (
+        Seat.query.filter_by(
+            join_code=teacher_block.join_code,
+            student_id=teacher_block.student_id,
+        )
+        .order_by(Seat.id.asc())
+        .first()
+    )
+    if seat:
+        if seat.block_identifier is None and teacher_block.block:
+            seat.block_identifier = teacher_block.block
+        if seat.block is None and teacher_block.block:
+            seat.block = teacher_block.block
+        if not seat.claimed_at and teacher_block.claimed_at:
+            seat.claimed_at = teacher_block.claimed_at
+        return seat
+
+    seat = Seat(
+        user_id=None,
+        class_id=getattr(teacher_block, "class_id", None),
+        role='student',
+        block_identifier=teacher_block.block,
+        join_code=teacher_block.join_code,
+        student_id=teacher_block.student_id,
+        block=teacher_block.block,
+        claimed_at=teacher_block.claimed_at,
+    )
+    db.session.add(seat)
+    db.session.flush()
+    return seat
 
 
 def _recovery_rate_limit():
@@ -146,6 +197,11 @@ def account_lookup():
         # Keep reset_code and recovery_status until setup_pin_passphrase completes.
         # Keep reset_code and recovery_status until setup_pin_passphrase completes.
 
+        bridge_seat = _get_or_create_bridge_seat_for_teacher_block(linked_block)
+        linked_user = _find_linked_user_for_student(student.id)
+        if bridge_seat and linked_user and bridge_seat.user_id != linked_user.id:
+            bridge_seat.user_id = linked_user.id
+
         db.session.commit()
 
         current_app.logger.info(
@@ -158,6 +214,8 @@ def account_lookup():
         # Set session for credential setup flow
         # Set session for credential setup flow
         session['claimed_student_id'] = student.id
+        session['claimed_seat_id'] = bridge_seat.id if bridge_seat else None
+        session['claimed_user_id'] = linked_user.id if linked_user else None
         session.pop('recovery_student_id', None)
 
         flash("Recovery code verified. Please set up your new username and credentials.", "success")

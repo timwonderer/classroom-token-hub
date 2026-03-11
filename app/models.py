@@ -215,13 +215,23 @@ class IdentityProfile(db.Model):
 
 
 class Seat(db.Model):
-    """Join-code scoped identity boundary for a user."""
+    """Class-local participant identity for a user."""
 
     __tablename__ = 'seats'
 
     id = db.Column(db.Integer, primary_key=True)
     public_id = db.Column(db.String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    role = db.Column(db.String(20), nullable=False, default='student')
+
+    # Canonical seat-local metadata for the identity overhaul target.
+    block_identifier = db.Column(db.String(10), nullable=True)
+    roster_fingerprint = db.Column(db.String(128), nullable=True, index=True)
+    dedupe_code = db.Column(db.String(8), nullable=True)
+    claimed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Transitional public-token bridge until seat/class rewiring is complete.
     join_code = db.Column(db.String(20), nullable=False, index=True)
 
     # Transitional bridge to existing student-backed tables.
@@ -234,8 +244,25 @@ class Seat(db.Model):
     student = db.relationship('Student', backref=db.backref('seats', lazy='dynamic'))
 
     __table_args__ = (
-        db.UniqueConstraint('user_id', 'join_code', name='uq_seats_user_join_code'),
+        db.UniqueConstraint('user_id', 'class_id', name='uq_seats_user_class'),
     )
+
+
+@event.listens_for(Seat, "before_insert")
+@event.listens_for(Seat, "before_update")
+def _sync_seat_scope(mapper, connection, target):
+    """Keep transitional seat bridge fields aligned while the actor swap is incomplete."""
+    if getattr(target, "block_identifier", None) is None and getattr(target, "block", None):
+        target.block_identifier = target.block
+    if getattr(target, "block", None) is None and getattr(target, "block_identifier", None):
+        target.block = target.block_identifier
+    if getattr(target, "class_id", None) is None and getattr(target, "join_code", None):
+        class_id = connection.execute(
+            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code"),
+            {"join_code": target.join_code},
+        ).scalar()
+        if class_id:
+            target.class_id = str(class_id)
 
 
 class TeacherBlock(db.Model):
