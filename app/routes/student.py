@@ -29,10 +29,12 @@ from app.models import (
 )
 from app.auth import (
     admin_required,
+    get_current_student_seat,
     login_required,
     get_logged_in_student,
     is_student_account_active,
     SESSION_TIMEOUT_MINUTES,
+    sync_student_session_context,
 )
 from app.forms import (
     StudentClaimAccountForm, StudentCreateUsernameForm, StudentPinPassphraseForm,
@@ -172,11 +174,29 @@ def get_current_class_context():
         dict with keys: join_code, teacher_id, block, seat_id
         None if no context available
     """
-    from app.models import TeacherBlock
+    from app.models import ClassEconomy, TeacherBlock
 
     student = get_logged_in_student()
     if not student:
         return None
+
+    current_seat = get_current_student_seat()
+    if current_seat and current_seat.join_code:
+        class_row = None
+        if current_seat.class_id:
+            class_row = ClassEconomy.query.filter_by(class_id=current_seat.class_id).first()
+        if not class_row:
+            class_row = ClassEconomy.query.filter_by(join_code=current_seat.join_code).first()
+
+        if class_row:
+            if session.get('current_join_code') != current_seat.join_code:
+                session['current_join_code'] = current_seat.join_code
+            return {
+                'join_code': current_seat.join_code,
+                'teacher_id': class_row.teacher_id,
+                'block': current_seat.block_identifier or current_seat.block,
+                'seat_id': current_seat.id,
+            }
 
     # Check if a join code is already selected in session
     current_join_code = session.get('current_join_code')
@@ -207,6 +227,8 @@ def get_current_class_context():
     if not current_seat:
         current_seat = claimed_seats[0]
         session['current_join_code'] = current_seat.join_code
+
+    sync_student_session_context(student, join_code=current_seat.join_code)
 
     # Return full class context
     return {
@@ -3934,6 +3956,8 @@ def login():
         # --- Set session timeout ---
         # Clear old student-specific session keys without wiping the CSRF token
         session.pop('student_id', None)
+        session.pop('student_user_id', None)
+        session.pop('current_seat_id', None)
         session.pop('login_time', None)
         session.pop('last_activity', None)
         # Explicitly clear other potential student-related session keys
@@ -3947,6 +3971,7 @@ def login():
         session['student_id'] = student.id
         session['login_time'] = utc_now().isoformat()
         session['last_activity'] = session['login_time']
+        sync_student_session_context(student)
         _prime_student_teacher_display_name_cache(student.id)
 
 
@@ -3994,6 +4019,7 @@ def switch_class(join_code):
 
     # Update session with new join code
     session['current_join_code'] = join_code
+    sync_student_session_context(student, join_code=join_code)
 
     # Get teacher name for response
     teacher = db.session.get(Admin, seat.teacher_id)
@@ -4074,6 +4100,7 @@ def _switch_to_teacher_scope(*, teacher_id: int):
     session['current_join_code'] = target_seat.join_code
     # Kept for compatibility with older templates/routes that still inspect this session key.
     session['current_teacher_id'] = teacher_id
+    sync_student_session_context(student, join_code=target_seat.join_code)
 
     # Get teacher name for flash message
     teacher = db.session.get(Admin, teacher_id)

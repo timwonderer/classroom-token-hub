@@ -55,10 +55,10 @@ def setup_multi_class_student(client):
     db.session.commit()
 
     # Create Class Economies
-    db.session.add(ClassEconomy(join_code="TEACHER1A", display_name="Class 1A"))
-    db.session.add(ClassEconomy(join_code="TEACHER2B", display_name="Class 2B"))
-    db.session.add(ClassEconomy(join_code="TEACHER3C", display_name="Class 3C"))
-    db.session.add(ClassEconomy(join_code="UNCLAIMEDZ", display_name="Unclaimed Z"))
+    db.session.add(ClassEconomy(join_code="TEACHER1A", teacher_id=teacher1.id, created_by_admin_id=teacher1.id, display_name="Class 1A"))
+    db.session.add(ClassEconomy(join_code="TEACHER2B", teacher_id=teacher2.id, created_by_admin_id=teacher2.id, display_name="Class 2B"))
+    db.session.add(ClassEconomy(join_code="TEACHER3C", teacher_id=teacher3.id, created_by_admin_id=teacher3.id, display_name="Class 3C"))
+    db.session.add(ClassEconomy(join_code="UNCLAIMEDZ", teacher_id=teacher1.id, created_by_admin_id=teacher1.id, display_name="Unclaimed Z"))
     db.session.commit()
 
     # Create ClassMemberships
@@ -147,7 +147,7 @@ def setup_single_class_student(client):
     db.session.commit()
 
     # Create Class Economy
-    db.session.add(ClassEconomy(join_code="SINGLED", display_name="Single D"))
+    db.session.add(ClassEconomy(join_code="SINGLED", teacher_id=teacher.id, created_by_admin_id=teacher.id, display_name="Single D"))
     db.session.commit()
 
     # Create ClassMemberships

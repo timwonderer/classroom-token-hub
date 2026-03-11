@@ -102,6 +102,8 @@ def login_required(f):
         if not login_time_str:
             # Clear student-specific keys but preserve CSRF token
             session.pop('student_id', None)
+            session.pop('student_user_id', None)
+            session.pop('current_seat_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
             session.pop('teacher_display_name_cache', None)
@@ -115,6 +117,8 @@ def login_required(f):
         if (utc_now() - login_time) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
             # Clear student-specific keys but preserve CSRF token
             session.pop('student_id', None)
+            session.pop('student_user_id', None)
+            session.pop('current_seat_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
             session.pop('teacher_display_name_cache', None)
@@ -130,6 +134,8 @@ def login_required(f):
         student = get_logged_in_student()
         if not student:
             session.pop('student_id', None)
+            session.pop('student_user_id', None)
+            session.pop('current_seat_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
             session.pop('teacher_display_name_cache', None)
@@ -139,6 +145,7 @@ def login_required(f):
             return redirect(url_for('student.login'))
 
         session['last_activity'] = utc_now().isoformat()
+        sync_student_session_context(student)
         return f(*args, **kwargs)
     return decorated_function
 
@@ -219,6 +226,59 @@ def system_admin_required(f):
 def is_student_account_active(student):
     """Return True when a student account exists and has not been deleted."""
     return student is not None
+
+
+def get_logged_in_user():
+    """Return the logged-in credential identity for the student session, if present."""
+    from app.models import User
+
+    user_id = session.get('student_user_id')
+    if not user_id:
+        return None
+    return db.session.get(User, user_id)
+
+
+def get_current_student_seat():
+    """Return the active seat for the current student session, if present."""
+    from app.models import Seat
+
+    seat_id = session.get('current_seat_id')
+    if not seat_id:
+        return None
+    return db.session.get(Seat, seat_id)
+
+
+def sync_student_session_context(student=None, *, join_code: str | None = None):
+    """Backfill user/seat session keys from the bridge-era student session."""
+    from app.models import Seat
+
+    if student is None and 'student_id' in session:
+        student = get_logged_in_student()
+    if not student:
+        session.pop('student_user_id', None)
+        session.pop('current_seat_id', None)
+        return None
+
+    normalized_join_code = (join_code or session.get('current_join_code') or '').strip().upper() or None
+
+    seat_query = Seat.query.filter(Seat.student_id == student.id)
+    if normalized_join_code:
+        seat_query = seat_query.filter(Seat.join_code == normalized_join_code)
+    seat = seat_query.order_by(Seat.id.asc()).first()
+    if not seat:
+        seat = Seat.query.filter(Seat.student_id == student.id).order_by(Seat.id.asc()).first()
+
+    if seat:
+        session['current_seat_id'] = seat.id
+        if seat.user_id:
+            session['student_user_id'] = seat.user_id
+        if seat.join_code:
+            session['current_join_code'] = seat.join_code
+    else:
+        session.pop('current_seat_id', None)
+        session.pop('student_user_id', None)
+
+    return seat
 
 
 def get_logged_in_student():
