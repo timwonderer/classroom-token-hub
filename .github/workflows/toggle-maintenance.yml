@@ -58,7 +58,7 @@ jobs:
       run: |
         mkdir -p ~/.ssh
         chmod 700 ~/.ssh
-        echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+        printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
         chmod 644 ~/.ssh/known_hosts
         echo "✓ SSH host key verification enabled"
 
@@ -98,13 +98,25 @@ jobs:
           sed -i '/^MAINTENANCE_BADGE_TYPE=/d' .env 2>/dev/null || true
           sed -i '/^MAINTENANCE_STATUS_DESCRIPTION=/d' .env 2>/dev/null || true
 
+          # Sanitize values: strip CR/LF and escape embedded quotes/backslashes
+          # to prevent .env corruption or injection of extra entries.
+          sanitize() {
+            printf '%s' "$1" | tr -d '\r\n' | sed 's/\\/\\\\/g; s/"/\\"/g'
+          }
+
+          SAFE_MESSAGE="$(sanitize "$MESSAGE")"
+          SAFE_EXPECTED_END="$(sanitize "$EXPECTED_END")"
+          SAFE_CONTACT="$(sanitize "$CONTACT")"
+          SAFE_BADGE_TYPE="$(sanitize "$BADGE_TYPE")"
+          SAFE_STATUS_DESC="$(sanitize "$STATUS_DESCRIPTION")"
+
           # Add new maintenance mode variables
           echo "MAINTENANCE_MODE=$MODE_VALUE" >> .env
-          echo "MAINTENANCE_MESSAGE=\"$MESSAGE\"" >> .env
-          echo "MAINTENANCE_EXPECTED_END=\"$EXPECTED_END\"" >> .env
-          echo "MAINTENANCE_CONTACT=\"$CONTACT\"" >> .env
-          echo "MAINTENANCE_BADGE_TYPE=\"$BADGE_TYPE\"" >> .env
-          echo "MAINTENANCE_STATUS_DESCRIPTION=\"$STATUS_DESCRIPTION\"" >> .env
+          echo "MAINTENANCE_MESSAGE=\"${SAFE_MESSAGE}\"" >> .env
+          echo "MAINTENANCE_EXPECTED_END=\"${SAFE_EXPECTED_END}\"" >> .env
+          echo "MAINTENANCE_CONTACT=\"${SAFE_CONTACT}\"" >> .env
+          echo "MAINTENANCE_BADGE_TYPE=\"${SAFE_BADGE_TYPE}\"" >> .env
+          echo "MAINTENANCE_STATUS_DESCRIPTION=\"${SAFE_STATUS_DESC}\"" >> .env
 
           echo 'Restarting Gunicorn to apply changes...'
           sudo systemctl restart gunicorn
