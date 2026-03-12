@@ -512,8 +512,8 @@
         toStrong.textContent = toText;
         summaryEl.appendChild(toStrong);
 
-        openTransferConfirmBtn.disabled = true;
         setTransferSubmittingState(false);
+        openTransferConfirmBtn.disabled = true;
         modal.show();
     });
 
@@ -524,6 +524,7 @@
     passphraseForm.addEventListener('submit', function (e) {
         if (!passphraseForm.checkValidity()) {
             passphraseForm.reportValidity();
+            e.preventDefault();
             return;
         }
 

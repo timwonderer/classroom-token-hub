@@ -11,17 +11,14 @@ not count toward balances in a class-scoped student session.
 
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
+from app.routes.student import TRANSFER_SUBMISSION_TOKEN_KEY
 from app.models import Student, Admin, BankingSettings, Transaction, TeacherBlock, TransactionStatus
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 
-
-TRANSFER_SUBMISSION_TOKEN_KEY = 'transfer_submission_token'
-
-
 def _set_transfer_submission_token(client, token="test-transfer-token"):
     with client.session_transaction() as sess:
-        sess[TRANSFER_SUBMISSION_TOKEN_KEY] = token
+        sess[TRANSFER_SUBMISSION_TOKEN_KEY] = [token]
     return token
 
 
@@ -320,3 +317,106 @@ def test_declined_transfer_does_not_charge_overdraft_fee(client):
         is_void=False,
     ).all()
     assert overdraft_txs == []
+
+
+def test_transfer_submission_token_cannot_be_reused(client, setup_student_with_legacy_transactions):
+    """A transfer submission token should be consumed after the first successful use."""
+    data = setup_student_with_legacy_transactions
+    student = data["student"]
+    teacher = data["teacher"]
+    join_code = data["join_code"]
+
+    with client.session_transaction() as sess:
+        sess["student_id"] = student.id
+        sess["current_join_code"] = join_code
+        sess["login_time"] = datetime.now(timezone.utc).isoformat()
+
+    submission_token = _set_transfer_submission_token(client, "single-use-token")
+    first_response = client.post(
+        "/student/transfer",
+        data={
+            "from_account": "checking",
+            "to_account": "savings",
+            "amount": "10.00",
+            "passphrase": "alice_pass",
+            "transfer_submission_token": submission_token,
+        },
+        follow_redirects=False,
+    )
+    assert first_response.status_code == 302
+
+    second_response = client.post(
+        "/student/transfer",
+        data={
+            "from_account": "checking",
+            "to_account": "savings",
+            "amount": "10.00",
+            "passphrase": "alice_pass",
+            "transfer_submission_token": submission_token,
+        },
+        follow_redirects=True,
+    )
+    assert second_response.status_code == 200
+    assert b"already been processed or expired" in second_response.data
+
+    transfer_txs = Transaction.query.filter_by(
+        student_id=student.id,
+        teacher_id=teacher.id,
+        join_code=join_code,
+        is_void=False,
+    ).all()
+    withdrawal_count = sum(1 for tx in transfer_txs if tx.type == "Withdrawal")
+    deposit_count = sum(
+        1
+        for tx in transfer_txs
+        if tx.type == "Deposit" and tx.description == "Transfer from checking"
+    )
+    assert withdrawal_count == 1
+    assert deposit_count == 1
+
+
+def test_transfer_json_request_uses_submission_token(client, setup_student_with_legacy_transactions):
+    """JSON transfer requests should validate the same one-time submission token."""
+    data = setup_student_with_legacy_transactions
+    student = data["student"]
+    teacher = data["teacher"]
+    join_code = data["join_code"]
+
+    with client.session_transaction() as sess:
+        sess["student_id"] = student.id
+        sess["current_join_code"] = join_code
+        sess["login_time"] = datetime.now(timezone.utc).isoformat()
+
+    submission_token = _set_transfer_submission_token(client, "json-transfer-token")
+    response = client.post(
+        "/student/transfer",
+        json={
+            "from_account": "checking",
+            "to_account": "savings",
+            "amount": "10.00",
+            "passphrase": "alice_pass",
+            "transfer_submission_token": submission_token,
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "status": "success",
+        "message": "Transfer completed successfully!",
+    }
+
+    transfer_txs = Transaction.query.filter_by(
+        student_id=student.id,
+        teacher_id=teacher.id,
+        join_code=join_code,
+        is_void=False,
+    ).all()
+    withdrawal_count = sum(1 for tx in transfer_txs if tx.type == "Withdrawal")
+    deposit_count = sum(
+        1
+        for tx in transfer_txs
+        if tx.type == "Deposit" and tx.description == "Transfer from checking"
+    )
+    assert withdrawal_count == 1
+    assert deposit_count == 1

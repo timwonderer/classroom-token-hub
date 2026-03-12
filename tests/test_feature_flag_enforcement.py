@@ -8,6 +8,7 @@ students cannot access those routes even via direct URL.
 import pytest
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
+from app.routes.student import TRANSFER_SUBMISSION_TOKEN_KEY
 from app.models import Student, Admin, Transaction, TeacherBlock, FeatureSettings
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
@@ -122,12 +123,9 @@ def test_transfer_blocked_when_banking_disabled(client, setup_student_with_disab
     assert b'banking feature is currently disabled' in response.data
 
 
-TRANSFER_SUBMISSION_TOKEN_KEY = 'transfer_submission_token'
-
-
 def _set_transfer_submission_token(client, token="feature-transfer-token"):
     with client.session_transaction() as sess:
-        sess[TRANSFER_SUBMISSION_TOKEN_KEY] = token
+        sess[TRANSFER_SUBMISSION_TOKEN_KEY] = [token]
     return token
 
 
