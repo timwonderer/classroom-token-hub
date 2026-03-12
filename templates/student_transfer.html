@@ -3,6 +3,20 @@
 {% set current_page = "transfer" %}
 {% block title %}Finances{% endblock %}
 {% block page_icon %}account_balance_wallet{% endblock %}
+{% block extra_styles %}
+<style>
+    .transfer-processing-note {
+        display: none;
+    }
+
+    .transfer-processing-note.is-visible {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <!-- Tabs -->
@@ -208,7 +222,7 @@
                                 </div>
                             </div>
 
-                            <button type="submit" class="btn btn-primary w-100">
+                            <button type="submit" class="btn btn-primary w-100" id="openTransferConfirmBtn">
                                 <span class="material-symbols-outlined">check_circle</span> Continue to Confirmation
                             </button>
                         </form>
@@ -385,9 +399,10 @@
         <div class="modal-content">
             <form id="passphraseForm" method="POST" action="{{ url_for('student.transfer') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="transfer_submission_token" value="{{ transfer_submission_token }}">
                 <div class="modal-header">
                     <h5 class="modal-title" id="passphraseModalLabel">Confirm Transfer</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="passphraseModalCloseBtn"></button>
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-info">
@@ -404,10 +419,14 @@
                     <input type="hidden" name="from_account" id="modal_from_account">
                     <input type="hidden" name="to_account" id="modal_to_account">
                     <input type="hidden" name="amount" id="modal_amount">
+                    <div class="alert alert-warning transfer-processing-note mb-0" id="transferProcessingNote" role="status" aria-live="polite">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span>Processing... please wait</span>
+                    </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Confirm Transfer</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="cancelTransferBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="confirmTransferBtn">Confirm Transfer</button>
                 </div>
             </form>
         </div>
@@ -418,8 +437,53 @@
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-    document.getElementById("transferDetailsForm").addEventListener("submit", function (e) {
+    const transferDetailsForm = document.getElementById("transferDetailsForm");
+    const passphraseForm = document.getElementById("passphraseForm");
+    const passphraseModalEl = document.getElementById("passphraseModal");
+    const openTransferConfirmBtn = document.getElementById("openTransferConfirmBtn");
+    const confirmTransferBtn = document.getElementById("confirmTransferBtn");
+    const cancelTransferBtn = document.getElementById("cancelTransferBtn");
+    const passphraseModalCloseBtn = document.getElementById("passphraseModalCloseBtn");
+    const transferProcessingNote = document.getElementById("transferProcessingNote");
+    const passphraseInput = document.getElementById("passphrase");
+    const originalConfirmHtml = confirmTransferBtn.innerHTML;
+    const modal = new bootstrap.Modal(passphraseModalEl);
+    let transferSubmitting = false;
+
+    function setTransferSubmittingState(isSubmitting) {
+        transferSubmitting = isSubmitting;
+        confirmTransferBtn.disabled = isSubmitting;
+        cancelTransferBtn.disabled = isSubmitting;
+        passphraseModalCloseBtn.disabled = isSubmitting;
+        openTransferConfirmBtn.disabled = isSubmitting;
+        passphraseInput.readOnly = isSubmitting;
+        passphraseModalEl.setAttribute('data-bs-backdrop', isSubmitting ? 'static' : 'true');
+        passphraseModalEl.setAttribute('data-bs-keyboard', isSubmitting ? 'false' : 'true');
+        transferProcessingNote.classList.toggle('is-visible', isSubmitting);
+        confirmTransferBtn.innerHTML = isSubmitting
+            ? '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing... please wait'
+            : originalConfirmHtml;
+    }
+
+    passphraseModalEl.addEventListener('hide.bs.modal', function (event) {
+        if (transferSubmitting) {
+            event.preventDefault();
+        }
+    });
+
+    passphraseModalEl.addEventListener('hidden.bs.modal', function () {
+        if (!transferSubmitting) {
+            openTransferConfirmBtn.disabled = false;
+        }
+    });
+
+    transferDetailsForm.addEventListener("submit", function (e) {
         e.preventDefault();
+
+        if (!transferDetailsForm.checkValidity()) {
+            transferDetailsForm.reportValidity();
+            return;
+        }
 
         const fromAccount = document.getElementById("from_account").value;
         const toAccount = document.getElementById("to_account").value;
@@ -448,14 +512,27 @@
         toStrong.textContent = toText;
         summaryEl.appendChild(toStrong);
 
-        // Show modal
-        const modal = new bootstrap.Modal(document.getElementById('passphraseModal'));
+        openTransferConfirmBtn.disabled = true;
+        setTransferSubmittingState(false);
         modal.show();
+    });
 
-        // Focus on passphrase input when modal is shown
-        document.getElementById('passphraseModal').addEventListener('shown.bs.modal', function () {
-            document.getElementById('passphrase').focus();
-        });
+    passphraseModalEl.addEventListener('shown.bs.modal', function () {
+        passphraseInput.focus();
+    });
+
+    passphraseForm.addEventListener('submit', function (e) {
+        if (!passphraseForm.checkValidity()) {
+            passphraseForm.reportValidity();
+            return;
+        }
+
+        if (transferSubmitting) {
+            e.preventDefault();
+            return;
+        }
+
+        setTransferSubmittingState(true);
     });
 
     // Savings Projection Chart

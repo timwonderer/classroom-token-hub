@@ -122,6 +122,15 @@ def test_transfer_blocked_when_banking_disabled(client, setup_student_with_disab
     assert b'banking feature is currently disabled' in response.data
 
 
+TRANSFER_SUBMISSION_TOKEN_KEY = 'transfer_submission_token'
+
+
+def _set_transfer_submission_token(client, token="feature-transfer-token"):
+    with client.session_transaction() as sess:
+        sess[TRANSFER_SUBMISSION_TOKEN_KEY] = token
+    return token
+
+
 def test_transfer_post_blocked_when_banking_disabled(client, setup_student_with_disabled_banking):
     """Test that transfer POST is blocked when banking is disabled."""
     data = setup_student_with_disabled_banking
@@ -136,11 +145,13 @@ def test_transfer_post_blocked_when_banking_disabled(client, setup_student_with_
         sess['current_period'] = 'Period1'
     
     # Try to submit a transfer (POST)
+    submission_token = _set_transfer_submission_token(client)
     response = client.post('/student/transfer', data={
         'from_account': 'checking',
         'to_account': 'savings',
         'amount': '50.00',
-        'passphrase': 'bob_pass'
+        'passphrase': 'bob_pass',
+        'transfer_submission_token': submission_token,
     }, follow_redirects=False)
     
     # Should redirect to dashboard
@@ -283,11 +294,13 @@ def test_transfer_allowed_when_banking_enabled(client, setup_student_with_enable
     assert b'Transfer Details' in response.data or b'Finances' in response.data
     
     # Submit a transfer (POST) should work
+    submission_token = _set_transfer_submission_token(client, "feature-transfer-success-token")
     response = client.post('/student/transfer', data={
         'from_account': 'checking',
         'to_account': 'savings',
         'amount': '50.00',
-        'passphrase': 'carol_pass'
+        'passphrase': 'carol_pass',
+        'transfer_submission_token': submission_token,
     }, follow_redirects=False)
     
     # Should redirect to dashboard (success)

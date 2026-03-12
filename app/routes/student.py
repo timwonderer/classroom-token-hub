@@ -71,6 +71,7 @@ student_bp = Blueprint('student', __name__, url_prefix='/student')
 # Tolerance used to match RentPayment rows with their Transaction rows.
 # This guards against small timestamp drift without weakening ownership checks.
 RENT_PAYMENT_MATCH_TOLERANCE_SECONDS = 300
+TRANSFER_SUBMISSION_TOKEN_KEY = 'transfer_submission_token'
 
 
 # -------------------- DATETIME HELPERS --------------------
@@ -134,6 +135,21 @@ def get_current_class_context():
         'block': current_seat.block,
         'seat_id': current_seat.id
     }
+
+
+def _issue_transfer_submission_token():
+    """Create a one-time token for the transfer confirmation form."""
+    token = secrets.token_urlsafe(32)
+    session[TRANSFER_SUBMISSION_TOKEN_KEY] = token
+    return token
+
+
+def _consume_transfer_submission_token(submitted_token):
+    """Consume and validate the one-time transfer submission token."""
+    expected_token = session.pop(TRANSFER_SUBMISSION_TOKEN_KEY, None)
+    if not expected_token or not submitted_token:
+        return False
+    return secrets.compare_digest(expected_token, submitted_token)
 
 
 def _prime_student_teacher_display_name_cache(student_id: int) -> None:
@@ -1538,6 +1554,14 @@ def transfer():
 
     if request.method == 'POST':
         is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        submission_token = request.form.get("transfer_submission_token")
+        if not _consume_transfer_submission_token(submission_token):
+            message = "This transfer request has already been processed or expired. Please try again."
+            if is_json:
+                return jsonify(status="error", message=message), 409
+            flash(message, "transfer_error")
+            return redirect(url_for("student.transfer"))
+
         passphrase = request.form.get("passphrase")
         if not check_password_hash(student.passphrase_hash or '', passphrase):
             if is_json:
@@ -1566,19 +1590,7 @@ def transfer():
             flash("Amount must be greater than 0.", "transfer_error")
             return redirect(url_for("student.transfer"))
         elif from_account == 'checking' and amount > checking_balance:
-            fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
-                student,
-                banking_settings,
-                teacher_id=teacher_id,
-                join_code=join_code,
-                force=True
-            )
-            if fee_charged:
-                db.session.commit()
-
             message = "Insufficient checking funds."
-            if fee_charged:
-                message += f" Overdraft fee of ${fee_amount:.2f} charged."
             if is_json:
                 return jsonify(status="error", message=message), 400
             flash(message, "transfer_error")
@@ -1708,7 +1720,8 @@ def transfer():
                          calculation_type=calculation_type,
                          compound_frequency=compound_frequency,
                          projection_months=projection_months,
-                         projection_balances=projection_balances)
+                         projection_balances=projection_balances,
+                         transfer_submission_token=_issue_transfer_submission_token())
 
 
 def apply_savings_interest(student, annual_rate=Decimal('0.045')):
