@@ -4019,6 +4019,7 @@ def setup_complete():
 def help_support():
     """Show the student help and support page with issue tracking."""
     from app.utils.issue_categories import init_default_categories
+    from app.models import Issue, IssueResolutionAction
 
     student = get_logged_in_student()
     class_context = get_current_class_context()
@@ -4036,10 +4037,27 @@ def help_support():
         join_code=class_context['join_code']
     ).order_by(Issue.submitted_at.desc()).limit(20).all()
 
+    # Get student's past and in-progress support tickets for current class
+    my_tickets = Issue.query.filter_by(
+        student_id=student.id,
+        join_code=class_context['join_code']
+    ).order_by(Issue.created_at.desc()).limit(50).all()
+
+    # Get teacher decisions (IssueResolutionAction) for this student in current class
+    teacher_decisions = IssueResolutionAction.query.join(
+        Issue, IssueResolutionAction.issue_id == Issue.id
+    ).filter(
+        Issue.student_id == student.id,
+        Issue.join_code == class_context['join_code'],
+        IssueResolutionAction.performed_by_type == 'teacher'
+    ).order_by(IssueResolutionAction.created_at.desc()).limit(100).all()
+
     return render_template('student_help_support_new.html',
                          current_page='help',
                          page_title='Help & Support',
                          my_issues=my_issues,
+                         my_tickets=my_tickets,
+                         teacher_decisions=teacher_decisions,
                          help_content=HELP_ARTICLES['student'],
                          format_utc_iso=format_utc_iso)
 

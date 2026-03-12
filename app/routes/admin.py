@@ -10836,12 +10836,20 @@ def issues_queue():
         ])
     ).order_by(Issue.escalated_at.desc()).all()
 
+    closed_issues = issues_query.filter(
+        Issue.status.in_([
+            Issue.STATUS_CLOSED,
+            'closed',
+        ])
+    ).order_by(Issue.closed_at.desc()).limit(50).all()
+
     return render_template('admin_issues_queue.html',
                          current_page='issues',
                          page_title='Student Issues',
                          pending_issues=pending_issues,
                          resolved_issues=resolved_issues,
                          escalated_issues=escalated_issues,
+                         closed_issues=closed_issues,
                          issue_ref_for=lambda issue_id: make_opaque_ref('issue', issue_id),
                          format_utc_iso=format_utc_iso)
 
