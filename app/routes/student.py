@@ -71,6 +71,8 @@ student_bp = Blueprint('student', __name__, url_prefix='/student')
 # Tolerance used to match RentPayment rows with their Transaction rows.
 # This guards against small timestamp drift without weakening ownership checks.
 RENT_PAYMENT_MATCH_TOLERANCE_SECONDS = 300
+TRANSFER_SUBMISSION_TOKEN_KEY = 'transfer_submission_token'
+TRANSFER_SUBMISSION_TOKEN_LIMIT = 5
 
 
 # -------------------- DATETIME HELPERS --------------------
@@ -134,6 +136,41 @@ def get_current_class_context():
         'block': current_seat.block,
         'seat_id': current_seat.id
     }
+
+
+def _issue_transfer_submission_token():
+    """Create a one-time token for the transfer confirmation form."""
+    token = secrets.token_urlsafe(32)
+    existing_tokens = session.get(TRANSFER_SUBMISSION_TOKEN_KEY, [])
+    if isinstance(existing_tokens, str):
+        existing_tokens = [existing_tokens]
+    elif not isinstance(existing_tokens, list):
+        existing_tokens = []
+    existing_tokens.append(token)
+    session[TRANSFER_SUBMISSION_TOKEN_KEY] = existing_tokens[-TRANSFER_SUBMISSION_TOKEN_LIMIT:]
+    return token
+
+
+def _consume_transfer_submission_token(submitted_token):
+    """Consume and validate a pending transfer submission token."""
+    if not submitted_token:
+        return False
+
+    pending_tokens = session.get(TRANSFER_SUBMISSION_TOKEN_KEY, [])
+    if isinstance(pending_tokens, str):
+        pending_tokens = [pending_tokens]
+    elif not isinstance(pending_tokens, list):
+        pending_tokens = []
+
+    for idx, expected_token in enumerate(pending_tokens):
+        if secrets.compare_digest(expected_token, submitted_token):
+            remaining_tokens = pending_tokens[:idx] + pending_tokens[idx + 1:]
+            if remaining_tokens:
+                session[TRANSFER_SUBMISSION_TOKEN_KEY] = remaining_tokens
+            else:
+                session.pop(TRANSFER_SUBMISSION_TOKEN_KEY, None)
+            return True
+    return False
 
 
 def _prime_student_teacher_display_name_cache(student_id: int) -> None:
@@ -1538,18 +1575,32 @@ def transfer():
 
     if request.method == 'POST':
         is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
-        passphrase = request.form.get("passphrase")
+        payload = request.get_json(silent=True) if request.is_json else None
+        payload = payload if isinstance(payload, dict) else {}
+
+        def get_transfer_value(key):
+            return payload.get(key) if request.is_json else request.form.get(key)
+
+        submission_token = get_transfer_value("transfer_submission_token")
+        if not _consume_transfer_submission_token(submission_token):
+            message = "This transfer request has already been processed or expired. Please try again."
+            if is_json:
+                return jsonify(status="error", message=message), 409
+            flash(message, "transfer_error")
+            return redirect(url_for("student.transfer"))
+
+        passphrase = get_transfer_value("passphrase")
         if not check_password_hash(student.passphrase_hash or '', passphrase):
             if is_json:
                 return jsonify(status="error", message="Incorrect passphrase"), 400
             flash("Incorrect passphrase. Transfer canceled.", "transfer_error")
             return redirect(url_for("student.transfer"))
 
-        from_account = request.form.get('from_account')
-        to_account = request.form.get('to_account')
+        from_account = get_transfer_value('from_account')
+        to_account = get_transfer_value('to_account')
         # Convert form input to Decimal for precise financial calculation
         from app.models import _quantize_currency
-        amount = _quantize_currency(request.form.get('amount'))
+        amount = _quantize_currency(get_transfer_value('amount'))
 
         # CRITICAL FIX: Calculate balances using join_code scoping
         checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
@@ -1566,19 +1617,7 @@ def transfer():
             flash("Amount must be greater than 0.", "transfer_error")
             return redirect(url_for("student.transfer"))
         elif from_account == 'checking' and amount > checking_balance:
-            fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
-                student,
-                banking_settings,
-                teacher_id=teacher_id,
-                join_code=join_code,
-                force=True
-            )
-            if fee_charged:
-                db.session.commit()
-
             message = "Insufficient checking funds."
-            if fee_charged:
-                message += f" Overdraft fee of ${fee_amount:.2f} charged."
             if is_json:
                 return jsonify(status="error", message=message), 400
             flash(message, "transfer_error")
@@ -1708,7 +1747,8 @@ def transfer():
                          calculation_type=calculation_type,
                          compound_frequency=compound_frequency,
                          projection_months=projection_months,
-                         projection_balances=projection_balances)
+                         projection_balances=projection_balances,
+                         transfer_submission_token=_issue_transfer_submission_token())
 
 
 def apply_savings_interest(student, annual_rate=Decimal('0.045')):

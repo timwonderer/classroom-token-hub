@@ -66,6 +66,7 @@
 
 <body class="student-shell">
     <a href="#main-content" class="skip-link">Skip to main content</a>
+    <div id="student-toast-container" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1080;"></div>
 
     <!-- Mobile Menu Toggle Button -->
     <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle navigation menu"
@@ -208,7 +209,13 @@
 
                     {% with messages = get_flashed_messages(with_categories=true) %}
                     {% if messages %}
-                    {% for category, message in messages %}
+                    <div id="student-toast-seed" class="d-none">
+                        {% for category, message in messages if category in ['transfer_success', 'transfer_error'] %}
+                        <div data-toast-type="{{ 'success' if category == 'transfer_success' else 'danger' }}"
+                            data-toast-message="{{ message }}"></div>
+                        {% endfor %}
+                    </div>
+                    {% for category, message in messages if category not in ['transfer_success', 'transfer_error'] %}
                     <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow-sm border-0 mb-4"
                         role="alert">
                         {{ message }}
@@ -227,6 +234,39 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ static_url('js/timezone-utils.js') }}"></script>
     <script>
+        window.showStudentToast = function (message, type = 'success') {
+            const container = document.getElementById('student-toast-container');
+            if (!container) return;
+
+            const toastEl = document.createElement('div');
+            toastEl.className = `toast align-items-center text-bg-${type} border-0 mb-2`;
+            toastEl.setAttribute('role', 'alert');
+            toastEl.setAttribute('aria-live', 'assertive');
+            toastEl.setAttribute('aria-atomic', 'true');
+
+            const flex = document.createElement('div');
+            flex.className = 'd-flex';
+
+            const body = document.createElement('div');
+            body.className = 'toast-body';
+            body.textContent = message;
+
+            const closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.className = 'btn-close btn-close-white me-2 m-auto';
+            closeBtn.setAttribute('data-bs-dismiss', 'toast');
+            closeBtn.setAttribute('aria-label', 'Close');
+
+            flex.appendChild(body);
+            flex.appendChild(closeBtn);
+            toastEl.appendChild(flex);
+            container.appendChild(toastEl);
+
+            const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
+            toast.show();
+            toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+        };
+
         function updateStudentTime() {
             const timeElement = document.getElementById('student-current-time');
             if (!timeElement) return;
@@ -240,6 +280,13 @@
         updateStudentTime();
 
         document.addEventListener('DOMContentLoaded', function () {
+            const toastSeed = document.getElementById('student-toast-seed');
+            if (toastSeed) {
+                toastSeed.querySelectorAll('[data-toast-message]').forEach((el) => {
+                    window.showStudentToast(el.dataset.toastMessage, el.dataset.toastType || 'success');
+                });
+            }
+
             const classSwitcher = document.getElementById('class-switcher-select');
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
             const errorBox = document.getElementById('class-switch-error');
