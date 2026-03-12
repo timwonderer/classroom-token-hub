@@ -2,7 +2,7 @@
 
 An interactive banking and classroom management platform for teaching students about money while tracking classroom participation.
 
-**Version:** 1.9.0
+**Release Track:** Active development — see [CHANGELOG.md](CHANGELOG.md) for current version
 
 ---
 
@@ -12,7 +12,25 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
-**Project Status:** Version 1.9.0 Released with active security hardening and performance work in progress. The 1.9.0 documentation release consolidates canonical taxonomy across `/docs`, resolves navigation integrity issues, and standardizes release/archive placement. Recent unreleased improvements include: post-claim PII minimisation (DOB and name hashes automatically deleted after account setup), comprehensive class deletion audit with P1/P2/P3 security fixes, timed deletion confirmation gates, hall pass and admin identity boundary hardening, and a major read-path performance optimization reducing student roster queries from ~1225 to ~10 for a class of 60 students. See [LOG-REL-016_Release_Notes_V1.9.0.md](docs/LOGS/RELEASES/LOG-REL-016_Release_Notes_V1.9.0.md) for the full release and [CHANGELOG.md](CHANGELOG.md) for all changes.
+**Project Status:** Actively maintained classroom-economy platform with ongoing security hardening, documentation cleanup, and feature work. For the current release history, see [CHANGELOG.md](CHANGELOG.md). For the canonical system and feature docs, start at [docs/README.md](docs/README.md).
+
+---
+
+## Design Principles
+
+Classroom Token Hub is built around a small set of architectural principles that guide both feature development and operational decisions.
+
+**Minimal Personal Data**  
+The system intentionally stores as little personally identifiable information as possible. Student identities are encrypted at rest, verification data is purged after account setup, and the platform avoids unnecessary linkage to real‑world identity systems.
+
+**Strong Classroom Isolation**  
+Each classroom operates as its own isolated economic environment. Join codes act as the boundary for data access, ensuring that teachers and students only interact with records belonging to their own class context.
+
+**Transparent Economic Systems**  
+All financial activity is logged and auditable within the scope of a classroom. Students can see how balances change over time, reinforcing transparency and helping the platform function as a teaching tool rather than a black box.
+
+**Operational Simplicity**  
+The platform favors simple, reliable technologies and predictable infrastructure. This keeps the system understandable for educators, maintainable for developers, and resilient in real classroom environments where networks, devices, and usage patterns can be unpredictable.
 
 ---
 
@@ -35,6 +53,7 @@ An interactive banking and classroom management platform for teaching students a
 - **Insurance System** — Policies, enrollments, and claims managed in-app
 - **Rent & Fees** — Optional recurring rent with waivers and late-fee configuration
 - **TOTP Authentication** — Secure admin access with two-factor authentication
+- **Passkey Support** — Passwordless sign-in for admins and system admins via Passwordless.dev
 
 ### Performance
 
@@ -167,42 +186,39 @@ After cloning, configure git to use the versioned `hooks/` directory:
 ./scripts/setup-hooks.sh
 ```
 
-This enables:
-
-- `post-checkout`: branch-aware `DATABASE_URL` switching
-  - `join-code-centric-architecture-rebuild`, `codex/fix-database-model-for-dob-sum-storage`, and `codex/v2.0` -> `classroom_economy`
-  - other branches -> `production_dev`
-- `pre-push`: migration-head safety checks
+This enables the repo-managed hooks used by the local development workflow, including migration safety checks on push. See [CONTRIBUTING.md](CONTRIBUTING.md) for workflow details.
 
 ### Testing with Sample Data
 
 - Use `student_upload_template.csv` as a reference for CSV roster uploads
 - Run `python scripts/seed_dummy_students.py` to seed the database with sample students
+- For operational script details, see [docs/LOGS/AUDITS/LOG-DEP-022_Scripts_Operations_Reference.md](docs/LOGS/AUDITS/LOG-DEP-022_Scripts_Operations_Reference.md)
 
 ---
 
 ## Documentation
 
-📚 **[Complete Documentation →](docs/GITHUB_SITE/README.md)**
+📚 **[Complete Documentation →](docs/README.md)**
 
 ### For Users
 
-- **[Student Guide](docs/user-guides/student_guide.md)** — How students use the platform
-- **[Teacher Manual](docs/user-guides/teacher_manual.md)** — Comprehensive admin guide
+- **[Student Guide](docs/user-guides/student_guide.md)** for students using the platform
+- **[Teacher Manual](docs/user-guides/teacher_manual.md)** for teacher facilitating the platform
+- **[Sysadmin Manual](docs/user-guides/sysadmin_manual.md)** for local maintainer
 
 ### For Developers
 
-- **[Architecture Guide](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)** — System design and patterns
-- **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)** — Up-to-date database reference
-- **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)** — REST API documentation
-- **[Development Priorities](DEVELOPMENT.md)** — Current priorities, roadmap, and tasks
-- **[Changelog](CHANGELOG.md)** — Version history and notable changes
+- **[Architecture Guide](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)** for complete explanation of system design and patterns
+- **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)** for current database tables and columns
+- **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)** for complete API used by this platform
+- **[Development Priorities](DEVELOPMENT.md)** for current priorities, roadmap, and tasks
+- **[Changelog](CHANGELOG.md)** for most up-to-date version history and notable changes
 
 ### Deployment & Operations
 
-- **[Deployment Guide](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)** — Production deployment instructions
-- **[Operations Guides](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/)** — Operational procedures and troubleshooting
-- **[Contributing Guide](CONTRIBUTING.md)** — How to contribute to the project
+- **[Deployment Guide](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)** used for production deployment
+- **[Operations Guides](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/)** with practical operational procedures and troubleshooting
+- **[Contributing Guide](CONTRIBUTING.md)** for essential know-hows when contributing to the project
 
 ---
 
@@ -228,7 +244,6 @@ This enables:
 - pytest and pytest-flask
 
 **Deployment:**
-- Docker support with multi-stage builds
 - GitHub Actions CI/CD pipeline
 - Production-ready for Linux servers (tested on Ubuntu/Debian)
 - Compatible with major cloud providers
@@ -244,7 +259,7 @@ classroom-economy/
 │   ├── extensions.py         # Flask extensions
 │   ├── models.py             # Database models (students, tenancy, payroll, rent, insurance)
 │   ├── auth.py               # Authentication decorators and scoped queries
-│   ├── routes/               # Blueprint-based routes (admin, student, system_admin, api, main)
+│   ├── routes/               # Blueprint-based routes (admin, student, system_admin, api, main, analytics, docs, recovery)
 │   └── utils/                # Utilities (encryption, helpers, constants)
 ├── templates/                # Jinja2 templates
 ├── static/                   # CSS, JS, images
@@ -288,13 +303,20 @@ python scripts/manage_invites.py      # Manage admin invites
 python scripts/seed_dummy_students.py # Seed test data
 ```
 
+Operational script behavior and arguments are documented in [docs/LOGS/AUDITS/LOG-DEP-022_Scripts_Operations_Reference.md](docs/LOGS/AUDITS/LOG-DEP-022_Scripts_Operations_Reference.md).
+
 ---
 
 ## Roadmap
 
-Active development priorities and the path to version 1.0 are tracked in [DEVELOPMENT.md](DEVELOPMENT.md).
+Active development priorities, architectural follow-up work, and operational tasks are tracked in [DEVELOPMENT.md](DEVELOPMENT.md).
 
-**Version 1.0 Status:** All critical blockers (P0 and P1) have been resolved! The platform is ready for staging deployment and final validation before production release.
+This repository is under active maintenance. Current capability and release history are reflected in [CHANGELOG.md](CHANGELOG.md) and the canonical docs under [`docs/`](docs/README.md).
+
+v2.0 is under active development with brand new join-code centric schema design, complete API rework, and with even more privacy invariants and even less PII stored. 
+
+> [!NOTE]
+> v2.0 is on track to begin testing by June 2026. Until then, v1.x remains under active maintenance with occasional feature push.
 
 ---
 
@@ -350,14 +372,16 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 ## Support
 
-**Documentation:** [docs/README.md](docs/GITHUB_SITE/README.md)
+**Documentation:** [docs/README.md](docs/README.md)
+
 **Issues:** Use GitHub Issues for bug reports and feature requests
+
 **Security:** Report security issues privately to project maintainers
 
 ---
 
 ## Acknowledgments
 
-Built for educators and students to make learning about finance engaging and practical.
+This project is dedicated to all of the young pentesters who are relentless in testing the stability of the system and validating the invariants embedded in all the features.
 
-**Last Updated:** 2026-02-25
+![Last Updated](https://img.shields.io/github/last-commit/timwonderer/classroom-economy?label=last%20updated&color=blue)

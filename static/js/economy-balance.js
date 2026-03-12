@@ -76,6 +76,7 @@ class EconomyBalanceChecker {
         const claimTypeTarget = input.dataset.economyClaimTypeTarget;
         const coverageTarget = input.dataset.economyCoverageTarget;
         const periodTarget = input.dataset.economyPeriodTarget;
+        const waitingTarget = input.dataset.economyWaitingTarget;
 
         // Collect block parameter (important for multi-class teachers)
         let additionalParams = {};
@@ -106,6 +107,18 @@ class EconomyBalanceChecker {
 
             getParamValue(coverageTarget, 'max_claim_amount');
             getParamValue(periodTarget, 'max_payout_per_period');
+            if (waitingTarget) {
+                const waitingField = document.querySelector(waitingTarget);
+                if (waitingField) {
+                    const rawValue = waitingField.value != null ? waitingField.value.trim() : '';
+                    if (rawValue !== '' && /^\d+$/.test(rawValue)) {
+                        const parsedDays = parseInt(rawValue, 10);
+                        if (!isNaN(parsedDays) && parsedDays > 0) {
+                            additionalParams.waiting_period_days = parsedDays;
+                        }
+                    }
+                }
+            }
         }
 
         // For rent validation, collect additional frequency parameters from the form
@@ -228,6 +241,35 @@ class EconomyBalanceChecker {
                     html += `<br><small class="text-muted">Weekly equivalent: $${recommendations.min_weekly} - $${recommendations.max_weekly}</small>`;
                 }
                 html += `</div>`;
+            }
+
+            if (recommendations.coverage) {
+                html += '<div class="mt-2">';
+                html += `<strong>Max Claim:</strong> $${recommendations.coverage.min} - $${recommendations.coverage.max}`;
+                if (recommendations.coverage.recommended !== undefined) {
+                    html += `<br><strong>Ideal Max Claim:</strong> $${recommendations.coverage.recommended}`;
+                }
+                html += `<br><small class="text-muted">${recommendations.coverage.multiplier_min}x-${recommendations.coverage.multiplier_max}x premium</small>`;
+                html += '</div>';
+            }
+
+            if (recommendations.period_cap) {
+                html += '<div class="mt-2">';
+                html += `<strong>Period Cap:</strong> $${recommendations.period_cap.min} - $${recommendations.period_cap.max}`;
+                if (recommendations.period_cap.recommended !== undefined) {
+                    html += `<br><strong>Ideal Period Cap:</strong> $${recommendations.period_cap.recommended}`;
+                }
+                html += `<br><small class="text-muted">${recommendations.period_cap.multiplier_min}x-${recommendations.period_cap.multiplier_max}x premium</small>`;
+                html += '</div>';
+            }
+
+            if (recommendations.waiting_period_days) {
+                html += '<div class="mt-2">';
+                html += `<strong>Waiting Period:</strong> ${recommendations.waiting_period_days.min}-${recommendations.waiting_period_days.max} days`;
+                if (recommendations.waiting_period_days.recommended !== undefined) {
+                    html += `<br><strong>Ideal Waiting Period:</strong> ${recommendations.waiting_period_days.recommended} days`;
+                }
+                html += '</div>';
             }
 
             if (recommendations.tiers) {

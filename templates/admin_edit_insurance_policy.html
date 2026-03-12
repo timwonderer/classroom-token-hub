@@ -99,6 +99,7 @@
                   'data-economy-validate': 'insurance',
                   'data-economy-coverage-target': '#edit_max_claim_amount',
                   'data-economy-period-target': '#edit_max_payout_per_period',
+                  'data-economy-waiting-target': '#edit_waiting_period_days',
                   'data-economy-claim-type-target': '#edit_claim_type'
                   }) }}
                 </div>
@@ -152,7 +153,7 @@
                   <div class="col-md-6 mb-3">
                     {{ form.waiting_period_days.label(class="form-label fw-bold") }}
                     <div class="input-group">
-                      {{ form.waiting_period_days(class="form-control", placeholder="0") }}
+                      {{ form.waiting_period_days(class="form-control", placeholder="0", id="edit_waiting_period_days", **{'data-economy-trigger': '#edit_premium'}) }}
                       <span class="input-group-text">days</span>
                     </div>
                     <small class="text-muted">Before coverage starts</small>
@@ -570,6 +571,7 @@
   // Display CWI info if payroll is configured
   economyChecker.analyzeEconomy().then(analysis => {
     economyChecker.displayCWIInfo(analysis, '#cwi-info');
+    window.__insuranceEconomyAnalysis = analysis;
   }).catch(err => {
     console.log('Payroll not configured yet, skipping CWI display');
   });
@@ -583,22 +585,23 @@
       // Trigger validation
       premiumField.dispatchEvent(new Event('input'));
       // Update Quick Tips based on frequency
-      updateQuickTipsPricing(this.value, economyChecker.currentCWI);
+      updateQuickTipsPricing(this.value, window.__insuranceEconomyAnalysis);
     });
     // Set initial frequency
     premiumField.setAttribute('data-economy-frequency', frequencyField.value);
   }
 
   // Function to update Quick Tips pricing based on frequency
-  function updateQuickTipsPricing(frequency, cwi) {
-    if (!cwi) return;
+  function updateQuickTipsPricing(frequency, analysis) {
+    const cwi = analysis?.cwi;
+    const insuranceRecommendations = analysis?.recommendations?.insurance_premium_weekly;
+    if (!cwi || !insuranceRecommendations) return;
 
     const tipPricingElement = document.querySelector('.tip-pricing');
     if (!tipPricingElement) return;
 
-    // Calculate frequency-specific affordable range (5-12% of CWI for insurance)
-    const minWeekly = cwi * 0.05;
-    const maxWeekly = cwi * 0.12;
+    const minWeekly = insuranceRecommendations.min;
+    const maxWeekly = insuranceRecommendations.max;
 
     let multiplier = 1;
     let frequencyLabel = 'weekly';
@@ -633,13 +636,15 @@
     const minPrice = (minWeekly * multiplier).toFixed(2);
     const maxPrice = (maxWeekly * multiplier).toFixed(2);
     const cwiDisplay = cwi.toFixed(2);
+    const policyLabel = analysis?.recommendations?.policy_label || 'current';
 
-    tipPricingElement.textContent = `Keep ${frequencyLabel} premium costs in the $${minPrice}-$${maxPrice} range (5-12% of weekly expected income: $${cwiDisplay})`;
+    tipPricingElement.textContent = `Keep ${frequencyLabel} premium costs in the $${minPrice}-$${maxPrice} range for the ${policyLabel.toLowerCase()} policy (weekly CWI: $${cwiDisplay}).`;
   }
 
   // Update Quick Tips with initial frequency and CWI
   economyChecker.analyzeEconomy().then(analysis => {
-    updateQuickTipsPricing(frequencyField ? frequencyField.value : 'weekly', analysis.cwi);
+    window.__insuranceEconomyAnalysis = analysis;
+    updateQuickTipsPricing(frequencyField ? frequencyField.value : 'weekly', analysis);
   }).catch(err => {
     console.log('Could not update Quick Tips pricing');
   });

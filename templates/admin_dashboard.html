@@ -45,6 +45,27 @@
 </div>
 {% endif %}
 
+<!-- System Announcements -->
+{% if system_announcements %}
+{% for announcement in system_announcements %}
+<div class="alert {{ announcement.get_priority_class() }} d-flex align-items-start mb-3 border-0 shadow-sm"
+    role="alert">
+    <span class="material-symbols-outlined me-3 fs-4">{{ announcement.get_priority_icon() }}</span>
+    <div class="flex-grow-1">
+        <h6 class="alert-heading fw-bold mb-2">{{ announcement.title }}</h6>
+        <p class="mb-1">{{ announcement.message|nl2br|safe }}</p>
+        {% if announcement.expires_at %}
+        <small class="text-muted d-block mt-2">
+            <span class="material-symbols-outlined fs-6 align-text-bottom">schedule</span>
+            Expires {{ announcement.expires_at.strftime('%b %d, %Y') }}
+        </small>
+        {% endif %}
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endfor %}
+{% endif %}
+
 <div class="row g-4 mb-4">
     <!-- Key Metrics -->
     <div class="col-12 col-md-6 col-lg-3">

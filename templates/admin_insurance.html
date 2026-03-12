@@ -411,6 +411,7 @@
                       'data-economy-validate': 'insurance',
                       'data-economy-coverage-target': '#simple_max_claim_amount',
                       'data-economy-period-target': '#simple_max_payout_per_period',
+                      'data-economy-waiting-target': '#simple_waiting_period_days',
                       'data-economy-claim-type-target': '#simple_claim_type'
                       }) }}
                       <span class="input-group-text">/{{ form.charge_frequency(class="form-select",
@@ -461,7 +462,7 @@
                     {{ form.waiting_period_days.label(class="form-label fw-bold") }}
                     <div class="input-group">
                       {{ form.waiting_period_days(class="form-control", placeholder="7",
-                      id="simple_waiting_period_days") }}
+                      id="simple_waiting_period_days", **{'data-economy-trigger': '#simple_premium'}) }}
                       <span class="input-group-text">days</span>
                     </div>
                     <small class="text-muted">Number of days students must wait before they can use their
@@ -545,6 +546,7 @@
                               'data-economy-validate': 'insurance',
                               'data-economy-coverage-target': '#advanced_max_claim_amount',
                               'data-economy-period-target': '#advanced_max_payout_per_period',
+                              'data-economy-waiting-target': '#advanced_waiting_period_days',
                               'data-economy-claim-type-target': '#advanced_claim_type'
                               }) }}
                             </div>
@@ -600,7 +602,7 @@
                           <div class="col-md-6 mb-3">
                             {{ form.waiting_period_days.label(class="form-label fw-bold") }}
                             <div class="input-group">
-                              {{ form.waiting_period_days(class="form-control", placeholder="0") }}
+                              {{ form.waiting_period_days(class="form-control", placeholder="0", id="advanced_waiting_period_days", **{'data-economy-trigger': '#advanced_premium'}) }}
                               <span class="input-group-text">days</span>
                             </div>
                             <small class="text-muted">Mandatory Waiting Period</small>

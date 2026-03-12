@@ -53,31 +53,33 @@ jobs:
 
     # SECURITY FIX: Add SSH host key verification to prevent MITM attacks
     - name: Set up SSH host key verification
+      env:
+        KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
       run: |
         mkdir -p ~/.ssh
         chmod 700 ~/.ssh
-        echo "${{ secrets.KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+        printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
         chmod 644 ~/.ssh/known_hosts
         echo "✓ SSH host key verification enabled"
 
     - name: Update maintenance mode on server
+      env:
+        PRODUCTION_SERVER_IP: ${{ secrets.PRODUCTION_SERVER_IP }}
+        INPUT_ENABLED: ${{ inputs.enabled }}
+        INPUT_MESSAGE: ${{ inputs.message }}
+        INPUT_EXPECTED_END: ${{ inputs.expected_end }}
+        INPUT_CONTACT: ${{ inputs.contact }}
+        INPUT_BADGE_TYPE: ${{ inputs.badge_type }}
+        INPUT_STATUS_DESCRIPTION: ${{ inputs.status_description }}
       run: |
-        ENABLED="${{ inputs.enabled }}"
         MODE_VALUE="false"
-        if [ "$ENABLED" = "true" ]; then
+        if [ "$INPUT_ENABLED" = "true" ]; then
           MODE_VALUE="true"
         fi
 
-        MESSAGE="${{ inputs.message }}"
-        EXPECTED_END="${{ inputs.expected_end }}"
-        CONTACT="${{ inputs.contact }}"
-        BADGE_TYPE="${{ inputs.badge_type }}"
-        STATUS_DESCRIPTION="${{ inputs.status_description }}"
+        SSH_ENV_VARS="MODE_VALUE=$(printf %q "${MODE_VALUE}") MESSAGE=$(printf %q "${INPUT_MESSAGE}") EXPECTED_END=$(printf %q "${INPUT_EXPECTED_END}") CONTACT=$(printf %q "${INPUT_CONTACT}") BADGE_TYPE=$(printf %q "${INPUT_BADGE_TYPE}") STATUS_DESCRIPTION=$(printf %q "${INPUT_STATUS_DESCRIPTION}")"
 
-        SSH_ENV_VARS="MODE_VALUE=$(printf %q "${MODE_VALUE}") MESSAGE=$(printf %q "${MESSAGE}") EXPECTED_END=$(printf %q "${EXPECTED_END}") CONTACT=$(printf %q "${CONTACT}") BADGE_TYPE=$(printf %q "${BADGE_TYPE}") STATUS_DESCRIPTION=$(printf %q "${STATUS_DESCRIPTION}")"
-
-        # SECURITY: Removed -o StrictHostKeyChecking=no (now uses known_hosts)
-        ssh root@${{ secrets.PRODUCTION_SERVER_IP }} "export ${SSH_ENV_VARS}; bash -s" << 'EOF'
+        ssh root@"$PRODUCTION_SERVER_IP" "export ${SSH_ENV_VARS}; bash -s" << 'EOF'
           set -e
 
           echo 'Navigating to project directory...'
@@ -96,13 +98,25 @@ jobs:
           sed -i '/^MAINTENANCE_BADGE_TYPE=/d' .env 2>/dev/null || true
           sed -i '/^MAINTENANCE_STATUS_DESCRIPTION=/d' .env 2>/dev/null || true
 
+          # Sanitize values: strip CR/LF and escape embedded quotes/backslashes
+          # to prevent .env corruption or injection of extra entries.
+          sanitize() {
+            printf '%s' "$1" | tr -d '\r\n' | sed 's/\\/\\\\/g; s/"/\\"/g'
+          }
+
+          SAFE_MESSAGE="$(sanitize "$MESSAGE")"
+          SAFE_EXPECTED_END="$(sanitize "$EXPECTED_END")"
+          SAFE_CONTACT="$(sanitize "$CONTACT")"
+          SAFE_BADGE_TYPE="$(sanitize "$BADGE_TYPE")"
+          SAFE_STATUS_DESC="$(sanitize "$STATUS_DESCRIPTION")"
+
           # Add new maintenance mode variables
           echo "MAINTENANCE_MODE=$MODE_VALUE" >> .env
-          echo "MAINTENANCE_MESSAGE=\"$MESSAGE\"" >> .env
-          echo "MAINTENANCE_EXPECTED_END=\"$EXPECTED_END\"" >> .env
-          echo "MAINTENANCE_CONTACT=\"$CONTACT\"" >> .env
-          echo "MAINTENANCE_BADGE_TYPE=\"$BADGE_TYPE\"" >> .env
-          echo "MAINTENANCE_STATUS_DESCRIPTION=\"$STATUS_DESCRIPTION\"" >> .env
+          echo "MAINTENANCE_MESSAGE=\"${SAFE_MESSAGE}\"" >> .env
+          echo "MAINTENANCE_EXPECTED_END=\"${SAFE_EXPECTED_END}\"" >> .env
+          echo "MAINTENANCE_CONTACT=\"${SAFE_CONTACT}\"" >> .env
+          echo "MAINTENANCE_BADGE_TYPE=\"${SAFE_BADGE_TYPE}\"" >> .env
+          echo "MAINTENANCE_STATUS_DESCRIPTION=\"${SAFE_STATUS_DESC}\"" >> .env
 
           echo 'Restarting Gunicorn to apply changes...'
           sudo systemctl restart gunicorn
@@ -118,12 +132,17 @@ jobs:
         EOF
 
     - name: Summary
+      env:
+        INPUT_ENABLED: ${{ inputs.enabled }}
+        INPUT_BADGE_TYPE: ${{ inputs.badge_type }}
+        INPUT_MESSAGE: ${{ inputs.message }}
+        INPUT_STATUS_DESCRIPTION: ${{ inputs.status_description }}
       run: |
-        if [ "${{ inputs.enabled }}" = "true" ]; then
+        if [ "$INPUT_ENABLED" = "true" ]; then
           echo "Maintenance mode ENABLED"
-          echo "Badge type: ${{ inputs.badge_type }}"
-          echo "Message: ${{ inputs.message }}"
-          echo "Status: ${{ inputs.status_description }}"
+          echo "Badge type: $INPUT_BADGE_TYPE"
+          echo "Message: $INPUT_MESSAGE"
+          echo "Status: $INPUT_STATUS_DESCRIPTION"
         else
           echo "Maintenance mode DISABLED - Site is live"
         fi

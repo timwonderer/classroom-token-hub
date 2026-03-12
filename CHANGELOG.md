@@ -8,6 +8,9 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+- **Economy policy mode and rebalance workflow** — Added policy-aware economy profiles (`Tight`, `Default`, `Comfortable`) that drive CWI recommendations for rent, utilities, store pricing tiers, fines, savings targets, and insurance settings. Teachers can review economy health by class, preview rent and insurance rebalances, apply changes immediately or schedule them for the next payroll run, and receive live CWI guidance in rent, store, and insurance settings. Rebalance application now regenerates its change plan from current server-side state instead of trusting client-submitted preview JSON.
+
 ### Fixed
 - **Broken help/guide links after doc system revamp** — Updated all doc path references in `layout_admin.html`, `layout_student.html`, `admin_insurance.html`, `admin_store.html`, and `admin_payroll.html` from hyphenated paths (e.g., `teacher-students`) to the new slash-separated directory structure (e.g., `teacher/students`).
 - **Passkey "Never used" always displayed** — Passkeys are tracked in our database without a `credential_id` (credentials are managed on the Passwordless.dev servers). The auth-finish handler was looking up credentials by `credential_id` (which is always `NULL`), so `last_used` was never updated. Fixed by updating `last_used` on all credentials for the authenticated admin/sysadmin when a successful passkey sign-in occurs.
