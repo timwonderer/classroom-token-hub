@@ -105,6 +105,7 @@ REQUEST_ID_HEADERS = ("X-Request-Id", "X-Correlation-Id")
 class RequestIdFilter(logging.Filter):
     def filter(self, record):
         context = getattr(g, "correlation_context", None) if has_request_context() else None
+        exc_info = getattr(record, "exc_info", None)
         if not hasattr(record, "request_id"):
             if has_request_context():
                 record.request_id = getattr(g, "request_id", "-")
@@ -127,9 +128,15 @@ class RequestIdFilter(logging.Filter):
         if not hasattr(record, "method"):
             record.method = request.method if has_request_context() else "-"
         if not hasattr(record, "error_class"):
-            record.error_class = "-"
+            if exc_info and exc_info[0]:
+                record.error_class = exc_info[0].__name__
+            else:
+                record.error_class = "-"
         if not hasattr(record, "error_message"):
-            record.error_message = "-"
+            if exc_info and exc_info[1]:
+                record.error_message = " ".join(str(exc_info[1]).split())[:500]
+            else:
+                record.error_message = "-"
         if not hasattr(record, "correlation_version"):
             record.correlation_version = 1
         return True
