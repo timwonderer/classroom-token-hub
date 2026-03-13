@@ -178,14 +178,7 @@
                                                 <span class="badge bg-secondary">Transaction #{{ ticket.related_transaction_id }}</span>
                                                 {% endif %}
                                             </h6>
-                                            <span class="badge
-                                                {% if ticket.status in ['OPEN', 'submitted'] %}bg-primary
-                                                {% elif ticket.status in ['TEACHER_REVIEW', 'teacher_review'] %}bg-info
-                                                {% elif ticket.status in ['TEACHER_FINAL_REVIEW', 'teacher_resolved'] %}bg-primary
-                                                {% elif ticket.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}bg-warning text-dark
-                                                {% elif ticket.status in ['DEV_RESOLVED', 'developer_resolved'] %}bg-info
-                                                {% elif ticket.status == 'CLOSED' %}bg-success
-                                                {% else %}bg-secondary{% endif %}">
+                                            <span class="badge {{ ticket.get_student_status_badge_class() }}">
                                                 {{ ticket.get_student_visible_status() if ticket.get_student_visible_status else ticket.status }}
                                             </span>
                                         </div>

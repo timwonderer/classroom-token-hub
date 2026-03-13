@@ -1775,6 +1775,19 @@ class Issue(db.Model):
         }
         return status_map.get(canonical_status, 'Unknown')
 
+    def get_student_status_badge_class(self):
+        """Return the Bootstrap badge class for the student-facing issue status."""
+        canonical_status = self.LEGACY_TO_CANONICAL_STATUS.get(self.status, self.status)
+        status_map = {
+            self.STATUS_OPEN: 'bg-primary',
+            self.STATUS_TEACHER_REVIEW: 'bg-info',
+            self.STATUS_TEACHER_FINAL_REVIEW: 'bg-primary',
+            self.STATUS_ESCALATED_TO_DEV: 'bg-warning text-dark',
+            self.STATUS_DEV_RESOLVED: 'bg-info',
+            self.STATUS_CLOSED: 'bg-success',
+        }
+        return status_map.get(canonical_status, 'bg-secondary')
+
     def is_locked(self):
         """Check if issue is locked from further student edits (after escalation)."""
         canonical_status = self.LEGACY_TO_CANONICAL_STATUS.get(self.status, self.status)
