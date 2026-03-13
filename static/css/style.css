@@ -1359,3 +1359,19 @@ body.maintenance-active .sidebar {
         /* Adjust sticky/fixed pos */
     }
 }
+
+.hover-shadow {
+    transition: box-shadow 0.3s ease-in-out;
+}
+
+.hover-shadow:hover {
+    box-shadow: 0 0.5rem 1rem color-mix(in srgb, black 15%, transparent) !important;
+}
+
+.issue-explanation-truncate {
+    max-width: 800px;
+}
+
+.issue-resolved-meta {
+    min-width: 150px;
+}

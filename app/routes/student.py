@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app, has_app_context
 from sqlalchemy import or_, func, select, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from sqlalchemy.orm import selectinload
 from werkzeug.security import generate_password_hash, check_password_hash
 import pytz
 from dateutil.relativedelta import relativedelta
@@ -4065,6 +4066,7 @@ def setup_complete():
 def help_support():
     """Show the student help and support page with issue tracking."""
     from app.utils.issue_categories import init_default_categories
+    from app.models import Issue, IssueResolutionAction
 
     student = get_logged_in_student()
     class_context = get_current_class_context()
@@ -4076,14 +4078,14 @@ def help_support():
     # Initialize default categories if they don't exist
     init_default_categories()
 
-    base_issue_query = Issue.query.filter_by(
+    base_issue_query = Issue.query.options(selectinload(Issue.category)).filter_by(
         student_id=student.id,
+        teacher_id=class_context['teacher_id'],
         join_code=class_context['join_code']
     )
 
     # Get student's issues for current class (last 20)
     my_issues = base_issue_query.order_by(Issue.submitted_at.desc()).limit(20).all()
-
     teacher_decisions = IssueResolutionAction.query.join(
         Issue, IssueResolutionAction.issue_id == Issue.id
     ).filter(
