@@ -22,6 +22,16 @@
                 <span class="material-symbols-outlined me-2">format_list_bulleted</span>My Issues
             </button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tickets-tab" data-bs-toggle="tab" data-bs-target="#tickets" type="button" role="tab" aria-controls="tickets" aria-selected="false">
+                <span class="material-symbols-outlined me-2">support_agent</span>Support Tickets
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="decisions-tab" data-bs-toggle="tab" data-bs-target="#decisions" type="button" role="tab" aria-controls="decisions" aria-selected="false">
+                <span class="material-symbols-outlined me-2">gavel</span>Teacher Decisions
+            </button>
+        </li>
     </ul>
 
     <div class="tab-content" id="helpTabsContent">
@@ -148,6 +158,126 @@
                     </div>
         </div>
 
+        <!-- Support Tickets Tab -->
+        <div class="tab-pane fade" id="tickets" role="tabpanel" aria-labelledby="tickets-tab">
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">support_agent</span>My Support Tickets</h5>
+                </div>
+                <div class="card-body">
+                    {% if my_tickets %}
+                        <div class="list-group">
+                            {% for ticket in my_tickets %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-1">
+                                                {{ ticket.category.name if ticket.category else 'General Issue' }}
+                                                {% if ticket.related_transaction_id %}
+                                                <span class="badge bg-secondary">Transaction #{{ ticket.related_transaction_id }}</span>
+                                                {% endif %}
+                                            </h6>
+                                            <span class="badge {{ ticket.get_student_status_badge_class() }}">
+                                                {{ ticket.get_student_visible_status() }}
+                                            </span>
+                                        </div>
+                                        <p class="mb-1 mt-2 small">
+                                            {{ (ticket.student_explanation or '') | truncate(150, True, '...') }}
+                                        </p>
+                                        <small class="text-muted">
+                                            Submitted
+                                            {% if ticket.submitted_at %}
+                                                <span class="local-timestamp" data-timestamp="{{ format_utc_iso(ticket.submitted_at) }}"></span>
+                                            {% else %}
+                                                N/A
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <span class="material-symbols-outlined fs-1 text-muted">support_agent</span>
+                            <p class="text-muted mt-2">You don't have any support tickets.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Teacher Decisions Tab -->
+        <div class="tab-pane fade" id="decisions" role="tabpanel" aria-labelledby="decisions-tab">
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">gavel</span>Teacher Decisions</h5>
+                </div>
+                <div class="card-body">
+                    {% if teacher_decisions %}
+                        <div class="accordion" id="decisionsAccordion">
+                            {% for decision in teacher_decisions %}
+                            {% set action_description = decision.action_description or '' %}
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingDecision{{ decision.id }}">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDecision{{ decision.id }}" aria-expanded="false" aria-controls="collapseDecision{{ decision.id }}">
+                                        <div class="d-flex justify-content-between align-items-center w-100 me-3">
+                                            <div>
+                                                <strong>{{ decision.action_type | replace('_', ' ') | title }}</strong>
+                                                <div class="small text-muted">
+                                                    {{ action_description | truncate(50, True, '...') }}
+                                                </div>
+                                            </div>
+                                            <div class="text-muted small text-end">
+                                                <span class="local-timestamp" data-timestamp="{{ format_utc_iso(decision.created_at) }}"></span>
+                                            </div>
+                                        </div>
+                                    </button>
+                                </h2>
+                                <div id="collapseDecision{{ decision.id }}" class="accordion-collapse collapse" aria-labelledby="headingDecision{{ decision.id }}" data-bs-parent="#decisionsAccordion">
+                                    <div class="accordion-body">
+                                        <div class="mb-3">
+                                            <strong>Teacher Action:</strong><br>
+                                            {{ decision.action_type | replace('_', ' ') | title }}
+                                        </div>
+                                        <div class="mb-3">
+                                            <strong>Summary:</strong><br>
+                                            {{ action_description or '(no summary provided)' }}
+                                        </div>
+                                        {% if decision.amount_changed is not none %}
+                                        <div class="mb-3">
+                                            <strong>Amount Changed:</strong><br>
+                                            ${{ "%.2f"|format(decision.amount_changed|abs) }}
+                                        </div>
+                                        {% endif %}
+                                        {% if decision.before_value %}
+                                        <div class="mb-3">
+                                            <strong>Previous Value:</strong><br>
+                                            {{ decision.before_value }}
+                                        </div>
+                                        {% endif %}
+                                        {% if decision.after_value %}
+                                        <div class="mb-3">
+                                            <strong>New Value:</strong><br>
+                                            {{ decision.after_value }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <span class="material-symbols-outlined fs-1 text-muted">gavel</span>
+                            <p class="text-muted mt-2">No teacher decisions found.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
         <!-- My Issues Tab -->
         <div class="tab-pane fade" id="myissues" role="tabpanel" aria-labelledby="myissues-tab">
             <div class="card shadow-sm">
@@ -168,19 +298,12 @@
                                                 <span class="badge bg-secondary">Transaction #{{ issue.related_transaction_id }}</span>
                                                 {% endif %}
                                             </h6>
-                                            <span class="badge
-                                                {% if issue.status in ['OPEN', 'submitted'] %}bg-primary
-                                                {% elif issue.status in ['TEACHER_REVIEW', 'teacher_review'] %}bg-info
-                                                {% elif issue.status in ['TEACHER_FINAL_REVIEW', 'teacher_resolved'] %}bg-primary
-                                                {% elif issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}bg-warning text-dark
-                                                {% elif issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}bg-info
-                                                {% elif issue.status == 'CLOSED' %}bg-success
-                                                {% else %}bg-secondary{% endif %}">
+                                            <span class="badge {{ issue.get_student_status_badge_class() }}">
                                                 {{ issue.get_student_visible_status() }}
                                             </span>
                                         </div>
                                         <p class="mb-1 mt-2 small">
-                                            {{ issue.student_explanation[:150] }}{% if issue.student_explanation|length > 150 %}...{% endif %}
+                                            {{ issue.student_explanation | truncate(150, True, '...') }}
                                         </p>
                                         <small class="text-muted">
                                             Submitted
@@ -207,14 +330,4 @@
         </div>
     </div>
 </div>
-
-<style>
-.hover-shadow {
-    transition: box-shadow 0.3s ease-in-out;
-}
-
-.hover-shadow:hover {
-    box-shadow: 0 0.5rem 1rem color-mix(in srgb, black 15%, transparent) !important;
-}
-</style>
 {% endblock %}
