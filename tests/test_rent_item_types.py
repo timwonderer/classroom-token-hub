@@ -1,7 +1,7 @@
 import pytest
 import re
 from decimal import Decimal
-from app.models import RentItem, RentSettings, RentPayment, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher
+from app.models import RentItem, RentSettings, RentPayment, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher, RedemptionAuditAction, RedemptionAuditLog, RedemptionAuditSource
 from app.extensions import db
 from datetime import datetime, timezone, timedelta
 
@@ -1125,6 +1125,92 @@ def test_shop_deletes_expired_rent_perk_student_item(client, teacher_admin, stud
     resp = client.get('/student/shop')
     assert resp.status_code == 200
     assert db.session.get(StudentItem, expired_id) is None
+
+
+def test_shop_keeps_processing_expired_rent_perk_student_item(client, teacher_admin, student_in_class):
+    """Expired processing rows must remain for teacher review instead of being purged as stale perks."""
+    student = student_in_class
+
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Processing Rent Pencil',
+        price=Decimal('7.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    processing_item = StudentItem(
+        student_id=student.id,
+        store_item_id=store_item.id,
+        status='processing',
+        uses_remaining=0,
+        purchase_date=datetime.now(timezone.utc) - timedelta(days=10),
+        expiry_date=datetime.now(timezone.utc) - timedelta(days=1),
+        join_code='JOINCODE123',
+    )
+    db.session.add(processing_item)
+    db.session.flush()
+
+    db.session.add(RedemptionAuditLog(
+        student_item_id=processing_item.id,
+        student_display_name='Test S.',
+        class_display_label='A',
+        action=RedemptionAuditAction.REQUEST,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        source=RedemptionAuditSource.LIVE,
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    assert db.session.get(StudentItem, processing_item.id) is not None
+    assert RedemptionAuditLog.query.filter_by(student_item_id=processing_item.id).count() == 1
+
+
+def test_shop_does_not_delete_expired_non_rent_multi_use_item(client, teacher_admin, student_in_class):
+    """Cleanup should be scoped to rent-granted perks, not every expired multi-use row."""
+    student = student_in_class
+
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Reusable Non-Rent Item',
+        price=Decimal('7.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=False,
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    non_rent_item = StudentItem(
+        student_id=student.id,
+        store_item_id=store_item.id,
+        status='purchased',
+        uses_remaining=2,
+        purchase_date=datetime.now(timezone.utc) - timedelta(days=10),
+        expiry_date=datetime.now(timezone.utc) - timedelta(days=1),
+        join_code='JOINCODE123',
+    )
+    db.session.add(non_rent_item)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    assert db.session.get(StudentItem, non_rent_item.id) is not None
 
 
 def test_per_use_stale_rent_grant_does_not_apply_when_current_period_is_unpaid(client, teacher_admin, student_in_class, monkeypatch):

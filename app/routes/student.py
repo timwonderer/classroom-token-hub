@@ -85,19 +85,22 @@ def _clear_expired_rent_perk_items(student_id, join_code=None, teacher_id=None, 
         return 0
 
     now = now or utc_now()
-    expired_query = db.session.query(StudentItem.id).filter(
+    expired_query = db.session.query(StudentItem.id).join(
+        StoreItem, StudentItem.store_item_id == StoreItem.id
+    ).filter(
         StudentItem.student_id == student_id,
+        StudentItem.status == 'purchased',
+        StudentItem.purchase_transaction_id.is_(None),
         StudentItem.uses_remaining.isnot(None),
         StudentItem.expiry_date.isnot(None),
         StudentItem.expiry_date <= now,
+        StoreItem.is_rent_linked.is_(True),
     )
 
     if join_code:
         expired_query = expired_query.filter(StudentItem.join_code == join_code)
     if teacher_id:
-        expired_query = expired_query.join(
-            StoreItem, StudentItem.store_item_id == StoreItem.id
-        ).filter(StoreItem.teacher_id == teacher_id)
+        expired_query = expired_query.filter(StoreItem.teacher_id == teacher_id)
 
     expired_ids = [row.id for row in expired_query.all()]
     if not expired_ids:
@@ -2577,6 +2580,7 @@ def shop():
     per_period_rent_item_ids = set()
     rent_item_types_by_store_id = {}
     per_use_limit_by_store_id = {}
+    rent_settings = None
 
     if teacher_id and join_code and current_block:
         rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()

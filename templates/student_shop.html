@@ -586,19 +586,19 @@
 
         switch (currentItemData.itemType) {
             case 'immediate':
-                explanation = '<strong>Immediate Use:</strong> This item is used instantly upon purchase. You won\\'t need to redeem it later - it\\'s applied to your account right away.';
+                explanation = '<strong>Immediate Use:</strong> This item is used instantly upon purchase. You won\'t need to redeem it later - it\'s applied to your account right away.';
                 alertClass = 'alert-success';
                 break;
             case 'delayed':
-                explanation = '<strong>Delayed Use:</strong> After purchase, this item will appear in your "My Items" tab. You can redeem it whenever you\\'re ready by clicking "Use Item" and entering your passphrase.';
+                explanation = '<strong>Delayed Use:</strong> After purchase, this item will appear in your "My Items" tab. You can redeem it whenever you\'re ready by clicking "Use Item" and entering your passphrase.';
                 alertClass = 'alert-info';
                 break;
             case 'hall_pass':
-                explanation = '<strong>Hall Pass:</strong> This is a special hall pass item. Upon purchase, it\\'s added to your hall pass balance and can be used during class when you need to leave.';
+                explanation = '<strong>Hall Pass:</strong> This is a special hall pass item. Upon purchase, it\'s added to your hall pass balance and can be used during class when you need to leave.';
                 alertClass = 'alert-warning';
                 break;
             case 'collective':
-                explanation = '<strong>Collective Goal:</strong> This is a class goal! Multiple students must purchase this item before it unlocks for everyone. Your purchase counts toward the goal, and you\\'ll receive the item once enough classmates have also purchased it. Check the progress bar on the item card to see how close you are!';
+                explanation = '<strong>Collective Goal:</strong> This is a class goal! Multiple students must purchase this item before it unlocks for everyone. Your purchase counts toward the goal, and you\'ll receive the item once enough classmates have also purchased it. Check the progress bar on the item card to see how close you are!';
                 alertClass = 'alert-primary';
                 break;
             default:
@@ -686,9 +686,15 @@
         const detailsSource = document.getElementById(detailsId);
         document.getElementById('detailsModalContent').innerHTML = detailsSource ? detailsSource.innerHTML : '<p class="text-muted mb-0">No description available.</p>';
 
-        const purchaseDisabled = trigger.getAttribute('data-is-rent-covered') === 'true' || trigger.disabled;
+        const inventoryValue = trigger.getAttribute('data-inventory');
+        const isOutOfStock = inventoryValue !== 'unlimited' && Number(inventoryValue) <= 0;
+        const purchaseDisabled = trigger.getAttribute('data-is-rent-covered') === 'true' || trigger.disabled || isOutOfStock;
         detailsModalPurchaseBtn.disabled = purchaseDisabled;
-        detailsModalPurchaseBtn.textContent = trigger.disabled ? trigger.textContent.trim() : 'Purchase';
+        if (isOutOfStock) {
+            detailsModalPurchaseBtn.textContent = 'Out of Stock';
+        } else {
+            detailsModalPurchaseBtn.textContent = trigger.disabled ? trigger.textContent.trim() : 'Purchase';
+        }
     });
 
     document.querySelectorAll('.store-item-card').forEach(card => {
