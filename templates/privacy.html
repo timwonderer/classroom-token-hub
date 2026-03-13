@@ -114,6 +114,26 @@
       border-left: 3px solid var(--neutral-500);
     }
 
+    .retention-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0 1.5rem;
+    }
+
+    .retention-table th,
+    .retention-table td {
+      border: 1px solid var(--border-color);
+      padding: 0.85rem;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    .retention-table th {
+      background: var(--neutral-100);
+      color: var(--primary);
+      font-weight: 600;
+    }
+
     .btn-secondary {
       background-color: var(--neutral-500);
       border: none;
@@ -131,7 +151,7 @@
 <body>
   <div class="container">
     <h1>Classroom Token Hub Data Handling and Privacy Policy</h1>
-    <p class="last-updated">Last Updated: February 25, 2026</p>
+    <p class="last-updated">Last Updated: March 13, 2026</p>
 
     <h2>Purpose</h2>
     <p>This document explains the type of data you will provide in order to use this application, ways we handle and
@@ -157,17 +177,13 @@
 
     <div class="student-section">
       <h3>If you are a student user</h3>
-      <p>Your teacher has provided these information on your behalf to create your account:</p>
+      <p>When your teacher created your account, they have given us these information:</p>
       <ul>
-        <li><strong>Date of Birth</strong>: Used once for identity verification during account setup only. The date of
-          birth is stored as a one-way hash and is <strong>permanently deleted from our systems immediately after you
-            complete account setup</strong>. It is not retained afterward.</li>
-        <li><strong>First Name</strong>: For account claim and friendly greetings</li>
-        <li><strong>Last Name</strong>: Stored as a one-way hash for account claim only; <strong>deleted immediately
-            after account setup is complete</strong>. Your last initial (not full last name) is retained for
-          identification purposes.</li>
-        <li><strong>Class Block</strong>: To place you in the correct class</li>
-        <li><strong>Class Identifier</strong>: An easy to understand name for your class</li>
+        <li><strong>Date of Birth</strong>: This is used to help us find you when you claim your account. We converted it into a long string of letters and numbers that cannot be turned back into your date of birth before saving it. After you claim your account, we delete this information.</li>
+        <li><strong>First Name and Last Initial</strong>: We use this to say hello to you and for your teacher to find you.</li>
+        <li><strong>Full Last Name</strong>: We convert this into a long string of letters and numbers that cannot be turned back into your last name before saving it. We use this to help us find you when you claim your account. After you claim your account, we delete this information.</li>
+        <li><strong>Class Block</strong>: We use this to help your teacher organize their classes.</li>
+        <li><strong>Class Identifier</strong>: We use this to show you the name of the class.</li>
       </ul>
 
       <div class="additional-info">
@@ -199,7 +215,7 @@
         to compute base pay and track participation.</li>
       <li><strong>Account Balances</strong>: Checking and savings balances, updated dynamically from transaction
         history.</li>
-      <li><strong>Transaction History</strong>: Detailed records of bonuses, payroll, rent, property tax, insurance
+      <li><strong>Transaction History</strong>: Detailed records of bonuses, payroll, rent, insurance
         premiums, non-sufficient funds fees, and store purchases; required to maintain accurate account states and
         enforce rules.</li>
       <li><strong>Monthly Billing Settings</strong>: Configured recurring charges (rent, taxes, insurance) for each
@@ -207,13 +223,77 @@
     </ul>
 
     <h2>Data Minimization & Retention</h2>
-    <p>We collect only the data necessary to support classroom activities and educational objectives. All personally
-      identifiable information (PII) is either hashed or stored minimalistically. Data is retained only for as long as
-      required by educational standards and district policies, then securely deleted.</p>
-    <p><strong>Post-Claim PII Cleanup:</strong> Verification hashes used solely for the one-time account claim process
-      (date of birth sum and name hash) are <strong>permanently and automatically deleted immediately after a student
-        completes account setup</strong>. These hashes exist only to verify identity during the initial claim and serve
-      no purpose once an account is established. This minimizes the sensitive-data footprint on an ongoing basis.</p>
+    <p>Classroom Token Hub rejects the practice of requesting and storing personally identifiable information (PII) beyond what is needed and longer than necessary. Because of this, we have designed our app to operate with very few PII elements. The list below represents our most recent policy in requesting, using, and retaining your data:</p>
+    <p><strong>Post-Claim PII Cleanup:</strong> During the account claiming process, we use student's first initial, last name by parts, and their date of birth to match the account you created when uploading roster or manualy entered. These information were needed to avoid duplication. After the student has claimed their account, their full last name and date of birth is fully removed from the database.</p>
+     <p><strong>Class Deletion:</strong> When a class is deleted by the teacher, all data associated with that class (connected by join code) immediately gets deleted off our database. Any student account that is not connected to another class will also be deleted. </p>
+    <p><strong>No Classroom-State Backup:</strong> We do not maintain a restorable backup feature for individual classroom economies. If a class is deleted by teacher action or by system inactivity rules, that classroom state is not designed to be restored later.</p>
+    <p><strong>Opaque identity</strong>: Both teacher and student identities are opaque to system administrators in normal operations. We can identify accounts primarily by opaque usernames, class labels, and technical identifiers rather than by student roster data.</p>
+
+    <h3>Operational Retention Schedule</h3>
+    <p>The application also keeps limited operational and security records so we can authenticate users, correlate support tickets, investigate failures, and keep the service stable. The table below describes the current default retention windows and how deletion works.</p>
+
+    <table class="retention-table">
+      <thead>
+        <tr>
+          <th>Data category</th>
+          <th>What we keep</th>
+          <th>Purpose</th>
+          <th>Default retention</th>
+          <th>Deletion logic</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Student claim verification hashes</strong></td>
+          <td>Hashed student date of birth and hashed full last name used during account claim.</td>
+          <td>Prevent duplicate claims and match a student to the pre-created class record.</td>
+          <td>Until the student successfully claims the account.</td>
+          <td>Removed as part of the account-claim completion flow.</td>
+        </tr>
+        <tr>
+          <td><strong>Classroom economy data</strong></td>
+          <td>Class, student, attendance, balances, transactions, store, and billing records needed to run the classroom economy.</td>
+          <td>Operate the educational simulation and preserve classroom state while the class is active.</td>
+          <td>Until the class is deleted by the teacher or removed under inactivity rules.</td>
+          <td>Deleting a class removes records associated with that class; student records that no longer belong to any class are also deleted.</td>
+        </tr>
+        <tr>
+          <td><strong>Request traces</strong></td>
+          <td>Opaque actor identifier, request ID, endpoint, method, status code, join-code context, and timestamp.</td>
+          <td>Correlate support tickets with a recent sequence of requests without exposing classroom content.</td>
+          <td>About 7 days.</td>
+          <td>Automatically pruned by the app during new trace writes; older rows are deleted after the retention window.</td>
+        </tr>
+        <tr>
+          <td><strong>Structured error events</strong></td>
+          <td>Request ID, opaque actor identifier, endpoint, method, error class, error message, join-code context, and timestamp.</td>
+          <td>Attach recent technical failures to support tickets and investigate authenticated user-facing errors.</td>
+          <td>About 14 days.</td>
+          <td>Automatically pruned by the app during trace/error maintenance; older rows are deleted after the retention window.</td>
+        </tr>
+        <tr>
+          <td><strong>Application log files</strong></td>
+          <td>Rotating text logs of application activity and exceptions, including request-scoped identifiers and diagnostic metadata.</td>
+          <td>Debug active issues and monitor service health.</td>
+          <td>Size-bounded rotation only.</td>
+          <td>The app keeps the current log file plus a fixed number of rotated backups; when rotation occurs, the oldest backup is overwritten.</td>
+        </tr>
+        <tr>
+          <td><strong>Error log table</strong></td>
+          <td>Error type, timestamp, request path, request method, IP address, browser user agent, stack trace, and the most recent application log excerpt captured for that error.</td>
+          <td>Support debugging of HTTP errors and server failures from the system admin console.</td>
+          <td>About 90 days.</td>
+          <td>Older rows are automatically purged by the app during ongoing error logging activity.</td>
+        </tr>
+        <tr>
+          <td><strong>Server and service logs</strong></td>
+          <td>Operating-system and service-manager logs for web server, process manager, and observability tooling.</td>
+          <td>Operate the server, troubleshoot outages, and review infrastructure events.</td>
+          <td>About 7 days on the current production server.</td>
+          <td>Automatically rotated and expired by server log retention settings.</td>
+        </tr>
+      </tbody>
+    </table>
 
     <h2>Security Measures</h2>
     <ul>
@@ -232,9 +312,7 @@
       <li><strong>Irreversible Hashes</strong>: All hashing is one-way, meaning that original values cannot be recovered
         from the stored hashes by anyone, including administrators. Any lost username, PIN, passphrases, and TOTP are
         not recoverable.</li>
-      <li><strong>Automatic Post-Claim PII Deletion</strong>: Identity verification hashes (date of birth, name) used
-        only during the one-time account claim process are automatically purged from all records — both the class roster
-        and the student account — immediately after setup is complete, reducing long-term data exposure.</li>
+      
       <li><strong>Timed Confirmation Gates for Destructive Actions</strong>: High-impact operations such as class period
         deletion and account removal require explicit timed in-app confirmation, reducing the risk of accidental or
         unauthorized data loss.</li>
@@ -261,10 +339,9 @@
     <h3>Access & Retention</h3>
     <ul>
       <li>Error logs are accessible only to system administrators for debugging and system improvement purposes.</li>
-      <li>Error logs do not contain student PII such as names, balances, or transaction details—only technical
-        diagnostic information.</li>
-      <li>Logs are retained for a reasonable period to support troubleshooting and are periodically purged in accordance
-        with data retention policies.</li>
+      <li>Error and telemetry records are designed to contain technical diagnostics rather than classroom content such as balances, transaction histories, or full student rosters, but they may include network metadata such as IP address, browser user agent, request path, and opaque account identifiers.</li>
+      <li>Current default retention windows are approximately 7 days for request traces, 14 days for structured error events, 90 days for the database-backed error log table, and rotating size-bounded retention for application log files.</li>
+      <li>Deletion is primarily automated: short-lived telemetry is pruned by the application, rotating log files overwrite their oldest backups, and server-level logs expire under operating-system retention settings.</li>
     </ul>
 
     <h2>Student Rights & Access</h2>
