@@ -25,7 +25,7 @@ from app.extensions import db, limiter
 from app.models import (
     Student, Transaction, TransactionStatus, TapEvent, StoreItem, StoreItemBlock, StudentItem,
     RentSettings, RentPayment, InsurancePolicy, StudentInsurance, InsuranceClaim,
-    BankingSettings, UserReport, FeatureSettings, Issue
+    BankingSettings, UserReport, FeatureSettings, Issue, IssueResolutionAction
 )
 from app.auth import (
     admin_required,
@@ -76,6 +76,34 @@ TRANSFER_SUBMISSION_TOKEN_LIMIT = 5
 
 
 # -------------------- DATETIME HELPERS --------------------
+
+
+def _clear_expired_rent_perk_items(student_id, join_code=None, teacher_id=None, now=None):
+    """Delete expired rent-granted StudentItem rows so stale perks disappear."""
+    if not student_id:
+        return 0
+
+    now = now or utc_now()
+    expired_query = db.session.query(StudentItem.id).filter(
+        StudentItem.student_id == student_id,
+        StudentItem.uses_remaining.isnot(None),
+        StudentItem.expiry_date.isnot(None),
+        StudentItem.expiry_date <= now,
+    )
+
+    if join_code:
+        expired_query = expired_query.filter(StudentItem.join_code == join_code)
+    if teacher_id:
+        expired_query = expired_query.join(
+            StoreItem, StudentItem.store_item_id == StoreItem.id
+        ).filter(StoreItem.teacher_id == teacher_id)
+
+    expired_ids = [row.id for row in expired_query.all()]
+    if not expired_ids:
+        return 0
+
+    deleted = StudentItem.query.filter(StudentItem.id.in_(expired_ids)).delete(synchronize_session=False)
+    return int(deleted or 0)
 
 
 
@@ -1152,6 +1180,14 @@ def dashboard():
     join_code = context['join_code']
     teacher_id = context['teacher_id']
     current_block = context['block']  # Get current class block
+
+    expired_rent_perks_cleared = _clear_expired_rent_perk_items(
+        student.id,
+        join_code=join_code,
+        teacher_id=teacher_id,
+    )
+    if expired_rent_perks_cleared:
+        db.session.commit()
 
     _, _, hall_pass_reconciled = _ensure_rent_hall_pass_top_off(student, context)
     if hall_pass_reconciled:
@@ -2498,6 +2534,14 @@ def shop():
     # Lazily expire collective goals whose deadline has passed, refunding pending purchases.
     process_expired_collective_goals(teacher_id)
 
+    expired_rent_perks_cleared = _clear_expired_rent_perk_items(
+        student.id,
+        join_code=context.get('join_code'),
+        teacher_id=teacher_id,
+    )
+    if expired_rent_perks_cleared:
+        db.session.commit()
+
     current_block = (context.get('block') or '').strip().upper()
 
     now = utc_now()
@@ -2587,9 +2631,11 @@ def shop():
             # Collect store item IDs (only privilege items get the "Included in your rent!" badge)
             per_period_rent_item_ids = {item.store_item_id for item in per_period_items if item.store_item_id}
 
+    rent_perks_active = not (teacher_id and join_code and current_block and rent_settings and rent_settings.is_enabled) or has_paid_rent
+
     # Build free uses remaining map for rent-linked per-use items
     rent_free_uses = {}  # {store_item_id: uses_remaining or -1 for unlimited}
-    if student:
+    if student and rent_perks_active:
         now_utc = utc_now()
         rent_linked_items_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
@@ -4030,16 +4076,29 @@ def help_support():
     # Initialize default categories if they don't exist
     init_default_categories()
 
-    # Get student's issues for current class (last 20)
-    my_issues = Issue.query.filter_by(
+    base_issue_query = Issue.query.filter_by(
         student_id=student.id,
         join_code=class_context['join_code']
-    ).order_by(Issue.submitted_at.desc()).limit(20).all()
+    )
+
+    # Get student's issues for current class (last 20)
+    my_issues = base_issue_query.order_by(Issue.submitted_at.desc()).limit(20).all()
+
+    teacher_decisions = IssueResolutionAction.query.join(
+        Issue, IssueResolutionAction.issue_id == Issue.id
+    ).filter(
+        Issue.student_id == student.id,
+        Issue.teacher_id == class_context['teacher_id'],
+        Issue.join_code == class_context['join_code'],
+        IssueResolutionAction.join_code == class_context['join_code'],
+        IssueResolutionAction.performed_by_type == IssueResolutionAction.PERFORMED_BY_TEACHER,
+    ).order_by(IssueResolutionAction.created_at.desc()).limit(100).all()
 
     return render_template('student_help_support_new.html',
                          current_page='help',
                          page_title='Help & Support',
                          my_issues=my_issues,
+                         teacher_decisions=teacher_decisions,
                          help_content=HELP_ARTICLES['student'],
                          format_utc_iso=format_utc_iso)
 

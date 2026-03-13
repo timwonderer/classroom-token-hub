@@ -33,6 +33,7 @@ from app.routes.student import (
     _calculate_rent_coverage_due_date,
     _is_student_coverage_period_paid,
     _ensure_rent_hall_pass_top_off,
+    _clear_expired_rent_perk_items,
 )
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
@@ -308,6 +309,7 @@ def purchase_item():
     has_per_use_link = False
     legacy_rent_perk_free_fallback = False
 
+    rent_perks_active = True
     if rent_settings and rent_settings.is_enabled:
         coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
         if coverage_due_date:
@@ -339,6 +341,7 @@ def purchase_item():
         legacy_rent_perk_free_fallback = bool(
             has_paid_rent and item.is_rent_linked and not has_privilege_link and not has_per_use_link
         )
+        rent_perks_active = has_paid_rent
 
     # Privilege-only rent items are already included when rent is paid and
     # should not be purchasable.
@@ -431,15 +434,21 @@ def purchase_item():
             )
         ).first()
 
-        if not active_rent_item and not existing_grant_row and has_paid_rent and per_use_rent_item:
+        if not rent_perks_active:
+            active_rent_item = None
+        elif not active_rent_item and not existing_grant_row and has_paid_rent and per_use_rent_item:
             # Missing grant edge case: create current-period grant on demand.
             # This prevents paid-rent students from being charged due to stale data.
+            expiry_date = None
+            _, next_due = _calculate_due_dates(rent_settings, now)
+            if next_due:
+                expiry_date = next_due
             active_rent_item = StudentItem(
                 student_id=student.id,
                 store_item_id=item.id,
                 join_code=join_code,
                 purchase_date=now,
-                expiry_date=None,
+                expiry_date=expiry_date,
                 status='purchased',
                 is_from_bundle=False,
                 quantity_purchased=1,
@@ -867,7 +876,15 @@ def use_item():
 
     # Check expiry
     if student_item.expiry_date and utc_now() > student_item.expiry_date:
-        student_item.status = 'expired'
+        if student_item.uses_remaining is not None:
+            _clear_expired_rent_perk_items(
+                student.id,
+                join_code=student_item.join_code,
+                teacher_id=(student_item.store_item.teacher_id if student_item.store_item else None),
+                now=utc_now(),
+            )
+        else:
+            student_item.status = 'expired'
         db.session.commit()
         return jsonify({"status": "error", "message": "This item has expired."}), 400
 

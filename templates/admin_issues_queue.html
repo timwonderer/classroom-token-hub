@@ -225,41 +225,35 @@
         <!-- Resolved Tab -->
         <div class="tab-pane fade" id="resolved" role="tabpanel">
             {% if resolved_issues %}
-                <div class="list-group">
-                    {% for issue in resolved_issues %}
-                    <a href="{{ url_for('admin.view_issue', issue_ref=issue_ref_for(issue.id)) }}" class="list-group-item list-group-item-action">
-                        <div class="d-flex w-100 justify-content-between align-items-start">
-                            <div class="flex-grow-1">
-                                <div class="d-flex align-items-center mb-2">
-                                    <h6 class="mb-0 me-2">
-                                        <span class="material-symbols-outlined me-1">person</span>
-                                        {{ issue.student_first_name }} {{ issue.student_last_initial }}.
-                                    </h6>
-                                    <span class="badge bg-secondary">{{ issue.category.name }}</span>
-                                    {% if issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}
-                                    <span class="badge bg-info ms-2">Developer Fix Applied - Teacher Review Required</span>
-                                    {% elif issue.teacher_resolution %}
-                                    <span class="badge bg-primary ms-2">{{ issue.teacher_resolution }}</span>
-                                    {% endif %}
-                                </div>
-                                <p class="mb-1 text-muted small">
-                                    {{ issue.student_explanation[:200] }}{% if issue.student_explanation|length > 200 %}...{% endif %}
-                                </p>
-                                <small class="text-muted">
-                                    <span class="material-symbols-outlined me-1">fact_check</span>
-                                    Updated <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.updated_at) }}"></span>
-                                </small>
-                            </div>
-                            <div class="text-end">
-                                {% if issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}
-                                <span class="badge bg-info">Dev Resolved</span>
-                                {% else %}
-                                <span class="badge bg-primary">Teacher Final Review</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </a>
-                    {% endfor %}
+                <div class="card shadow-sm">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 issues-resolved-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Class Identifier</th>
+                                    <th>Issue Type</th>
+                                    <th>Transaction ID</th>
+                                    <th>Date of Resolution</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for issue in resolved_issues %}
+                                <tr>
+                                    <td>
+                                        <a href="{{ url_for('admin.view_issue', issue_ref=issue_ref_for(issue.id)) }}" class="text-decoration-none fw-semibold">
+                                            {{ issue.student_first_name }} {{ issue.student_last_initial }}.
+                                        </a>
+                                    </td>
+                                    <td>{{ issue.class_label or issue.period or '—' }}</td>
+                                    <td>{{ issue.category.name if issue.category else (issue.issue_type|replace('_', ' ')|title if issue.issue_type else '—') }}</td>
+                                    <td>{% if issue.related_transaction_id %}#{{ issue.related_transaction_id }}{% else %}—{% endif %}</td>
+                                    <td><span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.updated_at) }}"></span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             {% else %}
                 <div class="card">
