@@ -4034,12 +4034,14 @@ def help_support():
     # Get student's issues for current class (last 20)
     my_issues = Issue.query.filter_by(
         student_id=student.id,
+        teacher_id=class_context['teacher_id'],
         join_code=class_context['join_code']
     ).order_by(Issue.submitted_at.desc()).limit(20).all()
 
     # Get student's past and in-progress support tickets for current class
     my_tickets = Issue.query.filter_by(
         student_id=student.id,
+        teacher_id=class_context['teacher_id'],
         join_code=class_context['join_code']
     ).order_by(Issue.created_at.desc()).limit(50).all()
 
@@ -4048,6 +4050,7 @@ def help_support():
         Issue, IssueResolutionAction.issue_id == Issue.id
     ).filter(
         Issue.student_id == student.id,
+        Issue.teacher_id == class_context['teacher_id'],
         Issue.join_code == class_context['join_code'],
         IssueResolutionAction.performed_by_type == 'teacher'
     ).order_by(IssueResolutionAction.created_at.desc()).limit(100).all()

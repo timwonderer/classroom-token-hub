@@ -225,6 +225,7 @@
                     {% if teacher_decisions %}
                         <div class="accordion" id="decisionsAccordion">
                             {% for decision in teacher_decisions %}
+                            {% set action_description = decision.action_description or '' %}
                             <div class="accordion-item">
                                 <h2 class="accordion-header" id="headingDecision{{ decision.id }}">
                                     <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDecision{{ decision.id }}" aria-expanded="false" aria-controls="collapseDecision{{ decision.id }}">
@@ -232,7 +233,7 @@
                                             <div>
                                                 <strong>{{ decision.action_type | replace('_', ' ') | title }}</strong>
                                                 <div class="small text-muted">
-                                                    {{ decision.action_description[:50] }}{% if decision.action_description|length > 50 %}...{% endif %}
+                                                    {{ action_description[:50] }}{% if action_description|length > 50 %}...{% endif %}
                                                 </div>
                                             </div>
                                             <div class="text-muted small text-end">
@@ -249,7 +250,7 @@
                                         </div>
                                         <div class="mb-3">
                                             <strong>Summary:</strong><br>
-                                            {{ decision.action_description }}
+                                            {{ action_description or '(no summary provided)' }}
                                         </div>
                                         {% if decision.amount_changed is not none %}
                                         <div class="mb-3">

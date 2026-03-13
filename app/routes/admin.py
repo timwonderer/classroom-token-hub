@@ -10839,7 +10839,6 @@ def issues_queue():
     closed_issues = issues_query.filter(
         Issue.status.in_([
             Issue.STATUS_CLOSED,
-            'closed',
         ])
     ).order_by(Issue.closed_at.desc()).limit(50).all()
 

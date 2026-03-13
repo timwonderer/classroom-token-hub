@@ -347,9 +347,13 @@
                             </div>
                             <div class="text-end ms-3" style="min-width: 150px;">
                                 <small class="text-muted d-block mb-1">Resolved</small>
+                                {% if issue.closed_at %}
                                 <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.closed_at) }}"
                                       data-format="MMM D, h:mm A">
                                 </span>
+                                {% else %}
+                                <span class="text-muted">N/A</span>
+                                {% endif %}
                             </div>
                         </div>
                     </a>
