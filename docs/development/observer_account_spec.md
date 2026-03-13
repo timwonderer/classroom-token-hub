@@ -235,7 +235,7 @@ Observers cannot:
 Authorization is constrained by:
 
 - teacher approval
-- 7 day expiration
+- 7-day expiration
 - class scope
 
 ---
@@ -293,4 +293,3 @@ Observer accounts will never provide access to:
 CTH is not intended to become district administrative software.
 
 Observer accounts exist only to support hallway monitoring.
-

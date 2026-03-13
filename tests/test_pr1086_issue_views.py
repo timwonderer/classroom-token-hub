@@ -125,15 +125,31 @@ def test_student_help_support_scopes_tickets_to_current_teacher(client):
 
 def test_admin_issue_queue_shows_only_canonical_closed_issues(client):
     teacher = Admin(username="admin_pr1086", totp_secret="secret")
-    db.session.add(teacher)
+    canonical_student = Student(
+        first_name="Jordan",
+        last_initial="R",
+        block="A",
+        salt=get_random_salt(),
+        first_half_hash="student-pr1086-admin-1",
+        dob_sum=2025,
+    )
+    legacy_student = Student(
+        first_name="Taylor",
+        last_initial="S",
+        block="A",
+        salt=get_random_salt(),
+        first_half_hash="student-pr1086-admin-2",
+        dob_sum=2026,
+    )
+    db.session.add_all([teacher, canonical_student, legacy_student])
     db.session.flush()
 
     category = _issue_category()
 
     canonical_closed = Issue(
-        student_id=1,
-        student_first_name="Jordan",
-        student_last_initial="R",
+        student_id=canonical_student.id,
+        student_first_name=canonical_student.first_name,
+        student_last_initial=canonical_student.last_initial,
         opaque_student_reference="opaque-admin-pr1086-1",
         teacher_id=teacher.id,
         join_code="PR1086A",
@@ -145,9 +161,9 @@ def test_admin_issue_queue_shows_only_canonical_closed_issues(client):
         closed_at=None,
     )
     legacy_closed = Issue(
-        student_id=2,
-        student_first_name="Taylor",
-        student_last_initial="S",
+        student_id=legacy_student.id,
+        student_first_name=legacy_student.first_name,
+        student_last_initial=legacy_student.last_initial,
         opaque_student_reference="opaque-admin-pr1086-2",
         teacher_id=teacher.id,
         join_code="PR1086A",

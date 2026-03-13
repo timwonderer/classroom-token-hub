@@ -179,7 +179,7 @@
                                                 {% endif %}
                                             </h6>
                                             <span class="badge {{ ticket.get_student_status_badge_class() }}">
-                                                {{ ticket.get_student_visible_status() if ticket.get_student_visible_status else ticket.status }}
+                                                {{ ticket.get_student_visible_status() }}
                                             </span>
                                         </div>
                                         <p class="mb-1 mt-2 small">
@@ -298,19 +298,12 @@
                                                 <span class="badge bg-secondary">Transaction #{{ issue.related_transaction_id }}</span>
                                                 {% endif %}
                                             </h6>
-                                            <span class="badge
-                                                {% if issue.status in ['OPEN', 'submitted'] %}bg-primary
-                                                {% elif issue.status in ['TEACHER_REVIEW', 'teacher_review'] %}bg-info
-                                                {% elif issue.status in ['TEACHER_FINAL_REVIEW', 'teacher_resolved'] %}bg-primary
-                                                {% elif issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}bg-warning text-dark
-                                                {% elif issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}bg-info
-                                                {% elif issue.status == 'CLOSED' %}bg-success
-                                                {% else %}bg-secondary{% endif %}">
+                                            <span class="badge {{ issue.get_student_status_badge_class() }}">
                                                 {{ issue.get_student_visible_status() }}
                                             </span>
                                         </div>
                                         <p class="mb-1 mt-2 small">
-                                            {{ issue.student_explanation[:150] }}{% if issue.student_explanation|length > 150 %}...{% endif %}
+                                            {{ issue.student_explanation | truncate(150, True, '...') }}
                                         </p>
                                         <small class="text-muted">
                                             Submitted
@@ -337,14 +330,4 @@
         </div>
     </div>
 </div>
-
-<style>
-.hover-shadow {
-    transition: box-shadow 0.3s ease-in-out;
-}
-
-.hover-shadow:hover {
-    box-shadow: 0 0.5rem 1rem color-mix(in srgb, black 15%, transparent) !important;
-}
-</style>
 {% endblock %}

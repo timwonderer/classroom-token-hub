@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app, has_app_context
 from sqlalchemy import or_, func, select, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from sqlalchemy.orm import selectinload
 from werkzeug.security import generate_password_hash, check_password_hash
 import pytz
 from dateutil.relativedelta import relativedelta
@@ -4031,19 +4032,17 @@ def help_support():
     # Initialize default categories if they don't exist
     init_default_categories()
 
-    # Get student's issues for current class (last 20)
-    my_issues = Issue.query.filter_by(
+    base_issue_query = Issue.query.options(selectinload(Issue.category)).filter_by(
         student_id=student.id,
         teacher_id=class_context['teacher_id'],
         join_code=class_context['join_code']
-    ).order_by(Issue.submitted_at.desc()).limit(20).all()
+    )
+
+    # Get student's issues for current class (last 20)
+    my_issues = base_issue_query.order_by(Issue.submitted_at.desc()).limit(20).all()
 
     # Get student's past and in-progress support tickets for current class
-    my_tickets = Issue.query.filter_by(
-        student_id=student.id,
-        teacher_id=class_context['teacher_id'],
-        join_code=class_context['join_code']
-    ).order_by(Issue.created_at.desc()).limit(50).all()
+    my_tickets = base_issue_query.order_by(Issue.created_at.desc()).limit(50).all()
 
     # Get teacher decisions (IssueResolutionAction) for this student in current class
     teacher_decisions = IssueResolutionAction.query.join(
@@ -4052,6 +4051,7 @@ def help_support():
         Issue.student_id == student.id,
         Issue.teacher_id == class_context['teacher_id'],
         Issue.join_code == class_context['join_code'],
+        IssueResolutionAction.join_code == class_context['join_code'],
         IssueResolutionAction.performed_by_type == IssueResolutionAction.PERFORMED_BY_TEACHER
     ).order_by(IssueResolutionAction.created_at.desc()).limit(100).all()
 

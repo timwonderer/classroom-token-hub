@@ -70,7 +70,7 @@ If a student loses class membership, the log disappears with the class.
 
 ## Navigation
 
-Placed within "help and Support" as a tab
+Placed within "Help & Support" as a tab
 
 
 ---
@@ -280,7 +280,7 @@ Teacher decisions are expected to be **low-frequency events**, so performance im
 
 Feature is complete when:
 
-- The feature exist as tab in help and support
+- The feature exists as a tab in Help & Support
 - Events appear in chronological order
 - Only teacher-initiated state mutations appear
 - Financial/system events do not appear
@@ -288,4 +288,3 @@ Feature is complete when:
 - Students cannot edit or delete entries
 
 ---
-
