@@ -179,42 +179,35 @@
         <!-- Pending Tab -->
         <div class="tab-pane fade show active" id="pending" role="tabpanel">
             {% if pending_issues %}
-                <div class="list-group">
-                    {% for issue in pending_issues %}
-                    <a href="{{ url_for('admin.view_issue', issue_ref=issue_ref_for(issue.id)) }}" class="list-group-item list-group-item-action">
-                        <div class="d-flex w-100 justify-content-between align-items-start">
-                            <div class="flex-grow-1">
-                                <div class="d-flex align-items-center mb-2">
-                                    <h6 class="mb-0 me-2">
-                                        <span class="material-symbols-outlined me-1">person</span>
-                                        {{ issue.student_first_name }} {{ issue.student_last_initial }}.
-                                    </h6>
-                                    <span class="badge bg-secondary">{{ issue.category.name }}</span>
-                                    {% if issue.related_transaction_id %}
-                                    <span class="badge bg-info ms-2">
-                                        <span class="material-symbols-outlined me-1">receipt_long</span>Transaction #{{ issue.related_transaction_id }}
-                                    </span>
-                                    {% endif %}
-                                </div>
-                                <p class="mb-1 text-muted small">
-                                    {{ issue.student_explanation[:200] }}{% if issue.student_explanation|length > 200 %}...{% endif %}
-                                </p>
-                                <small class="text-muted">
-                                    <span class="material-symbols-outlined me-1">schedule</span>
-                                    Submitted <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.submitted_at) }}"></span>
-                                    {% if issue.class_label %}
-                                    | <span class="material-symbols-outlined me-1">door_front</span>{{ issue.class_label }}
-                                    {% endif %}
-                                </small>
-                            </div>
-                            <div class="text-end">
-                                <span class="badge bg-secondary text-dark">
-                                    {{ issue.status|replace('_', ' ')|title }}
-                                </span>
-                            </div>
-                        </div>
-                    </a>
-                    {% endfor %}
+                <div class="card shadow-sm">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 issues-resolved-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Class Identifier</th>
+                                    <th>Issue Type</th>
+                                    <th>Transaction ID</th>
+                                    <th>Date Submitted</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for issue in pending_issues %}
+                                <tr>
+                                    <td>
+                                        <a href="{{ url_for('admin.view_issue', issue_ref=issue_ref_for(issue.id)) }}" class="text-decoration-none fw-semibold">
+                                            {{ issue.student_first_name }} {{ issue.student_last_initial }}.
+                                        </a>
+                                    </td>
+                                    <td>{{ issue.class_label or issue.period or '—' }}</td>
+                                    <td>{{ issue.category.name if issue.category else '—' }}</td>
+                                    <td>{% if issue.related_transaction_id %}#{{ issue.related_transaction_id }}{% else %}—{% endif %}</td>
+                                    <td><span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.submitted_at) }}"></span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             {% else %}
                 <div class="card">
@@ -274,37 +267,35 @@
         <!-- Escalated Tab -->
         <div class="tab-pane fade" id="escalated" role="tabpanel">
             {% if escalated_issues %}
-                <div class="list-group">
-                    {% for issue in escalated_issues %}
-                    <a href="{{ url_for('admin.view_issue', issue_ref=issue_ref_for(issue.id)) }}" class="list-group-item list-group-item-action">
-                        <div class="d-flex w-100 justify-content-between align-items-start">
-                            <div class="flex-grow-1">
-                                <div class="d-flex align-items-center mb-2">
-                                    <h6 class="mb-0 me-2">
-                                        <span class="material-symbols-outlined me-1">person</span>
-                                        {{ issue.student_first_name }} {{ issue.student_last_initial }}.
-                                    </h6>
-                                    <span class="badge bg-secondary">{{ issue.category.name }}</span>
-                                </div>
-                                <p class="mb-1 text-muted small">
-                                    <strong>Escalation Reason:</strong> {{ issue.escalation_reason }}
-                                </p>
-                                <small class="text-muted">
-                                    <span class="material-symbols-outlined me-1">arrow_circle_up</span>
-                                    Escalated <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span>
-                                </small>
-                            </div>
-                            <div class="text-end">
-                                <span class="badge
-                                    {% if issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}bg-warning text-dark
-                                    {% elif issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}bg-info
-                                    {% else %}bg-secondary{% endif %}">
-                                    {{ issue.status|replace('_', ' ')|title }}
-                                </span>
-                            </div>
-                        </div>
-                    </a>
-                    {% endfor %}
+                <div class="card shadow-sm">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 issues-resolved-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Class Identifier</th>
+                                    <th>Issue Type</th>
+                                    <th>Transaction ID</th>
+                                    <th>Date Escalated</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for issue in escalated_issues %}
+                                <tr>
+                                    <td>
+                                        <a href="{{ url_for('admin.view_issue', issue_ref=issue_ref_for(issue.id)) }}" class="text-decoration-none fw-semibold">
+                                            {{ issue.student_first_name }} {{ issue.student_last_initial }}.
+                                        </a>
+                                    </td>
+                                    <td>{{ issue.class_label or issue.period or '—' }}</td>
+                                    <td>{{ issue.category.name if issue.category else '—' }}</td>
+                                    <td>{% if issue.related_transaction_id %}#{{ issue.related_transaction_id }}{% else %}—{% endif %}</td>
+                                    <td><span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             {% else %}
                 <div class="card">
@@ -319,39 +310,41 @@
 
         <div class="tab-pane fade" id="closed" role="tabpanel">
             {% if closed_issues %}
-                <div class="list-group">
-                    {% for issue in closed_issues %}
-                    <a href="{{ url_for('admin.view_issue', issue_ref=issue_ref_for(issue.id)) }}" class="list-group-item list-group-item-action">
-                        <div class="d-flex w-100 justify-content-between align-items-start">
-                            <div class="flex-grow-1">
-                                <div class="d-flex align-items-center mb-2">
-                                    <h5 class="mb-0 me-2">{{ issue.student_first_name }} {{ issue.student_last_initial }}.</h5>
-                                    <span class="badge bg-secondary me-2">{{ issue.class_label or 'Unknown Class' }}</span>
-                                    <span class="badge bg-success">Resolved</span>
-                                </div>
-                                <div class="mb-2">
-                                    <strong>{{ issue.category.name if issue.category else 'General Issue' }}</strong>
-                                    {% if issue.related_transaction_id %}
-                                    <span class="badge bg-secondary ms-2">Transaction #{{ issue.related_transaction_id }}</span>
-                                    {% endif %}
-                                </div>
-                                <p class="issue-explanation-truncate mb-1 text-muted text-truncate">
-                                    {{ issue.student_explanation or '' }}
-                                </p>
-                            </div>
-                            <div class="issue-resolved-meta text-end ms-3">
-                                <small class="text-muted d-block mb-1">Resolved</small>
-                                {% if issue.closed_at %}
-                                <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.closed_at) }}"
-                                      data-format="MMM D, h:mm A">
-                                </span>
-                                {% else %}
-                                <span class="text-muted">N/A</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </a>
-                    {% endfor %}
+                <div class="card shadow-sm">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 issues-resolved-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Class Identifier</th>
+                                    <th>Issue Type</th>
+                                    <th>Transaction ID</th>
+                                    <th>Date of Resolution</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for issue in closed_issues %}
+                                <tr>
+                                    <td>
+                                        <a href="{{ url_for('admin.view_issue', issue_ref=issue_ref_for(issue.id)) }}" class="text-decoration-none fw-semibold">
+                                            {{ issue.student_first_name }} {{ issue.student_last_initial }}.
+                                        </a>
+                                    </td>
+                                    <td>{{ issue.class_label or issue.period or '—' }}</td>
+                                    <td>{{ issue.category.name if issue.category else '—' }}</td>
+                                    <td>{% if issue.related_transaction_id %}#{{ issue.related_transaction_id }}{% else %}—{% endif %}</td>
+                                    <td>
+                                        {% if issue.closed_at %}
+                                        <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.closed_at) }}"></span>
+                                        {% else %}
+                                        —
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             {% else %}
                 <div class="card">
