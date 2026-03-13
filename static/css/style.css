@@ -410,10 +410,15 @@ a:hover {
 /* ─── Badges & Alerts ─── */
 .badge {
     border-radius: var(--radius-pill);
-    padding: 0.35em 0.75em;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28em 0.72em;
     font-weight: 600;
-    font-size: 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.1;
     letter-spacing: 0.02em;
+    vertical-align: middle;
 }
 
 /* Solid Badges with Border — scoped to .badge only */
@@ -439,6 +444,96 @@ a:hover {
 
 .badge.bg-secondary {
     border: 1px solid color-mix(in srgb, var(--secondary) 80%, black);
+}
+
+.store-item-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.store-item-card {
+    min-height: 15rem;
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.store-item-card:hover,
+.store-item-card:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.08);
+}
+
+.store-item-card .card-body {
+    min-height: 100%;
+}
+
+.store-item-spacer {
+    flex: 1 1 auto;
+    min-height: 1.5rem;
+}
+
+.store-item-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+}
+
+.store-item-price {
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--primary);
+}
+
+.store-item-price-original {
+    margin-left: 0.45rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-decoration: line-through;
+}
+
+.store-rent-perk-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.65rem;
+    border-radius: 0.45rem;
+    background-color: var(--primary);
+    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.1;
+}
+
+.store-rent-perk-chip .material-symbols-outlined,
+.store-item-type-icon .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+.store-item-type-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+}
+
+.store-item-attribute-icons {
+    min-height: 1.25rem;
+}
+
+.store-item-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+
+.issues-resolved-table th,
+.issues-resolved-table td {
+    vertical-align: middle;
+    font-size: 0.95rem;
 }
 
 .alert {

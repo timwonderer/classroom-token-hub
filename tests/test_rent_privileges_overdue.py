@@ -101,7 +101,7 @@ def test_overdue_rent_payment_restores_privileges(client):
 
     response = client.get("/student/shop")
     assert response.status_code == 200
-    assert b"Included in your rent!" not in response.data
+    assert b'data-is-rent-covered="true"' not in response.data
 
     coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
     assert coverage_due_date is not None
@@ -138,7 +138,7 @@ def test_overdue_rent_payment_restores_privileges(client):
 
     response = client.get("/student/shop")
     assert response.status_code == 200
-    assert b"Included in your rent!" in response.data
+    assert b'data-is-rent-covered="true"' in response.data
 
 
 def test_voided_payment_does_not_restore_privileges(client):
@@ -258,7 +258,7 @@ def test_voided_payment_does_not_restore_privileges(client):
 
     response = client.get("/student/shop")
     assert response.status_code == 200
-    assert b"Included in your rent!" not in response.data
+    assert b'data-is-rent-covered="true"' not in response.data
 
     valid_tx = Transaction(
         student_id=student.id,
@@ -288,7 +288,7 @@ def test_voided_payment_does_not_restore_privileges(client):
 
     response = client.get("/student/shop")
     assert response.status_code == 200
-    assert b"Included in your rent!" in response.data
+    assert b'data-is-rent-covered="true"' in response.data
 
 
 def test_overdue_rent_payment_with_timestamp_drift_restores_privileges(client):
@@ -405,4 +405,4 @@ def test_overdue_rent_payment_with_timestamp_drift_restores_privileges(client):
 
     response = client.get("/student/shop")
     assert response.status_code == 200
-    assert b"Included in your rent!" in response.data
+    assert b'data-is-rent-covered="true"' in response.data

@@ -18,6 +18,7 @@ from app.utils.time import utc_now
 CORRELATION_VERSION = 1
 DEFAULT_TRACE_LIMIT = 20
 DEFAULT_TRACE_TTL_DAYS = 7
+DEFAULT_ERROR_EVENT_TTL_DAYS = 14
 DEFAULT_ERROR_WINDOW_HOURS = 2
 DEFAULT_RECENT_ERROR_MINUTES = 15
 DEFAULT_TRACE_FETCH_MULTIPLIER = 4
@@ -132,8 +133,10 @@ def persist_request_trace(
 
     trace_limit = _int_env("TLCP_TRACE_LIMIT", DEFAULT_TRACE_LIMIT)
     ttl_days = _int_env("TLCP_TRACE_TTL_DAYS", DEFAULT_TRACE_TTL_DAYS)
+    error_event_ttl_days = _int_env("TLCP_ERROR_EVENT_TTL_DAYS", DEFAULT_ERROR_EVENT_TTL_DAYS)
     now = utc_now()
     ttl_cutoff = now - timedelta(days=ttl_days)
+    error_event_ttl_cutoff = now - timedelta(days=error_event_ttl_days)
 
     request_id = request_id or uuid.uuid4().hex
 
@@ -174,7 +177,7 @@ def persist_request_trace(
         ).delete(synchronize_session=False)
 
         sess.query(ErrorEvent).filter(
-            ErrorEvent.created_at < ttl_cutoff
+            ErrorEvent.created_at < error_event_ttl_cutoff
         ).delete(synchronize_session=False)
 
 
@@ -240,7 +243,7 @@ def create_ticket_correlation_pack(
 ) -> TicketCorrelationPack:
     """Create immutable correlation snapshot for a ticket."""
     trace_limit = _int_env("TLCP_TRACE_LIMIT", DEFAULT_TRACE_LIMIT)
-    ttl_days = _int_env("TLCP_TRACE_TTL_DAYS", DEFAULT_TRACE_TTL_DAYS)
+    error_event_ttl_days = _int_env("TLCP_ERROR_EVENT_TTL_DAYS", DEFAULT_ERROR_EVENT_TTL_DAYS)
     error_window_hours = _int_env("TLCP_ERROR_WINDOW_HOURS", DEFAULT_ERROR_WINDOW_HOURS)
 
     fetch_limit = trace_limit * _int_env("TLCP_TRACE_FETCH_MULTIPLIER", DEFAULT_TRACE_FETCH_MULTIPLIER)
@@ -283,7 +286,7 @@ def create_ticket_correlation_pack(
     error_rows = errors_query.limit(trace_limit).all() if include_recent_error else []
 
     if include_recent_error and not error_rows:
-        ttl_cutoff = ticket_created_at - timedelta(days=ttl_days)
+        ttl_cutoff = ticket_created_at - timedelta(days=error_event_ttl_days)
         latest_error = (
             ErrorEvent.query.filter(
                 ErrorEvent.actor_type == actor_type,

@@ -1,7 +1,7 @@
 import pytest
 import re
 from decimal import Decimal
-from app.models import RentItem, RentSettings, RentPayment, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher
+from app.models import RentItem, RentSettings, RentPayment, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher, RedemptionAuditAction, RedemptionAuditLog, RedemptionAuditSource
 from app.extensions import db
 from datetime import datetime, timezone, timedelta
 
@@ -1016,6 +1016,281 @@ def test_per_use_free_purchase_without_precreated_grant_when_rent_paid(client, t
     db.session.refresh(student)
     assert student.checking_balance == starting_balance
 
+    created_grant = StudentItem.query.filter(
+        StudentItem.student_id == student.id,
+        StudentItem.store_item_id == store_item.id,
+        StudentItem.join_code == 'JOINCODE123',
+        StudentItem.uses_remaining.isnot(None),
+    ).order_by(StudentItem.id.asc()).first()
+    assert created_grant is not None
+    assert created_grant.expiry_date is not None
+
+
+def test_shop_hides_stale_rent_perk_when_current_period_is_unpaid(client, teacher_admin, student_in_class, monkeypatch):
+    """Overdue students should not see stale rent-granted uses as active perks."""
+    student = student_in_class
+
+    fixed_now = datetime.now(timezone.utc).replace(microsecond=0)
+    monkeypatch.setattr('app.routes.student.utc_now', lambda: fixed_now)
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=fixed_now - timedelta(days=40),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Overdue Pencil',
+        price=Decimal('7.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    db.session.add(RentItem(
+        rent_setting_id=settings.id,
+        name='Overdue Pencil',
+        rent_item_type='per_use',
+        is_available_in_store=True,
+        store_price=Decimal('7.00'),
+        purchase_duration='per_use',
+        use_limit=2,
+        store_item_id=store_item.id,
+    ))
+    db.session.add(StudentItem(
+        student_id=student.id,
+        store_item_id=store_item.id,
+        status='purchased',
+        uses_remaining=2,
+        purchase_date=fixed_now - timedelta(days=30),
+        expiry_date=None,
+        join_code='JOINCODE123',
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = fixed_now.isoformat()
+
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    assert b'Rent Perk price: $0.00' not in resp.data
+    assert b'$7.00' in resp.data
+
+
+def test_shop_deletes_expired_rent_perk_student_item(client, teacher_admin, student_in_class):
+    """Expired rent-granted StudentItem rows should be purged from inventory on shop load."""
+    student = student_in_class
+
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Expired Rent Pencil',
+        price=Decimal('7.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    expired_grant = StudentItem(
+        student_id=student.id,
+        store_item_id=store_item.id,
+        status='purchased',
+        uses_remaining=2,
+        purchase_date=datetime.now(timezone.utc) - timedelta(days=10),
+        expiry_date=datetime.now(timezone.utc) - timedelta(days=1),
+        join_code='JOINCODE123',
+    )
+    db.session.add(expired_grant)
+    db.session.commit()
+    expired_id = expired_grant.id
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    assert db.session.get(StudentItem, expired_id) is None
+
+
+def test_shop_keeps_processing_expired_rent_perk_student_item(client, teacher_admin, student_in_class):
+    """Expired processing rows must remain for teacher review instead of being purged as stale perks."""
+    student = student_in_class
+
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Processing Rent Pencil',
+        price=Decimal('7.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    processing_item = StudentItem(
+        student_id=student.id,
+        store_item_id=store_item.id,
+        status='processing',
+        uses_remaining=0,
+        purchase_date=datetime.now(timezone.utc) - timedelta(days=10),
+        expiry_date=datetime.now(timezone.utc) - timedelta(days=1),
+        join_code='JOINCODE123',
+    )
+    db.session.add(processing_item)
+    db.session.flush()
+
+    db.session.add(RedemptionAuditLog(
+        student_item_id=processing_item.id,
+        student_display_name='Test S.',
+        class_display_label='A',
+        action=RedemptionAuditAction.REQUEST,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        source=RedemptionAuditSource.LIVE,
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    assert db.session.get(StudentItem, processing_item.id) is not None
+    assert RedemptionAuditLog.query.filter_by(student_item_id=processing_item.id).count() == 1
+
+
+def test_shop_does_not_delete_expired_non_rent_multi_use_item(client, teacher_admin, student_in_class):
+    """Cleanup should be scoped to rent-granted perks, not every expired multi-use row."""
+    student = student_in_class
+
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Reusable Non-Rent Item',
+        price=Decimal('7.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=False,
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    non_rent_item = StudentItem(
+        student_id=student.id,
+        store_item_id=store_item.id,
+        status='purchased',
+        uses_remaining=2,
+        purchase_date=datetime.now(timezone.utc) - timedelta(days=10),
+        expiry_date=datetime.now(timezone.utc) - timedelta(days=1),
+        join_code='JOINCODE123',
+    )
+    db.session.add(non_rent_item)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    assert db.session.get(StudentItem, non_rent_item.id) is not None
+
+
+def test_per_use_stale_rent_grant_does_not_apply_when_current_period_is_unpaid(client, teacher_admin, student_in_class, monkeypatch):
+    """Stale rent-granted uses must not authorize $0 purchases once the current period is unpaid."""
+    student = student_in_class
+    from werkzeug.security import generate_password_hash
+    student.passphrase_hash = generate_password_hash('password')
+
+    fixed_now = datetime.now(timezone.utc).replace(microsecond=0)
+    monkeypatch.setattr('app.routes.api.utc_now', lambda: fixed_now)
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=fixed_now - timedelta(days=40),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Overdue Snack',
+        price=Decimal('5.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    db.session.add(RentItem(
+        rent_setting_id=settings.id,
+        name='Overdue Snack',
+        rent_item_type='per_use',
+        is_available_in_store=True,
+        store_price=Decimal('5.00'),
+        purchase_duration='per_use',
+        use_limit=2,
+        store_item_id=store_item.id,
+    ))
+    stale_grant = StudentItem(
+        student_id=student.id,
+        store_item_id=store_item.id,
+        status='purchased',
+        uses_remaining=2,
+        purchase_date=fixed_now - timedelta(days=30),
+        expiry_date=None,
+        join_code='JOINCODE123',
+    )
+    db.session.add(stale_grant)
+    db.session.add(Transaction(
+        student_id=student.id,
+        amount=Decimal('100.00'),
+        account_type='checking',
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123'
+    ))
+    db.session.commit()
+
+    starting_balance = student.checking_balance
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = fixed_now.isoformat()
+
+    resp = client.post('/api/purchase-item', json={'item_id': store_item.id, 'passphrase': 'password', 'quantity': 1})
+    assert resp.status_code == 200
+    assert 'rent perk' not in resp.json['message'].lower()
+
+    db.session.refresh(student)
+    db.session.refresh(stale_grant)
+    assert student.checking_balance == starting_balance - Decimal('5.00')
+    assert stale_grant.uses_remaining == 2
+
 
 def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin, student_in_class):
     """When rent is paid, privilege items are included/disabled but per-use items remain purchasable."""
@@ -1111,7 +1386,7 @@ def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin
     assert resp.status_code == 200
     html = resp.data.decode('utf-8')
     privilege_button = re.search(
-        rf'data-item-id="{privilege_store_item.id}"[^>]*>',
+        rf'<button[^>]*class="btn btn-primary w-100 store-item-purchase-btn"[^>]*data-item-id="{privilege_store_item.id}"[^>]*>',
         html,
         re.DOTALL
     )
@@ -1119,7 +1394,7 @@ def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin
     assert 'disabled' in privilege_button.group(0)
 
     per_use_button = re.search(
-        rf'data-item-id="{per_use_store_item.id}"[^>]*>',
+        rf'<button[^>]*class="btn btn-primary w-100 store-item-purchase-btn"[^>]*data-item-id="{per_use_store_item.id}"[^>]*>',
         html,
         re.DOTALL
     )
@@ -1291,7 +1566,9 @@ def test_shop_treats_legacy_privilege_with_per_use_duration_as_per_use(client, t
     button = re.search(rf'data-item-id="{store_item.id}"[^>]*>', html, re.DOTALL)
     assert button is not None
     assert 'disabled' not in button.group(0)
-    assert 'Rent Perk price: $0.00' in html
+    assert '$0.00' in html
+    assert 'Included in Rent' in html
+    assert 'Rent Perk price: $0.00' not in html
 
 
 def test_api_allows_zero_cost_rent_linked_purchase_when_paid_without_per_use_mapping(client, teacher_admin, student_in_class):
@@ -1546,8 +1823,10 @@ def test_shop_displays_rent_perk_price_as_free(client, teacher_admin, student_in
 
     resp = client.get('/student/shop')
     assert resp.status_code == 200
-    assert b'Rent Perk price: $0.00' in resp.data
-    assert b'Regular: $7.00' in resp.data
+    assert b'$0.00' in resp.data
+    assert b'Included in Rent' in resp.data
+    assert b'Rent Perk price: $0.00' not in resp.data
+    assert b'Unlimited free uses' not in resp.data
 
 
 def test_shop_displays_rent_perk_price_as_free_when_rent_paid_without_grant_row(client, teacher_admin, student_in_class):
@@ -1620,7 +1899,9 @@ def test_shop_displays_rent_perk_price_as_free_when_rent_paid_without_grant_row(
     resp = client.get('/student/shop')
     assert resp.status_code == 200
     assert b'Paid Rent Pencil' in resp.data
-    assert b'Rent Perk price: $0.00' in resp.data
+    assert b'$0.00' in resp.data
+    assert b'Included in Rent' in resp.data
+    assert b'Rent Perk price: $0.00' not in resp.data
 
 
 def test_admin_store_hides_delete_button_for_rent_linked_items(client, teacher_admin):

@@ -38,125 +38,91 @@
             {% set has_legacy_rent_free_purchase = (not is_hall_pass_item) and has_paid_rent and item.is_rent_linked and not is_rent_covered and not has_rent_free_purchase %}
             {% set has_any_rent_free_purchase = has_rent_free_purchase or has_legacy_rent_free_purchase %}
             <div class="col">
-                <div class="card h-100 {% if item.is_bundle or item.bulk_discount_enabled %}border-primary{% endif %} {% if is_rent_covered %}opacity-50{% endif %}">
+                <div class="card h-100 store-item-card {% if item.is_bundle or item.bulk_discount_enabled %}border-primary{% endif %} {% if is_rent_covered %}opacity-50{% endif %}"
+                     role="button"
+                     tabindex="0"
+                     data-bs-toggle="modal"
+                     data-bs-target="#storeItemDetailsModal"
+                     data-item-id="{{ item.id }}"
+                     data-item-name="{{ item.name }}"
+                     data-item-price="{{ '0.00' if has_any_rent_free_purchase or is_rent_covered else '%.2f'|format(item.price) }}"
+                     data-item-regular-price="{{ "%.2f"|format(item.price) }}"
+                     data-has-rent-free-purchase="{{ 'true' if has_any_rent_free_purchase or is_rent_covered else 'false' }}"
+                     data-item-type="{{ item.item_type }}"
+                     data-is-bundle="{{ 'true' if item.is_bundle else 'false' }}"
+                     data-bundle-quantity="{{ item.bundle_quantity if item.is_bundle else 0 }}"
+                     data-bulk-discount-enabled="{{ 'true' if item.bulk_discount_enabled else 'false' }}"
+                     data-bulk-discount-quantity="{{ item.bulk_discount_quantity if item.bulk_discount_enabled else 0 }}"
+                     data-bulk-discount-percentage="{{ item.bulk_discount_percentage if item.bulk_discount_enabled else 0 }}"
+                     data-inventory="{{ item.inventory if item.inventory is not none else 'unlimited' }}"
+                     data-is-rent-covered="{{ 'true' if is_rent_covered else 'false' }}"
+                     data-details-id="store-item-details-{{ item.id }}">
                     <div class="card-body d-flex flex-column">
                         <h5 class="card-title">{{ item.name }}</h5>
-                        {% if is_rent_covered %}
-                        <div class="alert alert-success alert-sm mb-2 py-1 px-2">
-                            <small><strong><span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">check_circle</span> Included in your rent!</strong></small>
-                        </div>
-                        {% elif is_rent_perk_item %}
-                        <div class="mb-2">
-                            <span class="badge bg-info"><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">card_membership</span> Rent Perk</span>
-                            {% if has_any_rent_free_purchase %}
-                            {% if rent_free_uses_remaining == -1 %}
-                            <span class="badge bg-success">Unlimited free uses</span>
-                            {% elif has_legacy_rent_free_purchase %}
-                            <span class="badge bg-success">Free with paid rent</span>
-                            {% else %}
-                            <span class="badge bg-success">{{ rent_free_uses_remaining }} free use{{ 's' if rent_free_uses_remaining != 1 else '' }} remaining</span>
-                            {% endif %}
-                            {% endif %}
-                        </div>
-                        {% endif %}
-                        <div class="mb-2">
-                            {% if is_rent_covered %}
-                            <span class="badge bg-success fs-6">Included in Rent</span>
-                            {% elif has_any_rent_free_purchase %}
-                            <span class="badge bg-success fs-6">Rent Perk price: $0.00</span>
-                            <span class="badge bg-light text-dark border">Regular: ${{ "%.2f"|format(item.price) }}</span>
-                            {% else %}
-                            <span class="badge bg-primary fs-6">${{ "%.2f"|format(item.price) }}</span>
-                            {% endif %}
-                            {% if item.item_type == 'immediate' %}
-                                <span class="badge bg-success">Immediate Use</span>
-                            {% elif item.item_type == 'delayed' %}
-                                <span class="badge bg-warning text-dark">Delayed Use</span>
-                            {% elif item.item_type == 'collective' %}
-                                <span class="badge bg-info">Collective Goal</span>
-                            {% elif item.item_type == 'hall_pass' %}
-                                <span class="badge bg-secondary">Hall Pass</span>
-                            {% endif %}
-                        </div>
-
-                        <!-- Bundle and Discount Badges -->
-                        {% if item.is_bundle %}
-                        <div class="mb-2">
-                            <span class="badge bg-warning text-dark">
-                                <span class="material-symbols-outlined">inventory_2</span> Bundle: {{ item.bundle_quantity }} items
-                            </span>
-                        </div>
-                        {% endif %}
-
-                        {% if item.bulk_discount_enabled %}
-                        <div class="mb-2">
-                            <span class="badge bg-success">
-                                <span class="material-symbols-outlined">percent</span> {{ item.bulk_discount_percentage }}% off when you buy {{ item.bulk_discount_quantity }}+
-                            </span>
-                        </div>
-                        {% endif %}
-
-                        <!-- Collective Goal Progress -->
-                        {% if item.item_type == 'collective' and item.collective_goal_type %}
-                        <div class="mb-3">
-                            {% set progress = collective_progress.get(item.id, {'count': 0, 'target': 0, 'remaining': 0, 'percent': 0, 'is_complete': false}) %}
-                            {% set purchases_count = progress.count %}
-                            {% set target = progress.target %}
-                            {% if item.collective_goal_type == 'whole_class' %}
-                                <div class="alert alert-info p-2 mb-2">
-                                    <small><strong>Whole Class Goal:</strong> All {{ class_size }} students must purchase!</small>
-                                </div>
-                            {% elif item.collective_goal_type == 'fixed' %}
-                                <div class="alert alert-info p-2 mb-2">
-                                    <small><strong>Collective Goal:</strong> {{ target }} students needed to unlock</small>
-                                </div>
-                            {% endif %}
-                            <div class="progress" style="height: 25px;">
-                                <div class="progress-bar {% if progress.is_complete %}bg-success{% else %}bg-warning{% endif %}"
-                                     role="progressbar"
-                                     style="width: {{ progress.percent }}%;"
-                                     aria-valuenow="{{ purchases_count }}"
-                                     aria-valuemin="0"
-                                     aria-valuemax="{{ target }}">
-                                    {{ purchases_count }}/{{ target }}
-                                </div>
+                        <div class="store-item-meta mb-4">
+                            <div class="store-item-meta-row">
+                                <span class="store-item-price">
+                                    {% if is_rent_covered or has_any_rent_free_purchase %}
+                                    $0.00
+                                    <span class="store-item-price-original">${{ "%.2f"|format(item.price) }}</span>
+                                    {% else %}
+                                    ${{ "%.2f"|format(item.price) }}
+                                    {% endif %}
+                                </span>
+                                {% if is_rent_covered or has_any_rent_free_purchase %}
+                                <span class="store-rent-perk-chip"
+                                      data-bs-toggle="tooltip"
+                                      data-bs-placement="top"
+                                      data-bs-title="Included in Rent">
+                                    <span class="material-symbols-outlined">home</span>
+                                    <span>Free</span>
+                                </span>
+                                {% endif %}
                             </div>
-                            {% if not progress.is_complete %}
-                                <small class="text-muted">{{ progress.remaining }} more needed!</small>
-                            {% else %}
-                                <small class="text-success"><span class="material-symbols-outlined">check_circle</span> Goal reached! Item will unlock soon.</small>
-                            {% endif %}
-                            {% if item.collective_goal_expires_at %}
-                            <div class="alert alert-warning p-2 mt-2 mb-0">
-                                <small><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">schedule</span> <strong>Deadline:</strong> Goal expires {{ item.collective_goal_expires_at.strftime('%b %d, %Y') }}</small>
+                            <div class="store-item-meta-row store-item-attribute-icons text-muted">
+                                {% if item.item_type == 'immediate' %}
+                                <span class="store-item-type-icon"
+                                      data-bs-toggle="tooltip"
+                                      data-bs-placement="top"
+                                      data-bs-title="Immediate use item">
+                                    <span class="material-symbols-outlined">bolt</span>
+                                </span>
+                                {% elif item.item_type == 'delayed' %}
+                                <span class="store-item-type-icon"
+                                      data-bs-toggle="tooltip"
+                                      data-bs-placement="top"
+                                      data-bs-title="Delayed use item">
+                                    <span class="material-symbols-outlined">schedule</span>
+                                </span>
+                                {% elif item.item_type == 'collective' %}
+                                <span class="store-item-type-icon"
+                                      data-bs-toggle="tooltip"
+                                      data-bs-placement="top"
+                                      data-bs-title="Collective Goal item">
+                                    <span class="material-symbols-outlined">group_add</span>
+                                </span>
+                                {% elif item.item_type == 'hall_pass' %}
+                                <span class="store-item-type-icon"
+                                      data-bs-toggle="tooltip"
+                                      data-bs-placement="top"
+                                      data-bs-title="Hall pass item">
+                                    <span class="material-symbols-outlined">id_card</span>
+                                </span>
+                                {% endif %}
                             </div>
-                            {% endif %}
                         </div>
-                        {% endif %}
+                        <div class="store-item-spacer"></div>
 
-                        <div class="card-text text-muted flex-grow-1">{{ (item.description or 'No description available.') | markdown }}</div>
-
-                        {% if item.inventory is not none %}
-                            <p class="text-muted small mb-2">
-                                <strong>Available:</strong> {{ item.inventory }} left
-                            </p>
-                        {% endif %}
-
-                        {% if item.limit_per_student %}
-                            <p class="text-muted small mb-2">
-                                <strong>Limit:</strong> {{ item.limit_per_student }} per student
-                            </p>
-                        {% endif %}
-
-                        <div class="mt-auto">
-                            <button class="btn btn-primary w-100"
+                        <div class="store-item-actions mt-auto">
+                            <button class="btn btn-outline-primary w-100 store-item-details-btn"
+                                    type="button"
                                     data-bs-toggle="modal"
-                                    data-bs-target="#buyItemModal"
+                                    data-bs-target="#storeItemDetailsModal"
                                     data-item-id="{{ item.id }}"
                                     data-item-name="{{ item.name }}"
-                                    data-item-price="{{ '0.00' if has_any_rent_free_purchase else '%.2f'|format(item.price) }}"
+                                    data-item-price="{{ '0.00' if has_any_rent_free_purchase or is_rent_covered else '%.2f'|format(item.price) }}"
                                     data-item-regular-price="{{ "%.2f"|format(item.price) }}"
-                                    data-has-rent-free-purchase="{{ 'true' if has_any_rent_free_purchase else 'false' }}"
+                                    data-has-rent-free-purchase="{{ 'true' if has_any_rent_free_purchase or is_rent_covered else 'false' }}"
                                     data-item-type="{{ item.item_type }}"
                                     data-is-bundle="{{ 'true' if item.is_bundle else 'false' }}"
                                     data-bundle-quantity="{{ item.bundle_quantity if item.is_bundle else 0 }}"
@@ -164,6 +130,26 @@
                                     data-bulk-discount-quantity="{{ item.bulk_discount_quantity if item.bulk_discount_enabled else 0 }}"
                                     data-bulk-discount-percentage="{{ item.bulk_discount_percentage if item.bulk_discount_enabled else 0 }}"
                                     data-inventory="{{ item.inventory if item.inventory is not none else 'unlimited' }}"
+                                    data-is-rent-covered="{{ 'true' if is_rent_covered else 'false' }}"
+                                    data-details-id="store-item-details-{{ item.id }}">
+                                Details
+                            </button>
+                            <button class="btn btn-primary w-100 store-item-purchase-btn"
+                                    type="button"
+                                    data-item-id="{{ item.id }}"
+                                    data-item-name="{{ item.name }}"
+                                    data-item-price="{{ '0.00' if has_any_rent_free_purchase or is_rent_covered else '%.2f'|format(item.price) }}"
+                                    data-item-regular-price="{{ "%.2f"|format(item.price) }}"
+                                    data-has-rent-free-purchase="{{ 'true' if has_any_rent_free_purchase or is_rent_covered else 'false' }}"
+                                    data-item-type="{{ item.item_type }}"
+                                    data-is-bundle="{{ 'true' if item.is_bundle else 'false' }}"
+                                    data-bundle-quantity="{{ item.bundle_quantity if item.is_bundle else 0 }}"
+                                    data-bulk-discount-enabled="{{ 'true' if item.bulk_discount_enabled else 'false' }}"
+                                    data-bulk-discount-quantity="{{ item.bulk_discount_quantity if item.bulk_discount_enabled else 0 }}"
+                                    data-bulk-discount-percentage="{{ item.bulk_discount_percentage if item.bulk_discount_enabled else 0 }}"
+                                    data-inventory="{{ item.inventory if item.inventory is not none else 'unlimited' }}"
+                                    data-is-rent-covered="{{ 'true' if is_rent_covered else 'false' }}"
+                                    data-details-id="store-item-details-{{ item.id }}"
                                     {% if is_rent_covered or (item.inventory is not none and item.inventory <= 0) %}disabled{% endif %}>
                                 {% if item.inventory is not none and item.inventory <= 0 %}
                                     Out of Stock
@@ -173,6 +159,70 @@
                                     Purchase
                                 {% endif %}
                             </button>
+                        </div>
+                        <div class="d-none" id="store-item-details-{{ item.id }}">
+                            <div class="mb-3">{{ (item.description or 'No description available.') | markdown }}</div>
+
+                            {% if item.is_bundle %}
+                            <p class="text-muted small mb-2">
+                                <strong>Bundle:</strong> {{ item.bundle_quantity }} items
+                            </p>
+                            {% endif %}
+
+                            {% if item.bulk_discount_enabled %}
+                            <p class="text-muted small mb-2">
+                                <strong>Bulk Discount:</strong> {{ item.bulk_discount_percentage }}% off when you buy {{ item.bulk_discount_quantity }}+
+                            </p>
+                            {% endif %}
+
+                            {% if item.item_type == 'collective' and item.collective_goal_type %}
+                            {% set progress = collective_progress.get(item.id, {'count': 0, 'target': 0, 'remaining': 0, 'percent': 0, 'is_complete': false}) %}
+                            {% set purchases_count = progress.count %}
+                            {% set target = progress.target %}
+                            <div class="mb-3">
+                                {% if item.collective_goal_type == 'whole_class' %}
+                                    <div class="alert alert-info p-2 mb-2">
+                                        <small><strong>Whole Class Goal:</strong> All {{ class_size }} students must purchase!</small>
+                                    </div>
+                                {% elif item.collective_goal_type == 'fixed' %}
+                                    <div class="alert alert-info p-2 mb-2">
+                                        <small><strong>Collective Goal:</strong> {{ target }} students needed to unlock</small>
+                                    </div>
+                                {% endif %}
+                                <div class="progress" style="height: 25px;">
+                                    <div class="progress-bar {% if progress.is_complete %}bg-success{% else %}bg-warning{% endif %}"
+                                         role="progressbar"
+                                         style="width: {{ progress.percent }}%;"
+                                         aria-valuenow="{{ purchases_count }}"
+                                         aria-valuemin="0"
+                                         aria-valuemax="{{ target }}">
+                                        {{ purchases_count }}/{{ target }}
+                                    </div>
+                                </div>
+                                {% if not progress.is_complete %}
+                                    <small class="text-muted">{{ progress.remaining }} more needed!</small>
+                                {% else %}
+                                    <small class="text-success"><span class="material-symbols-outlined">check_circle</span> Goal reached! Item will unlock soon.</small>
+                                {% endif %}
+                                {% if item.collective_goal_expires_at %}
+                                <div class="alert alert-warning p-2 mt-2 mb-0">
+                                    <small><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">schedule</span> <strong>Deadline:</strong> Goal expires {{ item.collective_goal_expires_at.strftime('%b %d, %Y') }}</small>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+
+                            {% if item.inventory is not none %}
+                                <p class="text-muted small mb-2">
+                                    <strong>Available:</strong> {{ item.inventory }} left
+                                </p>
+                            {% endif %}
+
+                            {% if item.limit_per_student %}
+                                <p class="text-muted small mb-0">
+                                    <strong>Limit:</strong> {{ item.limit_per_student }} per student
+                                </p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -301,6 +351,40 @@
     </div>
 </div>
 
+<div class="modal fade" id="storeItemDetailsModal" tabindex="-1" aria-labelledby="storeItemDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="storeItemDetailsModalLabel">Item Details</h5>
+                    <div class="store-item-meta mt-2">
+                        <div class="store-item-meta-row">
+                            <span class="store-item-price" id="detailsModalPrice"></span>
+                            <span class="store-item-price-original d-none" id="detailsModalRegularPrice"></span>
+                            <span class="store-rent-perk-chip d-none" id="detailsModalRentChip"
+                                  data-bs-toggle="tooltip"
+                                  data-bs-placement="top"
+                                  data-bs-title="Included in Rent">
+                                <span class="material-symbols-outlined">home</span>
+                                <span>Free</span>
+                            </span>
+                        </div>
+                        <div class="store-item-meta-row text-muted" id="detailsModalIcons"></div>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="detailsModalContent"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="detailsModalPurchaseBtn">Purchase</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Buy Item Modal -->
 <div class="modal fade" id="buyItemModal" tabindex="-1" aria-labelledby="buyItemModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -412,30 +496,54 @@
 
 {% block extra_scripts %}
 <script>
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    [...tooltipTriggerList].forEach(el => new bootstrap.Tooltip(el));
+
     let currentItemData = {};
-
-    // Buy Item Modal Logic
+    let currentStoreTrigger = null;
     const buyItemModal = document.getElementById('buyItemModal');
-    buyItemModal.addEventListener('show.bs.modal', event => {
-        const button = event.relatedTarget;
+    const detailsModalElement = document.getElementById('storeItemDetailsModal');
+    const detailsModalPurchaseBtn = document.getElementById('detailsModalPurchaseBtn');
 
-        // Store item data
+    function getItemTypeIconMarkup(itemType) {
+        if (itemType === 'immediate') {
+            return '<span class="store-item-type-icon" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Immediate use item"><span class="material-symbols-outlined">bolt</span></span>';
+        }
+        if (itemType === 'delayed') {
+            return '<span class="store-item-type-icon" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Delayed use item"><span class="material-symbols-outlined">schedule</span></span>';
+        }
+        if (itemType === 'collective') {
+            return '<span class="store-item-type-icon" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Collective Goal item"><span class="material-symbols-outlined">group_add</span></span>';
+        }
+        if (itemType === 'hall_pass') {
+            return '<span class="store-item-type-icon" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Hall pass item"><span class="material-symbols-outlined">id_card</span></span>';
+        }
+        return '';
+    }
+
+    function hydrateTooltips(scope) {
+        const triggers = scope.querySelectorAll('[data-bs-toggle="tooltip"]');
+        triggers.forEach(el => new bootstrap.Tooltip(el));
+    }
+
+    function populateBuyItemModal(trigger) {
+        currentStoreTrigger = trigger;
+
         currentItemData = {
-            itemName: button.getAttribute('data-item-name'),
-            itemId: button.getAttribute('data-item-id'),
-            itemType: button.getAttribute('data-item-type'),
-            basePrice: parseFloat(button.getAttribute('data-item-price')),
-            regularPrice: parseFloat(button.getAttribute('data-item-regular-price')),
-            hasRentFreePurchase: button.getAttribute('data-has-rent-free-purchase') === 'true',
-            isBundle: button.getAttribute('data-is-bundle') === 'true',
-            bundleQuantity: parseInt(button.getAttribute('data-bundle-quantity')) || 0,
-            bulkDiscountEnabled: button.getAttribute('data-bulk-discount-enabled') === 'true',
-            bulkDiscountQuantity: parseInt(button.getAttribute('data-bulk-discount-quantity')) || 0,
-            bulkDiscountPercentage: parseFloat(button.getAttribute('data-bulk-discount-percentage')) || 0,
-            inventory: button.getAttribute('data-inventory')
+            itemName: trigger.getAttribute('data-item-name'),
+            itemId: trigger.getAttribute('data-item-id'),
+            itemType: trigger.getAttribute('data-item-type'),
+            basePrice: parseFloat(trigger.getAttribute('data-item-price')),
+            regularPrice: parseFloat(trigger.getAttribute('data-item-regular-price')),
+            hasRentFreePurchase: trigger.getAttribute('data-has-rent-free-purchase') === 'true',
+            isBundle: trigger.getAttribute('data-is-bundle') === 'true',
+            bundleQuantity: parseInt(trigger.getAttribute('data-bundle-quantity')) || 0,
+            bulkDiscountEnabled: trigger.getAttribute('data-bulk-discount-enabled') === 'true',
+            bulkDiscountQuantity: parseInt(trigger.getAttribute('data-bulk-discount-quantity')) || 0,
+            bulkDiscountPercentage: parseFloat(trigger.getAttribute('data-bulk-discount-percentage')) || 0,
+            inventory: trigger.getAttribute('data-inventory')
         };
 
-        // Populate modal
         document.getElementById('modalItemName').textContent = currentItemData.itemName;
         document.getElementById('modalItemId').value = currentItemData.itemId;
         document.getElementById('modalItemType').value = currentItemData.itemType;
@@ -446,6 +554,7 @@
         document.getElementById('modalBulkDiscountPercentage').value = currentItemData.bulkDiscountPercentage;
         document.getElementById('modalBasePrice').value = currentItemData.basePrice;
         document.getElementById('modalInventory').value = currentItemData.inventory;
+
         const rentPerkModalNote = document.getElementById('rentPerkModalNote');
         const modalRegularPrice = document.getElementById('modalRegularPrice');
         if (currentItemData.hasRentFreePurchase) {
@@ -455,7 +564,6 @@
             rentPerkModalNote.style.display = 'none';
         }
 
-        // Show bundle info
         if (currentItemData.isBundle) {
             document.getElementById('modalBundleInfo').style.display = 'block';
             document.getElementById('modalBundleQuantity').textContent = currentItemData.bundleQuantity;
@@ -463,7 +571,6 @@
             document.getElementById('modalBundleInfo').style.display = 'none';
         }
 
-        // Show discount info
         if (currentItemData.bulkDiscountEnabled) {
             document.getElementById('modalDiscountInfo').style.display = 'block';
             document.getElementById('modalDiscountPercentage').textContent = currentItemData.bulkDiscountPercentage;
@@ -472,7 +579,6 @@
             document.getElementById('modalDiscountInfo').style.display = 'none';
         }
 
-        // Show item type explanation
         const explanationDiv = document.getElementById('itemTypeExplanation');
         const explanationText = document.getElementById('explanationText');
         let explanation = '';
@@ -507,7 +613,6 @@
             explanationDiv.style.display = 'none';
         }
 
-        // Set max quantity if inventory limited
         const quantityInput = document.getElementById('quantity');
         const decreaseQtyBtn = document.getElementById('decreaseQty');
         const increaseQtyBtn = document.getElementById('increaseQty');
@@ -526,17 +631,103 @@
             quantityInput.readOnly = false;
             decreaseQtyBtn.disabled = false;
             increaseQtyBtn.disabled = false;
-        }
-
-        // Reset quantity
-        if (!currentItemData.hasRentFreePurchase) {
             quantityInput.value = 1;
         }
+
         updateTotalPrice();
+    }
+
+    function openBuyModalFromTrigger(trigger) {
+        populateBuyItemModal(trigger);
+        bootstrap.Modal.getOrCreateInstance(buyItemModal).show();
+    }
+
+    // Buy Item Modal Logic
+    buyItemModal.addEventListener('show.bs.modal', event => {
+        const trigger = event.relatedTarget || currentStoreTrigger;
+        if (trigger) {
+            populateBuyItemModal(trigger);
+        }
     });
 
     buyItemModal.addEventListener('shown.bs.modal', function () {
         document.getElementById('passphrase').focus();
+    });
+
+    detailsModalElement.addEventListener('show.bs.modal', event => {
+        const trigger = event.relatedTarget;
+        if (!trigger) {
+            return;
+        }
+        currentStoreTrigger = trigger;
+
+        document.getElementById('storeItemDetailsModalLabel').textContent = trigger.getAttribute('data-item-name');
+        document.getElementById('detailsModalPrice').textContent = `$${parseFloat(trigger.getAttribute('data-item-price')).toFixed(2)}`;
+
+        const regularPriceEl = document.getElementById('detailsModalRegularPrice');
+        const rentChipEl = document.getElementById('detailsModalRentChip');
+        const hasRentFreePurchase = trigger.getAttribute('data-has-rent-free-purchase') === 'true';
+        const regularPrice = parseFloat(trigger.getAttribute('data-item-regular-price')).toFixed(2);
+
+        if (hasRentFreePurchase) {
+            regularPriceEl.textContent = `$${regularPrice}`;
+            regularPriceEl.classList.remove('d-none');
+            rentChipEl.classList.remove('d-none');
+        } else {
+            regularPriceEl.classList.add('d-none');
+            rentChipEl.classList.add('d-none');
+        }
+
+        const iconsEl = document.getElementById('detailsModalIcons');
+        iconsEl.innerHTML = getItemTypeIconMarkup(trigger.getAttribute('data-item-type'));
+        hydrateTooltips(iconsEl);
+
+        const detailsId = trigger.getAttribute('data-details-id');
+        const detailsSource = document.getElementById(detailsId);
+        document.getElementById('detailsModalContent').innerHTML = detailsSource ? detailsSource.innerHTML : '<p class="text-muted mb-0">No description available.</p>';
+
+        const inventoryValue = trigger.getAttribute('data-inventory');
+        const isOutOfStock = inventoryValue !== 'unlimited' && Number(inventoryValue) <= 0;
+        const purchaseDisabled = trigger.getAttribute('data-is-rent-covered') === 'true' || trigger.disabled || isOutOfStock;
+        detailsModalPurchaseBtn.disabled = purchaseDisabled;
+        if (isOutOfStock) {
+            detailsModalPurchaseBtn.textContent = 'Out of Stock';
+        } else {
+            detailsModalPurchaseBtn.textContent = trigger.disabled ? trigger.textContent.trim() : 'Purchase';
+        }
+    });
+
+    document.querySelectorAll('.store-item-card').forEach(card => {
+        card.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                bootstrap.Modal.getOrCreateInstance(detailsModalElement).show(card);
+            }
+        });
+    });
+
+    document.querySelectorAll('.store-item-purchase-btn, .store-item-details-btn').forEach(button => {
+        button.addEventListener('click', event => {
+            event.stopPropagation();
+        });
+    });
+
+    document.querySelectorAll('.store-item-purchase-btn').forEach(button => {
+        button.addEventListener('click', event => {
+            event.preventDefault();
+            openBuyModalFromTrigger(button);
+        });
+    });
+
+    detailsModalPurchaseBtn.addEventListener('click', () => {
+        if (!currentStoreTrigger || detailsModalPurchaseBtn.disabled) {
+            return;
+        }
+        const detailsModal = bootstrap.Modal.getInstance(detailsModalElement);
+        if (detailsModal) {
+            detailsModal.hide();
+        }
+        openBuyModalFromTrigger(currentStoreTrigger);
     });
 
     // Quantity controls

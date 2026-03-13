@@ -24,10 +24,11 @@ os.environ['TZ'] = 'UTC'
 if platform.system() != 'Windows':
     time.tzset()  # Apply timezone change
 
-from flask import render_template, request, session
+from flask import g, render_template, request, session
 from datetime import datetime, timedelta, timezone
 import traceback
 import collections
+import random
 
 # -------------------- APPLICATION FACTORY --------------------
 # Import and create the Flask application using the factory pattern
@@ -363,6 +364,30 @@ def log_error_to_db(error_type=None, error_message=None, stack_trace=None, log_o
         )
 
         db.session.add(error_log)
+
+        try:
+            from app.services.tlcp import save_error_event, resolve_actor_context
+
+            context = resolve_actor_context()
+            if context:
+                save_error_event(
+                    request_id=getattr(g, 'request_id', None) if request else None,
+                    actor_type=context.get('actor_type'),
+                    actor_opaque_id=context.get('actor_opaque_id'),
+                    join_code_id=context.get('join_code_id'),
+                    endpoint=context.get('endpoint') or (request.path if request else None),
+                    method=context.get('method') or (request.method if request else None),
+                    error_class=error_type or 'ApplicationError',
+                    error_message=error_message,
+                )
+        except Exception:
+            app.logger.warning("Failed to persist structured error event", exc_info=True)
+
+        error_log_ttl_days = int(os.getenv("ERROR_LOG_TTL_DAYS", "90") or "90")
+        if error_log_ttl_days > 0 and random.random() < 0.1:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=error_log_ttl_days)
+            ErrorLog.query.filter(ErrorLog.timestamp < cutoff).delete(synchronize_session=False)
+
         db.session.commit()
 
         return error_log.id
@@ -420,7 +445,7 @@ def not_found_error(error):
     Displays a user-friendly page with navigation help.
     Rate-limited database logging to prevent spam from bots/typos.
     """
-    app.logger.warning(f"404 Not Found: {request.url}")
+    app.logger.info(f"404 Not Found: {request.url}")
 
     # Rate-limited logging: only log unique 404s once per hour
     cache_key = f"404_{request.path}"

@@ -1,6 +1,11 @@
 import logging
 
 from app import create_app
+from app.extensions import db
+from app.models import ErrorEvent
+from flask import g, session
+from werkzeug.exceptions import BadRequest
+from wsgi import log_error_to_db
 
 
 def test_unhandled_exception_logs_request_id_and_route(caplog):
@@ -30,3 +35,62 @@ def test_unhandled_exception_logs_request_id_and_route(caplog):
     assert getattr(record, "route", None) == "/_boom"
     assert getattr(record, "method", None) == "GET"
     assert getattr(record, "request_id", None) == "test-request-id"
+    assert getattr(record, "error_class", None) == "RuntimeError"
+
+
+def test_request_logger_exception_infers_error_class_from_exc_info(caplog):
+    app = create_app()
+
+    caplog.set_level(logging.ERROR, logger=app.logger.name)
+
+    with app.test_request_context("/_probe", method="GET", headers={"X-Request-Id": "probe-request-id"}):
+        for fn in app.before_request_funcs.get(None, []):
+            fn()
+        try:
+            raise ValueError("probe failure")
+        except Exception:
+            app.logger.exception("Probe exception log")
+
+    matching_records = [
+        record
+        for record in caplog.records
+        if record.getMessage() == "Probe exception log"
+    ]
+    assert matching_records, "Expected Probe exception log entry."
+
+    record = matching_records[0]
+    assert getattr(record, "request_id", None) == "probe-request-id"
+    assert getattr(record, "method", None) == "GET"
+    assert getattr(record, "endpoint", None) == "/_probe"
+    assert getattr(record, "error_class", None) == "ValueError"
+    assert getattr(record, "error_message", None) == "probe failure"
+
+
+def test_handled_http_error_creates_structured_error_event(client):
+    app = client.application
+
+    with app.app_context():
+        db.create_all()
+        ErrorEvent.query.delete()
+        db.session.commit()
+
+    with app.test_request_context("/_bad_request", method="GET", headers={"X-Request-Id": "handled-error-request"}):
+        session["is_admin"] = True
+        session["admin_id"] = 123
+        for fn in app.before_request_funcs.get(None, []):
+            fn()
+        log_error_to_db(
+            error_type="400 Bad Request",
+            error_message="Bad request on /_bad_request: probe bad request",
+            stack_trace=None,
+        )
+
+    with app.app_context():
+        row = ErrorEvent.query.order_by(ErrorEvent.id.desc()).first()
+        assert row is not None
+        assert row.request_id == "handled-error-request"
+        assert row.actor_type == "teacher"
+        assert row.endpoint == "/_bad_request"
+        assert row.method == "GET"
+        assert row.error_class == "400 Bad Request"
+        assert "probe bad request" in (row.error_message or "")
