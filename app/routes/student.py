@@ -4052,7 +4052,7 @@ def help_support():
         Issue.student_id == student.id,
         Issue.teacher_id == class_context['teacher_id'],
         Issue.join_code == class_context['join_code'],
-        IssueResolutionAction.performed_by_type == 'teacher'
+        IssueResolutionAction.performed_by_type == IssueResolutionAction.PERFORMED_BY_TEACHER
     ).order_by(IssueResolutionAction.created_at.desc()).limit(100).all()
 
     return render_template('student_help_support_new.html',

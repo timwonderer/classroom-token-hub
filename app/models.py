@@ -1832,6 +1832,9 @@ class IssueResolutionAction(db.Model):
     """
     __tablename__ = 'issue_resolution_actions'
 
+    PERFORMED_BY_TEACHER = 'teacher'
+    PERFORMED_BY_SYSADMIN = 'sysadmin'
+
     id = db.Column(db.Integer, primary_key=True)
     issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)

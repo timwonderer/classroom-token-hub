@@ -190,7 +190,7 @@
                                             </span>
                                         </div>
                                         <p class="mb-1 mt-2 small">
-                                            {{ (ticket.student_explanation or '')[:150] }}{% if (ticket.student_explanation or '')|length > 150 %}...{% endif %}
+                                            {{ (ticket.student_explanation or '') | truncate(150, True, '...') }}
                                         </p>
                                         <small class="text-muted">
                                             Submitted
@@ -233,7 +233,7 @@
                                             <div>
                                                 <strong>{{ decision.action_type | replace('_', ' ') | title }}</strong>
                                                 <div class="small text-muted">
-                                                    {{ action_description[:50] }}{% if action_description|length > 50 %}...{% endif %}
+                                                    {{ action_description | truncate(50, True, '...') }}
                                                 </div>
                                             </div>
                                             <div class="text-muted small text-end">
