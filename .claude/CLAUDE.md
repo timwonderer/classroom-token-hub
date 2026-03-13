@@ -25,7 +25,7 @@ This document provides essential guidance for Claude (or any AI assistant) worki
 - **Students** can be enrolled in multiple periods with different teachers
 - **System Admins** oversee the entire platform
 
-**Version:** 1.4.0 - Announcement System & UI Enhancements Release
+**Version:** 1.9.0 (Unreleased work ongoing)
 **License:** PolyForm Noncommercial 1.0.0
 **Python:** 3.10+
 **Database:** PostgreSQL with Alembic migrations
@@ -81,26 +81,37 @@ app/
 │   ├── student.py        # Student routes
 │   ├── system_admin.py   # System admin routes
 │   ├── api.py            # API endpoints
+│   ├── analytics.py      # Analytics endpoints
+│   ├── docs.py           # Documentation serving
+│   ├── main.py           # Public/landing routes
+│   ├── recovery.py       # Account recovery routes
 │   └── auth.py           # Authentication
-├── models.py             # SQLAlchemy models (35+ models)
+├── models.py             # SQLAlchemy models (51 models)
 ├── utils/                # Utility functions
+├── services/             # Service layer (tlcp.py, balance_service.py)
 └── __init__.py           # App factory
 ```
 
 ### Key Files
 
 - `wsgi.py` - Application entry point
-- `forms.py` - WTForms form definitions
 - `hash_utils.py` - Hashing and encryption utilities
 - `payroll.py` - Payroll automation logic
 - `attendance.py` - Attendance tracking logic
+- `app/utils/economy_policy.py` - Economy policy mode logic
+- `app/utils/economy_balance.py` - Economy balance checker
+- `app/utils/store.py` - Store helpers (collective goals, refunds)
+- `app/services/tlcp.py` - Ticket-Log Correlation Pack service
+- `app/services/balance_service.py` - Balance cache service
 
 ### Database Models
 
-**41 SQLAlchemy models** including:
+**51 SQLAlchemy models** including:
 - Core: `Admin`, `Student`, `SystemAdmin`, `TeacherBlock`, `StudentBlock`
-- Financial: `Transaction`, `PayrollSettings`, `BankingSettings`
-- Features: `StoreItem`, `InsurancePolicy`, `RentSettings`, `HallPassLog`
+- Financial: `Transaction`, `BalanceCache`, `PayrollSettings`, `BankingSettings`
+- Features: `StoreItem`, `InsurancePolicy`, `RentSettings`, `HallPassLog`, `FeatureSettings`
+- Support: `Issue`, `UserReport`, `IssueStatusHistory`, `TicketCorrelationPack`
+- Diagnostics: `ActorRequestTrace`, `ErrorEvent`, `ErrorLog`
 - Multi-tenancy: `StudentTeacher` (links students to multiple teachers)
 - Recovery: `RecoveryRequest`, `StudentRecoveryCode`
 
@@ -161,41 +172,51 @@ pytest tests/
 2. **DEVELOPMENT.md** - Add to roadmap or mark as completed
 3. **README.md** - Update if it affects installation/quick start
 4. **User guides** in `docs/user-guides/` - If user-facing
-5. **Technical reference** in `docs/technical-reference/` - For architecture changes
+5. **Architecture/technical docs** in `docs/ARCHITECTURE/` - For architecture changes
+6. **Feature specs** in `docs/FEATURES/` - For new feature specifications
 
 ### Documentation Organization
 
+The repository uses a formal documentation taxonomy. See `docs/STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-000_Writing_Specification.md` for the full specification.
+
 ```
 docs/
-├── README.md                  # Documentation index
-├── user-guides/               # Teachers and students
-│   ├── README.md
-│   ├── teacher_manual.md
-│   ├── student_guide.md
-│   ├── economy_guide.md
-│   ├── diagnostics/
-│   ├── features/
-│   └── legal/
-├── technical-reference/       # Architecture, database, API
-│   ├── architecture.md
-│   ├── database_schema.md
-│   ├── api_reference.md
-│   ├── analytics-specification.md
-│   └── economy-specification.md
-├── operations/                # Deployment and maintenance
-│   ├── README.md
-│   ├── Deployment_Guide.md
-│   ├── README_GITHUB_PAGES.md
-│   └── GITHUB_PAGES_SETUP.md
-├── security/                  # Security audits
-│   ├── CRITICAL_SAME_TEACHER_LEAK.md
-│   └── MULTI_TENANCY_AUDIT.md
-├── development/               # Dev guides and policies
-│   ├── codebase_organization_documentation_hygiene_playbook.md
-│   ├── SCHEMA_CHANGE_MD.md
-│   ├── migration-specifications.md
-│   └── TESTING_SUMMARY.md
-└── archive/                   # Historical docs
+├── INV-CORE-000_Core_Invariants.md    # Foundational invariants
+├── INV-CORE-001_Authority_Model.md    # Authority hierarchy
+├── ARCHITECTURE/                      # Cross-domain architecture (ARC-*)
+│   ├── ARC-CORE-000_Architecture_Foundation.md
+│   ├── IDENTITY/                      # Identity and auth (ARC-IDEN-*)
+│   ├── OPERATIONS/                    # DB schema, API, constraints (ARC-OPS-*)
+│   └── SYSADMIN/                      # Sysadmin interface (ARC-SYS-*)
+├── DOMAINS/                           # Domain-specific specs (DOM-*)
+│   └── ECONOMY_DESIGN/                # Economy balance and spec (DOM-ECON-*)
+├── FEATURES/                          # Feature specifications (FEAT-*)
+│   ├── ANALYTICS/
+│   ├── DESIGN/
+│   ├── HALL_PASS/
+│   ├── RENT/
+│   └── SUPPORT/
+├── STANDARD_OPERATING_PROCEDURES/     # Operational procedures (SOP-*)
+│   ├── DATABASE/                      # Migration rules and schema SOPs
+│   ├── DEPLOYMENT/                    # Deployment guides
+│   └── DOCUMENTATION/                 # Documentation standards
+├── SECURITY/                          # Security docs (SEC-*)
+│   ├── AUDITS/
+│   ├── CONTROLS/
+│   ├── INCIDENTS/
+│   ├── THREATS/
+│   └── VULNERABILITIES/
+├── LOGS/                              # Historical records (LOG-*)
+│   ├── AUDITS/
+│   └── RELEASES/
+└── user-guides/                       # User-facing instructional content
+    ├── teacher_manual.md
+    ├── student_guide.md
+    ├── economy_guide.md
+    ├── sysadmin_manual.md
+    ├── diagnostics/
+    ├── features/
+    └── legal/
 ```
 
 ---
@@ -408,7 +429,7 @@ students = Student.query.filter_by(
 - [ ] Test downgrade: `flask db downgrade`
 - [ ] Re-upgrade: `flask db upgrade`
 - [ ] Run tests: `pytest`
-- [ ] Update docs/technical-reference/database_schema.md if needed
+- [ ] Update docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md if needed
 - [ ] Update CHANGELOG.md
 - [ ] Commit migration with model changes
 
@@ -419,22 +440,23 @@ students = Student.query.filter_by(
 - **Detailed Rules:** See `.claude/rules/` directory for in-depth guidance
 - **Project History:** `PROJECT_HISTORY.md` for context and philosophy
 - **Development Priorities:** `DEVELOPMENT.md` for roadmap and planned features
-- **Security Audits:** `docs/security/` for past security reviews
-- **Architecture:** `docs/technical-reference/architecture.md`
+- **Security Audits:** `docs/SECURITY/AUDITS/` for past security reviews
+- **Architecture:** `docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md`
+- **Documentation Index:** `docs/STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_Documentation_Index.md`
 
 ---
 
 ## Questions or Clarifications?
 
 When uncertain about:
-- **Architecture decisions** → Review `docs/technical-reference/architecture.md`
-- **Database design** → Review `docs/technical-reference/database_schema.md`
-- **Multi-tenancy** → Review `docs/security/MULTI_TENANCY_AUDIT.md`
-- **Deployment** → Review `docs/operations/DEPLOYMENT.md`
+- **Architecture decisions** → Review `docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md`
+- **Database design** → Review `docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md`
+- **Multi-tenancy** → Review `docs/SECURITY/AUDITS/SEC-AUD-015_Multi_Tenancy_Audit.md`
+- **Deployment** → Review `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md`
 
 Always prefer reading existing code and documentation before making assumptions.
 
 ---
 
-**Last Updated:** 2025-12-27
+**Last Updated:** 2026-03-13
 **For:** Claude Code and AI assistants working on Classroom Token Hub

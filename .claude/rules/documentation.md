@@ -28,53 +28,42 @@
 │   ├── AGENTS.md             # AI agent workflow guidelines
 │   └── rules/                # Detailed rule files
 ├── docs/
-│   ├── README.md             # Documentation index
-│   ├── user-guides/          # For end users
-│   │   ├── README.md
-│   │   ├── teacher_manual.md
-│   │   ├── student_guide.md
-│   │   ├── economy_guide.md
-│   │   ├── diagnostics/
-│   │   ├── features/
-│   │   └── legal/
-│   ├── technical-reference/  # For developers
-│   │   ├── architecture.md
-│   │   ├── database_schema.md
-│   │   ├── api_reference.md
-│   │   ├── analytics-specification.md
-│   │   └── economy-specification.md
-│   ├── operations/           # Deployment and maintenance
-│   │   ├── README.md
-│   │   ├── Deployment_Guide.md
-│   │   ├── README_GITHUB_PAGES.md
-│   │   ├── GITHUB_PAGES_SETUP.md
-│   │   ├── CLEANUP_DUPLICATES.md
-│   │   ├── DEMO_SESSIONS.md
-│   │   ├── DIGITALOCEAN_CLOUDFLARE_SETUP.md
-│   │   ├── MULTI_TENANCY_FIX_DEPLOYMENT.md
-│   │   ├── PII_AUDIT.md
-│   │   ├── SECURITY_AUDIT_2025.md
-│   │   ├── SECURITY_IMPROVEMENTS_IMPLEMENTATION.md
-│   │   └── PULSETIC_SETUP.md
-│   ├── security/             # Security audits and reports
-│   │   ├── CRITICAL_SAME_TEACHER_LEAK.md
-│   │   └── MULTI_TENANCY_AUDIT.md
-│   ├── development/          # Development guides
-│   │   ├── codebase_organization_documentation_hygiene_playbook.md
-│   │   ├── SCHEMA_CHANGE_MD.md
-│   │   ├── migration-specifications.md
-│   │   ├── TESTING_SUMMARY.md
-│   │   └── SEEDING_INSTRUCTIONS.md
-│   └── archive/              # Historical documents
-│       ├── releases/         # Old release notes
-│       │   ├── RELEASE_NOTES_v1.0.md
-│       │   ├── RELEASE_NOTES_v1.1.0.md
-│       │   ├── RELEASE_NOTES_v1.1.1.md
-│       │   └── RELEASE_NOTES_v1.2.0.md
-│       ├── RECOVERY_EVALUATION.md
-│       ├── migration_check_report.md
-│       ├── pr-reports/
-│       └── FIXES_SUMMARY.md
+│   ├── INV-CORE-000_Core_Invariants.md    # Foundational invariants (Tier 0)
+│   ├── INV-CORE-001_Authority_Model.md    # Authority hierarchy (Tier 0)
+│   ├── ARCHITECTURE/                      # Cross-domain architecture (Constitutional, ARC-*)
+│   │   ├── ARC-CORE-000_Architecture_Foundation.md
+│   │   ├── IDENTITY/                      # Identity/auth (ARC-IDEN-*)
+│   │   ├── OPERATIONS/                    # DB schema, API ref, constraints (ARC-OPS-*)
+│   │   └── SYSADMIN/                      # Sysadmin architecture (ARC-SYS-*)
+│   ├── DOMAINS/                           # Domain-specific specs (Constitutional, DOM-*)
+│   │   └── ECONOMY_DESIGN/                # Economy balance and spec (DOM-ECON-*)
+│   ├── FEATURES/                          # Feature specifications (Normative, FEAT-*)
+│   │   ├── ANALYTICS/
+│   │   ├── DESIGN/
+│   │   ├── HALL_PASS/
+│   │   ├── RENT/
+│   │   └── SUPPORT/
+│   ├── STANDARD_OPERATING_PROCEDURES/     # Operational procedures (Normative, SOP-*)
+│   │   ├── DATABASE/                      # Migration rules and schema SOPs
+│   │   ├── DEPLOYMENT/                    # Deployment guides
+│   │   └── DOCUMENTATION/                 # Documentation standards (SOP-DOC-*)
+│   ├── SECURITY/                          # Security docs (Mixed, SEC-*)
+│   │   ├── AUDITS/                        # Audit reports (SEC-AUD-*)
+│   │   ├── CONTROLS/                      # Security controls (SEC-CONT-*)
+│   │   ├── INCIDENTS/                     # Incident reports (SEC-INC-*)
+│   │   ├── THREATS/                       # Threat models (SEC-THR-*)
+│   │   └── VULNERABILITIES/               # Vulnerability reports (SEC-VUL-*)
+│   ├── LOGS/                              # Historical records (Informative, LOG-*)
+│   │   ├── AUDITS/                        # Audit and implementation logs
+│   │   └── RELEASES/                      # Release notes
+│   └── user-guides/                       # User-facing instructional content
+│       ├── teacher_manual.md
+│       ├── student_guide.md
+│       ├── economy_guide.md
+│       ├── sysadmin_manual.md
+│       ├── diagnostics/
+│       ├── features/
+│       └── legal/
 ```
 
 ---
@@ -161,14 +150,14 @@ Update **ALL** of these:
 - RecoveryRequest and StudentRecoveryCode models for account recovery (#609)
 ```
 
-**docs/technical-reference/architecture.md** (if changes architecture)
+**`docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md`** (if changes cross-domain architecture)
 ```markdown
 ## Account Recovery
 
 The system implements a student-verified account recovery mechanism...
 ```
 
-**docs/technical-reference/database_schema.md** (for new models)
+**`docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md`** (for new models)
 ```markdown
 ### RecoveryRequest
 
@@ -210,8 +199,9 @@ Update **ALL** of these:
 - Resolved join_code scoping issue in transaction queries
 ```
 
-**Security documentation** (`docs/security/`)
-- Create incident report if critical
+**Security documentation** (`docs/SECURITY/`)
+- Create incident report under `docs/SECURITY/INCIDENTS/` if critical (SEC-INC-*)
+- Create audit report under `docs/SECURITY/AUDITS/` (SEC-AUD-*)
 - Update existing audit documents
 
 **README.md** (if affects installation/setup)
@@ -249,7 +239,7 @@ Update **ALL** of these:
 
 **DEVELOPMENT.md** (if affects future work)
 
-**docs/operations/DEPLOYMENT.md** (upgrade instructions)
+**`docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md`** (upgrade instructions)
 
 **Migration guide** (create if major version change)
 
@@ -433,14 +423,16 @@ Use proper markdown:
 
 ---
 
-### Technical Reference
+### Technical Reference (Architecture & Domain Docs)
 
-**Location:** `docs/technical-reference/`
+**Location:** `docs/ARCHITECTURE/` and `docs/DOMAINS/`
 
-**Files:**
-- `architecture.md` - System architecture
-- `database_schema.md` - Database structure
-- `economy-specification.md` - Financial system spec
+**Key files:**
+- `docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md` - System architecture overview
+- `docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md` - Database structure
+- `docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md` - API reference
+- `docs/DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification.md` - Financial system spec
+- `docs/FEATURES/` - Feature-level specifications (FEAT-*)
 
 **Update When:**
 - New models added
@@ -452,12 +444,14 @@ Use proper markdown:
 
 ### Security Documentation
 
-**Location:** `docs/security/`
+**Location:** `docs/SECURITY/`
 
-**Files:**
-- Audit reports
-- Incident reports
-- Security guidelines
+**Subdirectories and naming:**
+- `docs/SECURITY/AUDITS/` — Audit reports (SEC-AUD-*)
+- `docs/SECURITY/CONTROLS/` — Security controls (SEC-CONT-*)
+- `docs/SECURITY/INCIDENTS/` — Incident reports (SEC-INC-*)
+- `docs/SECURITY/THREATS/` — Threat models (SEC-THR-*)
+- `docs/SECURITY/VULNERABILITIES/` — Vulnerability reports (SEC-VUL-*)
 
 **Update When:**
 - Security vulnerabilities found
@@ -465,7 +459,7 @@ Use proper markdown:
 - Security audits completed
 - Critical fixes deployed
 
-**Format:** Create dated, immutable reports
+**Format:** Create immutable reports following the document naming convention defined in `SOP-DOC-000`
 
 ---
 
@@ -601,15 +595,16 @@ Before marking docs as complete:
 
 | Change Type | Required Docs | Optional Docs |
 |-------------|---------------|---------------|
-| New Feature | CHANGELOG, User Guide, Technical Ref | README, DEVELOPMENT |
+| New Feature | CHANGELOG, User Guide, `docs/FEATURES/` spec | README, DEVELOPMENT |
 | Bug Fix | CHANGELOG | User Guide (if workflow changed) |
-| Security Fix | CHANGELOG, Security Docs | User Guide |
+| Security Fix | CHANGELOG, `docs/SECURITY/` report | User Guide |
+| Architecture Change | CHANGELOG, `docs/ARCHITECTURE/` doc | DEVELOPMENT |
 | Breaking Change | CHANGELOG, Migration Guide | All affected docs |
-| Refactor | CHANGELOG | Technical Ref |
+| Refactor | CHANGELOG | `docs/ARCHITECTURE/` if applicable |
 | Documentation | CHANGELOG | - |
 
 ---
 
-**Last Updated:** 2025-12-13
-**Total Documentation Files:** 30+
-**Documentation Coverage:** Comprehensive (user guides, technical ref, operations, security)
+**Last Updated:** 2026-03-13
+**Total Documentation Files:** 238+
+**Documentation Coverage:** Comprehensive (user guides, architecture, domain specs, feature specs, SOPs, security, logs)

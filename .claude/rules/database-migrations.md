@@ -138,7 +138,7 @@ def get_foreign_keys_by_column(table_name, column_name):
         return []
 ```
 
-**Why this is critical:** See docs/development/MIGRATION_COMPLIANCE_REVIEW.md for details on the 40+ non-idempotent migrations that cause deployment failures.
+**Why this is critical:** See `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-009_Migration_Compliance_Review.md` for details on the 40+ non-idempotent migrations that cause deployment failures.
 
 ### Step 6: IMMEDIATELY Verify the Migration
 
@@ -245,7 +245,7 @@ This checks for:
 - Hardcoded constraint names
 - Other best practice violations
 
-**If linting fails:** Fix the issues before proceeding. See `docs/development/migration-specifications.md` for examples.
+**If linting fails:** Fix the issues before proceeding. See `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-011_Migration_Specifications.md` for examples.
 
 ### Step 9: Test the Upgrade
 
@@ -665,17 +665,17 @@ Every time you change database schema:
 14. ✅ **Verify single head:** `flask db heads` (still must show exactly 1)
 15. ✅ Run tests: `pytest tests/`
 16. ✅ Commit model + migration together
-17. ✅ Update `docs/technical-reference/database_schema.md` if significant change
+17. ✅ Update `docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md` if significant change
 18. ✅ Update `CHANGELOG.md`
 
 **NEW REQUIREMENTS (2026-02-04):**
 - All migrations MUST include idempotency helpers
 - All CREATE operations MUST check existence first
 - Migration linter MUST pass before committing
-- See `docs/development/MIGRATION_COMPLIANCE_REVIEW.md` for full audit report
+- See `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-009_Migration_Compliance_Review.md` for full audit report
 
 ---
 
-**Last Updated:** 2025-12-13
-**Migrations Count:** 83 (and growing)
+**Last Updated:** 2026-03-13
+**Migrations Count:** 90+ (and growing)
 **Database:** PostgreSQL with Alembic
