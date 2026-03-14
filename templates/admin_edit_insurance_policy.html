@@ -5,6 +5,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+<link rel="stylesheet" href="{{ static_url('css/admin-insurance-advisor.css') }}">
 <script src="{{ static_url('js/economy-balance.js') }}"></script>
 <script src="{{ static_url('js/insurance-badge-select.js') }}"></script>
 <style>
@@ -111,10 +112,6 @@
                 <small class="text-muted">Billing frequency</small>
               </div>
             </div>
-
-            <!-- Economy Balance Warnings -->
-            <div id="economy-warnings"></div>
-
             <div class="row">
               <div class="col-md-6 mb-3">
                 <div class="form-check form-switch">
@@ -500,26 +497,15 @@
           </div>
         </div>
 
-        <!-- Quick Tips Card -->
-        <div class="card shadow-sm mb-4 bg-light">
-          <div class="card-header border-0 bg-transparent">
-            <h6 class="mb-0 text-primary"><span class="material-symbols-outlined me-2">lightbulb</span>Quick Tips</h6>
+        <div class="card shadow-sm mb-4 border-info">
+          <div class="card-header bg-dark text-white">
+            <h6 class="mb-0"><span class="material-symbols-outlined me-2">trending_up</span>Guidance</h6>
           </div>
-          <div class="card-body pt-0">
-            <ul class="small mb-0 ps-3" style="line-height: 1.8;" id="insurance-quick-tips">
-              <li><strong>Price with CWI in mind:</strong> <span class="tip-pricing">Keep premium costs between 5-12% of
-                  weekly expected income (CWI) to ensure affordability</span></li>
-              <li><strong>Waiting periods:</strong> 3-7 days prevents immediate claims after purchase while remaining
-                student-friendly</li>
-              <li><strong>Bundle discounts:</strong> 10-20% off encourages students to buy multiple policies together
-              </li>
-              <li><strong>Balance coverage:</strong> Set max claim amounts 3-5x the premium, and period caps 6-10x the
-                premium</li>
-              <li><strong>Enable autopay:</strong> Auto-deduction reduces payment friction and improves participation
-                rates</li>
-              <li><strong>Monitor claims:</strong> Review claim patterns monthly to adjust coverage limits and identify
-                abuse</li>
-            </ul>
+          <div class="card-body">
+            <p class="text-muted small">Recommendations for this policy based on the current class economy and contract setup.</p>
+            <div id="policyAdvisor" class="insurance-advisor-card rounded-3 p-3">
+              <div class="text-muted small">Loading economy recommendations for this class…</div>
+            </div>
           </div>
         </div>
 
