@@ -581,6 +581,22 @@
       }
       return { basic: 1.0, mid: 1.4, premium: 1.8 }[tierLevel] || 1.0;
     };
+    CTHEconomy.getRecommendedCustomClaimLimit = function (premiumAmount) {
+      const parsedPremium = Number(premiumAmount);
+      if (!Number.isFinite(parsedPremium)) {
+        return 0;
+      }
+      const multiplier = Number(CTHEconomy.latestInsuranceEconomyAnalysis?.recommendations?.insurance_coverage?.multiplier_recommended) || 4;
+      return parsedPremium * multiplier;
+    };
+    CTHEconomy.getRecommendedCustomPeriodCap = function (premiumAmount) {
+      const parsedPremium = Number(premiumAmount);
+      if (!Number.isFinite(parsedPremium)) {
+        return 0;
+      }
+      const multiplier = Number(CTHEconomy.latestInsuranceEconomyAnalysis?.recommendations?.insurance_period_cap?.multiplier_recommended) || 8;
+      return parsedPremium * multiplier;
+    };
 
     const appendAdvisorStat = (container, label, value) => {
       const stat = document.createElement('div');
@@ -616,6 +632,8 @@
       const tierLevel = document.getElementById('tier_level')?.value || '';
       const maxClaimAmount = Number(document.getElementById('edit_max_claim_amount')?.value || 0);
       const maxPayoutPerPeriod = Number(document.getElementById('edit_max_payout_per_period')?.value || 0);
+      const recommendedClaimLimit = CTHEconomy.getRecommendedCustomClaimLimit(premium);
+      const recommendedPeriodCap = CTHEconomy.getRecommendedCustomPeriodCap(premium);
       const recommendations = analysis.recommendations;
       const defaultWaitingMin = recommendations.insurance_waiting_period_days?.min ?? 0;
       const defaultWaitingMax = recommendations.insurance_waiting_period_days?.max ?? 0;
@@ -657,6 +675,35 @@
         } else {
           appendAdvisorStat(summary, 'Tier waiting period', waitingLabel);
         }
+      } else if (claimType === 'legacy_monetary' && isTiered) {
+        const recommendedBaseWeekly = recommendations.transaction_insurance_defaults?.recommended_base_premium || 0;
+        const recommendedTierWeekly = selectedTierDefaults?.premium || (recommendedBaseWeekly * CTHEconomy.getTierMultiplier(tierLevel));
+        const recommendedTierAtFrequency = CTHEconomy.convertInsuranceWeeklyToFrequency(recommendedTierWeekly, frequency);
+        title.textContent = 'Grouped custom-monetary guidance';
+        appendAdvisorStat(summary, 'Recommended base premium (weekly)', `${CTHEconomy.formatInsuranceCurrency(recommendedBaseWeekly)} / week`);
+        if (tierLevel) {
+          appendAdvisorStat(summary, 'Selected tier', tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1));
+        }
+        if (premium > 0) {
+          appendAdvisorStat(summary, 'Current premium', `${CTHEconomy.formatInsuranceCurrency(premium)} / ${frequency}`);
+        }
+        if (tierLevel) {
+          appendAdvisorStat(summary, 'Recommended premium (weekly)', `${CTHEconomy.formatInsuranceCurrency(recommendedTierWeekly)} / week`);
+          if (frequency !== 'weekly') {
+            appendAdvisorStat(summary, `Recommended premium at ${frequency}`, `${CTHEconomy.formatInsuranceCurrency(recommendedTierAtFrequency)} / ${frequency}`);
+          }
+        }
+        appendAdvisorStat(summary, 'Tier-controlled waiting period', isTiered && selectedTierDefaults ? `${selectedTierDefaults.waiting_period_days || 0} days` : waitingLabel);
+        if (premium > 0) {
+          appendAdvisorStat(summary, 'Suggested per-claim limit', CTHEconomy.formatInsuranceCurrency(recommendedClaimLimit));
+          appendAdvisorStat(summary, 'Suggested per-period limit', CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap));
+        }
+        if (maxClaimAmount > 0) {
+          appendAdvisorStat(summary, 'Per-claim limit', CTHEconomy.formatInsuranceCurrency(maxClaimAmount));
+        }
+        if (maxPayoutPerPeriod > 0) {
+          appendAdvisorStat(summary, 'Per-coverage-period limit', CTHEconomy.formatInsuranceCurrency(maxPayoutPerPeriod));
+        }
       } else {
         const minWeekly = recommendations.insurance_premium_weekly?.min || 0;
         const maxWeekly = recommendations.insurance_premium_weekly?.max || 0;
@@ -674,6 +721,10 @@
           appendAdvisorStat(summary, `Ideal target at ${frequency}`, `${CTHEconomy.formatInsuranceCurrency(CTHEconomy.convertInsuranceWeeklyToFrequency(idealWeekly, frequency))} / ${frequency}`);
         }
         appendAdvisorStat(summary, isTiered ? 'Tier-controlled waiting period' : 'Default waiting period', isTiered && selectedTierDefaults ? `${selectedTierDefaults.waiting_period_days || 0} days` : waitingLabel);
+        if (claimType === 'legacy_monetary' && premium > 0) {
+          appendAdvisorStat(summary, 'Suggested per-claim limit', CTHEconomy.formatInsuranceCurrency(recommendedClaimLimit));
+          appendAdvisorStat(summary, 'Suggested per-period limit', CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap));
+        }
         if (claimType === 'legacy_monetary' && maxClaimAmount > 0) {
           appendAdvisorStat(summary, 'Per-claim limit', CTHEconomy.formatInsuranceCurrency(maxClaimAmount));
         }
@@ -690,7 +741,7 @@
           ? 'This edit uses the tiered transaction model: one weekly base premium plus the selected tier multiplier and tier-controlled wait.'
           : 'Select a tier to see the exact transaction-linked contract for this grouped policy.';
       } else if (isTiered && claimType === 'legacy_monetary') {
-        detail.textContent = 'This is a grouped custom monetary policy. Tiering organizes the policy group and controls the tier wait, while payout limits stay teacher-defined.';
+        detail.textContent = 'This is a grouped custom-monetary policy. The tier multiplier is a recommendation only here; teachers still control the actual premium and payout limits.';
       } else if (isTiered) {
         detail.textContent = 'This grouped policy uses tiering for student-facing grouping. Coverage and payout behavior still follow the selected claim type.';
       } else if (claimType === 'legacy_monetary') {
