@@ -1453,6 +1453,7 @@ class EconomyBalanceChecker:
                 "base_premium": round(float(tier_defaults["base_premium"] or 0), 2),
                 "premium": round(float(tier_defaults["premium"] or 0), 2),
                 "tier_multiplier": round(float(tier_defaults["tier_multiplier"]), 2),
+                "period_cap_multiplier": round(float(tier_defaults["period_cap_multiplier"]), 2),
                 "coverage_percent": round(float(tier_defaults["coverage_percent"]), 4),
                 "max_payout_per_period": round(float(tier_defaults["max_payout_per_period"] or 0), 2),
                 "waiting_period_days": tier_defaults["waiting_period_days"],

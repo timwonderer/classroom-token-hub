@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from app import db
-from app.routes.admin import _build_rebalance_preview, _inverse_weekly_amount
+from app.routes.admin import _build_rebalance_preview, _get_transaction_tier_base_premium, _inverse_weekly_amount
 from app.models import Admin, FeatureSettings, InsurancePolicy, PayrollSettings, RentSettings
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 from app.utils.economy_policy import (
@@ -122,6 +122,9 @@ def test_comfortable_policy_uses_requested_ratio_profile(client):
     assert recommendations['insurance_waiting_period_days']['min'] == 3
     assert recommendations['insurance_waiting_period_days']['max'] == 7
     assert recommendations['transaction_insurance_defaults']['recommended_base_premium'] == round(cwi * 0.05, 2)
+    assert recommendations['transaction_insurance_defaults']['tiers']['basic']['period_cap_multiplier'] == 6.0
+    assert recommendations['transaction_insurance_defaults']['tiers']['mid']['period_cap_multiplier'] == 8.0
+    assert recommendations['transaction_insurance_defaults']['tiers']['premium']['period_cap_multiplier'] == 10.0
 
 
 def test_transaction_insurance_defaults_vary_by_policy_mode():
@@ -183,6 +186,21 @@ def test_edit_policy_rejects_contract_shape_changes(client):
     assert response.status_code == 302
     db.session.refresh(policy)
     assert policy.claim_type == 'legacy_monetary'
+
+
+def test_get_transaction_tier_base_premium_normalizes_nonweekly_storage(client):
+    admin, _, _ = _create_admin_with_block()
+    weekly_premium = get_transaction_tier_defaults('default', 2, Decimal('120.00'))['premium']
+    policy = _create_insurance_policy(admin.id, "Tiered Monthly Policy", _inverse_weekly_amount(weekly_premium, 'monthly'))
+    policy.claim_type = 'transaction_monetary'
+    policy.charge_frequency = 'monthly'
+    policy.tier_rank = 2
+    policy.tier_level = 'mid'
+    db.session.commit()
+
+    base_premium = _get_transaction_tier_base_premium(policy)
+
+    assert base_premium == Decimal('7.20')
 
 
 def test_update_economy_policy_creates_block_scoped_settings(client):

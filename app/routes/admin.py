@@ -251,7 +251,7 @@ def _get_transaction_tier_base_premium(policy) -> Decimal | None:
     tier_multiplier = Decimal(str(tier_defaults["tier_multiplier"]))
     if tier_multiplier == 0:
         return None
-    return (Decimal(str(policy.premium)) / tier_multiplier).quantize(Decimal("0.01"))
+    return (_normalize_amount_to_weekly(Decimal(str(policy.premium)), policy.charge_frequency) / tier_multiplier).quantize(Decimal("0.01"))
 
 
 def _policy_contract_shape_changed(policy, form) -> bool:
@@ -444,6 +444,9 @@ def _populate_policy_from_form(policy, form, *, teacher_id=None, block=None, nex
     policy.marketing_badge = form.marketing_badge.data if form.marketing_badge.data else None
     policy.set_blocks(form.blocks.data if form.blocks.data else [])
     _apply_normalized_tier_fields(policy, form, next_tier_category_id=next_tier_category_id)
+    if is_transaction and policy.effective_tier_rank:
+        policy.charge_frequency = 'weekly'
+        policy.max_claims_period = FREQUENCY_TO_CLAIM_PERIOD.get('weekly', 'week')
     _apply_tier_waiting_period(policy)
 
     policy.tier_name = form.tier_name.data or None
@@ -1196,6 +1199,31 @@ def _inverse_weekly_amount(value, frequency, custom_frequency_value=None, custom
         if unit == 'months':
             return _quantize_currency(amount * Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH)) * freq_value)
         return _quantize_currency(amount / (Decimal('7') / freq_value))
+    return amount
+
+
+def _normalize_amount_to_weekly(value, frequency, custom_frequency_value=None, custom_frequency_unit=None):
+    from app.models import _quantize_currency
+
+    amount = _quantize_currency(value)
+    frequency = (frequency or 'weekly').lower()
+
+    if frequency == 'monthly':
+        return _quantize_currency(amount / Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH)))
+    if frequency == 'weekly':
+        return amount
+    if frequency == 'biweekly':
+        return _quantize_currency(amount / Decimal('2'))
+    if frequency == 'daily':
+        return _quantize_currency(amount * Decimal('7'))
+    if frequency == 'custom':
+        unit = (custom_frequency_unit or 'days').lower()
+        freq_value = Decimal(str(custom_frequency_value or 1))
+        if unit == 'weeks':
+            return _quantize_currency(amount / freq_value)
+        if unit == 'months':
+            return _quantize_currency(amount / (Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH)) * freq_value))
+        return _quantize_currency(amount * (Decimal('7') / freq_value))
     return amount
 
 

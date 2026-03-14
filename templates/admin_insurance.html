@@ -942,6 +942,10 @@
         return parsed;
       };
       CTHEconomy.getTierMultiplier = function (tierLevel) {
+        const tierDefaults = CTHEconomy.latestInsuranceEconomyAnalysis?.recommendations?.transaction_insurance_defaults?.tiers?.[tierLevel];
+        if (tierDefaults && typeof tierDefaults.tier_multiplier !== 'undefined') {
+          return Number(tierDefaults.tier_multiplier) || 1.0;
+        }
         return {
           basic: 1.0,
           mid: 1.4,
@@ -960,7 +964,8 @@
         if (!Number.isFinite(parsedBase)) {
           return 0;
         }
-        const periodCapMultiplier = {
+        const tierDefaults = CTHEconomy.latestInsuranceEconomyAnalysis?.recommendations?.transaction_insurance_defaults?.tiers?.[tierLevel];
+        const periodCapMultiplier = Number(tierDefaults?.period_cap_multiplier) || {
           basic: 6,
           mid: 8,
           premium: 10
@@ -1257,6 +1262,7 @@
         const advancedWaitingPeriodHelp = document.getElementById('advanced_waiting_period_help');
         const advancedPremiumLabel = document.getElementById('advanced_premium_label');
         const advancedPremiumHelp = document.getElementById('advanced_premium_help');
+        const advancedChargeFrequencyInput = document.getElementById('advanced_charge_frequency');
         const advancedChargeFrequencyLabel = document.getElementById('advanced_charge_frequency_label');
         const advancedChargeFrequencyHelp = document.getElementById('advanced_charge_frequency_help');
 
@@ -1368,11 +1374,25 @@
               : 'Cost per cycle';
           }
           if (advancedChargeFrequencyLabel) {
-            advancedChargeFrequencyLabel.textContent = isTieredTransaction ? 'Charge Frequency for Derived Premium' : 'Charge Frequency';
+            advancedChargeFrequencyLabel.textContent = 'Charge Frequency';
+          }
+          if (advancedChargeFrequencyInput) {
+            if (isTieredTransaction) {
+              if (!advancedChargeFrequencyInput.disabled) {
+                advancedChargeFrequencyInput.dataset.manualValue = advancedChargeFrequencyInput.value || 'monthly';
+              }
+              advancedChargeFrequencyInput.value = 'weekly';
+              advancedChargeFrequencyInput.disabled = true;
+            } else {
+              advancedChargeFrequencyInput.disabled = false;
+              if (advancedChargeFrequencyInput.dataset.manualValue) {
+                advancedChargeFrequencyInput.value = advancedChargeFrequencyInput.dataset.manualValue;
+              }
+            }
           }
           if (advancedChargeFrequencyHelp) {
             advancedChargeFrequencyHelp.textContent = isTieredTransaction
-              ? 'Billing frequency applied to the derived student premium.'
+              ? 'Tiered transaction policies are weekly-only so the base premium, student premium, and coverage cap all stay on the same cadence.'
               : 'Billing frequency';
           }
 
@@ -1593,6 +1613,7 @@
             if (advancedWaitingPeriodInput) advancedWaitingPeriodInput.disabled = false;
             if (advancedPremiumInput) advancedPremiumInput.disabled = false;
             if (advancedMaxPayoutInput) advancedMaxPayoutInput.disabled = false;
+            if (advancedChargeFrequencyInput) advancedChargeFrequencyInput.disabled = false;
           });
         }
 
@@ -1608,7 +1629,8 @@
         // Initialize Economy Balance Checker
         if (typeof EconomyBalanceChecker !== 'undefined') {
           const economyChecker = new EconomyBalanceChecker({
-            warningsContainer: '#insurance-economy-validator-disabled'
+            warningsContainer: '#insurance-economy-validator-disabled',
+            autoValidate: false,
           });
 
           const currentBlock = '{{ settings_block }}';

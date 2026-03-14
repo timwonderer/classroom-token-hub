@@ -59,7 +59,6 @@
                     {% if is_transaction %}
                         <div class="mb-3">
                             <label class="form-label">{{ form.transaction_id.label.text }}</label>
-                            <input type="hidden" name="{{ form.transaction_id.name }}" id="transaction_id" value="{{ form.transaction_id.data or '' }}">
                             <small class="form-text text-muted">
                                 One claim per transaction. Select a spending transaction within {{ contract_claim_time_limit_days }} days.
                             </small>
@@ -87,7 +86,7 @@
                                                         <input
                                                             class="form-check-input"
                                                             type="radio"
-                                                            name="transaction_id_choice"
+                                                            name="{{ form.transaction_id.name }}"
                                                             value="{{ tx.id }}"
                                                             {% if is_selected %}checked{% endif %}
                                                             aria-label="Select transaction {{ tx.id }}"
@@ -281,9 +280,8 @@
   document.addEventListener('DOMContentLoaded', function() {
     const descriptionField = document.getElementById('description');
     const commentsField = document.getElementById('comments');
-    const transactionIdInput = document.getElementById('transaction_id');
     const transactionRows = document.querySelectorAll('[data-transaction-row]');
-    const transactionChoices = document.querySelectorAll('input[name="transaction_id_choice"]');
+    const transactionChoices = document.querySelectorAll('input[name="transaction_id"]');
 
     if (descriptionField) {
       new EasyMDE({
@@ -311,12 +309,8 @@
     }
 
     function syncSelectedTransaction() {
-      const selectedChoice = document.querySelector('input[name="transaction_id_choice"]:checked');
-      if (transactionIdInput) {
-        transactionIdInput.value = selectedChoice ? selectedChoice.value : '';
-      }
       transactionRows.forEach((row) => {
-        const radio = row.querySelector('input[name="transaction_id_choice"]');
+        const radio = row.querySelector('input[name="transaction_id"]');
         row.classList.toggle('is-selected', Boolean(radio && radio.checked));
       });
     }
@@ -327,7 +321,7 @@
     transactionRows.forEach((row) => {
       row.addEventListener('click', function(event) {
         if (event.target instanceof HTMLInputElement) return;
-        const radio = row.querySelector('input[name="transaction_id_choice"]');
+        const radio = row.querySelector('input[name="transaction_id"]');
         if (radio) {
           radio.checked = true;
           syncSelectedTransaction();
