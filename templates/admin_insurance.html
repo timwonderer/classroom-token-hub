@@ -19,6 +19,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
 <script src="{{ static_url('js/economy-balance.js') }}"></script>
 <script src="{{ static_url('js/insurance-badge-select.js') }}"></script>
+<link rel="stylesheet" href="{{ static_url('css/admin-insurance-advisor.css') }}">
 <style>
   .EasyMDEContainer .CodeMirror {
     min-height: 120px;
@@ -104,44 +105,6 @@
 
   #advancedInsuranceAccordion .accordion-button:focus {
     box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--primary) 20%, transparent);
-  }
-
-  .insurance-advisor-card {
-    border: 1px solid color-mix(in srgb, var(--info) 35%, white);
-    background: linear-gradient(180deg, rgba(236, 246, 252, 0.95) 0%, rgba(255, 255, 255, 1) 100%);
-  }
-
-  .insurance-advisor-grid {
-    display: grid;
-    gap: 0.75rem;
-  }
-
-  .insurance-advisor-tiers {
-    display: grid;
-    gap: 0.75rem;
-  }
-
-  .insurance-advisor-tier-card {
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 0.85rem;
-    background: rgba(255, 255, 255, 0.92);
-  }
-
-  .insurance-advisor-tier-card.is-selected {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 0.15rem color-mix(in srgb, var(--primary) 18%, transparent);
-  }
-
-  .insurance-advisor-stat {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    font-size: 0.92rem;
-  }
-
-  .insurance-gated-field {
-    opacity: 0.7;
   }
 </style>
 {% endblock %}
@@ -667,7 +630,7 @@
                             {% else %}
                             <div class="alert alert-warning d-flex align-items-center mt-3" role="alert">
                               <span class="material-symbols-outlined me-2">info</span>
-                              <div>No tiered insurance set exist yet. You can create one by entering the name of the
+                              <div>No tiered insurance sets exist yet. You can create one by entering the name of the
                                 tiered set.</div>
                             </div>
                             {% endif %}
@@ -933,27 +896,29 @@
     <script>
       // Handle simple/advanced mode toggle
       let insuranceModeToggle;
-      window.latestInsuranceEconomyAnalysis = null;
-      window.formatInsuranceCurrency = function (value) {
+      const CTHEconomy = window.CTHEconomy || (window.CTHEconomy = {});
+      CTHEconomy.latestInsuranceEconomyAnalysis = null;
+      CTHEconomy.formatInsuranceCurrency = function (value) {
         const parsed = Number(value);
         if (!Number.isFinite(parsed)) {
           return '$0.00';
         }
         return `$${parsed.toFixed(2)}`;
       };
-      window.formatInsurancePercent = function (value) {
+      CTHEconomy.formatInsurancePercent = function (value) {
         const parsed = Number(value);
         if (!Number.isFinite(parsed)) {
           return '0%';
         }
         return `${Math.round(parsed * 100)}%`;
       };
-      window.convertInsuranceWeeklyToFrequency = function (weeklyValue, frequency) {
+      CTHEconomy.averageWeeksPerMonth = 365.25 / 12 / 7;
+      CTHEconomy.convertInsuranceWeeklyToFrequency = function (weeklyValue, frequency) {
         const parsed = Number(weeklyValue);
         if (!Number.isFinite(parsed)) {
           return 0;
         }
-        if (frequency === 'monthly') return parsed * 4.333;
+        if (frequency === 'monthly') return parsed * CTHEconomy.averageWeeksPerMonth;
         if (frequency === 'biweekly') return parsed * 2;
         if (frequency === 'semester') return parsed * 18;
         if (frequency === 'daily') return parsed / 7;
@@ -1324,7 +1289,7 @@
           const { isAdvanced, claimType, isTiered, tierLevel } = getActiveInsuranceState();
           const shouldLockTransactionDefaults = isAdvanced && isTiered && claimType === 'transaction_monetary' && Boolean(tierLevel);
           const tierDefaults = shouldLockTransactionDefaults
-            ? window.latestInsuranceEconomyAnalysis?.recommendations?.transaction_insurance_defaults?.tiers?.[tierLevel]
+            ? CTHEconomy.latestInsuranceEconomyAnalysis?.recommendations?.transaction_insurance_defaults?.tiers?.[tierLevel]
             : null;
           const pricingNotice = shouldLockTransactionDefaults
             ? `Premium is economy-controlled for ${tierLevel} tier transaction insurance. Use the guidance card on the right to compare the default benefit package.`
@@ -1502,7 +1467,7 @@
 
           const currentBlock = '{{ settings_block }}';
           economyChecker.analyzeEconomy(null, currentBlock).then(analysis => {
-            window.latestInsuranceEconomyAnalysis = analysis;
+            CTHEconomy.latestInsuranceEconomyAnalysis = analysis;
             economyChecker.displayCWIInfo(analysis, '#cwi-info');
             updateTierDrivenAdvancedControls();
             updatePolicyAdvisor();
@@ -2066,6 +2031,7 @@
   }
 
   function updatePolicyAdvisor() {
+    const CTHEconomy = window.CTHEconomy || (window.CTHEconomy = {});
     const advisor = document.getElementById('policyAdvisor');
     if (!advisor) return;
 
@@ -2110,20 +2076,20 @@
       }
 
       card.appendChild(header);
-      appendStat(card, 'Premium', window.formatInsuranceCurrency(tier.premium || 0));
-      appendStat(card, 'Coverage', window.formatInsurancePercent(tier.coverage_percent || 0));
-      appendStat(card, 'Period cap', window.formatInsuranceCurrency(tier.max_payout_per_period || 0));
+      appendStat(card, 'Premium', CTHEconomy.formatInsuranceCurrency(tier.premium || 0));
+      appendStat(card, 'Coverage', CTHEconomy.formatInsurancePercent(tier.coverage_percent || 0));
+      appendStat(card, 'Period cap', CTHEconomy.formatInsuranceCurrency(tier.max_payout_per_period || 0));
       appendStat(card, 'Wait', `${tier.waiting_period_days || 0} days`);
       return card;
     };
 
-    if (!window.latestInsuranceEconomyAnalysis) {
+    if (!CTHEconomy.latestInsuranceEconomyAnalysis) {
       clearAdvisor();
       appendMessage('text-muted small', 'Loading economy recommendations for this class…');
       return;
     }
 
-    const analysis = window.latestInsuranceEconomyAnalysis || null;
+    const analysis = CTHEconomy.latestInsuranceEconomyAnalysis || null;
     if (!analysis || !analysis.recommendations) {
       clearAdvisor();
       appendMessage('text-muted small', 'Configure payroll settings to see proactive insurance recommendations here.');
@@ -2141,9 +2107,9 @@
     const tierLevel = document.getElementById('tier_level')?.value || '';
     const isTiered = Boolean(isAdvanced && tierToggle?.checked);
     const recommendations = analysis.recommendations;
-    const minPremium = window.convertInsuranceWeeklyToFrequency(recommendations.insurance_premium_weekly?.min || 0, frequency);
-    const maxPremium = window.convertInsuranceWeeklyToFrequency(recommendations.insurance_premium_weekly?.max || 0, frequency);
-    const idealPremium = window.convertInsuranceWeeklyToFrequency(recommendations.insurance_premium_weekly?.recommended || 0, frequency);
+    const minPremium = CTHEconomy.convertInsuranceWeeklyToFrequency(recommendations.insurance_premium_weekly?.min || 0, frequency);
+    const maxPremium = CTHEconomy.convertInsuranceWeeklyToFrequency(recommendations.insurance_premium_weekly?.max || 0, frequency);
+    const idealPremium = CTHEconomy.convertInsuranceWeeklyToFrequency(recommendations.insurance_premium_weekly?.recommended || 0, frequency);
     const selectedTierDefaults = tierLevel
       ? recommendations.transaction_insurance_defaults?.tiers?.[tierLevel]
       : null;
@@ -2160,11 +2126,11 @@
     guidanceTitle.textContent = 'Economy guidance';
     const cwiBadge = document.createElement('span');
     cwiBadge.className = 'badge bg-info-subtle text-info-emphasis border';
-    cwiBadge.textContent = `${window.formatInsuranceCurrency(analysis.cwi)} weekly CWI`;
+    cwiBadge.textContent = `${CTHEconomy.formatInsuranceCurrency(analysis.cwi)} weekly CWI`;
     guidanceHeader.append(guidanceTitle, cwiBadge);
     guidance.appendChild(guidanceHeader);
-    appendStat(guidance, 'Recommended premium', `${window.formatInsuranceCurrency(minPremium)} to ${window.formatInsuranceCurrency(maxPremium)}`);
-    appendStat(guidance, 'Ideal target', `${window.formatInsuranceCurrency(idealPremium)} / ${frequency}`);
+    appendStat(guidance, 'Recommended premium', `${CTHEconomy.formatInsuranceCurrency(minPremium)} to ${CTHEconomy.formatInsuranceCurrency(maxPremium)}`);
+    appendStat(guidance, 'Ideal target', `${CTHEconomy.formatInsuranceCurrency(idealPremium)} / ${frequency}`);
     appendStat(guidance, 'Waiting period', `${recommendations.insurance_waiting_period_days?.min ?? 0}-${recommendations.insurance_waiting_period_days?.max ?? 0} days`);
     grid.appendChild(guidance);
 
@@ -2177,7 +2143,7 @@
 
       const nonTiered = document.createElement('div');
       nonTiered.className = 'small text-muted mb-2';
-      nonTiered.textContent = `Non-tiered coverage default: ${window.formatInsurancePercent(recommendations.transaction_insurance_defaults?.non_tiered_coverage_percent || 0)}`;
+      nonTiered.textContent = `Non-tiered coverage default: ${CTHEconomy.formatInsurancePercent(recommendations.transaction_insurance_defaults?.non_tiered_coverage_percent || 0)}`;
       transactionSection.appendChild(nonTiered);
 
       const tierGrid = document.createElement('div');
@@ -2211,17 +2177,18 @@
 
   // Update preview when form fields change
   const insuranceFormFields = document.querySelectorAll('#insuranceForm input, #insuranceForm select, #insuranceForm textarea');
+  const updateInsurancePreviewAndAdvisor = () => {
+    updatePolicyPreview();
+    updatePolicyAdvisor();
+  };
   insuranceFormFields.forEach(field => {
-    field.addEventListener('change', updatePolicyPreview);
-    field.addEventListener('input', updatePolicyPreview);
-    field.addEventListener('change', updatePolicyAdvisor);
-    field.addEventListener('input', updatePolicyAdvisor);
+    field.addEventListener('change', updateInsurancePreviewAndAdvisor);
+    field.addEventListener('input', updateInsurancePreviewAndAdvisor);
   });
 
   // Update preview when mode toggle changes
   if (insuranceModeToggle) {
-    insuranceModeToggle.addEventListener('change', updatePolicyPreview);
-    insuranceModeToggle.addEventListener('change', updatePolicyAdvisor);
+    insuranceModeToggle.addEventListener('change', updateInsurancePreviewAndAdvisor);
   }
 
 </script>

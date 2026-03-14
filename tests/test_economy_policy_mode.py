@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from app import db
-from app.routes.admin import _build_rebalance_preview
+from app.routes.admin import _build_rebalance_preview, _inverse_weekly_amount
 from app.models import Admin, FeatureSettings, InsurancePolicy, PayrollSettings, RentSettings
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 from app.utils.economy_policy import (
@@ -291,8 +291,18 @@ def test_rebalance_preview_uses_saved_tier_selection_for_transaction_insurance(c
     )
 
     by_title = {item['change']['title']: item for item in preview_items if item['change']['type'] == 'insurance'}
-    expected_basic = str(get_transaction_tier_defaults('default', 1, Decimal(str(analysis.cwi.cwi)))['premium'])
-    expected_max = str(get_transaction_tier_defaults('default', 3, Decimal(str(analysis.cwi.cwi)))['premium'])
+    expected_basic = str(
+        _inverse_weekly_amount(
+            get_transaction_tier_defaults('default', 1, Decimal(str(analysis.cwi.cwi)))['premium'],
+            basic_policy.charge_frequency,
+        )
+    )
+    expected_max = str(
+        _inverse_weekly_amount(
+            get_transaction_tier_defaults('default', 3, Decimal(str(analysis.cwi.cwi)))['premium'],
+            max_policy.charge_frequency,
+        )
+    )
 
     assert by_title['Paycheck Protection Basic']['change']['new_value'] == expected_basic
     assert by_title['Paycheck Protection Max']['change']['new_value'] == expected_max

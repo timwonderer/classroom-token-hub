@@ -1277,14 +1277,10 @@ def _build_rebalance_preview(admin_id, selected_block, checker, cwi, rent_settin
         tier_rank = policy.effective_tier_rank
         if policy.claim_type == 'transaction_monetary' and tier_rank:
             tier_defaults = get_transaction_tier_defaults(checker.policy_mode, tier_rank, Decimal(str(cwi)))
-            recommended_premium = Decimal(str(tier_defaults.get('premium') or 0))
-        elif tier_rank:
-            recommended_premium = _inverse_weekly_amount(
-                premium_band_by_tier.get(tier_rank, recommended_insurance_weekly),
-                policy.charge_frequency,
-            )
+            recommended_weekly = Decimal(str(tier_defaults.get('premium') or 0))
         else:
-            recommended_premium = _inverse_weekly_amount(recommended_insurance_weekly, policy.charge_frequency)
+            recommended_weekly = premium_band_by_tier.get(tier_rank, recommended_insurance_weekly)
+        recommended_premium = _inverse_weekly_amount(recommended_weekly, policy.charge_frequency)
         if current_premium == recommended_premium:
             continue
         preview_items.append({
