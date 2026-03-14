@@ -1,0 +1,37 @@
+.insurance-advisor-card {
+  border: 1px solid color-mix(in srgb, var(--info) 35%, white);
+  background: linear-gradient(180deg, rgba(236, 246, 252, 0.95) 0%, rgba(255, 255, 255, 1) 100%);
+}
+
+.insurance-advisor-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.insurance-advisor-tiers {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.insurance-advisor-tier-card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.insurance-advisor-tier-card.is-selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 0.15rem color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.insurance-advisor-stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.92rem;
+}
+
+.insurance-gated-field {
+  opacity: 0.7;
+}

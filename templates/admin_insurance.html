@@ -19,6 +19,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
 <script src="{{ static_url('js/economy-balance.js') }}"></script>
 <script src="{{ static_url('js/insurance-badge-select.js') }}"></script>
+<link rel="stylesheet" href="{{ static_url('css/admin-insurance-advisor.css') }}">
 <style>
   .EasyMDEContainer .CodeMirror {
     min-height: 120px;
@@ -537,6 +538,135 @@
                     </div>
                   </div>
 
+                  <div class="accordion-item advanced-section-tiered">
+                    <h2 class="accordion-header" id="advancedHeadingTiered">
+                      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#advancedCollapseTiered" aria-expanded="false"
+                        aria-controls="advancedCollapseTiered">
+                        <span class="material-symbols-outlined me-2">layers</span><strong>Tiered Insurance Policies</strong>
+                      </button>
+                    </h2>
+                    <div id="advancedCollapseTiered" class="accordion-collapse collapse"
+                      aria-labelledby="advancedHeadingTiered" data-bs-parent="#advancedInsuranceAccordion">
+                      <div class="accordion-body">
+                        <div class="alert alert-secondary d-flex align-items-start gap-2 mb-3">
+                          <span class="material-symbols-outlined">rule_settings</span>
+                          <div>
+                            <strong>Choose tiering before pricing.</strong>
+                            <div class="small mb-0">Tiered transaction policies lock later settings like waiting period and recommended premium defaults, so start here before filling out the rest of the policy.</div>
+                          </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                          <small class="text-muted">These are insurance policies covering the same incidents but with
+                            different tiers of benefits. Students are allowed to choose <strong>one policy</strong> from
+                            the tiered policies. <span class="ms-1" data-bs-toggle="tooltip"
+                              title="Grouped insurance policies are mutually exclusive since they cover the same incidents."><span class="material-symbols-outlined">info</span></span></small>
+                          <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="tierToggleNew">
+                            <label class="form-check-label fw-bold" for="tierToggleNew">Part of tiered group</label>
+                          </div>
+                        </div>
+
+                        {% if form.tier_level is defined %}
+                        <div id="tierSelectionNew" class="card bg-light-subtle border-0 shadow-sm"
+                          style="display: none;">
+                          <div class="card-body">
+                            <div class="row g-3 align-items-start">
+                              <div class="col-lg-8">
+                                <div class="alert alert-info py-2 px-3 d-none mb-0" id="tierSummaryNew"></div>
+                              </div>
+                              <div class="col-lg-4">
+                                {{ form.tier_level.label(class="form-label fw-bold small mb-1") }}
+                                {{ form.tier_level(class="form-select form-select-sm", id="tier_level") }}
+                                <small class="text-muted">Select the tier level for this policy</small>
+                              </div>
+                            </div>
+
+                            {% if tier_groups %}
+                            <div class="row g-3 mt-2">
+                              {% for group in tier_groups %}
+                              <div class="col-md-6">
+                                <div class="card h-100 border-{{ group.color }} shadow-sm">
+                                  <div class="card-body d-flex flex-column">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                      <div>
+                                        <span class="badge bg-{{ group.color }} text-white">{{ group.name }}</span>
+                                        <div class="small text-muted">Students will be shown these options to choose
+                                          from</div>
+                                      </div>
+                                      <button type="button" class="btn btn-outline-primary btn-sm select-tier-btn"
+                                        data-tier-id="{{ group.id }}" data-tier-name="{{ group.name }}"
+                                        data-tier-color="{{ group.color }}">
+                                        Add this insurance to existing group
+                                      </button>
+                                    </div>
+                                    <div class="small text-muted">{{ group.policies|length }} policy{{ 'ies' if
+                                      group.policies|length != 1 else '' }} in this group</div>
+                                    {% if group.policies %}
+                                    <ul class="list-unstyled small mt-2 mb-0">
+                                      {% for policy_info in group.policies %}
+                                      <li class="d-flex align-items-center gap-2">
+                                        <span class="material-symbols-outlined text-{{ group.color }}">verified_user</span>
+                                        <span>{{ policy_info.title }}</span>
+                                        {% if policy_info.level %}
+                                        <span
+                                          class="badge rounded-pill text-bg-light border border-{{ group.color }} text-{{ group.color }} text-uppercase"
+                                          style="font-size: 0.65rem;">{{ policy_info.level.replace('_', ' ') }}</span>
+                                        {% endif %}
+                                      </li>
+                                      {% endfor %}
+                                    </ul>
+                                    {% endif %}
+                                  </div>
+                                </div>
+                              </div>
+                              {% endfor %}
+                            </div>
+                            <div class="mt-3">
+                              <button type="button" class="btn btn-outline-secondary btn-sm"
+                                id="startNewGroupBtnNew">Create a new tiered set</button>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-warning d-flex align-items-center mt-3" role="alert">
+                              <span class="material-symbols-outlined me-2">info</span>
+                              <div>No tiered insurance sets exist yet. You can create one by entering the name of the
+                                tiered set.</div>
+                            </div>
+                            {% endif %}
+
+                            <div id="newGroupFieldsNew"
+                              class="card card-body border-0 bg-white shadow-sm {% if tier_groups %}d-none{% endif %} mt-3">
+                              <div class="d-flex align-items-center mb-3">
+                                <small class="text-muted">Students can choose one policy per group.</small>
+                              </div>
+                              <div class="row g-2">
+                                <div class="col-md-7">
+                                  {{ form.tier_name.label(class="form-label fw-bold small") }}
+                                  {{ form.tier_name(class="form-control form-control-sm", id="tier_name") }}
+                                </div>
+                                <div class="col-md-5">
+                                  {{ form.tier_color.label(class="form-label fw-bold small") }}
+                                  {{ form.tier_color(class="form-select form-select-sm", id="tier_color") }}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="d-none">
+                          {{ form.tier_category_id(id="tier_category_id") }}
+                        </div>
+                        {% else %}
+                        <div class="alert alert-warning mb-0">
+                          Tier grouping controls are temporarily unavailable. Reload the page after updating the site to
+                          enable grouping. If this problem persists, please file a ticket.
+                        </div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+
                   <div class="accordion-item advanced-section-pricing">
                     <h2 class="accordion-header" id="advancedHeadingPricing">
                       <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
@@ -548,6 +678,7 @@
                     <div id="advancedCollapsePricing" class="accordion-collapse collapse"
                       aria-labelledby="advancedHeadingPricing" data-bs-parent="#advancedInsuranceAccordion">
                       <div class="accordion-body">
+                        <div class="alert alert-info d-none" id="advancedTierPricingNotice"></div>
                         <div class="row">
                           <div class="col-md-6 mb-3">
                             {{ form.premium.label(class="form-label fw-bold") }}
@@ -609,6 +740,7 @@
                     <div id="advancedCollapseCoverage" class="accordion-collapse collapse"
                       aria-labelledby="advancedHeadingCoverage" data-bs-parent="#advancedInsuranceAccordion">
                       <div class="accordion-body">
+                        <div class="alert alert-info d-none" id="advancedTierCoverageNotice"></div>
                         <div class="row">
                           <div class="col-md-6 mb-3">
                             {{ form.waiting_period_days.label(class="form-label fw-bold") }}
@@ -725,126 +857,6 @@
                     </div>
                   </div>
 
-                  <div class="accordion-item advanced-section-tiered">
-                    <h2 class="accordion-header" id="advancedHeadingTiered">
-                      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#advancedCollapseTiered" aria-expanded="false"
-                        aria-controls="advancedCollapseTiered">
-                        <span class="material-symbols-outlined me-2">layers</span><strong>Tiered Insurance Policies</strong>
-                      </button>
-                    </h2>
-                    <div id="advancedCollapseTiered" class="accordion-collapse collapse"
-                      aria-labelledby="advancedHeadingTiered" data-bs-parent="#advancedInsuranceAccordion">
-                      <div class="accordion-body">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                          <small class="text-muted">These are insurance policies covering the same incidents but with
-                            different tiers of benefits. Students are allowed to choose <strong>one policy</strong> from
-                            the tiered policies. <span class="ms-1" data-bs-toggle="tooltip"
-                              title="Grouped insurance policies are mutually exclusive since they cover the same incidents."><span class="material-symbols-outlined">info</span></span></small>
-                          <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="tierToggleNew">
-                            <label class="form-check-label fw-bold" for="tierToggleNew">Part of tiered group</label>
-                          </div>
-                        </div>
-
-                        {% if form.tier_level is defined %}
-                        <div id="tierSelectionNew" class="card bg-light-subtle border-0 shadow-sm"
-                          style="display: none;">
-                          <div class="card-body">
-                            <div class="row g-3 align-items-start">
-                              <div class="col-lg-8">
-                                <div class="alert alert-info py-2 px-3 d-none mb-0" id="tierSummaryNew"></div>
-                              </div>
-                              <div class="col-lg-4">
-                                {{ form.tier_level.label(class="form-label fw-bold small mb-1") }}
-                                {{ form.tier_level(class="form-select form-select-sm", id="tier_level") }}
-                                <small class="text-muted">Select the tier level for this policy</small>
-                              </div>
-                            </div>
-
-                            {% if tier_groups %}
-                            <div class="row g-3 mt-2">
-                              {% for group in tier_groups %}
-                              <div class="col-md-6">
-                                <div class="card h-100 border-{{ group.color }} shadow-sm">
-                                  <div class="card-body d-flex flex-column">
-                                    <div class="d-flex justify-content-between align-items-start mb-2">
-                                      <div>
-                                        <span class="badge bg-{{ group.color }} text-white">{{ group.name }}</span>
-                                        <div class="small text-muted">Students will be shown these options to choose
-                                          from</div>
-                                      </div>
-                                      <button type="button" class="btn btn-outline-primary btn-sm select-tier-btn"
-                                        data-tier-id="{{ group.id }}" data-tier-name="{{ group.name }}"
-                                        data-tier-color="{{ group.color }}">
-                                        Add this insurance to existing group
-                                      </button>
-                                    </div>
-                                    <div class="small text-muted">{{ group.policies|length }} policy{{ 'ies' if
-                                      group.policies|length != 1 else '' }} in this group</div>
-                                    {% if group.policies %}
-                                    <ul class="list-unstyled small mt-2 mb-0">
-                                      {% for policy_info in group.policies %}
-                                      <li class="d-flex align-items-center gap-2">
-                                        <span class="material-symbols-outlined text-{{ group.color }}">verified_user</span>
-                                        <span>{{ policy_info.title }}</span>
-                                        {% if policy_info.level %}
-                                        <span
-                                          class="badge rounded-pill text-bg-light border border-{{ group.color }} text-{{ group.color }} text-uppercase"
-                                          style="font-size: 0.65rem;">{{ policy_info.level.replace('_', ' ') }}</span>
-                                        {% endif %}
-                                      </li>
-                                      {% endfor %}
-                                    </ul>
-                                    {% endif %}
-                                  </div>
-                                </div>
-                              </div>
-                              {% endfor %}
-                            </div>
-                            <div class="mt-3">
-                              <button type="button" class="btn btn-outline-secondary btn-sm"
-                                id="startNewGroupBtnNew">Create a new tiered set</button>
-                            </div>
-                            {% else %}
-                            <div class="alert alert-warning d-flex align-items-center mt-3" role="alert">
-                              <span class="material-symbols-outlined me-2">info</span>
-                              <div>No tiered insurance set exist yet. You can create one by entering the name of the
-                                tiered set.</div>
-                            </div>
-                            {% endif %}
-
-                            <div id="newGroupFieldsNew"
-                              class="card card-body border-0 bg-white shadow-sm {% if tier_groups %}d-none{% endif %} mt-3">
-                              <div class="d-flex align-items-center mb-3">
-                                <small class="text-muted">Students can choose one policy per group.</small>
-                              </div>
-                              <div class="row g-2">
-                                <div class="col-md-7">
-                                  {{ form.tier_name.label(class="form-label fw-bold small") }}
-                                  {{ form.tier_name(class="form-control form-control-sm", id="tier_name") }}
-                                </div>
-                                <div class="col-md-5">
-                                  {{ form.tier_color.label(class="form-label fw-bold small") }}
-                                  {{ form.tier_color(class="form-select form-select-sm", id="tier_color") }}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div class="d-none">
-                          {{ form.tier_category_id(id="tier_category_id") }}
-                        </div>
-                        {% else %}
-                        <div class="alert alert-warning mb-0">
-                          Tier grouping controls are temporarily unavailable. Reload the page after updating the site to
-                          enable grouping. If this problem persists, please file a ticket.
-                        </div>
-                        {% endif %}
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div><!-- End Advanced Mode Fields -->
 
@@ -860,7 +872,7 @@
       <div class="col-lg-4 mb-4">
         <div class="card shadow border-info sticky-top" style="top: 20px;">
           <div class="card-header bg-dark text-white">
-            <h6 class="mb-0"><span class="material-symbols-outlined me-2">trending_up</span>Statistics</h6>
+            <h6 class="mb-0"><span class="material-symbols-outlined me-2">trending_up</span>Preview & Guidance</h6>
           </div>
           <div class="card-body">
             <p class="text-muted small">This is how students will see your insurance policy.</p>
@@ -872,6 +884,10 @@
                 </p>
               </div>
             </div>
+
+            <div id="policyAdvisor" class="insurance-advisor-card rounded-3 p-3 mt-3">
+              <div class="text-muted small">Loading economy recommendations for this class…</div>
+            </div>
           </div>
         </div>
       </div><!-- End RIGHT column -->
@@ -880,6 +896,35 @@
     <script>
       // Handle simple/advanced mode toggle
       let insuranceModeToggle;
+      const CTHEconomy = window.CTHEconomy || (window.CTHEconomy = {});
+      CTHEconomy.latestInsuranceEconomyAnalysis = null;
+      CTHEconomy.formatInsuranceCurrency = function (value) {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) {
+          return '$0.00';
+        }
+        return `$${parsed.toFixed(2)}`;
+      };
+      CTHEconomy.formatInsurancePercent = function (value) {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) {
+          return '0%';
+        }
+        return `${Math.round(parsed * 100)}%`;
+      };
+      CTHEconomy.averageWeeksPerMonth = 365.25 / 12 / 7;
+      CTHEconomy.convertInsuranceWeeklyToFrequency = function (weeklyValue, frequency) {
+        const parsed = Number(weeklyValue);
+        if (!Number.isFinite(parsed)) {
+          return 0;
+        }
+        if (frequency === 'monthly') return parsed * CTHEconomy.averageWeeksPerMonth;
+        if (frequency === 'biweekly') return parsed * 2;
+        if (frequency === 'semester') return parsed * 18;
+        if (frequency === 'daily') return parsed / 7;
+        if (frequency === 'yearly') return parsed * 52;
+        return parsed;
+      };
       document.addEventListener('DOMContentLoaded', function () {
         insuranceModeToggle = document.getElementById('insuranceModeToggle');
         const settingsModeInput = document.getElementById('settingsModeInput');
@@ -902,6 +947,10 @@
         const simpleMaxPayoutInput = document.getElementById('simple_max_payout_per_period');
         const advancedMaxClaimAmountInput = document.getElementById('advanced_max_claim_amount');
         const advancedMaxPayoutInput = document.getElementById('advanced_max_payout_per_period');
+        const advancedPremiumInput = document.getElementById('advanced_premium');
+        const advancedTierPricingNotice = document.getElementById('advancedTierPricingNotice');
+        const advancedTierCoverageNotice = document.getElementById('advancedTierCoverageNotice');
+        const policyAdvisor = document.getElementById('policyAdvisor');
 
         function setClaimLimit(isEnabled, allowInputs) {
           if (!claimLimitFields) {
@@ -994,6 +1043,7 @@
           });
 
           setClaimLimit(claimLimitToggle && claimLimitToggle.checked, !isAdvanced);
+          updateTierDrivenAdvancedControls();
         }
 
         // Highlight fields with errors
@@ -1056,6 +1106,7 @@
             setMonetaryFieldsVisibilityForType(advancedClaimType.value);
             toggleSimpleNonMonetaryClaimsLimit(advancedClaimType.value);
           }
+          updateTierDrivenAdvancedControls();
         }
 
         function toggleSimpleNonMonetaryClaimsLimit(claimType) {
@@ -1147,6 +1198,48 @@
         const simpleWaitingPeriodHelp = document.getElementById('simple_waiting_period_help');
         const advancedWaitingPeriodHelp = document.getElementById('advanced_waiting_period_help');
 
+        function getActiveInsuranceState() {
+          const isAdvanced = Boolean(insuranceModeToggle && insuranceModeToggle.checked);
+          const frequency = isAdvanced
+            ? (document.getElementById('advanced_charge_frequency')?.value || 'monthly')
+            : (document.getElementById('simple_charge_frequency')?.value || 'monthly');
+          const claimType = isAdvanced
+            ? (document.getElementById('advanced_claim_type')?.value || 'transaction_monetary')
+            : (document.getElementById('simple_claim_type')?.value || 'transaction_monetary');
+          return {
+            isAdvanced,
+            frequency,
+            claimType,
+            isTiered: Boolean(tierToggleNew?.checked),
+            tierLevel: tierLevelInput?.value || '',
+            tierGroupName: tierNameInput?.value || '',
+          };
+        }
+
+        function syncTierDrivenFieldState(field, shouldLock, lockedValue, noticeText) {
+          if (!field) return;
+          if (shouldLock) {
+            if (!field.disabled) {
+              field.dataset.manualValue = field.value || '';
+            }
+            if (lockedValue !== undefined && lockedValue !== null && lockedValue !== '') {
+              field.value = String(lockedValue);
+            }
+            field.disabled = true;
+            field.classList.add('insurance-gated-field');
+            if (noticeText) {
+              field.title = noticeText;
+            }
+            return;
+          }
+          field.disabled = false;
+          field.classList.remove('insurance-gated-field');
+          if (field.dataset.manualValue !== undefined && field.dataset.manualValue !== '') {
+            field.value = field.dataset.manualValue;
+          }
+          field.removeAttribute('title');
+        }
+
         function getTierControlledWaitingPeriod() {
           const waitingByTier = {
             basic: 7,
@@ -1192,6 +1285,42 @@
           );
         }
 
+        function updateTierDrivenAdvancedControls() {
+          const { isAdvanced, claimType, isTiered, tierLevel } = getActiveInsuranceState();
+          const shouldLockTransactionDefaults = isAdvanced && isTiered && claimType === 'transaction_monetary' && Boolean(tierLevel);
+          const tierDefaults = shouldLockTransactionDefaults
+            ? CTHEconomy.latestInsuranceEconomyAnalysis?.recommendations?.transaction_insurance_defaults?.tiers?.[tierLevel]
+            : null;
+          const pricingNotice = shouldLockTransactionDefaults
+            ? `Premium is economy-controlled for ${tierLevel} tier transaction insurance. Use the guidance card on the right to compare the default benefit package.`
+            : '';
+          const coverageNotice = shouldLockTransactionDefaults
+            ? `Tiered transaction insurance locks the waiting period and per-period cap to the selected tier defaults.`
+            : '';
+
+          if (advancedTierPricingNotice) {
+            advancedTierPricingNotice.classList.toggle('d-none', !pricingNotice);
+            advancedTierPricingNotice.innerHTML = pricingNotice;
+          }
+          if (advancedTierCoverageNotice) {
+            advancedTierCoverageNotice.classList.toggle('d-none', !coverageNotice);
+            advancedTierCoverageNotice.innerHTML = coverageNotice;
+          }
+
+          syncTierDrivenFieldState(
+            advancedPremiumInput,
+            shouldLockTransactionDefaults,
+            tierDefaults?.premium,
+            pricingNotice
+          );
+          syncTierDrivenFieldState(
+            advancedMaxPayoutInput,
+            shouldLockTransactionDefaults,
+            tierDefaults?.max_payout_per_period,
+            coverageNotice
+          );
+        }
+
         function clearTierFields() {
           if (tierCategoryInput) tierCategoryInput.value = '';
           if (tierNameInput) tierNameInput.value = '';
@@ -1209,6 +1338,7 @@
             newGroupFieldsNew.classList.remove('d-none');
           }
           updateWaitingPeriodControls();
+          updateTierDrivenAdvancedControls();
         }
 
         function hideTierSelection() {
@@ -1219,6 +1349,7 @@
           }
           clearTierFields();
           updateWaitingPeriodControls();
+          updateTierDrivenAdvancedControls();
         }
 
         function updateTierSummary() {
@@ -1241,6 +1372,7 @@
           updateTierSummary();
           if (newGroupFieldsNew) newGroupFieldsNew.classList.add('d-none');
           updateWaitingPeriodControls();
+          updateTierDrivenAdvancedControls();
         }
 
         function startNewGroup() {
@@ -1253,6 +1385,7 @@
             tierColorInput.dispatchEvent(new Event('change'));
           }
           updateWaitingPeriodControls();
+          updateTierDrivenAdvancedControls();
         }
 
         selectTierButtons.forEach(btn => {
@@ -1293,6 +1426,7 @@
               updateTierSummary();
             }
             updateWaitingPeriodControls();
+            updateTierDrivenAdvancedControls();
           });
         }
 
@@ -1307,6 +1441,7 @@
           });
         }
         updateWaitingPeriodControls();
+        updateTierDrivenAdvancedControls();
 
         if (insuranceForm) {
           insuranceForm.addEventListener('submit', () => {
@@ -1332,10 +1467,16 @@
 
           const currentBlock = '{{ settings_block }}';
           economyChecker.analyzeEconomy(null, currentBlock).then(analysis => {
+            CTHEconomy.latestInsuranceEconomyAnalysis = analysis;
             economyChecker.displayCWIInfo(analysis, '#cwi-info');
+            updateTierDrivenAdvancedControls();
+            updatePolicyAdvisor();
           }).catch(err => {
             if (cwiInfoContainer) {
               cwiInfoContainer.innerHTML = '';
+            }
+            if (policyAdvisor) {
+              policyAdvisor.innerHTML = '<div class="text-muted small">Configure payroll settings to see proactive insurance recommendations here.</div>';
             }
             console.log('Payroll not configured yet, skipping CWI display');
           });
@@ -1349,6 +1490,7 @@
             const syncFrequency = () => {
               premiumField.setAttribute('data-economy-frequency', field.value);
               premiumField.dispatchEvent(new Event('input'));
+              updatePolicyAdvisor();
             };
 
             field.addEventListener('change', syncFrequency);
@@ -1888,16 +2030,165 @@
     previewDiv.appendChild(note);
   }
 
+  function updatePolicyAdvisor() {
+    const CTHEconomy = window.CTHEconomy || (window.CTHEconomy = {});
+    const advisor = document.getElementById('policyAdvisor');
+    if (!advisor) return;
+
+    const clearAdvisor = () => {
+      advisor.replaceChildren();
+    };
+
+    const appendMessage = (className, text) => {
+      const message = document.createElement('div');
+      message.className = className;
+      message.textContent = text;
+      advisor.appendChild(message);
+    };
+
+    const appendStat = (container, label, value) => {
+      const stat = document.createElement('div');
+      stat.className = 'insurance-advisor-stat';
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = label;
+      const valueStrong = document.createElement('strong');
+      valueStrong.textContent = value;
+      stat.append(labelSpan, valueStrong);
+      container.appendChild(stat);
+    };
+
+    const createTierCard = (level, tier, selected) => {
+      const card = document.createElement('div');
+      card.className = `insurance-advisor-tier-card${selected ? ' is-selected' : ''}`;
+
+      const header = document.createElement('div');
+      header.className = 'd-flex justify-content-between align-items-center mb-2';
+      const title = document.createElement('strong');
+      title.className = 'text-capitalize';
+      title.textContent = level;
+      header.appendChild(title);
+
+      if (selected) {
+        const badge = document.createElement('span');
+        badge.className = 'badge bg-primary';
+        badge.textContent = 'Selected';
+        header.appendChild(badge);
+      }
+
+      card.appendChild(header);
+      appendStat(card, 'Premium', CTHEconomy.formatInsuranceCurrency(tier.premium || 0));
+      appendStat(card, 'Coverage', CTHEconomy.formatInsurancePercent(tier.coverage_percent || 0));
+      appendStat(card, 'Period cap', CTHEconomy.formatInsuranceCurrency(tier.max_payout_per_period || 0));
+      appendStat(card, 'Wait', `${tier.waiting_period_days || 0} days`);
+      return card;
+    };
+
+    if (!CTHEconomy.latestInsuranceEconomyAnalysis) {
+      clearAdvisor();
+      appendMessage('text-muted small', 'Loading economy recommendations for this class…');
+      return;
+    }
+
+    const analysis = CTHEconomy.latestInsuranceEconomyAnalysis || null;
+    if (!analysis || !analysis.recommendations) {
+      clearAdvisor();
+      appendMessage('text-muted small', 'Configure payroll settings to see proactive insurance recommendations here.');
+      return;
+    }
+
+    const isAdvanced = insuranceModeToggle && insuranceModeToggle.checked;
+    const frequency = isAdvanced
+      ? (document.getElementById('advanced_charge_frequency')?.value || 'monthly')
+      : (document.getElementById('simple_charge_frequency')?.value || 'monthly');
+    const claimType = isAdvanced
+      ? (document.getElementById('advanced_claim_type')?.value || 'transaction_monetary')
+      : (document.getElementById('simple_claim_type')?.value || 'transaction_monetary');
+    const tierToggle = document.getElementById('tierToggleNew');
+    const tierLevel = document.getElementById('tier_level')?.value || '';
+    const isTiered = Boolean(isAdvanced && tierToggle?.checked);
+    const recommendations = analysis.recommendations;
+    const minPremium = CTHEconomy.convertInsuranceWeeklyToFrequency(recommendations.insurance_premium_weekly?.min || 0, frequency);
+    const maxPremium = CTHEconomy.convertInsuranceWeeklyToFrequency(recommendations.insurance_premium_weekly?.max || 0, frequency);
+    const idealPremium = CTHEconomy.convertInsuranceWeeklyToFrequency(recommendations.insurance_premium_weekly?.recommended || 0, frequency);
+    const selectedTierDefaults = tierLevel
+      ? recommendations.transaction_insurance_defaults?.tiers?.[tierLevel]
+      : null;
+
+    clearAdvisor();
+
+    const grid = document.createElement('div');
+    grid.className = 'insurance-advisor-grid';
+
+    const guidance = document.createElement('div');
+    const guidanceHeader = document.createElement('div');
+    guidanceHeader.className = 'd-flex justify-content-between align-items-center mb-2';
+    const guidanceTitle = document.createElement('strong');
+    guidanceTitle.textContent = 'Economy guidance';
+    const cwiBadge = document.createElement('span');
+    cwiBadge.className = 'badge bg-info-subtle text-info-emphasis border';
+    cwiBadge.textContent = `${CTHEconomy.formatInsuranceCurrency(analysis.cwi)} weekly CWI`;
+    guidanceHeader.append(guidanceTitle, cwiBadge);
+    guidance.appendChild(guidanceHeader);
+    appendStat(guidance, 'Recommended premium', `${CTHEconomy.formatInsuranceCurrency(minPremium)} to ${CTHEconomy.formatInsuranceCurrency(maxPremium)}`);
+    appendStat(guidance, 'Ideal target', `${CTHEconomy.formatInsuranceCurrency(idealPremium)} / ${frequency}`);
+    appendStat(guidance, 'Waiting period', `${recommendations.insurance_waiting_period_days?.min ?? 0}-${recommendations.insurance_waiting_period_days?.max ?? 0} days`);
+    grid.appendChild(guidance);
+
+    if (claimType === 'transaction_monetary') {
+      const transactionSection = document.createElement('div');
+      const transactionTitle = document.createElement('strong');
+      transactionTitle.className = 'd-block mb-2';
+      transactionTitle.textContent = 'Transaction defaults';
+      transactionSection.appendChild(transactionTitle);
+
+      const nonTiered = document.createElement('div');
+      nonTiered.className = 'small text-muted mb-2';
+      nonTiered.textContent = `Non-tiered coverage default: ${CTHEconomy.formatInsurancePercent(recommendations.transaction_insurance_defaults?.non_tiered_coverage_percent || 0)}`;
+      transactionSection.appendChild(nonTiered);
+
+      const tierGrid = document.createElement('div');
+      tierGrid.className = 'insurance-advisor-tiers';
+      ['basic', 'mid', 'premium'].forEach((level) => {
+        const tier = recommendations.transaction_insurance_defaults?.tiers?.[level];
+        if (!tier) return;
+        tierGrid.appendChild(createTierCard(level, tier, isTiered && tierLevel === level));
+      });
+      transactionSection.appendChild(tierGrid);
+
+      if (isTiered && selectedTierDefaults) {
+        const selectedAlert = document.createElement('div');
+        selectedAlert.className = 'alert alert-primary mt-3 mb-0 small';
+        const strong = document.createElement('strong');
+        strong.textContent = `${tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1)} tier selected.`;
+        selectedAlert.appendChild(strong);
+        selectedAlert.append(` Premium, waiting period, and period cap are now being guided from this package instead of freeform entry.`);
+        transactionSection.appendChild(selectedAlert);
+      }
+      grid.appendChild(transactionSection);
+    } else {
+      const notice = document.createElement('div');
+      notice.className = 'alert alert-light border mb-0 small';
+      notice.textContent = 'Switch claim type to transaction-linked reimbursement to see tier-driven premium and coverage defaults.';
+      grid.appendChild(notice);
+    }
+
+    advisor.appendChild(grid);
+  }
+
   // Update preview when form fields change
   const insuranceFormFields = document.querySelectorAll('#insuranceForm input, #insuranceForm select, #insuranceForm textarea');
+  const updateInsurancePreviewAndAdvisor = () => {
+    updatePolicyPreview();
+    updatePolicyAdvisor();
+  };
   insuranceFormFields.forEach(field => {
-    field.addEventListener('change', updatePolicyPreview);
-    field.addEventListener('input', updatePolicyPreview);
+    field.addEventListener('change', updateInsurancePreviewAndAdvisor);
+    field.addEventListener('input', updateInsurancePreviewAndAdvisor);
   });
 
   // Update preview when mode toggle changes
   if (insuranceModeToggle) {
-    insuranceModeToggle.addEventListener('change', updatePolicyPreview);
+    insuranceModeToggle.addEventListener('change', updateInsurancePreviewAndAdvisor);
   }
 
 </script>

@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from app import db
+from app.routes.admin import _build_rebalance_preview, _inverse_weekly_amount
 from app.models import Admin, FeatureSettings, InsurancePolicy, PayrollSettings, RentSettings
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 from app.utils.economy_policy import (
@@ -48,9 +49,11 @@ def _create_admin_with_block(block='A'):
 
 
 def _create_insurance_policy(admin_id, title, premium, block='A'):
+    sanitized_title = ''.join(ch for ch in title.upper() if ch.isalnum()) or 'POLICY'
+    code_seed = f"{sanitized_title[:5]}{sanitized_title[-3:]}"
     policy = InsurancePolicy(
         teacher_id=admin_id,
-        policy_code=f"{title[:3].upper()}{admin_id}",
+        policy_code=f"{code_seed}{admin_id}",
         title=title,
         premium=Decimal(str(premium)),
         charge_frequency='monthly',
@@ -256,6 +259,91 @@ def test_rebalance_ignores_cross_teacher_selected_ids(client):
     db.session.refresh(policy_b)
     assert policy_a.premium == Decimal('20.00')
     assert policy_b.premium == Decimal('99.00')
+
+
+def test_rebalance_preview_uses_saved_tier_selection_for_transaction_insurance(client):
+    admin, payroll_settings, rent_settings = _create_admin_with_block()
+    db.session.add(FeatureSettings(teacher_id=admin.id, block='A', economy_policy_mode='default'))
+    db.session.commit()
+
+    basic_policy = _create_insurance_policy(admin.id, 'Paycheck Protection Basic', '60.00', block='A')
+    basic_policy.claim_type = 'transaction_monetary'
+    basic_policy.product_group_id = 1001
+    basic_policy.tier_rank = 1
+    basic_policy.tier_level = 'basic'
+
+    max_policy = _create_insurance_policy(admin.id, 'Paycheck Protection Max', '140.00', block='A')
+    max_policy.claim_type = 'transaction_monetary'
+    max_policy.product_group_id = 1001
+    max_policy.tier_rank = 3
+    max_policy.tier_level = 'premium'
+    db.session.commit()
+
+    checker = EconomyBalanceChecker(admin.id, 'A')
+    analysis = checker.analyze_economy(payroll_settings, rent_settings=rent_settings, insurance_policies=[basic_policy, max_policy])
+    preview_items = _build_rebalance_preview(
+        admin.id,
+        'A',
+        checker,
+        analysis.cwi.cwi,
+        rent_settings,
+        [basic_policy, max_policy],
+    )
+
+    by_title = {item['change']['title']: item for item in preview_items if item['change']['type'] == 'insurance'}
+    expected_basic = str(
+        _inverse_weekly_amount(
+            get_transaction_tier_defaults('default', 1, Decimal(str(analysis.cwi.cwi)))['premium'],
+            basic_policy.charge_frequency,
+        )
+    )
+    expected_max = str(
+        _inverse_weekly_amount(
+            get_transaction_tier_defaults('default', 3, Decimal(str(analysis.cwi.cwi)))['premium'],
+            max_policy.charge_frequency,
+        )
+    )
+
+    assert by_title['Paycheck Protection Basic']['change']['new_value'] == expected_basic
+    assert by_title['Paycheck Protection Max']['change']['new_value'] == expected_max
+    assert by_title['Paycheck Protection Basic']['change']['new_value'] != by_title['Paycheck Protection Max']['change']['new_value']
+
+
+def test_rebalance_preview_uses_saved_tier_selection_for_custom_monetary_insurance(client):
+    admin, payroll_settings, rent_settings = _create_admin_with_block()
+
+    basic_policy = _create_insurance_policy(admin.id, 'Allowance Shield Basic', '40.00', block='A')
+    basic_policy.claim_type = 'legacy_monetary'
+    basic_policy.product_group_id = 2002
+    basic_policy.tier_rank = 1
+    basic_policy.tier_level = 'basic'
+
+    max_policy = _create_insurance_policy(admin.id, 'Allowance Shield Max', '90.00', block='A')
+    max_policy.claim_type = 'legacy_monetary'
+    max_policy.product_group_id = 2002
+    max_policy.tier_rank = 3
+    max_policy.tier_level = 'premium'
+    db.session.commit()
+
+    checker = EconomyBalanceChecker(admin.id, 'A')
+    analysis = checker.analyze_economy(payroll_settings, rent_settings=rent_settings, insurance_policies=[basic_policy, max_policy])
+    preview_items = _build_rebalance_preview(
+        admin.id,
+        'A',
+        checker,
+        analysis.cwi.cwi,
+        rent_settings,
+        [basic_policy, max_policy],
+    )
+
+    by_title = {item['change']['title']: item for item in preview_items if item['change']['type'] == 'insurance'}
+    monthly_factor = Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH))
+    expected_basic = str((Decimal(str(analysis.recommendations['insurance_premium_weekly']['min'])) * monthly_factor).quantize(Decimal('0.01')))
+    expected_max = str((Decimal(str(analysis.recommendations['insurance_premium_weekly']['max'])) * monthly_factor).quantize(Decimal('0.01')))
+
+    assert by_title['Allowance Shield Basic']['change']['new_value'] == expected_basic
+    assert by_title['Allowance Shield Max']['change']['new_value'] == expected_max
+    assert by_title['Allowance Shield Basic']['change']['new_value'] != by_title['Allowance Shield Max']['change']['new_value']
 
 
 def test_run_payroll_applies_scheduled_rebalance(client):
