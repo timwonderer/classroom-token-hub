@@ -201,15 +201,10 @@ def _calculate_block_cwi_for_insurance(teacher_id, block):
 
 
 def _apply_normalized_tier_fields(policy, form, *, next_tier_category_id=None):
-    raw_rank = form.tier_rank.data or ''
-    normalized_rank = int(raw_rank) if raw_rank else None
     level_value = form.tier_level.data or None
-    if normalized_rank is None and level_value:
-        normalized_rank = TIER_LEVEL_TO_RANK.get(level_value)
+    normalized_rank = TIER_LEVEL_TO_RANK.get(level_value) if level_value else None
 
-    if form.product_group_id.data:
-        policy.product_group_id = form.product_group_id.data
-    elif form.tier_category_id.data:
+    if form.tier_category_id.data:
         policy.product_group_id = form.tier_category_id.data
     elif form.tier_name.data or form.tier_color.data or normalized_rank is not None:
         policy.product_group_id = next_tier_category_id
@@ -6031,10 +6026,7 @@ def edit_insurance_policy(policy_id):
     # Pre-populate selected blocks on GET request (using many-to-many relationship)
     if request.method == 'GET':
         form.blocks.data = policy.blocks_list
-        if policy.product_group_id is not None:
-            form.product_group_id.data = policy.product_group_id
         if policy.effective_tier_rank is not None:
-            form.tier_rank.data = str(policy.effective_tier_rank)
             form.waiting_period_days.data = get_tier_waiting_period_days(policy.effective_tier_rank)
 
     teacher_policies = InsurancePolicy.query.filter_by(teacher_id=session.get('admin_id')).all()

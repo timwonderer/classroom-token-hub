@@ -241,10 +241,10 @@ class InsurancePolicyForm(FlaskForm):
 
     def validate_waiting_period_days(self, field):
         is_tiered = any([
-            self.product_group_id.data,
             self.tier_category_id.data,
-            self.tier_rank.data,
             self.tier_level.data,
+            self.tier_name.data,
+            self.tier_color.data,
         ])
         if is_tiered:
             return

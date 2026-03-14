@@ -101,6 +101,22 @@ def upgrade():
           AND tier_level IS NOT NULL
         """
     ))
+    if table_exists('insurance_policies') and table_exists('student_insurance'):
+        conn.execute(sa.text(
+            """
+            UPDATE student_insurance AS si
+            SET frozen_premium = COALESCE(si.frozen_premium, ip.premium),
+                frozen_coverage_percent = COALESCE(si.frozen_coverage_percent, ip.coverage_percent),
+                frozen_waiting_period_days = COALESCE(si.frozen_waiting_period_days, ip.waiting_period_days)
+            FROM insurance_policies AS ip
+            WHERE si.policy_id = ip.id
+              AND (
+                si.frozen_premium IS NULL
+                OR si.frozen_coverage_percent IS NULL
+                OR si.frozen_waiting_period_days IS NULL
+              )
+            """
+        ))
 
     if table_exists('insurance_policies') and not index_exists('insurance_policies', 'uq_insurance_policy_group_rank'):
         op.create_index(

@@ -2071,9 +2071,9 @@ def purchase_insurance(policy_id):
         ).filter(
             StudentInsurance.student_id == student.id,
             StudentInsurance.status == 'active',
-            sa.or_(
+            or_(
                 InsurancePolicy.product_group_id == policy.effective_product_group_id,
-                sa.and_(
+                and_(
                     InsurancePolicy.product_group_id.is_(None),
                     InsurancePolicy.tier_category_id == policy.effective_product_group_id,
                 ),

@@ -77,7 +77,7 @@ def test_student_insurance_keeps_frozen_snapshot_after_policy_edit(client, test_
     assert enrollment.policy_version == 1
 
 
-def test_admin_claim_approval_uses_frozen_claim_cap(client, test_student):
+def test_admin_claim_approval_uses_frozen_coverage_percent(client, test_student):
     admin = Admin(username="snapshot-claim-admin", totp_secret="secret")
     db.session.add(admin)
     db.session.flush()
