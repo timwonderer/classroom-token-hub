@@ -2069,14 +2069,64 @@
     const advisor = document.getElementById('policyAdvisor');
     if (!advisor) return;
 
+    const clearAdvisor = () => {
+      advisor.replaceChildren();
+    };
+
+    const appendMessage = (className, text) => {
+      const message = document.createElement('div');
+      message.className = className;
+      message.textContent = text;
+      advisor.appendChild(message);
+    };
+
+    const appendStat = (container, label, value) => {
+      const stat = document.createElement('div');
+      stat.className = 'insurance-advisor-stat';
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = label;
+      const valueStrong = document.createElement('strong');
+      valueStrong.textContent = value;
+      stat.append(labelSpan, valueStrong);
+      container.appendChild(stat);
+    };
+
+    const createTierCard = (level, tier, selected) => {
+      const card = document.createElement('div');
+      card.className = `insurance-advisor-tier-card${selected ? ' is-selected' : ''}`;
+
+      const header = document.createElement('div');
+      header.className = 'd-flex justify-content-between align-items-center mb-2';
+      const title = document.createElement('strong');
+      title.className = 'text-capitalize';
+      title.textContent = level;
+      header.appendChild(title);
+
+      if (selected) {
+        const badge = document.createElement('span');
+        badge.className = 'badge bg-primary';
+        badge.textContent = 'Selected';
+        header.appendChild(badge);
+      }
+
+      card.appendChild(header);
+      appendStat(card, 'Premium', window.formatInsuranceCurrency(tier.premium || 0));
+      appendStat(card, 'Coverage', window.formatInsurancePercent(tier.coverage_percent || 0));
+      appendStat(card, 'Period cap', window.formatInsuranceCurrency(tier.max_payout_per_period || 0));
+      appendStat(card, 'Wait', `${tier.waiting_period_days || 0} days`);
+      return card;
+    };
+
     if (!window.latestInsuranceEconomyAnalysis) {
-      advisor.innerHTML = '<div class="text-muted small">Loading economy recommendations for this class…</div>';
+      clearAdvisor();
+      appendMessage('text-muted small', 'Loading economy recommendations for this class…');
       return;
     }
 
     const analysis = window.latestInsuranceEconomyAnalysis || null;
     if (!analysis || !analysis.recommendations) {
-      advisor.innerHTML = '<div class="text-muted small">Configure payroll settings to see proactive insurance recommendations here.</div>';
+      clearAdvisor();
+      appendMessage('text-muted small', 'Configure payroll settings to see proactive insurance recommendations here.');
       return;
     }
 
@@ -2098,53 +2148,65 @@
       ? recommendations.transaction_insurance_defaults?.tiers?.[tierLevel]
       : null;
 
-    let html = '<div class="insurance-advisor-grid">';
-    html += '<div>';
-    html += '<div class="d-flex justify-content-between align-items-center mb-2">';
-    html += '<strong>Economy guidance</strong>';
-    html += `<span class="badge bg-info-subtle text-info-emphasis border">${window.formatInsuranceCurrency(analysis.cwi)} weekly CWI</span>`;
-    html += '</div>';
-    html += `<div class="insurance-advisor-stat"><span>Recommended premium</span><strong>${window.formatInsuranceCurrency(minPremium)} to ${window.formatInsuranceCurrency(maxPremium)}</strong></div>`;
-    html += `<div class="insurance-advisor-stat"><span>Ideal target</span><strong>${window.formatInsuranceCurrency(idealPremium)} / ${frequency}</strong></div>`;
-    html += `<div class="insurance-advisor-stat"><span>Waiting period</span><strong>${recommendations.insurance_waiting_period_days?.min ?? 0}-${recommendations.insurance_waiting_period_days?.max ?? 0} days</strong></div>`;
-    html += '</div>';
+    clearAdvisor();
+
+    const grid = document.createElement('div');
+    grid.className = 'insurance-advisor-grid';
+
+    const guidance = document.createElement('div');
+    const guidanceHeader = document.createElement('div');
+    guidanceHeader.className = 'd-flex justify-content-between align-items-center mb-2';
+    const guidanceTitle = document.createElement('strong');
+    guidanceTitle.textContent = 'Economy guidance';
+    const cwiBadge = document.createElement('span');
+    cwiBadge.className = 'badge bg-info-subtle text-info-emphasis border';
+    cwiBadge.textContent = `${window.formatInsuranceCurrency(analysis.cwi)} weekly CWI`;
+    guidanceHeader.append(guidanceTitle, cwiBadge);
+    guidance.appendChild(guidanceHeader);
+    appendStat(guidance, 'Recommended premium', `${window.formatInsuranceCurrency(minPremium)} to ${window.formatInsuranceCurrency(maxPremium)}`);
+    appendStat(guidance, 'Ideal target', `${window.formatInsuranceCurrency(idealPremium)} / ${frequency}`);
+    appendStat(guidance, 'Waiting period', `${recommendations.insurance_waiting_period_days?.min ?? 0}-${recommendations.insurance_waiting_period_days?.max ?? 0} days`);
+    grid.appendChild(guidance);
 
     if (claimType === 'transaction_monetary') {
-      html += '<div>';
-      html += '<strong class="d-block mb-2">Transaction defaults</strong>';
-      html += `<div class="small text-muted mb-2">Non-tiered coverage default: ${window.formatInsurancePercent(recommendations.transaction_insurance_defaults?.non_tiered_coverage_percent || 0)}</div>`;
-      html += '<div class="insurance-advisor-tiers">';
+      const transactionSection = document.createElement('div');
+      const transactionTitle = document.createElement('strong');
+      transactionTitle.className = 'd-block mb-2';
+      transactionTitle.textContent = 'Transaction defaults';
+      transactionSection.appendChild(transactionTitle);
+
+      const nonTiered = document.createElement('div');
+      nonTiered.className = 'small text-muted mb-2';
+      nonTiered.textContent = `Non-tiered coverage default: ${window.formatInsurancePercent(recommendations.transaction_insurance_defaults?.non_tiered_coverage_percent || 0)}`;
+      transactionSection.appendChild(nonTiered);
+
+      const tierGrid = document.createElement('div');
+      tierGrid.className = 'insurance-advisor-tiers';
       ['basic', 'mid', 'premium'].forEach((level) => {
         const tier = recommendations.transaction_insurance_defaults?.tiers?.[level];
         if (!tier) return;
-        const selectedClass = isTiered && tierLevel === level ? ' is-selected' : '';
-        html += `<div class="insurance-advisor-tier-card${selectedClass}">`;
-        html += `<div class="d-flex justify-content-between align-items-center mb-2"><strong class="text-capitalize">${level}</strong>`;
-        if (isTiered && tierLevel === level) {
-          html += '<span class="badge bg-primary">Selected</span>';
-        }
-        html += '</div>';
-        html += `<div class="insurance-advisor-stat"><span>Premium</span><strong>${window.formatInsuranceCurrency(tier.premium || 0)}</strong></div>`;
-        html += `<div class="insurance-advisor-stat"><span>Coverage</span><strong>${window.formatInsurancePercent(tier.coverage_percent || 0)}</strong></div>`;
-        html += `<div class="insurance-advisor-stat"><span>Period cap</span><strong>${window.formatInsuranceCurrency(tier.max_payout_per_period || 0)}</strong></div>`;
-        html += `<div class="insurance-advisor-stat"><span>Wait</span><strong>${tier.waiting_period_days || 0} days</strong></div>`;
-        html += '</div>';
+        tierGrid.appendChild(createTierCard(level, tier, isTiered && tierLevel === level));
       });
-      html += '</div>';
+      transactionSection.appendChild(tierGrid);
+
       if (isTiered && selectedTierDefaults) {
-        html += '<div class="alert alert-primary mt-3 mb-0 small">';
-        html += `<strong>${tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1)} tier selected.</strong> Premium, waiting period, and period cap are now being guided from this package instead of freeform entry.`;
-        html += '</div>';
+        const selectedAlert = document.createElement('div');
+        selectedAlert.className = 'alert alert-primary mt-3 mb-0 small';
+        const strong = document.createElement('strong');
+        strong.textContent = `${tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1)} tier selected.`;
+        selectedAlert.appendChild(strong);
+        selectedAlert.append(` Premium, waiting period, and period cap are now being guided from this package instead of freeform entry.`);
+        transactionSection.appendChild(selectedAlert);
       }
-      html += '</div>';
+      grid.appendChild(transactionSection);
     } else {
-      html += '<div class="alert alert-light border mb-0 small">';
-      html += 'Switch claim type to transaction-linked reimbursement to see tier-driven premium and coverage defaults.';
-      html += '</div>';
+      const notice = document.createElement('div');
+      notice.className = 'alert alert-light border mb-0 small';
+      notice.textContent = 'Switch claim type to transaction-linked reimbursement to see tier-driven premium and coverage defaults.';
+      grid.appendChild(notice);
     }
 
-    html += '</div>';
-    advisor.innerHTML = html;
+    advisor.appendChild(grid);
   }
 
   // Update preview when form fields change
