@@ -112,6 +112,7 @@
                 <small class="text-muted">Billing frequency</small>
               </div>
             </div>
+            <div id="edit-insurance-economy-validator-disabled" class="d-none"></div>
             <div class="row">
               <div class="col-md-6 mb-3">
                 <div class="form-check form-switch">
@@ -525,6 +526,12 @@
     const checkboxes = document.querySelectorAll('.bundle-policy-checkbox');
     const hiddenField = document.getElementById('bundlePolicyIds');
     const bundleBadge = document.querySelector('.bundle-badge');
+    const CTHEconomy = window.CTHEconomy || (window.CTHEconomy = {});
+    const cwiInfoContainer = document.getElementById('cwi-info');
+    const policyAdvisor = document.getElementById('policyAdvisor');
+    const editPremiumInput = document.getElementById('edit_premium');
+    const editFrequencyInput = document.querySelector('[data-economy-frequency-field]');
+    let economyAnalysisPending = typeof EconomyBalanceChecker !== 'undefined';
 
     function updateBundleIds() {
       const selectedIds = Array.from(checkboxes)
@@ -547,94 +554,187 @@
     // Initialize on load
     updateBundleIds();
 
-    // Initialize Economy Balance Checker
-    if (typeof EconomyBalanceChecker !== 'undefined') {
-      const economyChecker = new EconomyBalanceChecker({
-        warningsContainer: '#economy-warnings',
-        expectedWeeklyHours: {{ (payroll_settings.expected_weekly_hours if payroll_settings and payroll_settings.expected_weekly_hours is not none else 5.0) | float }}
-    });
+    CTHEconomy.latestInsuranceEconomyAnalysis = null;
+    CTHEconomy.formatInsuranceCurrency = function (value) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? `$${parsed.toFixed(2)}` : '$0.00';
+    };
+    CTHEconomy.formatInsurancePercent = function (value) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? `${Math.round(parsed * 100)}%` : '0%';
+    };
+    CTHEconomy.averageWeeksPerMonth = 365.25 / 12 / 7;
+    CTHEconomy.convertInsuranceWeeklyToFrequency = function (weeklyValue, frequency) {
+      const parsed = Number(weeklyValue);
+      if (!Number.isFinite(parsed)) return 0;
+      if (frequency === 'monthly') return parsed * CTHEconomy.averageWeeksPerMonth;
+      if (frequency === 'biweekly') return parsed * 2;
+      if (frequency === 'semester') return parsed * 18;
+      if (frequency === 'daily') return parsed / 7;
+      if (frequency === 'yearly') return parsed * 52;
+      return parsed;
+    };
+    CTHEconomy.getTierMultiplier = function (tierLevel) {
+      const tierDefaults = CTHEconomy.latestInsuranceEconomyAnalysis?.recommendations?.transaction_insurance_defaults?.tiers?.[tierLevel];
+      if (typeof tierDefaults?.tier_multiplier !== 'undefined') {
+        return Number(tierDefaults.tier_multiplier) || 1.0;
+      }
+      return { basic: 1.0, mid: 1.4, premium: 1.8 }[tierLevel] || 1.0;
+    };
 
-  // Display CWI info if payroll is configured
-  economyChecker.analyzeEconomy().then(analysis => {
-    economyChecker.displayCWIInfo(analysis, '#cwi-info');
-    window.__insuranceEconomyAnalysis = analysis;
-  }).catch(err => {
-    console.log('Payroll not configured yet, skipping CWI display');
-  });
+    const appendAdvisorStat = (container, label, value) => {
+      const stat = document.createElement('div');
+      stat.className = 'insurance-advisor-stat';
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = label;
+      const valueStrong = document.createElement('strong');
+      valueStrong.textContent = value;
+      stat.append(labelSpan, valueStrong);
+      container.appendChild(stat);
+    };
 
-  // Update frequency data attribute when frequency field changes
-  const frequencyField = document.querySelector('[data-economy-frequency-field]');
-  const premiumField = document.querySelector('[data-economy-validate="insurance"]');
-  if (frequencyField && premiumField) {
-    frequencyField.addEventListener('change', function () {
-      premiumField.setAttribute('data-economy-frequency', this.value);
-      // Trigger validation
-      premiumField.dispatchEvent(new Event('input'));
-      // Update Quick Tips based on frequency
-      updateQuickTipsPricing(this.value, window.__insuranceEconomyAnalysis);
-    });
-    // Set initial frequency
-    premiumField.setAttribute('data-economy-frequency', frequencyField.value);
-  }
+    function renderPolicyAdvisor() {
+      if (!policyAdvisor) return;
 
-  // Function to update Quick Tips pricing based on frequency
-  function updateQuickTipsPricing(frequency, analysis) {
-    const cwi = analysis?.cwi;
-    const insuranceRecommendations = analysis?.recommendations?.insurance_premium_weekly;
-    if (!cwi || !insuranceRecommendations) return;
+      policyAdvisor.replaceChildren();
 
-    const tipPricingElement = document.querySelector('.tip-pricing');
-    if (!tipPricingElement) return;
+      const analysis = CTHEconomy.latestInsuranceEconomyAnalysis;
+      if (!analysis || !analysis.recommendations) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'text-muted small';
+        emptyState.textContent = economyAnalysisPending
+          ? 'Loading economy recommendations for this class…'
+          : 'Configure payroll settings to see proactive insurance recommendations here.';
+        policyAdvisor.appendChild(emptyState);
+        return;
+      }
 
-    const minWeekly = insuranceRecommendations.min;
-    const maxWeekly = insuranceRecommendations.max;
+      const claimType = document.getElementById('edit_claim_type')?.value || 'legacy_monetary';
+      const frequency = editFrequencyInput?.value || 'monthly';
+      const premium = Number(editPremiumInput?.value || 0);
+      const isTiered = Boolean(document.getElementById('tierToggleEdit')?.checked);
+      const tierLevel = document.getElementById('tier_level')?.value || '';
+      const maxClaimAmount = Number(document.getElementById('edit_max_claim_amount')?.value || 0);
+      const maxPayoutPerPeriod = Number(document.getElementById('edit_max_payout_per_period')?.value || 0);
+      const recommendations = analysis.recommendations;
+      const defaultWaitingMin = recommendations.insurance_waiting_period_days?.min ?? 0;
+      const defaultWaitingMax = recommendations.insurance_waiting_period_days?.max ?? 0;
+      const waitingLabel = defaultWaitingMin === defaultWaitingMax
+        ? `${defaultWaitingMin} days`
+        : `${defaultWaitingMin}-${defaultWaitingMax} days`;
+      const selectedTierDefaults = tierLevel
+        ? recommendations.transaction_insurance_defaults?.tiers?.[tierLevel]
+        : null;
 
-    let multiplier = 1;
-    let frequencyLabel = 'weekly';
+      const grid = document.createElement('div');
+      grid.className = 'insurance-advisor-grid';
 
-    switch (frequency) {
-      case 'monthly':
-        multiplier = 4.345; // average weeks per month
-        frequencyLabel = 'monthly';
-        break;
-      case 'weekly':
-        multiplier = 1;
-        frequencyLabel = 'weekly';
-        break;
-      case 'biweekly':
-        multiplier = 2;
-        frequencyLabel = 'biweekly';
-        break;
-      case 'daily':
-        multiplier = 1 / 7;
-        frequencyLabel = 'daily';
-        break;
-      case 'semester':
-        multiplier = 18; // 18 weeks per semester
-        frequencyLabel = 'semester';
-        break;
-      case 'yearly':
-        multiplier = 52;
-        frequencyLabel = 'yearly';
-        break;
+      const summary = document.createElement('div');
+      const summaryHeader = document.createElement('div');
+      summaryHeader.className = 'd-flex justify-content-between align-items-center mb-2';
+      const title = document.createElement('strong');
+      title.textContent = 'Policy guidance';
+      const cwiBadge = document.createElement('span');
+      cwiBadge.className = 'badge bg-info-subtle text-info-emphasis border';
+      cwiBadge.textContent = `${CTHEconomy.formatInsuranceCurrency(analysis.cwi)} weekly CWI`;
+      summaryHeader.append(title, cwiBadge);
+      summary.appendChild(summaryHeader);
+
+      if (claimType === 'transaction_monetary' && isTiered) {
+        title.textContent = 'Tiered transaction setup';
+        const basePremium = premium;
+        const studentWeeklyPremium = tierLevel
+          ? basePremium * CTHEconomy.getTierMultiplier(tierLevel)
+          : 0;
+        appendAdvisorStat(summary, 'Recommended base premium (weekly)', `${CTHEconomy.formatInsuranceCurrency(recommendations.transaction_insurance_defaults?.recommended_base_premium || 0)} / week`);
+        if (selectedTierDefaults) {
+          appendAdvisorStat(summary, 'Selected tier', tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1));
+          appendAdvisorStat(summary, 'Base premium (weekly)', `${CTHEconomy.formatInsuranceCurrency(basePremium)} / week`);
+          appendAdvisorStat(summary, 'Student premium (weekly)', `${CTHEconomy.formatInsuranceCurrency(studentWeeklyPremium)} / week`);
+          appendAdvisorStat(summary, 'Coverage', CTHEconomy.formatInsurancePercent(selectedTierDefaults.coverage_percent || 0));
+          appendAdvisorStat(summary, 'Waiting period', `${selectedTierDefaults.waiting_period_days || 0} days`);
+          appendAdvisorStat(summary, 'Recommended cap', CTHEconomy.formatInsuranceCurrency(selectedTierDefaults.max_payout_per_period || 0));
+        } else {
+          appendAdvisorStat(summary, 'Tier waiting period', waitingLabel);
+        }
+      } else {
+        const minWeekly = recommendations.insurance_premium_weekly?.min || 0;
+        const maxWeekly = recommendations.insurance_premium_weekly?.max || 0;
+        const idealWeekly = recommendations.insurance_premium_weekly?.recommended || 0;
+        title.textContent = isTiered ? 'Grouped policy guidance' : 'Economy guidance';
+        if (isTiered && tierLevel) {
+          appendAdvisorStat(summary, 'Selected tier', tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1));
+        }
+        if (premium > 0) {
+          appendAdvisorStat(summary, 'Current premium', `${CTHEconomy.formatInsuranceCurrency(premium)} / ${frequency}`);
+        }
+        appendAdvisorStat(summary, 'Recommended premium range (weekly)', `${CTHEconomy.formatInsuranceCurrency(minWeekly)} to ${CTHEconomy.formatInsuranceCurrency(maxWeekly)} / week`);
+        appendAdvisorStat(summary, 'Ideal target (weekly)', `${CTHEconomy.formatInsuranceCurrency(idealWeekly)} / week`);
+        if (frequency !== 'weekly') {
+          appendAdvisorStat(summary, `Ideal target at ${frequency}`, `${CTHEconomy.formatInsuranceCurrency(CTHEconomy.convertInsuranceWeeklyToFrequency(idealWeekly, frequency))} / ${frequency}`);
+        }
+        appendAdvisorStat(summary, isTiered ? 'Tier-controlled waiting period' : 'Default waiting period', isTiered && selectedTierDefaults ? `${selectedTierDefaults.waiting_period_days || 0} days` : waitingLabel);
+        if (claimType === 'legacy_monetary' && maxClaimAmount > 0) {
+          appendAdvisorStat(summary, 'Per-claim limit', CTHEconomy.formatInsuranceCurrency(maxClaimAmount));
+        }
+        if (claimType !== 'non_monetary' && maxPayoutPerPeriod > 0) {
+          appendAdvisorStat(summary, 'Per-coverage-period limit', CTHEconomy.formatInsuranceCurrency(maxPayoutPerPeriod));
+        }
+      }
+      grid.appendChild(summary);
+
+      const detail = document.createElement('div');
+      detail.className = 'alert alert-light border mb-0 small';
+      if (claimType === 'transaction_monetary' && isTiered) {
+        detail.textContent = selectedTierDefaults
+          ? 'This edit uses the tiered transaction model: one weekly base premium plus the selected tier multiplier and tier-controlled wait.'
+          : 'Select a tier to see the exact transaction-linked contract for this grouped policy.';
+      } else if (isTiered && claimType === 'legacy_monetary') {
+        detail.textContent = 'This is a grouped custom monetary policy. Tiering organizes the policy group and controls the tier wait, while payout limits stay teacher-defined.';
+      } else if (isTiered) {
+        detail.textContent = 'This grouped policy uses tiering for student-facing grouping. Coverage and payout behavior still follow the selected claim type.';
+      } else if (claimType === 'legacy_monetary') {
+        detail.textContent = 'Custom monetary reimbursement uses teacher-defined claim limits. Use the weekly premium guidance as an affordability check, not an auto-filled contract.';
+      } else if (claimType === 'non_monetary') {
+        detail.textContent = 'Non-monetary policies do not reimburse money, so only premium affordability and waiting period guidance apply here.';
+      } else {
+        detail.textContent = 'Transaction-linked reimbursement uses exact purchase transactions at claim time. Turn on tiering to see Basic, Mid, and Premium defaults.';
+      }
+      grid.appendChild(detail);
+
+      policyAdvisor.appendChild(grid);
     }
 
-    const minPrice = (minWeekly * multiplier).toFixed(2);
-    const maxPrice = (maxWeekly * multiplier).toFixed(2);
-    const cwiDisplay = cwi.toFixed(2);
-    const policyLabel = analysis?.recommendations?.policy_label || 'current';
+    if (typeof EconomyBalanceChecker !== 'undefined') {
+      const economyChecker = new EconomyBalanceChecker({
+        warningsContainer: '#edit-insurance-economy-validator-disabled',
+        autoValidate: false,
+        expectedWeeklyHours: {{ (payroll_settings.expected_weekly_hours if payroll_settings and payroll_settings.expected_weekly_hours is not none else 5.0) | float }}
+      });
 
-    tipPricingElement.textContent = `Keep ${frequencyLabel} premium costs in the $${minPrice}-$${maxPrice} range for the ${policyLabel.toLowerCase()} policy (weekly CWI: $${cwiDisplay}).`;
-  }
+      if (editFrequencyInput && editPremiumInput) {
+        editPremiumInput.setAttribute('data-economy-frequency', editFrequencyInput.value || 'monthly');
+        editFrequencyInput.addEventListener('change', function () {
+          editPremiumInput.setAttribute('data-economy-frequency', this.value);
+          renderPolicyAdvisor();
+        });
+      }
 
-  // Update Quick Tips with initial frequency and CWI
-  economyChecker.analyzeEconomy().then(analysis => {
-    window.__insuranceEconomyAnalysis = analysis;
-    updateQuickTipsPricing(frequencyField ? frequencyField.value : 'weekly', analysis);
-  }).catch(err => {
-    console.log('Could not update Quick Tips pricing');
-  });
-  }
+      economyChecker.analyzeEconomy().then(analysis => {
+        economyAnalysisPending = false;
+        CTHEconomy.latestInsuranceEconomyAnalysis = analysis;
+        economyChecker.displayCWIInfo(analysis, '#cwi-info');
+        renderPolicyAdvisor();
+      }).catch(() => {
+        economyAnalysisPending = false;
+        if (cwiInfoContainer) {
+          cwiInfoContainer.innerHTML = '';
+        }
+        renderPolicyAdvisor();
+      });
+    } else {
+      renderPolicyAdvisor();
+    }
 
   // Handle mutually exclusive repurchase restrictions
   const permanentBlockToggle = document.getElementById('permanentBlockToggle');
@@ -716,8 +816,16 @@
     }
   }
   if (editClaimType) {
-    editClaimType.addEventListener('change', setEditMonetaryFieldsVisibility);
+    editClaimType.addEventListener('change', () => {
+      setEditMonetaryFieldsVisibility();
+      renderPolicyAdvisor();
+    });
     setEditMonetaryFieldsVisibility();
+  }
+
+  if (editPremiumInput) {
+    editPremiumInput.addEventListener('input', renderPolicyAdvisor);
+    editPremiumInput.addEventListener('change', renderPolicyAdvisor);
   }
 
   // Tier grouping flow (edit mode)
@@ -822,6 +930,7 @@
     if (tierActionsEdit) tierActionsEdit.style.display = 'flex';
     if (newGroupFieldsEdit) newGroupFieldsEdit.classList.remove('d-none');
     updateEditWaitingPeriodControl();
+    renderPolicyAdvisor();
   }
 
   function startNewGroup() {
@@ -835,6 +944,7 @@
       tierColorInput.dispatchEvent(new Event('change'));
     }
     updateEditWaitingPeriodControl();
+    renderPolicyAdvisor();
   }
 
   selectTierButtonsEdit.forEach(btn => {
@@ -879,6 +989,7 @@
       } else {
         hideTierSelection();
       }
+      renderPolicyAdvisor();
     });
   }
 
@@ -888,6 +999,7 @@
         updateTierSummary();
       }
       updateEditWaitingPeriodControl();
+      renderPolicyAdvisor();
     });
   }
 
@@ -908,6 +1020,8 @@
       if (editWaitingPeriodInput) editWaitingPeriodInput.disabled = false;
     });
   }
+
+  renderPolicyAdvisor();
 
   // Enable tooltips for grouped insurance info
   const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
