@@ -110,6 +110,17 @@
 
 {% block content %}
 
+{% set review_policies = policies|selectattr('requires_review')|list %}
+{% if review_policies %}
+<div class="alert alert-warning d-flex align-items-start gap-3">
+  <span class="material-symbols-outlined">warning</span>
+  <div>
+    <strong>Insurance behavior has been updated.</strong>
+    <div>Please review your transaction insurance settings. Policy templates are influenced by economy mode, but student enrollments freeze their own immutable contract snapshots.</div>
+  </div>
+</div>
+{% endif %}
+
 <div class="offcanvas offcanvas-end" tabindex="-1" id="insuranceGuide" aria-labelledby="insuranceGuideLabel">
   <div class="offcanvas-header">
     <h5 class="offcanvas-title" id="insuranceGuideLabel">How to: Insurance Management</h5>
@@ -301,7 +312,7 @@
                   {% elif policy.claim_type == 'non_monetary' %}
                   <span class="badge bg-warning text-dark">Non-Monetary Benefit</span>
                   {% else %}
-                  <span class="badge bg-primary">Custom Monetary Reimbursement</span>
+                  <span class="badge bg-primary">Custom Monetary</span>
                   {% endif %}
                 </td>
                 <td>{{ policy.waiting_period_days }} days</td>
@@ -465,7 +476,7 @@
                       id="simple_waiting_period_days", **{'data-economy-trigger': '#simple_premium'}) }}
                       <span class="input-group-text">days</span>
                     </div>
-                    <small class="text-muted">Number of days students must wait before they can use their
+                    <small class="text-muted" id="simple_waiting_period_help">Number of days students must wait before they can use their
                       insurance</small>
                   </div>
                   <div class="col-md-6 mb-3">
@@ -517,7 +528,7 @@
                               reimburse student purchases<br>
                               <strong>Non-Monetary:</strong> Use this option if your payout/reimbursement is outside of
                               this app.<br>
-                              <strong>Custom Monetary Reimbursement:</strong> Use this option if you don't have a set
+                              <strong>Custom Monetary:</strong> Use this option if you don't have a set
                               amount to reimburse students.
                             </small>
                           </div>
@@ -605,7 +616,7 @@
                               {{ form.waiting_period_days(class="form-control", placeholder="0", id="advanced_waiting_period_days", **{'data-economy-trigger': '#advanced_premium'}) }}
                               <span class="input-group-text">days</span>
                             </div>
-                            <small class="text-muted">Mandatory Waiting Period</small>
+                            <small class="text-muted" id="advanced_waiting_period_help">Mandatory Waiting Period</small>
                           </div>
                           <div class="col-md-6 mb-3">
                             {{ form.claim_time_limit_days.label(class="form-label fw-bold") }}
@@ -911,21 +922,22 @@
 
         function setMonetaryFieldsVisibilityForType(claimTypeValue) {
           const isNonMonetary = claimTypeValue === 'non_monetary';
+          const isTransaction = claimTypeValue === 'transaction_monetary';
 
           if (simpleMaxClaimAmountGroup) {
-            simpleMaxClaimAmountGroup.style.display = isNonMonetary ? 'none' : '';
+            simpleMaxClaimAmountGroup.style.display = (isNonMonetary || isTransaction) ? 'none' : '';
           }
           if (simpleMaxPayoutPerPeriodGroup) {
             simpleMaxPayoutPerPeriodGroup.style.display = isNonMonetary ? 'none' : '';
           }
           if (advancedMaxClaimAmountGroup) {
-            advancedMaxClaimAmountGroup.style.display = isNonMonetary ? 'none' : '';
+            advancedMaxClaimAmountGroup.style.display = (isNonMonetary || isTransaction) ? 'none' : '';
           }
           if (advancedMaxPayoutPerPeriodGroup) {
             advancedMaxPayoutPerPeriodGroup.style.display = isNonMonetary ? 'none' : '';
           }
 
-          if (isNonMonetary) {
+          if (isNonMonetary || isTransaction) {
             if (maxClaimAmountInput) {
               maxClaimAmountInput.value = '';
               maxClaimAmountInput.disabled = true;
@@ -1129,6 +1141,56 @@
         const newGroupFieldsNew = document.getElementById('newGroupFieldsNew');
         const startNewGroupBtnNew = document.getElementById('startNewGroupBtnNew');
         const selectTierButtons = document.querySelectorAll('.select-tier-btn');
+        const insuranceForm = document.getElementById('insuranceForm');
+        const simpleWaitingPeriodInput = document.getElementById('simple_waiting_period_days');
+        const advancedWaitingPeriodInput = document.getElementById('advanced_waiting_period_days');
+        const simpleWaitingPeriodHelp = document.getElementById('simple_waiting_period_help');
+        const advancedWaitingPeriodHelp = document.getElementById('advanced_waiting_period_help');
+
+        function getTierControlledWaitingPeriod() {
+          const waitingByTier = {
+            basic: 7,
+            mid: 5,
+            premium: 3
+          };
+          return waitingByTier[tierLevelInput?.value] || null;
+        }
+
+        function syncWaitingFieldState(field, helpText, waitingDays, enabledHelpText) {
+          if (!field) return;
+          if (waitingDays !== null) {
+            if (!field.disabled) {
+              field.dataset.manualValue = field.value || '7';
+            }
+            field.value = String(waitingDays);
+            field.disabled = true;
+            if (helpText) {
+              helpText.textContent = `Tier Controlled: ${waitingDays} days`;
+            }
+          } else {
+            field.disabled = false;
+            field.value = field.dataset.manualValue || field.value || '7';
+            if (helpText) {
+              helpText.textContent = enabledHelpText;
+            }
+          }
+        }
+
+        function updateWaitingPeriodControls() {
+          const waitingDays = tierToggleNew?.checked ? getTierControlledWaitingPeriod() : null;
+          syncWaitingFieldState(
+            simpleWaitingPeriodInput,
+            simpleWaitingPeriodHelp,
+            waitingDays,
+            'Number of days students must wait before they can use their insurance'
+          );
+          syncWaitingFieldState(
+            advancedWaitingPeriodInput,
+            advancedWaitingPeriodHelp,
+            waitingDays,
+            'Mandatory Waiting Period'
+          );
+        }
 
         function clearTierFields() {
           if (tierCategoryInput) tierCategoryInput.value = '';
@@ -1138,6 +1200,7 @@
             tierColorInput.dispatchEvent(new Event('change'));
           }
           if (tierLevelInput) tierLevelInput.value = '';
+          updateWaitingPeriodControls();
         }
 
         function showTierSelection() {
@@ -1145,6 +1208,7 @@
           if (!selectTierButtons.length && newGroupFieldsNew) {
             newGroupFieldsNew.classList.remove('d-none');
           }
+          updateWaitingPeriodControls();
         }
 
         function hideTierSelection() {
@@ -1154,6 +1218,7 @@
             newGroupFieldsNew.classList.add('d-none');
           }
           clearTierFields();
+          updateWaitingPeriodControls();
         }
 
         function updateTierSummary() {
@@ -1175,6 +1240,7 @@
           }
           updateTierSummary();
           if (newGroupFieldsNew) newGroupFieldsNew.classList.add('d-none');
+          updateWaitingPeriodControls();
         }
 
         function startNewGroup() {
@@ -1186,6 +1252,7 @@
             tierColorInput.value = 'primary';
             tierColorInput.dispatchEvent(new Event('change'));
           }
+          updateWaitingPeriodControls();
         }
 
         selectTierButtons.forEach(btn => {
@@ -1225,6 +1292,7 @@
             if (tierToggleNew && tierToggleNew.checked && tierCategoryInput && tierCategoryInput.value) {
               updateTierSummary();
             }
+            updateWaitingPeriodControls();
           });
         }
 
@@ -1236,6 +1304,14 @@
             id: tierCategoryInput.value,
             name: tierNameInput ? tierNameInput.value : '',
             color: tierColorInput ? tierColorInput.value : 'primary'
+          });
+        }
+        updateWaitingPeriodControls();
+
+        if (insuranceForm) {
+          insuranceForm.addEventListener('submit', () => {
+            if (simpleWaitingPeriodInput) simpleWaitingPeriodInput.disabled = false;
+            if (advancedWaitingPeriodInput) advancedWaitingPeriodInput.disabled = false;
           });
         }
 
@@ -1713,7 +1789,7 @@
     const premium = parseFloat((isSimpleMode ? document.getElementById('simple_premium')?.value : document.getElementById('advanced_premium')?.value)) || 0;
     const frequency = (isSimpleMode ? document.getElementById('simple_charge_frequency')?.value : document.getElementById('advanced_charge_frequency')?.value) || 'monthly';
     const claimType = (isSimpleMode ? document.getElementById('simple_claim_type')?.value : document.getElementById('advanced_claim_type')?.value) || 'transaction_monetary';
-    const waitingPeriod = parseInt((isSimpleMode ? document.getElementById('simple_waiting_period_days')?.value : document.getElementById('waiting_period_days')?.value), 10) || 0;
+    const waitingPeriod = parseInt((isSimpleMode ? document.getElementById('simple_waiting_period_days')?.value : document.getElementById('advanced_waiting_period_days')?.value), 10) || 0;
     const autopay = !isSimpleMode && document.getElementById('autopay')?.checked;
     const isActive = (isSimpleMode ? document.getElementById('simple_is_active')?.checked : document.getElementById('is_active')?.checked);
     const marketingBadge = !isSimpleMode ? (document.getElementById('advanced_marketing_badge')?.value) : '';

@@ -14,6 +14,7 @@ def _create_policy(admin_id: int, *, title: str = "Snapshot Coverage", max_claim
         premium=Decimal("10.00"),
         claim_type="transaction_monetary",
         is_monetary=True,
+        coverage_percent=Decimal("0.50"),
         max_claim_amount=max_claim_amount,
         max_claims_period="month",
         claim_time_limit_days=30,
@@ -69,6 +70,8 @@ def test_student_insurance_keeps_frozen_snapshot_after_policy_edit(client, test_
 
     assert enrollment.contract_title == "Original Policy"
     assert enrollment.contract_description == "Base policy"
+    assert enrollment.contract_premium == Decimal("10.00")
+    assert enrollment.contract_coverage_percent == Decimal("0.50")
     assert enrollment.contract_max_claim_amount == Decimal("42.00")
     assert enrollment.contract_claim_time_limit_days == 30
     assert enrollment.policy_version == 1
@@ -94,7 +97,7 @@ def test_admin_claim_approval_uses_frozen_claim_cap(client, test_student):
         payment_current=True,
     )
     enrollment.freeze_policy_snapshot(policy)
-    enrollment.frozen_max_claim_amount = Decimal("20.00")
+    enrollment.frozen_coverage_percent = Decimal("0.40")
     db.session.add(enrollment)
     db.session.flush()
 
@@ -151,3 +154,97 @@ def test_admin_claim_approval_uses_frozen_claim_cap(client, test_student):
     ).first()
     assert reimbursement is not None
     assert reimbursement.amount == Decimal("20.00")
+
+
+def test_transaction_claim_ignores_per_claim_cap_and_uses_coverage_percent(client, test_student):
+    admin = Admin(username="snapshot-coverage-admin", totp_secret="secret")
+    db.session.add(admin)
+    db.session.flush()
+    db.session.add(StudentTeacher(student_id=test_student.id, admin_id=admin.id))
+    db.session.commit()
+
+    policy = _create_policy(admin.id, title="Coverage Policy", max_claim_amount=Decimal("5.00"))
+    policy.coverage_percent = Decimal("0.50")
+    db.session.commit()
+
+    enrollment = StudentInsurance(
+        student_id=test_student.id,
+        policy_id=policy.id,
+        status="active",
+        join_code="JOIN-SNAP-2",
+        purchase_date=datetime.now(timezone.utc),
+        coverage_start_date=datetime.now(timezone.utc) - timedelta(days=2),
+        payment_current=True,
+    )
+    enrollment.freeze_policy_snapshot(policy)
+    db.session.add(enrollment)
+    db.session.flush()
+
+    tx = Transaction(
+        student_id=test_student.id,
+        teacher_id=admin.id,
+        join_code="JOIN-SNAP-2",
+        amount=Decimal("-50.00"),
+        account_type="checking",
+        status=TransactionStatus.POSTED,
+        type="purchase",
+        description="Purchase: Notebook",
+    )
+    db.session.add(tx)
+    db.session.flush()
+
+    claim = InsuranceClaim(
+        student_insurance_id=enrollment.id,
+        policy_id=policy.id,
+        student_id=test_student.id,
+        incident_date=tx.timestamp,
+        description="Need reimbursement",
+        claim_amount=Decimal("50.00"),
+        status="pending",
+        transaction_id=tx.id,
+    )
+    db.session.add(claim)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["is_admin"] = True
+        sess["admin_id"] = admin.id
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    client.post(
+        f"/admin/insurance/claim/{claim.id}",
+        data={"status": "approved", "approved_amount": "", "rejection_reason": "", "admin_notes": ""},
+        follow_redirects=True,
+    )
+
+    db.session.refresh(claim)
+    assert claim.approved_amount == Decimal("25.00")
+
+
+def test_renewed_enrollment_uses_frozen_waiting_period_for_coverage_start(client, test_student):
+    admin = Admin(username="snapshot-renew-admin", totp_secret="secret")
+    db.session.add(admin)
+    db.session.commit()
+
+    policy = _create_policy(admin.id, title="Tier Waiting Policy")
+    policy.waiting_period_days = 3
+    db.session.commit()
+
+    enrollment = StudentInsurance(
+        student_id=test_student.id,
+        policy_id=policy.id,
+        status="active",
+        join_code="JOIN-SNAP-3",
+        purchase_date=datetime.now(timezone.utc),
+        coverage_start_date=datetime.now(timezone.utc),
+        payment_current=True,
+    )
+    enrollment.freeze_policy_snapshot(policy)
+    db.session.add(enrollment)
+    db.session.commit()
+
+    renewal = enrollment.build_renewed_enrollment(policy)
+
+    assert renewal.contract_waiting_period_days == 3
+    assert renewal.coverage_start_date is not None
+    assert (renewal.coverage_start_date - renewal.purchase_date).days == 3

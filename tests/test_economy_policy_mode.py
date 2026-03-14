@@ -5,7 +5,11 @@ from decimal import Decimal
 from app import db
 from app.models import Admin, FeatureSettings, InsurancePolicy, PayrollSettings, RentSettings
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
-from app.utils.economy_policy import get_feature_settings_row
+from app.utils.economy_policy import (
+    get_feature_settings_row,
+    get_transaction_coverage_default,
+    get_transaction_tier_defaults,
+)
 
 
 def _login_admin(client, admin_id):
@@ -116,6 +120,33 @@ def test_comfortable_policy_uses_requested_ratio_profile(client):
     assert recommendations['insurance_waiting_period_days']['max'] == 7
 
 
+def test_transaction_insurance_defaults_vary_by_policy_mode():
+    assert get_transaction_coverage_default('tight') == Decimal('0.7')
+    assert get_transaction_coverage_default('default') == Decimal('0.7')
+    assert get_transaction_coverage_default('comfortable') == Decimal('0.7')
+
+    default_mid = get_transaction_tier_defaults('default', 2, Decimal('120.00'))
+    assert default_mid['coverage_percent'] == Decimal('0.7')
+    assert default_mid['premium'] == Decimal('8.64')
+    assert default_mid['max_payout_per_period'] == Decimal('69.12')
+
+    tight_basic = get_transaction_tier_defaults('tight', 1, Decimal('250.00'))
+    assert tight_basic['coverage_percent'] == Decimal('0.5')
+    assert tight_basic['premium'] == Decimal('17.50')
+    assert tight_basic['max_payout_per_period'] == Decimal('105.00')
+
+    comfortable_premium = get_transaction_tier_defaults('comfortable', 3, Decimal('250.00'))
+    assert comfortable_premium['coverage_percent'] == Decimal('0.9')
+    assert comfortable_premium['premium'] == Decimal('17.50')
+    assert comfortable_premium['max_payout_per_period'] == Decimal('175.00')
+
+
+def test_transaction_tier_waiting_periods_are_tier_controlled():
+    assert get_transaction_tier_defaults('tight', 1)['waiting_period_days'] == 7
+    assert get_transaction_tier_defaults('default', 2)['waiting_period_days'] == 5
+    assert get_transaction_tier_defaults('comfortable', 3)['waiting_period_days'] == 3
+
+
 def test_update_economy_policy_creates_block_scoped_settings(client):
     admin, _, _ = _create_admin_with_block()
     _login_admin(client, admin.id)
@@ -163,7 +194,7 @@ def test_rent_warnings_report_single_monthly_conversion(client):
     warnings = checker.check_rent_balance(high_rent, cwi)
 
     rent_warning = next(w for w in warnings if w.feature == 'Rent' and w.level in (WarningLevel.WARNING, WarningLevel.CRITICAL))
-    assert round(float(rent_warning.recommended_max), 2) == round(cwi * 0.75 * checker.AVERAGE_WEEKS_PER_MONTH, 2)
+    assert round(float(rent_warning.recommended_max), 2) == round(cwi * checker.RENT_MAX_RATIO, 2)
 
 
 def test_immediate_rebalance_updates_rent_setting(client):

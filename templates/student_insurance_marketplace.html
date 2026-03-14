@@ -120,7 +120,7 @@
                                     style="font-size: 1rem;">redeem</span> Non-monetary</span>
                             {% else %}
                                 <span class="badge bg-primary"><span class="material-symbols-outlined"
-                                    style="font-size: 1rem;">payments</span> Custom monetary reimbursement</span>
+                                    style="font-size: 1rem;">payments</span> Custom monetary</span>
                             {% endif %}
                             {% if enrollment.coverage_start_date %}
                             <span class="badge bg-success">
@@ -294,12 +294,14 @@
                                 <ul class="mb-4">
                                     <li>Up to {% if policy.max_claims_count %}{{ policy.max_claims_count }}{% else
                                         %}unlimited{% endif %} claims per {{ policy.max_claims_period }}</li>
-                                    {% if policy.claim_type != 'non_monetary' %}
+                                    {% if policy.claim_type == 'legacy_monetary' %}
                                     {% if policy.max_claim_amount %}
                                     <li>Maximum claim amount: ${{ "%.2f"|format(policy.max_claim_amount) }}</li>
                                     {% else %}
                                     <li>Unlimited claim amounts</li>
                                     {% endif %}
+                                    {% elif policy.claim_type == 'transaction_monetary' and policy.effective_coverage_percent %}
+                                    <li>Coverage percent: {{ '%.0f'|format(policy.effective_coverage_percent * 100) }}%</li>
                                     {% endif %}
                                 </ul>
 
@@ -323,7 +325,7 @@
                                         {% elif policy.claim_type == 'non_monetary' %}
                                         <span class="badge bg-warning text-dark">Non-monetary</span>
                                         {% else %}
-                                        <span class="badge bg-primary">Custom monetary reimbursement</span>
+                                        <span class="badge bg-primary">Custom monetary</span>
                                         {% endif %}
                                     </li>
                                     <li>Waiting period: {{ policy.waiting_period_days }} days</li>
@@ -333,11 +335,12 @@
                                     {% else %}
                                     <li>Unlimited claims</li>
                                     {% endif %}
-                                    {% if policy.claim_type != 'non_monetary' and policy.max_claim_amount %}
+                                    {% if policy.claim_type == 'legacy_monetary' and policy.max_claim_amount %}
                                     <li>Max claim amount: ${{ "%.2f"|format(policy.max_claim_amount) }}</li>
                                     {% endif %}
                                     {% if policy.claim_type == 'transaction_monetary' %}
-                                    <li>One claim per transaction; amount pulled from spending</li>
+                                    <li>Coverage percent: {{ '%.0f'|format(policy.effective_coverage_percent * 100) }}%</li>
+                                    <li>One claim per transaction; reimbursement is derived automatically</li>
                                     {% endif %}
                                 </ul>
 
@@ -403,8 +406,10 @@
                             <li>Up to {% if policy.max_claims_count %}{{ policy.max_claims_count }}{% else %}unlimited{%
                                 endif %} claims</li>
                             <li>{{ policy.waiting_period_days }} day waiting period</li>
-                            {% if policy.claim_type != 'non_monetary' and policy.max_claim_amount %}
+                            {% if policy.claim_type == 'legacy_monetary' and policy.max_claim_amount %}
                             <li>Max claim: ${{ "%.2f"|format(policy.max_claim_amount) }}</li>
+                            {% elif policy.claim_type == 'transaction_monetary' and policy.effective_coverage_percent %}
+                            <li>Coverage: {{ '%.0f'|format(policy.effective_coverage_percent * 100) }}%</li>
                             {% endif %}
                         </ul>
 
