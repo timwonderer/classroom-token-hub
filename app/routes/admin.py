@@ -1265,11 +1265,26 @@ def _build_rebalance_preview(admin_id, selected_block, checker, cwi, rent_settin
             })
 
     recommended_insurance_weekly = Decimal(str(recommendations['insurance_premium_weekly']['recommended']))
+    premium_band_by_tier = {
+        1: Decimal(str(recommendations['insurance_premium_weekly']['min'])),
+        2: Decimal(str(recommendations['insurance_premium_weekly']['recommended'])),
+        3: Decimal(str(recommendations['insurance_premium_weekly']['max'])),
+    }
     for policy in insurance_policies or []:
         if not policy.is_active:
             continue
         current_premium = Decimal(str(policy.premium or 0))
-        recommended_premium = _inverse_weekly_amount(recommended_insurance_weekly, policy.charge_frequency)
+        tier_rank = policy.effective_tier_rank
+        if policy.claim_type == 'transaction_monetary' and tier_rank:
+            tier_defaults = get_transaction_tier_defaults(checker.policy_mode, tier_rank, Decimal(str(cwi)))
+            recommended_premium = Decimal(str(tier_defaults.get('premium') or 0))
+        elif tier_rank:
+            recommended_premium = _inverse_weekly_amount(
+                premium_band_by_tier.get(tier_rank, recommended_insurance_weekly),
+                policy.charge_frequency,
+            )
+        else:
+            recommended_premium = _inverse_weekly_amount(recommended_insurance_weekly, policy.charge_frequency)
         if current_premium == recommended_premium:
             continue
         preview_items.append({
