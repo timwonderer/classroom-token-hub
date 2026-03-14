@@ -2301,6 +2301,7 @@ def file_claim(policy_id):
         remaining_period_cap = max(max_payout_per_period - period_payouts, Decimal('0.00'))
 
     eligible_transactions = []
+    eligible_transaction_rows = []
     if claim_type == 'transaction_monetary':
         effective_time_limit_days = int(claim_time_limit_days) if claim_time_limit_days is not None else None
         tx_query = (
@@ -2351,6 +2352,20 @@ def file_claim(policy_id):
             )
             for tx in eligible_transactions
         ]
+        for tx in eligible_transactions:
+            transaction_amount = abs(tx.amount or Decimal('0.00'))
+            estimated_payout = transaction_amount
+            if contract_coverage_percent:
+                estimated_payout = transaction_amount * contract_coverage_percent
+            if remaining_period_cap is not None:
+                estimated_payout = min(estimated_payout, remaining_period_cap)
+            eligible_transaction_rows.append({
+                'id': tx.id,
+                'timestamp': ensure_utc(tx.timestamp) if tx.timestamp else None,
+                'description': tx.description or 'No description',
+                'transaction_amount': transaction_amount,
+                'estimated_payout': estimated_payout,
+            })
     else:
         form.transaction_id.choices = []
 
@@ -2490,6 +2505,7 @@ def file_claim(policy_id):
                           errors=errors,
                           claims_this_period=claims_this_period,
                           eligible_transactions=eligible_transactions,
+                          eligible_transaction_rows=eligible_transaction_rows,
                           remaining_period_cap=remaining_period_cap,
                           period_payouts=period_payouts)
 

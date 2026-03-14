@@ -400,7 +400,6 @@
 
               <!-- Economy Balance Check -->
               <div id="cwi-info" class="mb-3"></div>
-              <div id="economy-warnings" class="mb-3"></div>
 
               <!-- SIMPLE MODE -->
               <div id="simpleModeFields">
@@ -572,6 +571,23 @@
                         <div id="tierSelectionNew" class="card bg-light-subtle border-0 shadow-sm"
                           style="display: none;">
                           <div class="card-body">
+                            {% if tier_groups %}
+                            <div id="tierDecisionNew" class="card border-0 bg-white shadow-sm mb-3">
+                              <div class="card-body">
+                                <div class="fw-bold mb-1">Where should this policy go?</div>
+                                <div class="small text-muted mb-3">Choose whether this policy joins an existing tiered set or starts a new one.</div>
+                                <div class="d-flex flex-wrap gap-2">
+                                  <button type="button" class="btn btn-outline-primary btn-sm" id="chooseExistingTierGroupBtn">
+                                    Add to existing tiered group
+                                  </button>
+                                  <button type="button" class="btn btn-outline-secondary btn-sm" id="chooseNewTierGroupBtn">
+                                    Create new tiered group
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                            {% endif %}
+
                             <div class="row g-3 align-items-start">
                               <div class="col-lg-8">
                                 <div class="alert alert-info py-2 px-3 d-none mb-0" id="tierSummaryNew"></div>
@@ -584,7 +600,7 @@
                             </div>
 
                             {% if tier_groups %}
-                            <div class="row g-3 mt-2">
+                            <div class="row g-3 mt-2 d-none" id="existingTierGroupsList">
                               {% for group in tier_groups %}
                               <div class="col-md-6">
                                 <div class="card h-100 border-{{ group.color }} shadow-sm">
@@ -623,7 +639,7 @@
                               </div>
                               {% endfor %}
                             </div>
-                            <div class="mt-3">
+                            <div class="mt-3 d-none" id="existingTierGroupActions">
                               <button type="button" class="btn btn-outline-secondary btn-sm"
                                 id="startNewGroupBtnNew">Create a new tiered set</button>
                             </div>
@@ -681,7 +697,7 @@
                         <div class="alert alert-info d-none" id="advancedTierPricingNotice"></div>
                         <div class="row">
                           <div class="col-md-6 mb-3">
-                            {{ form.premium.label(class="form-label fw-bold") }}
+                            {{ form.premium.label(class="form-label fw-bold", id="advanced_premium_label") }}
                             <div class="input-group">
                               <span class="input-group-text">$</span>
                               {{ form.premium(class="form-control", placeholder="0.00", id="advanced_premium", **{
@@ -692,14 +708,14 @@
                               'data-economy-claim-type-target': '#advanced_claim_type'
                               }) }}
                             </div>
-                            <small class="text-muted">Cost per cycle</small>
+                            <small class="text-muted" id="advanced_premium_help">Cost per cycle</small>
                           </div>
                           <div class="col-md-6 mb-3">
-                            {{ form.charge_frequency.label(class="form-label fw-bold") }}
+                            {{ form.charge_frequency.label(class="form-label fw-bold", id="advanced_charge_frequency_label") }}
                             {{ form.charge_frequency(class="form-select", id="advanced_charge_frequency",
                             **{'data-economy-frequency-field': 'true', 'data-economy-frequency-target':
                             '#advanced_premium'}) }}
-                            <small class="text-muted">Billing frequency</small>
+                            <small class="text-muted" id="advanced_charge_frequency_help">Billing frequency</small>
                           </div>
                         </div>
                         <div class="mb-3">
@@ -760,9 +776,9 @@
                           </div>
                         </div>
                         <div class="row">
-                          <div class="col-md-6 mb-3">
+                          <div class="col-md-6 mb-3" id="advancedMaxClaimsCountGroup">
                             {{ form.max_claims_count.label(class="form-label fw-bold") }}
-                            {{ form.max_claims_count(class="form-control", placeholder="0") }}
+                            {{ form.max_claims_count(class="form-control", placeholder="0", id="advanced_max_claims_count") }}
                             <small class="text-muted">Student can file up to this many claims per charge period</small>
                           </div>
                         </div>
@@ -925,13 +941,38 @@
         if (frequency === 'yearly') return parsed * 52;
         return parsed;
       };
+      CTHEconomy.getTierMultiplier = function (tierLevel) {
+        return {
+          basic: 1.0,
+          mid: 1.4,
+          premium: 1.8
+        }[tierLevel] || 1.0;
+      };
+      CTHEconomy.deriveTierPremium = function (basePremium, tierLevel) {
+        const parsedBase = Number(basePremium);
+        if (!Number.isFinite(parsedBase)) {
+          return 0;
+        }
+        return parsedBase * CTHEconomy.getTierMultiplier(tierLevel);
+      };
+      CTHEconomy.deriveTierCap = function (basePremium, tierLevel) {
+        const parsedBase = Number(basePremium);
+        if (!Number.isFinite(parsedBase)) {
+          return 0;
+        }
+        const periodCapMultiplier = {
+          basic: 6,
+          mid: 8,
+          premium: 10
+        }[tierLevel] || 0;
+        return CTHEconomy.deriveTierPremium(parsedBase, tierLevel) * periodCapMultiplier;
+      };
       document.addEventListener('DOMContentLoaded', function () {
         insuranceModeToggle = document.getElementById('insuranceModeToggle');
         const settingsModeInput = document.getElementById('settingsModeInput');
         const simpleModeFields = document.getElementById('simpleModeFields');
         const advancedModeFields = document.getElementById('advancedModeFields');
         const cwiInfoContainer = document.getElementById('cwi-info');
-        const economyWarningsContainer = document.getElementById('economy-warnings');
         const simpleModeInputs = simpleModeFields ? simpleModeFields.querySelectorAll('input, select, textarea') : [];
         const advancedModeInputs = advancedModeFields ? advancedModeFields.querySelectorAll('input, select, textarea') : [];
         const claimLimitToggle = document.getElementById('simpleClaimLimitToggle');
@@ -940,11 +981,13 @@
         const advancedClaimType = document.getElementById('advanced_claim_type');
         const simpleMaxClaimAmountGroup = document.getElementById('simpleMaxClaimAmountGroup');
         const simpleMaxPayoutPerPeriodGroup = document.getElementById('simpleMaxPayoutPerPeriodGroup');
+        const advancedMaxClaimsCountGroup = document.getElementById('advancedMaxClaimsCountGroup');
         const advancedMaxClaimAmountGroup = document.getElementById('advancedMaxClaimAmountGroup');
         const advancedMaxPayoutPerPeriodGroup = document.getElementById('advancedMaxPayoutPerPeriodGroup');
         const maxClaimAmountInput = document.getElementById('simple_max_claim_amount');
         const maxClaimsCountInput = document.getElementById('simple_max_claims_count');
         const simpleMaxPayoutInput = document.getElementById('simple_max_payout_per_period');
+        const advancedMaxClaimsCountInput = document.getElementById('advanced_max_claims_count');
         const advancedMaxClaimAmountInput = document.getElementById('advanced_max_claim_amount');
         const advancedMaxPayoutInput = document.getElementById('advanced_max_payout_per_period');
         const advancedPremiumInput = document.getElementById('advanced_premium');
@@ -982,11 +1025,14 @@
           if (advancedMaxClaimAmountGroup) {
             advancedMaxClaimAmountGroup.style.display = (isNonMonetary || isTransaction) ? 'none' : '';
           }
+          if (advancedMaxClaimsCountGroup) {
+            advancedMaxClaimsCountGroup.style.display = isTransaction ? 'none' : '';
+          }
           if (advancedMaxPayoutPerPeriodGroup) {
             advancedMaxPayoutPerPeriodGroup.style.display = isNonMonetary ? 'none' : '';
           }
 
-          if (isNonMonetary || isTransaction) {
+          if (isNonMonetary) {
             if (maxClaimAmountInput) {
               maxClaimAmountInput.value = '';
               maxClaimAmountInput.disabled = true;
@@ -995,13 +1041,17 @@
               simpleMaxPayoutInput.value = '';
               simpleMaxPayoutInput.disabled = true;
             }
-            if (advancedMaxClaimAmountInput) {
-              advancedMaxClaimAmountInput.value = '';
-              advancedMaxClaimAmountInput.disabled = true;
-            }
-            if (advancedMaxPayoutInput) {
-              advancedMaxPayoutInput.value = '';
-              advancedMaxPayoutInput.disabled = true;
+              if (advancedMaxClaimAmountInput) {
+                advancedMaxClaimAmountInput.value = '';
+                advancedMaxClaimAmountInput.disabled = true;
+              }
+              if (advancedMaxClaimsCountInput) {
+                advancedMaxClaimsCountInput.value = '';
+                advancedMaxClaimsCountInput.disabled = true;
+              }
+              if (advancedMaxPayoutInput) {
+                advancedMaxPayoutInput.value = '';
+                advancedMaxPayoutInput.disabled = true;
             }
             if (claimLimitToggle) {
               claimLimitToggle.checked = true;
@@ -1009,9 +1059,25 @@
               setClaimLimit(true, true);
             }
           } else {
-            if (maxClaimAmountInput) maxClaimAmountInput.disabled = false;
+            if (isTransaction) {
+              if (maxClaimAmountInput) {
+                maxClaimAmountInput.value = '';
+                maxClaimAmountInput.disabled = true;
+              }
+              if (advancedMaxClaimAmountInput) {
+                advancedMaxClaimAmountInput.value = '';
+                advancedMaxClaimAmountInput.disabled = true;
+              }
+              if (advancedMaxClaimsCountInput) {
+                advancedMaxClaimsCountInput.value = '';
+                advancedMaxClaimsCountInput.disabled = true;
+              }
+            } else {
+              if (maxClaimAmountInput) maxClaimAmountInput.disabled = false;
+              if (advancedMaxClaimsCountInput) advancedMaxClaimsCountInput.disabled = false;
+              if (advancedMaxClaimAmountInput) advancedMaxClaimAmountInput.disabled = false;
+            }
             if (simpleMaxPayoutInput) simpleMaxPayoutInput.disabled = false;
-            if (advancedMaxClaimAmountInput) advancedMaxClaimAmountInput.disabled = false;
             if (advancedMaxPayoutInput) advancedMaxPayoutInput.disabled = false;
             if (claimLimitToggle) {
               claimLimitToggle.disabled = false;
@@ -1133,19 +1199,6 @@
           advancedClaimType.addEventListener('change', () => syncClaimTypeAcrossModes('advanced_claim_type'));
         }
 
-        if (insuranceModeToggle && settingsModeInput) {
-          const initialAdvanced = settingsModeInput.value === 'advanced';
-          insuranceModeToggle.checked = initialAdvanced;
-          setMode(initialAdvanced);
-        } else {
-          setMode(false);
-        }
-
-        const initialClaimType = (settingsModeInput && settingsModeInput.value === 'advanced' && advancedClaimType)
-          ? advancedClaimType.value
-          : (simpleClaimType ? simpleClaimType.value : 'legacy_monetary');
-        setMonetaryFieldsVisibilityForType(initialClaimType);
-
         // Handle mutually exclusive repurchase restrictions for new policy form
         const permanentBlockToggleNew = document.getElementById('permanentBlockToggleNew');
         const cooldownToggleNew = document.getElementById('cooldownToggleNew');
@@ -1189,7 +1242,12 @@
         const tierColorInput = document.getElementById('tier_color');
         const tierLevelInput = document.getElementById('tier_level');
         const tierSummaryNew = document.getElementById('tierSummaryNew');
+        const tierDecisionNew = document.getElementById('tierDecisionNew');
         const newGroupFieldsNew = document.getElementById('newGroupFieldsNew');
+        const existingTierGroupsList = document.getElementById('existingTierGroupsList');
+        const existingTierGroupActions = document.getElementById('existingTierGroupActions');
+        const chooseExistingTierGroupBtn = document.getElementById('chooseExistingTierGroupBtn');
+        const chooseNewTierGroupBtn = document.getElementById('chooseNewTierGroupBtn');
         const startNewGroupBtnNew = document.getElementById('startNewGroupBtnNew');
         const selectTierButtons = document.querySelectorAll('.select-tier-btn');
         const insuranceForm = document.getElementById('insuranceForm');
@@ -1197,6 +1255,28 @@
         const advancedWaitingPeriodInput = document.getElementById('advanced_waiting_period_days');
         const simpleWaitingPeriodHelp = document.getElementById('simple_waiting_period_help');
         const advancedWaitingPeriodHelp = document.getElementById('advanced_waiting_period_help');
+        const advancedPremiumLabel = document.getElementById('advanced_premium_label');
+        const advancedPremiumHelp = document.getElementById('advanced_premium_help');
+        const advancedChargeFrequencyLabel = document.getElementById('advanced_charge_frequency_label');
+        const advancedChargeFrequencyHelp = document.getElementById('advanced_charge_frequency_help');
+
+        function formatTierCapValue(value) {
+          const parsed = Number(value);
+          return Number.isFinite(parsed) ? parsed.toFixed(2) : '';
+        }
+
+        if (insuranceModeToggle && settingsModeInput) {
+          const initialAdvanced = settingsModeInput.value === 'advanced';
+          insuranceModeToggle.checked = initialAdvanced;
+          setMode(initialAdvanced);
+        } else {
+          setMode(false);
+        }
+
+        const initialClaimType = (settingsModeInput && settingsModeInput.value === 'advanced' && advancedClaimType)
+          ? advancedClaimType.value
+          : (simpleClaimType ? simpleClaimType.value : 'legacy_monetary');
+        setMonetaryFieldsVisibilityForType(initialClaimType);
 
         function getActiveInsuranceState() {
           const isAdvanced = Boolean(insuranceModeToggle && insuranceModeToggle.checked);
@@ -1214,30 +1294,6 @@
             tierLevel: tierLevelInput?.value || '',
             tierGroupName: tierNameInput?.value || '',
           };
-        }
-
-        function syncTierDrivenFieldState(field, shouldLock, lockedValue, noticeText) {
-          if (!field) return;
-          if (shouldLock) {
-            if (!field.disabled) {
-              field.dataset.manualValue = field.value || '';
-            }
-            if (lockedValue !== undefined && lockedValue !== null && lockedValue !== '') {
-              field.value = String(lockedValue);
-            }
-            field.disabled = true;
-            field.classList.add('insurance-gated-field');
-            if (noticeText) {
-              field.title = noticeText;
-            }
-            return;
-          }
-          field.disabled = false;
-          field.classList.remove('insurance-gated-field');
-          if (field.dataset.manualValue !== undefined && field.dataset.manualValue !== '') {
-            field.value = field.dataset.manualValue;
-          }
-          field.removeAttribute('title');
         }
 
         function getTierControlledWaitingPeriod() {
@@ -1287,16 +1343,38 @@
 
         function updateTierDrivenAdvancedControls() {
           const { isAdvanced, claimType, isTiered, tierLevel } = getActiveInsuranceState();
-          const shouldLockTransactionDefaults = isAdvanced && isTiered && claimType === 'transaction_monetary' && Boolean(tierLevel);
-          const tierDefaults = shouldLockTransactionDefaults
+          const shouldUseTierContract = isAdvanced && isTiered && claimType === 'transaction_monetary' && Boolean(tierLevel);
+          const tierDefaults = shouldUseTierContract
             ? CTHEconomy.latestInsuranceEconomyAnalysis?.recommendations?.transaction_insurance_defaults?.tiers?.[tierLevel]
             : null;
-          const pricingNotice = shouldLockTransactionDefaults
-            ? `Premium is economy-controlled for ${tierLevel} tier transaction insurance. Use the guidance card on the right to compare the default benefit package.`
+          const recommendedBasePremium = CTHEconomy.latestInsuranceEconomyAnalysis?.recommendations?.transaction_insurance_defaults?.recommended_base_premium;
+          const isTieredTransaction = isAdvanced && isTiered && claimType === 'transaction_monetary';
+          const derivedRecommendedCap = shouldUseTierContract
+            ? CTHEconomy.deriveTierCap(advancedPremiumInput?.value || 0, tierLevel)
+            : 0;
+          const pricingNotice = shouldUseTierContract
+            ? `Enter one base premium. The ${tierLevel} tier charges base x ${tierDefaults?.tier_multiplier || CTHEconomy.getTierMultiplier(tierLevel)} and the recommended weekly base premium for this class is ${CTHEconomy.formatInsuranceCurrency(recommendedBasePremium || 0)}.`
             : '';
-          const coverageNotice = shouldLockTransactionDefaults
-            ? `Tiered transaction insurance locks the waiting period and per-period cap to the selected tier defaults.`
+          const coverageNotice = shouldUseTierContract
+            ? `Coverage and waiting period are controlled by tier (${CTHEconomy.formatInsurancePercent(tierDefaults?.coverage_percent || 0)} coverage, ${tierDefaults?.waiting_period_days || 0} day wait). Per-period cap stays teacher editable; recommended cap is ${CTHEconomy.formatInsuranceCurrency(derivedRecommendedCap || tierDefaults?.max_payout_per_period || 0)}.`
             : '';
+
+          if (advancedPremiumLabel) {
+            advancedPremiumLabel.textContent = isTieredTransaction ? 'Weekly Base Premium ($)' : 'Premium ($)';
+          }
+          if (advancedPremiumHelp) {
+            advancedPremiumHelp.textContent = isTieredTransaction
+              ? 'Teacher enters one weekly base premium for the tiered group. The student-facing premium is calculated automatically from the selected tier multiplier.'
+              : 'Cost per cycle';
+          }
+          if (advancedChargeFrequencyLabel) {
+            advancedChargeFrequencyLabel.textContent = isTieredTransaction ? 'Charge Frequency for Derived Premium' : 'Charge Frequency';
+          }
+          if (advancedChargeFrequencyHelp) {
+            advancedChargeFrequencyHelp.textContent = isTieredTransaction
+              ? 'Billing frequency applied to the derived student premium.'
+              : 'Billing frequency';
+          }
 
           if (advancedTierPricingNotice) {
             advancedTierPricingNotice.classList.toggle('d-none', !pricingNotice);
@@ -1306,19 +1384,25 @@
             advancedTierCoverageNotice.classList.toggle('d-none', !coverageNotice);
             advancedTierCoverageNotice.innerHTML = coverageNotice;
           }
-
-          syncTierDrivenFieldState(
-            advancedPremiumInput,
-            shouldLockTransactionDefaults,
-            tierDefaults?.premium,
-            pricingNotice
-          );
-          syncTierDrivenFieldState(
-            advancedMaxPayoutInput,
-            shouldLockTransactionDefaults,
-            tierDefaults?.max_payout_per_period,
-            coverageNotice
-          );
+          if (advancedPremiumInput) {
+            advancedPremiumInput.disabled = false;
+            advancedPremiumInput.classList.toggle('insurance-gated-field', shouldUseTierContract);
+            advancedPremiumInput.title = pricingNotice;
+          }
+          if (advancedMaxPayoutInput) {
+            advancedMaxPayoutInput.disabled = false;
+            advancedMaxPayoutInput.classList.toggle('insurance-gated-field', false);
+            if (shouldUseTierContract && (!advancedMaxPayoutInput.value || advancedMaxPayoutInput.dataset.autofillRecommended === 'true')) {
+              advancedMaxPayoutInput.value = formatTierCapValue(
+                derivedRecommendedCap || tierDefaults?.max_payout_per_period || ''
+              );
+              advancedMaxPayoutInput.dataset.autofillRecommended = 'true';
+            }
+            if (!shouldUseTierContract) {
+              delete advancedMaxPayoutInput.dataset.autofillRecommended;
+            }
+            advancedMaxPayoutInput.title = coverageNotice;
+          }
         }
 
         function clearTierFields() {
@@ -1332,10 +1416,39 @@
           updateWaitingPeriodControls();
         }
 
+        function setTierWorkflow(mode) {
+          const showExisting = mode === 'existing';
+          const showNew = mode === 'new';
+          const showDecision = Boolean(tierDecisionNew) && !showExisting && !showNew;
+
+          if (tierDecisionNew) {
+            tierDecisionNew.classList.toggle('d-none', !showDecision);
+          }
+          if (existingTierGroupsList) {
+            existingTierGroupsList.classList.toggle('d-none', !showExisting);
+          }
+          if (existingTierGroupActions) {
+            existingTierGroupActions.classList.toggle('d-none', !showExisting);
+          }
+          if (newGroupFieldsNew) {
+            newGroupFieldsNew.classList.toggle('d-none', !showNew);
+          }
+          if (chooseExistingTierGroupBtn) {
+            chooseExistingTierGroupBtn.classList.toggle('btn-primary', showExisting);
+            chooseExistingTierGroupBtn.classList.toggle('btn-outline-primary', !showExisting);
+          }
+          if (chooseNewTierGroupBtn) {
+            chooseNewTierGroupBtn.classList.toggle('btn-secondary', showNew);
+            chooseNewTierGroupBtn.classList.toggle('btn-outline-secondary', !showNew);
+          }
+        }
+
         function showTierSelection() {
           if (tierSelectionNew) tierSelectionNew.style.display = 'block';
-          if (!selectTierButtons.length && newGroupFieldsNew) {
-            newGroupFieldsNew.classList.remove('d-none');
+          if (!selectTierButtons.length) {
+            setTierWorkflow('new');
+          } else {
+            setTierWorkflow(null);
           }
           updateWaitingPeriodControls();
           updateTierDrivenAdvancedControls();
@@ -1344,9 +1457,7 @@
         function hideTierSelection() {
           if (tierSelectionNew) tierSelectionNew.style.display = 'none';
           if (tierSummaryNew) tierSummaryNew.classList.add('d-none');
-          if (newGroupFieldsNew && selectTierButtons.length) {
-            newGroupFieldsNew.classList.add('d-none');
-          }
+          setTierWorkflow(null);
           clearTierFields();
           updateWaitingPeriodControls();
           updateTierDrivenAdvancedControls();
@@ -1369,8 +1480,8 @@
             tierColorInput.value = tier.color || 'primary';
             tierColorInput.dispatchEvent(new Event('change'));
           }
+          setTierWorkflow('existing');
           updateTierSummary();
-          if (newGroupFieldsNew) newGroupFieldsNew.classList.add('d-none');
           updateWaitingPeriodControls();
           updateTierDrivenAdvancedControls();
         }
@@ -1379,7 +1490,7 @@
           showTierSelection();
           if (tierCategoryInput) tierCategoryInput.value = '';
           if (tierSummaryNew) tierSummaryNew.classList.add('d-none');
-          if (newGroupFieldsNew) newGroupFieldsNew.classList.remove('d-none');
+          setTierWorkflow('new');
           if (tierColorInput && !tierColorInput.value) {
             tierColorInput.value = 'primary';
             tierColorInput.dispatchEvent(new Event('change'));
@@ -1399,6 +1510,23 @@
             });
           });
         });
+
+        if (chooseExistingTierGroupBtn) {
+          chooseExistingTierGroupBtn.addEventListener('click', () => {
+            if (tierToggleNew) tierToggleNew.checked = true;
+            showTierSelection();
+            setTierWorkflow('existing');
+            if (tierSummaryNew) tierSummaryNew.classList.add('d-none');
+            if (tierCategoryInput) tierCategoryInput.value = '';
+          });
+        }
+
+        if (chooseNewTierGroupBtn) {
+          chooseNewTierGroupBtn.addEventListener('click', () => {
+            if (tierToggleNew) tierToggleNew.checked = true;
+            startNewGroup();
+          });
+        }
 
         if (startNewGroupBtnNew) {
           startNewGroupBtnNew.addEventListener('click', () => {
@@ -1430,6 +1558,18 @@
           });
         }
 
+        if (advancedPremiumInput) {
+          advancedPremiumInput.addEventListener('input', () => {
+            updateTierDrivenAdvancedControls();
+          });
+        }
+
+        if (advancedMaxPayoutInput) {
+          advancedMaxPayoutInput.addEventListener('input', () => {
+            advancedMaxPayoutInput.dataset.autofillRecommended = 'false';
+          });
+        }
+
         // Initialize existing selection if data already present
         if (tierCategoryInput && tierCategoryInput.value) {
           if (tierToggleNew) tierToggleNew.checked = true;
@@ -1439,6 +1579,10 @@
             name: tierNameInput ? tierNameInput.value : '',
             color: tierColorInput ? tierColorInput.value : 'primary'
           });
+        } else if (tierNameInput && tierNameInput.value) {
+          if (tierToggleNew) tierToggleNew.checked = true;
+          showTierSelection();
+          setTierWorkflow('new');
         }
         updateWaitingPeriodControls();
         updateTierDrivenAdvancedControls();
@@ -1447,6 +1591,8 @@
           insuranceForm.addEventListener('submit', () => {
             if (simpleWaitingPeriodInput) simpleWaitingPeriodInput.disabled = false;
             if (advancedWaitingPeriodInput) advancedWaitingPeriodInput.disabled = false;
+            if (advancedPremiumInput) advancedPremiumInput.disabled = false;
+            if (advancedMaxPayoutInput) advancedMaxPayoutInput.disabled = false;
           });
         }
 
@@ -1462,7 +1608,7 @@
         // Initialize Economy Balance Checker
         if (typeof EconomyBalanceChecker !== 'undefined') {
           const economyChecker = new EconomyBalanceChecker({
-            warningsContainer: '#economy-warnings'
+            warningsContainer: '#insurance-economy-validator-disabled'
           });
 
           const currentBlock = '{{ settings_block }}';
@@ -1928,17 +2074,22 @@
 
     const title = (isSimpleMode ? document.getElementById('simple_title')?.value : document.getElementById('title')?.value) || '';
     const description = (isSimpleMode ? document.getElementById('simple_description')?.value : document.getElementById('description')?.value) || '';
-    const premium = parseFloat((isSimpleMode ? document.getElementById('simple_premium')?.value : document.getElementById('advanced_premium')?.value)) || 0;
+    const enteredPremium = parseFloat((isSimpleMode ? document.getElementById('simple_premium')?.value : document.getElementById('advanced_premium')?.value)) || 0;
     const frequency = (isSimpleMode ? document.getElementById('simple_charge_frequency')?.value : document.getElementById('advanced_charge_frequency')?.value) || 'monthly';
     const claimType = (isSimpleMode ? document.getElementById('simple_claim_type')?.value : document.getElementById('advanced_claim_type')?.value) || 'transaction_monetary';
     const waitingPeriod = parseInt((isSimpleMode ? document.getElementById('simple_waiting_period_days')?.value : document.getElementById('advanced_waiting_period_days')?.value), 10) || 0;
     const autopay = !isSimpleMode && document.getElementById('autopay')?.checked;
     const isActive = (isSimpleMode ? document.getElementById('simple_is_active')?.checked : document.getElementById('is_active')?.checked);
     const marketingBadge = !isSimpleMode ? (document.getElementById('advanced_marketing_badge')?.value) : '';
+    const isTieredTransaction = Boolean(!isSimpleMode && document.getElementById('tierToggleNew')?.checked && claimType === 'transaction_monetary');
+    const tierLevel = document.getElementById('tier_level')?.value || '';
+    const premium = isTieredTransaction
+      ? CTHEconomy.deriveTierPremium(enteredPremium, tierLevel)
+      : enteredPremium;
 
     previewDiv.replaceChildren();
 
-    if (!title || premium === 0) {
+    if (!title || enteredPremium === 0) {
       const blank = document.createElement('div');
       blank.className = 'alert alert-light border mb-0';
       blank.textContent = 'Fill out the policy name and premium to see a preview of how students will see this insurance policy.';
@@ -1982,6 +2133,13 @@
     premiumEl.className = 'text-success fw-bold mb-2';
     premiumEl.textContent = `$${premium.toFixed(2)} / ${frequencyNames[frequency] || frequency}`;
     cardBody.appendChild(premiumEl);
+
+    if (isTieredTransaction && tierLevel) {
+      const derivedNote = document.createElement('p');
+      derivedNote.className = 'text-muted small mb-2';
+      derivedNote.textContent = `Derived from a $${enteredPremium.toFixed(2)} base premium using the ${tierLevel} tier multiplier.`;
+      cardBody.appendChild(derivedNote);
+    }
 
     if (description) {
       const descriptionEl = document.createElement('p');
@@ -2076,11 +2234,20 @@
       }
 
       card.appendChild(header);
-      appendStat(card, 'Premium', CTHEconomy.formatInsuranceCurrency(tier.premium || 0));
+      appendStat(card, 'Multiplier', `${tier.tier_multiplier || CTHEconomy.getTierMultiplier(level)}x base`);
+      appendStat(card, 'Base premium (weekly)', `${CTHEconomy.formatInsuranceCurrency(tier.base_premium || 0)} / week`);
+      appendStat(card, 'Premium (weekly)', `${CTHEconomy.formatInsuranceCurrency(tier.premium || 0)} / week`);
       appendStat(card, 'Coverage', CTHEconomy.formatInsurancePercent(tier.coverage_percent || 0));
-      appendStat(card, 'Period cap', CTHEconomy.formatInsuranceCurrency(tier.max_payout_per_period || 0));
+      appendStat(card, 'Recommended cap', CTHEconomy.formatInsuranceCurrency(tier.max_payout_per_period || 0));
       appendStat(card, 'Wait', `${tier.waiting_period_days || 0} days`);
       return card;
+    };
+
+    const createNotice = (text) => {
+      const notice = document.createElement('div');
+      notice.className = 'alert alert-light border mb-0 small';
+      notice.textContent = text;
+      return notice;
     };
 
     if (!CTHEconomy.latestInsuranceEconomyAnalysis) {
@@ -2107,12 +2274,15 @@
     const tierLevel = document.getElementById('tier_level')?.value || '';
     const isTiered = Boolean(isAdvanced && tierToggle?.checked);
     const recommendations = analysis.recommendations;
-    const minPremium = CTHEconomy.convertInsuranceWeeklyToFrequency(recommendations.insurance_premium_weekly?.min || 0, frequency);
-    const maxPremium = CTHEconomy.convertInsuranceWeeklyToFrequency(recommendations.insurance_premium_weekly?.max || 0, frequency);
-    const idealPremium = CTHEconomy.convertInsuranceWeeklyToFrequency(recommendations.insurance_premium_weekly?.recommended || 0, frequency);
+    const minPremiumWeekly = recommendations.insurance_premium_weekly?.min || 0;
+    const maxPremiumWeekly = recommendations.insurance_premium_weekly?.max || 0;
+    const idealPremiumWeekly = recommendations.insurance_premium_weekly?.recommended || 0;
+    const idealPremiumAtFrequency = CTHEconomy.convertInsuranceWeeklyToFrequency(idealPremiumWeekly, frequency);
+    const recommendedBasePremium = recommendations.transaction_insurance_defaults?.recommended_base_premium || 0;
     const selectedTierDefaults = tierLevel
       ? recommendations.transaction_insurance_defaults?.tiers?.[tierLevel]
       : null;
+    const tierRecommendations = recommendations.transaction_insurance_defaults?.tiers || {};
 
     clearAdvisor();
 
@@ -2129,47 +2299,58 @@
     cwiBadge.textContent = `${CTHEconomy.formatInsuranceCurrency(analysis.cwi)} weekly CWI`;
     guidanceHeader.append(guidanceTitle, cwiBadge);
     guidance.appendChild(guidanceHeader);
-    appendStat(guidance, 'Recommended premium', `${CTHEconomy.formatInsuranceCurrency(minPremium)} to ${CTHEconomy.formatInsuranceCurrency(maxPremium)}`);
-    appendStat(guidance, 'Ideal target', `${CTHEconomy.formatInsuranceCurrency(idealPremium)} / ${frequency}`);
-    appendStat(guidance, 'Waiting period', `${recommendations.insurance_waiting_period_days?.min ?? 0}-${recommendations.insurance_waiting_period_days?.max ?? 0} days`);
+    const defaultWaitingMin = recommendations.insurance_waiting_period_days?.min ?? 0;
+    const defaultWaitingMax = recommendations.insurance_waiting_period_days?.max ?? 0;
+    const defaultWaitingLabel = defaultWaitingMin === defaultWaitingMax
+      ? `${defaultWaitingMin} days`
+      : `${defaultWaitingMin}-${defaultWaitingMax} days`;
+    const tierWaitValues = Object.values(tierRecommendations)
+      .map((tier) => Number(tier?.waiting_period_days))
+      .filter((days) => Number.isFinite(days));
+    const tierWaitingMin = tierWaitValues.length ? Math.min(...tierWaitValues) : null;
+    const tierWaitingMax = tierWaitValues.length ? Math.max(...tierWaitValues) : null;
+    const tierWaitingLabel = tierWaitingMin === null || tierWaitingMax === null
+      ? null
+      : (tierWaitingMin === tierWaitingMax ? `${tierWaitingMin} days` : `${tierWaitingMin}-${tierWaitingMax} days`);
+
+    if (claimType === 'transaction_monetary' && isTiered) {
+      guidanceTitle.textContent = 'Tiered transaction setup';
+      appendStat(guidance, 'Recommended base premium (weekly)', `${CTHEconomy.formatInsuranceCurrency(recommendedBasePremium)} / week`);
+      if (selectedTierDefaults) {
+        appendStat(guidance, 'Selected tier', tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1));
+        appendStat(guidance, 'Student premium (weekly)', `${CTHEconomy.formatInsuranceCurrency(selectedTierDefaults.premium || 0)} / week`);
+        appendStat(guidance, 'Coverage', CTHEconomy.formatInsurancePercent(selectedTierDefaults.coverage_percent || 0));
+        appendStat(guidance, 'Waiting period', `${selectedTierDefaults.waiting_period_days || 0} days`);
+        appendStat(guidance, 'Recommended cap', CTHEconomy.formatInsuranceCurrency(selectedTierDefaults.max_payout_per_period || 0));
+      } else {
+        appendStat(guidance, 'Tier waiting period range', tierWaitingLabel || defaultWaitingLabel);
+        guidance.appendChild(createNotice('Select Basic, Mid, or Premium to see the exact tier contract for this policy.'));
+      }
+    } else {
+      appendStat(guidance, 'Recommended premium range (weekly)', `${CTHEconomy.formatInsuranceCurrency(minPremiumWeekly)} to ${CTHEconomy.formatInsuranceCurrency(maxPremiumWeekly)} / week`);
+      appendStat(guidance, 'Ideal target (weekly)', `${CTHEconomy.formatInsuranceCurrency(idealPremiumWeekly)} / week`);
+      if (frequency !== 'weekly') {
+        appendStat(guidance, `Ideal target at ${frequency}`, `${CTHEconomy.formatInsuranceCurrency(idealPremiumAtFrequency)} / ${frequency}`);
+      }
+      appendStat(guidance, 'Default waiting period', defaultWaitingLabel);
+    }
     grid.appendChild(guidance);
 
-    if (claimType === 'transaction_monetary') {
-      const transactionSection = document.createElement('div');
-      const transactionTitle = document.createElement('strong');
-      transactionTitle.className = 'd-block mb-2';
-      transactionTitle.textContent = 'Transaction defaults';
-      transactionSection.appendChild(transactionTitle);
-
-      const nonTiered = document.createElement('div');
-      nonTiered.className = 'small text-muted mb-2';
-      nonTiered.textContent = `Non-tiered coverage default: ${CTHEconomy.formatInsurancePercent(recommendations.transaction_insurance_defaults?.non_tiered_coverage_percent || 0)}`;
-      transactionSection.appendChild(nonTiered);
-
-      const tierGrid = document.createElement('div');
-      tierGrid.className = 'insurance-advisor-tiers';
-      ['basic', 'mid', 'premium'].forEach((level) => {
-        const tier = recommendations.transaction_insurance_defaults?.tiers?.[level];
-        if (!tier) return;
-        tierGrid.appendChild(createTierCard(level, tier, isTiered && tierLevel === level));
-      });
-      transactionSection.appendChild(tierGrid);
-
-      if (isTiered && selectedTierDefaults) {
-        const selectedAlert = document.createElement('div');
-        selectedAlert.className = 'alert alert-primary mt-3 mb-0 small';
-        const strong = document.createElement('strong');
-        strong.textContent = `${tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1)} tier selected.`;
-        selectedAlert.appendChild(strong);
-        selectedAlert.append(` Premium, waiting period, and period cap are now being guided from this package instead of freeform entry.`);
-        transactionSection.appendChild(selectedAlert);
+    if (claimType === 'transaction_monetary' && isTiered) {
+      if (!selectedTierDefaults) {
+        const tierGrid = document.createElement('div');
+        tierGrid.className = 'insurance-advisor-tiers';
+        ['basic', 'mid', 'premium'].forEach((level) => {
+          const tier = recommendations.transaction_insurance_defaults?.tiers?.[level];
+          if (!tier) return;
+          tierGrid.appendChild(createTierCard(level, tier, false));
+        });
+        grid.appendChild(tierGrid);
       }
-      grid.appendChild(transactionSection);
+    } else if (claimType === 'transaction_monetary') {
+      grid.appendChild(createNotice('Turn on tiered insurance to see Basic, Mid, and Premium recommendations.'));
     } else {
-      const notice = document.createElement('div');
-      notice.className = 'alert alert-light border mb-0 small';
-      notice.textContent = 'Switch claim type to transaction-linked reimbursement to see tier-driven premium and coverage defaults.';
-      grid.appendChild(notice);
+      grid.appendChild(createNotice('Switch claim type to transaction-linked reimbursement to see tier-driven premium and coverage defaults.'));
     }
 
     advisor.appendChild(grid);

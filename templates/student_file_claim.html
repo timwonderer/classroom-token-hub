@@ -16,6 +16,16 @@
     .CodeMirror {
         border-radius: 0 0 4px 4px;
     }
+    .claim-transaction-table th,
+    .claim-transaction-table td {
+        vertical-align: middle;
+    }
+    .claim-transaction-row {
+        cursor: pointer;
+    }
+    .claim-transaction-row.is-selected {
+        background: rgba(13, 110, 253, 0.08);
+    }
 </style>
 {% endblock %}
 
@@ -48,14 +58,49 @@
 
                     {% if is_transaction %}
                         <div class="mb-3">
-                            {{ form.transaction_id.label(class="form-label") }}
-                            {{ form.transaction_id(class="form-select", required=True) }}
+                            <label class="form-label">{{ form.transaction_id.label.text }}</label>
+                            <input type="hidden" name="{{ form.transaction_id.name }}" id="transaction_id" value="{{ form.transaction_id.data or '' }}">
                             <small class="form-text text-muted">
                                 One claim per transaction. Select a spending transaction within {{ contract_claim_time_limit_days }} days.
                             </small>
                             {% if not eligible_transactions %}
                                 <div class="alert alert-warning mt-2 mb-0 py-2">
                                     No eligible transactions available to claim right now.
+                                </div>
+                            {% else %}
+                                <div class="table-responsive mt-2">
+                                    <table class="table table-sm claim-transaction-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 56px;">Pick</th>
+                                                <th>Date</th>
+                                                <th>Description</th>
+                                                <th class="text-end">Amount</th>
+                                                <th class="text-end">Estimated Payout</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for tx in eligible_transaction_rows %}
+                                                {% set is_selected = form.transaction_id.data == tx.id %}
+                                                <tr class="claim-transaction-row{% if is_selected %} is-selected{% endif %}" data-transaction-row>
+                                                    <td>
+                                                        <input
+                                                            class="form-check-input"
+                                                            type="radio"
+                                                            name="transaction_id_choice"
+                                                            value="{{ tx.id }}"
+                                                            {% if is_selected %}checked{% endif %}
+                                                            aria-label="Select transaction {{ tx.id }}"
+                                                        >
+                                                    </td>
+                                                    <td>{{ tx.timestamp.strftime('%Y-%m-%d') if tx.timestamp else 'Unknown' }}</td>
+                                                    <td>{{ tx.description }}</td>
+                                                    <td class="text-end">${{ '%.2f'|format(tx.transaction_amount) }}</td>
+                                                    <td class="text-end">${{ '%.2f'|format(tx.estimated_payout) }}</td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
                                 </div>
                             {% endif %}
                         </div>
@@ -236,6 +281,9 @@
   document.addEventListener('DOMContentLoaded', function() {
     const descriptionField = document.getElementById('description');
     const commentsField = document.getElementById('comments');
+    const transactionIdInput = document.getElementById('transaction_id');
+    const transactionRows = document.querySelectorAll('[data-transaction-row]');
+    const transactionChoices = document.querySelectorAll('input[name="transaction_id_choice"]');
 
     if (descriptionField) {
       new EasyMDE({
@@ -261,6 +309,32 @@
         placeholder: "Any additional information (Markdown supported)...",
       });
     }
+
+    function syncSelectedTransaction() {
+      const selectedChoice = document.querySelector('input[name="transaction_id_choice"]:checked');
+      if (transactionIdInput) {
+        transactionIdInput.value = selectedChoice ? selectedChoice.value : '';
+      }
+      transactionRows.forEach((row) => {
+        const radio = row.querySelector('input[name="transaction_id_choice"]');
+        row.classList.toggle('is-selected', Boolean(radio && radio.checked));
+      });
+    }
+
+    transactionChoices.forEach((choice) => {
+      choice.addEventListener('change', syncSelectedTransaction);
+    });
+    transactionRows.forEach((row) => {
+      row.addEventListener('click', function(event) {
+        if (event.target instanceof HTMLInputElement) return;
+        const radio = row.querySelector('input[name="transaction_id_choice"]');
+        if (radio) {
+          radio.checked = true;
+          syncSelectedTransaction();
+        }
+      });
+    });
+    syncSelectedTransaction();
   });
 </script>
 {% endblock %}
