@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField
-from wtforms.validators import DataRequired, ValidationError, Length
+from wtforms.validators import DataRequired, ValidationError, Length, NumberRange
 from wtforms import HiddenField, TextAreaField, FloatField, SelectField, IntegerField, DateField, BooleanField, SelectMultipleField
 from wtforms.validators import Optional
 
@@ -166,7 +166,11 @@ class InsurancePolicyForm(FlaskForm):
         ],
         default='transaction_monetary',
     )
-    waiting_period_days = IntegerField('Waiting Period', default=7, validators=[DataRequired()])
+    waiting_period_days = IntegerField(
+        'Waiting Period',
+        default=7,
+        validators=[Optional(), NumberRange(min=0, max=30, message='Waiting period must be between 0 and 30 days.')],
+    )
     max_claims_count = IntegerField('Claims per Coverage Period Limit', validators=[Optional()])
     max_claim_amount = FloatField('Per Claim Limit', validators=[Optional()])
     max_payout_per_period = FloatField('Per Coverage Period Limit', validators=[Optional()])
@@ -234,6 +238,18 @@ class InsurancePolicyForm(FlaskForm):
     is_active = BooleanField('Policy is Active', default=True)
     blocks = SelectMultipleField('Visible to Periods/Blocks (leave empty for all)', choices=[], validators=[Optional()])
     submit = SubmitField('Save Policy')
+
+    def validate_waiting_period_days(self, field):
+        is_tiered = any([
+            self.tier_category_id.data,
+            self.tier_level.data,
+            self.tier_name.data,
+            self.tier_color.data,
+        ])
+        if is_tiered:
+            return
+        if field.data is None:
+            raise ValidationError('Waiting period is required for non-tiered policies.')
 
 
 class InsuranceClaimForm(FlaskForm):

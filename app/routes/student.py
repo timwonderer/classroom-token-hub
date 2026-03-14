@@ -1978,14 +1978,15 @@ def insurance_marketplace():
     tier_groups = {}
     ungrouped_policies = []
     for policy in available_policies:
-        if policy.tier_category_id:
-            if policy.tier_category_id not in tier_groups:
-                tier_groups[policy.tier_category_id] = {
-                    'name': policy.tier_name or f"Tier {policy.tier_category_id}",
+        group_id = policy.effective_product_group_id
+        if group_id:
+            if group_id not in tier_groups:
+                tier_groups[group_id] = {
+                    'name': policy.tier_name or f"Tier {group_id}",
                     'color': policy.tier_color or 'primary',
                     'policies': []
                 }
-            tier_groups[policy.tier_category_id]['policies'].append(policy)
+            tier_groups[group_id]['policies'].append(policy)
         else:
             ungrouped_policies.append(policy)
 
@@ -1995,8 +1996,8 @@ def insurance_marketplace():
         # Normalize dates for safe comparisons in templates
         enrollment.coverage_start_date = ensure_utc(enrollment.coverage_start_date)
         enrollment.cancel_date = ensure_utc(enrollment.cancel_date)
-        if enrollment.policy.tier_category_id:
-            enrolled_tiers.add(enrollment.policy.tier_category_id)
+        if enrollment.policy.effective_product_group_id:
+            enrolled_tiers.add(enrollment.policy.effective_product_group_id)
 
     return render_template('student_insurance_marketplace.html',
                           student=student,
@@ -2064,13 +2065,19 @@ def purchase_insurance(policy_id):
                 return redirect(url_for('student.student_insurance'))
 
     # Check tier restrictions - can only have one policy per tier (scoped to current class)
-    if policy.tier_category_id:
+    if policy.effective_product_group_id:
         existing_tier_enrollment = StudentInsurance.query.join(
             InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id
         ).filter(
             StudentInsurance.student_id == student.id,
             StudentInsurance.status == 'active',
-            InsurancePolicy.tier_category_id == policy.tier_category_id,
+            or_(
+                InsurancePolicy.product_group_id == policy.effective_product_group_id,
+                and_(
+                    InsurancePolicy.product_group_id.is_(None),
+                    InsurancePolicy.tier_category_id == policy.effective_product_group_id,
+                ),
+            ),
             InsurancePolicy.teacher_id == teacher_id  # Scope to current class only
         ).first()
 
@@ -2127,10 +2134,11 @@ def purchase_insurance(policy_id):
         purchase_date=utc_now(),
         last_payment_date=utc_now(),
         next_payment_due=utc_now() + timedelta(days=30),  # Simplified
-        coverage_start_date=utc_now() + timedelta(days=policy.waiting_period_days),
+        coverage_start_date=utc_now(),
         payment_current=True
     )
     enrollment.freeze_policy_snapshot(policy)
+    enrollment.coverage_start_date = utc_now() + timedelta(days=enrollment.contract_waiting_period_days or 0)
     db.session.add(enrollment)
 
     # CRITICAL FIX v2: Create transaction with join_code
@@ -2215,11 +2223,12 @@ def file_claim(policy_id):
 
     policy = enrollment.policy
     claim_type = policy.claim_type
-    max_claim_amount = enrollment.contract_max_claim_amount
+    max_claim_amount = None if claim_type == 'transaction_monetary' else enrollment.contract_max_claim_amount
     max_payout_per_period = enrollment.contract_max_payout_per_period
     max_claims_count = enrollment.contract_max_claims_count
     max_claims_period = (enrollment.contract_max_claims_period or 'month').lower()
     claim_time_limit_days = enrollment.contract_claim_time_limit_days
+    contract_coverage_percent = enrollment.contract_coverage_percent
     form = InsuranceClaimForm()
     if claim_type == 'transaction_monetary' and not form.incident_date.data:
         form.incident_date.data = utc_now().date()
@@ -2476,6 +2485,7 @@ def file_claim(policy_id):
                           contract_max_claims_period=max_claims_period,
                           contract_claim_time_limit_days=claim_time_limit_days,
                           contract_max_payout_per_period=max_payout_per_period,
+                          contract_coverage_percent=contract_coverage_percent,
                           form=form,
                           errors=errors,
                           claims_this_period=claims_this_period,

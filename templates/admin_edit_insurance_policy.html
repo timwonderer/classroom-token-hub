@@ -74,7 +74,7 @@
                 <small>
                   <strong>Transactions-based:</strong> Link claims to a specific student transaction.<br>
                   <strong>Non-monetary:</strong> Approval-only workflow, no reimbursements.<br>
-                  <strong>Custom monetary reimbursement:</strong> Manual claim amounts (backward compatible).
+                  <strong>Custom monetary:</strong> Manual claim amounts (backward compatible).
                 </small>
               </div>
             </div>
@@ -156,7 +156,7 @@
                       {{ form.waiting_period_days(class="form-control", placeholder="0", id="edit_waiting_period_days", **{'data-economy-trigger': '#edit_premium'}) }}
                       <span class="input-group-text">days</span>
                     </div>
-                    <small class="text-muted">Before coverage starts</small>
+                    <small class="text-muted" id="edit_waiting_period_help">Before coverage starts</small>
                   </div>
                   <div class="col-md-6 mb-3">
                     {{ form.claim_time_limit_days.label(class="form-label fw-bold") }}
@@ -661,6 +661,9 @@
   const editMaxPayoutPerPeriodGroup = document.getElementById('editMaxPayoutPerPeriodGroup');
   const editMaxClaimAmountInput = document.getElementById('edit_max_claim_amount');
   const editMaxPayoutInput = document.getElementById('edit_max_payout_per_period');
+  const editWaitingPeriodInput = document.getElementById('edit_waiting_period_days');
+  const editWaitingPeriodHelp = document.getElementById('edit_waiting_period_help');
+  const editForm = document.querySelector('form[action*="/insurance/edit/"]');
 
   function updateRepurchaseRestrictions() {
     if (permanentBlockToggle.checked) {
@@ -703,15 +706,16 @@
   function setEditMonetaryFieldsVisibility() {
     if (!editClaimType) return;
     const isNonMonetary = editClaimType.value === 'non_monetary';
+    const isTransaction = editClaimType.value === 'transaction_monetary';
 
     if (editMaxClaimAmountGroup) {
-      editMaxClaimAmountGroup.style.display = isNonMonetary ? 'none' : '';
+      editMaxClaimAmountGroup.style.display = (isNonMonetary || isTransaction) ? 'none' : '';
     }
     if (editMaxPayoutPerPeriodGroup) {
       editMaxPayoutPerPeriodGroup.style.display = isNonMonetary ? 'none' : '';
     }
 
-    if (isNonMonetary) {
+    if (isNonMonetary || isTransaction) {
       if (editMaxClaimAmountInput) {
         editMaxClaimAmountInput.value = '';
         editMaxClaimAmountInput.disabled = true;
@@ -745,6 +749,37 @@
   const tierActionsEdit = document.getElementById('tierActionsEdit');
   const groupedBadge = document.querySelector('.grouped-badge');
 
+  function getTierControlledWaitingPeriod() {
+    const waitingByTier = {
+      basic: 7,
+      mid: 5,
+      premium: 3
+    };
+    return waitingByTier[tierLevelInput?.value] || null;
+  }
+
+  function updateEditWaitingPeriodControl() {
+    const waitingDays = tierToggleEdit?.checked ? getTierControlledWaitingPeriod() : null;
+    if (!editWaitingPeriodInput) return;
+
+    if (waitingDays !== null) {
+      if (!editWaitingPeriodInput.disabled) {
+        editWaitingPeriodInput.dataset.manualValue = editWaitingPeriodInput.value || '7';
+      }
+      editWaitingPeriodInput.value = String(waitingDays);
+      editWaitingPeriodInput.disabled = true;
+      if (editWaitingPeriodHelp) {
+        editWaitingPeriodHelp.textContent = `Tier Controlled: ${waitingDays} days`;
+      }
+    } else {
+      editWaitingPeriodInput.disabled = false;
+      editWaitingPeriodInput.value = editWaitingPeriodInput.dataset.manualValue || editWaitingPeriodInput.value || '7';
+      if (editWaitingPeriodHelp) {
+        editWaitingPeriodHelp.textContent = 'Before coverage starts';
+      }
+    }
+  }
+
   function clearTierFields() {
     if (tierCategoryInput) tierCategoryInput.value = '';
     if (tierNameInput) tierNameInput.value = '';
@@ -767,6 +802,7 @@
     if (newGroupFieldsEdit) newGroupFieldsEdit.classList.add('d-none');
     if (groupedBadge) groupedBadge.style.display = 'none';
     clearTierFields();
+    updateEditWaitingPeriodControl();
   }
 
   // Escapes &, <, >, ", and ' for HTML usage
@@ -799,6 +835,7 @@
     updateTierSummary();
     if (tierActionsEdit) tierActionsEdit.style.display = 'flex';
     if (newGroupFieldsEdit) newGroupFieldsEdit.classList.remove('d-none');
+    updateEditWaitingPeriodControl();
   }
 
   function startNewGroup() {
@@ -811,6 +848,7 @@
       tierColorInput.value = 'primary';
       tierColorInput.dispatchEvent(new Event('change'));
     }
+    updateEditWaitingPeriodControl();
   }
 
   selectTierButtonsEdit.forEach(btn => {
@@ -863,6 +901,7 @@
       if (tierToggleEdit && tierToggleEdit.checked && tierCategoryInput && tierCategoryInput.value) {
         updateTierSummary();
       }
+      updateEditWaitingPeriodControl();
     });
   }
 
@@ -874,6 +913,13 @@
       id: tierCategoryInput.value,
       name: tierNameInput ? tierNameInput.value : '',
       color: tierColorInput ? tierColorInput.value : 'primary'
+    });
+  }
+  updateEditWaitingPeriodControl();
+
+  if (editForm) {
+    editForm.addEventListener('submit', () => {
+      if (editWaitingPeriodInput) editWaitingPeriodInput.disabled = false;
     });
   }
 

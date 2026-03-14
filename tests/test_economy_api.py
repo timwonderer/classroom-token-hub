@@ -260,10 +260,10 @@ def test_validate_rent_with_monthly_frequency(logged_in_admin_client, admin_with
 
     # Test with monthly rent of $440
     # CWI = 0.25 * 8 * 60 = 120.0 per week
-    # Default policy rent burden is 60-75% of weekly CWI.
-    # Converted to monthly-equivalent using average weeks/month:
-    # min = 120 * 0.60 * 4.348... ~= 313.07
-    # max = 120 * 0.75 * 4.348... ~= 391.34
+    # Default policy rent recommendation is expressed as a monthly multiple
+    # of weekly CWI.
+    # min = 120 * 2.00 = 240.00
+    # max = 120 * 2.50 = 300.00
     response = client.post(
         '/admin/api/economy/validate/rent',
         json={
@@ -279,12 +279,11 @@ def test_validate_rent_with_monthly_frequency(logged_in_admin_client, admin_with
     expected_cwi = 0.25 * 8.0 * 60  # 120.0 per week
     assert abs(data['cwi'] - expected_cwi) < 0.01
 
-    # Verify recommendations are monthly-equivalent values derived from the default policy
+    # Verify recommendations are monthly values derived from the default policy
     recommendations = data['recommendations']
-    average_weeks_per_month = 365.25 / 12 / 7
-    assert abs(recommendations['min'] - (expected_cwi * 0.60 * average_weeks_per_month)) < 0.01
-    assert abs(recommendations['max'] - (expected_cwi * 0.75 * average_weeks_per_month)) < 0.01
-    assert abs(recommendations['recommended'] - (expected_cwi * 0.675 * average_weeks_per_month)) < 0.01
+    assert abs(recommendations['min'] - (expected_cwi * 2.00)) < 0.01
+    assert abs(recommendations['max'] - (expected_cwi * 2.50)) < 0.01
+    assert abs(recommendations['recommended'] - (expected_cwi * 2.25)) < 0.01
 
     # Monthly rent of $440 is above the policy max
     assert data['status'] == 'warning'

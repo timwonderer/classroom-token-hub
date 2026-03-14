@@ -87,8 +87,8 @@
                             <div>
                                 <div class="fw-bold">Transaction-based reimbursement</div>
                                 <div class="small mb-1">Claim amount is based on the transaction total (no manual entry).</div>
-                                {% if contract_max_claim_amount %}
-                                    <div class="small">Per-claim cap: ${{ '%.2f'|format(contract_max_claim_amount) }}</div>
+                                {% if contract_coverage_percent %}
+                                    <div class="small">Coverage percent: {{ '%.0f'|format(contract_coverage_percent * 100) }}%</div>
                                 {% endif %}
                                 {% if remaining_period_cap is not none %}
                                     <div class="small">Remaining period cap: ${{ '%.2f'|format(remaining_period_cap) }}</div>
@@ -165,7 +165,10 @@
                 <ul class="small mb-3">
                     <li>Waiting period: {{ policy.waiting_period_days }} days</li>
                     <li>Claim deadline: {{ contract_claim_time_limit_days }} days from incident</li>
-                    {% if claim_type != 'non_monetary' and contract_max_claim_amount %}
+                    {% if claim_type == 'transaction_monetary' and contract_coverage_percent %}
+                        <li>Coverage percent: {{ '%.0f'|format(contract_coverage_percent * 100) }}%</li>
+                    {% endif %}
+                    {% if claim_type == 'legacy_monetary' and contract_max_claim_amount %}
                         <li>Max claim: ${{ "%.2f"|format(contract_max_claim_amount) }}</li>
                     {% endif %}
                     {% if contract_max_claims_count %}

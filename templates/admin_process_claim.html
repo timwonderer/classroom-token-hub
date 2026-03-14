@@ -151,7 +151,9 @@
         </p>
 
         <p><strong>Max Claim Amount:</strong><br>
-          {% if contract_max_claim_amount %}
+          {% if claim_type == 'transaction_monetary' and contract_coverage_percent %}
+            {{ '%.0f'|format(contract_coverage_percent * 100) }}% of linked transaction
+          {% elif contract_max_claim_amount %}
             ${{ "%.2f"|format(contract_max_claim_amount) }}
           {% else %}
             Unlimited

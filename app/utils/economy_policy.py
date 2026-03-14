@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Dict, Optional
 from flask import has_app_context
 
 
 POLICY_MODE_DEFAULT = "default"
+TIER_WAITING_PERIOD_DAYS = {
+    1: 7,
+    2: 5,
+    3: 3,
+}
 
 POLICY_MODES: Dict[str, Dict[str, Any]] = {
     "tight": {
@@ -12,7 +18,7 @@ POLICY_MODES: Dict[str, Dict[str, Any]] = {
         "summary": "More budgeting pressure",
         "description": "A leaner economy with less surplus and more deliberate spending.",
         "ratios": {
-            "rent_weekly": {"min": 0.70, "max": 0.80, "recommended": 0.75},
+            "rent_weekly": {"min": 2.25, "max": 2.75, "recommended": 2.50},
             "utilities_weekly": {"min": 0.07, "max": 0.12, "recommended": 0.095},
             "insurance_weekly": {"min": 0.06, "max": 0.14, "recommended": 0.09},
             "insurance_coverage_multiplier": {"min": 2.5, "max": 4.0, "recommended": 3.25},
@@ -27,13 +33,22 @@ POLICY_MODES: Dict[str, Dict[str, Any]] = {
             },
             "savings_weekly": {"min": 0.05, "target": 0.05},
         },
+        "insurance_transaction_defaults": {
+            "base_rate": 0.07,
+            "non_tiered": {"coverage_percent": 0.70},
+            "tiers": {
+                1: {"coverage_percent": 0.50, "period_cap_multiplier": 6.0, "waiting_period_days": 7},
+                2: {"coverage_percent": 0.70, "period_cap_multiplier": 8.0, "waiting_period_days": 5},
+                3: {"coverage_percent": 0.90, "period_cap_multiplier": 10.0, "waiting_period_days": 3},
+            },
+        },
     },
     "default": {
         "label": "Default",
         "summary": "Balanced economy",
         "description": "The standard baseline with moderate pressure and stable survival margins.",
         "ratios": {
-            "rent_weekly": {"min": 0.60, "max": 0.75, "recommended": 0.675},
+            "rent_weekly": {"min": 2.00, "max": 2.50, "recommended": 2.25},
             "utilities_weekly": {"min": 0.05, "max": 0.10, "recommended": 0.075},
             "insurance_weekly": {"min": 0.05, "max": 0.12, "recommended": 0.08},
             "insurance_coverage_multiplier": {"min": 3.0, "max": 5.0, "recommended": 4.0},
@@ -48,13 +63,22 @@ POLICY_MODES: Dict[str, Dict[str, Any]] = {
             },
             "savings_weekly": {"min": 0.10, "target": 0.10},
         },
+        "insurance_transaction_defaults": {
+            "base_rate": 0.06,
+            "non_tiered": {"coverage_percent": 0.70},
+            "tiers": {
+                1: {"coverage_percent": 0.50, "period_cap_multiplier": 6.0, "waiting_period_days": 7},
+                2: {"coverage_percent": 0.70, "period_cap_multiplier": 8.0, "waiting_period_days": 5},
+                3: {"coverage_percent": 0.90, "period_cap_multiplier": 10.0, "waiting_period_days": 3},
+            },
+        },
     },
     "comfortable": {
         "label": "Comfortable",
         "summary": "More breathing room",
         "description": "A more forgiving economy with lower fixed pressure and larger student margin.",
         "ratios": {
-            "rent_weekly": {"min": 0.50, "max": 0.65, "recommended": 0.575},
+            "rent_weekly": {"min": 1.75, "max": 2.25, "recommended": 2.00},
             "utilities_weekly": {"min": 0.04, "max": 0.08, "recommended": 0.06},
             "insurance_weekly": {"min": 0.04, "max": 0.10, "recommended": 0.07},
             "insurance_coverage_multiplier": {"min": 4.0, "max": 6.0, "recommended": 5.0},
@@ -69,6 +93,15 @@ POLICY_MODES: Dict[str, Dict[str, Any]] = {
             },
             "savings_weekly": {"min": 0.15, "target": 0.175},
         },
+        "insurance_transaction_defaults": {
+            "base_rate": 0.05,
+            "non_tiered": {"coverage_percent": 0.70},
+            "tiers": {
+                1: {"coverage_percent": 0.50, "period_cap_multiplier": 6.0, "waiting_period_days": 7},
+                2: {"coverage_percent": 0.70, "period_cap_multiplier": 8.0, "waiting_period_days": 5},
+                3: {"coverage_percent": 0.90, "period_cap_multiplier": 10.0, "waiting_period_days": 3},
+            },
+        },
     },
 }
 
@@ -80,6 +113,44 @@ def normalize_policy_mode(value: Optional[str]) -> str:
 
 def get_policy_profile(mode: Optional[str]) -> Dict[str, Any]:
     return POLICY_MODES[normalize_policy_mode(mode)]
+
+
+def get_transaction_coverage_default(mode: Optional[str]) -> Decimal:
+    profile = get_policy_profile(mode)
+    raw_value = profile.get("insurance_transaction_defaults", {}).get("non_tiered", {}).get("coverage_percent", 0.70)
+    return Decimal(str(raw_value))
+
+
+def get_tier_waiting_period_days(tier_rank: Optional[int]) -> int:
+    try:
+        normalized_rank = int(tier_rank) if tier_rank is not None else None
+    except (TypeError, ValueError):
+        normalized_rank = None
+    return int(TIER_WAITING_PERIOD_DAYS.get(normalized_rank, 7))
+
+
+def get_transaction_tier_defaults(mode: Optional[str], tier_rank: int, cwi: Optional[Decimal] = None) -> Dict[str, Any]:
+    profile = get_policy_profile(mode)
+    tier_defaults = profile.get("insurance_transaction_defaults", {}).get("tiers", {}).get(int(tier_rank), {})
+    base_rate = Decimal(str(profile.get("insurance_transaction_defaults", {}).get("base_rate", 0.06)))
+    coverage_percent = Decimal(str(tier_defaults.get("coverage_percent", 0.70)))
+    premium_multiplier = Decimal("0.5") + coverage_percent
+    period_cap_multiplier = Decimal(str(tier_defaults.get("period_cap_multiplier", 0)))
+    premium = None
+    max_payout_per_period = None
+    if cwi is not None:
+        premium = (Decimal(str(cwi)) * base_rate * premium_multiplier).quantize(Decimal("0.01"))
+        max_payout_per_period = (premium * period_cap_multiplier).quantize(Decimal("0.01"))
+
+    return {
+        "base_rate": base_rate,
+        "premium_multiplier": premium_multiplier,
+        "coverage_percent": coverage_percent,
+        "period_cap_multiplier": period_cap_multiplier,
+        "waiting_period_days": get_tier_waiting_period_days(tier_rank),
+        "premium": premium,
+        "max_payout_per_period": max_payout_per_period,
+    }
 
 
 def get_feature_settings_row(teacher_id: int, block: Optional[str] = None, create: bool = False):

@@ -1271,6 +1271,16 @@ class RentItem(db.Model):
 # -------------------- INSURANCE MODELS --------------------
 class InsurancePolicy(db.Model):
     __tablename__ = 'insurance_policies'
+    __table_args__ = (
+        db.Index(
+            'uq_insurance_policy_group_rank',
+            'teacher_id',
+            'product_group_id',
+            'tier_rank',
+            unique=True,
+            postgresql_where=sa.text('product_group_id IS NOT NULL AND tier_rank IS NOT NULL'),
+        ),
+    )
     id = db.Column(db.Integer, primary_key=True)
     policy_code = db.Column(db.String(16), unique=True, nullable=False, index=True)  # Unique code per teacher's policy
     version_number = db.Column(db.Integer, nullable=False, default=1)
@@ -1287,6 +1297,7 @@ class InsurancePolicy(db.Model):
     max_claims_period = db.Column(db.String(20), default='month')  # month, semester, year
     max_claim_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)  # Max $ per claim (null = unlimited)
     max_payout_per_period = db.Column(db.Numeric(precision=12, scale=2), nullable=True)  # Max total $ payout per period (null = unlimited)
+    coverage_percent = db.Column(db.Numeric(precision=5, scale=4), nullable=True)  # Decimal fraction (e.g. 0.7000)
 
     # Claim type
     claim_type = db.Column(db.String(20), nullable=False, default='legacy_monetary')  # transaction_monetary, non_monetary, legacy_monetary
@@ -1312,6 +1323,9 @@ class InsurancePolicy(db.Model):
     tier_name = db.Column(db.String(100), nullable=True)  # Display name for the tier (e.g., "Paycheck Protection")
     tier_color = db.Column(db.String(20), nullable=True)  # Color theme for the tier (e.g., "primary", "success", "warning")
     tier_level = db.Column(db.String(20), nullable=True)  # Basic, mid-tier, premium placement within a group
+    product_group_id = db.Column(db.Integer, nullable=True)  # Canonical normalized tier group identifier
+    tier_rank = db.Column(db.Integer, nullable=True)  # Canonical rank: 1=Basic, 2=Mid, 3=Premium
+    requires_review = db.Column(db.Boolean, default=False)
 
     # Settings mode: simple or advanced
     settings_mode = db.Column(db.String(20), nullable=True, default='advanced')  # simple or advanced
@@ -1352,6 +1366,34 @@ class InsurancePolicy(db.Model):
     @property
     def is_monetary_claim(self):
         return self.claim_type != 'non_monetary'
+
+    @property
+    def product_type(self):
+        return 'custom_monetary' if self.claim_type == 'legacy_monetary' else self.claim_type
+
+    @property
+    def effective_product_group_id(self):
+        return self.product_group_id if self.product_group_id is not None else self.tier_category_id
+
+    @property
+    def effective_tier_rank(self):
+        if self.tier_rank is not None:
+            return self.tier_rank
+        level = (self.tier_level or '').strip().lower()
+        return {'basic': 1, 'mid': 2, 'premium': 3}.get(level)
+
+    @property
+    def effective_coverage_percent(self):
+        if self.coverage_percent is not None:
+            return self.coverage_percent
+        if self.claim_type == 'transaction_monetary':
+            return Decimal('1.0')
+        return None
+
+    @property
+    def tier_label(self):
+        rank = self.effective_tier_rank
+        return {1: 'Basic', 2: 'Mid', 3: 'Premium'}.get(rank)
 
 
 @sa.event.listens_for(InsurancePolicy, "before_update")
@@ -1403,6 +1445,9 @@ class StudentInsurance(db.Model):
     # Immutable snapshot of the policy terms at purchase time.
     frozen_policy_title = db.Column(db.String(100), nullable=True)
     frozen_policy_description = db.Column(db.Text, nullable=True)
+    frozen_premium = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
+    frozen_coverage_percent = db.Column(db.Numeric(precision=5, scale=4), nullable=True)
+    frozen_waiting_period_days = db.Column(db.Integer, nullable=True)
     frozen_max_claim_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
     frozen_max_payout_per_period = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
     frozen_max_claims_count = db.Column(db.Integer, nullable=True)
@@ -1418,6 +1463,9 @@ class StudentInsurance(db.Model):
         """Copy mutable template values into this enrollment's immutable contract snapshot."""
         self.frozen_policy_title = policy.title
         self.frozen_policy_description = policy.description
+        self.frozen_premium = policy.premium
+        self.frozen_coverage_percent = policy.effective_coverage_percent
+        self.frozen_waiting_period_days = policy.waiting_period_days
         self.frozen_max_claim_amount = policy.max_claim_amount
         self.frozen_max_payout_per_period = policy.max_payout_per_period
         self.frozen_max_claims_count = policy.max_claims_count
@@ -1435,11 +1483,12 @@ class StudentInsurance(db.Model):
             purchase_date=utc_now(),
             last_payment_date=utc_now(),
             next_payment_due=utc_now() + timedelta(days=30),
-            coverage_start_date=utc_now() + timedelta(days=policy.waiting_period_days),
+            coverage_start_date=utc_now(),
             payment_current=True,
             days_unpaid=0,
         )
         renewal.freeze_policy_snapshot(policy)
+        renewal.coverage_start_date = utc_now() + timedelta(days=renewal.contract_waiting_period_days or 0)
         return renewal
 
     @property
@@ -1457,6 +1506,26 @@ class StudentInsurance(db.Model):
         return self.frozen_max_claim_amount if self.frozen_max_claim_amount is not None else (
             self.policy.max_claim_amount if self.policy else None
         )
+
+    @property
+    def contract_premium(self):
+        return self.frozen_premium if self.frozen_premium is not None else (
+            self.policy.premium if self.policy else None
+        )
+
+    @property
+    def contract_coverage_percent(self):
+        if self.frozen_coverage_percent is not None:
+            return self.frozen_coverage_percent
+        if self.policy and self.policy.claim_type == 'transaction_monetary':
+            return self.policy.effective_coverage_percent
+        return None
+
+    @property
+    def contract_waiting_period_days(self):
+        if self.frozen_waiting_period_days is not None:
+            return self.frozen_waiting_period_days
+        return self.policy.waiting_period_days if self.policy else None
 
     @property
     def contract_max_payout_per_period(self):

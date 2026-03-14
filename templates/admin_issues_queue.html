@@ -329,6 +329,7 @@
                                         <a href="{{ url_for('admin.view_issue', issue_ref=issue_ref_for(issue.id)) }}" class="text-decoration-none fw-semibold">
                                             {{ issue.student_first_name }} {{ issue.student_last_initial }}.
                                         </a>
+                                        <div class="small text-muted">{{ issue.student_explanation or 'N/A' }}</div>
                                     </td>
                                     <td>{{ issue.class_label or issue.period or '—' }}</td>
                                     <td>{{ issue.category.name if issue.category else '—' }}</td>
@@ -337,7 +338,7 @@
                                         {% if issue.closed_at %}
                                         <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.closed_at) }}"></span>
                                         {% else %}
-                                        —
+                                        N/A
                                         {% endif %}
                                     </td>
                                 </tr>
