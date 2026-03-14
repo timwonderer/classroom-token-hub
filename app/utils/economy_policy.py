@@ -11,6 +11,11 @@ TIER_WAITING_PERIOD_DAYS = {
     2: 5,
     3: 3,
 }
+TRANSACTION_TIER_MULTIPLIERS = {
+    1: Decimal("1.0"),
+    2: Decimal("1.4"),
+    3: Decimal("1.8"),
+}
 
 POLICY_MODES: Dict[str, Dict[str, Any]] = {
     "tight": {
@@ -35,7 +40,7 @@ POLICY_MODES: Dict[str, Dict[str, Any]] = {
         },
         "insurance_transaction_defaults": {
             "base_rate": 0.07,
-            "non_tiered": {"coverage_percent": 0.70},
+            "non_tiered": {"coverage_percent": 0.50},
             "tiers": {
                 1: {"coverage_percent": 0.50, "period_cap_multiplier": 6.0, "waiting_period_days": 7},
                 2: {"coverage_percent": 0.70, "period_cap_multiplier": 8.0, "waiting_period_days": 5},
@@ -65,7 +70,7 @@ POLICY_MODES: Dict[str, Dict[str, Any]] = {
         },
         "insurance_transaction_defaults": {
             "base_rate": 0.06,
-            "non_tiered": {"coverage_percent": 0.70},
+            "non_tiered": {"coverage_percent": 0.50},
             "tiers": {
                 1: {"coverage_percent": 0.50, "period_cap_multiplier": 6.0, "waiting_period_days": 7},
                 2: {"coverage_percent": 0.70, "period_cap_multiplier": 8.0, "waiting_period_days": 5},
@@ -95,7 +100,7 @@ POLICY_MODES: Dict[str, Dict[str, Any]] = {
         },
         "insurance_transaction_defaults": {
             "base_rate": 0.05,
-            "non_tiered": {"coverage_percent": 0.70},
+            "non_tiered": {"coverage_percent": 0.50},
             "tiers": {
                 1: {"coverage_percent": 0.50, "period_cap_multiplier": 6.0, "waiting_period_days": 7},
                 2: {"coverage_percent": 0.70, "period_cap_multiplier": 8.0, "waiting_period_days": 5},
@@ -117,7 +122,7 @@ def get_policy_profile(mode: Optional[str]) -> Dict[str, Any]:
 
 def get_transaction_coverage_default(mode: Optional[str]) -> Decimal:
     profile = get_policy_profile(mode)
-    raw_value = profile.get("insurance_transaction_defaults", {}).get("non_tiered", {}).get("coverage_percent", 0.70)
+    raw_value = profile.get("insurance_transaction_defaults", {}).get("non_tiered", {}).get("coverage_percent", 0.50)
     return Decimal(str(raw_value))
 
 
@@ -129,22 +134,34 @@ def get_tier_waiting_period_days(tier_rank: Optional[int]) -> int:
     return int(TIER_WAITING_PERIOD_DAYS.get(normalized_rank, 7))
 
 
-def get_transaction_tier_defaults(mode: Optional[str], tier_rank: int, cwi: Optional[Decimal] = None) -> Dict[str, Any]:
+def get_transaction_tier_defaults(
+    mode: Optional[str],
+    tier_rank: int,
+    cwi: Optional[Decimal] = None,
+    *,
+    base_premium: Optional[Decimal] = None,
+) -> Dict[str, Any]:
     profile = get_policy_profile(mode)
     tier_defaults = profile.get("insurance_transaction_defaults", {}).get("tiers", {}).get(int(tier_rank), {})
     base_rate = Decimal(str(profile.get("insurance_transaction_defaults", {}).get("base_rate", 0.06)))
-    coverage_percent = Decimal(str(tier_defaults.get("coverage_percent", 0.70)))
-    premium_multiplier = Decimal("0.5") + coverage_percent
+    coverage_percent = Decimal(str(tier_defaults.get("coverage_percent", 0.50)))
+    tier_multiplier = TRANSACTION_TIER_MULTIPLIERS.get(int(tier_rank), Decimal("1.0"))
     period_cap_multiplier = Decimal(str(tier_defaults.get("period_cap_multiplier", 0)))
+    resolved_base_premium = None
+    if base_premium is not None:
+        resolved_base_premium = Decimal(str(base_premium)).quantize(Decimal("0.01"))
+    elif cwi is not None:
+        resolved_base_premium = (Decimal(str(cwi)) * base_rate).quantize(Decimal("0.01"))
     premium = None
     max_payout_per_period = None
-    if cwi is not None:
-        premium = (Decimal(str(cwi)) * base_rate * premium_multiplier).quantize(Decimal("0.01"))
+    if resolved_base_premium is not None:
+        premium = (resolved_base_premium * tier_multiplier).quantize(Decimal("0.01"))
         max_payout_per_period = (premium * period_cap_multiplier).quantize(Decimal("0.01"))
 
     return {
         "base_rate": base_rate,
-        "premium_multiplier": premium_multiplier,
+        "base_premium": resolved_base_premium,
+        "tier_multiplier": tier_multiplier,
         "coverage_percent": coverage_percent,
         "period_cap_multiplier": period_cap_multiplier,
         "waiting_period_days": get_tier_waiting_period_days(tier_rank),

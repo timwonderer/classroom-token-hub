@@ -220,12 +220,15 @@ def _apply_transaction_policy_defaults(policy, *, teacher_id, block=None):
     policy_mode = get_active_policy_mode(teacher_id, block)
     tier_rank = policy.effective_tier_rank
     if tier_rank:
-        cwi = _calculate_block_cwi_for_insurance(teacher_id, block)
-        tier_defaults = get_transaction_tier_defaults(policy_mode, tier_rank, cwi)
-        if tier_defaults.get('premium') is not None:
+        tier_defaults = get_transaction_tier_defaults(
+            policy_mode,
+            tier_rank,
+            base_premium=policy.premium,
+        )
+        if tier_defaults.get('base_premium') is not None:
             policy.premium = tier_defaults['premium']
         policy.coverage_percent = tier_defaults['coverage_percent']
-        if tier_defaults.get('max_payout_per_period') is not None:
+        if policy.max_payout_per_period is None and tier_defaults.get('max_payout_per_period') is not None:
             policy.max_payout_per_period = tier_defaults['max_payout_per_period']
         policy.waiting_period_days = tier_defaults['waiting_period_days']
     else:
@@ -236,6 +239,32 @@ def _apply_tier_waiting_period(policy):
     tier_rank = policy.effective_tier_rank
     if tier_rank:
         policy.waiting_period_days = get_tier_waiting_period_days(tier_rank)
+
+
+def _get_transaction_tier_base_premium(policy) -> Decimal | None:
+    if not policy or policy.claim_type != 'transaction_monetary' or not policy.effective_tier_rank or policy.premium is None:
+        return None
+    tier_defaults = get_transaction_tier_defaults(
+        get_active_policy_mode(policy.teacher_id, _resolve_policy_block_for_mode(policy.blocks_list)),
+        policy.effective_tier_rank,
+    )
+    tier_multiplier = Decimal(str(tier_defaults["tier_multiplier"]))
+    if tier_multiplier == 0:
+        return None
+    return (_normalize_amount_to_weekly(Decimal(str(policy.premium)), policy.charge_frequency) / tier_multiplier).quantize(Decimal("0.01"))
+
+
+def _policy_contract_shape_changed(policy, form) -> bool:
+    original_group = policy.effective_product_group_id
+    submitted_group = form.tier_category_id.data
+    if not submitted_group and (form.tier_name.data or form.tier_color.data or form.tier_level.data):
+        submitted_group = original_group or "__new_group__"
+
+    return any([
+        form.claim_type.data != policy.claim_type,
+        (form.tier_level.data or None) != (policy.tier_level or None),
+        submitted_group != original_group,
+    ])
 
 def parse_dob_input(dob_str):
     """
@@ -415,6 +444,9 @@ def _populate_policy_from_form(policy, form, *, teacher_id=None, block=None, nex
     policy.marketing_badge = form.marketing_badge.data if form.marketing_badge.data else None
     policy.set_blocks(form.blocks.data if form.blocks.data else [])
     _apply_normalized_tier_fields(policy, form, next_tier_category_id=next_tier_category_id)
+    if is_transaction and policy.effective_tier_rank:
+        policy.charge_frequency = 'weekly'
+        policy.max_claims_period = FREQUENCY_TO_CLAIM_PERIOD.get('weekly', 'week')
     _apply_tier_waiting_period(policy)
 
     policy.tier_name = form.tier_name.data or None
@@ -1167,6 +1199,31 @@ def _inverse_weekly_amount(value, frequency, custom_frequency_value=None, custom
         if unit == 'months':
             return _quantize_currency(amount * Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH)) * freq_value)
         return _quantize_currency(amount / (Decimal('7') / freq_value))
+    return amount
+
+
+def _normalize_amount_to_weekly(value, frequency, custom_frequency_value=None, custom_frequency_unit=None):
+    from app.models import _quantize_currency
+
+    amount = _quantize_currency(value)
+    frequency = (frequency or 'weekly').lower()
+
+    if frequency == 'monthly':
+        return _quantize_currency(amount / Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH)))
+    if frequency == 'weekly':
+        return amount
+    if frequency == 'biweekly':
+        return _quantize_currency(amount / Decimal('2'))
+    if frequency == 'daily':
+        return _quantize_currency(amount * Decimal('7'))
+    if frequency == 'custom':
+        unit = (custom_frequency_unit or 'days').lower()
+        freq_value = Decimal(str(custom_frequency_value or 1))
+        if unit == 'weeks':
+            return _quantize_currency(amount / freq_value)
+        if unit == 'months':
+            return _quantize_currency(amount / (Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH)) * freq_value))
+        return _quantize_currency(amount * (Decimal('7') / freq_value))
     return amount
 
 
@@ -6022,7 +6079,7 @@ def insurance_management():
 @admin_required
 def edit_insurance_policy(policy_id):
     """Edit existing insurance policy."""
-    policy = InsurancePolicy.query.get_or_404(policy_id)
+    policy = db.get_or_404(InsurancePolicy, policy_id)
 
     # Verify this policy belongs to the current teacher
     if policy.teacher_id != session.get('admin_id'):
@@ -6039,6 +6096,9 @@ def edit_insurance_policy(policy_id):
         form.blocks.data = policy.blocks_list
         if policy.effective_tier_rank is not None:
             form.waiting_period_days.data = get_tier_waiting_period_days(policy.effective_tier_rank)
+        base_premium = _get_transaction_tier_base_premium(policy)
+        if base_premium is not None:
+            form.premium.data = float(base_premium)
 
     teacher_policies = InsurancePolicy.query.filter_by(teacher_id=session.get('admin_id')).all()
     tier_groups_map = {}
@@ -6063,6 +6123,12 @@ def edit_insurance_policy(policy_id):
     next_tier_category_id = _next_tenant_scoped_tier_id(tier_namespace_seed, existing_tier_ids)
 
     if request.method == 'POST' and form.validate_on_submit():
+        if _policy_contract_shape_changed(policy, form):
+            flash(
+                "Product type and tier structure are contract invariants. Create a new policy instead of changing those fields.",
+                "danger",
+            )
+            return redirect(url_for('admin.edit_insurance_policy', policy_id=policy.id))
         edit_block = request.args.get('settings_block') or _resolve_policy_block_for_mode(form.blocks.data)
         _populate_policy_from_form(
             policy,
