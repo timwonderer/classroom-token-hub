@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from app import db
-from app.routes.admin import _build_rebalance_preview, _get_transaction_tier_base_premium, _inverse_weekly_amount
+from app.routes.admin import _build_rebalance_preview, _get_transaction_weekly_premium, _inverse_weekly_amount
 from app.models import Admin, FeatureSettings, InsurancePolicy, PayrollSettings, RentSettings
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 from app.utils.economy_policy import (
@@ -128,30 +128,30 @@ def test_comfortable_policy_uses_requested_ratio_profile(client):
 
 
 def test_transaction_insurance_defaults_vary_by_policy_mode():
-    assert get_transaction_coverage_default('tight') == Decimal('0.5')
-    assert get_transaction_coverage_default('default') == Decimal('0.5')
-    assert get_transaction_coverage_default('comfortable') == Decimal('0.5')
+    assert get_transaction_coverage_default('tight') == Decimal('0.7')
+    assert get_transaction_coverage_default('default') == Decimal('0.7')
+    assert get_transaction_coverage_default('comfortable') == Decimal('0.7')
 
     default_mid = get_transaction_tier_defaults('default', 2, Decimal('120.00'))
     assert default_mid['coverage_percent'] == Decimal('0.7')
-    assert default_mid['base_premium'] == Decimal('7.20')
-    assert default_mid['tier_multiplier'] == Decimal('1.4')
-    assert default_mid['premium'] == Decimal('10.08')
-    assert default_mid['max_payout_per_period'] == Decimal('80.64')
+    assert default_mid['base_premium'] == Decimal('9.60')
+    assert default_mid['premium'] == Decimal('9.60')
+    assert default_mid['weekly_cap'] == Decimal('28.80')
+    assert default_mid['max_payout_per_period'] == Decimal('28.80')
 
     tight_basic = get_transaction_tier_defaults('tight', 1, Decimal('250.00'))
     assert tight_basic['coverage_percent'] == Decimal('0.5')
-    assert tight_basic['base_premium'] == Decimal('17.50')
-    assert tight_basic['tier_multiplier'] == Decimal('1.0')
-    assert tight_basic['premium'] == Decimal('17.50')
-    assert tight_basic['max_payout_per_period'] == Decimal('105.00')
+    assert tight_basic['base_premium'] == Decimal('12.50')
+    assert tight_basic['premium'] == Decimal('12.50')
+    assert tight_basic['weekly_cap'] == Decimal('25.00')
+    assert tight_basic['max_payout_per_period'] == Decimal('25.00')
 
     comfortable_premium = get_transaction_tier_defaults('comfortable', 3, Decimal('250.00'))
     assert comfortable_premium['coverage_percent'] == Decimal('0.9')
-    assert comfortable_premium['base_premium'] == Decimal('12.50')
-    assert comfortable_premium['tier_multiplier'] == Decimal('1.8')
-    assert comfortable_premium['premium'] == Decimal('22.50')
-    assert comfortable_premium['max_payout_per_period'] == Decimal('225.00')
+    assert comfortable_premium['base_premium'] == Decimal('27.50')
+    assert comfortable_premium['premium'] == Decimal('27.50')
+    assert comfortable_premium['weekly_cap'] == Decimal('110.00')
+    assert comfortable_premium['max_payout_per_period'] == Decimal('110.00')
 
 
 def test_transaction_tier_waiting_periods_are_tier_controlled():
@@ -161,11 +161,12 @@ def test_transaction_tier_waiting_periods_are_tier_controlled():
 
 
 def test_transaction_tier_defaults_accept_teacher_base_premium():
-    manual_mid = get_transaction_tier_defaults('default', 2, base_premium=Decimal('60.00'))
+    manual_mid = get_transaction_tier_defaults('default', 2, base_premium=Decimal('60.00'), billing_weeks=4)
 
     assert manual_mid['base_premium'] == Decimal('60.00')
-    assert manual_mid['premium'] == Decimal('84.00')
-    assert manual_mid['max_payout_per_period'] == Decimal('672.00')
+    assert manual_mid['premium'] == Decimal('60.00')
+    assert manual_mid['weekly_cap'] == Decimal('180.00')
+    assert manual_mid['max_payout_per_period'] == Decimal('720.00')
 
 
 def test_edit_policy_rejects_contract_shape_changes(client):
@@ -188,7 +189,7 @@ def test_edit_policy_rejects_contract_shape_changes(client):
     assert policy.claim_type == 'legacy_monetary'
 
 
-def test_get_transaction_tier_base_premium_normalizes_nonweekly_storage(client):
+def test_get_transaction_weekly_premium_normalizes_nonweekly_storage(client):
     admin, _, _ = _create_admin_with_block()
     weekly_premium = get_transaction_tier_defaults('default', 2, Decimal('120.00'))['premium']
     policy = _create_insurance_policy(admin.id, "Tiered Monthly Policy", _inverse_weekly_amount(weekly_premium, 'monthly'))
@@ -198,9 +199,9 @@ def test_get_transaction_tier_base_premium_normalizes_nonweekly_storage(client):
     policy.tier_level = 'mid'
     db.session.commit()
 
-    base_premium = _get_transaction_tier_base_premium(policy)
+    base_premium = _get_transaction_weekly_premium(policy)
 
-    assert base_premium == Decimal('7.20')
+    assert base_premium == Decimal('9.60')
 
 
 def test_update_economy_policy_creates_block_scoped_settings(client):

@@ -1328,7 +1328,7 @@ class InsurancePolicy(db.Model):
     requires_review = db.Column(db.Boolean, default=False)
 
     # Settings mode: simple or advanced
-    settings_mode = db.Column(db.String(20), nullable=True, default='advanced')  # simple or advanced
+    settings_mode = db.Column(db.String(20), nullable=True, default='custom')  # preset or custom
 
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
@@ -1369,7 +1369,7 @@ class InsurancePolicy(db.Model):
 
     @property
     def product_type(self):
-        return 'custom_monetary' if self.claim_type == 'legacy_monetary' else self.claim_type
+        return 'variable_monetary' if self.claim_type == 'legacy_monetary' else self.claim_type
 
     @property
     def effective_product_group_id(self):
