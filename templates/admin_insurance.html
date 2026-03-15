@@ -1730,9 +1730,9 @@
           const coverageNotice = shouldUseTierContract
             ? `Coverage and waiting period are controlled by tier (${CTHEconomy.formatInsurancePercent(selectedTierDefaults?.coverage_percent || 0)} coverage, ${selectedTierDefaults?.waiting_period_days || 0} day wait). Per-period cap stays teacher editable; recommended cap is ${CTHEconomy.formatInsuranceCurrency(derivedRecommendedCap || selectedTierDefaults?.max_payout_per_period || 0)}.`
             : (isTieredCustomMonetary
-              ? `This grouped custom-monetary policy keeps teacher-controlled claim caps. Tiering supplies a pricing recommendation, a ${selectedTierDefaults?.waiting_period_days || 0}-day wait, and suggested limits of ${CTHEconomy.formatInsuranceCurrency(recommendedClaimLimit)} per claim and ${CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap)} per coverage period.`
+              ? `This grouped variable monetary policy keeps teacher-controlled claim caps. Tiering supplies a pricing recommendation, a ${selectedTierDefaults?.waiting_period_days || 0}-day wait, and suggested limits of ${CTHEconomy.formatInsuranceCurrency(recommendedClaimLimit)} per claim and ${CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap)} per coverage period.`
               : (isCustomMonetary
-                ? `Custom-monetary policies keep teacher-controlled limits. Based on the current premium, a good starting point is ${CTHEconomy.formatInsuranceCurrency(recommendedClaimLimit)} per claim and ${CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap)} per coverage period.`
+                ? `Variable monetary policies keep teacher-controlled limits. Based on the current premium, a good starting point is ${CTHEconomy.formatInsuranceCurrency(recommendedClaimLimit)} per claim and ${CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap)} per coverage period.`
                 : ''));
 
           if (advancedPremiumLabel) {
@@ -2906,7 +2906,7 @@
     } else if (claimType === 'legacy_monetary' && isTiered) {
       const recommendedTierWeekly = selectedTierDefaults?.premium || CTHEconomy.deriveTierPremium(recommendedBasePremium, tierLevel);
       const recommendedTierAtFrequency = CTHEconomy.convertInsuranceWeeklyToFrequency(recommendedTierWeekly, frequency);
-      guidanceTitle.textContent = 'Grouped custom-monetary guidance';
+      guidanceTitle.textContent = 'Grouped Variable Monetary Guidance';
       appendStat(guidance, 'Recommended base premium (weekly)', `${CTHEconomy.formatInsuranceCurrency(recommendedBasePremium)} / week`);
       if (selectedTierDefaults) {
         appendStat(guidance, 'Selected tier', tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1));
@@ -2923,7 +2923,7 @@
         }
       } else {
         appendStat(guidance, 'Tier waiting period range', tierWaitingLabel || defaultWaitingLabel);
-        guidance.appendChild(createNotice('Select a tier to see the recommended premium for that grouped custom-monetary policy.'));
+        guidance.appendChild(createNotice('Select a tier to see the recommended premium for that grouped variable monetary policy.'));
       }
     } else {
       appendStat(guidance, 'Recommended premium range (weekly)', `${CTHEconomy.formatInsuranceCurrency(minPremiumWeekly)} to ${CTHEconomy.formatInsuranceCurrency(maxPremiumWeekly)} / week`);
@@ -2956,7 +2956,7 @@
         grid.appendChild(tierGrid);
       }
     } else if (claimType === 'legacy_monetary' && isTiered) {
-      grid.appendChild(createNotice('Tier multipliers act as recommendations here. Teachers can still override the premium and payout limits for each custom-monetary policy.'));
+      grid.appendChild(createNotice('Tier multipliers act as recommendations here. Teachers can still override the premium and payout limits for each variable monetary policy.'));
     } else if (claimType === 'transaction_monetary') {
       grid.appendChild(createNotice('Turn on tiered insurance to see Basic, Mid, and Premium recommendations.'));
     } else {

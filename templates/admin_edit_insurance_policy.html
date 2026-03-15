@@ -75,7 +75,7 @@
                 <small>
                   <strong>Transactions-based:</strong> Link claims to a specific student transaction.<br>
                   <strong>Non-monetary:</strong> Approval-only workflow, no reimbursements.<br>
-                  <strong>Custom monetary:</strong> Manual claim amounts (backward compatible).
+                  <strong>Variable Monetary:</strong> Manual claim amounts (backward compatible).
                 </small>
               </div>
             </div>
@@ -679,7 +679,7 @@
         const recommendedBaseWeekly = recommendations.transaction_insurance_defaults?.recommended_base_premium || 0;
         const recommendedTierWeekly = selectedTierDefaults?.premium || (recommendedBaseWeekly * CTHEconomy.getTierMultiplier(tierLevel));
         const recommendedTierAtFrequency = CTHEconomy.convertInsuranceWeeklyToFrequency(recommendedTierWeekly, frequency);
-        title.textContent = 'Grouped custom-monetary guidance';
+        title.textContent = 'Grouped Variable Monetary Guidance';
         appendAdvisorStat(summary, 'Recommended base premium (weekly)', `${CTHEconomy.formatInsuranceCurrency(recommendedBaseWeekly)} / week`);
         if (tierLevel) {
           appendAdvisorStat(summary, 'Selected tier', tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1));
@@ -696,13 +696,13 @@
         appendAdvisorStat(summary, 'Tier-controlled waiting period', isTiered && selectedTierDefaults ? `${selectedTierDefaults.waiting_period_days || 0} days` : waitingLabel);
         if (premium > 0) {
           appendAdvisorStat(summary, 'Suggested per-claim limit', CTHEconomy.formatInsuranceCurrency(recommendedClaimLimit));
-          appendAdvisorStat(summary, 'Suggested per-period limit', CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap));
+          appendAdvisorStat(summary, 'Suggested per-coverage-period limit', CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap));
         }
         if (maxClaimAmount > 0) {
-          appendAdvisorStat(summary, 'Per-claim limit', CTHEconomy.formatInsuranceCurrency(maxClaimAmount));
+          appendAdvisorStat(summary, 'Current per-claim limit', CTHEconomy.formatInsuranceCurrency(maxClaimAmount));
         }
         if (maxPayoutPerPeriod > 0) {
-          appendAdvisorStat(summary, 'Per-coverage-period limit', CTHEconomy.formatInsuranceCurrency(maxPayoutPerPeriod));
+          appendAdvisorStat(summary, 'Current per-coverage-period limit', CTHEconomy.formatInsuranceCurrency(maxPayoutPerPeriod));
         }
       } else {
         const minWeekly = recommendations.insurance_premium_weekly?.min || 0;
@@ -723,13 +723,13 @@
         appendAdvisorStat(summary, isTiered ? 'Tier-controlled waiting period' : 'Default waiting period', isTiered && selectedTierDefaults ? `${selectedTierDefaults.waiting_period_days || 0} days` : waitingLabel);
         if (claimType === 'legacy_monetary' && premium > 0) {
           appendAdvisorStat(summary, 'Suggested per-claim limit', CTHEconomy.formatInsuranceCurrency(recommendedClaimLimit));
-          appendAdvisorStat(summary, 'Suggested per-period limit', CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap));
+          appendAdvisorStat(summary, 'Suggested per-coverage-period limit', CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap));
         }
         if (claimType === 'legacy_monetary' && maxClaimAmount > 0) {
-          appendAdvisorStat(summary, 'Per-claim limit', CTHEconomy.formatInsuranceCurrency(maxClaimAmount));
+          appendAdvisorStat(summary, 'Current per-claim limit', CTHEconomy.formatInsuranceCurrency(maxClaimAmount));
         }
         if (claimType !== 'non_monetary' && maxPayoutPerPeriod > 0) {
-          appendAdvisorStat(summary, 'Per-coverage-period limit', CTHEconomy.formatInsuranceCurrency(maxPayoutPerPeriod));
+          appendAdvisorStat(summary, 'Current per-coverage-period limit', CTHEconomy.formatInsuranceCurrency(maxPayoutPerPeriod));
         }
       }
       grid.appendChild(summary);
@@ -741,11 +741,11 @@
           ? 'This edit uses the tiered transaction model: one weekly base premium plus the selected tier multiplier and tier-controlled wait.'
           : 'Select a tier to see the exact transaction-linked contract for this grouped policy.';
       } else if (isTiered && claimType === 'legacy_monetary') {
-        detail.textContent = 'This is a grouped custom-monetary policy. The tier multiplier is a recommendation only here; teachers still control the actual premium and payout limits.';
+        detail.textContent = 'This is a grouped variable monetary policy. The tier multiplier is a recommendation only here; teachers still control the actual premium and payout limits.';
       } else if (isTiered) {
         detail.textContent = 'This grouped policy uses tiering for student-facing grouping. Coverage and payout behavior still follow the selected claim type.';
       } else if (claimType === 'legacy_monetary') {
-        detail.textContent = 'Custom monetary reimbursement uses teacher-defined claim limits. Use the weekly premium guidance as an affordability check, not an auto-filled contract.';
+        detail.textContent = 'Variable monetary reimbursement uses teacher-defined claim limits. Use the weekly premium guidance as an affordability check, not an auto-filled contract.';
       } else if (claimType === 'non_monetary') {
         detail.textContent = 'Non-monetary policies do not reimburse money, so only premium affordability and waiting period guidance apply here.';
       } else {
