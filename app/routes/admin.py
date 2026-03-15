@@ -274,7 +274,7 @@ def _apply_transaction_policy_defaults(policy, *, teacher_id, block=None):
             billing_weeks=billing_weeks,
         )
         if tier_defaults.get('premium') is not None:
-            policy.premium = tier_defaults['premium']
+            policy.premium = (tier_defaults['premium'] * Decimal(str(billing_weeks))).quantize(Decimal('0.01'))
         policy.coverage_percent = tier_defaults['coverage_percent']
         if tier_defaults.get('max_payout_per_period') is not None:
             policy.max_payout_per_period = tier_defaults['max_payout_per_period']
@@ -285,7 +285,7 @@ def _apply_transaction_policy_defaults(policy, *, teacher_id, block=None):
         weekly_premium = policy.premium
         if cwi is not None:
             weekly_premium = (Decimal(str(cwi)) * Decimal('0.08')).quantize(Decimal('0.01'))
-            policy.premium = weekly_premium
+            policy.premium = (weekly_premium * Decimal(str(billing_weeks))).quantize(Decimal('0.01'))
         if weekly_premium is not None:
             weekly_cap = (Decimal(str(weekly_premium)) * Decimal('3.0')).quantize(Decimal('0.01'))
             policy.max_payout_per_period = (
@@ -296,13 +296,17 @@ def _apply_transaction_policy_defaults(policy, *, teacher_id, block=None):
 def _apply_non_monetary_preset_defaults(policy, *, teacher_id, block=None):
     cwi = _calculate_block_cwi_for_insurance(teacher_id, block) if teacher_id else None
     tier_rank = policy.effective_tier_rank
+    billing_weeks = _insurance_billing_period_weeks(policy.charge_frequency)
     weekly_rate = {
         None: Decimal('0.05'),
         1: Decimal('0.03'),
         2: Decimal('0.05'),
         3: Decimal('0.07'),
     }.get(tier_rank, Decimal('0.05'))
-    policy.premium = ((cwi or Decimal('0.00')) * weekly_rate).quantize(Decimal('0.01')) if cwi is not None else Decimal('0.00')
+    policy.premium = (
+        ((cwi or Decimal('0.00')) * weekly_rate * Decimal(str(billing_weeks))).quantize(Decimal('0.01'))
+        if cwi is not None else Decimal('0.00')
+    )
     policy.max_claims_count = {None: 2, 1: 1, 2: 2, 3: 3}.get(tier_rank, 2)
     policy.max_claim_amount = None
     policy.max_payout_per_period = None

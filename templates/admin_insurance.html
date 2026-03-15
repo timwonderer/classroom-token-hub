@@ -1202,6 +1202,21 @@
         }[tierLevel] || 0;
         return CTHEconomy.deriveTierPremium(parsedBase, tierLevel) * periodCapMultiplier;
       };
+      CTHEconomy.frequencyToBillingWeeks = function (frequency) {
+        return {
+          weekly: 1,
+          biweekly: 2,
+          monthly: 4,
+          semester: 16
+        }[frequency] || 4;
+      };
+      CTHEconomy.convertWeeklyToBillingPeriod = function (weeklyValue, frequency) {
+        const parsed = Number(weeklyValue);
+        if (!Number.isFinite(parsed)) {
+          return 0;
+        }
+        return parsed * CTHEconomy.frequencyToBillingWeeks(frequency);
+      };
       CTHEconomy.getRecommendedCustomClaimLimit = function (premiumAmount) {
         const parsedPremium = Number(premiumAmount);
         if (!Number.isFinite(parsedPremium)) {
@@ -1822,7 +1837,7 @@
           const analysis = CTHEconomy.latestInsuranceEconomyAnalysis;
           const weeklyCwi = Number(analysis?.cwi || 0);
           const frequency = document.getElementById('simple_charge_frequency')?.value || 'monthly';
-          const weeksInPeriod = { weekly: 1, biweekly: 2, monthly: 4, semester: 16 }[frequency] || 4;
+          const weeksInPeriod = CTHEconomy.frequencyToBillingWeeks(frequency);
           const simplePremium = document.getElementById('simple_premium');
           const riskFactor = { tight: 0.20, default: 0.15, comfortable: 0.12 }[analysis?.recommendations?.policy_mode || 'default'] || 0.15;
           const tierRank = getPresetTierRank();
@@ -1847,7 +1862,7 @@
 
           if (claimType === 'non_monetary') {
             const defaults = nonMonetaryDefaults[tierRank];
-            if (simplePremium) simplePremium.value = formatTierCapValue(weeklyCwi * defaults.rate);
+            if (simplePremium) simplePremium.value = formatTierCapValue((weeklyCwi * defaults.rate) * weeksInPeriod);
             if (maxClaimsCountInput) {
               maxClaimsCountInput.value = String(defaults.claims);
               maxClaimsCountInput.disabled = true;
@@ -1871,7 +1886,7 @@
             const defaults = transactionDefaults[tierRank];
             const weeklyPremium = weeklyCwi * defaults.rate;
             const periodCap = (weeklyPremium * defaults.weeklyCapMultiplier) * weeksInPeriod;
-            if (simplePremium) simplePremium.value = formatTierCapValue(weeklyPremium);
+            if (simplePremium) simplePremium.value = formatTierCapValue(weeklyPremium * weeksInPeriod);
             if (simpleWaitingPeriodInput) {
               simpleWaitingPeriodInput.value = String(defaults.wait);
               simpleWaitingPeriodInput.disabled = true;
@@ -2843,8 +2858,14 @@
       ? (document.getElementById('advanced_claim_type')?.value || 'transaction_monetary')
       : (document.getElementById('simple_claim_type')?.value || 'transaction_monetary');
     const tierToggle = document.getElementById('tierToggleNew');
-    const tierLevel = document.getElementById('tier_level')?.value || '';
-    const isTiered = Boolean(isAdvanced && tierToggle?.checked);
+    const presetTierToggle = document.getElementById('presetTierToggle');
+    const presetTierLevel = document.getElementById('preset_tier_level');
+    const tierLevel = isAdvanced
+      ? (document.getElementById('tier_level')?.value || '')
+      : (presetTierLevel?.value || '');
+    const isTiered = isAdvanced
+      ? Boolean(tierToggle?.checked)
+      : Boolean(presetTierToggle?.checked && tierLevel);
     const recommendations = analysis.recommendations;
     const minPremiumWeekly = recommendations.insurance_premium_weekly?.min || 0;
     const maxPremiumWeekly = recommendations.insurance_premium_weekly?.max || 0;
@@ -2890,7 +2911,20 @@
       ? null
       : (tierWaitingMin === tierWaitingMax ? `${tierWaitingMin} days` : `${tierWaitingMin}-${tierWaitingMax} days`);
 
-    if (claimType === 'transaction_monetary' && isTiered) {
+    if (!isAdvanced && claimType === 'transaction_monetary') {
+      const presetCoverage = selectedTierDefaults?.coverage_percent
+        ?? ({ null: 0.70, basic: 0.50, mid: 0.70, premium: 0.90 }[tierLevel || 'null'] || 0.70);
+      const presetWait = selectedTierDefaults?.waiting_period_days
+        ?? ({ null: 5, basic: 7, mid: 5, premium: 3 }[tierLevel || 'null'] || 5);
+      guidanceTitle.textContent = isTiered ? 'Preset Tiered Transaction Contract' : 'Preset Transaction Contract';
+      if (isTiered) {
+        appendStat(guidance, 'Selected tier', tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1));
+      }
+      appendStat(guidance, `Premium at ${frequency}`, `${CTHEconomy.formatInsuranceCurrency(enteredPremium)} / ${frequency}`);
+      appendStat(guidance, 'Coverage', CTHEconomy.formatInsurancePercent(presetCoverage));
+      appendStat(guidance, 'Waiting period', `${presetWait} days`);
+      appendStat(guidance, 'Preset payout limit per period', CTHEconomy.formatInsuranceCurrency(Number(document.getElementById('simple_max_payout_per_period')?.value || 0)));
+    } else if (claimType === 'transaction_monetary' && isTiered) {
       guidanceTitle.textContent = 'Tiered transaction setup';
       appendStat(guidance, 'Recommended base premium (weekly)', `${CTHEconomy.formatInsuranceCurrency(recommendedBasePremium)} / week`);
       if (selectedTierDefaults) {
@@ -2903,6 +2937,17 @@
         appendStat(guidance, 'Tier waiting period range', tierWaitingLabel || defaultWaitingLabel);
         guidance.appendChild(createNotice('Select Basic, Mid, or Premium to see the exact tier contract for this policy.'));
       }
+    } else if (!isAdvanced && claimType === 'legacy_monetary' && isTiered) {
+      const recommendedTierWeekly = selectedTierDefaults?.premium || CTHEconomy.deriveTierPremium(recommendedBasePremium, tierLevel);
+      const recommendedTierAtFrequency = CTHEconomy.convertWeeklyToBillingPeriod(recommendedTierWeekly, frequency);
+      guidanceTitle.textContent = 'Preset Grouped Variable Monetary Guidance';
+      appendStat(guidance, 'Selected tier', tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1));
+      appendStat(guidance, `Recommended premium at ${frequency}`, `${CTHEconomy.formatInsuranceCurrency(recommendedTierAtFrequency)} / ${frequency}`);
+      appendStat(guidance, 'Tier waiting period', `${selectedTierDefaults?.waiting_period_days || 0} days`);
+      if (enteredPremium > 0) {
+        appendStat(guidance, `Current premium at ${frequency}`, `${CTHEconomy.formatInsuranceCurrency(enteredPremium)} / ${frequency}`);
+      }
+      appendStat(guidance, 'Suggested payout limit per period', CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap));
     } else if (claimType === 'legacy_monetary' && isTiered) {
       const recommendedTierWeekly = selectedTierDefaults?.premium || CTHEconomy.deriveTierPremium(recommendedBasePremium, tierLevel);
       const recommendedTierAtFrequency = CTHEconomy.convertInsuranceWeeklyToFrequency(recommendedTierWeekly, frequency);
@@ -2925,6 +2970,11 @@
         appendStat(guidance, 'Tier waiting period range', tierWaitingLabel || defaultWaitingLabel);
         guidance.appendChild(createNotice('Select a tier to see the recommended premium for that grouped variable monetary policy.'));
       }
+    } else if (!isAdvanced && claimType === 'non_monetary') {
+      guidanceTitle.textContent = 'Preset Non-Monetary Contract';
+      appendStat(guidance, `Premium at ${frequency}`, `${CTHEconomy.formatInsuranceCurrency(enteredPremium)} / ${frequency}`);
+      appendStat(guidance, 'Waiting period', `${Number(document.getElementById('simple_waiting_period_days')?.value || 0)} days`);
+      appendStat(guidance, 'Claims per period', String(document.getElementById('simple_max_claims_count')?.value || '0'));
     } else {
       appendStat(guidance, 'Recommended premium range (weekly)', `${CTHEconomy.formatInsuranceCurrency(minPremiumWeekly)} to ${CTHEconomy.formatInsuranceCurrency(maxPremiumWeekly)} / week`);
       appendStat(guidance, 'Ideal target (weekly)', `${CTHEconomy.formatInsuranceCurrency(idealPremiumWeekly)} / week`);
@@ -2944,7 +2994,9 @@
     }
     grid.appendChild(guidance);
 
-    if (claimType === 'transaction_monetary' && isTiered) {
+    if (!isAdvanced && claimType === 'transaction_monetary') {
+      grid.appendChild(createNotice('Preset mode shows the exact contract students will buy for the selected billing period.'));
+    } else if (claimType === 'transaction_monetary' && isTiered) {
       if (!selectedTierDefaults) {
         const tierGrid = document.createElement('div');
         tierGrid.className = 'insurance-advisor-tiers';
