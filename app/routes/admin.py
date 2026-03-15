@@ -60,6 +60,7 @@ from app.utils.join_code import generate_join_code
 from app.utils.economy_balance import EconomyBalanceChecker
 from app.utils.economy_policy import (
     POLICY_MODES,
+    TRANSACTION_DEFAULTS,
     get_feature_settings_row,
     get_tier_waiting_period_days,
     get_transaction_coverage_default,
@@ -540,8 +541,6 @@ def _populate_policy_from_form(policy, form, *, teacher_id=None, block=None, nex
     policy.marketing_badge = form.marketing_badge.data if form.marketing_badge.data else None
     policy.set_blocks(form.blocks.data if form.blocks.data else [])
     _apply_normalized_tier_fields(policy, form, next_tier_category_id=next_tier_category_id)
-    _apply_tier_waiting_period(policy)
-
     policy.tier_name = form.tier_name.data or None
     policy.tier_color = form.tier_color.data or None
     policy.is_active = form.is_active.data
@@ -551,6 +550,8 @@ def _populate_policy_from_form(policy, form, *, teacher_id=None, block=None, nex
     effective_teacher_id = teacher_id or policy.teacher_id
 
     if normalized_mode == 'preset':
+        # In preset mode, tier-based waiting periods override form values.
+        _apply_tier_waiting_period(policy)
         if is_non_monetary:
             _apply_non_monetary_preset_defaults(policy, teacher_id=effective_teacher_id, block=mode_block)
         elif is_transaction:
@@ -558,13 +559,19 @@ def _populate_policy_from_form(policy, form, *, teacher_id=None, block=None, nex
         elif is_variable:
             _apply_variable_monetary_preset_defaults(policy, form, teacher_id=effective_teacher_id, block=mode_block)
     elif is_non_monetary:
+        # In custom mode, teacher controls all fields; clear system-only fields.
         policy.coverage_percent = None
         policy.max_payout_per_period = None
     elif is_transaction:
-        # Coverage percent is system-controlled. For non-tiered templates we assign
-        # the current policy-mode default; for tiered templates we derive the full
-        # transaction product shape from the policy mode + tier rank.
-        _apply_transaction_policy_defaults(policy, teacher_id=effective_teacher_id, block=mode_block)
+        # In custom mode, teacher controls premium, waiting_period, and
+        # max_payout_per_period (spec: all editable). Coverage percent is
+        # still derived from tier rank because there is no form field for it.
+        tier_rank = policy.effective_tier_rank
+        if tier_rank:
+            tier_cfg = TRANSACTION_DEFAULTS["tiers"].get(tier_rank, TRANSACTION_DEFAULTS["non_tiered"])
+            policy.coverage_percent = Decimal(str(tier_cfg["coverage_percent"]))
+        else:
+            policy.coverage_percent = TRANSACTION_DEFAULTS["non_tiered"]["coverage_percent"]
     else:
         policy.coverage_percent = None
 

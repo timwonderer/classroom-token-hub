@@ -12,6 +12,7 @@ from app.models import (
     Transaction,
     TransactionStatus,
     StoreItem,
+    StudentItem,
     RentSettings,
     RentItem,
 )
@@ -159,8 +160,8 @@ def test_hard_deny_transaction_type_cannot_be_approved(client, test_student, adm
         amount=-40.0,
         account_type="checking",
         status=TransactionStatus.POSTED,
-        type="Rent Payment",
-        description="Rent for Period A",
+        type="interest",
+        description="Interest charge",
     )
     db.session.add(rent_tx)
     db.session.commit()
@@ -324,6 +325,16 @@ def test_rent_privilege_purchase_cannot_be_approved(client, test_student, admin_
         description="Purchase: Desk Pass",
     )
     db.session.add(privilege_purchase)
+    db.session.flush()
+
+    # Create StudentItem so the delay-use rule can detect it hasn't been redeemed.
+    student_item = StudentItem(
+        student_id=test_student.id,
+        store_item_id=store_item.id,
+        purchase_date=privilege_purchase.timestamp,
+        redemption_date=None,
+    )
+    db.session.add(student_item)
     db.session.commit()
 
     claim = _build_claim(enrollment, policy, test_student.id, privilege_purchase)
@@ -343,4 +354,4 @@ def test_rent_privilege_purchase_cannot_be_approved(client, test_student, admin_
 
     db.session.refresh(claim)
     assert claim.status == "pending"
-    assert b"never eligible" in response.data
+    assert b"not been used yet" in response.data
