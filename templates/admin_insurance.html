@@ -415,7 +415,7 @@
             <!-- Mode Toggle -->
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" id="insuranceModeToggle" role="switch">
-            <label class="form-check-label text-white" for="insuranceModeToggle">Custom Mode</label>
+              <label class="form-check-label text-white" for="insuranceModeToggle">Custom Mode</label>
             </div>
           </div>
           <div class="card-body">
@@ -2130,6 +2130,10 @@
           insuranceForm.addEventListener('submit', () => {
             const isAdvancedMode = Boolean(insuranceModeToggle && insuranceModeToggle.checked);
             if (simpleWaitingPeriodInput) simpleWaitingPeriodInput.disabled = false;
+            if (simplePremiumInput) simplePremiumInput.disabled = false;
+            if (maxClaimsCountInput) maxClaimsCountInput.disabled = false;
+            if (simpleMaxPayoutInput) simpleMaxPayoutInput.disabled = false;
+            if (maxClaimAmountInput) maxClaimAmountInput.disabled = false;
             if (isAdvancedMode) {
               if (advancedWaitingPeriodInput) advancedWaitingPeriodInput.disabled = false;
               if (advancedPremiumInput) advancedPremiumInput.disabled = false;

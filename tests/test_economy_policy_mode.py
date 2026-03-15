@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from app import db
-from app.routes.admin import _build_rebalance_preview, _get_transaction_tier_base_premium, _inverse_weekly_amount
+from app.routes.admin import _build_rebalance_preview, _get_transaction_weekly_premium, _inverse_weekly_amount
 from app.models import Admin, FeatureSettings, InsurancePolicy, PayrollSettings, RentSettings
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 from app.utils.economy_policy import (
@@ -189,7 +189,7 @@ def test_edit_policy_rejects_contract_shape_changes(client):
     assert policy.claim_type == 'legacy_monetary'
 
 
-def test_get_transaction_tier_base_premium_normalizes_nonweekly_storage(client):
+def test_get_transaction_weekly_premium_normalizes_nonweekly_storage(client):
     admin, _, _ = _create_admin_with_block()
     weekly_premium = get_transaction_tier_defaults('default', 2, Decimal('120.00'))['premium']
     policy = _create_insurance_policy(admin.id, "Tiered Monthly Policy", _inverse_weekly_amount(weekly_premium, 'monthly'))
@@ -199,7 +199,7 @@ def test_get_transaction_tier_base_premium_normalizes_nonweekly_storage(client):
     policy.tier_level = 'mid'
     db.session.commit()
 
-    base_premium = _get_transaction_tier_base_premium(policy)
+    base_premium = _get_transaction_weekly_premium(policy)
 
     assert base_premium == Decimal('9.60')
 

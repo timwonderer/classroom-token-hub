@@ -21,7 +21,7 @@ import hashlib
 from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from app.utils.time import utc_now, ensure_utc, local_date_end_utc, local_date_bounds_utc, UTC_MIN
+from app.utils.time import utc_now, ensure_utc, local_date_end_utc, local_date_bounds_utc, UTC_MIN, get_claim_period_bounds
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from flask import (
@@ -342,7 +342,7 @@ def _apply_tier_waiting_period(policy):
         policy.waiting_period_days = get_tier_waiting_period_days(tier_rank)
 
 
-def _get_transaction_tier_base_premium(policy) -> Decimal | None:
+def _get_transaction_weekly_premium(policy) -> Decimal | None:
     if not policy or policy.claim_type != 'transaction_monetary' or not policy.effective_tier_rank or policy.premium is None:
         return None
     return _normalize_amount_to_weekly(Decimal(str(policy.premium)), policy.charge_frequency).quantize(Decimal("0.01"))
@@ -6208,7 +6208,7 @@ def edit_insurance_policy(policy_id):
         form.blocks.data = policy.blocks_list
         if policy.effective_tier_rank is not None:
             form.waiting_period_days.data = get_tier_waiting_period_days(policy.effective_tier_rank)
-        base_premium = _get_transaction_tier_base_premium(policy)
+        base_premium = _get_transaction_weekly_premium(policy)
         if base_premium is not None:
             form.premium.data = float(base_premium)
 
@@ -6463,36 +6463,7 @@ def process_claim(claim_id):
     claim_time_limit_days = enrollment.contract_claim_time_limit_days
     contract_coverage_percent = enrollment.contract_coverage_percent or Decimal('1.0')
 
-    def _get_period_bounds():
-        now = utc_now()
-        period_key = max_claims_period
-        if period_key == 'semester':
-            if now.month <= 6:
-                return (
-                    now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
-                    now.replace(month=6, day=30, hour=23, minute=59, second=59),
-                )
-            return (
-                now.replace(month=7, day=1, hour=0, minute=0, second=0, microsecond=0),
-                now.replace(month=12, day=31, hour=23, minute=59, second=59),
-            )
-        if period_key == 'weekly':
-            period_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-            period_end = period_start + timedelta(days=7) - timedelta(seconds=1)
-            return period_start, period_end
-        if period_key == 'biweekly':
-            anchor = datetime(1970, 1, 5, tzinfo=timezone.utc)
-            current_week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-            elapsed_days = (current_week_start - anchor).days
-            period_start = anchor + timedelta(days=(elapsed_days // 14) * 14)
-            period_end = period_start + timedelta(days=14) - timedelta(seconds=1)
-            return period_start, period_end
-        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        next_month = period_start.replace(day=28) + timedelta(days=4)
-        period_end = next_month.replace(day=1) - timedelta(seconds=1)
-        return period_start, period_end
-
-    period_start, period_end = _get_period_bounds()
+    period_start, period_end = get_claim_period_bounds(max_claims_period)
 
     def _claim_base_amount(target_claim):
         if claim_type == 'transaction_monetary' and target_claim.transaction:

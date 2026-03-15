@@ -54,7 +54,7 @@ from app.utils.store import process_expired_collective_goals
 from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
 from app.attendance import get_all_block_statuses
 from app.payroll import get_pay_rate_for_block
-from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone
+from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone, get_claim_period_bounds
 from app.utils.insurance_eligibility import (
     evaluate_claim_transaction_eligibility,
     collect_reimbursed_source_tx_ids,
@@ -2276,35 +2276,6 @@ def file_claim(policy_id):
     # Validation errors
     errors = []
 
-    def _get_period_bounds():
-        now = utc_now()
-        period_key = max_claims_period
-        if period_key == 'semester':
-            if now.month <= 6:
-                return (
-                    now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
-                    now.replace(month=6, day=30, hour=23, minute=59, second=59),
-                )
-            return (
-                now.replace(month=7, day=1, hour=0, minute=0, second=0, microsecond=0),
-                now.replace(month=12, day=31, hour=23, minute=59, second=59),
-            )
-        if period_key == 'weekly':
-            period_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-            period_end = period_start + timedelta(days=7) - timedelta(seconds=1)
-            return period_start, period_end
-        if period_key == 'biweekly':
-            anchor = datetime(1970, 1, 5, tzinfo=timezone.utc)
-            current_week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-            elapsed_days = (current_week_start - anchor).days
-            period_start = anchor + timedelta(days=(elapsed_days // 14) * 14)
-            period_end = period_start + timedelta(days=14) - timedelta(seconds=1)
-            return period_start, period_end
-        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        next_month = period_start.replace(day=28) + timedelta(days=4)
-        period_end = next_month.replace(day=1) - timedelta(seconds=1)
-        return period_start, period_end
-
     # Normalize coverage dates for safe comparisons
     enrollment.coverage_start_date = ensure_utc(enrollment.coverage_start_date)
     enrollment.cancel_date = ensure_utc(enrollment.cancel_date)
@@ -2319,7 +2290,7 @@ def file_claim(policy_id):
     if not enrollment.payment_current:
         errors.append("Your premium payments are not current. Please contact the teacher.")
 
-    period_start, period_end = _get_period_bounds()
+    period_start, period_end = get_claim_period_bounds(max_claims_period)
 
     # Check max claims per period
     if max_claims_count:

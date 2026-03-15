@@ -284,9 +284,9 @@ Repurchase logic controls how students may re-enroll after cancellation.
 
 | Rule | Description |
 |---|---|
-| Cycle Locked | Enrollment is only allowed at the start of a billing cycle |
+| Continuous | Student may re-enroll immediately after cancellation when no restriction is enabled |
 | Cooldown | Student must wait a configured number of days before repurchasing |
-| Continuous | Policy renews unless cancelled |
+| Permanent Block | Student may not re-enroll after cancellation |
 
 Implementation may use internal flags to represent these rules, but the product-facing behavior must match the table above.
 
@@ -338,6 +338,7 @@ All preset insurance calculations begin in weekly units.
 | Weekly | 1 |
 | Biweekly | 2 |
 | Monthly | 4 |
+| Semester | 16 |
 
 ```python
 period_value = weekly_value * weeks_in_period
