@@ -1365,6 +1365,9 @@
 
         function updateTierDrivenAdvancedControls() {
           const { isAdvanced, claimType, isTiered, tierLevel } = getActiveInsuranceState();
+          if (!isAdvanced) {
+            return;
+          }
           const selectedTierDefaults = tierLevel
             ? CTHEconomy.latestInsuranceEconomyAnalysis?.recommendations?.transaction_insurance_defaults?.tiers?.[tierLevel]
             : null;
@@ -1661,11 +1664,14 @@
 
         if (insuranceForm) {
           insuranceForm.addEventListener('submit', () => {
+            const isAdvancedMode = Boolean(insuranceModeToggle && insuranceModeToggle.checked);
             if (simpleWaitingPeriodInput) simpleWaitingPeriodInput.disabled = false;
-            if (advancedWaitingPeriodInput) advancedWaitingPeriodInput.disabled = false;
-            if (advancedPremiumInput) advancedPremiumInput.disabled = false;
-            if (advancedMaxPayoutInput) advancedMaxPayoutInput.disabled = false;
-            if (advancedChargeFrequencyInput) advancedChargeFrequencyInput.disabled = false;
+            if (isAdvancedMode) {
+              if (advancedWaitingPeriodInput) advancedWaitingPeriodInput.disabled = false;
+              if (advancedPremiumInput) advancedPremiumInput.disabled = false;
+              if (advancedMaxPayoutInput) advancedMaxPayoutInput.disabled = false;
+              if (advancedChargeFrequencyInput) advancedChargeFrequencyInput.disabled = false;
+            }
           });
         }
 
