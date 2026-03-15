@@ -18,7 +18,7 @@ def test_insurance_policy_product_type_and_tier_fallbacks():
         tier_level="premium",
     )
 
-    assert policy.product_type == "custom_monetary"
+    assert policy.product_type == "variable_monetary"
     assert policy.effective_product_group_id == 123
     assert policy.effective_tier_rank == 3
     assert policy.effective_coverage_percent is None

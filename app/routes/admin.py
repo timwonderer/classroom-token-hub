@@ -22,7 +22,7 @@ from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from app.utils.time import utc_now, ensure_utc, local_date_end_utc, local_date_bounds_utc, UTC_MIN
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from flask import (
     Blueprint, redirect, url_for, flash, request, session,
@@ -64,6 +64,7 @@ from app.utils.economy_policy import (
     get_tier_waiting_period_days,
     get_transaction_coverage_default,
     get_transaction_tier_defaults,
+    get_variable_monetary_risk_factor,
     get_active_policy_mode,
     normalize_policy_mode,
 )
@@ -140,6 +141,7 @@ FALLBACK_CODE_MODULO = 10000  # Modulo for timestamp suffix (produces 4-digit nu
 # Insurance form mapping for derived claim period storage
 FREQUENCY_TO_CLAIM_PERIOD = {
     'weekly': 'week',
+    'biweekly': 'biweekly',
     'monthly': 'month',
     'semester': 'semester',
 }
@@ -173,13 +175,55 @@ def before_request():
 # -------------------- HELPER FUNCTIONS --------------------
 
 def _insurance_product_type_from_claim_type(claim_type: str | None) -> str:
-    return 'custom_monetary' if claim_type == 'legacy_monetary' else (claim_type or 'custom_monetary')
+    return 'variable_monetary' if claim_type == 'legacy_monetary' else (claim_type or 'variable_monetary')
+
+
+def _normalize_insurance_settings_mode(value: str | None) -> str:
+    normalized = (value or 'custom').strip().lower()
+    if normalized == 'advanced':
+        return 'custom'
+    if normalized == 'simple':
+        return 'preset'
+    return normalized if normalized in {'preset', 'custom'} else 'custom'
 
 
 def _resolve_policy_block_for_mode(form_blocks, fallback_block=None):
     if form_blocks:
         return form_blocks[0]
     return fallback_block
+
+
+def _insurance_billing_period_weeks(frequency):
+    return {
+        'weekly': 1,
+        'biweekly': 2,
+        'monthly': 4,
+        'semester': 16,
+    }.get((frequency or 'monthly').lower(), 4)
+
+
+def _scale_variable_envelope_for_tier(*, max_claim_amount, max_claims_count, max_payout_per_period, tier_rank):
+    scale = {
+        1: Decimal('1.0'),
+        2: Decimal('1.5'),
+        3: Decimal('2.0'),
+    }.get(tier_rank)
+    if scale is None:
+        return max_claim_amount, max_claims_count, max_payout_per_period
+
+    scaled_claim_amount = (
+        (Decimal(str(max_claim_amount)) * scale).quantize(Decimal('0.01'))
+        if max_claim_amount is not None else None
+    )
+    scaled_claims_count = (
+        int((Decimal(str(max_claims_count)) * scale).to_integral_value(rounding=ROUND_HALF_UP))
+        if max_claims_count is not None else None
+    )
+    scaled_period_cap = (
+        (Decimal(str(max_payout_per_period)) * scale).quantize(Decimal('0.01'))
+        if max_payout_per_period is not None else None
+    )
+    return scaled_claim_amount, scaled_claims_count, scaled_period_cap
 
 
 def _calculate_block_cwi_for_insurance(teacher_id, block):
@@ -218,21 +262,77 @@ def _apply_normalized_tier_fields(policy, form, *, next_tier_category_id=None):
 
 def _apply_transaction_policy_defaults(policy, *, teacher_id, block=None):
     policy_mode = get_active_policy_mode(teacher_id, block)
+    cwi = _calculate_block_cwi_for_insurance(teacher_id, block) if teacher_id else None
+    billing_weeks = _insurance_billing_period_weeks(policy.charge_frequency)
     tier_rank = policy.effective_tier_rank
     if tier_rank:
         tier_defaults = get_transaction_tier_defaults(
             policy_mode,
             tier_rank,
-            base_premium=policy.premium,
+            cwi,
+            billing_weeks=billing_weeks,
         )
-        if tier_defaults.get('base_premium') is not None:
+        if tier_defaults.get('premium') is not None:
             policy.premium = tier_defaults['premium']
         policy.coverage_percent = tier_defaults['coverage_percent']
-        if policy.max_payout_per_period is None and tier_defaults.get('max_payout_per_period') is not None:
+        if tier_defaults.get('max_payout_per_period') is not None:
             policy.max_payout_per_period = tier_defaults['max_payout_per_period']
         policy.waiting_period_days = tier_defaults['waiting_period_days']
     else:
         policy.coverage_percent = get_transaction_coverage_default(policy_mode)
+        policy.waiting_period_days = 5
+        weekly_premium = policy.premium
+        if cwi is not None:
+            weekly_premium = (Decimal(str(cwi)) * Decimal('0.08')).quantize(Decimal('0.01'))
+            policy.premium = weekly_premium
+        if weekly_premium is not None:
+            weekly_cap = (Decimal(str(weekly_premium)) * Decimal('3.0')).quantize(Decimal('0.01'))
+            policy.max_payout_per_period = (
+                weekly_cap * Decimal(str(billing_weeks))
+            ).quantize(Decimal('0.01'))
+
+
+def _apply_non_monetary_preset_defaults(policy, *, teacher_id, block=None):
+    cwi = _calculate_block_cwi_for_insurance(teacher_id, block) if teacher_id else None
+    tier_rank = policy.effective_tier_rank
+    weekly_rate = {
+        None: Decimal('0.05'),
+        1: Decimal('0.03'),
+        2: Decimal('0.05'),
+        3: Decimal('0.07'),
+    }.get(tier_rank, Decimal('0.05'))
+    policy.premium = ((cwi or Decimal('0.00')) * weekly_rate).quantize(Decimal('0.01')) if cwi is not None else Decimal('0.00')
+    policy.max_claims_count = {None: 2, 1: 1, 2: 2, 3: 3}.get(tier_rank, 2)
+    policy.max_claim_amount = None
+    policy.max_payout_per_period = None
+    policy.coverage_percent = None
+    policy.waiting_period_days = {None: 5, 1: 7, 2: 5, 3: 3}.get(tier_rank, 5)
+
+
+def _apply_variable_monetary_preset_defaults(policy, form, *, teacher_id, block=None):
+    tier_rank = policy.effective_tier_rank
+    scaled_max_claim_amount, scaled_max_claims_count, scaled_period_cap = _scale_variable_envelope_for_tier(
+        max_claim_amount=form.max_claim_amount.data,
+        max_claims_count=form.max_claims_count.data,
+        max_payout_per_period=form.max_payout_per_period.data,
+        tier_rank=tier_rank,
+    )
+    policy.max_claim_amount = scaled_max_claim_amount
+    policy.max_claims_count = scaled_max_claims_count
+    policy.max_payout_per_period = scaled_period_cap
+    policy.coverage_percent = None
+    policy.waiting_period_days = {None: (form.waiting_period_days.data if form.waiting_period_days.data is not None else 7), 1: 7, 2: 5, 3: 3}.get(tier_rank)
+
+    liability_components = []
+    if policy.max_payout_per_period is not None:
+        liability_components.append(Decimal(str(policy.max_payout_per_period)))
+    if policy.max_claim_amount is not None and policy.max_claims_count is not None:
+        liability_components.append(
+            (Decimal(str(policy.max_claim_amount)) * Decimal(str(policy.max_claims_count))).quantize(Decimal('0.01'))
+        )
+    liability = min(liability_components) if liability_components else Decimal('0.00')
+    risk_factor = get_variable_monetary_risk_factor(get_active_policy_mode(teacher_id, block))
+    policy.premium = (liability * risk_factor).quantize(Decimal('0.01'))
 
 
 def _apply_tier_waiting_period(policy):
@@ -244,14 +344,7 @@ def _apply_tier_waiting_period(policy):
 def _get_transaction_tier_base_premium(policy) -> Decimal | None:
     if not policy or policy.claim_type != 'transaction_monetary' or not policy.effective_tier_rank or policy.premium is None:
         return None
-    tier_defaults = get_transaction_tier_defaults(
-        get_active_policy_mode(policy.teacher_id, _resolve_policy_block_for_mode(policy.blocks_list)),
-        policy.effective_tier_rank,
-    )
-    tier_multiplier = Decimal(str(tier_defaults["tier_multiplier"]))
-    if tier_multiplier == 0:
-        return None
-    return (_normalize_amount_to_weekly(Decimal(str(policy.premium)), policy.charge_frequency) / tier_multiplier).quantize(Decimal("0.01"))
+    return _normalize_amount_to_weekly(Decimal(str(policy.premium)), policy.charge_frequency).quantize(Decimal("0.01"))
 
 
 def _policy_contract_shape_changed(policy, form) -> bool:
@@ -412,17 +505,20 @@ def _get_students_needing_transaction_backfill(teacher_id):
 
 
 
-def _populate_policy_from_form(policy, form, *, teacher_id=None, block=None, next_tier_category_id=None):
+def _populate_policy_from_form(policy, form, *, teacher_id=None, block=None, next_tier_category_id=None, settings_mode=None):
     """Populate insurance policy fields from form data.
 
     Policy templates can be influenced by the current economy policy mode, but
     each student enrollment freezes its own immutable contract snapshot.
     """
     product_claim_type = form.claim_type.data
+    normalized_mode = _normalize_insurance_settings_mode(settings_mode or getattr(policy, 'settings_mode', None))
     is_non_monetary = product_claim_type == 'non_monetary'
     is_transaction = product_claim_type == 'transaction_monetary'
+    is_variable = product_claim_type == 'legacy_monetary'
     policy.title = form.title.data
     policy.description = form.description.data
+    policy.settings_mode = normalized_mode
     policy.premium = form.premium.data
     policy.charge_frequency = form.charge_frequency.data
     policy.autopay = form.autopay.data
@@ -444,9 +540,6 @@ def _populate_policy_from_form(policy, form, *, teacher_id=None, block=None, nex
     policy.marketing_badge = form.marketing_badge.data if form.marketing_badge.data else None
     policy.set_blocks(form.blocks.data if form.blocks.data else [])
     _apply_normalized_tier_fields(policy, form, next_tier_category_id=next_tier_category_id)
-    if is_transaction and policy.effective_tier_rank:
-        policy.charge_frequency = 'weekly'
-        policy.max_claims_period = FREQUENCY_TO_CLAIM_PERIOD.get('weekly', 'week')
     _apply_tier_waiting_period(policy)
 
     policy.tier_name = form.tier_name.data or None
@@ -454,15 +547,24 @@ def _populate_policy_from_form(policy, form, *, teacher_id=None, block=None, nex
     policy.is_active = form.is_active.data
     policy.requires_review = False
 
-    if is_non_monetary:
+    mode_block = _resolve_policy_block_for_mode(form.blocks.data, block)
+    effective_teacher_id = teacher_id or policy.teacher_id
+
+    if normalized_mode == 'preset':
+        if is_non_monetary:
+            _apply_non_monetary_preset_defaults(policy, teacher_id=effective_teacher_id, block=mode_block)
+        elif is_transaction:
+            _apply_transaction_policy_defaults(policy, teacher_id=effective_teacher_id, block=mode_block)
+        elif is_variable:
+            _apply_variable_monetary_preset_defaults(policy, form, teacher_id=effective_teacher_id, block=mode_block)
+    elif is_non_monetary:
         policy.coverage_percent = None
         policy.max_payout_per_period = None
     elif is_transaction:
         # Coverage percent is system-controlled. For non-tiered templates we assign
         # the current policy-mode default; for tiered templates we derive the full
         # transaction product shape from the policy mode + tier rank.
-        mode_block = _resolve_policy_block_for_mode(form.blocks.data, block)
-        _apply_transaction_policy_defaults(policy, teacher_id=teacher_id or policy.teacher_id, block=mode_block)
+        _apply_transaction_policy_defaults(policy, teacher_id=effective_teacher_id, block=mode_block)
     else:
         policy.coverage_percent = None
 
@@ -5960,6 +6062,7 @@ def insurance_management():
     next_tier_category_id = _next_tenant_scoped_tier_id(tier_namespace_seed, existing_tier_ids)
 
     if request.method == 'POST' and form.validate_on_submit():
+        settings_mode = _normalize_insurance_settings_mode(request.form.get('settings_mode'))
         # Generate unique policy code
         policy_code = secrets.token_urlsafe(12)[:16]
         while InsurancePolicy.query.filter_by(policy_code=policy_code).first():
@@ -5975,7 +6078,7 @@ def insurance_management():
         policy = InsurancePolicy(
             policy_code=policy_code,
             teacher_id=session.get('admin_id'),
-            settings_mode=request.form.get('settings_mode', 'advanced'),
+            settings_mode=settings_mode,
         )
         _populate_policy_from_form(
             policy,
@@ -5983,6 +6086,7 @@ def insurance_management():
             teacher_id=session.get('admin_id'),
             block=settings_block,
             next_tier_category_id=tier_category_id,
+            settings_mode=settings_mode,
         )
         db.session.add(policy)
         db.session.flush()  # Get the ID for the policy before adding blocks
@@ -6086,6 +6190,7 @@ def edit_insurance_policy(policy_id):
         abort(403)
 
     form = InsurancePolicyForm(obj=policy)
+    form.settings_mode.data = _normalize_insurance_settings_mode(policy.settings_mode)
 
     # Populate blocks choices from teacher's students
     blocks = _get_teacher_blocks()
@@ -6123,6 +6228,7 @@ def edit_insurance_policy(policy_id):
     next_tier_category_id = _next_tenant_scoped_tier_id(tier_namespace_seed, existing_tier_ids)
 
     if request.method == 'POST' and form.validate_on_submit():
+        settings_mode = _normalize_insurance_settings_mode(request.form.get('settings_mode') or policy.settings_mode)
         if _policy_contract_shape_changed(policy, form):
             flash(
                 "Product type and tier structure are contract invariants. Create a new policy instead of changing those fields.",
@@ -6136,6 +6242,7 @@ def edit_insurance_policy(policy_id):
             teacher_id=session.get('admin_id'),
             block=edit_block,
             next_tier_category_id=next_tier_category_id,
+            settings_mode=settings_mode,
         )
 
         db.session.commit()
@@ -6341,11 +6448,7 @@ def process_claim(claim_id):
 
     # Get enrollment details
     enrollment = db.session.get(StudentInsurance, claim.student_insurance_id)
-    claim_type = (
-        'transaction_monetary'
-        if claim.transaction_id
-        else ('non_monetary' if claim.claim_item else 'legacy_monetary')
-    )
+    claim_type = enrollment.policy.claim_type if enrollment and enrollment.policy else claim.policy.claim_type
     max_claim_amount = None if claim_type == 'transaction_monetary' else enrollment.contract_max_claim_amount
     max_payout_per_period = enrollment.contract_max_payout_per_period
     max_claims_count = enrollment.contract_max_claims_count
@@ -6369,6 +6472,13 @@ def process_claim(claim_id):
         if period_key == 'weekly':
             period_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
             period_end = period_start + timedelta(days=7) - timedelta(seconds=1)
+            return period_start, period_end
+        if period_key == 'biweekly':
+            anchor = datetime(1970, 1, 5, tzinfo=timezone.utc)
+            current_week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+            elapsed_days = (current_week_start - anchor).days
+            period_start = anchor + timedelta(days=(elapsed_days // 14) * 14)
+            period_end = period_start + timedelta(days=14) - timedelta(seconds=1)
             return period_start, period_end
         period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         next_month = period_start.replace(day=28) + timedelta(days=4)

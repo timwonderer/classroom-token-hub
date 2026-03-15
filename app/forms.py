@@ -150,10 +150,11 @@ class AdminLoginForm(FlaskForm):
 class InsurancePolicyForm(FlaskForm):
     title = StringField('Policy Title', validators=[DataRequired()])
     description = TextAreaField('Description')
-    premium = FloatField('Monthly Premium ($)', validators=[DataRequired()])
+    premium = FloatField('Premium Per Billing Period ($)', validators=[DataRequired()])
     charge_frequency = SelectField('Charge Frequency', choices=[
-        ('monthly', 'Monthly'),
         ('weekly', 'Weekly'),
+        ('biweekly', 'Biweekly'),
+        ('monthly', 'Monthly'),
         ('semester', 'Per Semester')
     ], default='monthly')
     autopay = BooleanField('Enable Autopay', default=True)
@@ -162,7 +163,7 @@ class InsurancePolicyForm(FlaskForm):
         choices=[
             ('transaction_monetary', 'Transaction-Linked Reimbursement'),
             ('non_monetary', 'Non-Monetary'),
-            ('legacy_monetary', 'Custom Monetary Reimbursement'),
+            ('legacy_monetary', 'Variable Monetary'),
         ],
         default='transaction_monetary',
     )
@@ -231,9 +232,9 @@ class InsurancePolicyForm(FlaskForm):
 
     # Settings mode
     settings_mode = SelectField('Settings Mode', choices=[
-        ('simple', 'Simple'),
-        ('advanced', 'Advanced')
-    ], default='advanced')
+        ('preset', 'Preset'),
+        ('custom', 'Custom')
+    ], default='custom')
 
     is_active = BooleanField('Policy is Active', default=True)
     blocks = SelectMultipleField('Visible to Periods/Blocks (leave empty for all)', choices=[], validators=[Optional()])
