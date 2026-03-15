@@ -1131,6 +1131,7 @@
 
           setClaimLimit(claimLimitToggle && claimLimitToggle.checked, !isAdvanced);
           updateTierDrivenAdvancedControls();
+          updateSimpleModeRecommendations();
         }
 
         // Highlight fields with errors
@@ -1165,6 +1166,7 @@
               economyWarningsContainer.innerHTML = '';
               economyWarningsContainer.style.display = 'none';
             }
+            updateSimpleModeRecommendations();
           });
         }
 
@@ -1194,6 +1196,7 @@
             toggleSimpleNonMonetaryClaimsLimit(advancedClaimType.value);
           }
           updateTierDrivenAdvancedControls();
+          updateSimpleModeRecommendations();
         }
 
         function toggleSimpleNonMonetaryClaimsLimit(claimType) {
@@ -1475,6 +1478,25 @@
           }
         }
 
+        function updateSimpleModeRecommendations() {
+          const isAdvanced = Boolean(insuranceModeToggle && insuranceModeToggle.checked);
+          if (isAdvanced) {
+            return;
+          }
+          const claimType = simpleClaimType?.value || 'transaction_monetary';
+          const premiumAmount = Number(document.getElementById('simple_premium')?.value || 0);
+          const recommendedPeriodCap = CTHEconomy.getRecommendedCustomPeriodCap(premiumAmount);
+
+          if (simpleMaxPayoutInput && (claimType === 'transaction_monetary' || claimType === 'legacy_monetary')) {
+            if (!simpleMaxPayoutInput.value || simpleMaxPayoutInput.dataset.autofillRecommended === 'true') {
+              simpleMaxPayoutInput.value = formatTierCapValue(recommendedPeriodCap);
+              simpleMaxPayoutInput.dataset.autofillRecommended = 'true';
+            }
+          } else if (simpleMaxPayoutInput) {
+            delete simpleMaxPayoutInput.dataset.autofillRecommended;
+          }
+        }
+
         function clearTierFields() {
           if (tierCategoryInput) tierCategoryInput.value = '';
           if (tierNameInput) tierNameInput.value = '';
@@ -1634,9 +1656,23 @@
           });
         }
 
+        const simplePremiumInput = document.getElementById('simple_premium');
+        const simpleChargeFrequencyInput = document.getElementById('simple_charge_frequency');
+        if (simplePremiumInput) {
+          simplePremiumInput.addEventListener('input', updateSimpleModeRecommendations);
+        }
+        if (simpleChargeFrequencyInput) {
+          simpleChargeFrequencyInput.addEventListener('change', updateSimpleModeRecommendations);
+        }
+
         if (advancedMaxPayoutInput) {
           advancedMaxPayoutInput.addEventListener('input', () => {
             advancedMaxPayoutInput.dataset.autofillRecommended = 'false';
+          });
+        }
+        if (simpleMaxPayoutInput) {
+          simpleMaxPayoutInput.addEventListener('input', () => {
+            simpleMaxPayoutInput.dataset.autofillRecommended = 'false';
           });
         }
         if (advancedMaxClaimAmountInput) {
@@ -1661,6 +1697,7 @@
         }
         updateWaitingPeriodControls();
         updateTierDrivenAdvancedControls();
+        updateSimpleModeRecommendations();
 
         if (insuranceForm) {
           insuranceForm.addEventListener('submit', () => {
@@ -2424,8 +2461,10 @@
         }
         appendStat(guidance, 'Tier waiting period', `${selectedTierDefaults.waiting_period_days || 0} days`);
         if (enteredPremium > 0) {
-          appendStat(guidance, 'Suggested per-claim limit', CTHEconomy.formatInsuranceCurrency(recommendedClaimLimit));
-          appendStat(guidance, 'Suggested per-period limit', CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap));
+          if (isAdvanced) {
+            appendStat(guidance, 'Suggested per-claim limit', CTHEconomy.formatInsuranceCurrency(recommendedClaimLimit));
+          }
+          appendStat(guidance, 'Suggested payout limit per period', CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap));
         }
       } else {
         appendStat(guidance, 'Tier waiting period range', tierWaitingLabel || defaultWaitingLabel);
@@ -2438,9 +2477,14 @@
         appendStat(guidance, `Ideal target at ${frequency}`, `${CTHEconomy.formatInsuranceCurrency(idealPremiumAtFrequency)} / ${frequency}`);
       }
       appendStat(guidance, 'Default waiting period', defaultWaitingLabel);
+      if (claimType === 'transaction_monetary' && enteredPremium > 0) {
+        appendStat(guidance, 'Suggested payout limit per period', CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap));
+      }
       if (claimType === 'legacy_monetary' && enteredPremium > 0) {
-        appendStat(guidance, 'Suggested per-claim limit', CTHEconomy.formatInsuranceCurrency(recommendedClaimLimit));
-        appendStat(guidance, 'Suggested per-period limit', CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap));
+        if (isAdvanced) {
+          appendStat(guidance, 'Suggested per-claim limit', CTHEconomy.formatInsuranceCurrency(recommendedClaimLimit));
+        }
+        appendStat(guidance, 'Suggested payout limit per period', CTHEconomy.formatInsuranceCurrency(recommendedPeriodCap));
       }
     }
     grid.appendChild(guidance);
