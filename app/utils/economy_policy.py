@@ -11,36 +11,39 @@ TIER_WAITING_PERIOD_DAYS = {
     2: 5,
     3: 3,
 }
+TRANSACTION_TIER_MULTIPLIERS = {
+    1: Decimal("0.75"),
+    2: Decimal("1.0"),
+    3: Decimal("1.3"),
+}
+TRANSACTION_TIER_LABELS = {
+    1: "basic",
+    2: "mid",
+    3: "premium",
+}
 TRANSACTION_DEFAULTS = {
     "non_tiered": {
-        "weekly_premium_rate": Decimal("0.08"),
         "coverage_percent": Decimal("0.70"),
         "weekly_cap_multiplier": Decimal("3.0"),
         "waiting_period_days": 5,
     },
     "tiers": {
         1: {
-            "weekly_premium_rate": Decimal("0.05"),
             "coverage_percent": Decimal("0.50"),
             "weekly_cap_multiplier": Decimal("2.0"),
             "period_cap_multiplier": Decimal("6.0"),
-            "tier_multiplier": Decimal("1.0"),
             "waiting_period_days": 7,
         },
         2: {
-            "weekly_premium_rate": Decimal("0.08"),
             "coverage_percent": Decimal("0.70"),
             "weekly_cap_multiplier": Decimal("3.0"),
             "period_cap_multiplier": Decimal("8.0"),
-            "tier_multiplier": Decimal("1.4"),
             "waiting_period_days": 5,
         },
         3: {
-            "weekly_premium_rate": Decimal("0.11"),
             "coverage_percent": Decimal("0.90"),
             "weekly_cap_multiplier": Decimal("4.0"),
             "period_cap_multiplier": Decimal("10.0"),
-            "tier_multiplier": Decimal("1.8"),
             "waiting_period_days": 3,
         },
     },
@@ -170,6 +173,23 @@ def get_variable_monetary_risk_factor(mode: Optional[str]) -> Decimal:
     return VARIABLE_MONETARY_RISK_FACTORS.get(normalize_policy_mode(mode), VARIABLE_MONETARY_RISK_FACTORS[POLICY_MODE_DEFAULT])
 
 
+def get_transaction_tier_multipliers_by_level() -> Dict[str, float]:
+    return {
+        TRANSACTION_TIER_LABELS[rank]: float(multiplier)
+        for rank, multiplier in TRANSACTION_TIER_MULTIPLIERS.items()
+    }
+
+
+def get_recommended_insurance_weekly_premium(mode: Optional[str], cwi: Optional[Decimal]) -> Optional[Decimal]:
+    if cwi is None:
+        return None
+    profile = get_policy_profile(mode)
+    weekly_premium_rate = Decimal(
+        str(profile.get("ratios", {}).get("insurance_weekly", {}).get("recommended", 0.08))
+    )
+    return (Decimal(str(cwi)) * weekly_premium_rate).quantize(Decimal("0.01"))
+
+
 def get_transaction_tier_defaults(
     mode: Optional[str],
     tier_rank: int,
@@ -178,34 +198,42 @@ def get_transaction_tier_defaults(
     base_premium: Optional[Decimal] = None,
     billing_weeks: int = 1,
 ) -> Dict[str, Any]:
+    profile = get_policy_profile(mode)
+    profile_tier_defaults = profile.get("insurance_transaction_defaults", {}).get("tiers", {}).get(int(tier_rank), {})
     tier_defaults = TRANSACTION_DEFAULTS["tiers"].get(int(tier_rank), TRANSACTION_DEFAULTS["non_tiered"])
-    weekly_premium_rate = Decimal(str(tier_defaults["weekly_premium_rate"]))
-    coverage_percent = Decimal(str(tier_defaults["coverage_percent"]))
+    weekly_premium_rate = Decimal(
+        str(profile.get("ratios", {}).get("insurance_weekly", {}).get("recommended", 0.08))
+    )
+    coverage_percent = Decimal(str(profile_tier_defaults.get("coverage_percent", tier_defaults["coverage_percent"])))
+    tier_multiplier = TRANSACTION_TIER_MULTIPLIERS.get(int(tier_rank), Decimal("1.0"))
     weekly_cap_multiplier = Decimal(str(tier_defaults["weekly_cap_multiplier"]))
-    period_cap_multiplier = Decimal(str(tier_defaults.get("period_cap_multiplier", weekly_cap_multiplier)))
-    tier_multiplier = Decimal(str(tier_defaults.get("tier_multiplier", "1.0")))
-    resolved_premium = None
+    period_cap_multiplier = Decimal(
+        str(profile_tier_defaults.get("period_cap_multiplier", tier_defaults.get("period_cap_multiplier", weekly_cap_multiplier)))
+    )
+    resolved_base_premium = None
     if base_premium is not None:
-        resolved_premium = Decimal(str(base_premium)).quantize(Decimal("0.01"))
+        resolved_base_premium = Decimal(str(base_premium)).quantize(Decimal("0.01"))
     elif cwi is not None:
-        resolved_premium = (Decimal(str(cwi)) * weekly_premium_rate).quantize(Decimal("0.01"))
+        resolved_base_premium = get_recommended_insurance_weekly_premium(mode, cwi)
+    resolved_premium = None
     weekly_cap = None
     max_payout_per_period = None
     normalized_weeks = max(int(billing_weeks or 1), 1)
-    if resolved_premium is not None:
+    if resolved_base_premium is not None:
+        resolved_premium = (resolved_base_premium * tier_multiplier).quantize(Decimal("0.01"))
         weekly_cap = (resolved_premium * weekly_cap_multiplier).quantize(Decimal("0.01"))
         max_payout_per_period = (weekly_cap * Decimal(str(normalized_weeks))).quantize(Decimal("0.01"))
 
     return {
         "weekly_premium_rate": weekly_premium_rate,
-        "base_premium": resolved_premium,
+        "base_premium": resolved_base_premium,
         "coverage_percent": coverage_percent,
         "tier_multiplier": tier_multiplier,
         "period_cap_multiplier": period_cap_multiplier,
         "weekly_cap_multiplier": weekly_cap_multiplier,
         "weekly_cap": weekly_cap,
         "billing_weeks": normalized_weeks,
-        "waiting_period_days": int(tier_defaults["waiting_period_days"]),
+        "waiting_period_days": int(profile_tier_defaults.get("waiting_period_days", tier_defaults["waiting_period_days"])),
         "premium": resolved_premium,
         "max_payout_per_period": max_payout_per_period,
     }

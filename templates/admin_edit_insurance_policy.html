@@ -536,6 +536,7 @@
     const isPresetPolicy = (editSettingsModeInput?.value || 'custom') === 'preset';
     const storedCoveragePercent = Number('{{ policy.coverage_percent if policy.coverage_percent is not none else 0 }}');
     let economyAnalysisPending = typeof EconomyBalanceChecker !== 'undefined';
+    CTHEconomy.transactionTierMultipliers = {{ transaction_tier_multipliers|tojson }};
 
     function updateBundleIds() {
       const selectedIds = Array.from(checkboxes)
@@ -583,7 +584,7 @@
       if (typeof tierDefaults?.tier_multiplier !== 'undefined') {
         return Number(tierDefaults.tier_multiplier) || 1.0;
       }
-      return { basic: 1.0, mid: 1.4, premium: 1.8 }[tierLevel] || 1.0;
+      return Number(CTHEconomy.transactionTierMultipliers?.[tierLevel]) || 1.0;
     };
     CTHEconomy.getRecommendedCustomClaimLimit = function (premiumAmount) {
       const parsedPremium = Number(premiumAmount);

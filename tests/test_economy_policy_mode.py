@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from app import db
 from app.routes.admin import _build_rebalance_preview, _get_transaction_weekly_premium, _inverse_weekly_amount
-from app.models import Admin, FeatureSettings, InsurancePolicy, PayrollSettings, RentSettings
+from app.models import Admin, EconomySnapshot, FeatureSettings, InsurancePolicy, PayrollSettings, RentSettings
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 from app.utils.economy_policy import (
     get_feature_settings_row,
@@ -121,7 +121,7 @@ def test_comfortable_policy_uses_requested_ratio_profile(client):
     assert recommendations['insurance_period_cap']['multiplier_max'] == 12.0
     assert recommendations['insurance_waiting_period_days']['min'] == 3
     assert recommendations['insurance_waiting_period_days']['max'] == 7
-    assert recommendations['transaction_insurance_defaults']['recommended_base_premium'] == round(cwi * 0.05, 2)
+    assert recommendations['transaction_insurance_defaults']['recommended_base_premium'] == round(cwi * 0.07, 2)
     assert recommendations['transaction_insurance_defaults']['tiers']['basic']['period_cap_multiplier'] == 6.0
     assert recommendations['transaction_insurance_defaults']['tiers']['mid']['period_cap_multiplier'] == 8.0
     assert recommendations['transaction_insurance_defaults']['tiers']['premium']['period_cap_multiplier'] == 10.0
@@ -135,23 +135,26 @@ def test_transaction_insurance_defaults_vary_by_policy_mode():
     default_mid = get_transaction_tier_defaults('default', 2, Decimal('120.00'))
     assert default_mid['coverage_percent'] == Decimal('0.7')
     assert default_mid['base_premium'] == Decimal('9.60')
+    assert default_mid['tier_multiplier'] == Decimal('1.0')
     assert default_mid['premium'] == Decimal('9.60')
     assert default_mid['weekly_cap'] == Decimal('28.80')
     assert default_mid['max_payout_per_period'] == Decimal('28.80')
 
     tight_basic = get_transaction_tier_defaults('tight', 1, Decimal('250.00'))
     assert tight_basic['coverage_percent'] == Decimal('0.5')
-    assert tight_basic['base_premium'] == Decimal('12.50')
-    assert tight_basic['premium'] == Decimal('12.50')
-    assert tight_basic['weekly_cap'] == Decimal('25.00')
-    assert tight_basic['max_payout_per_period'] == Decimal('25.00')
+    assert tight_basic['base_premium'] == Decimal('22.50')
+    assert tight_basic['tier_multiplier'] == Decimal('0.75')
+    assert tight_basic['premium'] == Decimal('16.88')
+    assert tight_basic['weekly_cap'] == Decimal('33.76')
+    assert tight_basic['max_payout_per_period'] == Decimal('33.76')
 
     comfortable_premium = get_transaction_tier_defaults('comfortable', 3, Decimal('250.00'))
     assert comfortable_premium['coverage_percent'] == Decimal('0.9')
-    assert comfortable_premium['base_premium'] == Decimal('27.50')
-    assert comfortable_premium['premium'] == Decimal('27.50')
-    assert comfortable_premium['weekly_cap'] == Decimal('110.00')
-    assert comfortable_premium['max_payout_per_period'] == Decimal('110.00')
+    assert comfortable_premium['base_premium'] == Decimal('17.50')
+    assert comfortable_premium['tier_multiplier'] == Decimal('1.3')
+    assert comfortable_premium['premium'] == Decimal('22.75')
+    assert comfortable_premium['weekly_cap'] == Decimal('91.00')
+    assert comfortable_premium['max_payout_per_period'] == Decimal('91.00')
 
 
 def test_transaction_tier_waiting_periods_are_tier_controlled():
@@ -167,6 +170,7 @@ def test_transaction_tier_defaults_accept_teacher_base_premium():
     assert manual_mid['premium'] == Decimal('60.00')
     assert manual_mid['weekly_cap'] == Decimal('180.00')
     assert manual_mid['max_payout_per_period'] == Decimal('720.00')
+    assert manual_mid['tier_multiplier'] == Decimal('1.0')
 
 
 def test_edit_policy_rejects_contract_shape_changes(client):
@@ -473,12 +477,23 @@ def test_rebalance_preview_uses_saved_tier_selection_for_custom_monetary_insuran
 
     by_title = {item['change']['title']: item for item in preview_items if item['change']['type'] == 'insurance'}
     monthly_factor = Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH))
-    expected_basic = str((Decimal(str(analysis.recommendations['insurance_premium_weekly']['min'])) * monthly_factor).quantize(Decimal('0.01')))
-    expected_max = str((Decimal(str(analysis.recommendations['insurance_premium_weekly']['max'])) * monthly_factor).quantize(Decimal('0.01')))
+    recommended_weekly = Decimal(str(analysis.recommendations['insurance_premium_weekly']['recommended']))
+    expected_basic = str(((recommended_weekly * Decimal('0.75')) * monthly_factor).quantize(Decimal('0.01')))
+    expected_max = str(((recommended_weekly * Decimal('1.3')) * monthly_factor).quantize(Decimal('0.01')))
 
     assert by_title['Allowance Shield Basic']['change']['new_value'] == expected_basic
     assert by_title['Allowance Shield Max']['change']['new_value'] == expected_max
     assert by_title['Allowance Shield Basic']['change']['new_value'] != by_title['Allowance Shield Max']['change']['new_value']
+
+
+def test_economy_health_get_does_not_persist_snapshot(client):
+    admin, _, _ = _create_admin_with_block()
+    _login_admin(client, admin.id)
+
+    response = client.get('/admin/economy-health?block=A')
+
+    assert response.status_code == 200
+    assert EconomySnapshot.query.count() == 0
 
 
 def test_run_payroll_applies_scheduled_rebalance(client):
