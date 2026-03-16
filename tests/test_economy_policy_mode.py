@@ -204,6 +204,87 @@ def test_get_transaction_weekly_premium_normalizes_nonweekly_storage(client):
     assert base_premium == Decimal('9.60')
 
 
+def test_edit_preset_policy_get_preserves_stored_billing_period_premium(client):
+    admin, _, _ = _create_admin_with_block()
+    _login_admin(client, admin.id)
+
+    policy = _create_insurance_policy(admin.id, "Preset Tiered Policy", 97.83)
+    policy.claim_type = 'transaction_monetary'
+    policy.settings_mode = 'preset'
+    policy.charge_frequency = 'monthly'
+    policy.product_group_id = 101
+    policy.tier_category_id = 101
+    policy.tier_name = 'Paycheck Protection'
+    policy.tier_color = 'primary'
+    policy.tier_rank = 2
+    policy.tier_level = 'mid'
+    policy.coverage_percent = Decimal('0.70')
+    policy.waiting_period_days = 5
+    policy.max_claim_amount = None
+    policy.max_payout_per_period = Decimal('270.00')
+    db.session.commit()
+
+    response = client.get(f'/admin/insurance/edit/{policy.id}')
+
+    assert response.status_code == 200
+    assert b'value="97.83"' in response.data
+    assert b'value="9.60"' not in response.data
+
+
+def test_edit_preset_policy_post_preserves_locked_contract_fields(client):
+    admin, _, _ = _create_admin_with_block()
+    _login_admin(client, admin.id)
+
+    policy = _create_insurance_policy(admin.id, "Preset Locked Policy", 97.83)
+    policy.claim_type = 'transaction_monetary'
+    policy.settings_mode = 'preset'
+    policy.charge_frequency = 'monthly'
+    policy.product_group_id = 101
+    policy.tier_category_id = 101
+    policy.tier_name = 'Paycheck Protection'
+    policy.tier_color = 'primary'
+    policy.tier_rank = 2
+    policy.tier_level = 'mid'
+    policy.coverage_percent = Decimal('0.70')
+    policy.waiting_period_days = 5
+    policy.max_claim_amount = None
+    policy.max_claims_count = None
+    policy.max_payout_per_period = Decimal('270.00')
+    policy.autopay = True
+    policy.auto_cancel_nonpay_days = 7
+    db.session.commit()
+
+    response = client.post(f'/admin/insurance/edit/{policy.id}', data={
+        'title': 'Updated Title',
+        'description': 'Updated description',
+        'settings_mode': 'preset',
+        'premium': '22.50',
+        'charge_frequency': 'weekly',
+        'claim_type': 'legacy_monetary',
+        'waiting_period_days': '1',
+        'max_claim_amount': '999.00',
+        'max_claims_count': '9',
+        'max_payout_per_period': '999.00',
+        'autopay': '',
+        'auto_cancel_nonpay_days': '1',
+        'claim_time_limit_days': '45',
+        'is_active': 'y',
+    })
+
+    assert response.status_code == 302
+    db.session.refresh(policy)
+    assert policy.title == 'Updated Title'
+    assert policy.description == 'Updated description'
+    assert policy.claim_time_limit_days == 45
+    assert policy.premium == Decimal('97.83')
+    assert policy.charge_frequency == 'monthly'
+    assert policy.claim_type == 'transaction_monetary'
+    assert policy.waiting_period_days == 5
+    assert policy.max_payout_per_period == Decimal('270.00')
+    assert policy.autopay is True
+    assert policy.auto_cancel_nonpay_days == 7
+
+
 def test_update_economy_policy_creates_block_scoped_settings(client):
     admin, _, _ = _create_admin_with_block()
     _login_admin(client, admin.id)

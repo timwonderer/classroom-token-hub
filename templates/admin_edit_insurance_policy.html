@@ -39,6 +39,7 @@
 
   <form method="POST" action="{{ url_for('admin.edit_insurance_policy', policy_id=policy.id) }}">
     {{ form.hidden_tag() }}
+    <input type="hidden" name="settings_mode" id="edit_settings_mode" value="{{ form.settings_mode.data or policy.settings_mode or 'custom' }}">
 
     <div class="row">
       <!-- Main Form Section -->
@@ -531,6 +532,9 @@
     const policyAdvisor = document.getElementById('policyAdvisor');
     const editPremiumInput = document.getElementById('edit_premium');
     const editFrequencyInput = document.querySelector('[data-economy-frequency-field]');
+    const editSettingsModeInput = document.getElementById('edit_settings_mode');
+    const isPresetPolicy = (editSettingsModeInput?.value || 'custom') === 'preset';
+    const storedCoveragePercent = Number('{{ policy.coverage_percent if policy.coverage_percent is not none else 0 }}');
     let economyAnalysisPending = typeof EconomyBalanceChecker !== 'undefined';
 
     function updateBundleIds() {
@@ -658,7 +662,36 @@
       summaryHeader.append(title, cwiBadge);
       summary.appendChild(summaryHeader);
 
-      if (claimType === 'transaction_monetary' && isTiered) {
+      if (isPresetPolicy && claimType === 'transaction_monetary') {
+        title.textContent = isTiered ? 'Preset Tiered Transaction Contract' : 'Preset Transaction Contract';
+        if (tierLevel) {
+          appendAdvisorStat(summary, 'Selected tier', tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1));
+        }
+        appendAdvisorStat(summary, `Premium at ${frequency}`, `${CTHEconomy.formatInsuranceCurrency(premium)} / ${frequency}`);
+        if (storedCoveragePercent > 0) {
+          appendAdvisorStat(summary, 'Coverage', CTHEconomy.formatInsurancePercent(storedCoveragePercent));
+        }
+        appendAdvisorStat(summary, 'Waiting period', `${Number(document.getElementById('edit_waiting_period_days')?.value || 0)} days`);
+        appendAdvisorStat(summary, 'Preset payout limit per period', CTHEconomy.formatInsuranceCurrency(maxPayoutPerPeriod));
+      } else if (isPresetPolicy && claimType === 'non_monetary') {
+        title.textContent = 'Preset Non-Monetary Contract';
+        appendAdvisorStat(summary, `Premium at ${frequency}`, `${CTHEconomy.formatInsuranceCurrency(premium)} / ${frequency}`);
+        appendAdvisorStat(summary, 'Waiting period', `${Number(document.getElementById('edit_waiting_period_days')?.value || 0)} days`);
+        appendAdvisorStat(summary, 'Claims per period', String(document.getElementById('max_claims_count')?.value || '0'));
+      } else if (isPresetPolicy && claimType === 'legacy_monetary') {
+        title.textContent = isTiered ? 'Preset Grouped Variable Monetary Contract' : 'Preset Variable Monetary Contract';
+        if (tierLevel) {
+          appendAdvisorStat(summary, 'Selected tier', tierLevel.charAt(0).toUpperCase() + tierLevel.slice(1));
+        }
+        appendAdvisorStat(summary, `Premium at ${frequency}`, `${CTHEconomy.formatInsuranceCurrency(premium)} / ${frequency}`);
+        appendAdvisorStat(summary, 'Waiting period', `${Number(document.getElementById('edit_waiting_period_days')?.value || 0)} days`);
+        if (maxClaimAmount > 0) {
+          appendAdvisorStat(summary, 'Per-claim limit', CTHEconomy.formatInsuranceCurrency(maxClaimAmount));
+        }
+        if (maxPayoutPerPeriod > 0) {
+          appendAdvisorStat(summary, 'Per-coverage-period limit', CTHEconomy.formatInsuranceCurrency(maxPayoutPerPeriod));
+        }
+      } else if (claimType === 'transaction_monetary' && isTiered) {
         title.textContent = 'Tiered transaction setup';
         const basePremium = premium;
         const studentWeeklyPremium = tierLevel
@@ -736,7 +769,13 @@
 
       const detail = document.createElement('div');
       detail.className = 'alert alert-light border mb-0 small';
-      if (claimType === 'transaction_monetary' && isTiered) {
+      if (isPresetPolicy && claimType === 'transaction_monetary') {
+        detail.textContent = 'This preset transaction policy keeps its contract values locked while you edit narrative and lifecycle settings.';
+      } else if (isPresetPolicy && claimType === 'non_monetary') {
+        detail.textContent = 'This preset non-monetary policy keeps its computed premium, claim count, and waiting period locked while you edit universal settings.';
+      } else if (isPresetPolicy && claimType === 'legacy_monetary') {
+        detail.textContent = 'This preset variable monetary policy keeps the computed premium and waiting period locked to the current preset contract.';
+      } else if (claimType === 'transaction_monetary' && isTiered) {
         detail.textContent = selectedTierDefaults
           ? 'This edit uses the tiered transaction model: one weekly base premium plus the selected tier multiplier and tier-controlled wait.'
           : 'Select a tier to see the exact transaction-linked contract for this grouped policy.';
@@ -844,6 +883,7 @@
     if (!editClaimType) return;
     const isNonMonetary = editClaimType.value === 'non_monetary';
     const isTransaction = editClaimType.value === 'transaction_monetary';
+    const lockPresetComputed = isPresetPolicy && (isTransaction || isNonMonetary);
 
     if (editMaxClaimAmountGroup) {
       editMaxClaimAmountGroup.style.display = (isNonMonetary || isTransaction) ? 'none' : '';
@@ -852,14 +892,19 @@
       editMaxPayoutPerPeriodGroup.style.display = isNonMonetary ? 'none' : '';
     }
 
-    if (isNonMonetary || isTransaction) {
+    if (isNonMonetary) {
       if (editMaxClaimAmountInput) {
-        editMaxClaimAmountInput.value = '';
         editMaxClaimAmountInput.disabled = true;
       }
       if (editMaxPayoutInput) {
-        editMaxPayoutInput.value = '';
         editMaxPayoutInput.disabled = true;
+      }
+    } else if (isTransaction) {
+      if (editMaxClaimAmountInput) {
+        editMaxClaimAmountInput.disabled = true;
+      }
+      if (editMaxPayoutInput) {
+        editMaxPayoutInput.disabled = lockPresetComputed;
       }
     } else {
       if (editMaxClaimAmountInput) editMaxClaimAmountInput.disabled = false;
@@ -893,6 +938,58 @@
   const removeGroupBtn = document.getElementById('removeGroupBtn');
   const tierActionsEdit = document.getElementById('tierActionsEdit');
   const groupedBadge = document.querySelector('.grouped-badge');
+  const maxClaimsCountInput = document.getElementById('max_claims_count');
+  const autopayInput = document.getElementById('autopay');
+  const autoCancelInput = document.getElementById('auto_cancel_nonpay_days');
+
+  function setReadOnlyField(field, shouldLock) {
+    if (!field) return;
+    field.readOnly = shouldLock;
+    field.classList.toggle('insurance-gated-field', shouldLock);
+  }
+
+  function setDisabledField(field, shouldLock) {
+    if (!field) return;
+    field.disabled = shouldLock;
+    field.classList.toggle('insurance-gated-field', shouldLock);
+  }
+
+  function updatePresetEditConstraints() {
+    if (!isPresetPolicy) {
+      return;
+    }
+    const claimType = editClaimType?.value || '{{ policy.claim_type }}';
+    const isTransaction = claimType === 'transaction_monetary';
+    const isNonMonetary = claimType === 'non_monetary';
+    const isVariable = claimType === 'legacy_monetary';
+
+    setDisabledField(editClaimType, true);
+    setDisabledField(editFrequencyInput, true);
+    setDisabledField(tierToggleEdit, true);
+    setDisabledField(tierLevelInput, true);
+    setDisabledField(tierColorInput, true);
+    setReadOnlyField(tierNameInput, true);
+    setReadOnlyField(editPremiumInput, true);
+    setReadOnlyField(editWaitingPeriodInput, true);
+    setDisabledField(autopayInput, true);
+    setReadOnlyField(autoCancelInput, true);
+
+    if (startNewGroupBtnEdit) startNewGroupBtnEdit.disabled = true;
+    if (removeGroupBtn) removeGroupBtn.disabled = true;
+    selectTierButtonsEdit.forEach((btn) => {
+      btn.disabled = true;
+    });
+
+    setReadOnlyField(maxClaimsCountInput, isTransaction || isNonMonetary);
+    setReadOnlyField(editMaxClaimAmountInput, isTransaction || isNonMonetary);
+    setReadOnlyField(editMaxPayoutInput, isTransaction || isNonMonetary);
+
+    if (isVariable) {
+      setReadOnlyField(maxClaimsCountInput, false);
+      setReadOnlyField(editMaxClaimAmountInput, false);
+      setReadOnlyField(editMaxPayoutInput, false);
+    }
+  }
 
   function getTierControlledWaitingPeriod() {
     const waitingByTier = {
@@ -1065,10 +1162,16 @@
     });
   }
   updateEditWaitingPeriodControl();
+  updatePresetEditConstraints();
 
   if (editForm) {
     editForm.addEventListener('submit', () => {
       if (editWaitingPeriodInput) editWaitingPeriodInput.disabled = false;
+      if (isPresetPolicy) {
+        [editClaimType, editFrequencyInput, tierToggleEdit, tierLevelInput, tierColorInput, autopayInput].forEach((field) => {
+          if (field) field.disabled = false;
+        });
+      }
     });
   }
 

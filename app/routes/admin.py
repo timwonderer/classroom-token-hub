@@ -352,6 +352,33 @@ def _get_transaction_weekly_premium(policy) -> Decimal | None:
     return _normalize_amount_to_weekly(Decimal(str(policy.premium)), policy.charge_frequency).quantize(Decimal("0.01"))
 
 
+def _preserve_preset_edit_constraints(policy, form):
+    """Keep preset edit submissions within the same contract boundaries as create."""
+    if _normalize_insurance_settings_mode(getattr(policy, 'settings_mode', None)) != 'preset':
+        return
+
+    form.claim_type.data = policy.claim_type
+    form.charge_frequency.data = policy.charge_frequency
+    form.tier_category_id.data = policy.effective_product_group_id
+    form.tier_name.data = policy.tier_name
+    form.tier_color.data = policy.tier_color
+    form.tier_level.data = policy.tier_level
+
+    if policy.claim_type in {'transaction_monetary', 'non_monetary'}:
+        form.premium.data = float(policy.premium) if policy.premium is not None else None
+        form.waiting_period_days.data = policy.waiting_period_days
+        form.max_claims_count.data = policy.max_claims_count
+        form.max_claim_amount.data = float(policy.max_claim_amount) if policy.max_claim_amount is not None else None
+        form.max_payout_per_period.data = (
+            float(policy.max_payout_per_period) if policy.max_payout_per_period is not None else None
+        )
+        form.autopay.data = policy.autopay
+        form.auto_cancel_nonpay_days.data = policy.auto_cancel_nonpay_days
+    elif policy.claim_type == 'legacy_monetary':
+        form.premium.data = float(policy.premium) if policy.premium is not None else None
+        form.waiting_period_days.data = policy.waiting_period_days
+
+
 def _policy_contract_shape_changed(policy, form) -> bool:
     original_group = policy.effective_product_group_id
     submitted_group = form.tier_category_id.data
@@ -6212,9 +6239,6 @@ def edit_insurance_policy(policy_id):
         form.blocks.data = policy.blocks_list
         if policy.effective_tier_rank is not None:
             form.waiting_period_days.data = get_tier_waiting_period_days(policy.effective_tier_rank)
-        base_premium = _get_transaction_weekly_premium(policy)
-        if base_premium is not None:
-            form.premium.data = float(base_premium)
 
     teacher_policies = InsurancePolicy.query.filter_by(teacher_id=session.get('admin_id')).all()
     tier_groups_map = {}
@@ -6239,6 +6263,7 @@ def edit_insurance_policy(policy_id):
     next_tier_category_id = _next_tenant_scoped_tier_id(tier_namespace_seed, existing_tier_ids)
 
     if request.method == 'POST' and form.validate_on_submit():
+        _preserve_preset_edit_constraints(policy, form)
         settings_mode = _normalize_insurance_settings_mode(request.form.get('settings_mode') or policy.settings_mode)
         if _policy_contract_shape_changed(policy, form):
             flash(
