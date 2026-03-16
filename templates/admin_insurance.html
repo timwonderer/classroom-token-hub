@@ -1143,6 +1143,7 @@
       // Handle preset/custom mode toggle
       let insuranceModeToggle;
       const CTHEconomy = window.CTHEconomy || (window.CTHEconomy = {});
+      CTHEconomy.transactionTierMultipliers = {{ transaction_tier_multipliers|tojson }};
       CTHEconomy.latestInsuranceEconomyAnalysis = null;
       CTHEconomy.formatInsuranceCurrency = function (value) {
         const parsed = Number(value);
@@ -1176,11 +1177,7 @@
         if (tierDefaults && typeof tierDefaults.tier_multiplier !== 'undefined') {
           return Number(tierDefaults.tier_multiplier) || 1.0;
         }
-        return {
-          basic: 0.75,
-          mid: 1.0,
-          premium: 1.3
-        }[tierLevel] || 1.0;
+        return Number(CTHEconomy.transactionTierMultipliers?.[tierLevel]) || 1.0;
       };
       CTHEconomy.deriveTierPremium = function (basePremium, tierLevel) {
         const parsedBase = Number(basePremium);

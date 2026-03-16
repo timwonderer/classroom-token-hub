@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from app import db
 from app.routes.admin import _build_rebalance_preview, _get_transaction_weekly_premium, _inverse_weekly_amount
-from app.models import Admin, FeatureSettings, InsurancePolicy, PayrollSettings, RentSettings
+from app.models import Admin, EconomySnapshot, FeatureSettings, InsurancePolicy, PayrollSettings, RentSettings
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 from app.utils.economy_policy import (
     get_feature_settings_row,
@@ -477,12 +477,23 @@ def test_rebalance_preview_uses_saved_tier_selection_for_custom_monetary_insuran
 
     by_title = {item['change']['title']: item for item in preview_items if item['change']['type'] == 'insurance'}
     monthly_factor = Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH))
-    expected_basic = str((Decimal(str(analysis.recommendations['insurance_premium_weekly']['min'])) * monthly_factor).quantize(Decimal('0.01')))
-    expected_max = str((Decimal(str(analysis.recommendations['insurance_premium_weekly']['max'])) * monthly_factor).quantize(Decimal('0.01')))
+    recommended_weekly = Decimal(str(analysis.recommendations['insurance_premium_weekly']['recommended']))
+    expected_basic = str(((recommended_weekly * Decimal('0.75')) * monthly_factor).quantize(Decimal('0.01')))
+    expected_max = str(((recommended_weekly * Decimal('1.3')) * monthly_factor).quantize(Decimal('0.01')))
 
     assert by_title['Allowance Shield Basic']['change']['new_value'] == expected_basic
     assert by_title['Allowance Shield Max']['change']['new_value'] == expected_max
     assert by_title['Allowance Shield Basic']['change']['new_value'] != by_title['Allowance Shield Max']['change']['new_value']
+
+
+def test_economy_health_get_does_not_persist_snapshot(client):
+    admin, _, _ = _create_admin_with_block()
+    _login_admin(client, admin.id)
+
+    response = client.get('/admin/economy-health?block=A')
+
+    assert response.status_code == 200
+    assert EconomySnapshot.query.count() == 0
 
 
 def test_run_payroll_applies_scheduled_rebalance(client):
