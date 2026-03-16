@@ -7,7 +7,7 @@ As per docs/development/TIMEZONE_HANDLING_SPECIFICATION.md:
 - No direct calls to datetime.now() or datetime.utcnow() allowed elsewhere.
 """
 
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timezone, timedelta
 import pytz
 from flask import current_app, has_app_context, has_request_context, session
 from app.extensions import db
@@ -108,3 +108,38 @@ def normalize_for_db(dt: datetime) -> datetime | None:
     if db.engine.dialect.name == "sqlite":
         return dt.replace(tzinfo=None)
     return dt
+
+
+def get_claim_period_bounds(period_key: str | None, now: datetime | None = None) -> tuple[datetime, datetime]:
+    """Return the current UTC claim window for a coverage period key."""
+    now = ensure_utc(now) or utc_now()
+    normalized_period = (period_key or "month").strip().lower()
+
+    if normalized_period == "semester":
+        if now.month <= 6:
+            return (
+                now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
+                now.replace(month=6, day=30, hour=23, minute=59, second=59, microsecond=0),
+            )
+        return (
+            now.replace(month=7, day=1, hour=0, minute=0, second=0, microsecond=0),
+            now.replace(month=12, day=31, hour=23, minute=59, second=59, microsecond=0),
+        )
+
+    if normalized_period == "weekly":
+        period_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        period_end = period_start + timedelta(days=7) - timedelta(seconds=1)
+        return period_start, period_end
+
+    if normalized_period == "biweekly":
+        anchor = datetime(1970, 1, 5, tzinfo=timezone.utc)
+        current_week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        elapsed_days = (current_week_start - anchor).days
+        period_start = anchor + timedelta(days=(elapsed_days // 14) * 14)
+        period_end = period_start + timedelta(days=14) - timedelta(seconds=1)
+        return period_start, period_end
+
+    period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    next_month = period_start.replace(day=28) + timedelta(days=4)
+    period_end = next_month.replace(day=1) - timedelta(seconds=1)
+    return period_start, period_end

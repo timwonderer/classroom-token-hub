@@ -25,7 +25,7 @@ from dateutil.relativedelta import relativedelta
 from app.extensions import db, limiter
 from app.models import (
     Student, Transaction, TransactionStatus, TapEvent, StoreItem, StoreItemBlock, StudentItem,
-    RentSettings, RentPayment, InsurancePolicy, StudentInsurance, InsuranceClaim,
+    RentSettings, RentPayment, InsurancePolicy, InsurancePolicyBlock, StudentInsurance, InsuranceClaim,
     BankingSettings, UserReport, FeatureSettings, Issue, IssueResolutionAction
 )
 from app.auth import (
@@ -54,7 +54,7 @@ from app.utils.store import process_expired_collective_goals
 from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
 from app.attendance import get_all_block_statuses
 from app.payroll import get_pay_rate_for_block
-from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone
+from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone, get_claim_period_bounds
 from app.utils.insurance_eligibility import (
     evaluate_claim_transaction_eligibility,
     collect_reimbursed_source_tx_ids,
@@ -260,6 +260,17 @@ def get_current_join_code():
     """
     context = get_current_class_context()
     return context['join_code'] if context else None
+
+
+def _insurance_next_payment_due(now_utc, charge_frequency):
+    frequency = (charge_frequency or 'monthly').lower()
+    if frequency == 'weekly':
+        return now_utc + timedelta(days=7)
+    if frequency == 'biweekly':
+        return now_utc + timedelta(days=14)
+    if frequency == 'semester':
+        return now_utc + timedelta(days=7 * 16)
+    return now_utc + timedelta(days=28)
 
 
 def get_feature_settings_for_student():
@@ -1915,21 +1926,40 @@ def insurance_marketplace():
         return redirect(url_for('student.dashboard'))
 
     teacher_id = context['teacher_id']
+    join_code = context['join_code']
+    current_block = (context.get('block') or '').strip().upper()
     now_utc = utc_now()
 
-    # FIX: Get student's active policies scoped to current class only
+    visible_policy_ids = (
+        db.session.query(InsurancePolicy.id)
+        .filter(InsurancePolicy.teacher_id == teacher_id)
+        .filter(
+            or_(
+                InsurancePolicy.id.in_(
+                    db.session.query(InsurancePolicyBlock.policy_id).filter(
+                        InsurancePolicyBlock.block == current_block
+                    )
+                ),
+                ~select(InsurancePolicyBlock.policy_id)
+                .where(InsurancePolicyBlock.policy_id == InsurancePolicy.id)
+                .exists(),
+            )
+        )
+    )
+
     my_policies = StudentInsurance.query.join(
         InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id
     ).filter(
         StudentInsurance.student_id == student.id,
         StudentInsurance.status == 'active',
-        InsurancePolicy.teacher_id == teacher_id  # FIX: Only show current class policies
+        StudentInsurance.join_code == join_code,
+        InsurancePolicy.teacher_id == teacher_id,
     ).all()
 
-    # FIX: Get available policies (only from current teacher)
     available_policies = InsurancePolicy.query.filter(
         InsurancePolicy.is_active == True,
-        InsurancePolicy.teacher_id == teacher_id  # FIX: Only current class
+        InsurancePolicy.teacher_id == teacher_id,
+        InsurancePolicy.id.in_(visible_policy_ids),
     ).all()
 
     # Check which policies can be purchased
@@ -1941,7 +1971,8 @@ def insurance_marketplace():
         existing = StudentInsurance.query.filter_by(
             student_id=student.id,
             policy_id=policy.id,
-            status='active'
+            status='active',
+            join_code=join_code,
         ).first()
 
         if existing:
@@ -1949,20 +1980,24 @@ def insurance_marketplace():
             continue
 
         # Check repurchase restrictions
-        if policy.no_repurchase_after_cancel:
-            cancelled = StudentInsurance.query.filter_by(
-                student_id=student.id,
-                policy_id=policy.id,
-                status='cancelled'
-            ).order_by(StudentInsurance.cancel_date.desc()).first()
+        cancelled = StudentInsurance.query.filter_by(
+            student_id=student.id,
+            policy_id=policy.id,
+            status='cancelled',
+            join_code=join_code,
+        ).order_by(StudentInsurance.cancel_date.desc()).first()
 
-            if cancelled and cancelled.cancel_date:
-                cancel_dt = ensure_utc(cancelled.cancel_date)
-                days_since_cancel = (now_utc - cancel_dt).days
-                if days_since_cancel < policy.repurchase_wait_days:
-                    can_purchase[policy.id] = False
-                    repurchase_blocks[policy.id] = policy.repurchase_wait_days - days_since_cancel
-                    continue
+        if cancelled and policy.no_repurchase_after_cancel:
+            can_purchase[policy.id] = False
+            continue
+
+        if cancelled and policy.enable_repurchase_cooldown and cancelled.cancel_date:
+            cancel_dt = ensure_utc(cancelled.cancel_date)
+            days_since_cancel = (now_utc - cancel_dt).days
+            if days_since_cancel < policy.repurchase_wait_days:
+                can_purchase[policy.id] = False
+                repurchase_blocks[policy.id] = policy.repurchase_wait_days - days_since_cancel
+                continue
 
         can_purchase[policy.id] = True
 
@@ -1971,7 +2006,8 @@ def insurance_marketplace():
         InsurancePolicy, InsuranceClaim.policy_id == InsurancePolicy.id
     ).filter(
         InsuranceClaim.student_id == student.id,
-        InsurancePolicy.teacher_id == teacher_id  # FIX: Only current class claims
+        InsuranceClaim.join_code == join_code,
+        InsurancePolicy.teacher_id == teacher_id,
     ).all()
 
     # Group policies by tier for display
@@ -2037,7 +2073,8 @@ def purchase_insurance(policy_id):
     existing = StudentInsurance.query.filter_by(
         student_id=student.id,
         policy_id=policy.id,
-        status='active'
+        status='active',
+        join_code=join_code,
     ).first()
 
     if existing:
@@ -2048,11 +2085,11 @@ def purchase_insurance(policy_id):
     cancelled = StudentInsurance.query.filter_by(
         student_id=student.id,
         policy_id=policy.id,
-        status='cancelled'
+        status='cancelled',
+        join_code=join_code,
     ).order_by(StudentInsurance.cancel_date.desc()).first()
 
     if cancelled:
-        # Check for permanent block (no repurchase allowed EVER)
         if policy.no_repurchase_after_cancel:
             flash("This policy cannot be repurchased after cancellation.", "danger")
             return redirect(url_for('student.student_insurance'))
@@ -2071,6 +2108,7 @@ def purchase_insurance(policy_id):
         ).filter(
             StudentInsurance.student_id == student.id,
             StudentInsurance.status == 'active',
+            StudentInsurance.join_code == join_code,
             or_(
                 InsurancePolicy.product_group_id == policy.effective_product_group_id,
                 and_(
@@ -2133,7 +2171,7 @@ def purchase_insurance(policy_id):
         status='active',
         purchase_date=utc_now(),
         last_payment_date=utc_now(),
-        next_payment_due=utc_now() + timedelta(days=30),  # Simplified
+        next_payment_due=_insurance_next_payment_due(utc_now(), policy.charge_frequency),
         coverage_start_date=utc_now(),
         payment_current=True
     )
@@ -2209,12 +2247,14 @@ def cancel_insurance(enrollment_id):
 def file_claim(policy_id):
     """File insurance claim."""
     student = get_logged_in_student()
+    context = get_current_class_context()
+    current_join_code = context['join_code'] if context else None
 
-    # Get student's enrollment for this policy
     enrollment = StudentInsurance.query.filter_by(
         student_id=student.id,
         policy_id=policy_id,
-        status='active'
+        status='active',
+        join_code=current_join_code,
     ).first()
 
     if not enrollment:
@@ -2236,28 +2276,6 @@ def file_claim(policy_id):
     # Validation errors
     errors = []
 
-    def _get_period_bounds():
-        now = utc_now()
-        period_key = max_claims_period
-        if period_key == 'semester':
-            if now.month <= 6:
-                return (
-                    now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
-                    now.replace(month=6, day=30, hour=23, minute=59, second=59),
-                )
-            return (
-                now.replace(month=7, day=1, hour=0, minute=0, second=0, microsecond=0),
-                now.replace(month=12, day=31, hour=23, minute=59, second=59),
-            )
-        if period_key == 'weekly':
-            period_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-            period_end = period_start + timedelta(days=7) - timedelta(seconds=1)
-            return period_start, period_end
-        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        next_month = period_start.replace(day=28) + timedelta(days=4)
-        period_end = next_month.replace(day=1) - timedelta(seconds=1)
-        return period_start, period_end
-
     # Normalize coverage dates for safe comparisons
     enrollment.coverage_start_date = ensure_utc(enrollment.coverage_start_date)
     enrollment.cancel_date = ensure_utc(enrollment.cancel_date)
@@ -2272,7 +2290,7 @@ def file_claim(policy_id):
     if not enrollment.payment_current:
         errors.append("Your premium payments are not current. Please contact the teacher.")
 
-    period_start, period_end = _get_period_bounds()
+    period_start, period_end = get_claim_period_bounds(max_claims_period)
 
     # Check max claims per period
     if max_claims_count:
@@ -2312,7 +2330,7 @@ def file_claim(policy_id):
             .filter(Transaction.amount < Decimal('0'))
             .filter(
                 ~func.lower(func.coalesce(Transaction.type, '')).in_(
-                    ['rent payment', 'insurance_premium', 'insurance_reimbursement', 'withdrawal', 'deposit']
+                    ['insurance_premium', 'insurance_reimbursement', 'interest', 'withdrawal', 'deposit']
                 )
             )
         )
@@ -2460,6 +2478,7 @@ def file_claim(policy_id):
             student_insurance_id=enrollment.id,
             policy_id=policy.id,
             student_id=student.id,
+            join_code=enrollment.join_code,
             incident_date=incident_date_value,
             description=form.description.data,
             claim_amount=claim_amount_value if claim_type != 'non_monetary' else None,

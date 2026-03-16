@@ -8,7 +8,7 @@ from typing import Optional, Set, Tuple
 
 from sqlalchemy import and_
 
-from app.models import InsuranceClaim, RentItem, StoreItem, StudentItem, Transaction, TransactionStatus
+from app.models import InsuranceClaim, StoreItem, StudentItem, Transaction, TransactionStatus
 from app.utils.time import ensure_utc
 
 
@@ -26,7 +26,7 @@ CLAIM_REASON_UNCLASSIFIED_TRANSACTION = "UNCLASSIFIED_TRANSACTION"
 
 _PURCHASE_NAME_RE = re.compile(r"^Purchase:\s*(.+?)(?:\s+\(x\d+\)|\s+\[|$)")
 _TRANSFER_TYPES = {"withdrawal", "deposit"}
-_HARD_DENY_TYPES = {"rent payment", "insurance_premium", "insurance_reimbursement"}
+_HARD_DENY_TYPES = {"insurance_premium", "insurance_reimbursement", "interest"}
 
 
 def _normalize_tx_type(tx_type: Optional[str]) -> str:
@@ -117,29 +117,6 @@ def _check_delay_use_rule(tx: Transaction, now_utc: datetime) -> Optional[str]:
     return None
 
 
-def _is_rent_perk_or_privilege_purchase(tx: Transaction) -> bool:
-    if _normalize_tx_type(tx.type) != "purchase":
-        return False
-    if tx.amount is not None and tx.amount == 0:
-        return True
-    desc = (tx.description or "").lower()
-    if "rent perk" in desc:
-        return True
-
-    item_name = _extract_purchase_item_name(tx.description)
-    if not item_name:
-        return False
-    item_query = StoreItem.query.filter(StoreItem.name == item_name)
-    if tx.teacher_id:
-        item_query = item_query.filter(StoreItem.teacher_id == tx.teacher_id)
-    store_item = item_query.order_by(StoreItem.id.desc()).first()
-    if not store_item:
-        return False
-
-    rent_item = RentItem.query.filter(RentItem.store_item_id == store_item.id).first()
-    return bool(rent_item and (rent_item.rent_item_type or "").lower() == "privilege")
-
-
 def evaluate_claim_transaction_eligibility(
     tx: Transaction,
     *,
@@ -172,9 +149,6 @@ def evaluate_claim_transaction_eligibility(
         return False, CLAIM_REASON_UNCLASSIFIED_TRANSACTION
 
     if _is_hard_deny(tx):
-        return False, CLAIM_REASON_HARD_DENY_CATEGORY
-
-    if _is_rent_perk_or_privilege_purchase(tx):
         return False, CLAIM_REASON_HARD_DENY_CATEGORY
 
     if _is_internal_transfer(tx):

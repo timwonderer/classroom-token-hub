@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from app import db
-from app.routes.admin import _build_rebalance_preview, _get_transaction_tier_base_premium, _inverse_weekly_amount
+from app.routes.admin import _build_rebalance_preview, _get_transaction_weekly_premium, _inverse_weekly_amount
 from app.models import Admin, FeatureSettings, InsurancePolicy, PayrollSettings, RentSettings
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 from app.utils.economy_policy import (
@@ -128,30 +128,33 @@ def test_comfortable_policy_uses_requested_ratio_profile(client):
 
 
 def test_transaction_insurance_defaults_vary_by_policy_mode():
-    assert get_transaction_coverage_default('tight') == Decimal('0.5')
-    assert get_transaction_coverage_default('default') == Decimal('0.5')
-    assert get_transaction_coverage_default('comfortable') == Decimal('0.5')
+    assert get_transaction_coverage_default('tight') == Decimal('0.7')
+    assert get_transaction_coverage_default('default') == Decimal('0.7')
+    assert get_transaction_coverage_default('comfortable') == Decimal('0.7')
 
     default_mid = get_transaction_tier_defaults('default', 2, Decimal('120.00'))
     assert default_mid['coverage_percent'] == Decimal('0.7')
     assert default_mid['base_premium'] == Decimal('9.60')
     assert default_mid['tier_multiplier'] == Decimal('1.0')
     assert default_mid['premium'] == Decimal('9.60')
-    assert default_mid['max_payout_per_period'] == Decimal('76.80')
+    assert default_mid['weekly_cap'] == Decimal('28.80')
+    assert default_mid['max_payout_per_period'] == Decimal('28.80')
 
     tight_basic = get_transaction_tier_defaults('tight', 1, Decimal('250.00'))
     assert tight_basic['coverage_percent'] == Decimal('0.5')
     assert tight_basic['base_premium'] == Decimal('22.50')
     assert tight_basic['tier_multiplier'] == Decimal('0.75')
     assert tight_basic['premium'] == Decimal('16.88')
-    assert tight_basic['max_payout_per_period'] == Decimal('101.28')
+    assert tight_basic['weekly_cap'] == Decimal('33.76')
+    assert tight_basic['max_payout_per_period'] == Decimal('33.76')
 
     comfortable_premium = get_transaction_tier_defaults('comfortable', 3, Decimal('250.00'))
     assert comfortable_premium['coverage_percent'] == Decimal('0.9')
     assert comfortable_premium['base_premium'] == Decimal('17.50')
     assert comfortable_premium['tier_multiplier'] == Decimal('1.3')
     assert comfortable_premium['premium'] == Decimal('22.75')
-    assert comfortable_premium['max_payout_per_period'] == Decimal('227.50')
+    assert comfortable_premium['weekly_cap'] == Decimal('91.00')
+    assert comfortable_premium['max_payout_per_period'] == Decimal('91.00')
 
 
 def test_transaction_tier_waiting_periods_are_tier_controlled():
@@ -161,11 +164,13 @@ def test_transaction_tier_waiting_periods_are_tier_controlled():
 
 
 def test_transaction_tier_defaults_accept_teacher_base_premium():
-    manual_mid = get_transaction_tier_defaults('default', 2, base_premium=Decimal('60.00'))
+    manual_mid = get_transaction_tier_defaults('default', 2, base_premium=Decimal('60.00'), billing_weeks=4)
 
     assert manual_mid['base_premium'] == Decimal('60.00')
     assert manual_mid['premium'] == Decimal('60.00')
-    assert manual_mid['max_payout_per_period'] == Decimal('480.00')
+    assert manual_mid['weekly_cap'] == Decimal('180.00')
+    assert manual_mid['max_payout_per_period'] == Decimal('720.00')
+    assert manual_mid['tier_multiplier'] == Decimal('1.0')
 
 
 def test_edit_policy_rejects_contract_shape_changes(client):
@@ -188,7 +193,7 @@ def test_edit_policy_rejects_contract_shape_changes(client):
     assert policy.claim_type == 'legacy_monetary'
 
 
-def test_get_transaction_tier_base_premium_normalizes_nonweekly_storage(client):
+def test_get_transaction_weekly_premium_normalizes_nonweekly_storage(client):
     admin, _, _ = _create_admin_with_block()
     weekly_premium = get_transaction_tier_defaults('default', 2, Decimal('120.00'))['premium']
     policy = _create_insurance_policy(admin.id, "Tiered Monthly Policy", _inverse_weekly_amount(weekly_premium, 'monthly'))
@@ -198,9 +203,90 @@ def test_get_transaction_tier_base_premium_normalizes_nonweekly_storage(client):
     policy.tier_level = 'mid'
     db.session.commit()
 
-    base_premium = _get_transaction_tier_base_premium(policy)
+    base_premium = _get_transaction_weekly_premium(policy)
 
     assert base_premium == Decimal('9.60')
+
+
+def test_edit_preset_policy_get_preserves_stored_billing_period_premium(client):
+    admin, _, _ = _create_admin_with_block()
+    _login_admin(client, admin.id)
+
+    policy = _create_insurance_policy(admin.id, "Preset Tiered Policy", 97.83)
+    policy.claim_type = 'transaction_monetary'
+    policy.settings_mode = 'preset'
+    policy.charge_frequency = 'monthly'
+    policy.product_group_id = 101
+    policy.tier_category_id = 101
+    policy.tier_name = 'Paycheck Protection'
+    policy.tier_color = 'primary'
+    policy.tier_rank = 2
+    policy.tier_level = 'mid'
+    policy.coverage_percent = Decimal('0.70')
+    policy.waiting_period_days = 5
+    policy.max_claim_amount = None
+    policy.max_payout_per_period = Decimal('270.00')
+    db.session.commit()
+
+    response = client.get(f'/admin/insurance/edit/{policy.id}')
+
+    assert response.status_code == 200
+    assert b'value="97.83"' in response.data
+    assert b'value="9.60"' not in response.data
+
+
+def test_edit_preset_policy_post_preserves_locked_contract_fields(client):
+    admin, _, _ = _create_admin_with_block()
+    _login_admin(client, admin.id)
+
+    policy = _create_insurance_policy(admin.id, "Preset Locked Policy", 97.83)
+    policy.claim_type = 'transaction_monetary'
+    policy.settings_mode = 'preset'
+    policy.charge_frequency = 'monthly'
+    policy.product_group_id = 101
+    policy.tier_category_id = 101
+    policy.tier_name = 'Paycheck Protection'
+    policy.tier_color = 'primary'
+    policy.tier_rank = 2
+    policy.tier_level = 'mid'
+    policy.coverage_percent = Decimal('0.70')
+    policy.waiting_period_days = 5
+    policy.max_claim_amount = None
+    policy.max_claims_count = None
+    policy.max_payout_per_period = Decimal('270.00')
+    policy.autopay = True
+    policy.auto_cancel_nonpay_days = 7
+    db.session.commit()
+
+    response = client.post(f'/admin/insurance/edit/{policy.id}', data={
+        'title': 'Updated Title',
+        'description': 'Updated description',
+        'settings_mode': 'preset',
+        'premium': '22.50',
+        'charge_frequency': 'weekly',
+        'claim_type': 'legacy_monetary',
+        'waiting_period_days': '1',
+        'max_claim_amount': '999.00',
+        'max_claims_count': '9',
+        'max_payout_per_period': '999.00',
+        'autopay': '',
+        'auto_cancel_nonpay_days': '1',
+        'claim_time_limit_days': '45',
+        'is_active': 'y',
+    })
+
+    assert response.status_code == 302
+    db.session.refresh(policy)
+    assert policy.title == 'Updated Title'
+    assert policy.description == 'Updated description'
+    assert policy.claim_time_limit_days == 45
+    assert policy.premium == Decimal('97.83')
+    assert policy.charge_frequency == 'monthly'
+    assert policy.claim_type == 'transaction_monetary'
+    assert policy.waiting_period_days == 5
+    assert policy.max_payout_per_period == Decimal('270.00')
+    assert policy.autopay is True
+    assert policy.auto_cancel_nonpay_days == 7
 
 
 def test_update_economy_policy_creates_block_scoped_settings(client):
