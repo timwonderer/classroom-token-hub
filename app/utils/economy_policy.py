@@ -12,9 +12,9 @@ TIER_WAITING_PERIOD_DAYS = {
     3: 3,
 }
 TRANSACTION_TIER_MULTIPLIERS = {
-    1: Decimal("1.0"),
-    2: Decimal("1.4"),
-    3: Decimal("1.8"),
+    1: Decimal("0.75"),
+    2: Decimal("1.0"),
+    3: Decimal("1.3"),
 }
 
 POLICY_MODES: Dict[str, Dict[str, Any]] = {
@@ -143,7 +143,9 @@ def get_transaction_tier_defaults(
 ) -> Dict[str, Any]:
     profile = get_policy_profile(mode)
     tier_defaults = profile.get("insurance_transaction_defaults", {}).get("tiers", {}).get(int(tier_rank), {})
-    base_rate = Decimal(str(profile.get("insurance_transaction_defaults", {}).get("base_rate", 0.06)))
+    insurance_recommended_ratio = Decimal(
+        str(profile.get("ratios", {}).get("insurance_weekly", {}).get("recommended", 0.08))
+    )
     coverage_percent = Decimal(str(tier_defaults.get("coverage_percent", 0.50)))
     tier_multiplier = TRANSACTION_TIER_MULTIPLIERS.get(int(tier_rank), Decimal("1.0"))
     period_cap_multiplier = Decimal(str(tier_defaults.get("period_cap_multiplier", 0)))
@@ -151,7 +153,7 @@ def get_transaction_tier_defaults(
     if base_premium is not None:
         resolved_base_premium = Decimal(str(base_premium)).quantize(Decimal("0.01"))
     elif cwi is not None:
-        resolved_base_premium = (Decimal(str(cwi)) * base_rate).quantize(Decimal("0.01"))
+        resolved_base_premium = (Decimal(str(cwi)) * insurance_recommended_ratio).quantize(Decimal("0.01"))
     premium = None
     max_payout_per_period = None
     if resolved_base_premium is not None:
@@ -159,7 +161,7 @@ def get_transaction_tier_defaults(
         max_payout_per_period = (premium * period_cap_multiplier).quantize(Decimal("0.01"))
 
     return {
-        "base_rate": base_rate,
+        "base_rate": insurance_recommended_ratio,
         "base_premium": resolved_base_premium,
         "tier_multiplier": tier_multiplier,
         "coverage_percent": coverage_percent,

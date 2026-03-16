@@ -1414,7 +1414,7 @@ class EconomyBalanceChecker:
             },
             "transaction_insurance_defaults": {
                 "non_tiered_coverage_percent": round(float(get_transaction_coverage_default(self.policy_mode)), 4),
-                "recommended_base_premium": round(cwi * float(self.policy_profile.get("insurance_transaction_defaults", {}).get("base_rate", 0.06)), 2),
+                "recommended_base_premium": round(cwi * insurance_default_ratio, 2),
                 "tiers": {
                     "basic": {},
                     "mid": {},

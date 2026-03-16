@@ -189,6 +189,39 @@ class JoinCode(db.Model):
     teacher = db.relationship('Admin', backref=db.backref('join_codes', lazy='dynamic', passive_deletes=True))
 
 
+class EconomySnapshot(db.Model):
+    __tablename__ = 'economy_snapshot'
+
+    id = db.Column(db.Integer, primary_key=True)
+    join_code_id = db.Column(
+        db.String(36),
+        db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    policy_mode = db.Column(db.String(20), nullable=False, default='default')
+    pay_rate = db.Column(db.Numeric(precision=12, scale=4), nullable=False)
+    expected_hours = db.Column(db.Numeric(precision=8, scale=2), nullable=False)
+    weekly_cwi = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+    effective_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+
+    rent_min = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+    rent_recommended = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+    rent_max = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+
+    insurance_weekly_min = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+    insurance_weekly_recommended = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+    insurance_weekly_max = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+
+    store_tier_min = db.Column(db.JSON, nullable=False)
+    store_tier_max = db.Column(db.JSON, nullable=False)
+
+    join_code = db.relationship(
+        'JoinCode',
+        backref=db.backref('economy_snapshots', lazy='dynamic', passive_deletes=True),
+    )
+
+
 class TeacherBlock(db.Model):
     """
     Represents an unclaimed seat in a teacher's class roster.

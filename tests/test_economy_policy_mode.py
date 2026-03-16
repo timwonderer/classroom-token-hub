@@ -121,7 +121,7 @@ def test_comfortable_policy_uses_requested_ratio_profile(client):
     assert recommendations['insurance_period_cap']['multiplier_max'] == 12.0
     assert recommendations['insurance_waiting_period_days']['min'] == 3
     assert recommendations['insurance_waiting_period_days']['max'] == 7
-    assert recommendations['transaction_insurance_defaults']['recommended_base_premium'] == round(cwi * 0.05, 2)
+    assert recommendations['transaction_insurance_defaults']['recommended_base_premium'] == round(cwi * 0.07, 2)
     assert recommendations['transaction_insurance_defaults']['tiers']['basic']['period_cap_multiplier'] == 6.0
     assert recommendations['transaction_insurance_defaults']['tiers']['mid']['period_cap_multiplier'] == 8.0
     assert recommendations['transaction_insurance_defaults']['tiers']['premium']['period_cap_multiplier'] == 10.0
@@ -134,24 +134,24 @@ def test_transaction_insurance_defaults_vary_by_policy_mode():
 
     default_mid = get_transaction_tier_defaults('default', 2, Decimal('120.00'))
     assert default_mid['coverage_percent'] == Decimal('0.7')
-    assert default_mid['base_premium'] == Decimal('7.20')
-    assert default_mid['tier_multiplier'] == Decimal('1.4')
-    assert default_mid['premium'] == Decimal('10.08')
-    assert default_mid['max_payout_per_period'] == Decimal('80.64')
+    assert default_mid['base_premium'] == Decimal('9.60')
+    assert default_mid['tier_multiplier'] == Decimal('1.0')
+    assert default_mid['premium'] == Decimal('9.60')
+    assert default_mid['max_payout_per_period'] == Decimal('76.80')
 
     tight_basic = get_transaction_tier_defaults('tight', 1, Decimal('250.00'))
     assert tight_basic['coverage_percent'] == Decimal('0.5')
-    assert tight_basic['base_premium'] == Decimal('17.50')
-    assert tight_basic['tier_multiplier'] == Decimal('1.0')
-    assert tight_basic['premium'] == Decimal('17.50')
-    assert tight_basic['max_payout_per_period'] == Decimal('105.00')
+    assert tight_basic['base_premium'] == Decimal('22.50')
+    assert tight_basic['tier_multiplier'] == Decimal('0.75')
+    assert tight_basic['premium'] == Decimal('16.88')
+    assert tight_basic['max_payout_per_period'] == Decimal('101.28')
 
     comfortable_premium = get_transaction_tier_defaults('comfortable', 3, Decimal('250.00'))
     assert comfortable_premium['coverage_percent'] == Decimal('0.9')
-    assert comfortable_premium['base_premium'] == Decimal('12.50')
-    assert comfortable_premium['tier_multiplier'] == Decimal('1.8')
-    assert comfortable_premium['premium'] == Decimal('22.50')
-    assert comfortable_premium['max_payout_per_period'] == Decimal('225.00')
+    assert comfortable_premium['base_premium'] == Decimal('17.50')
+    assert comfortable_premium['tier_multiplier'] == Decimal('1.3')
+    assert comfortable_premium['premium'] == Decimal('22.75')
+    assert comfortable_premium['max_payout_per_period'] == Decimal('227.50')
 
 
 def test_transaction_tier_waiting_periods_are_tier_controlled():
@@ -164,8 +164,8 @@ def test_transaction_tier_defaults_accept_teacher_base_premium():
     manual_mid = get_transaction_tier_defaults('default', 2, base_premium=Decimal('60.00'))
 
     assert manual_mid['base_premium'] == Decimal('60.00')
-    assert manual_mid['premium'] == Decimal('84.00')
-    assert manual_mid['max_payout_per_period'] == Decimal('672.00')
+    assert manual_mid['premium'] == Decimal('60.00')
+    assert manual_mid['max_payout_per_period'] == Decimal('480.00')
 
 
 def test_edit_policy_rejects_contract_shape_changes(client):
@@ -200,7 +200,7 @@ def test_get_transaction_tier_base_premium_normalizes_nonweekly_storage(client):
 
     base_premium = _get_transaction_tier_base_premium(policy)
 
-    assert base_premium == Decimal('7.20')
+    assert base_premium == Decimal('9.60')
 
 
 def test_update_economy_policy_creates_block_scoped_settings(client):

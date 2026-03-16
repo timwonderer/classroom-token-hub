@@ -45,7 +45,7 @@ from app.models import (
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
     RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent,
-    BalanceCache, JoinCode,
+    BalanceCache, JoinCode, EconomySnapshot,
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
 from app.forms import (
@@ -219,19 +219,20 @@ def _apply_normalized_tier_fields(policy, form, *, next_tier_category_id=None):
 def _apply_transaction_policy_defaults(policy, *, teacher_id, block=None):
     policy_mode = get_active_policy_mode(teacher_id, block)
     tier_rank = policy.effective_tier_rank
+    snapshot = _get_or_create_economy_snapshot_for_block(teacher_id, block)
+    premium_band_by_tier = _get_snapshot_insurance_weekly_targets(snapshot)
     if tier_rank:
-        tier_defaults = get_transaction_tier_defaults(
-            policy_mode,
-            tier_rank,
-            base_premium=policy.premium,
-        )
-        if tier_defaults.get('base_premium') is not None:
-            policy.premium = tier_defaults['premium']
+        tier_defaults = get_transaction_tier_defaults(policy_mode, tier_rank)
+        if premium_band_by_tier and premium_band_by_tier.get(tier_rank) is not None:
+            policy.premium = _inverse_weekly_amount(premium_band_by_tier[tier_rank], policy.charge_frequency)
         policy.coverage_percent = tier_defaults['coverage_percent']
-        if policy.max_payout_per_period is None and tier_defaults.get('max_payout_per_period') is not None:
-            policy.max_payout_per_period = tier_defaults['max_payout_per_period']
+        if premium_band_by_tier and premium_band_by_tier.get(tier_rank) is not None:
+            recommended_period_cap = premium_band_by_tier[tier_rank] * Decimal(str(tier_defaults['period_cap_multiplier']))
+            policy.max_payout_per_period = _inverse_weekly_amount(recommended_period_cap, policy.charge_frequency)
         policy.waiting_period_days = tier_defaults['waiting_period_days']
     else:
+        if snapshot:
+            policy.premium = _inverse_weekly_amount(Decimal(str(snapshot.insurance_weekly_recommended)), policy.charge_frequency)
         policy.coverage_percent = get_transaction_coverage_default(policy_mode)
 
 
@@ -444,9 +445,6 @@ def _populate_policy_from_form(policy, form, *, teacher_id=None, block=None, nex
     policy.marketing_badge = form.marketing_badge.data if form.marketing_badge.data else None
     policy.set_blocks(form.blocks.data if form.blocks.data else [])
     _apply_normalized_tier_fields(policy, form, next_tier_category_id=next_tier_category_id)
-    if is_transaction and policy.effective_tier_rank:
-        policy.charge_frequency = 'weekly'
-        policy.max_claims_period = FREQUENCY_TO_CLAIM_PERIOD.get('weekly', 'week')
     _apply_tier_waiting_period(policy)
 
     policy.tier_name = form.tier_name.data or None
@@ -1244,6 +1242,111 @@ def _format_frequency_label(frequency, custom_frequency_value=None, custom_frequ
     return "configured cadence"
 
 
+def _resolve_join_code_id_for_block(admin_id, block):
+    normalized_block = (block or '').strip().upper()
+    if not normalized_block:
+        return None
+
+    join_code = _get_join_codes_by_block(admin_id, [normalized_block]).get(normalized_block)
+    if not join_code:
+        return None
+    return _ensure_join_code_anchors(admin_id, join_code, class_label=normalized_block)
+
+
+def _build_economy_snapshot_from_analysis(join_code_id, checker, analysis):
+    recommendations = analysis.recommendations or {}
+    store_tiers = recommendations.get('store_tiers') or {}
+    return EconomySnapshot(
+        join_code_id=join_code_id,
+        policy_mode=checker.policy_mode,
+        pay_rate=Decimal(str(analysis.cwi.pay_rate_per_minute)),
+        expected_hours=(Decimal(str(analysis.cwi.expected_weekly_minutes)) / Decimal('60')).quantize(Decimal('0.01')),
+        weekly_cwi=Decimal(str(analysis.cwi.cwi)),
+        effective_at=utc_now(),
+        rent_min=Decimal(str(recommendations.get('rent', {}).get('min', 0))),
+        rent_recommended=Decimal(str(recommendations.get('rent', {}).get('recommended', 0))),
+        rent_max=Decimal(str(recommendations.get('rent', {}).get('max', 0))),
+        insurance_weekly_min=Decimal(str(recommendations.get('insurance_premium_weekly', {}).get('min', 0))),
+        insurance_weekly_recommended=Decimal(str(recommendations.get('insurance_premium_weekly', {}).get('recommended', 0))),
+        insurance_weekly_max=Decimal(str(recommendations.get('insurance_premium_weekly', {}).get('max', 0))),
+        store_tier_min={
+            key: float((values or {}).get('min', 0))
+            for key, values in store_tiers.items()
+        },
+        store_tier_max={
+            key: float((values or {}).get('max', 0))
+            for key, values in store_tiers.items()
+        },
+    )
+
+
+def _load_payroll_settings_for_snapshot(admin_id, block):
+    payroll_settings = None
+    if block:
+        payroll_settings = PayrollSettings.query.filter_by(
+            teacher_id=admin_id,
+            block=block,
+            is_active=True,
+        ).first()
+    if not payroll_settings:
+        payroll_settings = PayrollSettings.query.filter_by(
+            teacher_id=admin_id,
+            block=None,
+            is_active=True,
+        ).first()
+    return payroll_settings
+
+
+def _get_or_create_economy_snapshot_for_block(admin_id, block):
+    payroll_settings = _load_payroll_settings_for_snapshot(admin_id, block)
+    if not payroll_settings:
+        return None
+
+    checker = EconomyBalanceChecker(admin_id, block)
+    analysis = checker.analyze_economy(
+        payroll_settings=payroll_settings,
+        expected_weekly_hours=payroll_settings.expected_weekly_hours if payroll_settings.expected_weekly_hours is not None else 5.0,
+    )
+    return _get_or_create_economy_snapshot(admin_id, block, checker, analysis)
+
+
+def _get_snapshot_insurance_weekly_targets(snapshot):
+    if not snapshot:
+        return None
+    return {
+        1: Decimal(str(snapshot.insurance_weekly_min)),
+        2: Decimal(str(snapshot.insurance_weekly_recommended)),
+        3: Decimal(str(snapshot.insurance_weekly_max)),
+    }
+
+
+def _get_or_create_economy_snapshot(admin_id, block, checker, analysis):
+    join_code_id = _resolve_join_code_id_for_block(admin_id, block)
+    if not join_code_id:
+        return None
+
+    cwi_value = Decimal(str(analysis.cwi.cwi)).quantize(Decimal('0.01'))
+    latest_snapshot = (
+        EconomySnapshot.query
+        .filter_by(join_code_id=join_code_id)
+        .order_by(EconomySnapshot.effective_at.desc(), EconomySnapshot.id.desc())
+        .first()
+    )
+    if latest_snapshot and latest_snapshot.policy_mode == checker.policy_mode:
+        latest_cwi = Decimal(str(latest_snapshot.weekly_cwi)).quantize(Decimal('0.01'))
+        latest_pay_rate = Decimal(str(latest_snapshot.pay_rate)).quantize(Decimal('0.0001'))
+        latest_expected_hours = Decimal(str(latest_snapshot.expected_hours)).quantize(Decimal('0.01'))
+        current_pay_rate = Decimal(str(analysis.cwi.pay_rate_per_minute)).quantize(Decimal('0.0001'))
+        current_expected_hours = (Decimal(str(analysis.cwi.expected_weekly_minutes)) / Decimal('60')).quantize(Decimal('0.01'))
+        if latest_cwi == cwi_value and latest_pay_rate == current_pay_rate and latest_expected_hours == current_expected_hours:
+            return latest_snapshot
+
+    snapshot = _build_economy_snapshot_from_analysis(join_code_id, checker, analysis)
+    db.session.add(snapshot)
+    db.session.flush()
+    return snapshot
+
+
 def _warning_to_alignment(level_value):
     if level_value == 'critical':
         return 'significantly_off'
@@ -1294,10 +1397,11 @@ def _build_policy_summary(admin_id, selected_block, analysis, rent_settings, ins
 
 def _build_rebalance_preview(admin_id, selected_block, checker, cwi, rent_settings, insurance_policies):
     preview_items = []
+    snapshot = _get_or_create_economy_snapshot_for_block(admin_id, selected_block)
     recommendations = checker.generate_recommendations(cwi)
 
     if rent_settings and rent_settings.is_enabled:
-        recommended_monthly = Decimal(str(recommendations['rent']['recommended']))
+        recommended_monthly = Decimal(str(snapshot.rent_recommended if snapshot else recommendations['rent']['recommended']))
         recommended_weekly = recommended_monthly / Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH))
         recommended_amount = _inverse_weekly_amount(
             recommended_weekly,
@@ -1321,8 +1425,8 @@ def _build_rebalance_preview(admin_id, selected_block, checker, cwi, rent_settin
                 },
             })
 
-    recommended_insurance_weekly = Decimal(str(recommendations['insurance_premium_weekly']['recommended']))
-    premium_band_by_tier = {
+    recommended_insurance_weekly = Decimal(str(snapshot.insurance_weekly_recommended if snapshot else recommendations['insurance_premium_weekly']['recommended']))
+    premium_band_by_tier = _get_snapshot_insurance_weekly_targets(snapshot) or {
         1: Decimal(str(recommendations['insurance_premium_weekly']['min'])),
         2: Decimal(str(recommendations['insurance_premium_weekly']['recommended'])),
         3: Decimal(str(recommendations['insurance_premium_weekly']['max'])),
@@ -7135,6 +7239,9 @@ def economy_health():
             expected_weekly_hours=expected_hours
         )
         cwi_calc = analysis.cwi
+        snapshot = _get_or_create_economy_snapshot(admin_id, selected_block, checker, analysis)
+        if snapshot is not None and snapshot in db.session.new:
+            db.session.commit()
         pay_rate_per_minute = cwi_calc.pay_rate_per_minute
         recommendations = analysis.recommendations
 
