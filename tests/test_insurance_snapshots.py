@@ -221,6 +221,90 @@ def test_transaction_claim_ignores_per_claim_cap_and_uses_coverage_percent(clien
     assert claim.approved_amount == Decimal("25.00")
 
 
+def test_variable_claim_can_be_approved_after_prior_claim_when_period_cap_remaining(client, test_student):
+    admin = Admin(username="snapshot-variable-admin", totp_secret="secret")
+    db.session.add(admin)
+    db.session.flush()
+    db.session.add(StudentTeacher(student_id=test_student.id, admin_id=admin.id))
+    db.session.commit()
+
+    policy = InsurancePolicy(
+        policy_code=f"POL-VAR-{admin.id}",
+        teacher_id=admin.id,
+        title="Variable Monetary Policy",
+        description="Base policy",
+        premium=Decimal("10.00"),
+        claim_type="legacy_monetary",
+        is_monetary=True,
+        max_claim_amount=Decimal("100.00"),
+        max_claims_count=5,
+        max_claims_period="month",
+        max_payout_per_period=Decimal("100.00"),
+        claim_time_limit_days=30,
+        is_active=True,
+    )
+    db.session.add(policy)
+    db.session.flush()
+
+    enrollment = StudentInsurance(
+        student_id=test_student.id,
+        policy_id=policy.id,
+        status="active",
+        join_code="JOIN-SNAP-4",
+        purchase_date=datetime.now(timezone.utc),
+        coverage_start_date=datetime.now(timezone.utc) - timedelta(days=2),
+        payment_current=True,
+    )
+    enrollment.freeze_policy_snapshot(policy)
+    db.session.add(enrollment)
+    db.session.flush()
+
+    processed_at = datetime.now(timezone.utc) - timedelta(days=1)
+    approved_claim = InsuranceClaim(
+        student_insurance_id=enrollment.id,
+        policy_id=policy.id,
+        student_id=test_student.id,
+        incident_date=processed_at - timedelta(days=1),
+        description="First approved claim",
+        claim_amount=Decimal("40.00"),
+        approved_amount=Decimal("40.00"),
+        status="approved",
+        processed_date=processed_at,
+    )
+    pending_claim = InsuranceClaim(
+        student_insurance_id=enrollment.id,
+        policy_id=policy.id,
+        student_id=test_student.id,
+        incident_date=processed_at,
+        description="Second claim should still be approvable",
+        claim_amount=Decimal("80.00"),
+        status="pending",
+    )
+    db.session.add_all([approved_claim, pending_claim])
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["is_admin"] = True
+        sess["admin_id"] = admin.id
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    response = client.post(
+        f"/admin/insurance/claim/{pending_claim.id}",
+        data={
+            "status": "approved",
+            "approved_amount": "60.00",
+            "rejection_reason": "",
+            "admin_notes": "",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    db.session.refresh(pending_claim)
+    assert pending_claim.status == "approved"
+    assert pending_claim.approved_amount == Decimal("60.00")
+
+
 def test_renewed_enrollment_uses_frozen_waiting_period_for_coverage_start(client, test_student):
     admin = Admin(username="snapshot-renew-admin", totp_secret="secret")
     db.session.add(admin)

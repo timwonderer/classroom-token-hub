@@ -61,6 +61,7 @@ from app.utils.economy_balance import EconomyBalanceChecker
 from app.utils.economy_policy import (
     POLICY_MODES,
     TRANSACTION_DEFAULTS,
+    TRANSACTION_TIER_MULTIPLIERS,
     get_feature_settings_row,
     get_recommended_insurance_weekly_premium,
     get_tier_waiting_period_days,
@@ -1458,9 +1459,8 @@ def _build_snapshot_insurance_weekly_targets(recommended_weekly):
 
     recommended = _quantize_currency(recommended_weekly)
     return {
-        1: _quantize_currency(recommended * Decimal('0.75')),
-        2: recommended,
-        3: _quantize_currency(recommended * Decimal('1.3')),
+        tier: _quantize_currency(recommended * multiplier)
+        for tier, multiplier in TRANSACTION_TIER_MULTIPLIERS.items()
     }
 
 
@@ -6726,12 +6726,10 @@ def process_claim(claim_id):
             InsuranceClaim.id != claim.id,
         ).scalar() or Decimal('0.00')
 
-        requested_amount = _claim_base_amount(claim)
         remaining_period_cap = max(max_payout_per_period - period_payouts, Decimal('0.00'))
-        if remaining_period_cap is not None and requested_amount > remaining_period_cap and claim_type != 'non_monetary':
-            validation_errors.append(
-                f"Maximum payout limit would be exceeded (${period_payouts:.2f} paid + ${requested_amount:.2f} requested > ${max_payout_per_period:.2f} limit per {max_claims_period})"
-            )
+        # A partial remaining cap should not block approval entirely. The payout
+        # path below already clamps the approved amount to the remaining cap and
+        # only rejects when the period cap is fully exhausted.
 
     # Get claims statistics
     claims_stats = {
