@@ -6728,10 +6728,9 @@ def process_claim(claim_id):
 
         requested_amount = _claim_base_amount(claim)
         remaining_period_cap = max(max_payout_per_period - period_payouts, Decimal('0.00'))
-        if remaining_period_cap is not None and requested_amount > remaining_period_cap and claim_type != 'non_monetary':
-            validation_errors.append(
-                f"Maximum payout limit would be exceeded (${period_payouts:.2f} paid + ${requested_amount:.2f} requested > ${max_payout_per_period:.2f} limit per {max_claims_period})"
-            )
+        # A partial remaining cap should not block approval entirely. The payout
+        # path below already clamps the approved amount to the remaining cap and
+        # only rejects when the period cap is fully exhausted.
 
     # Get claims statistics
     claims_stats = {
