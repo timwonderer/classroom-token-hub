@@ -214,6 +214,7 @@ def test_duplicate_reimbursement_for_same_source_and_policy_blocked(client, test
         type="insurance_reimbursement",
         original_transaction_id=source_tx.id,
         policy_id=policy.id,
+        idempotency_key="txn:insurance:claim:source-1:reimbursement",
         description="Insurance reimbursement #1",
     )
     reimbursement_two = Transaction(
@@ -225,6 +226,7 @@ def test_duplicate_reimbursement_for_same_source_and_policy_blocked(client, test
         type="insurance_reimbursement",
         original_transaction_id=source_tx.id,
         policy_id=policy.id,
+        idempotency_key="txn:insurance:claim:source-1:reimbursement",
         description="Insurance reimbursement #2",
     )
     db.session.add(reimbursement_one)

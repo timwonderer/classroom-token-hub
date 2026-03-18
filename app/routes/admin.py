@@ -18,10 +18,11 @@ import secrets
 import threading
 import qrcode
 import hashlib
+from types import SimpleNamespace
 from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from app.utils.time import utc_now, ensure_utc, local_date_end_utc, local_date_bounds_utc, UTC_MIN, get_claim_period_bounds
+from app.utils.time import utc_now, ensure_utc, local_date_end_utc, local_date_bounds_utc, UTC_MIN, get_claim_period_bounds, normalize_for_db
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from flask import (
@@ -82,6 +83,12 @@ from app.utils.name_utils import hash_last_name_parts, verify_last_name_parts
 from app.utils.help_content import HELP_ARTICLES
 from app.utils.encryption import encrypt_totp, decrypt_totp
 from app.utils.overdraft import charge_overdraft_fee_if_needed, evaluate_overdraft_allowance
+from app.utils.transaction_idempotency import (
+    create_idempotent_transaction,
+    get_idempotent_transaction,
+    insurance_reimbursement_key,
+    void_refund_key,
+)
 from app.utils.passwordless_client import (
     create_register_token,
     verify_signin_token,
@@ -1432,6 +1439,141 @@ def _build_economy_snapshot_from_analysis(join_code_id, checker, analysis):
             key: str(_quantize_currency((values or {}).get('max', 0)))
             for key, values in store_tiers.items()
         },
+        analysis_payload=_serialize_economy_analysis_payload(analysis),
+    )
+
+
+def _economy_refresh_timezone():
+    return pytz.timezone(current_app.config.get('ECONOMY_REFRESH_TIMEZONE', 'America/Los_Angeles'))
+
+
+def _json_safe_value(value):
+    if isinstance(value, Decimal):
+        if value == value.to_integral_value():
+            return int(value)
+        return float(value)
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _json_safe_value(item) for key, item in value.items()}
+    return value
+
+
+def _economy_weekly_refresh_bounds(now_utc=None):
+    now = ensure_utc(now_utc or utc_now())
+    local_now = now.astimezone(_economy_refresh_timezone())
+    days_since_sunday = (local_now.weekday() + 1) % 7
+    weekly_start_local = (local_now - timedelta(days=days_since_sunday)).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    next_weekly_start_local = weekly_start_local + timedelta(days=7)
+    return ensure_utc(weekly_start_local), ensure_utc(next_weekly_start_local)
+
+
+def _economy_monthly_refresh_bounds(now_utc=None):
+    now = ensure_utc(now_utc or utc_now())
+    local_now = now.astimezone(_economy_refresh_timezone())
+    monthly_start_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if monthly_start_local.month == 12:
+        next_monthly_start_local = monthly_start_local.replace(year=monthly_start_local.year + 1, month=1)
+    else:
+        next_monthly_start_local = monthly_start_local.replace(month=monthly_start_local.month + 1)
+    return ensure_utc(monthly_start_local), ensure_utc(next_monthly_start_local)
+
+
+def _economy_analysis_schedule(snapshot=None, *, now_utc=None, frozen=True):
+    current_time = ensure_utc(now_utc or utc_now())
+    weekly_window_start, next_weekly_refresh = _economy_weekly_refresh_bounds(current_time)
+    monthly_window_start, next_monthly_refresh = _economy_monthly_refresh_bounds(current_time)
+    last_updated = ensure_utc(snapshot.effective_at) if snapshot and snapshot.effective_at else current_time
+    return {
+        'frozen': frozen,
+        'last_updated_at': last_updated.isoformat(),
+        'refresh_timezone': _economy_refresh_timezone().zone,
+        'weekly_refresh_label': 'Sunday 12:00 AM',
+        'monthly_refresh_label': '1st of each month 12:00 AM',
+        'weekly_window_start_at': weekly_window_start.isoformat(),
+        'monthly_window_start_at': monthly_window_start.isoformat(),
+        'next_weekly_refresh_at': next_weekly_refresh.isoformat(),
+        'next_monthly_refresh_at': next_monthly_refresh.isoformat(),
+    }
+
+
+def _serialize_economy_analysis_payload(analysis, *, snapshot=None, now_utc=None, frozen=True):
+    warnings_by_level = {
+        'critical': [],
+        'warning': [],
+        'info': [],
+    }
+    warning_items = []
+
+    for warning in analysis.warnings:
+        warning_payload = {
+            'feature': warning.feature,
+            'level': warning.level.value,
+            'message': warning.message,
+            'current_value': _json_safe_value(warning.current_value),
+            'recommended_min': _json_safe_value(warning.recommended_min),
+            'recommended_max': _json_safe_value(warning.recommended_max),
+            'cwi_ratio': _json_safe_value(warning.cwi_ratio),
+        }
+        warning_items.append(warning_payload)
+        warnings_by_level[warning.level.value].append(warning_payload)
+
+    return {
+        'status': 'success',
+        'cwi': _json_safe_value(analysis.cwi.cwi),
+        'is_balanced': analysis.is_balanced,
+        'budget_survival_test_passed': analysis.budget_survival_test_passed,
+        'weekly_savings': _json_safe_value(analysis.weekly_savings),
+        'warnings': warnings_by_level,
+        'warning_items': warning_items,
+        'recommendations': _json_safe_value(analysis.recommendations),
+        'cwi_breakdown': {
+            'pay_rate_per_hour': float(analysis.cwi.pay_rate_per_minute) * 60,
+            'pay_rate_per_minute': float(analysis.cwi.pay_rate_per_minute),
+            'expected_weekly_hours': float(analysis.cwi.expected_weekly_minutes) / 60.0,
+            'expected_weekly_minutes': float(analysis.cwi.expected_weekly_minutes),
+            'notes': _json_safe_value(analysis.cwi.notes),
+        },
+        'analysis_schedule': _economy_analysis_schedule(snapshot, now_utc=now_utc, frozen=frozen),
+    }
+
+
+def _deserialize_economy_analysis_payload(payload):
+    if not payload:
+        return None
+
+    warnings = []
+    for warning in payload.get('warning_items', []):
+        warnings.append(SimpleNamespace(
+            feature=warning.get('feature'),
+            message=warning.get('message'),
+            current_value=warning.get('current_value'),
+            recommended_min=warning.get('recommended_min'),
+            recommended_max=warning.get('recommended_max'),
+            cwi_ratio=warning.get('cwi_ratio'),
+            level=SimpleNamespace(value=warning.get('level', 'info')),
+        ))
+
+    breakdown = payload.get('cwi_breakdown') or {}
+    cwi = SimpleNamespace(
+        cwi=payload.get('cwi'),
+        pay_rate_per_minute=breakdown.get('pay_rate_per_minute'),
+        expected_weekly_minutes=breakdown.get('expected_weekly_minutes'),
+        notes=breakdown.get('notes') or [],
+    )
+    return SimpleNamespace(
+        cwi=cwi,
+        is_balanced=payload.get('is_balanced'),
+        budget_survival_test_passed=payload.get('budget_survival_test_passed'),
+        weekly_savings=payload.get('weekly_savings'),
+        warnings=warnings,
+        recommendations=payload.get('recommendations') or {},
+        analysis_schedule=payload.get('analysis_schedule') or {},
     )
 
 
@@ -1511,12 +1653,114 @@ def _get_or_create_economy_snapshot(admin_id, block, checker, analysis, *, persi
     return snapshot
 
 
+def _current_economy_snapshot_inputs(checker, payroll_settings, expected_weekly_hours=None):
+    pay_rate = Decimal(str(payroll_settings.pay_rate or 0)).quantize(Decimal('0.0001'))
+    source_hours = expected_weekly_hours
+    if source_hours is None:
+        source_hours = payroll_settings.expected_weekly_hours if payroll_settings.expected_weekly_hours is not None else 5.0
+    hours = Decimal(str(source_hours)).quantize(Decimal('0.01'))
+    return {
+        'policy_mode': checker.policy_mode,
+        'pay_rate': pay_rate,
+        'expected_hours': hours,
+    }
+
+
+def _economy_snapshot_matches_inputs(snapshot, *, expected_inputs):
+    if not snapshot:
+        return False
+    return (
+        snapshot.policy_mode == expected_inputs['policy_mode']
+        and Decimal(str(snapshot.pay_rate)).quantize(Decimal('0.0001')) == expected_inputs['pay_rate']
+        and Decimal(str(snapshot.expected_hours)).quantize(Decimal('0.01')) == expected_inputs['expected_hours']
+    )
+
+
+def _get_frozen_economy_analysis_payload(
+    admin_id,
+    block,
+    checker,
+    payroll_settings,
+    *,
+    rent_settings=None,
+    insurance_policies=None,
+    fines=None,
+    store_items=None,
+    expected_weekly_hours=None,
+):
+    expected_inputs = _current_economy_snapshot_inputs(
+        checker,
+        payroll_settings,
+        expected_weekly_hours=expected_weekly_hours,
+    )
+    join_code_id = _resolve_join_code_id_for_block(admin_id, block)
+    weekly_window_start, _next_weekly_refresh = _economy_weekly_refresh_bounds()
+    weekly_window_start_db = normalize_for_db(weekly_window_start)
+    latest_snapshot = None
+
+    if join_code_id and expected_weekly_hours is None:
+        latest_snapshot = (
+            EconomySnapshot.query
+            .filter(
+                EconomySnapshot.join_code_id == join_code_id,
+                EconomySnapshot.effective_at >= weekly_window_start_db,
+            )
+            .order_by(EconomySnapshot.effective_at.desc(), EconomySnapshot.id.desc())
+            .first()
+        )
+        if _economy_snapshot_matches_inputs(latest_snapshot, expected_inputs=expected_inputs) and latest_snapshot.analysis_payload:
+            payload = dict(latest_snapshot.analysis_payload)
+            payload['analysis_schedule'] = _economy_analysis_schedule(latest_snapshot, frozen=True)
+            payload['snapshot_cached'] = True
+            return payload, latest_snapshot
+
+    analysis = checker.analyze_economy(
+        payroll_settings=payroll_settings,
+        rent_settings=rent_settings,
+        insurance_policies=insurance_policies,
+        fines=fines,
+        store_items=store_items,
+        expected_weekly_hours=float(expected_inputs['expected_hours']),
+    )
+
+    if join_code_id and expected_weekly_hours is None:
+        snapshot = _build_economy_snapshot_from_analysis(join_code_id, checker, analysis)
+        snapshot.analysis_payload = _serialize_economy_analysis_payload(analysis, snapshot=snapshot, frozen=True)
+        db.session.add(snapshot)
+        db.session.commit()
+        payload = dict(snapshot.analysis_payload)
+        payload['snapshot_cached'] = False
+        return payload, snapshot
+
+    payload = _serialize_economy_analysis_payload(analysis, frozen=False)
+    payload['snapshot_cached'] = False
+    return payload, None
+
+
 def _warning_to_alignment(level_value):
     if level_value == 'critical':
         return 'significantly_off'
     if level_value == 'warning':
         return 'slightly_off'
     return 'aligned'
+
+
+def _ensure_void_refund_transaction(tx):
+    idempotency_key = void_refund_key(tx.id)
+    reversal_tx, _created = create_idempotent_transaction(
+        idempotency_key=idempotency_key,
+        student_id=tx.student_id,
+        teacher_id=tx.teacher_id,
+        join_code=tx.join_code,
+        amount=-(tx.amount or Decimal('0.00')),
+        account_type=tx.account_type or 'checking',
+        status=TransactionStatus.PENDING,
+        type='refund',
+        original_transaction_id=tx.id,
+        description=f"Void refund for transaction #{tx.id}: {tx.description}",
+    )
+    tx.reversal_transaction_id = reversal_tx.id
+    return reversal_tx
 
 
 def _max_alignment(statuses):
@@ -6791,14 +7035,14 @@ def process_claim(claim_id):
             if claim.transaction_id:
                 transaction_description += f" linked to transaction #{claim.transaction_id}"
 
+            reimbursement_idempotency_key = insurance_reimbursement_key(claim.id)
             existing_reimbursement = Transaction.query.filter(
                 Transaction.type == 'insurance_reimbursement',
-                Transaction.original_transaction_id == claim.transaction_id,
-                Transaction.policy_id == claim.policy_id,
+                Transaction.idempotency_key == reimbursement_idempotency_key,
                 Transaction.is_void == False,
             ).first()
             if existing_reimbursement:
-                flash("Reimbursement already exists for this source transaction and policy.", "danger")
+                flash("Reimbursement already exists for this claim.", "danger")
                 db.session.rollback()
                 return redirect(url_for('admin.process_claim', claim_id=claim_id))
 
@@ -6806,7 +7050,8 @@ def process_claim(claim_id):
             student_insurance = db.session.get(StudentInsurance, claim.student_insurance_id)
             join_code = student_insurance.join_code if student_insurance else None
 
-            transaction = Transaction(
+            create_idempotent_transaction(
+                idempotency_key=reimbursement_idempotency_key,
                 student_id=student.id,
                 teacher_id=session.get('admin_id'),
                 join_code=join_code,  # CRITICAL: Add join_code for period isolation
@@ -6818,7 +7063,6 @@ def process_claim(claim_id):
                 policy_id=claim.policy_id,
                 description=transaction_description,
             )
-            db.session.add(transaction)
 
             flash(f"Monetary claim approved! ${approved_amount:.2f} deposited to {student.full_name}'s checking account.", "success")
         elif claim_type == 'non_monetary' and new_status == 'approved':
@@ -6831,8 +7075,12 @@ def process_claim(claim_id):
             db.session.commit()
         except IntegrityError as exc:
             db.session.rollback()
-            if 'uq_insurance_reimbursement_source_policy' in str(exc.orig):
-                flash("Reimbursement already exists for this source transaction and policy.", "danger")
+            if (
+                'uq_insurance_reimbursement_source_policy' in str(exc.orig)
+                or 'transaction_idempotency_key_key' in str(exc.orig)
+                or 'ix_transaction_idempotency_key' in str(exc.orig)
+            ):
+                flash("Reimbursement already exists for this claim.", "danger")
             else:
                 flash("Could not process the claim due to a concurrent update. Please retry.", "danger")
             return redirect(url_for('admin.process_claim', claim_id=claim_id))
@@ -6979,20 +7227,7 @@ def void_transaction(transaction_id):
                 if not student_item.redemption_date:
                     student_item.redemption_date = utc_now()
 
-            reversal_tx = Transaction(
-                student_id=tx.student_id,
-                teacher_id=tx.teacher_id,
-                join_code=tx.join_code,
-                amount=abs(tx.amount or Decimal('0.00')),
-                account_type=tx.account_type or 'checking',
-                status=TransactionStatus.PENDING,
-                type='refund',
-                original_transaction_id=tx.id,
-                description=f"Void refund for transaction #{tx.id}: {tx.description}",
-            )
-            db.session.add(reversal_tx)
-            db.session.flush()
-            tx.reversal_transaction_id = reversal_tx.id
+            _ensure_void_refund_transaction(tx)
 
         elif tx.type == 'Rent Payment':
             rent_payments_query = RentPayment.query.filter(
@@ -7013,20 +7248,7 @@ def void_transaction(transaction_id):
                 db.session.delete(matched_rent_payment)
 
             if not is_pending:
-                reversal_tx = Transaction(
-                    student_id=tx.student_id,
-                    teacher_id=tx.teacher_id,
-                    join_code=tx.join_code,
-                    amount=abs(tx.amount or Decimal('0.00')),
-                    account_type=tx.account_type or 'checking',
-                    status=TransactionStatus.PENDING,
-                    type='refund',
-                    original_transaction_id=tx.id,
-                    description=f"Void refund for transaction #{tx.id}: {tx.description}",
-                )
-                db.session.add(reversal_tx)
-                db.session.flush()
-                tx.reversal_transaction_id = reversal_tx.id
+                _ensure_void_refund_transaction(tx)
 
         elif tx.type == 'insurance_premium':
             policy_title = None
@@ -7060,40 +7282,12 @@ def void_transaction(transaction_id):
                 matched_enrollment.days_unpaid = max(1, matched_enrollment.days_unpaid or 0)
 
             if not is_pending:
-                reversal_tx = Transaction(
-                    student_id=tx.student_id,
-                    teacher_id=tx.teacher_id,
-                    join_code=tx.join_code,
-                    amount=abs(tx.amount or Decimal('0.00')),
-                    account_type=tx.account_type or 'checking',
-                    status=TransactionStatus.PENDING,
-                    type='refund',
-                    original_transaction_id=tx.id,
-                    description=f"Void refund for transaction #{tx.id}: {tx.description}",
-                )
-                db.session.add(reversal_tx)
-                db.session.flush()
-                tx.reversal_transaction_id = reversal_tx.id
+                _ensure_void_refund_transaction(tx)
         
         else:
             # Generic reversal for other types (if posted)
             if not is_pending:
-                # Invert amount
-                reversal_amount = -(tx.amount or Decimal('0.00'))
-                reversal_tx = Transaction(
-                    student_id=tx.student_id,
-                    teacher_id=tx.teacher_id,
-                    join_code=tx.join_code,
-                    amount=reversal_amount,
-                    account_type=tx.account_type or 'checking',
-                    status=TransactionStatus.PENDING,
-                    type='refund',
-                    original_transaction_id=tx.id,
-                    description=f"Void refund for transaction #{tx.id}: {tx.description}",
-                )
-                db.session.add(reversal_tx)
-                db.session.flush()
-                tx.reversal_transaction_id = reversal_tx.id
+                _ensure_void_refund_transaction(tx)
 
         tx.is_void = True
         if is_pending:
@@ -7360,21 +7554,25 @@ def economy_health():
     recommendations = {}
     cwi_calc = None
     snapshot = None
+    analysis_schedule = None
     expected_hours = payroll_settings.expected_weekly_hours if payroll_settings and payroll_settings.expected_weekly_hours is not None else 5.0
     pay_rate_per_minute = payroll_settings.pay_rate if payroll_settings else None
 
     if payroll_settings:
         checker = EconomyBalanceChecker(admin_id, selected_block)
-        analysis = checker.analyze_economy(
-            payroll_settings=payroll_settings,
+        payload, snapshot = _get_frozen_economy_analysis_payload(
+            admin_id,
+            selected_block,
+            checker,
+            payroll_settings,
             rent_settings=rent_settings,
             insurance_policies=insurance_policies,
             fines=fines,
             store_items=store_items,
-            expected_weekly_hours=expected_hours
         )
+        analysis = _deserialize_economy_analysis_payload(payload)
         cwi_calc = analysis.cwi
-        snapshot = _get_or_create_economy_snapshot(admin_id, selected_block, checker, analysis, persist=False)
+        analysis_schedule = analysis.analysis_schedule
         pay_rate_per_minute = cwi_calc.pay_rate_per_minute
         recommendations = analysis.recommendations
 
@@ -7433,6 +7631,8 @@ def economy_health():
         warnings_by_level=warnings_by_level,
         warnings_by_feature=warnings_by_feature,
         recommendations=recommendations,
+        snapshot=snapshot,
+        analysis_schedule=analysis_schedule,
         policy_modes=POLICY_MODES,
         policy_summary=policy_summary,
         rebalance_preview=rebalance_preview,
@@ -8327,22 +8527,7 @@ def void_payroll_transaction(transaction_id):
             transaction.status = TransactionStatus.VOID
             transaction.voided_at = utc_now()
         else:
-            # Create reversal for posted transaction
-            reversal_amount = -(transaction.amount or Decimal('0.00'))
-            reversal_tx = Transaction(
-                student_id=transaction.student_id,
-                teacher_id=transaction.teacher_id,
-                join_code=transaction.join_code,
-                amount=reversal_amount,
-                account_type=transaction.account_type or 'checking',
-                status=TransactionStatus.PENDING,
-                type='refund',
-                original_transaction_id=transaction.id,
-                description=f"Void refund for transaction #{transaction.id}: {transaction.description}",
-            )
-            db.session.add(reversal_tx)
-            db.session.flush()
-            transaction.reversal_transaction_id = reversal_tx.id
+            _ensure_void_refund_transaction(transaction)
 
         db.session.commit()
 
@@ -8382,25 +8567,7 @@ def void_transactions_bulk():
                     transaction.status = TransactionStatus.VOID
                     transaction.voided_at = utc_now()
                 else:
-                    # Create reversal for posted transaction
-                    reversal_amount = -(transaction.amount or Decimal('0.00'))
-                    reversal_tx = Transaction(
-                        student_id=transaction.student_id,
-                        teacher_id=transaction.teacher_id,
-                        join_code=transaction.join_code,
-                        amount=reversal_amount,
-                        account_type=transaction.account_type or 'checking',
-                        status=TransactionStatus.PENDING,
-                        type='refund',
-                        original_transaction_id=transaction.id,
-                        description=f"Void refund for transaction #{transaction.id}: {transaction.description}",
-                    )
-                    db.session.add(reversal_tx)
-                    # No flush here to avoid performance hit in loop? 
-                    # Actually we need ID for reversal_transaction_id?
-                    # Yes, linking them is good practice.
-                    db.session.flush()
-                    transaction.reversal_transaction_id = reversal_tx.id
+                    _ensure_void_refund_transaction(transaction)
 
                 count += 1
 
@@ -10803,48 +10970,18 @@ def api_economy_analyze():
         else:
             expected_weekly_hours = None  # Will read from payroll_settings
 
-        analysis = checker.analyze_economy(
-            payroll_settings=payroll_settings,
+        payload, _snapshot = _get_frozen_economy_analysis_payload(
+            admin_id,
+            block,
+            checker,
+            payroll_settings,
             rent_settings=rent_settings,
             insurance_policies=insurance_policies,
             fines=fines,
             store_items=store_items,
-            expected_weekly_hours=expected_weekly_hours
+            expected_weekly_hours=expected_weekly_hours,
         )
-
-        # Format response
-        warnings_by_level = {
-            'critical': [],
-            'warning': [],
-            'info': []
-        }
-
-        for w in analysis.warnings:
-            warnings_by_level[w.level.value].append({
-                'feature': w.feature,
-                'message': w.message,
-                'current_value': w.current_value,
-                'recommended_min': w.recommended_min,
-                'recommended_max': w.recommended_max,
-                'cwi_ratio': w.cwi_ratio
-            })
-
-        return jsonify({
-            'status': 'success',
-            'cwi': analysis.cwi.cwi,
-            'is_balanced': analysis.is_balanced,
-            'budget_survival_test_passed': analysis.budget_survival_test_passed,
-            'weekly_savings': analysis.weekly_savings,
-            'warnings': warnings_by_level,
-            'recommendations': analysis.recommendations,
-            'cwi_breakdown': {
-                'pay_rate_per_hour': float(analysis.cwi.pay_rate_per_minute) * 60,
-                'pay_rate_per_minute': float(analysis.cwi.pay_rate_per_minute),
-                'expected_weekly_hours': float(analysis.cwi.expected_weekly_minutes) / 60.0,
-                'expected_weekly_minutes': float(analysis.cwi.expected_weekly_minutes),
-                'notes': analysis.cwi.notes
-            }
-        })
+        return jsonify(payload)
 
     except Exception as e:
         current_app.logger.error(f"Error analyzing economy: {e}")

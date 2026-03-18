@@ -129,6 +129,7 @@ def test_reject_redemption_refunds_student(client, teacher_admin, student_in_cla
     ).first()
     assert refund_tx is not None
     assert "Refund:" in refund_tx.description
+    assert refund_tx.idempotency_key == f"txn:refund:student-item:{student_item.id}:redemption-rejected"
     purchase_tx = Transaction.query.filter_by(
         student_id=student.id,
         type='purchase',
@@ -210,6 +211,7 @@ def test_reject_redemption_refunds_single_unit_from_multi_quantity_purchase(clie
         amount=Decimal('10.00')
     ).first()
     assert refund_tx is not None
+    assert refund_tx.idempotency_key == f"txn:refund:student-item:{student_item.id}:redemption-rejected"
 
 
 def test_reject_redemption_legacy_item_resolves_join_code(client, teacher_admin, student_in_class):

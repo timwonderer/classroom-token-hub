@@ -1,5 +1,4 @@
 import pytest
-
 pytestmark = [pytest.mark.critical, pytest.mark.regression]
 
 """
@@ -8,11 +7,13 @@ Tests for Economy API endpoints.
 Tests the /api/economy/* endpoints to ensure they correctly use
 expected_weekly_hours from payroll_settings rather than hardcoded values.
 """
-import pytest
 from datetime import datetime, timezone
+from decimal import Decimal
+from os import urandom
 from app import db
-from app.models import Admin, PayrollSettings
+from app.models import Admin, EconomySnapshot, JoinCode, PayrollSettings, TeacherBlock
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
+from app.routes import admin as admin_routes
 
 
 @pytest.fixture
@@ -52,6 +53,28 @@ def logged_in_admin_client(client, admin_with_payroll):
         sess['is_system_admin'] = False
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
     return client
+
+
+def _attach_join_code(admin, block='A', token='JOIN-A'):
+    join_code = JoinCode(join_code_token=token, teacher_id=admin.id)
+    db.session.add(join_code)
+    db.session.flush()
+    db.session.add(TeacherBlock(
+        teacher_id=admin.id,
+        block=block,
+        class_label=block,
+        first_name='Test',
+        last_initial='A',
+        last_name_hash_by_part=['hash'],
+        dob_sum=1234,
+        salt=urandom(16),
+        first_half_hash=f'hash-{block.lower()}',
+        join_code=token,
+        join_code_id=join_code.join_code_id,
+        is_claimed=False,
+    ))
+    db.session.commit()
+    return join_code
 
 
 def test_validate_endpoint_uses_payroll_settings_hours(logged_in_admin_client, admin_with_payroll):
@@ -188,6 +211,113 @@ def test_analyze_endpoint_null_override_uses_payroll(logged_in_admin_client, adm
     breakdown = data['cwi_breakdown']
     assert breakdown['expected_weekly_hours'] == 8.0, \
         f"Expected payroll_settings value 8.0 when override is null, got {breakdown['expected_weekly_hours']}"
+
+
+def test_analyze_endpoint_reuses_frozen_weekly_snapshot(logged_in_admin_client, admin_with_payroll):
+    admin, _payroll_settings = admin_with_payroll
+    client = logged_in_admin_client
+    _attach_join_code(admin, block='A', token='JOIN-CACHE-A')
+
+    response_one = client.post('/admin/api/economy/analyze', json={'block': 'A'})
+    assert response_one.status_code == 200
+    data_one = response_one.get_json()
+    assert data_one['analysis_schedule']['frozen'] is True
+    assert data_one['snapshot_cached'] is False
+    assert EconomySnapshot.query.count() == 1
+
+    response_two = client.post('/admin/api/economy/analyze', json={'block': 'A'})
+    assert response_two.status_code == 200
+    data_two = response_two.get_json()
+    assert data_two['analysis_schedule']['frozen'] is True
+    assert data_two['snapshot_cached'] is True
+    assert EconomySnapshot.query.count() == 1
+    assert data_one['cwi'] == data_two['cwi']
+    assert data_one['analysis_schedule']['last_updated_at'] == data_two['analysis_schedule']['last_updated_at']
+
+
+def test_analyze_endpoint_override_bypasses_frozen_snapshot(logged_in_admin_client, admin_with_payroll):
+    admin, _payroll_settings = admin_with_payroll
+    client = logged_in_admin_client
+    _attach_join_code(admin, block='A', token='JOIN-CACHE-B')
+
+    initial_response = client.post('/admin/api/economy/analyze', json={'block': 'A'})
+    assert initial_response.status_code == 200
+    assert EconomySnapshot.query.count() == 1
+
+    preview_response = client.post(
+        '/admin/api/economy/analyze',
+        json={'block': 'A', 'expected_weekly_hours': 10.0},
+    )
+    assert preview_response.status_code == 200
+    preview_data = preview_response.get_json()
+    assert preview_data['analysis_schedule']['frozen'] is False
+    assert preview_data['snapshot_cached'] is False
+    assert preview_data['cwi_breakdown']['expected_weekly_hours'] == 10.0
+    assert EconomySnapshot.query.count() == 1
+
+
+def test_analyze_endpoint_recomputes_after_payroll_change(logged_in_admin_client, admin_with_payroll):
+    admin, payroll_settings = admin_with_payroll
+    client = logged_in_admin_client
+    _attach_join_code(admin, block='A', token='JOIN-CACHE-C')
+
+    initial_response = client.post('/admin/api/economy/analyze', json={'block': 'A'})
+    assert initial_response.status_code == 200
+    initial_data = initial_response.get_json()
+    assert initial_data['snapshot_cached'] is False
+    assert EconomySnapshot.query.count() == 1
+
+    payroll_settings.expected_weekly_hours = 9.5
+    db.session.commit()
+
+    refreshed_response = client.post('/admin/api/economy/analyze', json={'block': 'A'})
+    assert refreshed_response.status_code == 200
+    refreshed_data = refreshed_response.get_json()
+    assert refreshed_data['snapshot_cached'] is False
+    assert refreshed_data['cwi_breakdown']['expected_weekly_hours'] == 9.5
+    assert refreshed_data['cwi'] != initial_data['cwi']
+    assert EconomySnapshot.query.count() == 2
+
+
+def test_serialize_economy_analysis_payload_coerces_decimal_values(app):
+    analysis = type("Analysis", (), {})()
+    analysis.warnings = [
+        type("Warning", (), {
+            "feature": "rent",
+            "level": type("Level", (), {"value": "warning"})(),
+            "message": "warning",
+            "current_value": Decimal("12.50"),
+            "recommended_min": Decimal("10.00"),
+            "recommended_max": Decimal("15.00"),
+            "cwi_ratio": Decimal("0.75"),
+        })()
+    ]
+    analysis.cwi = type("CWI", (), {
+        "cwi": Decimal("120.00"),
+        "pay_rate_per_minute": Decimal("0.25"),
+        "expected_weekly_minutes": Decimal("480"),
+        "notes": ["note", Decimal("1.50")],
+    })()
+    analysis.is_balanced = True
+    analysis.budget_survival_test_passed = True
+    analysis.weekly_savings = Decimal("5.25")
+    analysis.recommendations = {
+        "rent": {
+            "min": Decimal("10.00"),
+            "recommended": Decimal("12.50"),
+            "max": Decimal("15.00"),
+        }
+    }
+
+    with app.test_request_context():
+        app.config["ECONOMY_REFRESH_TIMEZONE"] = "America/Chicago"
+        payload = admin_routes._serialize_economy_analysis_payload(analysis)
+
+    assert payload["warnings"]["warning"][0]["current_value"] == 12.5
+    assert payload["recommendations"]["rent"]["recommended"] == 12.5
+    assert payload["weekly_savings"] == 5.25
+    assert payload["cwi_breakdown"]["notes"][1] == 1.5
+    assert payload["analysis_schedule"]["refresh_timezone"] == "America/Chicago"
 
 
 def test_different_expected_hours_per_block(client):

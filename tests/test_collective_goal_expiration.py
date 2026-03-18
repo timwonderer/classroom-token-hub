@@ -400,6 +400,7 @@ def test_refund_pending_collective_purchases_marks_voided_and_creates_refund(cli
     ).all()
     assert len(refund_txs) == 1
     assert 'Teacher Removed' in refund_txs[0].description
+    assert refund_txs[0].idempotency_key == f"txn:refund:student-item:{si.id}:teacher-removed"
 
 
 def test_refund_matching_uses_purchase_transaction_id_after_item_rename(client):
@@ -440,6 +441,7 @@ def test_refund_matching_uses_purchase_transaction_id_after_item_rename(client):
     ).one()
     assert refund_tx.amount == Decimal('13.00'), "Refund should use linked purchase transaction amount"
     assert refund_tx.original_transaction_id == purchase_tx.id
+    assert refund_tx.idempotency_key == f"txn:refund:student-item:{si.id}:teacher-removed"
 
 
 def test_refund_pending_skips_non_pending_statuses(client):

@@ -6,6 +6,7 @@ called from both admin and student route handlers.
 """
 from app.extensions import db
 from app.models import StoreItem, StudentItem, Transaction
+from app.utils.transaction_idempotency import create_idempotent_transaction, student_item_refund_key
 from app.utils.time import utc_now
 
 
@@ -65,7 +66,11 @@ def refund_pending_collective_purchases(item, description_suffix="Goal Expired")
         else:
             refund_amount = item.price
 
-        refund_tx = Transaction(
+        refund_tx, _created = create_idempotent_transaction(
+            idempotency_key=student_item_refund_key(
+                si.id,
+                description_suffix.lower().replace(' ', '-'),
+            ),
             student_id=si.student_id,
             teacher_id=item.teacher_id,
             join_code=si.join_code,
@@ -75,10 +80,7 @@ def refund_pending_collective_purchases(item, description_suffix="Goal Expired")
             original_transaction_id=purchase_tx.id if purchase_tx else None,
             description=f"Refund: {item.name} ({description_suffix})",
         )
-        db.session.add(refund_tx)
         if purchase_tx:
-            # Assign ID before linking reverse pointer.
-            db.session.flush()
             purchase_tx.reversal_transaction_id = refund_tx.id
 
         si.status = 'voided'
