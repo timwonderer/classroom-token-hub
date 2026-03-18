@@ -318,7 +318,7 @@
           <div class="alert alert-secondary mt-3 mb-0 small">
             <strong>{{ 'Frozen analytics snapshot' if analysis_schedule.frozen else 'Preview analysis' }}.</strong>
             Last updated on <span class="local-timestamp" data-timestamp="{{ analysis_schedule.last_updated_at }}"></span>.
-            Analytics update once a week on {{ analysis_schedule.weekly_refresh_label }} {{ analysis_schedule.refresh_timezone }}.
+            Analytics updates once a week on {{ analysis_schedule.weekly_refresh_label }} {{ analysis_schedule.refresh_timezone }}.
             Monthly rollups refresh on {{ analysis_schedule.monthly_refresh_label }} {{ analysis_schedule.refresh_timezone }}.
           </div>
           {% endif %}

@@ -8,6 +8,7 @@ from app.models import Admin, Student, Transaction
 import app.utils.transaction_idempotency as transaction_idempotency
 from app.utils.transaction_idempotency import (
     IDEMPOTENT_TRANSACTION_TYPES,
+    MAX_IDEMPOTENCY_KEY_LENGTH,
     create_idempotent_transaction,
     insurance_reimbursement_key,
 )
@@ -118,5 +119,44 @@ def test_create_idempotent_transaction_rejects_non_idempotent_types(client):
             amount=Decimal("5.00"),
             account_type="checking",
             type="payroll",
+            description="Should fail",
+        )
+
+
+@pytest.mark.parametrize("bad_key", [None, "", "   "])
+def test_create_idempotent_transaction_rejects_empty_keys(client, bad_key):
+    teacher = Admin(username="idempotent-empty-key-teacher", totp_secret="secret")
+    student = Student(first_name="Empty", last_initial="E", block="A", salt=b"salt")
+    db.session.add_all([teacher, student])
+    db.session.commit()
+
+    with pytest.raises(ValueError):
+        create_idempotent_transaction(
+            idempotency_key=bad_key,
+            student_id=student.id,
+            teacher_id=teacher.id,
+            join_code="IDEMP000",
+            amount=Decimal("5.00"),
+            account_type="checking",
+            type="refund",
+            description="Should fail",
+        )
+
+
+def test_create_idempotent_transaction_rejects_oversize_keys(client):
+    teacher = Admin(username="idempotent-long-key-teacher", totp_secret="secret")
+    student = Student(first_name="Long", last_initial="L", block="A", salt=b"salt")
+    db.session.add_all([teacher, student])
+    db.session.commit()
+
+    with pytest.raises(ValueError):
+        create_idempotent_transaction(
+            idempotency_key="x" * (MAX_IDEMPOTENCY_KEY_LENGTH + 1),
+            student_id=student.id,
+            teacher_id=teacher.id,
+            join_code="IDEMP001",
+            amount=Decimal("5.00"),
+            account_type="checking",
+            type="refund",
             description="Should fail",
         )

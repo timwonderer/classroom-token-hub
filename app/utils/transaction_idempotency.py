@@ -10,6 +10,7 @@ IDEMPOTENT_TRANSACTION_TYPES = frozenset({
 })
 
 IDEMPOTENCY_KEY_PREFIX = "txn"
+MAX_IDEMPOTENCY_KEY_LENGTH = 128
 
 
 def _normalize_key_part(value):
@@ -47,6 +48,12 @@ def create_idempotent_transaction(*, idempotency_key, **transaction_kwargs):
     transaction_type = transaction_kwargs.get("type")
     if transaction_type not in IDEMPOTENT_TRANSACTION_TYPES:
         raise ValueError(f"Transaction type '{transaction_type}' is not enabled for idempotent creation.")
+    if not isinstance(idempotency_key, str) or not idempotency_key.strip():
+        raise ValueError("Idempotency key must be a non-empty string.")
+    if len(idempotency_key) > MAX_IDEMPOTENCY_KEY_LENGTH:
+        raise ValueError(
+            f"Idempotency key exceeds max length of {MAX_IDEMPOTENCY_KEY_LENGTH} characters."
+        )
 
     existing = get_idempotent_transaction(idempotency_key)
     if existing:

@@ -1444,7 +1444,19 @@ def _build_economy_snapshot_from_analysis(join_code_id, checker, analysis):
 
 
 def _economy_refresh_timezone():
-    return pytz.timezone('America/Los_Angeles')
+    return pytz.timezone(current_app.config.get('ECONOMY_REFRESH_TIMEZONE', 'America/Los_Angeles'))
+
+
+def _json_safe_value(value):
+    if isinstance(value, Decimal):
+        if value == value.to_integral_value():
+            return int(value)
+        return float(value)
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _json_safe_value(item) for key, item in value.items()}
+    return value
 
 
 def _economy_weekly_refresh_bounds(now_utc=None):
@@ -1480,7 +1492,7 @@ def _economy_analysis_schedule(snapshot=None, *, now_utc=None, frozen=True):
     return {
         'frozen': frozen,
         'last_updated_at': last_updated.isoformat(),
-        'refresh_timezone': 'America/Los_Angeles',
+        'refresh_timezone': _economy_refresh_timezone().zone,
         'weekly_refresh_label': 'Sunday 12:00 AM',
         'monthly_refresh_label': '1st of each month 12:00 AM',
         'weekly_window_start_at': weekly_window_start.isoformat(),
@@ -1503,29 +1515,29 @@ def _serialize_economy_analysis_payload(analysis, *, snapshot=None, now_utc=None
             'feature': warning.feature,
             'level': warning.level.value,
             'message': warning.message,
-            'current_value': warning.current_value,
-            'recommended_min': warning.recommended_min,
-            'recommended_max': warning.recommended_max,
-            'cwi_ratio': warning.cwi_ratio,
+            'current_value': _json_safe_value(warning.current_value),
+            'recommended_min': _json_safe_value(warning.recommended_min),
+            'recommended_max': _json_safe_value(warning.recommended_max),
+            'cwi_ratio': _json_safe_value(warning.cwi_ratio),
         }
         warning_items.append(warning_payload)
         warnings_by_level[warning.level.value].append(warning_payload)
 
     return {
         'status': 'success',
-        'cwi': analysis.cwi.cwi,
+        'cwi': _json_safe_value(analysis.cwi.cwi),
         'is_balanced': analysis.is_balanced,
         'budget_survival_test_passed': analysis.budget_survival_test_passed,
-        'weekly_savings': analysis.weekly_savings,
+        'weekly_savings': _json_safe_value(analysis.weekly_savings),
         'warnings': warnings_by_level,
         'warning_items': warning_items,
-        'recommendations': analysis.recommendations,
+        'recommendations': _json_safe_value(analysis.recommendations),
         'cwi_breakdown': {
             'pay_rate_per_hour': float(analysis.cwi.pay_rate_per_minute) * 60,
             'pay_rate_per_minute': float(analysis.cwi.pay_rate_per_minute),
             'expected_weekly_hours': float(analysis.cwi.expected_weekly_minutes) / 60.0,
             'expected_weekly_minutes': float(analysis.cwi.expected_weekly_minutes),
-            'notes': analysis.cwi.notes,
+            'notes': _json_safe_value(analysis.cwi.notes),
         },
         'analysis_schedule': _economy_analysis_schedule(snapshot, now_utc=now_utc, frozen=frozen),
     }
@@ -1735,11 +1747,6 @@ def _warning_to_alignment(level_value):
 
 def _ensure_void_refund_transaction(tx):
     idempotency_key = void_refund_key(tx.id)
-    existing = get_idempotent_transaction(idempotency_key)
-    if existing:
-        tx.reversal_transaction_id = existing.id
-        return existing
-
     reversal_tx, _created = create_idempotent_transaction(
         idempotency_key=idempotency_key,
         student_id=tx.student_id,

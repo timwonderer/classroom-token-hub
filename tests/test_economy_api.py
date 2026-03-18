@@ -8,10 +8,12 @@ Tests the /api/economy/* endpoints to ensure they correctly use
 expected_weekly_hours from payroll_settings rather than hardcoded values.
 """
 from datetime import datetime, timezone
+from decimal import Decimal
 from os import urandom
 from app import db
 from app.models import Admin, EconomySnapshot, JoinCode, PayrollSettings, TeacherBlock
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
+from app.routes import admin as admin_routes
 
 
 @pytest.fixture
@@ -275,6 +277,47 @@ def test_analyze_endpoint_recomputes_after_payroll_change(logged_in_admin_client
     assert refreshed_data['cwi_breakdown']['expected_weekly_hours'] == 9.5
     assert refreshed_data['cwi'] != initial_data['cwi']
     assert EconomySnapshot.query.count() == 2
+
+
+def test_serialize_economy_analysis_payload_coerces_decimal_values(app):
+    analysis = type("Analysis", (), {})()
+    analysis.warnings = [
+        type("Warning", (), {
+            "feature": "rent",
+            "level": type("Level", (), {"value": "warning"})(),
+            "message": "warning",
+            "current_value": Decimal("12.50"),
+            "recommended_min": Decimal("10.00"),
+            "recommended_max": Decimal("15.00"),
+            "cwi_ratio": Decimal("0.75"),
+        })()
+    ]
+    analysis.cwi = type("CWI", (), {
+        "cwi": Decimal("120.00"),
+        "pay_rate_per_minute": Decimal("0.25"),
+        "expected_weekly_minutes": Decimal("480"),
+        "notes": ["note", Decimal("1.50")],
+    })()
+    analysis.is_balanced = True
+    analysis.budget_survival_test_passed = True
+    analysis.weekly_savings = Decimal("5.25")
+    analysis.recommendations = {
+        "rent": {
+            "min": Decimal("10.00"),
+            "recommended": Decimal("12.50"),
+            "max": Decimal("15.00"),
+        }
+    }
+
+    with app.test_request_context():
+        app.config["ECONOMY_REFRESH_TIMEZONE"] = "America/Chicago"
+        payload = admin_routes._serialize_economy_analysis_payload(analysis)
+
+    assert payload["warnings"]["warning"][0]["current_value"] == 12.5
+    assert payload["recommendations"]["rent"]["recommended"] == 12.5
+    assert payload["weekly_savings"] == 5.25
+    assert payload["cwi_breakdown"]["notes"][1] == 1.5
+    assert payload["analysis_schedule"]["refresh_timezone"] == "America/Chicago"
 
 
 def test_different_expected_hours_per_block(client):

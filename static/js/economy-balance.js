@@ -454,7 +454,7 @@ class EconomyBalanceChecker {
 
             html += '<div class="small text-muted mt-2">';
             html += `<div><strong>${frozenLabel}.</strong> Last updated on ${lastUpdated}.</div>`;
-            html += `<div>Analytics update once a week on ${schedule.weekly_refresh_label} ${schedule.refresh_timezone}.</div>`;
+            html += `<div>Analytics updates once a week on ${schedule.weekly_refresh_label} ${schedule.refresh_timezone}.</div>`;
             html += `<div>Monthly rollups refresh on ${schedule.monthly_refresh_label} ${schedule.refresh_timezone}.</div>`;
             html += '</div>';
         }
