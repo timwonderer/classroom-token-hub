@@ -215,6 +215,7 @@ class EconomySnapshot(db.Model):
 
     store_tier_min = db.Column(db.JSON, nullable=False)
     store_tier_max = db.Column(db.JSON, nullable=False)
+    analysis_payload = db.Column(db.JSON, nullable=True)
 
     join_code = db.relationship(
         'JoinCode',
@@ -806,6 +807,7 @@ class Transaction(db.Model):
     original_transaction_id = db.Column(db.Integer, nullable=True, index=True)
     reversal_transaction_id = db.Column(db.Integer, nullable=True, index=True)
     policy_id = db.Column(db.Integer, db.ForeignKey('insurance_policies.id'), nullable=True, index=True)
+    idempotency_key = db.Column(db.String(128), nullable=True, unique=True, index=True)
     type = db.Column(db.String(50))  # optional field to describe the transaction type
     # All times stored as UTC
     date_funds_available = db.Column(db.DateTime(timezone=True), default=utc_now)

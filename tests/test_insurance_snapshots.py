@@ -154,6 +154,7 @@ def test_admin_claim_approval_uses_frozen_coverage_percent(client, test_student)
     ).first()
     assert reimbursement is not None
     assert reimbursement.amount == Decimal("20.00")
+    assert reimbursement.idempotency_key == f"txn:insurance:claim:{claim.id}:reimbursement"
 
 
 def test_transaction_claim_ignores_per_claim_cap_and_uses_coverage_percent(client, test_student):
@@ -303,6 +304,9 @@ def test_variable_claim_can_be_approved_after_prior_claim_when_period_cap_remain
     db.session.refresh(pending_claim)
     assert pending_claim.status == "approved"
     assert pending_claim.approved_amount == Decimal("60.00")
+    reimbursements = Transaction.query.filter_by(type="insurance_reimbursement").order_by(Transaction.id.asc()).all()
+    assert len(reimbursements) == 1
+    assert reimbursements[0].idempotency_key == f"txn:insurance:claim:{pending_claim.id}:reimbursement"
 
 
 def test_renewed_enrollment_uses_frozen_waiting_period_for_coverage_start(client, test_student):

@@ -125,6 +125,7 @@ def test_void_delayed_purchase_removes_item_and_refunds(client):
     reversal_tx = db.session.get(Transaction, purchase_tx.reversal_transaction_id)
     assert reversal_tx is not None
     assert reversal_tx.original_transaction_id == purchase_tx.id
+    assert reversal_tx.idempotency_key == f"txn:void:transaction:{purchase_tx.id}:refund"
 
 
 def test_void_immediate_purchase_is_not_allowed(client):

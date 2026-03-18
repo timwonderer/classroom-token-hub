@@ -387,9 +387,20 @@ class EconomyBalanceChecker {
         try {
             const requestBody = {};
 
+            let resolvedBlock = block;
+            if (!resolvedBlock) {
+                const settingsBlockInput = document.getElementById('settings_block_selector') ||
+                    document.querySelector('input[name="settings_block"]') ||
+                    document.querySelector('input[name="block"]') ||
+                    document.querySelector('select[name="block"]');
+                if (settingsBlockInput && settingsBlockInput.value) {
+                    resolvedBlock = settingsBlockInput.value;
+                }
+            }
+
             // Include block if provided
-            if (block) {
-                requestBody.block = block;
+            if (resolvedBlock) {
+                requestBody.block = resolvedBlock;
             }
 
             // Note: expected_weekly_hours is read from payroll_settings by the backend
@@ -427,10 +438,26 @@ class EconomyBalanceChecker {
     displayCWIInfo(cwiData, containerId = '#cwi-info') {
         const container = document.querySelector(containerId);
         if (!container) return;
+        const schedule = cwiData.analysis_schedule || null;
 
         let html = '<div class="cwi-info-box alert alert-info">';
         html += '<h6><i class="bi bi-info-circle-fill"></i> Classroom Wage Index (CWI)</h6>';
         html += `<div class="cwi-value">Weekly Expected Income: <strong>$${cwiData.cwi.toFixed(2)}</strong></div>`;
+
+        if (schedule) {
+            const frozenLabel = schedule.frozen
+                ? 'Frozen analytics snapshot'
+                : 'Preview analysis';
+            const lastUpdated = schedule.last_updated_at
+                ? new Date(schedule.last_updated_at).toLocaleString()
+                : 'Unknown';
+
+            html += '<div class="small text-muted mt-2">';
+            html += `<div><strong>${frozenLabel}.</strong> Last updated on ${lastUpdated}.</div>`;
+            html += `<div>Analytics update once a week on ${schedule.weekly_refresh_label} ${schedule.refresh_timezone}.</div>`;
+            html += `<div>Monthly rollups refresh on ${schedule.monthly_refresh_label} ${schedule.refresh_timezone}.</div>`;
+            html += '</div>';
+        }
 
         if (cwiData.cwi_breakdown || cwiData.breakdown) {
             html += '<details class="mt-2">';
