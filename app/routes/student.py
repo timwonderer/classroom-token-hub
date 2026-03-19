@@ -3055,8 +3055,8 @@ def _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date):
 
     locked_candidates = []
     for payment in valid_payments:
-        late_fee = Decimal(str(payment.late_fee_charged or Decimal('0.00')))
-        base_amount = Decimal(str(payment.amount_paid or Decimal('0.00'))) - late_fee
+        late_fee = payment.late_fee_charged or Decimal('0.00')
+        base_amount = (payment.amount_paid or Decimal('0.00')) - late_fee
         if base_amount > Decimal('0.00'):
             locked_candidates.append(base_amount)
 
