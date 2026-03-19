@@ -3075,7 +3075,7 @@ def _get_effective_rent_amount_for_coverage_period(settings, payments, coverage_
     that period before the update, keep the pre-update paid amount as the base due
     threshold for this period so students are not retroactively marked late.
     """
-    current_amount = Decimal(str(settings.rent_amount or Decimal('0.00')))
+    current_amount = settings.rent_amount or Decimal('0.00')
 
     locked_amount = _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date)
     if locked_amount is not None:
