@@ -1612,6 +1612,8 @@ class InsuranceClaim(db.Model):
     processed_date = db.Column(db.DateTime(timezone=True), nullable=True)
     processed_by_admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
     transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True)
+    # When a teacher overrides the claim time limit, they must provide a written reason.
+    time_limit_override_reason = db.Column(db.Text, nullable=True)
 
     # Relationships
     student = db.relationship('Student', backref='insurance_claims')

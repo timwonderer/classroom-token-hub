@@ -6867,28 +6867,35 @@ def process_claim(claim_id):
         return target_claim.claim_amount or Decimal('0.00')
 
     # Validate claim
-    validation_errors = []
+    # "Hard" errors always block approval; "time limit" errors can be overridden
+    # by the teacher with a written explanation.
+    hard_validation_errors = []
+    time_limit_errors = []
 
-    # Check if coverage has started (past waiting period)
-    # Ensure timezone-aware comparison
+    # Snapshot the filing time once. All date-gate checks use this so that a
+    # claim filed within the limit is never blocked just because the teacher
+    # reviews it late.
+    filed_utc = ensure_utc(claim.filed_date) if claim.filed_date else utc_now()
+
+    # Check if coverage has started (past waiting period) — evaluated at filing time
     coverage_start = ensure_utc(enrollment.coverage_start_date)
 
-    if not coverage_start or coverage_start > utc_now():
-        validation_errors.append("Coverage has not started yet (still in waiting period)")
+    if not coverage_start or coverage_start > filed_utc:
+        hard_validation_errors.append("Coverage has not started yet (still in waiting period)")
 
     # Check if payment is current
     if not enrollment.payment_current:
-        validation_errors.append("Premium payments are not current")
+        hard_validation_errors.append("Premium payments are not current")
 
     if claim_type == 'transaction_monetary' and not claim.transaction:
-        validation_errors.append("Transaction-based claim is missing a linked transaction")
+        hard_validation_errors.append("Transaction-based claim is missing a linked transaction")
     if claim_type == 'transaction_monetary' and claim.transaction and claim.transaction.is_void:
-        validation_errors.append("Linked transaction has been voided and cannot be reimbursed")
+        hard_validation_errors.append("Linked transaction has been voided and cannot be reimbursed")
 
     # P0-3 Fix: Validate transaction ownership to prevent cross-student fraud
     if claim_type == 'transaction_monetary' and claim.transaction:
         if claim.transaction.student_id != claim.student_id:
-            validation_errors.append(
+            hard_validation_errors.append(
                 f"SECURITY: Transaction ownership mismatch. "
                 f"Transaction belongs to student ID {claim.transaction.student_id}, "
                 f"but claim filed by student ID {claim.student_id}."
@@ -6904,7 +6911,7 @@ def process_claim(claim_id):
             InsuranceClaim.id != claim.id,
         ).first()
         if duplicate_claim:
-            validation_errors.append("Another claim is already tied to this transaction")
+            hard_validation_errors.append("Another claim is already tied to this transaction")
 
     if claim_type == 'transaction_monetary' and claim.transaction:
         reason_to_message = {
@@ -6927,10 +6934,13 @@ def process_claim(claim_id):
             if row[0] is not None
         }
         reimbursed_tx_ids = collect_reimbursed_source_tx_ids(claim.policy_id)
+        # Pass filed_utc so the time-limit check inside the eligibility function
+        # reflects when the student actually submitted the claim, not when the
+        # teacher is reviewing it.
         transaction_eligible, reason_code = evaluate_claim_transaction_eligibility(
             claim.transaction,
             enrollment=enrollment,
-            now_utc=utc_now(),
+            now_utc=filed_utc,
             claim_type=claim_type,
             claim_time_limit_days=claim_time_limit_days,
             policy_id=claim.policy_id,
@@ -6939,13 +6949,20 @@ def process_claim(claim_id):
             reimbursed_tx_ids=reimbursed_tx_ids,
         )
         if not transaction_eligible:
-            validation_errors.append(reason_to_message.get(reason_code, "Linked transaction is not eligible"))
+            error_msg = reason_to_message.get(reason_code, "Linked transaction is not eligible")
+            if reason_code == CLAIM_REASON_TIME_LIMIT_EXCEEDED:
+                time_limit_errors.append(error_msg)
+            else:
+                hard_validation_errors.append(error_msg)
 
+    # Time limit check: measure from when the student filed, not from now.
     incident_reference = claim.transaction.timestamp if claim_type == 'transaction_monetary' and claim.transaction else claim.incident_date
     incident_reference = ensure_utc(incident_reference)
-    days_since_incident = (utc_now() - incident_reference).days if incident_reference else 0
-    if claim_time_limit_days is not None and days_since_incident > claim_time_limit_days:
-        validation_errors.append(f"Claim filed too late ({days_since_incident} days after incident, limit is {claim_time_limit_days} days)")
+    days_from_incident_to_filing = (filed_utc - incident_reference).days if incident_reference else 0
+    if claim_time_limit_days is not None and days_from_incident_to_filing > claim_time_limit_days:
+        time_limit_errors.append(
+            f"Claim filed too late ({days_from_incident_to_filing} days after incident, limit is {claim_time_limit_days} days)"
+        )
 
     # Check max claims count
     approved_claims = InsuranceClaim.query.filter(
@@ -6956,7 +6973,11 @@ def process_claim(claim_id):
         InsuranceClaim.id != claim.id,
     )
     if max_claims_count and approved_claims.count() >= max_claims_count:
-        validation_errors.append(f"Maximum claims limit reached ({max_claims_count} per {max_claims_period})")
+        hard_validation_errors.append(f"Maximum claims limit reached ({max_claims_count} per {max_claims_period})")
+
+    # Combined list for display — always derived from the two source lists.
+    validation_errors = hard_validation_errors + time_limit_errors
+
 
     period_payouts = None
     remaining_period_cap = None
@@ -6990,8 +7011,20 @@ def process_claim(claim_id):
         is_monetary_claim = claim_type != 'non_monetary'
         requires_payout = is_monetary_claim and new_status in ('approved', 'paid') and old_status not in ('approved', 'paid')
 
-        if validation_errors and requires_payout:
+        override_reason = (form.time_limit_override_reason.data or '').strip()
+
+        # Hard errors always block payout — they cannot be overridden.
+        if hard_validation_errors and requires_payout:
             flash("Resolve validation errors before approving or paying out this claim.", "danger")
+            return redirect(url_for('admin.process_claim', claim_id=claim_id))
+
+        # Time-limit errors block payout unless the teacher provides a written override reason.
+        if time_limit_errors and requires_payout and not override_reason:
+            flash(
+                "This claim appears to have been filed outside the policy time limit. "
+                "Provide a written override reason to approve it anyway.",
+                "danger",
+            )
             return redirect(url_for('admin.process_claim', claim_id=claim_id))
 
         claim.status = new_status
@@ -6999,6 +7032,8 @@ def process_claim(claim_id):
         claim.rejection_reason = form.rejection_reason.data if new_status == 'rejected' else None
         claim.processed_date = utc_now()
         claim.processed_by_admin_id = session.get('admin_id')
+        if override_reason and time_limit_errors:
+            claim.time_limit_override_reason = override_reason
 
         # Handle monetary claims - auto-deposit when approved/paid
         if requires_payout:
@@ -7100,6 +7135,8 @@ def process_claim(claim_id):
                           contract_max_payout_per_period=max_payout_per_period,
                           contract_coverage_percent=contract_coverage_percent,
                           validation_errors=validation_errors,
+                          hard_validation_errors=hard_validation_errors,
+                          time_limit_errors=time_limit_errors,
                           claims_stats=claims_stats,
                           remaining_period_cap=remaining_period_cap,
                           period_payouts=period_payouts)
