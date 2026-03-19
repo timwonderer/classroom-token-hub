@@ -6950,9 +6950,7 @@ def process_claim(claim_id):
         )
         if not transaction_eligible:
             error_msg = reason_to_message.get(reason_code, "Linked transaction is not eligible")
-            if reason_code == CLAIM_REASON_TIME_LIMIT_EXCEEDED:
-                time_limit_errors.append(error_msg)
-            else:
+            if reason_code != CLAIM_REASON_TIME_LIMIT_EXCEEDED:
                 hard_validation_errors.append(error_msg)
 
     # Time limit check: measure from when the student filed, not from now.
