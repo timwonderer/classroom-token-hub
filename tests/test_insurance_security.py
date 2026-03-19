@@ -357,3 +357,247 @@ def test_rent_privilege_purchase_cannot_be_approved(client, test_student, admin_
     db.session.refresh(claim)
     assert claim.status == "pending"
     assert b"not been used yet" in response.data
+
+
+# ---------------------------------------------------------------------------
+# Date-gate fix: time limit should be measured at filing time, not review time
+# ---------------------------------------------------------------------------
+
+def _build_policy_with_time_limit(admin_id, limit_days):
+    """Create a transaction_monetary policy with the given claim_time_limit_days."""
+    policy = InsurancePolicy(
+        policy_code=f"POLICY-TL-{limit_days}",
+        teacher_id=admin_id,
+        title="Time Limit Test Coverage",
+        description="",
+        premium=10.0,
+        claim_type="transaction_monetary",
+        is_monetary=True,
+        claim_time_limit_days=limit_days,
+    )
+    db.session.add(policy)
+    db.session.commit()
+    return policy
+
+
+def test_claim_filed_in_time_not_blocked_when_reviewed_late(client, test_student, admin_user):
+    """
+    If a student files a claim within the policy's time limit but the teacher
+    reviews it after the limit has passed, the claim must NOT be blocked.
+
+    Before the fix, the date gate used utc_now() (review time) instead of
+    claim.filed_date, causing valid claims to be incorrectly rejected.
+    """
+    from app.models import StudentTeacher
+
+    st = StudentTeacher(student_id=test_student.id, admin_id=admin_user.id)
+    db.session.add(st)
+    db.session.commit()
+
+    policy = _build_policy_with_time_limit(admin_user.id, limit_days=7)
+    enrollment = StudentInsurance(
+        student_id=test_student.id,
+        policy_id=policy.id,
+        status="active",
+        # Coverage started 20 days ago so the waiting period is long past
+        coverage_start_date=datetime.now(timezone.utc) - timedelta(days=20),
+        payment_current=True,
+    )
+    db.session.add(enrollment)
+    db.session.commit()
+
+    # Transaction happened 10 days ago (outside the 7-day limit from today's perspective)
+    tx = Transaction(
+        student_id=test_student.id,
+        teacher_id=admin_user.id,
+        amount=-25.0,
+        account_type="checking",
+        description="Test purchase",
+        type="purchase",
+        status=TransactionStatus.POSTED,
+        timestamp=datetime.now(timezone.utc) - timedelta(days=10),
+    )
+    db.session.add(tx)
+    db.session.commit()
+
+    # Claim was filed 7 days ago (3 days after the tx — within the 7-day limit).
+    # From today's perspective the incident is 10 days old, which would be outside
+    # the limit if we used utc_now(), but filing happened on day 3 which is valid.
+    claim = InsuranceClaim(
+        student_insurance_id=enrollment.id,
+        policy_id=policy.id,
+        student_id=test_student.id,
+        incident_date=tx.timestamp,
+        filed_date=datetime.now(timezone.utc) - timedelta(days=7),  # filed 7 days ago = 3 days after tx
+        description="Test claim",
+        claim_amount=abs(tx.amount),
+        transaction_id=tx.id,
+        status="pending",
+    )
+    db.session.add(claim)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["is_admin"] = True
+        sess["admin_id"] = admin_user.id
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    response = client.post(
+        f"/admin/insurance/claim/{claim.id}",
+        data={
+            "status": "approved",
+            "approved_amount": "",
+            "rejection_reason": "",
+            "admin_notes": "",
+            "time_limit_override_reason": "",
+        },
+        follow_redirects=True,
+    )
+
+    db.session.refresh(claim)
+    # The claim was filed within the time limit → should be approved
+    assert claim.status == "approved", (
+        f"Expected claim to be approved (filed within limit), got {claim.status!r}. "
+        f"Response: {response.data.decode()[:500]}"
+    )
+
+
+def test_claim_filed_late_blocked_without_override(client, test_student, admin_user):
+    """A claim filed after the time limit is blocked unless an override reason is given."""
+    from app.models import StudentTeacher
+
+    st = StudentTeacher(student_id=test_student.id, admin_id=admin_user.id)
+    db.session.add(st)
+    db.session.commit()
+
+    policy = _build_policy_with_time_limit(admin_user.id, limit_days=3)
+    enrollment = StudentInsurance(
+        student_id=test_student.id,
+        policy_id=policy.id,
+        status="active",
+        coverage_start_date=datetime.now(timezone.utc) - timedelta(days=20),
+        payment_current=True,
+    )
+    db.session.add(enrollment)
+    db.session.commit()
+
+    tx = Transaction(
+        student_id=test_student.id,
+        teacher_id=admin_user.id,
+        amount=-25.0,
+        account_type="checking",
+        description="Test purchase",
+        type="purchase",
+        status=TransactionStatus.POSTED,
+        timestamp=datetime.now(timezone.utc) - timedelta(days=10),
+    )
+    db.session.add(tx)
+    db.session.commit()
+
+    # Filed 8 days after the transaction — clearly outside the 3-day limit
+    claim = InsuranceClaim(
+        student_insurance_id=enrollment.id,
+        policy_id=policy.id,
+        student_id=test_student.id,
+        incident_date=tx.timestamp,
+        filed_date=datetime.now(timezone.utc) - timedelta(days=2),
+        description="Late claim",
+        claim_amount=abs(tx.amount),
+        transaction_id=tx.id,
+        status="pending",
+    )
+    db.session.add(claim)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["is_admin"] = True
+        sess["admin_id"] = admin_user.id
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    response = client.post(
+        f"/admin/insurance/claim/{claim.id}",
+        data={
+            "status": "approved",
+            "approved_amount": "",
+            "rejection_reason": "",
+            "admin_notes": "",
+            "time_limit_override_reason": "",  # no override
+        },
+        follow_redirects=True,
+    )
+
+    db.session.refresh(claim)
+    assert claim.status == "pending"
+    assert b"time limit" in response.data.lower()
+
+
+def test_claim_filed_late_approved_with_override(client, test_student, admin_user):
+    """A teacher can approve a late claim by providing a written override reason."""
+    from app.models import StudentTeacher
+
+    st = StudentTeacher(student_id=test_student.id, admin_id=admin_user.id)
+    db.session.add(st)
+    db.session.commit()
+
+    policy = _build_policy_with_time_limit(admin_user.id, limit_days=3)
+    enrollment = StudentInsurance(
+        student_id=test_student.id,
+        policy_id=policy.id,
+        status="active",
+        coverage_start_date=datetime.now(timezone.utc) - timedelta(days=20),
+        payment_current=True,
+    )
+    db.session.add(enrollment)
+    db.session.commit()
+
+    tx = Transaction(
+        student_id=test_student.id,
+        teacher_id=admin_user.id,
+        amount=-25.0,
+        account_type="checking",
+        description="Test purchase",
+        type="purchase",
+        status=TransactionStatus.POSTED,
+        timestamp=datetime.now(timezone.utc) - timedelta(days=10),
+    )
+    db.session.add(tx)
+    db.session.commit()
+
+    claim = InsuranceClaim(
+        student_insurance_id=enrollment.id,
+        policy_id=policy.id,
+        student_id=test_student.id,
+        incident_date=tx.timestamp,
+        filed_date=datetime.now(timezone.utc) - timedelta(days=2),  # filed 8 days late
+        description="Late claim with override",
+        claim_amount=abs(tx.amount),
+        transaction_id=tx.id,
+        status="pending",
+    )
+    db.session.add(claim)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["is_admin"] = True
+        sess["admin_id"] = admin_user.id
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    override_text = "Student had a family emergency and could not file on time."
+    response = client.post(
+        f"/admin/insurance/claim/{claim.id}",
+        data={
+            "status": "approved",
+            "approved_amount": "",
+            "rejection_reason": "",
+            "admin_notes": "",
+            "time_limit_override_reason": override_text,
+        },
+        follow_redirects=True,
+    )
+
+    db.session.refresh(claim)
+    assert claim.status == "approved", (
+        f"Expected approved with override, got {claim.status!r}. "
+        f"Response: {response.data.decode()[:500]}"
+    )
+    assert claim.time_limit_override_reason == override_text

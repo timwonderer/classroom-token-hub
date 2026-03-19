@@ -273,6 +273,10 @@ class AdminClaimProcessForm(FlaskForm):
     approved_amount = FloatField('Approved Amount', validators=[Optional()])
     rejection_reason = TextAreaField('Rejection Reason (if rejected)')
     admin_notes = TextAreaField('Admin Notes')
+    time_limit_override_reason = TextAreaField(
+        'Time Limit Override Reason',
+        validators=[Optional()],
+    )
     submit = SubmitField('Update Claim')
 
 

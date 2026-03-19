@@ -485,55 +485,40 @@ Add input validation (optional):
 
 ### ASA-008: Verbose Logging in Authentication
 
-**Status:** ℹ **INFORMATIONAL**
+**Status:** ✅ **RESOLVED**
 **Severity:** LOW (CVSS 3.1)
-**Location:** `app/auth.py:208`
+**Location:** `app/auth.py`
 
 #### Description
 
-Admin authentication includes verbose logging:
+Admin authentication included verbose logging that dumped the entire session dictionary on every admin request:
 
 ```python
 current_app.logger.info(f" Admin access attempt: session = {dict(session)}")
 ```
 
-This logs the entire session dictionary, which may contain:
-
-- Session IDs
-- User identifiers
-- CSRF tokens
-- Temporary authentication data
+This logged sensitive data including CSRF tokens and authentication identifiers.
 
 #### Risk
 
 - **Log Exposure:** If logs are compromised, session data is visible
 - **Session Hijacking:** Attacker with log access could replay sessions
 
-#### Recommendation
+#### Resolution
 
-**Sanitize Logged Data:**
-
-```python
-# Instead of logging entire session
-current_app.logger.info(f"Admin access attempt: admin_id={session.get('admin_id')}, is_admin={session.get('is_admin')}")
-```
-
-**Or use structured logging:**
+Replaced with sanitized structured logging that only emits non-sensitive identifiers:
 
 ```python
 current_app.logger.info(
-    "Admin access attempt",
-    extra={
-        'admin_id': session.get('admin_id'),
-        'is_admin': session.get('is_admin'),
-        'ip': request.remote_addr
-    }
+    "Admin access attempt: admin_id=%s, is_admin=%s",
+    session.get("admin_id"),
+    session.get("is_admin"),
 )
 ```
 
 #### Priority
 
-ℹ **LOW** - Good practice improvement
+✅ **FIXED**
 
 ---
 

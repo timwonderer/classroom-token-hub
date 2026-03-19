@@ -110,6 +110,14 @@
         <div class="bg-danger-subtle p-3 rounded text-danger">{{ claim.rejection_reason | markdown }}</div>
         {% endif %}
 
+        {% if claim.time_limit_override_reason %}
+        <h6>Time Limit Override:</h6>
+        <div class="alert alert-warning py-2 small">
+          <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;">edit_note</span>
+          {{ claim.time_limit_override_reason | markdown }}
+        </div>
+        {% endif %}
+
         {% if claim.admin_notes %}
         <h6>Admin Notes:</h6>
         <div class="bg-info-subtle p-3 rounded">{{ claim.admin_notes | markdown }}</div>
@@ -185,11 +193,21 @@
         <hr>
 
         <h6>Validation Status:</h6>
-        {% if validation_errors %}
-          {% for error in validation_errors %}
+        {% if hard_validation_errors %}
+          {% for error in hard_validation_errors %}
             <div class="alert alert-danger py-2 small">{{ error }}</div>
           {% endfor %}
-        {% else %}
+        {% endif %}
+        {% if time_limit_errors %}
+          {% for error in time_limit_errors %}
+            <div class="alert alert-warning py-2 small">
+              <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;">schedule</span>
+              {{ error }}
+              <div class="mt-1 text-muted" style="font-size:0.9em;">Override available — see form below.</div>
+            </div>
+          {% endfor %}
+        {% endif %}
+        {% if not validation_errors %}
           <div class="alert alert-success py-2 small"><span class="material-symbols-outlined me-1">check_circle</span>Claim meets all requirements</div>
         {% endif %}
       </div>
@@ -260,6 +278,27 @@
         {{ form.admin_notes.label(class="form-label") }}
         {{ form.admin_notes(class="form-control", rows=3) }}
       </div>
+
+      {% if time_limit_errors %}
+      <div class="mb-3 border border-warning rounded p-3 bg-warning-subtle">
+        <label class="form-label fw-bold text-warning-emphasis">
+          <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;">edit_note</span>
+          Time Limit Override Reason
+          <span class="badge bg-warning text-dark ms-1">Required to approve</span>
+        </label>
+        {{ form.time_limit_override_reason(class="form-control", rows=3,
+            placeholder="Explain why this claim should be approved despite being filed outside the policy time limit...") }}
+        <small class="text-muted mt-1 d-block">
+          This claim was filed outside the policy time limit. Provide a written explanation to override the block and proceed with approval.
+          Your reason will be permanently recorded on the claim.
+        </small>
+        {% if claim.time_limit_override_reason %}
+        <div class="alert alert-info mt-2 py-2 small">
+          <strong>Previously recorded override:</strong> {{ claim.time_limit_override_reason | markdown }}
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
 
       <div class="d-flex gap-2">
         {{ form.submit(class="btn btn-primary") }}
