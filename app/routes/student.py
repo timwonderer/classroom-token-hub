@@ -3042,14 +3042,41 @@ def _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date):
     if not cycle_payments:
         return None
 
-    payments_by_student = {}
-    for payment in cycle_payments:
-        payments_by_student.setdefault(payment.student_id, []).append(payment)
+    # Batch-load and validate related transactions to avoid N+1 queries.
+    transaction_ids = {
+        payment.transaction_id
+        for payment in cycle_payments
+        if getattr(payment, "transaction_id", None) is not None
+    }
+
+    transactions_by_id = {}
+    if transaction_ids:
+        transactions = Transaction.query.filter(Transaction.id.in_(transaction_ids)).all()
+        transactions_by_id = {txn.id: txn for txn in transactions}
 
     valid_payments = []
-    for student_id, student_payments in payments_by_student.items():
-        valid_payments.extend(_filter_valid_rent_payments(student_payments, student_id, join_code))
+    for payment in cycle_payments:
+        txn_id = getattr(payment, "transaction_id", None)
+        if not txn_id:
+            continue
 
+        txn = transactions_by_id.get(txn_id)
+        if txn is None:
+            continue
+
+        # Require a successfully completed transaction; mirror original validation semantics.
+        if getattr(txn, "status", None) != TransactionStatus.COMPLETED:
+            continue
+
+       # Optionally ensure consistency between payment, transaction, and join_code if attributes exist.
+        if hasattr(txn, "student_id") and getattr(payment, "student_id", None) is not None:
+            if txn.student_id != payment.student_id:
+                continue
+        if hasattr(txn, "join_code"):
+            if txn.join_code != join_code:
+                continue
+
+        valid_payments.append(payment)
     if not valid_payments:
         return None
 
