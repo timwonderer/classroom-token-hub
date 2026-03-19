@@ -3053,17 +3053,23 @@ def _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date):
     if not valid_payments:
         return None
 
-    locked_candidates = []
+    # Aggregate base portions per student across all valid payments in the cycle.
+    base_totals_by_student = {}
     for payment in valid_payments:
         late_fee = payment.late_fee_charged or Decimal('0.00')
         base_amount = (payment.amount_paid or Decimal('0.00')) - late_fee
-        if base_amount > Decimal('0.00'):
-            locked_candidates.append(base_amount)
+        if base_amount <= Decimal('0.00'):
+            continue
+        student_id = payment.student_id
+        previous_total = base_totals_by_student.get(student_id, Decimal('0.00'))
+        base_totals_by_student[student_id] = previous_total + base_amount
 
-    if not locked_candidates:
+    if not base_totals_by_student:
         return None
 
-    return max(locked_candidates)
+    # The locked base rent for the join_code cycle is the maximum total base amount
+    # observed for any single student in that cycle.
+    return max(base_totals_by_student.values())
 
 
 def _get_effective_rent_amount_for_coverage_period(settings, payments, coverage_due_date, join_code=None):
