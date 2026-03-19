@@ -1350,10 +1350,16 @@ def dashboard():
 
             total_paid = sum(p.amount_paid for p in payments) if payments else Decimal('0.00')
             paid_by_grace = _total_paid_by_grace(payments, grace_end_date_for_status)
+            effective_rent_amount = _get_effective_rent_amount_for_coverage_period(
+                rent_settings,
+                payments,
+                coverage_due_date,
+                join_code=join_code,
+            )
             late_fee = Decimal('0.00')
-            if rent_is_active and now > grace_end_date_for_status and paid_by_grace < rent_settings.rent_amount:
+            if rent_is_active and now > grace_end_date_for_status and paid_by_grace < effective_rent_amount:
                 late_fee = rent_settings.late_fee
-            total_due = rent_settings.rent_amount + late_fee if rent_is_active else Decimal('0.00')
+            total_due = effective_rent_amount + late_fee if rent_is_active else Decimal('0.00')
             is_paid = total_paid >= total_due if rent_is_active else False
 
             if rent_is_active and not is_paid:
@@ -3023,6 +3029,78 @@ def _total_paid_by_grace(payments, grace_end_date):
     )
 
 
+def _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date):
+    """Return locked base-rent amount for a join_code coverage cycle, if available."""
+    if not join_code or not coverage_due_date:
+        return None
+
+    cycle_payments = RentPayment.query.filter(
+        RentPayment.join_code == join_code,
+        RentPayment.coverage_month == coverage_due_date.month,
+        RentPayment.coverage_year == coverage_due_date.year,
+    ).all()
+    if not cycle_payments:
+        return None
+
+    payments_by_student = {}
+    for payment in cycle_payments:
+        payments_by_student.setdefault(payment.student_id, []).append(payment)
+
+    valid_payments = []
+    for student_id, student_payments in payments_by_student.items():
+        valid_payments.extend(_filter_valid_rent_payments(student_payments, student_id, join_code))
+
+    if not valid_payments:
+        return None
+
+    locked_candidates = []
+    for payment in valid_payments:
+        late_fee = Decimal(str(payment.late_fee_charged or Decimal('0.00')))
+        base_amount = Decimal(str(payment.amount_paid or Decimal('0.00'))) - late_fee
+        if base_amount > Decimal('0.00'):
+            locked_candidates.append(base_amount)
+
+    if not locked_candidates:
+        return None
+
+    return max(locked_candidates)
+
+
+def _get_effective_rent_amount_for_coverage_period(settings, payments, coverage_due_date, join_code=None):
+    """
+    Return the rent amount that should apply for a specific coverage period.
+
+    Rebalance updates should apply on the next cycle. If rent amount was updated
+    after the current coverage period started and the student already paid toward
+    that period before the update, keep the pre-update paid amount as the base due
+    threshold for this period so students are not retroactively marked late.
+    """
+    current_amount = Decimal(str(settings.rent_amount or Decimal('0.00')))
+
+    locked_amount = _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date)
+    if locked_amount is not None:
+        return locked_amount
+
+    if not coverage_due_date or not payments:
+        return current_amount
+
+    updated_at = ensure_utc(getattr(settings, 'updated_at', None))
+    if not updated_at or updated_at <= ensure_utc(coverage_due_date):
+        return current_amount
+
+    paid_before_update = sum(
+        (
+            p.amount_paid for p in payments
+            if p.payment_date and ensure_utc(p.payment_date) < updated_at
+        ),
+        Decimal('0.00')
+    )
+    if paid_before_update <= Decimal('0.00'):
+        return current_amount
+
+    return min(current_amount, paid_before_update)
+
+
 def _filter_valid_rent_payments(payments, student_id, join_code):
     """Return payments that have a matching, non-void rent transaction."""
     if not payments:
@@ -3073,7 +3151,7 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
     return valid_payments
 
 
-def _is_coverage_period_paid(settings, valid_payments, coverage_due_date, include_late_fee=True):
+def _is_coverage_period_paid(settings, valid_payments, coverage_due_date, include_late_fee=True, join_code=None):
     """
     Return True when a coverage period is fully paid.
 
@@ -3083,7 +3161,13 @@ def _is_coverage_period_paid(settings, valid_payments, coverage_due_date, includ
     """
     if not settings or not coverage_due_date:
         return False
-    if settings.rent_amount <= Decimal('0.00'):
+    effective_rent_amount = _get_effective_rent_amount_for_coverage_period(
+        settings,
+        valid_payments,
+        coverage_due_date,
+        join_code=join_code,
+    )
+    if effective_rent_amount <= Decimal('0.00'):
         return True
     if not valid_payments:
         return False
@@ -3092,8 +3176,8 @@ def _is_coverage_period_paid(settings, valid_payments, coverage_due_date, includ
     grace_for_coverage = coverage_due_date + timedelta(days=settings.grace_period_days)
     paid_by_grace = _total_paid_by_grace(valid_payments, grace_for_coverage)
 
-    required_total = settings.rent_amount
-    if include_late_fee and paid_by_grace < settings.rent_amount:
+    required_total = effective_rent_amount
+    if include_late_fee and paid_by_grace < effective_rent_amount:
         required_total += settings.late_fee
 
     return total_paid >= required_total
@@ -3132,6 +3216,7 @@ def _is_student_coverage_period_paid(
         valid_payments,
         coverage_due_date,
         include_late_fee=include_late_fee,
+        join_code=join_code,
     )
 
 
@@ -3368,11 +3453,17 @@ def rent():
     total_paid = sum(p.amount_paid for p in payments) if payments else Decimal('0.00')
 
     paid_by_grace = _total_paid_by_grace(payments, grace_end_date_for_status)
+    effective_rent_amount = _get_effective_rent_amount_for_coverage_period(
+        settings,
+        payments,
+        coverage_due_date,
+        join_code=join_code,
+    )
     late_fee = Decimal('0.00')
-    if rent_is_active and now > grace_end_date_for_status and paid_by_grace < settings.rent_amount:
+    if rent_is_active and now > grace_end_date_for_status and paid_by_grace < effective_rent_amount:
         late_fee = settings.late_fee
 
-    total_due = settings.rent_amount + late_fee if rent_is_active else Decimal('0.00')
+    total_due = effective_rent_amount + late_fee if rent_is_active else Decimal('0.00')
     is_paid = total_paid >= total_due if rent_is_active else False
     is_late = now > grace_end_date_for_status and not is_paid if rent_is_active else False
     remaining_amount = max(Decimal('0.00'), total_due - total_paid) if rent_is_active else Decimal('0.00')
@@ -3550,7 +3641,13 @@ def rent_pay(period):
     if payment_due_date and payment_due_date != due_date:
         grace_end_date_for_payment = payment_due_date + timedelta(days=settings.grace_period_days)
     paid_by_grace = _total_paid_by_grace(existing_payments, grace_end_date_for_payment)
-    is_late = now > grace_end_date_for_payment and paid_by_grace < settings.rent_amount
+    effective_rent_amount = _get_effective_rent_amount_for_coverage_period(
+        settings,
+        existing_payments,
+        payment_due_date,
+        join_code=join_code,
+    )
+    is_late = now > grace_end_date_for_payment and paid_by_grace < effective_rent_amount
 
     # Calculate late fee if applicable
     late_fee = Decimal('0.00')
@@ -3558,7 +3655,7 @@ def rent_pay(period):
         late_fee = settings.late_fee
 
     # Total amount due (rent + late fee if applicable)
-    total_due = settings.rent_amount + late_fee
+    total_due = effective_rent_amount + late_fee
 
     # Calculate remaining amount to pay
     remaining_amount = total_due - total_paid_so_far

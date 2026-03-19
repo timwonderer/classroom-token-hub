@@ -4,7 +4,9 @@ from decimal import Decimal
 
 from app import db
 from app.routes.admin import _build_rebalance_preview, _get_transaction_weekly_premium, _inverse_weekly_amount
-from app.models import Admin, EconomySnapshot, FeatureSettings, InsurancePolicy, PayrollSettings, RentSettings
+from app.routes.student import _get_effective_rent_amount_for_coverage_period, _is_coverage_period_paid
+from app.models import Admin, EconomySnapshot, FeatureSettings, InsurancePolicy, PayrollSettings, RentPayment, RentSettings, Student, Transaction
+from app.hash_utils import get_random_salt, hash_username
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 from app.utils.economy_policy import (
     get_feature_settings_row,
@@ -358,6 +360,81 @@ def test_immediate_rebalance_updates_rent_setting(client):
     assert response.status_code == 302
     db.session.refresh(rent_settings)
     assert rent_settings.rent_amount == expected_rent
+
+
+def test_rebalanced_rent_amount_does_not_backdate_current_coverage_due(client):
+    _, _, rent_settings = _create_admin_with_block()
+    rent_settings.rent_amount = Decimal('620.00')
+    rent_settings.updated_at = datetime(2026, 3, 19, 12, 0, tzinfo=timezone.utc)
+
+    coverage_due_date = datetime(2026, 3, 1, 0, 0, tzinfo=timezone.utc)
+    prior_cycle_payment = RentPayment(
+        amount_paid=Decimal('500.00'),
+        payment_date=datetime(2026, 3, 10, 8, 0, tzinfo=timezone.utc),
+    )
+
+    assert _is_coverage_period_paid(
+        rent_settings,
+        [prior_cycle_payment],
+        coverage_due_date,
+        include_late_fee=False,
+    )
+
+
+def test_join_code_cycle_locks_rent_rate_after_first_payment(client):
+    admin, _, rent_settings = _create_admin_with_block()
+    join_code = "LOCKA1"
+    coverage_due_date = datetime(2026, 3, 1, 0, 0, tzinfo=timezone.utc)
+
+    salt = get_random_salt()
+    payer = Student(
+        first_name="Rate",
+        last_initial="L",
+        block="A",
+        salt=salt,
+        username_hash=hash_username("rate-lock-payer", salt),
+        pin_hash="test-pin",
+    )
+    db.session.add(payer)
+    db.session.flush()
+
+    payment_date = datetime(2026, 3, 5, 8, 0, tzinfo=timezone.utc)
+    db.session.add(
+        RentPayment(
+            student_id=payer.id,
+            period="A",
+            join_code=join_code,
+            amount_paid=Decimal("500.00"),
+            late_fee_charged=Decimal("0.00"),
+            payment_date=payment_date,
+            coverage_month=coverage_due_date.month,
+            coverage_year=coverage_due_date.year,
+        )
+    )
+    db.session.add(
+        Transaction(
+            student_id=payer.id,
+            teacher_id=admin.id,
+            join_code=join_code,
+            type="Rent Payment",
+            amount=Decimal("-500.00"),
+            timestamp=payment_date,
+            description="Rent payment",
+        )
+    )
+    db.session.commit()
+
+    rent_settings.rent_amount = Decimal("620.00")
+    rent_settings.updated_at = datetime(2026, 3, 19, 12, 0, tzinfo=timezone.utc)
+
+    effective_amount = _get_effective_rent_amount_for_coverage_period(
+        rent_settings,
+        payments=[],
+        coverage_due_date=coverage_due_date,
+        join_code=join_code,
+    )
+
+    assert effective_amount == Decimal("500.00")
 
 
 def test_invalid_activation_mode_is_rejected(client):

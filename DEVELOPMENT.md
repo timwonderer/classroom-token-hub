@@ -1,6 +1,6 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-03-04
+**Last Updated:** 2026-03-19
 **Current Version:** 1.9.0
 **Target:** 1.10.0 Future Enhancements
 
@@ -40,6 +40,7 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 - Fixed student recovery identity updates to preserve claimed class seats, preventing post-claim "No class selected" errors on next login.
 - Updated teacher reset flow to redirect to Student Detail after generating a reset code, where the active code remains visible until expiration.
 - Improved mobile responsiveness for student recovery pages by tightening spacing and collapsing the right panel on small screens.
+- Fixed economy rebalance rent updates so each join code locks a cycle's base rent rate once the first valid payment is recorded; mid-cycle changes now roll forward to the next cycle (late fees still apply when overdue).
 
 ---
 
