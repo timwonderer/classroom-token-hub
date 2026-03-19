@@ -3087,26 +3087,11 @@ def _get_effective_rent_amount_for_coverage_period(settings, payments, coverage_
     if locked_amount is not None:
         return locked_amount
 
-    if not coverage_due_date or not payments:
-        return current_amount
-
-    updated_at = ensure_utc(getattr(settings, 'updated_at', None))
-    if not updated_at or updated_at <= ensure_utc(coverage_due_date):
-        return current_amount
-
-    paid_before_update = sum(
-        (
-            p.amount_paid for p in payments
-            if p.payment_date and ensure_utc(p.payment_date) < updated_at
-        ),
-        Decimal('0.00')
-    )
-    if paid_before_update <= Decimal('0.00'):
-        return current_amount
-
-    return min(current_amount, paid_before_update)
-
-
+    # For non-locked cycles, always use the current configured rent amount as the
+    # effective base for the coverage period. Mid-cycle updates are handled by the
+    # join-code locking logic above; we intentionally avoid reducing the effective
+    # rent below the actual cycle rate based on partial payments.
+    return current_amount
 def _filter_valid_rent_payments(payments, student_id, join_code):
     """Return payments that have a matching, non-void rent transaction."""
     if not payments:
