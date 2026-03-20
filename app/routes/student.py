@@ -3030,73 +3030,47 @@ def _total_paid_by_grace(payments, grace_end_date):
 
 
 def _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date):
-    """Return locked base-rent amount for a join_code coverage cycle, if available."""
+    """Return the locked base-rent amount for a join_code coverage cycle.
+
+    The rate is locked at the FIRST valid payer's base amount, preventing
+    mid-cycle rate changes from affecting students already in the cycle.
+    Uses timestamp-based transaction matching (same approach as the rest of
+    the rent payment validation code) since RentPayment has no transaction_id
+    column.
+    """
     if not join_code or not coverage_due_date:
         return None
 
+    # Order by payment_date ascending so the first valid payment is found first.
     cycle_payments = RentPayment.query.filter(
         RentPayment.join_code == join_code,
         RentPayment.coverage_month == coverage_due_date.month,
         RentPayment.coverage_year == coverage_due_date.year,
-    ).all()
+    ).order_by(RentPayment.payment_date.asc()).all()
     if not cycle_payments:
         return None
 
-    # Batch-load and validate related transactions to avoid N+1 queries.
-    transaction_ids = {
-        payment.transaction_id
-        for payment in cycle_payments
-        if getattr(payment, "transaction_id", None) is not None
-    }
-
-    transactions_by_id = {}
-    if transaction_ids:
-        transactions = Transaction.query.filter(Transaction.id.in_(transaction_ids)).all()
-        transactions_by_id = {txn.id: txn for txn in transactions}
-
-    valid_payments = []
+    # Walk payments in chronological order; return the base amount of the
+    # first one backed by a non-void Rent Payment transaction.
     for payment in cycle_payments:
-        txn_id = getattr(payment, "transaction_id", None)
-        if not txn_id:
+        txn = Transaction.query.filter(
+            Transaction.student_id == payment.student_id,
+            Transaction.type == 'Rent Payment',
+            Transaction.join_code == join_code,
+            Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+            Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+            Transaction.amount == -payment.amount_paid,
+        ).first()
+
+        if txn is None or txn.is_void:
             continue
 
-        txn = transactions_by_id.get(txn_id)
-        if txn is None:
-            continue
-
-        # Require a successfully completed transaction; mirror original validation semantics.
-        if getattr(txn, "status", None) != TransactionStatus.COMPLETED:
-            continue
-
-       # Optionally ensure consistency between payment, transaction, and join_code if attributes exist.
-        if hasattr(txn, "student_id") and getattr(payment, "student_id", None) is not None:
-            if txn.student_id != payment.student_id:
-                continue
-        if hasattr(txn, "join_code"):
-            if txn.join_code != join_code:
-                continue
-
-        valid_payments.append(payment)
-    if not valid_payments:
-        return None
-
-    # Aggregate base portions per student across all valid payments in the cycle.
-    base_totals_by_student = {}
-    for payment in valid_payments:
         late_fee = payment.late_fee_charged or Decimal('0.00')
         base_amount = (payment.amount_paid or Decimal('0.00')) - late_fee
-        if base_amount <= Decimal('0.00'):
-            continue
-        student_id = payment.student_id
-        previous_total = base_totals_by_student.get(student_id, Decimal('0.00'))
-        base_totals_by_student[student_id] = previous_total + base_amount
+        if base_amount > Decimal('0.00'):
+            return base_amount
 
-    if not base_totals_by_student:
-        return None
-
-    # The locked base rent for the join_code cycle is the maximum total base amount
-    # observed for any single student in that cycle.
-    return max(base_totals_by_student.values())
+    return None
 
 
 def _get_effective_rent_amount_for_coverage_period(settings, payments, coverage_due_date, join_code=None):
@@ -3114,10 +3088,25 @@ def _get_effective_rent_amount_for_coverage_period(settings, payments, coverage_
     if locked_amount is not None:
         return locked_amount
 
-    # For non-locked cycles, always use the current configured rent amount as the
-    # effective base for the coverage period. Mid-cycle updates are handled by the
-    # join-code locking logic above; we intentionally avoid reducing the effective
-    # rent below the actual cycle rate based on partial payments.
+    # Fallback: if settings were updated AFTER the student's earliest payment
+    # for this period, the rate was raised mid-cycle. Use the total base amount
+    # the student paid (their rate at payment time) as the effective threshold.
+    if payments:
+        updated_at = getattr(settings, 'updated_at', None)
+        if updated_at:
+            payment_dates = [
+                ensure_utc(p.payment_date) for p in payments if p.payment_date
+            ]
+            if payment_dates:
+                earliest = min(payment_dates)
+                if ensure_utc(updated_at) > earliest:
+                    base_paid = sum(
+                        (p.amount_paid or Decimal('0.00')) - (p.late_fee_charged or Decimal('0.00'))
+                        for p in payments
+                    )
+                    if base_paid > Decimal('0.00'):
+                        return base_paid
+
     return current_amount
 def _filter_valid_rent_payments(payments, student_id, join_code):
     """Return payments that have a matching, non-void rent transaction."""
@@ -3201,6 +3190,20 @@ def _is_coverage_period_paid(settings, valid_payments, coverage_due_date, includ
     return total_paid >= required_total
 
 
+def _has_active_rent_waiver(student_id, join_code, coverage_due_date):
+    """Return True when the student has an active waiver covering the given coverage period."""
+    from app.models import RentWaiver
+    if not student_id or not coverage_due_date:
+        return False
+    waiver = RentWaiver.query.filter(
+        RentWaiver.student_id == student_id,
+        RentWaiver.join_code == join_code,
+        RentWaiver.waiver_start_date <= coverage_due_date,
+        RentWaiver.waiver_end_date >= coverage_due_date,
+    ).first()
+    return waiver is not None
+
+
 def _is_student_coverage_period_paid(
     settings,
     student_id,
@@ -3209,12 +3212,16 @@ def _is_student_coverage_period_paid(
     coverage_due_date,
     include_late_fee=True,
 ):
-    """Return True when a student's specific coverage period is fully paid."""
+    """Return True when a student's specific coverage period is fully paid or waived."""
     if not settings or not coverage_due_date or not join_code:
         return False
     normalized_period = (period or '').strip().upper()
     if not normalized_period:
         return False
+
+    # A waiver exempts the student from paying rent for this coverage period.
+    if _has_active_rent_waiver(student_id, join_code, coverage_due_date):
+        return True
 
     coverage_payments = RentPayment.query.filter(
         RentPayment.student_id == student_id,

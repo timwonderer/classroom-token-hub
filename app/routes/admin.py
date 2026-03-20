@@ -6008,15 +6008,24 @@ def rent_settings():
     # Get statistics
     total_students = _scoped_students().filter_by(is_rent_enabled=True).count()
 
-    # Get active waivers
+    # Get active waivers scoped to the current join_code so teachers only see
+    # waivers for the class period they are currently viewing.
     now = utc_now()
-    active_waivers = (
+    current_join_code = session.get('current_join_code')
+    active_waivers_q = (
         RentWaiver.query
         .join(Student, RentWaiver.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(RentWaiver.waiver_end_date >= now)
-        .all()
     )
+    if current_join_code:
+        active_waivers_q = active_waivers_q.filter(
+            db.or_(
+                RentWaiver.join_code == current_join_code,
+                RentWaiver.join_code.is_(None),
+            )
+        )
+    active_waivers = active_waivers_q.all()
 
     # Get all students for waiver form
     all_students = _scoped_students().order_by(Student.first_name).all()
@@ -6268,26 +6277,58 @@ def rent_settings():
 @admin_required
 def add_rent_waiver():
     """Add rent waiver for selected students."""
+    from app.routes.student import _calculate_rent_coverage_due_date, _calculate_rent_timeline
+
     student_ids = request.form.getlist('student_ids')
     periods_count = int(request.form.get('periods_count', 1))
     reason = request.form.get('reason', '')
+    settings_block = request.form.get('settings_block', '')
 
     if not student_ids:
         flash("Please select at least one student.", "danger")
         return redirect(url_for('admin.rent_settings'))
 
-    # Get rent settings to calculate waiver period
     admin_id = session.get("admin_id")
-    settings = RentSettings.query.filter_by(teacher_id=admin_id).first()
+    join_code = session.get('current_join_code')
+
+    # Resolve the block and join_code for this waiver.
+    if not settings_block and join_code:
+        tb = TeacherBlock.query.filter_by(teacher_id=admin_id, join_code=join_code).first()
+        if tb:
+            settings_block = tb.block
+
+    # Get rent settings scoped to the correct block.
+    settings = None
+    if settings_block:
+        settings = RentSettings.query.filter_by(
+            teacher_id=admin_id, block=settings_block
+        ).first()
+    if not settings:
+        settings = RentSettings.query.filter_by(teacher_id=admin_id).first()
     if not settings:
         flash("Rent settings not configured.", "danger")
         return redirect(url_for('admin.rent_settings'))
 
-    # Calculate waiver end date based on frequency
-    now = utc_now()
-    waiver_start = now
+    # Resolve join_code from the block if it wasn't in the session.
+    if not join_code and settings_block:
+        tb = TeacherBlock.query.filter_by(
+            teacher_id=admin_id, block=settings_block
+        ).first()
+        if tb:
+            join_code = tb.join_code
 
-    # Calculate days per period based on frequency type
+    # Waiver window: start from the current coverage due date so the waiver
+    # is anchored to actual rent periods rather than wall-clock days.
+    now = utc_now()
+    timeline = _calculate_rent_timeline(settings, now)
+    coverage_due_date = timeline.get('coverage_due_date') or timeline.get('upcoming_due_date')
+
+    if coverage_due_date:
+        waiver_start = coverage_due_date
+    else:
+        waiver_start = now
+
+    # Advance end date by one full rent period per waived period count.
     if settings.frequency_type == 'daily':
         days_per_period = 1
     elif settings.frequency_type == 'weekly':
@@ -6309,28 +6350,26 @@ def add_rent_waiver():
     total_days = days_per_period * periods_count
     waiver_end = waiver_start + timedelta(days=total_days)
 
-    # Get current admin
-    admin_id = session.get('admin_id')
-
-    # Create waivers for each student
+    # Create waivers for each student, scoped to the current join_code.
     count = 0
     for student_id in student_ids:
         student = _get_student_or_404(int(student_id))
         if student:
             waiver = RentWaiver(
                 student_id=student.id,
+                join_code=join_code,
                 waiver_start_date=waiver_start,
                 waiver_end_date=waiver_end,
                 periods_count=periods_count,
                 reason=reason,
-                created_by_admin_id=admin_id
+                created_by_admin_id=admin_id,
             )
             db.session.add(waiver)
             count += 1
 
     db.session.commit()
     flash(f"Rent waiver added for {count} student(s) for {periods_count} period(s).", "success")
-    return redirect(url_for('admin.rent_settings'))
+    return redirect(url_for('admin.rent_settings', settings_block=settings_block))
 
 
 @admin_bp.route('/rent-waiver/<int:waiver_id>/remove', methods=['POST'])
@@ -6344,6 +6383,161 @@ def remove_rent_waiver(waiver_id):
     db.session.commit()
     flash(f"Rent waiver removed for {student_name}.", "success")
     return redirect(url_for('admin.rent_settings'))
+
+
+@admin_bp.route('/rent/reverse-cycle-penalties', methods=['POST'])
+@admin_required
+def reverse_cycle_penalties():
+    """Reverse misapplied rent penalties for the current coverage cycle.
+
+    When a teacher changes the rent rate mid-cycle, students who paid at the
+    original rate may have been incorrectly charged late fees (because the
+    system saw their payment as insufficient at the new rate). This endpoint
+    refunds those late fees and corrects the RentPayment records so the locked
+    rate (first valid payer's base amount) is enforced retroactively.
+
+    A positive 'Rent Late Fee Reversal' transaction is created for every
+    student whose late_fee_charged should not have been applied.
+    """
+    from app.routes.student import (
+        _get_locked_rent_amount_for_join_code_cycle,
+        _calculate_rent_coverage_due_date,
+        _calculate_rent_timeline,
+        RENT_PAYMENT_MATCH_TOLERANCE_SECONDS,
+    )
+
+    admin_id = session.get('admin_id')
+    join_code = session.get('current_join_code')
+    settings_block = request.form.get('settings_block') or request.args.get('settings_block')
+
+    if not join_code:
+        flash("No class period selected. Please select a class first.", "error")
+        return redirect(url_for('admin.rent_settings'))
+
+    # Resolve RentSettings for the current join_code
+    teacher_block = TeacherBlock.query.filter_by(
+        teacher_id=admin_id, join_code=join_code
+    ).first()
+    if not teacher_block:
+        flash("Could not find a class matching the current session.", "error")
+        return redirect(url_for('admin.rent_settings'))
+
+    block = teacher_block.block
+    rent_settings = RentSettings.query.filter_by(
+        teacher_id=admin_id, block=block
+    ).first()
+    if not rent_settings or not rent_settings.is_enabled:
+        flash("Rent system is not enabled for this class.", "info")
+        return redirect(url_for('admin.rent_settings', settings_block=settings_block or block))
+
+    now = utc_now()
+    timeline = _calculate_rent_timeline(rent_settings, now)
+    coverage_due_date = timeline.get('coverage_due_date')
+    if not coverage_due_date:
+        flash("No active coverage period found for this class.", "info")
+        return redirect(url_for('admin.rent_settings', settings_block=settings_block or block))
+
+    # Determine the locked (correct) base rate for this cycle.
+    locked_rate = _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date)
+    if locked_rate is None:
+        flash("No valid payments found for the current cycle — nothing to reverse.", "info")
+        return redirect(url_for('admin.rent_settings', settings_block=settings_block or block))
+
+    grace_end_date = coverage_due_date + timedelta(days=rent_settings.grace_period_days)
+
+    # Find all RentPayment records for this join_code / coverage period.
+    cycle_payments = RentPayment.query.filter(
+        RentPayment.join_code == join_code,
+        RentPayment.coverage_month == coverage_due_date.month,
+        RentPayment.coverage_year == coverage_due_date.year,
+    ).order_by(RentPayment.student_id, RentPayment.payment_date).all()
+
+    # Group payments by student so we can evaluate per-student totals.
+    from collections import defaultdict
+    payments_by_student = defaultdict(list)
+    for pmt in cycle_payments:
+        # Validate payment against a non-void transaction (timestamp-based).
+        txn = Transaction.query.filter(
+            Transaction.student_id == pmt.student_id,
+            Transaction.type == 'Rent Payment',
+            Transaction.join_code == join_code,
+            Transaction.timestamp >= pmt.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+            Transaction.timestamp <= pmt.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+            Transaction.amount == -pmt.amount_paid,
+        ).first()
+        if txn and not txn.is_void:
+            payments_by_student[pmt.student_id].append(pmt)
+
+    students_fixed = 0
+    total_refunded = Decimal('0.00')
+
+    for student_id, pmts in payments_by_student.items():
+        student = Student.query.get(student_id)
+        if not student:
+            continue
+
+        # Calculate what was paid on time (by grace) vs total paid.
+        paid_by_grace = sum(
+            p.amount_paid for p in pmts
+            if p.payment_date and ensure_utc(p.payment_date) <= ensure_utc(grace_end_date)
+        )
+        total_paid = sum(p.amount_paid for p in pmts)
+        total_late_fee_charged = sum(
+            p.late_fee_charged or Decimal('0.00') for p in pmts
+        )
+
+        if total_late_fee_charged <= Decimal('0.00'):
+            # No late fees were charged for this student; nothing to reverse.
+            continue
+
+        # A late fee is misapplied when the student paid the locked rate on
+        # time but was flagged as late because the rate had been raised above
+        # the locked amount.
+        # Condition: they paid >= locked_rate by grace but were still charged
+        # a late fee (because the system then used the elevated rate).
+        if paid_by_grace >= locked_rate:
+            refund_amount = total_late_fee_charged
+
+            # Create a refund transaction to restore the wrongly deducted fee.
+            refund_txn = Transaction(
+                student_id=student_id,
+                teacher_id=admin_id,
+                join_code=join_code,
+                amount=refund_amount,
+                account_type='checking',
+                status=TransactionStatus.PENDING,
+                type='Rent Late Fee Reversal',
+                description=(
+                    f'Late fee reversal: rate was raised mid-cycle for '
+                    f'{coverage_due_date.strftime("%B %Y")} (locked at ${locked_rate:.2f})'
+                ),
+            )
+            db.session.add(refund_txn)
+
+            # Correct each RentPayment record for this student.
+            for pmt in pmts:
+                if pmt.late_fee_charged and pmt.late_fee_charged > Decimal('0.00'):
+                    pmt.late_fee_charged = Decimal('0.00')
+                    pmt.was_late = False
+
+            students_fixed += 1
+            total_refunded += refund_amount
+
+    if students_fixed:
+        db.session.commit()
+        flash(
+            f"Reversed misapplied late fees for {students_fixed} student(s). "
+            f"Total refunded: ${total_refunded:.2f}.",
+            "success",
+        )
+    else:
+        flash(
+            "No misapplied penalties found for the current cycle at the locked rate "
+            f"(${locked_rate:.2f}). Students who were genuinely late keep their fees.",
+            "info",
+        )
+
+    return redirect(url_for('admin.rent_settings', settings_block=settings_block or block))
 
 
 # -------------------- INSURANCE MANAGEMENT --------------------
