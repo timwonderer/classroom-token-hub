@@ -73,6 +73,14 @@ from app.utils.economy_policy import (
     get_active_policy_mode,
     normalize_policy_mode,
 )
+from app.utils.economy_rebalance import (
+    REBALANCE_ACTIVATION_IMMEDIATE,
+    REBALANCE_ACTIVATION_LEGACY_NEXT_PAYROLL,
+    REBALANCE_ACTIVATION_NEXT_RENEWAL,
+    activate_due_rebalances,
+    apply_rebalance_changes,
+    prepare_scheduled_rebalance_changes,
+)
 from app.utils.claim_credentials import (
     compute_primary_claim_hash,
     match_claim_hash,
@@ -577,6 +585,7 @@ def _populate_policy_from_form(policy, form, *, teacher_id=None, block=None, nex
     policy.max_claims_period = FREQUENCY_TO_CLAIM_PERIOD.get(form.charge_frequency.data, 'month')
     policy.max_claim_amount = None if (is_non_monetary or is_transaction) else form.max_claim_amount.data
     policy.max_payout_per_period = None if is_non_monetary else form.max_payout_per_period.data
+    policy.bypass_cwi_warnings = form.bypass_cwi_warnings.data
     policy.claim_type = product_claim_type
     policy.is_monetary = not is_non_monetary
     policy.no_repurchase_after_cancel = form.no_repurchase_after_cancel.data
@@ -1768,7 +1777,99 @@ def _max_alignment(statuses):
     return max(statuses, key=lambda item: rank.get(item, 0)) if statuses else 'aligned'
 
 
-def _build_policy_summary(admin_id, selected_block, analysis, rent_settings, insurance_policies, fines):
+def _warning_feature_prefixes_for_policy(policy):
+    title = getattr(policy, 'title', '')
+    return {
+        f'Insurance: {title}',
+        f'Coverage: {title}',
+        f'Period Cap: {title}',
+        f'Waiting Period: {title}',
+    }
+
+
+def _is_actionable_economy_warning(warning):
+    level = getattr(getattr(warning, 'level', None), 'value', None) or getattr(warning, 'level', None)
+    return level in {'critical', 'warning'}
+
+
+def _is_bypassed_economy_warning(warning, rent_settings, insurance_policies, store_items):
+    feature = getattr(warning, 'feature', '')
+    if feature == 'Rent' and rent_settings and getattr(rent_settings, 'bypass_cwi_warnings', False):
+        return True
+
+    for policy in insurance_policies or []:
+        if getattr(policy, 'bypass_cwi_warnings', False) and feature in _warning_feature_prefixes_for_policy(policy):
+            return True
+
+    for item in store_items or []:
+        if getattr(item, 'bypass_cwi_warnings', False) and feature == f'Store Item: {item.name}':
+            return True
+
+    return False
+
+
+def _filter_economy_health_warnings(analysis, rent_settings, insurance_policies, fines, store_items, *, selected_block=None):
+    filtered = []
+    for warning in analysis.warnings if analysis else []:
+        if not _is_actionable_economy_warning(warning):
+            continue
+        if _is_bypassed_economy_warning(warning, rent_settings, insurance_policies, store_items):
+            continue
+        filtered.append(warning)
+
+    warnings_by_level = {'critical': [], 'warning': [], 'info': []}
+    warnings_by_feature = {}
+    for warning in filtered:
+        warnings_by_level[warning.level.value].append(warning)
+        warnings_by_feature.setdefault(warning.feature, []).append(warning)
+
+    insurance_prefixes = set()
+    for policy in insurance_policies or []:
+        if getattr(policy, 'bypass_cwi_warnings', False):
+            continue
+        insurance_prefixes.update(_warning_feature_prefixes_for_policy(policy))
+
+    summary_rows = []
+
+    def add_summary(label, count, link_label, link_href):
+        if count <= 0:
+            return
+        summary_rows.append({
+            'label': label,
+            'count': count,
+            'link_label': link_label,
+            'link_href': link_href,
+        })
+
+    add_summary(
+        'Rent',
+        len([warning for warning in filtered if warning.feature == 'Rent']) if rent_settings else 0,
+        'Adjust rent',
+        url_for('admin.rent_settings', settings_block=selected_block) if rent_settings else None,
+    )
+    add_summary(
+        'Insurance',
+        len([warning for warning in filtered if warning.feature in insurance_prefixes]),
+        'Review insurance',
+        url_for('admin.insurance_management', settings_block=selected_block),
+    )
+    add_summary(
+        'Fees',
+        len([warning for warning in filtered if warning.feature.startswith('Fine:')]) if fines else 0,
+        'Review payroll fines',
+        url_for('admin.payroll', cwi_block=selected_block),
+    )
+    add_summary(
+        'Store',
+        len([warning for warning in filtered if warning.feature.startswith('Store Item:')]) if store_items else 0,
+        'Update store',
+        url_for('admin.store_management'),
+    )
+
+    return filtered, warnings_by_level, warnings_by_feature, summary_rows
+
+
+def _build_policy_summary(admin_id, selected_block, analysis, rent_settings, insurance_policies, fines, *, warnings=None):
     settings_row = get_feature_settings_row(admin_id, block=selected_block, create=False)
     policy_mode = normalize_policy_mode(getattr(settings_row, 'economy_policy_mode', 'default'))
 
@@ -1785,10 +1886,14 @@ def _build_policy_summary(admin_id, selected_block, analysis, rent_settings, ins
             'warning_count': len(warnings),
         })
 
-    warnings = analysis.warnings if analysis else []
-    add_category('rent', 'Rent', [w for w in warnings if w.feature == 'Rent'] if rent_settings else [])
-    add_category('insurance', 'Insurance', [w for w in warnings if w.feature.startswith('Insurance:')] if insurance_policies else [])
-    add_category('fine', 'Fees', [w for w in warnings if w.feature.startswith('Fine:')] if fines else [])
+    warning_items = warnings if warnings is not None else (analysis.warnings if analysis else [])
+    add_category('rent', 'Rent', [w for w in warning_items if w.feature == 'Rent'] if rent_settings else [])
+    add_category(
+        'insurance',
+        'Insurance',
+        [w for w in warning_items if w.feature.startswith(('Insurance:', 'Coverage:', 'Period Cap:', 'Waiting Period:'))] if insurance_policies else []
+    )
+    add_category('fine', 'Fees', [w for w in warning_items if w.feature.startswith('Fine:')] if fines else [])
     overall_status = _max_alignment([category['status'] for category in categories])
 
     return {
@@ -1904,40 +2009,7 @@ def _load_economy_rebalance_context(admin_id, selected_block):
 
 
 def _apply_rebalance_plan(admin_id, settings_row, change_plan, activation_mode):
-    applied_labels = []
-
-    for change in change_plan:
-        change_type = change.get('type')
-        if change_type == 'rent':
-            rent_settings = None
-            if change.get('block'):
-                rent_settings = RentSettings.query.filter_by(
-                    teacher_id=admin_id,
-                    block=change.get('block'),
-                    is_enabled=True,
-                ).first()
-            if not rent_settings:
-                rent_settings = RentSettings.query.filter_by(
-                    teacher_id=admin_id,
-                    block=None,
-                    is_enabled=True,
-                ).first()
-            if rent_settings:
-                rent_settings.rent_amount = Decimal(str(change.get('new_value')))
-                applied_labels.append('Rent')
-        elif change_type == 'insurance':
-            policy = InsurancePolicy.query.filter_by(
-                teacher_id=admin_id,
-                id=change.get('policy_id'),
-                is_active=True,
-            ).first()
-            if policy:
-                policy.premium = Decimal(str(change.get('new_value')))
-                applied_labels.append(f"Insurance: {policy.title}")
-
-    settings_row.economy_pending_rebalance_json = None
-    settings_row.economy_last_rebalanced_at = utc_now()
-    settings_row.economy_last_rebalanced_by = admin_id
+    applied_labels = apply_rebalance_changes(admin_id, settings_row, change_plan, activation_mode)
     current_app.logger.info(
         "Applied economy rebalance for teacher=%s block=%s activation=%s changes=%s",
         admin_id,
@@ -5128,6 +5200,7 @@ def store_management():
             auto_expiry_days=form.auto_expiry_days.data,
             is_active=form.is_active.data,
             is_long_term_goal=form.is_long_term_goal.data,
+            bypass_cwi_warnings=form.bypass_cwi_warnings.data,
             # Bundle settings
             is_bundle=form.is_bundle.data,
             bundle_quantity=form.bundle_quantity.data if form.is_bundle.data else None,
@@ -5812,6 +5885,7 @@ def rent_settings():
             block_settings.bill_preview_days = int(request.form.get('bill_preview_days', 7))
             block_settings.allow_incremental_payment = request.form.get('allow_incremental_payment') == 'on'
             block_settings.prevent_purchase_when_late = request.form.get('prevent_purchase_when_late') == 'on'
+            block_settings.bypass_cwi_warnings = request.form.get('bypass_cwi_warnings') == 'on'
 
         db.session.commit()
 
@@ -7641,10 +7715,17 @@ def update_economy_policy():
 def apply_economy_rebalance():
     admin_id = session.get('admin_id')
     selected_block = (request.form.get('block') or '').strip().upper() or None
-    activation_mode = (request.form.get('activation_mode') or 'next_payroll').strip().lower()
+    activation_mode = (request.form.get('activation_mode') or REBALANCE_ACTIVATION_NEXT_RENEWAL).strip().lower()
     selected_keys = set(request.form.getlist('selected_changes'))
     settings_row = get_feature_settings_row(admin_id, block=selected_block, create=True)
-    allowed_activation_modes = {'immediate', 'next_payroll'}
+    allowed_activation_modes = {
+        REBALANCE_ACTIVATION_IMMEDIATE,
+        REBALANCE_ACTIVATION_NEXT_RENEWAL,
+        REBALANCE_ACTIVATION_LEGACY_NEXT_PAYROLL,
+    }
+
+    if activation_mode == REBALANCE_ACTIVATION_LEGACY_NEXT_PAYROLL:
+        activation_mode = REBALANCE_ACTIVATION_NEXT_RENEWAL
 
     if activation_mode not in allowed_activation_modes:
         flash("Invalid rebalance activation mode.", "warning")
@@ -7687,18 +7768,28 @@ def apply_economy_rebalance():
         flash("No rebalance changes were selected.", "warning")
         return redirect(url_for('admin.economy_health', block=effective_block, review_rebalance=1))
 
-    if activation_mode == 'immediate' and request.form.get('confirm_immediate') != 'yes':
+    if activation_mode == REBALANCE_ACTIVATION_IMMEDIATE and request.form.get('confirm_immediate') != 'yes':
         flash("Confirm the immediate change warning before applying now.", "warning")
         return redirect(url_for('admin.economy_health', block=effective_block, review_rebalance=1))
 
-    if activation_mode == 'immediate':
-        applied_labels = _apply_rebalance_plan(admin_id, settings_row, change_plan, activation_mode='immediate')
+    if activation_mode == REBALANCE_ACTIVATION_IMMEDIATE:
+        applied_labels = _apply_rebalance_plan(
+            admin_id,
+            settings_row,
+            change_plan,
+            activation_mode=REBALANCE_ACTIVATION_IMMEDIATE,
+        )
         db.session.commit()
         flash(f"Applied economy rebalance now for {len(applied_labels)} setting(s).", "success")
     else:
+        scheduled_changes = prepare_scheduled_rebalance_changes(
+            change_plan,
+            rent_settings=rent_settings,
+            insurance_policies=insurance_policies,
+        )
         settings_row.economy_pending_rebalance_json = json.dumps({
-            'activation_mode': 'next_payroll',
-            'changes': change_plan,
+            'activation_mode': REBALANCE_ACTIVATION_NEXT_RENEWAL,
+            'changes': scheduled_changes,
             'scheduled_at': utc_now().isoformat(),
         })
         db.session.commit()
@@ -7708,7 +7799,10 @@ def apply_economy_rebalance():
             effective_block,
             [change.get('type') for change in change_plan],
         )
-        flash(f"Scheduled economy rebalance for the next payroll run ({len(change_plan)} setting(s)).", "success")
+        flash(
+            f"Scheduled economy rebalance for the renewal after the upcoming bill ({len(change_plan)} setting(s)).",
+            "success",
+        )
 
     return redirect(url_for('admin.economy_health', block=effective_block))
 
@@ -7717,6 +7811,8 @@ def apply_economy_rebalance():
 def economy_health():
     """Show a holistic view of the current economy configuration and CWI health."""
     admin_id = session.get("admin_id")
+    activate_due_rebalances(admin_id)
+    db.session.commit()
 
     blocks = _get_teacher_blocks()
     # Always use per-class view since CWI is inherently per-class (multi-tenancy by join_code)
@@ -7726,6 +7822,8 @@ def economy_health():
         admin_id,
         selected_block,
     )
+    class_labels_by_block = _get_class_labels_for_blocks(admin_id, blocks)
+    selected_class_label = class_labels_by_block.get(selected_block, selected_block) if selected_block else None
     has_payroll_settings = len(all_payroll_settings) > 0
 
     fines = PayrollFine.query.filter_by(teacher_id=admin_id, is_active=True).all()
@@ -7780,6 +7878,8 @@ def economy_health():
     analysis = None
     warnings_by_level = {'critical': [], 'warning': [], 'info': []}
     warnings_by_feature = {}
+    actionable_warnings = []
+    health_warning_summary = []
     recommendations = {}
     cwi_calc = None
     snapshot = None
@@ -7805,9 +7905,14 @@ def economy_health():
         pay_rate_per_minute = cwi_calc.pay_rate_per_minute
         recommendations = analysis.recommendations
 
-        for warning in analysis.warnings:
-            warnings_by_level[warning.level.value].append(warning)
-            warnings_by_feature.setdefault(warning.feature, []).append(warning)
+        actionable_warnings, warnings_by_level, warnings_by_feature, health_warning_summary = _filter_economy_health_warnings(
+            analysis,
+            rent_settings,
+            insurance_policies,
+            fines,
+            store_items,
+            selected_block=selected_block,
+        )
 
     policy_summary = _build_policy_summary(
         admin_id,
@@ -7816,6 +7921,7 @@ def economy_health():
         rent_settings,
         insurance_policies,
         fines,
+        warnings=actionable_warnings,
     )
     rebalance_preview = []
     show_rebalance_review = request.args.get('review_rebalance') == '1'
@@ -7845,6 +7951,7 @@ def economy_health():
         current_page='economy_health',
         blocks=blocks,
         selected_block=selected_block,
+        selected_class_label=selected_class_label,
         payroll_settings=payroll_settings,
         has_payroll_settings=has_payroll_settings,
         cwi_calc=cwi_calc,
@@ -7859,6 +7966,8 @@ def economy_health():
         analysis=analysis,
         warnings_by_level=warnings_by_level,
         warnings_by_feature=warnings_by_feature,
+        actionable_warning_count=len(actionable_warnings),
+        health_warning_summary=health_warning_summary,
         recommendations=recommendations,
         snapshot=snapshot,
         analysis_schedule=analysis_schedule,
@@ -8010,30 +8119,7 @@ def run_payroll():
             db.session.add(tx)
             count += 1
 
-        pending_rows = FeatureSettings.query.filter(
-            FeatureSettings.teacher_id == current_admin_id,
-            FeatureSettings.economy_pending_rebalance_json.isnot(None),
-        ).all()
-        scheduled_rebalances_applied = 0
-        for settings_row in pending_rows:
-            try:
-                payload = json.loads(settings_row.economy_pending_rebalance_json or '{}')
-            except json.JSONDecodeError:
-                current_app.logger.warning(
-                    "Skipping invalid pending economy rebalance for teacher=%s block=%s",
-                    current_admin_id,
-                    settings_row.block,
-                )
-                settings_row.economy_pending_rebalance_json = None
-                continue
-
-            changes = payload.get('changes') or []
-            if not changes:
-                settings_row.economy_pending_rebalance_json = None
-                continue
-
-            _apply_rebalance_plan(current_admin_id, settings_row, changes, activation_mode='next_payroll')
-            scheduled_rebalances_applied += 1
+        scheduled_rebalances_applied, _scheduled_labels = activate_due_rebalances(current_admin_id)
 
         db.session.commit()
         current_app.logger.info(f"Payroll complete. Created {count} transactions.")

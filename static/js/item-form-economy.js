@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const expectedWeeklyHours = parseFloat(economyDataEl.dataset.expectedWeeklyHours);
   const economyChecker = new EconomyBalanceChecker({
     warningsContainer: '#economy-warnings',
+    bypassSelector: '#bypass_cwi_warnings',
     expectedWeeklyHours: isNaN(expectedWeeklyHours) ? undefined : expectedWeeklyHours,
   });
 

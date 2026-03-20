@@ -1031,6 +1031,7 @@ class StoreItem(db.Model):
     auto_expiry_days = db.Column(db.Integer, nullable=True) # days student has to use the item
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     is_long_term_goal = db.Column(db.Boolean, default=False, nullable=False) # if true, exclude from CWI balance checks
+    bypass_cwi_warnings = db.Column(db.Boolean, default=False, nullable=False)
 
     # Bundle settings
     is_bundle = db.Column(db.Boolean, default=False, nullable=False)
@@ -1207,6 +1208,7 @@ class RentSettings(db.Model):
     bill_preview_days = db.Column(db.Integer, default=7)
     allow_incremental_payment = db.Column(db.Boolean, default=False)
     prevent_purchase_when_late = db.Column(db.Boolean, default=False)
+    bypass_cwi_warnings = db.Column(db.Boolean, default=False, nullable=False)
 
     # Metadata
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
@@ -1364,6 +1366,7 @@ class InsurancePolicy(db.Model):
 
     # Settings mode: simple or advanced
     settings_mode = db.Column(db.String(20), nullable=True, default='custom')  # preset or custom
+    bypass_cwi_warnings = db.Column(db.Boolean, default=False, nullable=False)
 
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
@@ -1510,6 +1513,21 @@ class StudentInsurance(db.Model):
 
     def build_renewed_enrollment(self, policy):
         """Create a new enrollment row with a fresh snapshot for the next coverage period."""
+        if policy and policy.teacher_id:
+            from app.utils.economy_rebalance import activate_due_rebalances
+            renewal_block = None
+            if self.join_code:
+                seat = TeacherBlock.query.filter_by(
+                    teacher_id=policy.teacher_id,
+                    join_code=self.join_code,
+                ).first()
+                if seat and seat.block:
+                    renewal_block = seat.block.strip().upper()
+            activate_due_rebalances(
+                policy.teacher_id,
+                block=renewal_block,
+                renewal_policy_id=policy.id,
+            )
         renewal = StudentInsurance(
             student_id=self.student_id,
             policy_id=policy.id,

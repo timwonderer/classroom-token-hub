@@ -22,10 +22,26 @@ class EconomyBalanceChecker {
         this.debounceDelay = options.debounceDelay || 500;
         this.debounceTimer = null;
         this.currentCWI = null;
+        this.bypassSelector = options.bypassSelector || null;
 
         if (this.autoValidate) {
             this.initializeAutoValidation();
         }
+    }
+
+    isBypassed() {
+        if (!this.bypassSelector) {
+            return false;
+        }
+        const bypassInput = document.querySelector(this.bypassSelector);
+        return Boolean(bypassInput && bypassInput.checked);
+    }
+
+    clearInputFeedback() {
+        const inputs = document.querySelectorAll('[data-economy-validate]');
+        inputs.forEach((input) => {
+            input.classList.remove('is-valid', 'is-invalid', 'is-warning');
+        });
     }
 
     /**
@@ -58,6 +74,25 @@ class EconomyBalanceChecker {
                 target.dispatchEvent(new Event('input'));
             });
         });
+
+        if (this.bypassSelector) {
+            const bypassInput = document.querySelector(this.bypassSelector);
+            if (bypassInput) {
+                bypassInput.addEventListener('change', () => {
+                    if (this.isBypassed()) {
+                        this.clearWarnings();
+                        this.clearInputFeedback();
+                        return;
+                    }
+
+                    inputs.forEach((input) => {
+                        if (input.value) {
+                            input.dispatchEvent(new Event('input'));
+                        }
+                    });
+                });
+            }
+        }
     }
 
     /**
@@ -69,6 +104,12 @@ class EconomyBalanceChecker {
 
         if (isNaN(value) || value <= 0) {
             this.clearWarnings();
+            return;
+        }
+
+        if (this.isBypassed()) {
+            this.clearWarnings();
+            this.clearInputFeedback();
             return;
         }
 
@@ -175,6 +216,11 @@ class EconomyBalanceChecker {
     displayWarnings(warnings, recommendations) {
         const container = document.querySelector(this.warningsContainer);
         if (!container) return;
+
+        if (this.isBypassed()) {
+            this.clearWarnings();
+            return;
+        }
 
         if (warnings.length === 0) {
             container.innerHTML = '';
