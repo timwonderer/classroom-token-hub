@@ -63,6 +63,23 @@ def prepare_scheduled_rebalance_changes(change_plan, *, rent_settings=None, insu
     return scheduled_changes
 
 
+def _get_effective_rent_settings(teacher_id, block):
+    """Return the enabled RentSettings for *block*, falling back to the global (block=None) row."""
+    if block:
+        settings = RentSettings.query.filter_by(
+            teacher_id=teacher_id,
+            block=block,
+            is_enabled=True,
+        ).first()
+        if settings:
+            return settings
+    return RentSettings.query.filter_by(
+        teacher_id=teacher_id,
+        block=None,
+        is_enabled=True,
+    ).first()
+
+
 def _apply_change_list(teacher_id, settings_row, changes, activation_mode, *, reference_time=None):
     reference_time = ensure_utc(reference_time) if reference_time else utc_now()
     applied_labels = []
@@ -70,19 +87,7 @@ def _apply_change_list(teacher_id, settings_row, changes, activation_mode, *, re
     for change in changes:
         change_type = change.get("type")
         if change_type == "rent":
-            rent_settings = None
-            if change.get("block"):
-                rent_settings = RentSettings.query.filter_by(
-                    teacher_id=teacher_id,
-                    block=change.get("block"),
-                    is_enabled=True,
-                ).first()
-            if not rent_settings:
-                rent_settings = RentSettings.query.filter_by(
-                    teacher_id=teacher_id,
-                    block=None,
-                    is_enabled=True,
-                ).first()
+            rent_settings = _get_effective_rent_settings(teacher_id, change.get("block"))
             if rent_settings:
                 rent_settings.rent_amount = Decimal(str(change.get("new_value")))
                 applied_labels.append("Rent")
