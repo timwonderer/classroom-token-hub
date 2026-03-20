@@ -59,6 +59,7 @@ from app.utils.insurance_eligibility import (
     evaluate_claim_transaction_eligibility,
     collect_reimbursed_source_tx_ids,
 )
+from app.utils.economy_rebalance import activate_due_rebalances
 from app.utils.display_name_session import (
     get_teacher_display_name_cache,
     upsert_teacher_display_name_cache,
@@ -168,6 +169,18 @@ def get_current_class_context():
         'block': current_seat.block,
         'seat_id': current_seat.id
     }
+
+
+def _activate_rebalances_for_context(context=None):
+    """Activate any due economy rebalances for the current (or given) class context."""
+    if context is None:
+        context = get_current_class_context()
+    if context and context.get('teacher_id'):
+        activate_due_rebalances(
+            context['teacher_id'],
+            block=(context.get('block') or '').strip().upper() or None,
+        )
+        db.session.commit()
 
 
 def _issue_transfer_submission_token():
@@ -1916,7 +1929,8 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
 @login_required
 def insurance_marketplace():
     """Insurance marketplace - browse and manage policies."""
-
+    context = get_current_class_context()
+    _activate_rebalances_for_context(context)
 
     # Check if insurance feature is enabled
     if not is_feature_enabled('insurance'):
@@ -2067,6 +2081,7 @@ def purchase_insurance(policy_id):
 
     join_code = context['join_code']
     teacher_id = context['teacher_id']
+    _activate_rebalances_for_context(context)
 
     policy = db.get_or_404(InsurancePolicy, policy_id)
 
@@ -3379,6 +3394,9 @@ def _ensure_rent_hall_pass_top_off(student, context, settings=None, now=None):
 @login_required
 def rent():
     """View rent status and payment history (per period)."""
+    context = get_current_class_context()
+    _activate_rebalances_for_context(context)
+
     # Check if rent feature is enabled
     if not is_feature_enabled('rent'):
         flash("The rent feature is currently disabled for your class.", "warning")
@@ -3561,6 +3579,7 @@ def rent_pay(period):
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
     current_block = (context.get('block') or '').strip().upper()
+    _activate_rebalances_for_context(context)
     settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:

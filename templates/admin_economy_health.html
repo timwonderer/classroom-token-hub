@@ -134,6 +134,11 @@
         <div>
           <h5 class="mb-1"><span class="material-symbols-outlined me-2">tune</span>Economy Policy</h5>
           <p class="text-muted mb-0">Pick the classroom pressure profile, then optionally realign current settings.</p>
+          {% if selected_class_label %}
+          <div class="small text-muted mt-2">
+            This policy mode applies to <strong>{{ selected_class_label }}</strong>{% if blocks|length > 1 %} only{% endif %}.
+          </div>
+          {% endif %}
         </div>
         <div class="text-end">
           <div class="small text-muted">Alignment</div>
@@ -234,8 +239,8 @@
           <div class="col-lg-6">
             <label class="form-label">Activation Timing</label>
             <div class="form-check">
-              <input class="form-check-input" type="radio" name="activation_mode" id="activationNextPayroll" value="next_payroll" checked>
-              <label class="form-check-label" for="activationNextPayroll">Next Payroll Run (Recommended)</label>
+              <input class="form-check-input" type="radio" name="activation_mode" id="activationNextRenewal" value="next_renewal" checked>
+              <label class="form-check-label" for="activationNextRenewal">Apply After The Upcoming Bill (Recommended)</label>
             </div>
             <div class="form-check">
               <input class="form-check-input" type="radio" name="activation_mode" id="activationImmediate" value="immediate">
@@ -244,7 +249,7 @@
           </div>
           <div class="col-lg-6">
             <div class="alert alert-warning mb-2">
-              Immediate changes can affect students during the current economic cycle before the next payroll run.
+              Scheduled changes skip the next bill and start on the following renewal cycle. Immediate changes can affect students during the current cycle.
             </div>
             <div class="form-check">
               <input class="form-check-input" type="checkbox" name="confirm_immediate" id="confirmImmediate" value="yes">
@@ -345,7 +350,7 @@
               <h5 class="mb-1"><span class="material-symbols-outlined me-2">ecg_heart</span>Balance Snapshot</h5>
               <p class="text-muted mb-0">How well rent, insurance, fines, and store align to your CWI</p>
             </div>
-            {% if analysis and analysis.is_balanced %}
+            {% if analysis and actionable_warning_count == 0 and banking_summary.level == 'success' %}
             <span class="badge bg-success">Balanced</span>
             {% elif analysis %}
             <span class="badge bg-warning text-dark">Needs attention</span>
@@ -354,33 +359,45 @@
             {% endif %}
           </div>
 
-          <div class="row text-center">
-            <div class="col-4">
+          <div class="row text-center g-2">
+            <div class="col-6">
               <div class="p-3 border rounded">
-                <div class="text-muted small">Critical</div>
+                <div class="text-muted small">Needs Attention</div>
                 <div class="h4 mb-0 text-danger">{{ warnings_by_level['critical']|length }}</div>
               </div>
             </div>
-            <div class="col-4">
+            <div class="col-6">
               <div class="p-3 border rounded">
-                <div class="text-muted small">Warnings</div>
+                <div class="text-muted small">Review</div>
                 <div class="h4 mb-0 text-warning">{{ warnings_by_level['warning']|length }}</div>
-              </div>
-            </div>
-            <div class="col-4">
-              <div class="p-3 border rounded">
-                <div class="text-muted small">Info</div>
-                <div class="h4 mb-0 text-success">{{ warnings_by_level['info']|length }}</div>
               </div>
             </div>
           </div>
 
           {% if analysis %}
           <div class="mt-3 small">
-            <div class="d-flex align-items-center mb-2"><span class="badge bg-light text-dark me-2">Rent</span> {{ warnings_by_feature.get('Rent', [])|length }} note(s) • <a href="{{ rent_link }}">Adjust rent</a></div>
-            <div class="d-flex align-items-center mb-2"><span class="badge bg-light text-dark me-2">Insurance</span> {{ insurance_count }} policy/policies • <a href="{{ insurance_link }}">Review premiums</a></div>
-            <div class="d-flex align-items-center mb-2"><span class="badge bg-light text-dark me-2">Banking</span> {{ banking_summary.message }} <a href="{{ banking_link }}" class="ms-1">Open banking</a></div>
-            <div class="d-flex align-items-center"><span class="badge bg-light text-dark me-2">Store</span> {{ store_item_count }} item(s) listed • <a href="{{ store_link }}">Edit store prices</a></div>
+            {% if health_warning_summary %}
+              {% for row in health_warning_summary %}
+              <div class="d-flex align-items-center mb-2">
+                <span class="badge bg-light text-dark me-2">{{ row.label }}</span>
+                {{ row.count }} action item(s)
+                {% if row.link_href %}
+                • <a href="{{ row.link_href }}" class="ms-1">{{ row.link_label }}</a>
+                {% endif %}
+              </div>
+              {% endfor %}
+            {% else %}
+              <div class="d-flex align-items-center mb-2">
+                <span class="badge bg-light text-dark me-2">Economy</span>
+                No CWI action items right now.
+              </div>
+            {% endif %}
+            {% if banking_summary.level != 'success' %}
+            <div class="d-flex align-items-center">
+              <span class="badge bg-light text-dark me-2">Banking</span>
+              {{ banking_summary.message }} <a href="{{ banking_link }}" class="ms-1">Open banking</a>
+            </div>
+            {% endif %}
           </div>
           {% endif %}
         </div>
@@ -436,18 +453,19 @@
 
   <div class="card shadow-sm">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <div><span class="material-symbols-outlined me-2">monitor_heart</span>Detailed warnings</div>
-      <small class="text-muted">Sorted by severity</small>
+      <div><span class="material-symbols-outlined me-2">monitor_heart</span>Action Items</div>
+      <small class="text-muted">Only settings that need review are shown</small>
     </div>
     <div class="card-body">
       {% if analysis %}
-        {% if warnings_by_level['critical'] or warnings_by_level['warning'] or warnings_by_level['info'] %}
-          {% set severity_map = {'critical': 'danger', 'warning': 'warning', 'info': 'info'} %}
-          {% for level in ['critical','warning','info'] %}
+        {% if warnings_by_level['critical'] or warnings_by_level['warning'] %}
+          {% set severity_map = {'critical': 'danger', 'warning': 'warning'} %}
+          {% set label_map = {'critical': 'Needs Attention', 'warning': 'Review'} %}
+          {% for level in ['critical','warning'] %}
             {% set bucket = warnings_by_level[level] %}
             {% if bucket %}
               <div class="alert alert-{{ severity_map[level] }}">
-                <strong class="text-capitalize">{{ level }}</strong>
+                <strong>{{ label_map[level] }}</strong>
                 <ul class="mb-0 mt-2">
                   {% for warning in bucket %}
                     {% set feature_lower = warning.feature.lower() %}
@@ -469,7 +487,7 @@
             {% endif %}
           {% endfor %}
         {% else %}
-          <p class="mb-0">No warnings detected. Your economy is balanced against the current CWI.</p>
+          <p class="mb-0">No CWI action items detected. Balanced settings and bypassed items are hidden here.</p>
         {% endif %}
       {% else %}
         <p class="mb-0">Configure payroll first to run the economy health check.</p>

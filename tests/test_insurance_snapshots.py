@@ -2,7 +2,18 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from app import db
-from app.models import Admin, InsurancePolicy, InsuranceClaim, StudentInsurance, StudentTeacher, Transaction, TransactionStatus
+from app.models import (
+    Admin,
+    FeatureSettings,
+    InsuranceClaim,
+    InsurancePolicy,
+    RentSettings,
+    StudentInsurance,
+    StudentTeacher,
+    TeacherBlock,
+    Transaction,
+    TransactionStatus,
+)
 
 
 def _create_policy(admin_id: int, *, title: str = "Snapshot Coverage", max_claim_amount=Decimal("75.00")):
@@ -336,3 +347,75 @@ def test_renewed_enrollment_uses_frozen_waiting_period_for_coverage_start(client
     assert renewal.contract_waiting_period_days == 3
     assert renewal.coverage_start_date is not None
     assert (renewal.coverage_start_date - renewal.purchase_date).days == 3
+
+
+def test_renewed_enrollment_only_activates_pending_rebalances_for_its_class(client, test_student):
+    admin = Admin(username="snapshot-renew-scope-admin", totp_secret="secret")
+    db.session.add(admin)
+    db.session.flush()
+
+    policy = _create_policy(admin.id, title="Scoped Renewal Policy")
+
+    rent_a = RentSettings(
+        teacher_id=admin.id,
+        block="A",
+        is_enabled=True,
+        rent_amount=Decimal("500.00"),
+        frequency_type="monthly",
+    )
+    rent_b = RentSettings(
+        teacher_id=admin.id,
+        block="B",
+        is_enabled=True,
+        rent_amount=Decimal("700.00"),
+        frequency_type="monthly",
+    )
+    seat_a = TeacherBlock(
+        teacher_id=admin.id,
+        block="A",
+        first_name="Renew",
+        last_initial="A",
+        salt=b"0123456789ABCDEF",
+        first_half_hash="renew-a",
+        join_code="JOIN-RENEW-A",
+    )
+    db.session.add_all([rent_a, rent_b, seat_a])
+    db.session.flush()
+
+    settings_a = FeatureSettings(
+        teacher_id=admin.id,
+        block="A",
+        economy_pending_rebalance_json='{"activation_mode":"next_renewal","changes":[{"type":"rent","block":"A","current_value":"500.00","new_value":"610.00","effective_at":"2026-03-01T00:00:00+00:00"}]}',
+    )
+    settings_b = FeatureSettings(
+        teacher_id=admin.id,
+        block="B",
+        economy_pending_rebalance_json='{"activation_mode":"next_renewal","changes":[{"type":"rent","block":"B","current_value":"700.00","new_value":"820.00","effective_at":"2026-03-01T00:00:00+00:00"}]}',
+    )
+    db.session.add_all([settings_a, settings_b])
+
+    enrollment = StudentInsurance(
+        student_id=test_student.id,
+        policy_id=policy.id,
+        status="active",
+        join_code="JOIN-RENEW-A",
+        purchase_date=datetime.now(timezone.utc),
+        coverage_start_date=datetime.now(timezone.utc),
+        payment_current=True,
+    )
+    enrollment.freeze_policy_snapshot(policy)
+    db.session.add(enrollment)
+    db.session.commit()
+
+    enrollment.build_renewed_enrollment(policy)
+    db.session.commit()
+
+    db.session.refresh(rent_a)
+    db.session.refresh(rent_b)
+    db.session.refresh(settings_a)
+    db.session.refresh(settings_b)
+
+    assert rent_a.rent_amount == Decimal("610.00")
+    assert rent_b.rent_amount == Decimal("700.00")
+    assert settings_a.economy_pending_rebalance_json is None
+    assert settings_b.economy_pending_rebalance_json is not None

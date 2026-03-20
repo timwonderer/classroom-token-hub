@@ -446,6 +446,11 @@
 
               <!-- Economy Balance Check -->
               <div id="cwi-info" class="mb-3"></div>
+              <div class="form-check mb-3">
+                {{ form.bypass_cwi_warnings(class="form-check-input", id="bypass_cwi_warnings") }}
+                {{ form.bypass_cwi_warnings.label(class="form-check-label fw-bold") }}
+                <small class="d-block text-muted">Hide this policy from Economy Health and suppress live CWI warnings for premium guidance.</small>
+              </div>
 
               <!-- SIMPLE MODE -->
               <div id="simpleModeFields">
@@ -2191,6 +2196,7 @@
           const economyChecker = new EconomyBalanceChecker({
             warningsContainer: '#insurance-economy-validator-disabled',
             autoValidate: false,
+            bypassSelector: '#bypass_cwi_warnings',
           });
 
           const currentBlock = '{{ settings_block }}';

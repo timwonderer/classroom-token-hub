@@ -82,6 +82,11 @@
                                 {{ form.is_active.label(class="form-check-label fw-bold") }}
                             </div>
                             <div class="form-check mt-2">
+                                {{ form.bypass_cwi_warnings(class="form-check-input", id="bypass_cwi_warnings") }}
+                                {{ form.bypass_cwi_warnings.label(class="form-check-label fw-bold") }}
+                                <small class="d-block text-muted">Suppress live CWI warnings for this item and hide it from Economy Health.</small>
+                            </div>
+                            <div class="form-check mt-2">
                                 {{ form.is_long_term_goal(class="form-check-input") }}
                                 {{ form.is_long_term_goal.label(class="form-check-label fw-bold") }}
                                 <small class="d-block text-muted">For expensive items students save for over many weeks (won't trigger CWI warnings)</small>

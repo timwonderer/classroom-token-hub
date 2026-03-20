@@ -3,10 +3,20 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from app import db
-from app.routes.admin import _build_rebalance_preview, _get_transaction_weekly_premium, _inverse_weekly_amount
+from app.routes.admin import (
+    _build_rebalance_preview,
+    _filter_economy_health_warnings,
+    _get_transaction_weekly_premium,
+    _inverse_weekly_amount,
+)
 from app.routes.student import _get_effective_rent_amount_for_coverage_period, _is_coverage_period_paid
-from app.models import Admin, EconomySnapshot, FeatureSettings, InsurancePolicy, PayrollSettings, RentPayment, RentSettings, Student, Transaction
+from app.models import Admin, EconomySnapshot, FeatureSettings, InsurancePolicy, PayrollSettings, RentPayment, RentSettings, StoreItem, Student, Transaction
 from app.hash_utils import get_random_salt, hash_username
+from app.utils.economy_rebalance import (
+    REBALANCE_TRIGGER_INSURANCE_RENEWAL,
+    activate_due_rebalances,
+    prepare_scheduled_rebalance_changes,
+)
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 from app.utils.economy_policy import (
     get_feature_settings_row,
@@ -582,13 +592,14 @@ def test_run_payroll_applies_scheduled_rebalance(client):
         block='A',
         economy_policy_mode='tight',
         economy_pending_rebalance_json=json.dumps({
-            'activation_mode': 'next_payroll',
+            'activation_mode': 'next_renewal',
             'changes': [
                 {
                     'type': 'rent',
                     'block': 'A',
                     'current_value': '500.00',
                     'new_value': '610.00',
+                    'effective_at': '2026-03-01T00:00:00+00:00',
                 }
             ],
         }),
@@ -603,3 +614,231 @@ def test_run_payroll_applies_scheduled_rebalance(client):
     db.session.refresh(settings_row)
     assert rent_settings.rent_amount == Decimal('610.00')
     assert settings_row.economy_pending_rebalance_json is None
+
+
+def test_run_payroll_does_not_apply_rebalance_before_effective_date(client):
+    admin, _, rent_settings = _create_admin_with_block()
+    _login_admin(client, admin.id)
+
+    settings_row = FeatureSettings(
+        teacher_id=admin.id,
+        block='A',
+        economy_policy_mode='tight',
+        economy_pending_rebalance_json=json.dumps({
+            'activation_mode': 'next_renewal',
+            'changes': [
+                {
+                    'type': 'rent',
+                    'block': 'A',
+                    'current_value': '500.00',
+                    'new_value': '610.00',
+                    'effective_at': '2099-03-01T00:00:00+00:00',
+                }
+            ],
+        }),
+    )
+    db.session.add(settings_row)
+    db.session.commit()
+
+    response = client.post('/admin/run-payroll')
+
+    assert response.status_code == 302
+    db.session.refresh(rent_settings)
+    db.session.refresh(settings_row)
+    assert rent_settings.rent_amount == Decimal('500.00')
+    assert settings_row.economy_pending_rebalance_json is not None
+
+
+def test_scheduled_rent_rebalance_skips_upcoming_cycle(client):
+    admin, _, rent_settings = _create_admin_with_block()
+    rent_settings.first_rent_due_date = datetime(2026, 1, 28, 0, 0, tzinfo=timezone.utc)
+    db.session.commit()
+
+    scheduled_changes = prepare_scheduled_rebalance_changes(
+        [{
+            'type': 'rent',
+            'block': 'A',
+            'current_value': '500.00',
+            'new_value': '610.00',
+        }],
+        rent_settings=rent_settings,
+        reference_time=datetime(2026, 3, 19, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert scheduled_changes[0]['effective_at'] == '2026-04-28T07:00:00+00:00'
+
+
+def test_scheduled_insurance_rebalance_waits_for_matching_policy_renewal(client):
+    admin, _, _ = _create_admin_with_block()
+    policy_a = _create_insurance_policy(admin.id, 'Coverage A', '200.00', block='A')
+    policy_b = _create_insurance_policy(admin.id, 'Coverage B', '240.00', block='B')
+
+    settings_a = FeatureSettings(
+        teacher_id=admin.id,
+        block='A',
+        economy_policy_mode='tight',
+        economy_pending_rebalance_json=json.dumps({
+            'activation_mode': 'next_renewal',
+            'changes': prepare_scheduled_rebalance_changes(
+                [{
+                    'type': 'insurance',
+                    'policy_id': policy_a.id,
+                    'current_value': '200.00',
+                    'new_value': '210.00',
+                }],
+                insurance_policies=[policy_a],
+                reference_time=datetime(2026, 3, 19, 12, 0, tzinfo=timezone.utc),
+            ),
+        }),
+    )
+    settings_b = FeatureSettings(
+        teacher_id=admin.id,
+        block='B',
+        economy_policy_mode='tight',
+        economy_pending_rebalance_json=json.dumps({
+            'activation_mode': 'next_renewal',
+            'changes': prepare_scheduled_rebalance_changes(
+                [{
+                    'type': 'insurance',
+                    'policy_id': policy_b.id,
+                    'current_value': '240.00',
+                    'new_value': '260.00',
+                }],
+                insurance_policies=[policy_b],
+                reference_time=datetime(2026, 3, 19, 12, 0, tzinfo=timezone.utc),
+            ),
+        }),
+    )
+    db.session.add_all([settings_a, settings_b])
+    db.session.commit()
+
+    activated, _labels = activate_due_rebalances(
+        admin.id,
+        block='A',
+        renewal_policy_id=policy_a.id,
+        reference_time=datetime(2026, 3, 19, 12, 0, tzinfo=timezone.utc),
+    )
+    db.session.commit()
+
+    db.session.refresh(policy_a)
+    db.session.refresh(policy_b)
+    db.session.refresh(settings_a)
+    db.session.refresh(settings_b)
+
+    assert activated == 1
+    assert policy_a.premium == Decimal('210.00')
+    assert policy_b.premium == Decimal('240.00')
+    assert settings_a.economy_pending_rebalance_json is None
+    assert settings_b.economy_pending_rebalance_json is not None
+
+
+def test_scheduled_insurance_rebalance_records_renewal_trigger_metadata(client):
+    admin, _, _ = _create_admin_with_block()
+    policy = _create_insurance_policy(admin.id, 'Coverage Plus', '200.00', block='A')
+
+    scheduled_changes = prepare_scheduled_rebalance_changes(
+        [{
+            'type': 'insurance',
+            'policy_id': policy.id,
+            'current_value': '200.00',
+            'new_value': '225.00',
+        }],
+        insurance_policies=[policy],
+        reference_time=datetime(2026, 3, 19, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert scheduled_changes[0]['effective_at'] is None
+    assert scheduled_changes[0]['activation_event'] == REBALANCE_TRIGGER_INSURANCE_RENEWAL
+    assert scheduled_changes[0]['activation_policy_id'] == policy.id
+
+
+def test_activate_due_rebalances_applies_only_due_changes(client):
+    admin, _, rent_settings = _create_admin_with_block()
+    settings_row = FeatureSettings(
+        teacher_id=admin.id,
+        block='A',
+        economy_policy_mode='tight',
+        economy_pending_rebalance_json=json.dumps({
+            'activation_mode': 'next_renewal',
+            'changes': [
+                {
+                    'type': 'rent',
+                    'block': 'A',
+                    'current_value': '500.00',
+                    'new_value': '610.00',
+                    'effective_at': '2026-03-01T00:00:00+00:00',
+                },
+                {
+                    'type': 'rent',
+                    'block': 'A',
+                    'current_value': '610.00',
+                    'new_value': '650.00',
+                    'effective_at': '2099-03-01T00:00:00+00:00',
+                },
+            ],
+        }),
+    )
+    db.session.add(settings_row)
+    db.session.commit()
+
+    activated, _labels = activate_due_rebalances(
+        admin.id,
+        block='A',
+        reference_time=datetime(2026, 3, 19, 12, 0, tzinfo=timezone.utc),
+    )
+    db.session.commit()
+
+    db.session.refresh(rent_settings)
+    db.session.refresh(settings_row)
+    payload = json.loads(settings_row.economy_pending_rebalance_json)
+
+    assert activated == 1
+    assert rent_settings.rent_amount == Decimal('610.00')
+    assert len(payload['changes']) == 1
+    assert payload['changes'][0]['new_value'] == '650.00'
+
+
+def test_filter_economy_health_warnings_hides_balanced_and_bypassed_items(client):
+    admin, payroll_settings, rent_settings = _create_admin_with_block()
+    rent_settings.bypass_cwi_warnings = True
+
+    expensive_store_item = StoreItem(
+        teacher_id=admin.id,
+        name='VIP Lunch',
+        price=Decimal('300.00'),
+        is_active=True,
+        bypass_cwi_warnings=True,
+    )
+    db.session.add(expensive_store_item)
+
+    policy = _create_insurance_policy(admin.id, 'Coverage Plus', '200.00', block='A')
+    db.session.refresh(policy)
+
+    checker = EconomyBalanceChecker(admin.id, 'A')
+    analysis = checker.analyze_economy(
+        payroll_settings,
+        rent_settings=rent_settings,
+        insurance_policies=[policy],
+        store_items=[expensive_store_item],
+    )
+
+    with client.application.test_request_context():
+        filtered, warnings_by_level, warnings_by_feature, summary_rows = _filter_economy_health_warnings(
+            analysis,
+            rent_settings,
+            [policy],
+            [],
+            [expensive_store_item],
+            selected_block='A',
+        )
+
+    messages = [warning.message for warning in filtered]
+    summary_labels = [row['label'] for row in summary_rows]
+
+    assert warnings_by_level['info'] == []
+    assert not any('Rent is balanced' in message for message in messages)
+    assert not any('VIP Lunch' in message for message in messages)
+    assert not any('Store Item: VIP Lunch' == feature for feature in warnings_by_feature)
+    assert 'Insurance' in summary_labels
+    assert 'Rent' not in summary_labels
+    assert 'Store' not in summary_labels

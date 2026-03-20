@@ -555,6 +555,11 @@
 
                 <!-- Economy Balance Warnings -->
                 <div id="economy-warnings"></div>
+                <div class="form-check mt-3">
+                  <input class="form-check-input" type="checkbox" id="bypass_cwi_warnings" name="bypass_cwi_warnings" {% if settings.bypass_cwi_warnings %}checked{% endif %}>
+                  <label class="form-check-label fw-bold" for="bypass_cwi_warnings">Bypass CWI Warnings</label>
+                  <small class="d-block text-muted">Suppress live CWI warnings for rent and hide rent notes from Economy Health for this class.</small>
+                </div>
               </div>
             </div>
           </div>
@@ -1110,6 +1115,7 @@
     if (typeof EconomyBalanceChecker !== 'undefined') {
       const economyChecker = new EconomyBalanceChecker({
         warningsContainer: '#economy-warnings',
+        bypassSelector: '#bypass_cwi_warnings',
         expectedWeeklyHours: {{ (payroll_settings.expected_weekly_hours if payroll_settings and payroll_settings.expected_weekly_hours is not none else 5.0) | float }}
     });
 
