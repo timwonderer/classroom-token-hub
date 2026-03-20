@@ -8,6 +8,15 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+- **Rent cycle rate lock now functional** — `_get_locked_rent_amount_for_join_code_cycle` was broken in #1103 because it searched for `transaction_id` on `RentPayment`, a column that does not exist. The function now uses the same timestamp-based transaction matching used throughout the rest of the rent payment code. The locked rate is the **first valid payer's base amount** (not the maximum), preventing a mid-cycle rate increase from affecting students who already paid at the original rate.
+- **Mid-cycle rate-increase fallback for per-student effective amount** — `_get_effective_rent_amount_for_coverage_period` now also checks whether the student's own payments predate a `RentSettings.updated_at` change. If so, the total base they already paid is used as the effective threshold, ensuring a rebalance never retroactively marks a student as late.
+- **Rent waivers now honoured** — `RentWaiver` records were stored but never consulted when determining rent paid status. A new `_has_active_rent_waiver` helper is called from `_is_student_coverage_period_paid`; any student with an active waiver that spans the coverage due date is immediately treated as paid.
+- **Rent waiver creation scoped to join_code** — `add_rent_waiver` was using `RentSettings.query.filter_by(teacher_id=admin_id).first()` (picks an arbitrary block) and never set `join_code` on the waiver row. It now resolves settings for the correct block and persists `join_code` on every new `RentWaiver`. The active-waivers query in `rent_settings` is similarly scoped to the current `join_code`.
+
+### Added
+- **Admin: Reverse misapplied rent late fees** — New `POST /admin/rent/reverse-cycle-penalties` route lets teachers fix the current coverage cycle after a mid-cycle rate increase wrongly triggered late fees. For each student who paid the (now-locked) base rate on time but was charged a late fee, the route creates a `Rent Late Fee Reversal` transaction and zeroes out `late_fee_charged` / `was_late` on the affected `RentPayment` rows. Students who were genuinely late keep their fees. The action is available in a new **Corrections** tab on the Rent Settings page.
+
 ### Changed
 - **Economy policy mode and rebalance workflow** — Added policy-aware economy profiles (`Tight`, `Default`, `Comfortable`) that drive CWI recommendations for rent, utilities, store pricing tiers, fines, savings targets, and insurance settings. Teachers can review economy health by class, preview rent and insurance rebalances, apply changes immediately or schedule them for the next payroll run, and receive live CWI guidance in rent, store, and insurance settings. Rebalance application now regenerates its change plan from current server-side state instead of trusting client-submitted preview JSON.
 
