@@ -6403,7 +6403,14 @@ def add_rent_waiver():
     student_ids = request.form.getlist('student_ids')
     waiver_scopes = request.form.getlist('waiver_scope')
     past_due_dates_iso = request.form.getlist('past_due_dates')
-    future_periods_count = max(1, int(request.form.get('future_periods_count', 1) or 1))
+    future_periods_count = 1
+    if 'future' in waiver_scopes:
+        raw_future_periods = request.form.get('future_periods_count', '') or ''
+        try:
+            future_periods_count = max(1, int(raw_future_periods))
+        except ValueError:
+            flash("Future periods count must be a positive whole number.", "danger")
+            return redirect(url_for('admin.rent_settings'))
     reason = request.form.get('reason', '')
     settings_block = request.form.get('settings_block', '')
 
@@ -6444,6 +6451,15 @@ def add_rent_waiver():
         if tb:
             join_code = tb.join_code
 
+    # If we still don't have a join_code, fail fast instead of creating an unscoped waiver.
+    if not join_code:
+        flash(
+            "Unable to resolve the class join code for this waiver. "
+            "Please select a class/block and try again.",
+            "danger",
+        )
+        return redirect(url_for('admin.rent_settings'))
+
     now = utc_now()
     period_delta = _get_rent_period_delta(settings)
     coverage_due_date = _calculate_rent_coverage_due_date(settings, now)
@@ -6452,6 +6468,7 @@ def add_rent_waiver():
 
     # Build the list of (waiver_start, waiver_end, periods_count) tuples to create.
     waiver_windows = []
+    past_due_window_count = 0
 
     if 'past_due' in waiver_scopes:
         # One point-in-time waiver per selected past-due date.
@@ -6461,6 +6478,7 @@ def add_rent_waiver():
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
                 waiver_windows.append((dt, dt, 1))
+                past_due_window_count += 1
             except (ValueError, AttributeError):
                 continue
 
@@ -6481,8 +6499,6 @@ def add_rent_waiver():
     count = 0
     for student_id in student_ids:
         student = _get_student_or_404(int(student_id))
-        if not student:
-            continue
         for waiver_start, waiver_end, periods_count in waiver_windows:
             waiver = RentWaiver(
                 student_id=student.id,
@@ -6498,9 +6514,10 @@ def add_rent_waiver():
 
     db.session.commit()
 
+    # Count actual past-due windows persisted (invalid ISO strings were skipped).
     scope_labels = []
     if 'past_due' in waiver_scopes:
-        scope_labels.append(f"{len(past_due_dates_iso)} past-due period(s)")
+        scope_labels.append(f"{past_due_window_count} past-due period(s)")
     if 'current' in waiver_scopes:
         scope_labels.append("current period")
     if 'future' in waiver_scopes:

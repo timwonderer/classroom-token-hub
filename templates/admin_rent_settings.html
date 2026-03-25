@@ -932,7 +932,7 @@
               <div class="mb-3">
                 <label class="form-label fw-bold">1. Select Students</label>
                 <select class="form-select" id="waiver_student_ids" name="student_ids" multiple size="7" required>
-                  {% for student in all_students %}
+                  {% for student in all_students if not settings or student.block == settings.block %}
                   <option value="{{ student.id }}">{{ student.full_name }} (Block {{ student.block }})</option>
                   {% endfor %}
                 </select>
@@ -1003,6 +1003,14 @@
               <button type="submit" class="btn btn-primary w-100" id="waiverSubmitBtn" disabled>
                 <span class="material-symbols-outlined me-2">check_circle</span>Add Waiver
               </button>
+              <noscript>
+                <div class="alert alert-warning mt-2 mb-0 small">
+                  JavaScript is disabled. Client-side validation will be skipped, but you can still submit this form.
+                </div>
+                <button type="submit" class="btn btn-primary w-100 mt-2">
+                  <span class="material-symbols-outlined me-2">check_circle</span>Add Waiver
+                </button>
+              </noscript>
             </form>
           </div>
         </div>
@@ -1092,7 +1100,7 @@
     }
 
     function buildPastDuePeriods(studentIds) {
-      // Union of past-due dates across selected students, sorted oldest-first.
+      // Union of past-due dates across selected students, sorted newest-first.
       const map = {};  // date_iso → label
       studentIds.forEach(sid => {
         (studentPastDueData[sid] || []).forEach(d => { map[d.date_iso] = d.label; });
