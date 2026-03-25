@@ -6260,6 +6260,7 @@ def rent_settings():
                         'block': block_name,
                         'months_behind': months_behind,
                         'unpaid_months': unpaid_month_labels,
+                        'unpaid_due_dates': list(unpaid_due_dates),
                     }
                     unpaid_rent_log.append(item)
 
@@ -6294,6 +6295,37 @@ def rent_settings():
                 'coverage_label': coverage_label,
                 'amount_paid': payment.amount_paid,
                 'payment_date': payment.payment_date,
+            })
+
+    # Build per-student past-due date data for the waiver form JS.
+    # Only include entries scoped to the currently viewed join_code.
+    student_past_due_json = {}
+    current_coverage_due_date = None
+    upcoming_coverage_due_date = None
+    if settings and settings.is_enabled:
+        now_for_waiver = utc_now()
+        from app.routes.student import (
+            _calculate_rent_coverage_due_date as _crd,
+            _calculate_upcoming_rent_due_date as _curd,
+            _calculate_rent_deadlines as _crdeadlines,
+        )
+        current_coverage_due_date = _crd(settings, now_for_waiver)
+        _cur_due, _ = _crdeadlines(settings, now_for_waiver)
+        upcoming_coverage_due_date = _curd(settings, _cur_due, current_coverage_due_date)
+
+    _waiver_join_code = session.get('current_join_code')
+    for log_item in unpaid_rent_log:
+        if log_item.get('join_code') != _waiver_join_code:
+            continue
+        sid = str(log_item['student'].id)
+        dates = log_item.get('unpaid_due_dates', [])
+        labels = log_item.get('unpaid_months', [])
+        if sid not in student_past_due_json:
+            student_past_due_json[sid] = []
+        for d, lbl in zip(dates, labels):
+            student_past_due_json[sid].append({
+                'label': lbl,
+                'date_iso': d.isoformat(),
             })
 
     # Determine period label based on frequency type
@@ -6344,22 +6376,43 @@ def rent_settings():
                           unpaid_rent_log=unpaid_rent_log,
                           current_period_start=current_period_start,
                           current_period_end=current_period_end,
-                          next_due_date=next_due_date)
+                          next_due_date=next_due_date,
+                          student_past_due_json=student_past_due_json,
+                          current_coverage_due_date=current_coverage_due_date,
+                          upcoming_coverage_due_date=upcoming_coverage_due_date)
 
 
 @admin_bp.route('/rent-waiver/add', methods=['POST'])
 @admin_required
 def add_rent_waiver():
-    """Add rent waiver for selected students."""
-    from app.routes.student import _calculate_rent_coverage_due_date, _calculate_rent_timeline
+    """Add rent waiver for selected students.
+
+    Accepts three waiver scopes (any combination):
+      - past_due: waive specific past-due coverage dates (list of ISO strings)
+      - current: waive the current coverage period
+      - future: waive N upcoming periods starting from the next due date
+    """
+    from app.routes.student import (
+        _calculate_rent_coverage_due_date,
+        _calculate_rent_deadlines,
+        _calculate_upcoming_rent_due_date,
+        _get_rent_period_delta,
+        _add_rent_period,
+    )
 
     student_ids = request.form.getlist('student_ids')
-    periods_count = int(request.form.get('periods_count', 1))
+    waiver_scopes = request.form.getlist('waiver_scope')
+    past_due_dates_iso = request.form.getlist('past_due_dates')
+    future_periods_count = max(1, int(request.form.get('future_periods_count', 1) or 1))
     reason = request.form.get('reason', '')
     settings_block = request.form.get('settings_block', '')
 
     if not student_ids:
         flash("Please select at least one student.", "danger")
+        return redirect(url_for('admin.rent_settings'))
+
+    if not waiver_scopes:
+        flash("Please select at least one waiver scope (past due, current, or future).", "danger")
         return redirect(url_for('admin.rent_settings'))
 
     admin_id = session.get("admin_id")
@@ -6391,44 +6444,46 @@ def add_rent_waiver():
         if tb:
             join_code = tb.join_code
 
-    # Waiver window: start from the current coverage due date so the waiver
-    # is anchored to actual rent periods rather than wall-clock days.
     now = utc_now()
-    timeline = _calculate_rent_timeline(settings, now)
-    coverage_due_date = timeline.get('coverage_due_date') or timeline.get('upcoming_due_date')
+    period_delta = _get_rent_period_delta(settings)
+    coverage_due_date = _calculate_rent_coverage_due_date(settings, now)
+    current_due, _ = _calculate_rent_deadlines(settings, now)
+    upcoming_due_date = _calculate_upcoming_rent_due_date(settings, current_due, coverage_due_date)
 
-    if coverage_due_date:
-        waiver_start = coverage_due_date
-    else:
-        waiver_start = now
+    # Build the list of (waiver_start, waiver_end, periods_count) tuples to create.
+    waiver_windows = []
 
-    # Advance end date by one full rent period per waived period count.
-    if settings.frequency_type == 'daily':
-        days_per_period = 1
-    elif settings.frequency_type == 'weekly':
-        days_per_period = 7
-    elif settings.frequency_type == 'monthly':
-        days_per_period = 30
-    elif settings.frequency_type == 'custom':
-        if settings.custom_frequency_unit == 'days':
-            days_per_period = settings.custom_frequency_value
-        elif settings.custom_frequency_unit == 'weeks':
-            days_per_period = settings.custom_frequency_value * 7
-        elif settings.custom_frequency_unit == 'months':
-            days_per_period = settings.custom_frequency_value * 30
-        else:
-            days_per_period = 30
-    else:
-        days_per_period = 30
+    if 'past_due' in waiver_scopes:
+        # One point-in-time waiver per selected past-due date.
+        for iso_str in past_due_dates_iso:
+            try:
+                dt = datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                waiver_windows.append((dt, dt, 1))
+            except (ValueError, AttributeError):
+                continue
 
-    total_days = days_per_period * periods_count
-    waiver_end = waiver_start + timedelta(days=total_days)
+    if 'current' in waiver_scopes and coverage_due_date:
+        waiver_windows.append((coverage_due_date, coverage_due_date, 1))
 
-    # Create waivers for each student, scoped to the current join_code.
+    if 'future' in waiver_scopes and upcoming_due_date:
+        future_end = upcoming_due_date
+        for _ in range(future_periods_count - 1):
+            future_end = _add_rent_period(future_end, period_delta)
+        waiver_windows.append((upcoming_due_date, future_end, future_periods_count))
+
+    if not waiver_windows:
+        flash("No valid waiver periods could be determined. Check that rent is configured and a scope was selected.", "danger")
+        return redirect(url_for('admin.rent_settings', settings_block=settings_block))
+
+    # Create waivers for each student and each window.
     count = 0
     for student_id in student_ids:
         student = _get_student_or_404(int(student_id))
-        if student:
+        if not student:
+            continue
+        for waiver_start, waiver_end, periods_count in waiver_windows:
             waiver = RentWaiver(
                 student_id=student.id,
                 join_code=join_code,
@@ -6439,10 +6494,19 @@ def add_rent_waiver():
                 created_by_admin_id=admin_id,
             )
             db.session.add(waiver)
-            count += 1
+        count += 1
 
     db.session.commit()
-    flash(f"Rent waiver added for {count} student(s) for {periods_count} period(s).", "success")
+
+    scope_labels = []
+    if 'past_due' in waiver_scopes:
+        scope_labels.append(f"{len(past_due_dates_iso)} past-due period(s)")
+    if 'current' in waiver_scopes:
+        scope_labels.append("current period")
+    if 'future' in waiver_scopes:
+        scope_labels.append(f"{future_periods_count} future period(s)")
+    scope_str = ", ".join(scope_labels) or "selected periods"
+    flash(f"Rent waiver added for {count} student(s) covering: {scope_str}.", "success")
     return redirect(url_for('admin.rent_settings', settings_block=settings_block))
 
 
