@@ -6,6 +6,7 @@ logging, Jinja filters, and registers blueprints.
 """
 
 import os
+import json
 import logging
 import urllib.parse
 import uuid
@@ -140,6 +141,56 @@ class RequestIdFilter(logging.Filter):
         if not hasattr(record, "correlation_version"):
             record.correlation_version = 1
         return True
+
+
+class JsonLogFormatter(logging.Formatter):
+    """Structured JSON log formatter for journald/Loki ingestion."""
+
+    def format(self, record):
+        payload = {
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "module": record.module,
+            "message": record.getMessage(),
+            "request_id": getattr(record, "request_id", None),
+            "actor_type": getattr(record, "actor_type", None),
+            "actor_opaque_id": getattr(record, "actor_opaque_id", None),
+            "join_code_id": getattr(record, "join_code_id", None),
+            "endpoint": getattr(record, "endpoint", None),
+            "method": getattr(record, "method", None),
+            "error_class": getattr(record, "error_class", None),
+            "error_message": getattr(record, "error_message", None),
+            "correlation_version": getattr(record, "correlation_version", None),
+        }
+
+        route = getattr(record, "route", None)
+        if route is not None:
+            payload["route"] = route
+
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+        if record.stack_info:
+            payload["stack_info"] = self.formatStack(record.stack_info)
+
+        return json.dumps(payload, ensure_ascii=True, sort_keys=True)
+
+
+def _build_log_formatter():
+    renderer = os.getenv("LOG_FORMAT", "json").strip()
+    renderer_lower = renderer.lower()
+    legacy_text_format = (
+        "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s] "
+        "[actor=%(actor_type)s:%(actor_opaque_id)s join_code_id=%(join_code_id)s] "
+        "[endpoint=%(endpoint)s method=%(method)s] "
+        "[error_class=%(error_class)s correlation_version=%(correlation_version)s]: %(message)s"
+    )
+
+    if renderer_lower == "json":
+        return JsonLogFormatter()
+    if renderer_lower == "text":
+        return logging.Formatter(os.getenv("LOG_TEXT_FORMAT", legacy_text_format))
+    return logging.Formatter(renderer)
 
 
 def _get_request_id():
@@ -284,17 +335,11 @@ def create_app():
     # -------------------- LOGGING --------------------
     log_level_name = os.getenv("LOG_LEVEL", "INFO").upper()
     log_level = getattr(logging, log_level_name, logging.INFO)
-    log_format = os.getenv(
-        "LOG_FORMAT",
-        "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s] "
-        "[actor=%(actor_type)s:%(actor_opaque_id)s join_code_id=%(join_code_id)s] "
-        "[endpoint=%(endpoint)s method=%(method)s] "
-        "[error_class=%(error_class)s correlation_version=%(correlation_version)s]: %(message)s",
-    )
+    log_formatter = _build_log_formatter()
 
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(log_level)
-    stream_handler.setFormatter(logging.Formatter(log_format))
+    stream_handler.setFormatter(log_formatter)
     stream_handler.addFilter(RequestIdFilter())
 
     app.logger.setLevel(log_level)
@@ -306,7 +351,7 @@ def create_app():
         log_file = os.getenv("LOG_FILE", "app.log")
         file_handler = RotatingFileHandler(log_file, maxBytes=1_000_000, backupCount=5)
         file_handler.setLevel(log_level)
-        file_handler.setFormatter(logging.Formatter(log_format))
+        file_handler.setFormatter(log_formatter)
         file_handler.addFilter(RequestIdFilter())
         app.logger.addHandler(file_handler)
 

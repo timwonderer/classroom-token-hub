@@ -38,7 +38,12 @@ from app.routes.student import (
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
-from app.utils.transaction_idempotency import create_idempotent_transaction, student_item_refund_key
+from app.utils.transaction_idempotency import (
+    create_idempotent_transaction,
+    get_idempotent_transaction,
+    purchase_transaction_key,
+    student_item_refund_key,
+)
 from app.utils.store import process_expired_collective_goals
 from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone, local_date_bounds_utc, UTC_MIN
 
@@ -234,10 +239,11 @@ def purchase_item():
     from app.routes.student import get_current_class_context
 
     student = get_logged_in_student()
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     item_id = data.get('item_id')
     passphrase = data.get('passphrase')
     quantity = int(data.get('quantity', 1))  # Default to 1 if not specified
+    client_purchase_id = str(data.get('client_purchase_id') or '').strip()
 
     if not all([item_id, passphrase]):
         return jsonify({"status": "error", "message": "Missing item ID or passphrase."}), 400
@@ -257,6 +263,14 @@ def purchase_item():
     join_code = context['join_code']
     teacher_id = context['teacher_id']
     current_block = context.get('block', '').strip().upper()
+    purchase_idempotency_key = None
+    if client_purchase_id:
+        purchase_idempotency_key = purchase_transaction_key(
+            student.id,
+            join_code,
+            item_id,
+            client_purchase_id,
+        )
 
     item_filters = [
         StoreItem.id == item_id,
@@ -463,22 +477,38 @@ def purchase_item():
             active_rent_item = None
 
         if active_rent_item or legacy_rent_perk_free_fallback:
+            purchase_message = f"You purchased {item.name} for $0 (rent perk)."
+            if purchase_idempotency_key:
+                existing_purchase_tx = get_idempotent_transaction(purchase_idempotency_key)
+                if existing_purchase_tx:
+                    return jsonify({"status": "success", "message": f"{purchase_message} Purchase already recorded."})
+
             # Free purchase from rent perk - decrement available free uses unless unlimited (-1)
             if active_rent_item and active_rent_item.uses_remaining != -1:
                 active_rent_item.uses_remaining -= 1
 
             # For rent perks, purchasing is $0 and usage is logged later on /use-item.
-            purchase_tx = Transaction(
+            purchase_kwargs = dict(
                 student_id=student.id,
                 teacher_id=teacher_id,
                 join_code=join_code,
                 amount=Decimal('0.00'),
                 account_type='checking',
-                status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
+                status=TransactionStatus.PENDING,
                 type='purchase',
-                description=f"Purchase: {item.name} [Rent Perk $0]"
+                description=f"Purchase: {item.name} [Rent Perk $0]",
             )
-            db.session.add(purchase_tx)
+            if purchase_idempotency_key:
+                purchase_tx, tx_created = create_idempotent_transaction(
+                    idempotency_key=purchase_idempotency_key,
+                    **purchase_kwargs,
+                )
+                if not tx_created:
+                    db.session.rollback()
+                    return jsonify({"status": "success", "message": f"{purchase_message} Purchase already recorded."})
+            else:
+                purchase_tx = Transaction(**purchase_kwargs)
+                db.session.add(purchase_tx)
 
             expiry_date = None
             if item.item_type == 'delayed' and item.auto_expiry_days:
@@ -498,14 +528,14 @@ def purchase_item():
             db.session.commit()
 
             if legacy_rent_perk_free_fallback and not active_rent_item:
-                return jsonify({"status": "success", "message": f"You purchased {item.name} for $0 (rent perk)."})
+                return jsonify({"status": "success", "message": purchase_message})
 
             remaining = active_rent_item.uses_remaining
             if remaining == -1:
-                return jsonify({"status": "success", "message": f"You purchased {item.name} for $0 (rent perk). Unlimited free purchases remaining this period."})
+                return jsonify({"status": "success", "message": f"{purchase_message} Unlimited free purchases remaining this period."})
             if remaining > 0:
-                return jsonify({"status": "success", "message": f"You purchased {item.name} for $0 (rent perk). {remaining} free purchase(s) remaining this period."})
-            return jsonify({"status": "success", "message": f"You purchased {item.name} for $0 (rent perk). No free purchases remaining this period."})
+                return jsonify({"status": "success", "message": f"{purchase_message} {remaining} free purchase(s) remaining this period."})
+            return jsonify({"status": "success", "message": f"{purchase_message} No free purchases remaining this period."})
 
     # Calculate price (with bulk discount if applicable)
     unit_price = item.price
@@ -597,18 +627,33 @@ def purchase_item():
         if item.bulk_discount_enabled and quantity >= item.bulk_discount_quantity:
             purchase_description += f" [{item.bulk_discount_percentage}% bulk discount]"
 
-        # CRITICAL FIX v2: Add join_code to purchase transaction
-        purchase_tx = Transaction(
+        existing_purchase_tx = None
+        if purchase_idempotency_key:
+            existing_purchase_tx = get_idempotent_transaction(purchase_idempotency_key)
+            if existing_purchase_tx:
+                return jsonify({"status": "success", "message": f"{item.name} purchase already recorded."})
+
+        purchase_kwargs = dict(
             student_id=student.id,
             teacher_id=teacher_id,
-            join_code=join_code,  # CRITICAL: Add join_code for period isolation
+            join_code=join_code,
             amount=-total_price,
             account_type='checking',
-            status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
+            status=TransactionStatus.PENDING,
             type='purchase',
-            description=purchase_description
+            description=purchase_description,
         )
-        db.session.add(purchase_tx)
+        if purchase_idempotency_key:
+            purchase_tx, tx_created = create_idempotent_transaction(
+                idempotency_key=purchase_idempotency_key,
+                **purchase_kwargs,
+            )
+            if not tx_created:
+                db.session.rollback()
+                return jsonify({"status": "success", "message": f"{item.name} purchase already recorded."})
+        else:
+            purchase_tx = Transaction(**purchase_kwargs)
+            db.session.add(purchase_tx)
         # Ensure purchase_tx.id is available so each StudentItem can carry a stable refund link.
         db.session.flush()
 

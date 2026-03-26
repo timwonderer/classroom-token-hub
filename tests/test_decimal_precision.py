@@ -7,9 +7,9 @@ These tests verify that the fixes for floating-point rounding bugs work correctl
 """
 import pytest
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models import (
-    Admin, Student, Transaction, StudentBlock, TeacherBlock,
+    Admin, Student, StudentTeacher, Transaction, StudentBlock, TeacherBlock,
     RentSettings, RentPayment, BankingSettings, _quantize_currency
 )
 from app.extensions import db
@@ -521,3 +521,87 @@ class TestDecimalPrecision:
         # Final balance should be -$45.00 (-10 - 35)
         final_balance = student.get_checking_balance(join_code=join_code)
         assert final_balance == Decimal('-45.00')
+
+    def test_partial_late_rent_payment_quantizes_allocated_late_fee_before_storage(self, client):
+        teacher = Admin(
+            username='teacher_late_fee_quantize',
+            totp_secret='test_secret'
+        )
+        db.session.add(teacher)
+        db.session.flush()
+
+        join_code = 'LATE_FEE_Q'
+        student = Student(
+            first_name='Late',
+            last_initial='F',
+            block='A',
+            salt=b'test_salt',
+            passphrase_hash='test_hash'
+        )
+        db.session.add(student)
+        db.session.flush()
+
+        db.session.add(TeacherBlock(
+            teacher_id=teacher.id,
+            join_code=join_code,
+            block='A',
+            student_id=student.id,
+            is_claimed=True,
+            first_name='Late',
+            last_initial='F',
+            last_name_hash_by_part=['hash1'],
+            dob_sum=1234,
+            salt=b'test_salt_123456',
+            first_half_hash='test_hash'
+        ))
+
+        db.session.add(RentSettings(
+            teacher_id=teacher.id,
+            block='A',
+            is_enabled=True,
+            rent_amount=Decimal('570.00'),
+            allow_incremental_payment=True,
+            frequency_type='monthly',
+            first_rent_due_date=datetime(2020, 1, 1, tzinfo=timezone.utc),
+            grace_period_days=0,
+            late_penalty_amount=Decimal('0.01'),
+            late_penalty_type='once',
+        ))
+
+        db.session.add(StudentBlock(
+            student_id=student.id,
+            period='A',
+            join_code=join_code
+        ))
+        db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+        db.session.add(Transaction(
+            student_id=student.id,
+            teacher_id=teacher.id,
+            join_code=join_code,
+            amount=Decimal('600.00'),
+            account_type='checking',
+            type='Initial Deposit',
+            description='Starting balance'
+        ))
+        db.session.commit()
+
+        with client.session_transaction() as sess:
+            sess['student_id'] = student.id
+            sess['current_join_code'] = join_code
+            sess['login_time'] = datetime.now(timezone.utc).isoformat()
+            sess['last_activity'] = datetime.now(timezone.utc).isoformat()
+
+        response = client.post(
+            '/student/rent/pay/A',
+            data={'amount': '285.00'},
+            follow_redirects=False,
+        )
+
+        assert response.status_code in (302, 303)
+
+        rent_payment = RentPayment.query.filter_by(
+            student_id=student.id,
+            join_code=join_code,
+        ).order_by(RentPayment.id.desc()).first()
+        assert rent_payment is not None
+        assert rent_payment.late_fee_charged == Decimal('0.00')

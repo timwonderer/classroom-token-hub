@@ -54,8 +54,19 @@ The application also recognizes these optional variables for logging:
 | Variable | Description | Default |
 |---|---|---|
 | `LOG_LEVEL` | The logging level. | `INFO` |
-| `LOG_FORMAT` | The log message format. | `[%(asctime)s] %(levelname)s in %(module)s: %(message)s` |
+| `LOG_FORMAT` | Log renderer. Use `json` for structured logs or `text` for the legacy formatter. Custom format strings are also accepted for backward compatibility. | `json` |
+| `LOG_TEXT_FORMAT` | Legacy text formatter used when `LOG_FORMAT=text`. | `[%(asctime)s] %(levelname)s in %(module)s: %(message)s` |
 | `LOG_FILE` | The file used for rotating logs when `FLASK_ENV=production`. | `app.log` |
+
+### Structured Logging
+
+Production logging defaults to newline-delimited JSON so Grafana/Loki can query fields directly (`request_id`, `endpoint`, `method`, `error_class`, etc.).
+
+If you are shipping app logs through Promtail:
+
+1. Prefer journald/stdout as the source of truth.
+2. Replace legacy regex parsing of gunicorn text lines with JSON extraction for app log records.
+3. Remove `| json` parsing from Grafana queries only if the upstream application is still on legacy text logs.
 
 ### Maintenance Mode Variables
 

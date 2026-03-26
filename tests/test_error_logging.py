@@ -1,4 +1,5 @@
 import logging
+import json
 
 from app import create_app
 from app.extensions import db
@@ -64,6 +65,38 @@ def test_request_logger_exception_infers_error_class_from_exc_info(caplog):
     assert getattr(record, "endpoint", None) == "/_probe"
     assert getattr(record, "error_class", None) == "ValueError"
     assert getattr(record, "error_message", None) == "probe failure"
+
+
+def test_default_log_formatter_emits_json_with_request_context():
+    app = create_app()
+    handler = app.logger.handlers[0]
+
+    with app.test_request_context("/_json_log", method="POST", headers={"X-Request-Id": "json-log-request"}):
+        for fn in app.before_request_funcs.get(None, []):
+            fn()
+
+        record = app.logger.makeRecord(
+            app.logger.name,
+            logging.INFO,
+            __file__,
+            0,
+            "Structured log probe",
+            args=(),
+            exc_info=None,
+            extra={"route": "/_json_log"},
+        )
+        for log_filter in handler.filters:
+            assert log_filter.filter(record) is True
+
+        payload = json.loads(handler.format(record))
+
+    assert payload["message"] == "Structured log probe"
+    assert payload["request_id"] == "json-log-request"
+    assert payload["method"] == "POST"
+    assert payload["endpoint"] == "/_json_log"
+    assert payload["route"] == "/_json_log"
+    assert payload["level"] == "INFO"
+    assert "timestamp" in payload
 
 
 def test_handled_http_error_creates_structured_error_event(client):

@@ -11,11 +11,16 @@ from app.utils.transaction_idempotency import (
     MAX_IDEMPOTENCY_KEY_LENGTH,
     create_idempotent_transaction,
     insurance_reimbursement_key,
+    purchase_transaction_key,
 )
 
 
 def test_idempotent_transaction_types_are_explicit():
-    assert IDEMPOTENT_TRANSACTION_TYPES == frozenset({"insurance_reimbursement", "refund"})
+    assert IDEMPOTENT_TRANSACTION_TYPES == frozenset({"insurance_reimbursement", "purchase", "refund"})
+
+
+def test_purchase_transaction_key_scopes_to_student_join_code_and_client_token():
+    assert purchase_transaction_key(12, "JOIN-ABC", 34, "tap-1") == "txn:purchase:student:12:join:join-abc:item:34:tap-1"
 
 
 def test_create_idempotent_transaction_reuses_existing_row_on_retry(client):
