@@ -20,6 +20,7 @@ import pytest
 from app import db
 from app.models import (
     Admin,
+    AnalyticsEvent,
     RentSettings,
     RentWaiver,
     Student,
@@ -390,3 +391,110 @@ def test_invalid_past_due_dates_skipped_count_reflects_actual(client, app):
         assert len(waivers) == 1
         # Flash message should report 1 past-due period (not 3)
         assert b'1 past-due period' in resp.data
+
+
+def test_add_rent_waiver_logs_analytics_event(client, app, monkeypatch):
+    """Adding a rent waiver creates one AnalyticsEvent per student with type 'rent_waiver'."""
+    with app.app_context():
+        admin = _make_admin("evt1")
+        join_code = "ARW_EVT1"
+        first_due = datetime(2026, 1, 5, tzinfo=timezone.utc)
+        _make_rent_settings(admin.id, "A", first_due)
+        _make_teacher_block(admin.id, "A", join_code)
+        student = _make_student("evt1_s")
+        _link_student(student, admin)
+        db.session.commit()
+
+        fixed_now = datetime(2026, 2, 1, tzinfo=timezone.utc)
+        monkeypatch.setattr('app.routes.admin.utc_now', lambda: fixed_now)
+        _login_admin(client, admin.id, join_code)
+
+        resp = client.post(
+            '/admin/rent-waiver/add',
+            data={
+                'student_ids': [str(student.id)],
+                'waiver_scope': ['current'],
+                'settings_block': 'A',
+                'reason': 'Medical absence',
+            },
+        )
+        assert resp.status_code == 302
+
+        events = AnalyticsEvent.query.filter_by(
+            join_code=join_code, event_type='rent_waiver'
+        ).all()
+        assert len(events) == 1
+        event = events[0]
+        assert event.teacher_id == admin.id
+        assert student.full_name in event.description
+        assert event.created_by_admin is True
+        assert 'Medical absence' in event.description
+
+
+def test_add_rent_waiver_logs_one_event_per_student(client, app, monkeypatch):
+    """Adding a waiver for multiple students logs one AnalyticsEvent per student."""
+    with app.app_context():
+        admin = _make_admin("evt2")
+        join_code = "ARW_EVT2"
+        first_due = datetime(2026, 1, 5, tzinfo=timezone.utc)
+        _make_rent_settings(admin.id, "A", first_due)
+        _make_teacher_block(admin.id, "A", join_code)
+        student_a = _make_student("evt2_sa")
+        student_b = _make_student("evt2_sb")
+        _link_student(student_a, admin)
+        _link_student(student_b, admin)
+        db.session.commit()
+
+        fixed_now = datetime(2026, 2, 1, tzinfo=timezone.utc)
+        monkeypatch.setattr('app.routes.admin.utc_now', lambda: fixed_now)
+        _login_admin(client, admin.id, join_code)
+
+        resp = client.post(
+            '/admin/rent-waiver/add',
+            data={
+                'student_ids': [str(student_a.id), str(student_b.id)],
+                'waiver_scope': ['current'],
+                'settings_block': 'A',
+            },
+        )
+        assert resp.status_code == 302
+
+        events = AnalyticsEvent.query.filter_by(
+            join_code=join_code, event_type='rent_waiver'
+        ).all()
+        assert len(events) == 2
+
+
+def test_remove_rent_waiver_logs_analytics_event(client, app):
+    """Removing a rent waiver creates an AnalyticsEvent with type 'rent_waiver'."""
+    with app.app_context():
+        admin = _make_admin("rem1")
+        join_code = "ARW_REM1"
+        first_due = datetime(2026, 1, 5, tzinfo=timezone.utc)
+        _make_rent_settings(admin.id, "A", first_due)
+        _make_teacher_block(admin.id, "A", join_code)
+        student = _make_student("rem1_s")
+        _link_student(student, admin)
+        coverage = datetime(2026, 3, 1, tzinfo=timezone.utc)
+        waiver = RentWaiver(
+            student_id=student.id,
+            join_code=join_code,
+            waiver_start_date=coverage,
+            waiver_end_date=coverage,
+            periods_count=1,
+            created_by_admin_id=admin.id,
+        )
+        db.session.add(waiver)
+        db.session.commit()
+
+        _login_admin(client, admin.id, join_code)
+
+        resp = client.post(f'/admin/rent-waiver/{waiver.id}/remove')
+        assert resp.status_code == 302
+
+        events = AnalyticsEvent.query.filter_by(
+            join_code=join_code, event_type='rent_waiver'
+        ).all()
+        assert len(events) == 1
+        assert student.full_name in events[0].description
+        assert 'removed' in events[0].description

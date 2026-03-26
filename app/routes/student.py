@@ -2664,6 +2664,7 @@ def shop():
                     current_block,
                     join_code,
                     coverage_due_date,
+                    include_waivers=False,
                 )
 
             rent_store_items = RentItem.query.filter(
@@ -3226,6 +3227,7 @@ def _is_student_coverage_period_paid(
     join_code,
     coverage_due_date,
     include_late_fee=True,
+    include_waivers=True,
 ):
     """Return True when a student's specific coverage period is fully paid or waived."""
     if not settings or not coverage_due_date or not join_code:
@@ -3235,7 +3237,7 @@ def _is_student_coverage_period_paid(
         return False
 
     # A waiver exempts the student from paying rent for this coverage period.
-    if _has_active_rent_waiver(student_id, join_code, coverage_due_date):
+    if include_waivers and _has_active_rent_waiver(student_id, join_code, coverage_due_date):
         return True
 
     coverage_payments = RentPayment.query.filter(
