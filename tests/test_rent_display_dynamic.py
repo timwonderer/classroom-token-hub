@@ -13,7 +13,7 @@ import os
 from werkzeug.security import generate_password_hash
 
 from app import db
-from app.models import Admin, Student, TeacherBlock, RentSettings, RentItem, Transaction, TransactionStatus
+from app.models import Admin, Student, TeacherBlock, RentSettings, RentItem, RentWaiver, Transaction, TransactionStatus
 from app.hash_utils import get_random_salt, hash_username
 
 
@@ -216,6 +216,39 @@ def test_overdue_current_period_does_not_show_future_due_countdown(client, setup
     assert response.status_code == 200
     assert b'Past due, pay now' in response.data
     assert b'Rent will be due in' not in response.data
+
+
+def test_student_rent_page_shows_current_waiver_and_history_row(client, setup_rent_with_items, monkeypatch):
+    data = setup_rent_with_items
+    fixed_now = datetime(2026, 1, 30, 12, 0, tzinfo=timezone.utc)
+
+    data['rent_settings'].first_rent_due_date = datetime(2026, 1, 28, tzinfo=timezone.utc)
+    data['rent_settings'].bill_preview_enabled = False
+    data['rent_settings'].bill_preview_days = 0
+    data['student'].is_rent_enabled = True
+    db.session.add(RentWaiver(
+        student_id=data['student'].id,
+        join_code=data['join_code'],
+        waiver_start_date=datetime(2026, 1, 28, tzinfo=timezone.utc),
+        waiver_end_date=datetime(2026, 1, 28, tzinfo=timezone.utc),
+        periods_count=1,
+        reason='Teacher excused absence',
+    ))
+    db.session.commit()
+
+    monkeypatch.setattr('app.routes.student.utc_now', lambda: fixed_now)
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = data['student'].id
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+        sess['current_join_code'] = data['join_code']
+
+    response = client.get('/student/rent')
+    assert response.status_code == 200
+    assert b'This rent period has been waived.' in response.data
+    assert b'Teacher excused absence' in response.data
+    assert b'Current waiver' in response.data
+    assert b'Waived' in response.data
 
 
 def test_days_until_due_calculation(client, setup_rent_with_items):

@@ -413,12 +413,13 @@ a:hover {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    padding: 0.28em 0.72em;
+    padding: var(--badge-padding-y) var(--badge-padding-x);
     font-weight: 600;
-    font-size: 0.875rem;
-    line-height: 1.1;
-    letter-spacing: 0.02em;
+    font-size: var(--badge-font-size);
+    line-height: var(--badge-line-height);
+    letter-spacing: var(--badge-letter-spacing);
     vertical-align: middle;
+    white-space: nowrap;
 }
 
 /* Solid Badges with Border — scoped to .badge only */

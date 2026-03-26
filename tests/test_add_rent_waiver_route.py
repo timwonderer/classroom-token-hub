@@ -18,6 +18,7 @@ from decimal import Decimal
 import pytest
 
 from app import db
+from app.utils.time import ensure_utc
 from app.models import (
     Admin,
     AnalyticsEvent,
@@ -498,3 +499,79 @@ def test_remove_rent_waiver_logs_analytics_event(client, app):
         assert len(events) == 1
         assert student.full_name in events[0].description
         assert 'removed' in events[0].description
+
+
+def test_cancel_upcoming_waiver_period_keeps_remaining_future_periods(client, app, monkeypatch):
+    with app.app_context():
+        admin = _make_admin("rem_future")
+        join_code = "ARW_REMFUT"
+        first_due = datetime(2026, 1, 5, tzinfo=timezone.utc)
+        _make_rent_settings(admin.id, "A", first_due)
+        _make_teacher_block(admin.id, "A", join_code)
+        student = _make_student("rem_future_s")
+        _link_student(student, admin)
+        waiver = RentWaiver(
+            student_id=student.id,
+            join_code=join_code,
+            waiver_start_date=datetime(2026, 3, 2, tzinfo=timezone.utc),
+            waiver_end_date=datetime(2026, 3, 16, tzinfo=timezone.utc),
+            periods_count=3,
+            created_by_admin_id=admin.id,
+        )
+        db.session.add(waiver)
+        db.session.commit()
+
+        monkeypatch.setattr('app.routes.admin.utc_now', lambda: datetime(2026, 2, 20, tzinfo=timezone.utc))
+        _login_admin(client, admin.id, join_code)
+
+        resp = client.post(
+            f'/admin/rent-waiver/{waiver.id}/remove',
+            data={
+                'settings_block': 'A',
+                'coverage_due_date': datetime(2026, 3, 2, tzinfo=timezone.utc).isoformat(),
+            },
+        )
+        assert resp.status_code == 302
+
+        remaining = RentWaiver.query.filter_by(student_id=student.id, join_code=join_code).all()
+        assert len(remaining) == 1
+        assert ensure_utc(remaining[0].waiver_start_date) == datetime(2026, 3, 9, tzinfo=timezone.utc)
+        assert ensure_utc(remaining[0].waiver_end_date) == datetime(2026, 3, 16, tzinfo=timezone.utc)
+        assert remaining[0].periods_count == 2
+
+
+def test_remove_current_waiver_period_is_blocked(client, app, monkeypatch):
+    with app.app_context():
+        admin = _make_admin("rem_current")
+        join_code = "ARW_REMCUR"
+        first_due = datetime(2026, 1, 5, tzinfo=timezone.utc)
+        _make_rent_settings(admin.id, "A", first_due)
+        _make_teacher_block(admin.id, "A", join_code)
+        student = _make_student("rem_current_s")
+        _link_student(student, admin)
+        current_due = datetime(2026, 2, 23, tzinfo=timezone.utc)
+        waiver = RentWaiver(
+            student_id=student.id,
+            join_code=join_code,
+            waiver_start_date=current_due,
+            waiver_end_date=current_due,
+            periods_count=1,
+            created_by_admin_id=admin.id,
+        )
+        db.session.add(waiver)
+        db.session.commit()
+
+        monkeypatch.setattr('app.routes.admin.utc_now', lambda: datetime(2026, 2, 24, tzinfo=timezone.utc))
+        _login_admin(client, admin.id, join_code)
+
+        resp = client.post(
+            f'/admin/rent-waiver/{waiver.id}/remove',
+            data={
+                'settings_block': 'A',
+                'coverage_due_date': current_due.isoformat(),
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        assert b'cannot be reversed' in resp.data
+        assert RentWaiver.query.filter_by(student_id=student.id, join_code=join_code).count() == 1

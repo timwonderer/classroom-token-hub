@@ -1,9 +1,11 @@
 
 from decimal import Decimal
+import importlib.util
+from pathlib import Path
 import pytest
 from app.models import Student, Transaction, TransactionStatus, BalanceCache, Admin
 from app.extensions import db
-from app.utils.banking import settle_balances
+from app.utils.banking import settle_balances, settle_pending_transaction_contexts
 
 def test_ledger_flow(client):
     """Test full flow: Create PENDING -> Settle -> Verify Cache."""
@@ -172,3 +174,92 @@ def test_void_posted_with_reversal(client):
     cache = BalanceCache.query.filter_by(student_id=student.id, join_code=join_code).first()
     # Cache should be updated: 100 + (-100) = 0
     assert cache.posted_checking_balance_cents == 0
+
+
+def test_settlement_sweep_processes_each_pending_context_once(client):
+    teacher = Admin(username="teacher-sweep", totp_secret="secret")
+    student_one = Student(first_name="Sweep", last_initial="A", block="A", salt=b'111', first_half_hash="hasha", dob_sum=111)
+    student_two = Student(first_name="Sweep", last_initial="B", block="B", salt=b'222', first_half_hash="hashb", dob_sum=222)
+    db.session.add_all([teacher, student_one, student_two])
+    db.session.commit()
+
+    db.session.add_all([
+        Transaction(
+            student_id=student_one.id,
+            teacher_id=teacher.id,
+            join_code="SWEEP-A",
+            amount=Decimal('12.34'),
+            account_type='checking',
+            status=TransactionStatus.PENDING,
+            type='deposit',
+            description='Pending A',
+        ),
+        Transaction(
+            student_id=student_one.id,
+            teacher_id=teacher.id,
+            join_code="SWEEP-A",
+            amount=Decimal('1.66'),
+            account_type='savings',
+            status=TransactionStatus.PENDING,
+            type='deposit',
+            description='Pending A savings',
+        ),
+        Transaction(
+            student_id=student_two.id,
+            teacher_id=teacher.id,
+            join_code="SWEEP-B",
+            amount=Decimal('9.99'),
+            account_type='checking',
+            status=TransactionStatus.PENDING,
+            type='deposit',
+            description='Pending B',
+        ),
+    ])
+    db.session.commit()
+
+    summary = settle_pending_transaction_contexts()
+
+    assert summary == {"settled_contexts": 2, "failed_contexts": 0}
+
+    posted_statuses = {
+        (tx.student_id, tx.join_code, tx.account_type): tx.status
+        for tx in Transaction.query.all()
+    }
+    assert posted_statuses[(student_one.id, "SWEEP-A", "checking")] == TransactionStatus.POSTED
+    assert posted_statuses[(student_one.id, "SWEEP-A", "savings")] == TransactionStatus.POSTED
+    assert posted_statuses[(student_two.id, "SWEEP-B", "checking")] == TransactionStatus.POSTED
+
+    cache_one = BalanceCache.query.filter_by(student_id=student_one.id, join_code="SWEEP-A").first()
+    cache_two = BalanceCache.query.filter_by(student_id=student_two.id, join_code="SWEEP-B").first()
+    assert cache_one.posted_checking_balance_cents == 1234
+    assert cache_one.posted_savings_balance_cents == 166
+    assert cache_two.posted_checking_balance_cents == 999
+
+
+def test_settlement_script_returns_nonzero_when_failures(monkeypatch):
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "settle_pending_transactions.py"
+    spec = importlib.util.spec_from_file_location("settle_pending_transactions_script", script_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    class DummyAppContext:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class DummyApp:
+        def app_context(self):
+            return DummyAppContext()
+
+    monkeypatch.setattr(module, "create_app", lambda: DummyApp())
+    monkeypatch.setattr(
+        module,
+        "settle_pending_transaction_contexts",
+        lambda limit=None: {"settled_contexts": 1, "failed_contexts": 2},
+    )
+    monkeypatch.setattr(module, "parse_args", lambda: type("Args", (), {"limit": None})())
+
+    assert module.main() == 1

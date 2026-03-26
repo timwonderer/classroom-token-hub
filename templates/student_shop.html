@@ -501,6 +501,7 @@
 
     let currentItemData = {};
     let currentStoreTrigger = null;
+    let currentPurchaseRequestId = null;
     const buyItemModal = document.getElementById('buyItemModal');
     const detailsModalElement = document.getElementById('storeItemDetailsModal');
     const detailsModalPurchaseBtn = document.getElementById('detailsModalPurchaseBtn');
@@ -644,6 +645,7 @@
 
     // Buy Item Modal Logic
     buyItemModal.addEventListener('show.bs.modal', event => {
+        currentPurchaseRequestId = null;
         const trigger = event.relatedTarget || currentStoreTrigger;
         if (trigger) {
             populateBuyItemModal(trigger);
@@ -803,6 +805,7 @@
 
     document.getElementById('confirmPurchaseBtn').addEventListener('click', () => {
         const form = document.getElementById('buyItemForm');
+        const confirmButton = document.getElementById('confirmPurchaseBtn');
         const itemId = form.querySelector('#modalItemId').value;
         const passphrase = form.querySelector('#passphrase').value;
         const quantity = parseInt(form.querySelector('#quantity').value);
@@ -818,6 +821,16 @@
             return;
         }
 
+        if (!currentPurchaseRequestId) {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                currentPurchaseRequestId = window.crypto.randomUUID();
+            } else {
+                currentPurchaseRequestId = `purchase-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            }
+        }
+
+        confirmButton.disabled = true;
+
         fetch('/api/purchase-item', {
             method: 'POST',
             headers: {
@@ -827,7 +840,8 @@
             body: JSON.stringify({
                 item_id: itemId,
                 passphrase: passphrase,
-                quantity: quantity
+                quantity: quantity,
+                client_purchase_id: currentPurchaseRequestId
             })
         })
         .then(response => response.json())
@@ -844,6 +858,9 @@
         .catch(error => {
             console.error('Purchase error:', error);
             alert('An unexpected error occurred. Please try again or contact your teacher if the problem persists. Error details have been logged.');
+        })
+        .finally(() => {
+            confirmButton.disabled = false;
         });
     });
 

@@ -128,6 +128,121 @@ def test_void_delayed_purchase_removes_item_and_refunds(client):
     assert reversal_tx.idempotency_key == f"txn:void:transaction:{purchase_tx.id}:refund"
 
 
+def test_duplicate_purchase_submission_with_same_client_token_is_idempotent(client):
+    teacher, student = _build_teacher_student('VOIDIDEMP1')
+
+    delayed_item = StoreItem(
+        teacher_id=teacher.id,
+        name='Notebook',
+        price=Decimal('25.00'),
+        item_type='delayed',
+        is_active=True,
+    )
+    db.session.add(delayed_item)
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher.id,
+        join_code='VOIDIDEMP1',
+        amount=Decimal('100.00'),
+        account_type='checking',
+        type='deposit',
+        description='Initial funds',
+    ))
+    db.session.commit()
+
+    _login_student(client, student.id, 'VOIDIDEMP1')
+    payload = {
+        'item_id': delayed_item.id,
+        'passphrase': 'password',
+        'quantity': 1,
+        'client_purchase_id': 'double-tap-1',
+    }
+
+    first_resp = client.post('/api/purchase-item', json=payload)
+    second_resp = client.post('/api/purchase-item', json=payload)
+
+    assert first_resp.status_code == 200
+    assert second_resp.status_code == 200
+    assert second_resp.get_json()['status'] == 'success'
+
+    purchase_txs = Transaction.query.filter_by(
+        student_id=student.id,
+        type='purchase',
+    ).filter(Transaction.description.like("Purchase: Notebook%")).all()
+    assert len(purchase_txs) == 1
+    assert StudentItem.query.filter_by(student_id=student.id, store_item_id=delayed_item.id).count() == 1
+    assert purchase_txs[0].idempotency_key == (
+        f"txn:purchase:student:{student.id}:join:voididemp1:item:{delayed_item.id}:double-tap-1"
+    )
+
+
+def test_purchase_rejects_non_numeric_quantity_with_400(client):
+    teacher, student = _build_teacher_student('VOIDBADQ1')
+
+    delayed_item = StoreItem(
+        teacher_id=teacher.id,
+        name='Marker',
+        price=Decimal('5.00'),
+        item_type='delayed',
+        is_active=True,
+    )
+    db.session.add(delayed_item)
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher.id,
+        join_code='VOIDBADQ1',
+        amount=Decimal('20.00'),
+        account_type='checking',
+        type='deposit',
+        description='Initial funds',
+    ))
+    db.session.commit()
+
+    _login_student(client, student.id, 'VOIDBADQ1')
+    resp = client.post('/api/purchase-item', json={
+        'item_id': delayed_item.id,
+        'passphrase': 'password',
+        'quantity': 'abc',
+    })
+
+    assert resp.status_code == 400
+    assert resp.get_json()['message'] == 'Quantity must be a whole number.'
+
+
+def test_purchase_rejects_oversized_client_purchase_id_with_400(client):
+    teacher, student = _build_teacher_student('VOIDLONG1')
+
+    delayed_item = StoreItem(
+        teacher_id=teacher.id,
+        name='Folder',
+        price=Decimal('5.00'),
+        item_type='delayed',
+        is_active=True,
+    )
+    db.session.add(delayed_item)
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher.id,
+        join_code='VOIDLONG1',
+        amount=Decimal('20.00'),
+        account_type='checking',
+        type='deposit',
+        description='Initial funds',
+    ))
+    db.session.commit()
+
+    _login_student(client, student.id, 'VOIDLONG1')
+    resp = client.post('/api/purchase-item', json={
+        'item_id': delayed_item.id,
+        'passphrase': 'password',
+        'quantity': 1,
+        'client_purchase_id': 'x' * 129,
+    })
+
+    assert resp.status_code == 400
+    assert resp.get_json()['message'] == 'Purchase request ID is too long.'
+
+
 def test_void_immediate_purchase_is_not_allowed(client):
     teacher, student = _build_teacher_student('VOIDIMM1')
 

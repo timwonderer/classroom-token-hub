@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from os import urandom
 from app import db
-from app.models import Admin, EconomySnapshot, JoinCode, PayrollSettings, TeacherBlock
+from app.models import Admin, EconomySnapshot, JoinCode, PayrollSettings, RentSettings, TeacherBlock
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 from app.routes import admin as admin_routes
 
@@ -277,6 +277,38 @@ def test_analyze_endpoint_recomputes_after_payroll_change(logged_in_admin_client
     assert refreshed_data['cwi_breakdown']['expected_weekly_hours'] == 9.5
     assert refreshed_data['cwi'] != initial_data['cwi']
     assert EconomySnapshot.query.count() == 2
+
+
+def test_analyze_endpoint_recomputes_after_rent_change(logged_in_admin_client, admin_with_payroll):
+    admin, _payroll_settings = admin_with_payroll
+    client = logged_in_admin_client
+    _attach_join_code(admin, block='A', token='JOIN-CACHE-D')
+
+    rent_settings = RentSettings(
+        teacher_id=admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('260.00'),
+        frequency_type='monthly',
+    )
+    db.session.add(rent_settings)
+    db.session.commit()
+
+    initial_response = client.post('/admin/api/economy/analyze', json={'block': 'A'})
+    assert initial_response.status_code == 200
+    initial_data = initial_response.get_json()
+    assert initial_data['snapshot_cached'] is False
+    assert EconomySnapshot.query.count() == 1
+
+    rent_settings.rent_amount = Decimal('610.00')
+    db.session.commit()
+
+    refreshed_response = client.post('/admin/api/economy/analyze', json={'block': 'A'})
+    assert refreshed_response.status_code == 200
+    refreshed_data = refreshed_response.get_json()
+    assert refreshed_data['snapshot_cached'] is False
+    assert EconomySnapshot.query.count() == 2
+    assert refreshed_data['warning_items'] != initial_data['warning_items']
 
 
 def test_serialize_economy_analysis_payload_coerces_decimal_values(app):
