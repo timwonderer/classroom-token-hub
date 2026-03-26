@@ -2406,13 +2406,13 @@ def test_waiver_does_not_grant_rent_perks_in_shop(client, teacher_admin, student
         ),
     ])
 
-    # Add a rent waiver for the current coverage period (no actual payment).
-    coverage = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    # Add a rent waiver that is guaranteed to cover the current coverage period,
+    # independent of the exact "now" used by the application.
     db.session.add(RentWaiver(
         student_id=student.id,
         join_code='JOINCODE123',
-        waiver_start_date=coverage - timedelta(days=5),
-        waiver_end_date=coverage + timedelta(days=5),
+        waiver_start_date=datetime(2000, 1, 1, tzinfo=timezone.utc),
+        waiver_end_date=datetime(2100, 1, 1, tzinfo=timezone.utc),
         periods_count=1,
     ))
     db.session.commit()
