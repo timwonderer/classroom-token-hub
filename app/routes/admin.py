@@ -6495,7 +6495,17 @@ def add_rent_waiver():
         flash("No valid waiver periods could be determined. Check that rent is configured and a scope was selected.", "danger")
         return redirect(url_for('admin.rent_settings', settings_block=settings_block))
 
-    # Create waivers for each student and each window.
+    # Build scope description for analytics events.
+    scope_labels = []
+    if 'past_due' in waiver_scopes:
+        scope_labels.append(f"{past_due_window_count} past-due period(s)")
+    if 'current' in waiver_scopes:
+        scope_labels.append("current period")
+    if 'future' in waiver_scopes:
+        scope_labels.append(f"{future_periods_count} future period(s)")
+    scope_str = ", ".join(scope_labels) or "selected periods"
+
+    # Create waivers and analytics events for each student and each window.
     count = 0
     for student_id in student_ids:
         student = _get_student_or_404(int(student_id))
@@ -6510,19 +6520,22 @@ def add_rent_waiver():
                 created_by_admin_id=admin_id,
             )
             db.session.add(waiver)
+
+        description = f"Rent waiver added for {student.full_name} covering: {scope_str}."
+        if reason:
+            description = f"{description} Reason: {reason}"
+        db.session.add(AnalyticsEvent(
+            teacher_id=admin_id,
+            join_code=join_code,
+            event_type='rent_waiver',
+            event_date=now,
+            description=description[:255],
+            created_by_admin=True,
+        ))
         count += 1
 
     db.session.commit()
 
-    # Count actual past-due windows persisted (invalid ISO strings were skipped).
-    scope_labels = []
-    if 'past_due' in waiver_scopes:
-        scope_labels.append(f"{past_due_window_count} past-due period(s)")
-    if 'current' in waiver_scopes:
-        scope_labels.append("current period")
-    if 'future' in waiver_scopes:
-        scope_labels.append(f"{future_periods_count} future period(s)")
-    scope_str = ", ".join(scope_labels) or "selected periods"
     flash(f"Rent waiver added for {count} student(s) covering: {scope_str}.", "success")
     return redirect(url_for('admin.rent_settings', settings_block=settings_block))
 
@@ -6534,7 +6547,19 @@ def remove_rent_waiver(waiver_id):
     waiver = RentWaiver.query.get_or_404(waiver_id)
     _get_student_or_404(waiver.student_id)
     student_name = waiver.student.full_name
+    admin_id = session.get("admin_id")
+    join_code = waiver.join_code or session.get('current_join_code')
     db.session.delete(waiver)
+    if admin_id and join_code:
+        removal_description = (f"Rent waiver removed for {student_name}.")[:255]
+        db.session.add(AnalyticsEvent(
+            teacher_id=admin_id,
+            join_code=join_code,
+            event_type='rent_waiver',
+            event_date=utc_now(),
+            description=removal_description,
+            created_by_admin=True,
+        ))
     db.session.commit()
     flash(f"Rent waiver removed for {student_name}.", "success")
     return redirect(url_for('admin.rent_settings'))

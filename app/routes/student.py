@@ -2665,6 +2665,13 @@ def shop():
                     join_code,
                     coverage_due_date,
                 )
+                # A waiver only covers the rent obligation; it does not grant
+                # rent perks (per-use free items or privilege "included" badges).
+                is_rent_waived = has_paid_rent and _has_active_rent_waiver(
+                    student.id, join_code, coverage_due_date
+                )
+                if is_rent_waived:
+                    has_paid_rent = False
 
             rent_store_items = RentItem.query.filter(
                 RentItem.rent_setting_id == rent_settings.id,
