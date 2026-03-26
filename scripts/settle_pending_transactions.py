@@ -2,6 +2,7 @@
 """Settle all pending transaction contexts."""
 
 import argparse
+import sys
 
 from app import create_app
 from app.utils.banking import settle_pending_transaction_contexts
@@ -30,7 +31,8 @@ def main():
                 **summary
             )
         )
+        return 1 if summary["failed_contexts"] else 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

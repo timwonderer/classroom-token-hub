@@ -39,6 +39,7 @@ from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
 from app.utils.transaction_idempotency import (
+    MAX_IDEMPOTENCY_KEY_LENGTH,
     create_idempotent_transaction,
     get_idempotent_transaction,
     purchase_transaction_key,
@@ -242,7 +243,10 @@ def purchase_item():
     data = request.get_json(silent=True) or {}
     item_id = data.get('item_id')
     passphrase = data.get('passphrase')
-    quantity = int(data.get('quantity', 1))  # Default to 1 if not specified
+    try:
+        quantity = int(data.get('quantity', 1))  # Default to 1 if not specified
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "Quantity must be a whole number."}), 400
     client_purchase_id = str(data.get('client_purchase_id') or '').strip()
 
     if not all([item_id, passphrase]):
@@ -250,6 +254,9 @@ def purchase_item():
 
     if quantity < 1:
         return jsonify({"status": "error", "message": "Quantity must be at least 1."}), 400
+
+    if len(client_purchase_id) > MAX_IDEMPOTENCY_KEY_LENGTH:
+        return jsonify({"status": "error", "message": "Purchase request ID is too long."}), 400
 
     # 1. Verify passphrase
     if not check_password_hash(student.passphrase_hash or '', passphrase):
@@ -271,6 +278,8 @@ def purchase_item():
             item_id,
             client_purchase_id,
         )
+        if len(purchase_idempotency_key) > MAX_IDEMPOTENCY_KEY_LENGTH:
+            return jsonify({"status": "error", "message": "Purchase request ID is too long."}), 400
 
     item_filters = [
         StoreItem.id == item_id,

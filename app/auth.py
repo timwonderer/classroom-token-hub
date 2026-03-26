@@ -334,7 +334,7 @@ def system_admin_required(f):
         last_activity = session.get('last_activity')
         now = utc_now()
         if last_activity:
-            last_activity = datetime.fromisoformat(last_activity)
+            last_activity = ensure_utc(datetime.fromisoformat(last_activity))
             if _system_admin_timeout_expired(last_activity):
                 _expire_system_admin_session()
                 if _is_grafana_proxy_subrequest():

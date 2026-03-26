@@ -74,3 +74,16 @@ def test_expired_sysadmin_dashboard_still_redirects_to_login(client):
 
     assert response.status_code == 302
     assert "/sysadmin/login" in response.headers["Location"]
+
+
+def test_sysadmin_dashboard_accepts_legacy_naive_last_activity_timestamp(client):
+    sysadmin, _ = _create_sysadmin("dashboard_naive")
+    with client.session_transaction() as sess:
+        sess["is_system_admin"] = True
+        sess["sysadmin_id"] = sysadmin.id
+        sess["sysadmin_auth_username"] = "dashboard_naive"
+        sess["last_activity"] = (utc_now() - timedelta(minutes=5)).replace(tzinfo=None).isoformat()
+
+    response = client.get("/sysadmin/dashboard")
+
+    assert response.status_code == 200

@@ -54,7 +54,7 @@ from app.utils.store import process_expired_collective_goals
 from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
 from app.attendance import get_all_block_statuses
 from app.payroll import get_pay_rate_for_block
-from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone, get_claim_period_bounds
+from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone, get_claim_period_bounds, UTC_MIN
 from app.utils.insurance_eligibility import (
     evaluate_claim_transaction_eligibility,
     collect_reimbursed_source_tx_ids,

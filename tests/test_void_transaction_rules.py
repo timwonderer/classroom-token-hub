@@ -176,6 +176,73 @@ def test_duplicate_purchase_submission_with_same_client_token_is_idempotent(clie
     )
 
 
+def test_purchase_rejects_non_numeric_quantity_with_400(client):
+    teacher, student = _build_teacher_student('VOIDBADQ1')
+
+    delayed_item = StoreItem(
+        teacher_id=teacher.id,
+        name='Marker',
+        price=Decimal('5.00'),
+        item_type='delayed',
+        is_active=True,
+    )
+    db.session.add(delayed_item)
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher.id,
+        join_code='VOIDBADQ1',
+        amount=Decimal('20.00'),
+        account_type='checking',
+        type='deposit',
+        description='Initial funds',
+    ))
+    db.session.commit()
+
+    _login_student(client, student.id, 'VOIDBADQ1')
+    resp = client.post('/api/purchase-item', json={
+        'item_id': delayed_item.id,
+        'passphrase': 'password',
+        'quantity': 'abc',
+    })
+
+    assert resp.status_code == 400
+    assert resp.get_json()['message'] == 'Quantity must be a whole number.'
+
+
+def test_purchase_rejects_oversized_client_purchase_id_with_400(client):
+    teacher, student = _build_teacher_student('VOIDLONG1')
+
+    delayed_item = StoreItem(
+        teacher_id=teacher.id,
+        name='Folder',
+        price=Decimal('5.00'),
+        item_type='delayed',
+        is_active=True,
+    )
+    db.session.add(delayed_item)
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher.id,
+        join_code='VOIDLONG1',
+        amount=Decimal('20.00'),
+        account_type='checking',
+        type='deposit',
+        description='Initial funds',
+    ))
+    db.session.commit()
+
+    _login_student(client, student.id, 'VOIDLONG1')
+    resp = client.post('/api/purchase-item', json={
+        'item_id': delayed_item.id,
+        'passphrase': 'password',
+        'quantity': 1,
+        'client_purchase_id': 'x' * 129,
+    })
+
+    assert resp.status_code == 400
+    assert resp.get_json()['message'] == 'Purchase request ID is too long.'
+
+
 def test_void_immediate_purchase_is_not_allowed(client):
     teacher, student = _build_teacher_student('VOIDIMM1')
 
