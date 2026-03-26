@@ -393,7 +393,7 @@ def test_invalid_past_due_dates_skipped_count_reflects_actual(client, app):
         assert b'1 past-due period' in resp.data
 
 
-def test_add_rent_waiver_logs_analytics_event(client, app):
+def test_add_rent_waiver_logs_analytics_event(client, app, monkeypatch):
     """Adding a rent waiver creates one AnalyticsEvent per student with type 'rent_waiver'."""
     with app.app_context():
         admin = _make_admin("evt1")
@@ -405,6 +405,8 @@ def test_add_rent_waiver_logs_analytics_event(client, app):
         _link_student(student, admin)
         db.session.commit()
 
+        fixed_now = datetime(2026, 2, 1, tzinfo=timezone.utc)
+        monkeypatch.setattr('app.routes.admin.utc_now', lambda: fixed_now)
         _login_admin(client, admin.id, join_code)
 
         resp = client.post(
@@ -429,7 +431,7 @@ def test_add_rent_waiver_logs_analytics_event(client, app):
         assert 'Medical absence' in event.description
 
 
-def test_add_rent_waiver_logs_one_event_per_student(client, app):
+def test_add_rent_waiver_logs_one_event_per_student(client, app, monkeypatch):
     """Adding a waiver for multiple students logs one AnalyticsEvent per student."""
     with app.app_context():
         admin = _make_admin("evt2")
@@ -443,6 +445,8 @@ def test_add_rent_waiver_logs_one_event_per_student(client, app):
         _link_student(student_b, admin)
         db.session.commit()
 
+        fixed_now = datetime(2026, 2, 1, tzinfo=timezone.utc)
+        monkeypatch.setattr('app.routes.admin.utc_now', lambda: fixed_now)
         _login_admin(client, admin.id, join_code)
 
         resp = client.post(
