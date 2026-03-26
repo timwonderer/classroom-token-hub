@@ -297,17 +297,11 @@
           </div>
         </div>
         <hr>
-        <div class="d-flex flex-wrap gap-2">
-          <span class="badge {% if settings.bill_preview_enabled %}bg-success{% else %}bg-secondary{% endif %}">
-            Bill Preview{% if settings.bill_preview_enabled %} ({{ settings.bill_preview_days }} days){% endif %}
-          </span>
-          <span class="badge {% if settings.allow_incremental_payment %}bg-success{% else %}bg-secondary{% endif %}">
-            Incremental Payment
-          </span>
-          <span class="badge {% if settings.prevent_purchase_when_late %}bg-success{% else %}bg-secondary{% endif %}">
-            Prevent Purchase When Late
-          </span>
-          <span class="badge bg-primary">Tracked Students: {{ rent_status_total }}</span>
+        <div class="d-flex flex-wrap gap-3 small">
+          <span><strong>Bill preview:</strong> {% if settings.bill_preview_enabled %}On{% if settings.bill_preview_days %} ({{ settings.bill_preview_days }} days){% endif %}{% else %}Off{% endif %}</span>
+          <span><strong>Incremental payment:</strong> {{ 'On' if settings.allow_incremental_payment else 'Off' }}</span>
+          <span><strong>Prevent purchase when late:</strong> {{ 'On' if settings.prevent_purchase_when_late else 'Off' }}</span>
+          <span><strong>Tracked students:</strong> {{ rent_status_total }}</span>
         </div>
         {% else %}
         <div class="alert alert-warning mb-0">
@@ -328,12 +322,12 @@
         <ul class="nav nav-tabs mb-3" id="rentLogTabs" role="tablist">
           <li class="nav-item" role="presentation">
             <button class="nav-link active" id="payment-log-tab" data-bs-toggle="tab" data-bs-target="#payment-log-pane" type="button" role="tab">
-              Payment Log <span class="badge bg-light text-dark ms-1">{{ payment_log|length }}</span>
+              Payment Log <span class="text-muted ms-1">({{ payment_log|length }})</span>
             </button>
           </li>
           <li class="nav-item" role="presentation">
             <button class="nav-link" id="unpaid-log-tab" data-bs-toggle="tab" data-bs-target="#unpaid-log-pane" type="button" role="tab">
-              Unpaid Rent Log <span class="badge bg-light text-dark ms-1">{{ unpaid_rent_log|length }}</span>
+              Unpaid Rent Log <span class="text-muted ms-1">({{ unpaid_rent_log|length }})</span>
             </button>
           </li>
         </ul>
@@ -361,10 +355,10 @@
                       </a>
                     </td>
                     <td>
-                      <span class="badge bg-secondary">{{ row.class_label }}</span>
-                      <small class="text-muted ms-1">{{ row.join_code }}</small>
+                      <div>{{ row.class_label }}</div>
+                      <small class="text-muted">{{ row.join_code }}</small>
                     </td>
-                    <td><span class="badge bg-info">{{ row.coverage_label }}</span></td>
+                    <td>{{ row.coverage_label }}</td>
                     <td>{{ row.payment_date.strftime('%b %d, %Y') if row.payment_date else 'Unknown' }}</td>
                     <td class="fw-bold">${{ "%.2f"|format(row.amount_paid) }}</td>
                   </tr>
@@ -398,18 +392,22 @@
                       </a>
                     </td>
                     <td>
-                      <span class="badge bg-secondary">{{ row.class_label }}</span>
-                      <small class="text-muted ms-1">{{ row.join_code }}</small>
+                      <div>{{ row.class_label }}</div>
+                      <small class="text-muted">{{ row.join_code }}</small>
                     </td>
                     <td>
                       {% for month_label in row.unpaid_months %}
-                      <span class="badge bg-warning text-dark me-1">{{ month_label }}</span>
+                      <div>{{ month_label }}</div>
                       {% endfor %}
                     </td>
                     <td>
-                      <span class="badge {% if row.months_behind >= 3 %}bg-danger{% elif row.months_behind == 2 %}bg-warning text-dark{% else %}bg-info{% endif %}">
-                        {{ row.months_behind }} month{{ 's' if row.months_behind != 1 else '' }}
-                      </span>
+                      {% if row.months_behind >= 3 %}
+                      <span class="text-danger fw-semibold">{{ row.months_behind }} months</span>
+                      {% elif row.months_behind == 2 %}
+                      <span class="text-warning fw-semibold">{{ row.months_behind }} months</span>
+                      {% else %}
+                      <span class="text-info fw-semibold">{{ row.months_behind }} month</span>
+                      {% endif %}
                     </td>
                   </tr>
                   {% endfor %}

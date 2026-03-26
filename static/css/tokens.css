@@ -22,6 +22,11 @@
     /* Modals, Large Containers */
     --radius-pill: 999px;
     /* Status Badges, Chips */
+    --badge-padding-y: 0.3em;
+    --badge-padding-x: 0.7em;
+    --badge-font-size: 0.78rem;
+    --badge-line-height: 1.15;
+    --badge-letter-spacing: 0.01em;
 
     /* Elevation — Subtle */
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
