@@ -220,7 +220,6 @@ def test_locked_rate_extracts_base_excluding_late_fee(client):
     locked = _get_locked_rent_amount_for_join_code_cycle(join_code, coverage)
     assert locked == Decimal("100.00")
 
-
 # ---------------------------------------------------------------------------
 # Tests: _has_active_rent_waiver and _is_student_coverage_period_paid
 # ---------------------------------------------------------------------------

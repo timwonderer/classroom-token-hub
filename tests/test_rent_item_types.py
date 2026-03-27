@@ -1,7 +1,7 @@
 import pytest
 import re
 from decimal import Decimal
-from app.models import RentItem, RentSettings, RentPayment, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher, RedemptionAuditAction, RedemptionAuditLog, RedemptionAuditSource
+from app.models import RentItem, RentSettings, RentPayment, RentWaiver, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher, RedemptionAuditAction, RedemptionAuditLog, RedemptionAuditSource
 from app.extensions import db
 from datetime import datetime, timezone, timedelta
 
@@ -2344,3 +2344,197 @@ def test_rent_payment_hall_pass_top_off_recovers_from_stale_counter(client, teac
     sb = StudentBlock.query.filter_by(student_id=student.id, period='A').first()
     assert sb is not None
     assert sb.rent_hall_passes == 3
+
+
+def test_waiver_does_not_grant_rent_perks_in_shop(client, teacher_admin, student_in_class, monkeypatch):
+    """A rent waiver allows store access but must NOT show rent perks (privilege items or
+    per-use free items) — only actual rent payment grants those perks."""
+    student = student_in_class
+
+    fixed_now = datetime.now(timezone.utc)
+    monkeypatch.setattr('app.routes.student.utc_now', lambda: fixed_now)
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    privilege_store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Waiver Desk Privilege',
+        price=Decimal('50.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    per_use_store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Waiver Pencil Per Use',
+        price=Decimal('3.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add_all([privilege_store_item, per_use_store_item])
+    db.session.flush()
+
+    db.session.add_all([
+        RentItem(
+            rent_setting_id=settings.id,
+            name='Waiver Desk Privilege',
+            rent_item_type='privilege',
+            is_available_in_store=True,
+            store_price=Decimal('50.00'),
+            purchase_duration='per_period',
+            store_item_id=privilege_store_item.id,
+        ),
+        RentItem(
+            rent_setting_id=settings.id,
+            name='Waiver Pencil Per Use',
+            rent_item_type='per_use',
+            is_available_in_store=True,
+            store_price=Decimal('3.00'),
+            purchase_duration='per_use',
+            use_limit=5,
+            store_item_id=per_use_store_item.id,
+        ),
+    ])
+
+    # Add a rent waiver that is guaranteed to cover the current coverage period,
+    # independent of the exact "now" used by the application.
+    db.session.add(RentWaiver(
+        student_id=student.id,
+        join_code='JOINCODE123',
+        waiver_start_date=datetime(2000, 1, 1, tzinfo=timezone.utc),
+        waiver_end_date=datetime(2100, 1, 1, tzinfo=timezone.utc),
+        periods_count=1,
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = fixed_now.isoformat()
+
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    html = resp.data.decode('utf-8')
+
+    # Privilege item: should NOT be shown as "Included in Rent" (free)
+    # The card data-has-rent-free-purchase should be "false" for the privilege item.
+    privilege_card = re.search(
+        rf'data-item-id="{privilege_store_item.id}"[^>]*data-has-rent-free-purchase="([^"]+)"',
+        html,
+    )
+    assert privilege_card is not None, "Privilege store item card not found in shop HTML"
+    assert privilege_card.group(1) == 'false', (
+        "Rent waiver should NOT mark privilege items as free"
+    )
+
+    # Per-use item: should NOT show $0 price due to waiver.
+    per_use_card = re.search(
+        rf'data-item-id="{per_use_store_item.id}"[^>]*data-has-rent-free-purchase="([^"]+)"',
+        html,
+    )
+    assert per_use_card is not None, "Per-use store item card not found in shop HTML"
+    assert per_use_card.group(1) == 'false', (
+        "Rent waiver should NOT grant free per-use perk access"
+    )
+
+
+def test_shop_keeps_rent_perks_when_payment_exists_alongside_waiver(client, teacher_admin, student_in_class, monkeypatch):
+    """A real payment should continue granting rent perks even if a waiver also exists."""
+    student = student_in_class
+    fixed_now = datetime.now(timezone.utc)
+    monkeypatch.setattr('app.routes.student.utc_now', lambda: fixed_now)
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    privilege_store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Paid + Waived Privilege',
+        price=Decimal('50.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(privilege_store_item)
+    db.session.flush()
+
+    db.session.add(RentItem(
+        rent_setting_id=settings.id,
+        name='Paid + Waived Privilege',
+        rent_item_type='privilege',
+        is_available_in_store=True,
+        store_price=Decimal('50.00'),
+        purchase_duration='per_period',
+        store_item_id=privilege_store_item.id,
+    ))
+
+    from app.routes.student import _calculate_rent_coverage_due_date
+    coverage_due_date = _calculate_rent_coverage_due_date(settings, fixed_now)
+    assert coverage_due_date is not None
+
+    db.session.add(RentPayment(
+        student_id=student.id,
+        period='A',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=coverage_due_date.month,
+        period_year=coverage_due_date.year,
+        coverage_month=coverage_due_date.month,
+        coverage_year=coverage_due_date.year,
+        payment_date=fixed_now,
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent for Period A',
+        timestamp=fixed_now,
+    ))
+    db.session.add(RentWaiver(
+        student_id=student.id,
+        join_code='JOINCODE123',
+        waiver_start_date=datetime(2000, 1, 1, tzinfo=timezone.utc),
+        waiver_end_date=datetime(2100, 1, 1, tzinfo=timezone.utc),
+        periods_count=1,
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = fixed_now.isoformat()
+
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    html = resp.data.decode('utf-8')
+
+    privilege_card = re.search(
+        rf'data-item-id="{privilege_store_item.id}"[^>]*data-has-rent-free-purchase="([^"]+)"',
+        html,
+    )
+    assert privilege_card is not None, "Privilege store item card not found in shop HTML"
+    assert privilege_card.group(1) == 'true'

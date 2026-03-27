@@ -1415,6 +1415,61 @@ def _format_frequency_label(frequency, custom_frequency_value=None, custom_frequ
     return "configured cadence"
 
 
+def _group_consecutive_waiver_dates(dates, settings):
+    """Group sorted coverage due dates into contiguous waiver windows."""
+    if not dates:
+        return []
+
+    from app.routes.student import _add_rent_period, _get_rent_period_delta
+
+    delta = None
+    groups = []
+    current_group = []
+
+    for dt in sorted(ensure_utc(date) for date in dates):
+        if not current_group:
+            current_group = [dt]
+            continue
+        if delta is None:
+            delta = _get_rent_period_delta(settings)
+        expected_next = _add_rent_period(current_group[-1], delta)
+        if expected_next == dt:
+            current_group.append(dt)
+            continue
+        groups.append(current_group)
+        current_group = [dt]
+
+    if current_group:
+        groups.append(current_group)
+    return groups
+
+
+def _cancel_rent_waiver_period(waiver, coverage_due_date, settings):
+    """Remove one upcoming period from a waiver, splitting rows if needed."""
+    from app.routes.student import _iter_rent_waiver_coverage_dates
+
+    coverage_due_date = ensure_utc(coverage_due_date)
+    covered_dates = _iter_rent_waiver_coverage_dates(settings, waiver)
+    remaining_dates = [dt for dt in covered_dates if ensure_utc(dt) != coverage_due_date]
+    db.session.delete(waiver)
+
+    replacements = []
+    for group in _group_consecutive_waiver_dates(remaining_dates, settings):
+        replacement = RentWaiver(
+            student_id=waiver.student_id,
+            join_code=waiver.join_code,
+            waiver_start_date=group[0],
+            waiver_end_date=group[-1],
+            periods_count=len(group),
+            reason=waiver.reason,
+            created_by_admin_id=waiver.created_by_admin_id,
+        )
+        db.session.add(replacement)
+        replacements.append(replacement)
+
+    return replacements
+
+
 def _resolve_join_code_id_for_block(admin_id, block):
     normalized_block = (block or '').strip().upper()
     if not normalized_block:
@@ -1426,7 +1481,87 @@ def _resolve_join_code_id_for_block(admin_id, block):
     return _ensure_join_code_anchors(admin_id, join_code, class_label=normalized_block)
 
 
-def _build_economy_snapshot_from_analysis(join_code_id, checker, analysis):
+def _serialize_economy_snapshot_settings_fingerprint(rent_settings=None, insurance_policies=None, fines=None, store_items=None):
+    def serialize_decimal(value, precision='0.0001'):
+        if value is None:
+            return None
+        return str(Decimal(str(value)).quantize(Decimal(precision)))
+
+    rent_payload = None
+    if rent_settings:
+        rent_payload = {
+            'is_enabled': bool(getattr(rent_settings, 'is_enabled', False)),
+            'rent_amount': serialize_decimal(getattr(rent_settings, 'rent_amount', None), '0.01'),
+            'frequency_type': getattr(rent_settings, 'frequency_type', None),
+            'custom_frequency_value': serialize_decimal(getattr(rent_settings, 'custom_frequency_value', None), '0.01'),
+            'custom_frequency_unit': getattr(rent_settings, 'custom_frequency_unit', None),
+            'bypass_cwi_warnings': bool(getattr(rent_settings, 'bypass_cwi_warnings', False)),
+        }
+
+    insurance_payload = sorted(
+        [
+            {
+                'policy_code': getattr(policy, 'policy_code', None),
+                'title': getattr(policy, 'title', None),
+                'is_active': bool(getattr(policy, 'is_active', False)),
+                'premium': serialize_decimal(getattr(policy, 'premium', None), '0.01'),
+                'charge_frequency': getattr(policy, 'charge_frequency', None),
+                'max_claim_amount': serialize_decimal(getattr(policy, 'max_claim_amount', None), '0.01'),
+                'max_payout_per_period': serialize_decimal(getattr(policy, 'max_payout_per_period', None), '0.01'),
+                'waiting_period_days': getattr(policy, 'waiting_period_days', None),
+                'claim_type': getattr(policy, 'claim_type', None),
+                'coverage_percent': serialize_decimal(getattr(policy, 'coverage_percent', None), '0.0001'),
+                'tier_rank': getattr(policy, 'tier_rank', None),
+                'bypass_cwi_warnings': bool(getattr(policy, 'bypass_cwi_warnings', False)),
+            }
+            for policy in (insurance_policies or [])
+        ],
+        key=lambda item: (
+            item['policy_code'] or '',
+            item['title'] or '',
+        ),
+    )
+
+    fine_payload = sorted(
+        [
+            {
+                'name': getattr(fine, 'name', None),
+                'is_active': bool(getattr(fine, 'is_active', False)),
+                'amount': serialize_decimal(getattr(fine, 'amount', None), '0.01'),
+            }
+            for fine in (fines or [])
+        ],
+        key=lambda item: item['name'] or '',
+    )
+
+    store_payload = sorted(
+        [
+            {
+                'name': getattr(item, 'name', None),
+                'is_active': bool(getattr(item, 'is_active', False)),
+                'price': serialize_decimal(getattr(item, 'price', None), '0.01'),
+                'is_long_term_goal': bool(getattr(item, 'is_long_term_goal', False)),
+                'bypass_cwi_warnings': bool(getattr(item, 'bypass_cwi_warnings', False)),
+            }
+            for item in (store_items or [])
+        ],
+        key=lambda item: item['name'] or '',
+    )
+
+    serialized = json.dumps(
+        {
+            'rent': rent_payload,
+            'insurance': insurance_payload,
+            'fines': fine_payload,
+            'store_items': store_payload,
+        },
+        sort_keys=True,
+        separators=(',', ':'),
+    )
+    return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
+
+
+def _build_economy_snapshot_from_analysis(join_code_id, checker, analysis, *, settings_fingerprint=None):
     from app.models import _quantize_currency
 
     recommendations = analysis.recommendations or {}
@@ -1452,7 +1587,7 @@ def _build_economy_snapshot_from_analysis(join_code_id, checker, analysis):
             key: str(_quantize_currency((values or {}).get('max', 0)))
             for key, values in store_tiers.items()
         },
-        analysis_payload=_serialize_economy_analysis_payload(analysis),
+        analysis_payload=_serialize_economy_analysis_payload(analysis, settings_fingerprint=settings_fingerprint),
     )
 
 
@@ -1515,7 +1650,7 @@ def _economy_analysis_schedule(snapshot=None, *, now_utc=None, frozen=True):
     }
 
 
-def _serialize_economy_analysis_payload(analysis, *, snapshot=None, now_utc=None, frozen=True):
+def _serialize_economy_analysis_payload(analysis, *, snapshot=None, now_utc=None, frozen=True, settings_fingerprint=None):
     warnings_by_level = {
         'critical': [],
         'warning': [],
@@ -1536,7 +1671,7 @@ def _serialize_economy_analysis_payload(analysis, *, snapshot=None, now_utc=None
         warning_items.append(warning_payload)
         warnings_by_level[warning.level.value].append(warning_payload)
 
-    return {
+    payload = {
         'status': 'success',
         'cwi': _json_safe_value(analysis.cwi.cwi),
         'is_balanced': analysis.is_balanced,
@@ -1554,6 +1689,9 @@ def _serialize_economy_analysis_payload(analysis, *, snapshot=None, now_utc=None
         },
         'analysis_schedule': _economy_analysis_schedule(snapshot, now_utc=now_utc, frozen=frozen),
     }
+    if settings_fingerprint is not None:
+        payload['settings_fingerprint'] = settings_fingerprint
+    return payload
 
 
 def _deserialize_economy_analysis_payload(payload):
@@ -1701,6 +1839,12 @@ def _get_frozen_economy_analysis_payload(
     store_items=None,
     expected_weekly_hours=None,
 ):
+    settings_fingerprint = _serialize_economy_snapshot_settings_fingerprint(
+        rent_settings=rent_settings,
+        insurance_policies=insurance_policies,
+        fines=fines,
+        store_items=store_items,
+    )
     expected_inputs = _current_economy_snapshot_inputs(
         checker,
         payroll_settings,
@@ -1721,7 +1865,11 @@ def _get_frozen_economy_analysis_payload(
             .order_by(EconomySnapshot.effective_at.desc(), EconomySnapshot.id.desc())
             .first()
         )
-        if _economy_snapshot_matches_inputs(latest_snapshot, expected_inputs=expected_inputs) and latest_snapshot.analysis_payload:
+        if (
+            _economy_snapshot_matches_inputs(latest_snapshot, expected_inputs=expected_inputs)
+            and latest_snapshot.analysis_payload
+            and latest_snapshot.analysis_payload.get('settings_fingerprint') == settings_fingerprint
+        ):
             payload = dict(latest_snapshot.analysis_payload)
             payload['analysis_schedule'] = _economy_analysis_schedule(latest_snapshot, frozen=True)
             payload['snapshot_cached'] = True
@@ -1737,15 +1885,29 @@ def _get_frozen_economy_analysis_payload(
     )
 
     if join_code_id and expected_weekly_hours is None:
-        snapshot = _build_economy_snapshot_from_analysis(join_code_id, checker, analysis)
-        snapshot.analysis_payload = _serialize_economy_analysis_payload(analysis, snapshot=snapshot, frozen=True)
+        snapshot = _build_economy_snapshot_from_analysis(
+            join_code_id,
+            checker,
+            analysis,
+            settings_fingerprint=settings_fingerprint,
+        )
+        snapshot.analysis_payload = _serialize_economy_analysis_payload(
+            analysis,
+            snapshot=snapshot,
+            frozen=True,
+            settings_fingerprint=settings_fingerprint,
+        )
         db.session.add(snapshot)
         db.session.commit()
         payload = dict(snapshot.analysis_payload)
         payload['snapshot_cached'] = False
         return payload, snapshot
 
-    payload = _serialize_economy_analysis_payload(analysis, frozen=False)
+    payload = _serialize_economy_analysis_payload(
+        analysis,
+        frozen=False,
+        settings_fingerprint=settings_fingerprint,
+    )
     payload['snapshot_cached'] = False
     return payload, None
 
@@ -6099,24 +6261,23 @@ def rent_settings():
     # Get statistics
     total_students = _scoped_students().filter_by(is_rent_enabled=True).count()
 
-    # Get active waivers scoped to the current join_code so teachers only see
+    # Get waiver history scoped to the current join_code so teachers only see
     # waivers for the class period they are currently viewing.
     now = utc_now()
     current_join_code = session.get('current_join_code')
-    active_waivers_q = (
+    waivers_q = (
         RentWaiver.query
         .join(Student, RentWaiver.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
-        .filter(RentWaiver.waiver_end_date >= now)
     )
     if current_join_code:
-        active_waivers_q = active_waivers_q.filter(
+        waivers_q = waivers_q.filter(
             db.or_(
                 RentWaiver.join_code == current_join_code,
                 RentWaiver.join_code.is_(None),
             )
         )
-    active_waivers = active_waivers_q.all()
+    waiver_rows = waivers_q.order_by(RentWaiver.waiver_start_date.desc(), RentWaiver.created_at.desc()).all()
 
     # Get all students for waiver form
     all_students = _scoped_students().order_by(Student.first_name).all()
@@ -6178,12 +6339,17 @@ def rent_settings():
     current_period_end = None
     next_due_date = None
 
+    waiver_history = []
+    current_coverage_due_date = None
+    upcoming_coverage_due_date = None
+
     if settings and settings.is_enabled:
         now_utc = utc_now()
         from app.routes.student import (
             _calculate_rent_coverage_due_date,
             _calculate_rent_deadlines,
             _calculate_upcoming_rent_due_date,
+            _expand_rent_waiver_history,
             _get_rent_period_delta,
             _is_student_coverage_period_paid,
         )
@@ -6277,8 +6443,11 @@ def rent_settings():
                         'block': block_name,
                         'months_behind': months_behind,
                         'unpaid_months': unpaid_month_labels,
+                        'unpaid_due_dates': list(unpaid_due_dates),
                     }
                     unpaid_rent_log.append(item)
+
+        waiver_history = _expand_rent_waiver_history(settings, waiver_rows, now=now_utc)
 
         payment_query = (
             RentPayment.query
@@ -6311,6 +6480,63 @@ def rent_settings():
                 'coverage_label': coverage_label,
                 'amount_paid': payment.amount_paid,
                 'payment_date': payment.payment_date,
+                'entry_type': 'payment',
+                'status_label': 'Paid',
+                'status_variant': 'success',
+                'recorded_at': payment.payment_date,
+            })
+
+        for waiver_entry in waiver_history:
+            payment_log.append({
+                'student': waiver_entry['student'],
+                'join_code': waiver_entry['join_code'],
+                'class_label': class_label_by_join.get(waiver_entry['join_code'], settings.block),
+                'block': block_by_join.get(waiver_entry['join_code'], settings.block),
+                'coverage_label': waiver_entry['coverage_label'],
+                'amount_paid': None,
+                'payment_date': None,
+                'entry_type': 'waiver',
+                'status_label': waiver_entry['status_label'],
+                'status_variant': 'info' if waiver_entry['status'] == 'upcoming' else 'secondary',
+                'recorded_at': waiver_entry['created_at'] or waiver_entry['coverage_due_date'],
+                'waiver_id': waiver_entry['waiver'].id,
+                'coverage_due_date': waiver_entry['coverage_due_date'],
+                'reason': waiver_entry['reason'],
+                'is_cancellable': waiver_entry['is_cancellable'],
+            })
+
+        payment_log.sort(
+            key=lambda row: ensure_utc(row['recorded_at']) if row.get('recorded_at') else UTC_MIN,
+            reverse=True,
+        )
+
+    # Build per-student past-due date data for the waiver form JS.
+    # Only include entries scoped to the currently viewed join_code.
+    student_past_due_json = {}
+    if settings and settings.is_enabled:
+        now_for_waiver = utc_now()
+        from app.routes.student import (
+            _calculate_rent_coverage_due_date as _crd,
+            _calculate_upcoming_rent_due_date as _curd,
+            _calculate_rent_deadlines as _crdeadlines,
+        )
+        current_coverage_due_date = _crd(settings, now_for_waiver)
+        _cur_due, _ = _crdeadlines(settings, now_for_waiver)
+        upcoming_coverage_due_date = _curd(settings, _cur_due, current_coverage_due_date)
+
+    _waiver_join_code = session.get('current_join_code')
+    for log_item in unpaid_rent_log:
+        if log_item.get('join_code') != _waiver_join_code:
+            continue
+        sid = str(log_item['student'].id)
+        dates = log_item.get('unpaid_due_dates', [])
+        labels = log_item.get('unpaid_months', [])
+        if sid not in student_past_due_json:
+            student_past_due_json[sid] = []
+        for d, lbl in zip(dates, labels):
+            student_past_due_json[sid].append({
+                'label': lbl,
+                'date_iso': d.isoformat(),
             })
 
     # Determine period label based on frequency type
@@ -6344,7 +6570,7 @@ def rent_settings():
     return render_template('admin_rent_settings.html',
                           settings=settings,
                           total_students=total_students,
-                          active_waivers=active_waivers,
+                          waiver_history=waiver_history,
                           all_students=all_students,
                           payroll_warning=payroll_warning,
                           payroll_settings=payroll_settings,
@@ -6361,22 +6587,50 @@ def rent_settings():
                           unpaid_rent_log=unpaid_rent_log,
                           current_period_start=current_period_start,
                           current_period_end=current_period_end,
-                          next_due_date=next_due_date)
+                          next_due_date=next_due_date,
+                          student_past_due_json=student_past_due_json,
+                          current_coverage_due_date=current_coverage_due_date,
+                          upcoming_coverage_due_date=upcoming_coverage_due_date)
 
 
 @admin_bp.route('/rent-waiver/add', methods=['POST'])
 @admin_required
 def add_rent_waiver():
-    """Add rent waiver for selected students."""
-    from app.routes.student import _calculate_rent_coverage_due_date, _calculate_rent_timeline
+    """Add rent waiver for selected students.
+
+    Accepts three waiver scopes (any combination):
+      - past_due: waive specific past-due coverage dates (list of ISO strings)
+      - current: waive the current coverage period
+      - future: waive N upcoming periods starting from the next due date
+    """
+    from app.routes.student import (
+        _calculate_rent_coverage_due_date,
+        _calculate_rent_deadlines,
+        _calculate_upcoming_rent_due_date,
+        _get_rent_period_delta,
+        _add_rent_period,
+    )
 
     student_ids = request.form.getlist('student_ids')
-    periods_count = int(request.form.get('periods_count', 1))
+    waiver_scopes = request.form.getlist('waiver_scope')
+    past_due_dates_iso = request.form.getlist('past_due_dates')
+    future_periods_count = 1
+    if 'future' in waiver_scopes:
+        raw_future_periods = request.form.get('future_periods_count', '') or ''
+        try:
+            future_periods_count = max(1, int(raw_future_periods))
+        except ValueError:
+            flash("Future periods count must be a positive whole number.", "danger")
+            return redirect(url_for('admin.rent_settings'))
     reason = request.form.get('reason', '')
     settings_block = request.form.get('settings_block', '')
 
     if not student_ids:
         flash("Please select at least one student.", "danger")
+        return redirect(url_for('admin.rent_settings'))
+
+    if not waiver_scopes:
+        flash("Please select at least one waiver scope (past due, current, or future).", "danger")
         return redirect(url_for('admin.rent_settings'))
 
     admin_id = session.get("admin_id")
@@ -6408,44 +6662,65 @@ def add_rent_waiver():
         if tb:
             join_code = tb.join_code
 
-    # Waiver window: start from the current coverage due date so the waiver
-    # is anchored to actual rent periods rather than wall-clock days.
+    # If we still don't have a join_code, fail fast instead of creating an unscoped waiver.
+    if not join_code:
+        flash(
+            "Unable to resolve the class join code for this waiver. "
+            "Please select a class/block and try again.",
+            "danger",
+        )
+        return redirect(url_for('admin.rent_settings'))
+
     now = utc_now()
-    timeline = _calculate_rent_timeline(settings, now)
-    coverage_due_date = timeline.get('coverage_due_date') or timeline.get('upcoming_due_date')
+    period_delta = _get_rent_period_delta(settings)
+    coverage_due_date = _calculate_rent_coverage_due_date(settings, now)
+    current_due, _ = _calculate_rent_deadlines(settings, now)
+    upcoming_due_date = _calculate_upcoming_rent_due_date(settings, current_due, coverage_due_date)
 
-    if coverage_due_date:
-        waiver_start = coverage_due_date
-    else:
-        waiver_start = now
+    # Build the list of (waiver_start, waiver_end, periods_count) tuples to create.
+    waiver_windows = []
+    past_due_window_count = 0
 
-    # Advance end date by one full rent period per waived period count.
-    if settings.frequency_type == 'daily':
-        days_per_period = 1
-    elif settings.frequency_type == 'weekly':
-        days_per_period = 7
-    elif settings.frequency_type == 'monthly':
-        days_per_period = 30
-    elif settings.frequency_type == 'custom':
-        if settings.custom_frequency_unit == 'days':
-            days_per_period = settings.custom_frequency_value
-        elif settings.custom_frequency_unit == 'weeks':
-            days_per_period = settings.custom_frequency_value * 7
-        elif settings.custom_frequency_unit == 'months':
-            days_per_period = settings.custom_frequency_value * 30
-        else:
-            days_per_period = 30
-    else:
-        days_per_period = 30
+    if 'past_due' in waiver_scopes:
+        # One point-in-time waiver per selected past-due date.
+        for iso_str in past_due_dates_iso:
+            try:
+                dt = datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                waiver_windows.append((dt, dt, 1))
+                past_due_window_count += 1
+            except (ValueError, AttributeError):
+                continue
 
-    total_days = days_per_period * periods_count
-    waiver_end = waiver_start + timedelta(days=total_days)
+    if 'current' in waiver_scopes and coverage_due_date:
+        waiver_windows.append((coverage_due_date, coverage_due_date, 1))
 
-    # Create waivers for each student, scoped to the current join_code.
+    if 'future' in waiver_scopes and upcoming_due_date:
+        future_end = upcoming_due_date
+        for _ in range(future_periods_count - 1):
+            future_end = _add_rent_period(future_end, period_delta)
+        waiver_windows.append((upcoming_due_date, future_end, future_periods_count))
+
+    if not waiver_windows:
+        flash("No valid waiver periods could be determined. Check that rent is configured and a scope was selected.", "danger")
+        return redirect(url_for('admin.rent_settings', settings_block=settings_block))
+
+    # Build scope description for analytics events.
+    scope_labels = []
+    if 'past_due' in waiver_scopes:
+        scope_labels.append(f"{past_due_window_count} past-due period(s)")
+    if 'current' in waiver_scopes:
+        scope_labels.append("current period")
+    if 'future' in waiver_scopes:
+        scope_labels.append(f"{future_periods_count} future period(s)")
+    scope_str = ", ".join(scope_labels) or "selected periods"
+
+    # Create waivers and analytics events for each student and each window.
     count = 0
     for student_id in student_ids:
         student = _get_student_or_404(int(student_id))
-        if student:
+        for waiver_start, waiver_end, periods_count in waiver_windows:
             waiver = RentWaiver(
                 student_id=student.id,
                 join_code=join_code,
@@ -6456,24 +6731,92 @@ def add_rent_waiver():
                 created_by_admin_id=admin_id,
             )
             db.session.add(waiver)
-            count += 1
+
+        description = f"Rent waiver added for {student.full_name} covering: {scope_str}."
+        if reason:
+            description = f"{description} Reason: {reason}"
+        db.session.add(AnalyticsEvent(
+            teacher_id=admin_id,
+            join_code=join_code,
+            event_type='rent_waiver',
+            event_date=now,
+            description=description[:255],
+            created_by_admin=True,
+        ))
+        count += 1
 
     db.session.commit()
-    flash(f"Rent waiver added for {count} student(s) for {periods_count} period(s).", "success")
+
+    flash(f"Rent waiver added for {count} student(s) covering: {scope_str}.", "success")
     return redirect(url_for('admin.rent_settings', settings_block=settings_block))
 
 
 @admin_bp.route('/rent-waiver/<int:waiver_id>/remove', methods=['POST'])
 @admin_required
 def remove_rent_waiver(waiver_id):
-    """Remove a rent waiver."""
+    """Remove a rent waiver, or cancel one unused upcoming covered period."""
     waiver = RentWaiver.query.get_or_404(waiver_id)
     _get_student_or_404(waiver.student_id)
     student_name = waiver.student.full_name
-    db.session.delete(waiver)
+    admin_id = session.get("admin_id")
+    join_code = waiver.join_code or session.get('current_join_code')
+    settings_block = request.form.get('settings_block', '')
+    coverage_due_date_raw = request.form.get('coverage_due_date')
+
+    settings = None
+    if settings_block:
+        settings = RentSettings.query.filter_by(
+            teacher_id=admin_id,
+            block=settings_block,
+        ).first()
+    if not settings:
+        settings = RentSettings.query.filter_by(teacher_id=admin_id).first()
+
+    removed_scope = "waiver"
+    if coverage_due_date_raw:
+        if not settings:
+            flash("Rent settings not found for this waiver.", "danger")
+            return redirect(url_for('admin.rent_settings', settings_block=settings_block or None))
+
+        try:
+            coverage_due_date = datetime.fromisoformat(coverage_due_date_raw.replace('Z', '+00:00'))
+            if coverage_due_date.tzinfo is None:
+                coverage_due_date = coverage_due_date.replace(tzinfo=timezone.utc)
+            coverage_due_date = ensure_utc(coverage_due_date)
+        except ValueError:
+            flash("Invalid waiver period selected.", "danger")
+            return redirect(url_for('admin.rent_settings', settings_block=settings_block or None))
+
+        from app.routes.student import _calculate_rent_coverage_due_date, _get_rent_coverage_label, _iter_rent_waiver_coverage_dates
+
+        current_coverage_due_date = _calculate_rent_coverage_due_date(settings, utc_now())
+        if current_coverage_due_date is not None and coverage_due_date <= current_coverage_due_date:
+            flash("Used or current rent waivers cannot be reversed.", "warning")
+            return redirect(url_for('admin.rent_settings', settings_block=settings_block or None))
+
+        covered_dates = _iter_rent_waiver_coverage_dates(settings, waiver)
+        if coverage_due_date not in [ensure_utc(dt) for dt in covered_dates]:
+            flash("That rent waiver period is no longer available to cancel.", "warning")
+            return redirect(url_for('admin.rent_settings', settings_block=settings_block or None))
+
+        _cancel_rent_waiver_period(waiver, coverage_due_date, settings)
+        removed_scope = f"upcoming waiver for {_get_rent_coverage_label(coverage_due_date)}"
+    else:
+        db.session.delete(waiver)
+
+    if admin_id and join_code:
+        removal_description = (f"Rent waiver removed for {student_name}: {removed_scope}.")[:255]
+        db.session.add(AnalyticsEvent(
+            teacher_id=admin_id,
+            join_code=join_code,
+            event_type='rent_waiver',
+            event_date=utc_now(),
+            description=removal_description,
+            created_by_admin=True,
+        ))
     db.session.commit()
     flash(f"Rent waiver removed for {student_name}.", "success")
-    return redirect(url_for('admin.rent_settings'))
+    return redirect(url_for('admin.rent_settings', settings_block=settings_block or None))
 
 
 @admin_bp.route('/rent/reverse-cycle-penalties', methods=['POST'])

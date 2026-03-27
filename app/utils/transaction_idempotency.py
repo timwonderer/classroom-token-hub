@@ -6,6 +6,7 @@ from app.models import Transaction
 
 IDEMPOTENT_TRANSACTION_TYPES = frozenset({
     "insurance_reimbursement",
+    "purchase",
     "refund",
 })
 
@@ -32,6 +33,19 @@ def insurance_reimbursement_key(claim_id):
 
 def student_item_refund_key(student_item_id, reason):
     return build_transaction_idempotency_key("refund", "student-item", student_item_id, reason)
+
+
+def purchase_transaction_key(student_id, join_code, item_id, client_purchase_id):
+    return build_transaction_idempotency_key(
+        "purchase",
+        "student",
+        student_id,
+        "join",
+        join_code,
+        "item",
+        item_id,
+        client_purchase_id,
+    )
 
 
 def void_refund_key(transaction_id):

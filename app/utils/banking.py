@@ -8,6 +8,54 @@ from app.utils.time import utc_now
 
 logger = logging.getLogger(__name__)
 
+
+def settle_pending_transaction_contexts(limit: int | None = None) -> dict[str, int]:
+    """
+    Sweep every student/class context with unsettled ledger activity.
+
+    Commits each context independently so one failing context does not stop the run.
+    """
+    context_query = (
+        db.session.query(Transaction.student_id, Transaction.join_code)
+        .filter(
+            Transaction.join_code.isnot(None),
+            db.or_(
+                Transaction.status == TransactionStatus.PENDING,
+                db.and_(
+                    Transaction.status == TransactionStatus.POSTED,
+                    Transaction.posted_at.is_(None),
+                ),
+            ),
+        )
+        .distinct()
+        .order_by(Transaction.student_id.asc(), Transaction.join_code.asc())
+    )
+    if limit is not None:
+        context_query = context_query.limit(limit)
+
+    settled_contexts = 0
+    failed_contexts = 0
+
+    for student_id, join_code in context_query.yield_per(1000):
+        try:
+            settle_balances(student_id, join_code)
+            db.session.commit()
+            settled_contexts += 1
+        except Exception:
+            db.session.rollback()
+            failed_contexts += 1
+            logger.exception(
+                "Settlement sweep failed for student %s in %s",
+                student_id,
+                join_code,
+            )
+
+    return {
+        "settled_contexts": settled_contexts,
+        "failed_contexts": failed_contexts,
+    }
+
+
 def settle_balances(student_id: int, join_code: str) -> None:
     """
     Atomic settlement of pending transactions into the balance cache.
