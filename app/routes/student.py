@@ -2767,6 +2767,7 @@ def shop():
         progress_rows = (
             db.session.query(
                 StudentItem.store_item_id,
+                StudentItem.collective_goal_instance_code,
                 db.func.count(db.distinct(StudentItem.student_id)).label('student_count'),
             )
             .join(Student, StudentItem.student_id == Student.id)
@@ -2776,10 +2777,13 @@ def shop():
                 StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
                 Student.is_teacher == False,  # Exclude teacher purchases from progress
             )
-            .group_by(StudentItem.store_item_id)
+            .group_by(StudentItem.store_item_id, StudentItem.collective_goal_instance_code)
             .all()
         )
-        progress_counts = {row.store_item_id: int(row.student_count or 0) for row in progress_rows}
+        progress_counts = {
+            (row.store_item_id, row.collective_goal_instance_code): int(row.student_count or 0)
+            for row in progress_rows
+        }
 
         for item in collective_items:
             if item.collective_goal_type == 'whole_class':
@@ -2788,7 +2792,7 @@ def shop():
                 target = int(item.collective_goal_target or 0)
             else:
                 target = 0
-            count = progress_counts.get(item.id, 0)
+            count = progress_counts.get((item.id, item.collective_goal_instance_code), 0)
             collective_progress[item.id] = {
                 'count': count,
                 'target': target,

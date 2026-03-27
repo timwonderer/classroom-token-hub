@@ -56,7 +56,11 @@ from app.forms import (
 )
 # Import utility functions
 from app.utils.helpers import is_safe_url, format_utc_iso, generate_anonymous_code, render_template_with_fallback as render_template
-from app.utils.store import refund_pending_collective_purchases, process_expired_collective_goals
+from app.utils.store import (
+    ensure_collective_goal_instance_code,
+    process_expired_collective_goals,
+    refund_pending_collective_purchases,
+)
 from app.utils.join_code import generate_join_code
 from app.utils.economy_balance import EconomyBalanceChecker
 from app.utils.economy_policy import (
@@ -5381,6 +5385,7 @@ def store_management():
             # Redemption prompt
             redemption_prompt=form.redemption_prompt.data if form.redemption_prompt.data else None
         )
+        ensure_collective_goal_instance_code(new_item)
         db.session.add(new_item)
         db.session.flush()  # Get the ID for the item before adding blocks
         # Set blocks using many-to-many relationship
@@ -5463,6 +5468,7 @@ def store_management():
             db.session.query(
                 StudentItem.store_item_id,
                 StudentItem.join_code,
+                StudentItem.collective_goal_instance_code,
                 db.func.count(db.distinct(StudentItem.student_id)).label('student_count'),
             )
             .join(Student, StudentItem.student_id == Student.id)
@@ -5472,11 +5478,15 @@ def store_management():
                 StudentItem.join_code.isnot(None),
                 StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
             )
-            .group_by(StudentItem.store_item_id, StudentItem.join_code)
+            .group_by(
+                StudentItem.store_item_id,
+                StudentItem.join_code,
+                StudentItem.collective_goal_instance_code,
+            )
             .all()
         )
         counts_lookup = {
-            (row.store_item_id, row.join_code): int(row.student_count or 0)
+            (row.store_item_id, row.join_code, row.collective_goal_instance_code): int(row.student_count or 0)
             for row in collective_counts
         }
 
@@ -5491,7 +5501,7 @@ def store_management():
 
             per_class = []
             for jc in sorted(applicable_join_codes):
-                count = counts_lookup.get((item.id, jc), 0)
+                count = counts_lookup.get((item.id, jc, item.collective_goal_instance_code), 0)
                 if item.collective_goal_type == 'fixed':
                     target = int(item.collective_goal_target or 0)
                 else:
@@ -5701,6 +5711,8 @@ def edit_store_item(item_id):
             form.collective_goal_expires_at.data = item.collective_goal_expires_at.date()
 
     if form.validate_on_submit():
+        was_collective = item.item_type == 'collective'
+        was_active = bool(item.is_active)
         # Populate other fields first
         form.populate_obj(item)
         # Set blocks using many-to-many relationship
@@ -5710,6 +5722,11 @@ def edit_store_item(item_id):
             if item.item_type == 'collective'
             else None
         )
+        if item.item_type == 'collective':
+            should_rotate_instance = (not was_collective) or (not was_active and item.is_active)
+            ensure_collective_goal_instance_code(item, rotate=should_rotate_instance)
+        else:
+            item.collective_goal_instance_code = None
         db.session.commit()
         flash(f"'{item.name}' has been updated.", "success")
         return redirect(url_for('admin.store_management'))
