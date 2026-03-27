@@ -18,7 +18,11 @@ from werkzeug.security import generate_password_hash
 
 from app.extensions import db
 from app.models import Admin, StoreItem, StudentItem, StudentTeacher, TeacherBlock, Transaction
-from app.utils.store import process_expired_collective_goals, refund_pending_collective_purchases
+from app.utils.store import (
+    ensure_collective_goal_instance_code,
+    process_expired_collective_goals,
+    refund_pending_collective_purchases,
+)
 
 
 def _login_student(client, student_id, join_code):
@@ -622,6 +626,71 @@ def test_reactivated_item_voided_purchases_excluded_from_progress(client):
     resp = client.get('/student/shop')
     assert resp.status_code == 200
     # Voided items must not count toward the displayed progress
+    assert b'0/2' in resp.data
+
+
+def test_reactivated_completed_goal_rotates_instance_and_clears_progress(client):
+    """Reactivating a previously completed collective goal must start a new progress instance."""
+    teacher = _create_teacher('teacher_reactivate_completed')
+    student = _create_student(teacher, 'Tess', 'JOINREACT2')
+    db.session.flush()
+
+    item = _collective_item(teacher, 'Reactivate Completed Goal', 'JOINREACT2',
+                            goal_type='fixed', target=2, expires_at=_future(), is_active=False)
+    old_instance_code = ensure_collective_goal_instance_code(item, rotate=True)
+
+    # Prior completed run of the goal should not count after reactivation.
+    db.session.add(StudentItem(
+        student_id=student.id,
+        store_item_id=item.id,
+        join_code='JOINREACT2',
+        collective_goal_instance_code=old_instance_code,
+        status='processing',
+    ))
+
+    item.is_active = True
+    new_instance_code = ensure_collective_goal_instance_code(item, rotate=True)
+    db.session.commit()
+
+    assert new_instance_code != old_instance_code
+
+    _login_student(client, student.id, 'JOINREACT2')
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    assert b'0/2' in resp.data
+
+
+def test_reactivating_twice_rotates_instance_each_time(client):
+    """Each reactivation must create a distinct instance boundary."""
+    teacher = _create_teacher('teacher_reactivate_twice')
+    student = _create_student(teacher, 'Uma', 'JOINREACT3')
+    db.session.flush()
+
+    item = _collective_item(teacher, 'Reactivate Twice Goal', 'JOINREACT3',
+                            goal_type='fixed', target=2, expires_at=_future(), is_active=True)
+    instance_a = ensure_collective_goal_instance_code(item, rotate=True)
+
+    item.is_active = False
+    item.is_active = True
+    instance_b = ensure_collective_goal_instance_code(item, rotate=True)
+    db.session.add(StudentItem(
+        student_id=student.id,
+        store_item_id=item.id,
+        join_code='JOINREACT3',
+        collective_goal_instance_code=instance_b,
+        status='processing',
+    ))
+
+    item.is_active = False
+    item.is_active = True
+    instance_c = ensure_collective_goal_instance_code(item, rotate=True)
+    db.session.commit()
+
+    assert len({instance_a, instance_b, instance_c}) == 3
+
+    _login_student(client, student.id, 'JOINREACT3')
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
     assert b'0/2' in resp.data
 
 

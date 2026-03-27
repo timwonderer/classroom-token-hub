@@ -4,10 +4,69 @@ Shared utility functions for store collective goal management.
 Provides refund and expiration processing for collective goal items,
 called from both admin and student route handlers.
 """
+import secrets
+
 from app.extensions import db
 from app.models import StoreItem, StudentItem, Transaction
 from app.utils.transaction_idempotency import create_idempotent_transaction, student_item_refund_key
 from app.utils.time import utc_now
+
+
+def new_collective_goal_instance_code():
+    """Return a new opaque code for the current live run of a collective goal."""
+    return secrets.token_urlsafe(12)
+
+
+def _rotate_collective_goal_instance_code(item):
+    """Assign a fresh instance code, guaranteed to differ from the previous code."""
+    previous_code = item.collective_goal_instance_code
+    next_code = new_collective_goal_instance_code()
+    while next_code == previous_code:
+        next_code = new_collective_goal_instance_code()
+    item.collective_goal_instance_code = next_code
+    return next_code
+
+
+def ensure_collective_goal_instance_code(item, rotate=False):
+    """
+    Ensure a collective goal item has an active instance code.
+
+    Args:
+        item: StoreItem instance.
+        rotate: When True, always assign a fresh code.
+
+    Returns:
+        str | None: The active instance code for collective items.
+    """
+    if item.item_type != 'collective':
+        item.collective_goal_instance_code = None
+        return None
+
+    generated = False
+    if rotate:
+        _rotate_collective_goal_instance_code(item)
+        generated = True
+    elif not item.collective_goal_instance_code:
+        item.collective_goal_instance_code = new_collective_goal_instance_code()
+        generated = True
+
+    # When legacy collective purchases predate instance codes, adopt them into the
+    # first generated code for that item so in-flight progress is preserved.
+    if generated and not rotate and item.id:
+        StudentItem.query.filter(
+            StudentItem.store_item_id == item.id,
+            StudentItem.collective_goal_instance_code.is_(None),
+        ).update(
+            {"collective_goal_instance_code": item.collective_goal_instance_code},
+            synchronize_session=False,
+        )
+
+    return item.collective_goal_instance_code
+
+
+def get_current_collective_goal_instance_code(item):
+    """Return the current instance code for a collective item, creating one if needed."""
+    return ensure_collective_goal_instance_code(item)
 
 
 def refund_pending_collective_purchases(item, description_suffix="Goal Expired"):
@@ -25,9 +84,11 @@ def refund_pending_collective_purchases(item, description_suffix="Goal Expired")
     Returns:
         int: Number of StudentItems refunded.
     """
+    ensure_collective_goal_instance_code(item)
     pending_items = StudentItem.query.filter(
         StudentItem.store_item_id == item.id,
         StudentItem.status == 'pending',
+        StudentItem.collective_goal_instance_code == item.collective_goal_instance_code,
     ).all()
 
     refunded = 0
@@ -106,26 +167,35 @@ def process_expired_collective_goals(teacher_id):
         int: Number of collective goal items that were expired and processed.
     """
     now = utc_now()
-    pending_exists = db.session.query(StudentItem.id).filter(
-        StudentItem.store_item_id == StoreItem.id,
-        StudentItem.status == 'pending',
-    ).exists()
-
-    expired_items = StoreItem.query.filter(
+    candidate_items = StoreItem.query.filter(
         StoreItem.teacher_id == teacher_id,
         StoreItem.item_type == 'collective',
         StoreItem.is_active == True,
         StoreItem.collective_goal_expires_at.isnot(None),
         StoreItem.collective_goal_expires_at <= now,
-        pending_exists,
     ).all()
 
-    if not expired_items:
+    if not candidate_items:
         return 0
 
-    for item in expired_items:
+    expired_count = 0
+    for item in candidate_items:
+        ensure_collective_goal_instance_code(item)
+        has_pending = db.session.query(StudentItem.id).filter(
+            StudentItem.store_item_id == item.id,
+            StudentItem.status == 'pending',
+            StudentItem.collective_goal_instance_code == item.collective_goal_instance_code,
+        ).first()
+        if not has_pending:
+            continue
+
         refund_pending_collective_purchases(item, description_suffix="Collective Goal Expired")
         item.is_active = False
+        expired_count += 1
+
+    if not expired_count:
+        db.session.rollback()
+        return 0
 
     db.session.commit()
-    return len(expired_items)
+    return expired_count

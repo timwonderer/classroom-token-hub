@@ -39,7 +39,11 @@ from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
 from app.utils.transaction_idempotency import create_idempotent_transaction, student_item_refund_key
-from app.utils.store import process_expired_collective_goals
+from app.utils.store import (
+    ensure_collective_goal_instance_code,
+    get_current_collective_goal_instance_code,
+    process_expired_collective_goals,
+)
 from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone, local_date_bounds_utc, UTC_MIN
 
 # Import external modules
@@ -695,6 +699,7 @@ def purchase_item():
         if item.item_type == 'immediate':
             student_item_status = 'redeemed' # Immediate use items are redeemed instantly
         elif item.item_type == 'collective':
+            current_instance_code = get_current_collective_goal_instance_code(item)
             student_item_status = 'pending'
         else: # delayed
             student_item_status = 'purchased'
@@ -705,6 +710,7 @@ def purchase_item():
                 student_id=student.id,
                 store_item_id=item.id,
                 join_code=join_code,
+                collective_goal_instance_code=current_instance_code if item.item_type == 'collective' else None,
                 purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
@@ -722,6 +728,7 @@ def purchase_item():
                 student_id=student.id,
                 store_item_id=item.id,
                 join_code=join_code,
+                collective_goal_instance_code=current_instance_code if item.item_type == 'collective' else None,
                 purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
@@ -738,6 +745,7 @@ def purchase_item():
                     student_id=student.id,
                     store_item_id=item.id,
                     join_code=join_code,
+                    collective_goal_instance_code=current_instance_code if item.item_type == 'collective' else None,
                     purchase_date=utc_now(),
                     expiry_date=expiry_date,
                     status=student_item_status,
@@ -783,6 +791,7 @@ def purchase_item():
 
         # --- Collective Item Logic ---
         if item.item_type == 'collective':
+            current_instance_code = get_current_collective_goal_instance_code(item)
             # Count unique students (not TeacherBlock seats) to get actual class size
             class_size = db.session.query(db.func.count(db.func.distinct(Student.id))).join(
                 TeacherBlock, TeacherBlock.student_id == Student.id
@@ -795,6 +804,7 @@ def purchase_item():
             purchased_students_count = db.session.query(db.func.count(db.func.distinct(StudentItem.student_id))).filter(
                 StudentItem.store_item_id == item.id,
                 StudentItem.join_code == join_code,
+                StudentItem.collective_goal_instance_code == current_instance_code,
                 StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
             ).scalar() or 0
 
@@ -808,12 +818,14 @@ def purchase_item():
                 StudentItem.query.filter(
                     StudentItem.store_item_id == item.id,
                     StudentItem.join_code == join_code,
+                    StudentItem.collective_goal_instance_code == current_instance_code,
                     StudentItem.status == 'pending'
                 ).update({"status": "processing"})
                 current_app.logger.info(
-                    "Collective goal '%s' reached for join_code=%s (%s/%s)",
+                    "Collective goal '%s' reached for join_code=%s instance=%s (%s/%s)",
                     item.name,
                     join_code,
+                    current_instance_code,
                     purchased_students_count,
                     target,
                 )
