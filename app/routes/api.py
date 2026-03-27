@@ -46,7 +46,6 @@ from app.utils.transaction_idempotency import (
     student_item_refund_key,
 )
 from app.utils.store import (
-    ensure_collective_goal_instance_code,
     get_current_collective_goal_instance_code,
     process_expired_collective_goals,
 )

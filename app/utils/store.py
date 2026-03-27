@@ -6,6 +6,8 @@ called from both admin and student route handlers.
 """
 import secrets
 
+import sqlalchemy as sa
+
 from app.extensions import db
 from app.models import StoreItem, StudentItem, Transaction
 from app.utils.transaction_idempotency import create_idempotent_transaction, student_item_refund_key
@@ -167,35 +169,42 @@ def process_expired_collective_goals(teacher_id):
         int: Number of collective goal items that were expired and processed.
     """
     now = utc_now()
-    candidate_items = StoreItem.query.filter(
+
+    # Use a correlated EXISTS subquery so only items with at least one pending
+    # purchase for the current instance are loaded — avoids the N+1 per-item check.
+    # Include the NULL-NULL case to handle legacy items that predate instance codes.
+    pending_exists = (
+        db.session.query(StudentItem.id)
+        .filter(
+            StudentItem.store_item_id == StoreItem.id,
+            StudentItem.status == 'pending',
+            sa.or_(
+                StudentItem.collective_goal_instance_code == StoreItem.collective_goal_instance_code,
+                sa.and_(
+                    StudentItem.collective_goal_instance_code.is_(None),
+                    StoreItem.collective_goal_instance_code.is_(None),
+                ),
+            ),
+        )
+        .correlate(StoreItem)
+        .exists()
+    )
+
+    items_to_expire = StoreItem.query.filter(
         StoreItem.teacher_id == teacher_id,
         StoreItem.item_type == 'collective',
         StoreItem.is_active == True,
         StoreItem.collective_goal_expires_at.isnot(None),
         StoreItem.collective_goal_expires_at <= now,
+        pending_exists,
     ).all()
 
-    if not candidate_items:
+    if not items_to_expire:
         return 0
 
-    expired_count = 0
-    for item in candidate_items:
-        ensure_collective_goal_instance_code(item)
-        has_pending = db.session.query(StudentItem.id).filter(
-            StudentItem.store_item_id == item.id,
-            StudentItem.status == 'pending',
-            StudentItem.collective_goal_instance_code == item.collective_goal_instance_code,
-        ).first()
-        if not has_pending:
-            continue
-
+    for item in items_to_expire:
         refund_pending_collective_purchases(item, description_suffix="Collective Goal Expired")
         item.is_active = False
-        expired_count += 1
-
-    if not expired_count:
-        db.session.rollback()
-        return 0
 
     db.session.commit()
-    return expired_count
+    return len(items_to_expire)
