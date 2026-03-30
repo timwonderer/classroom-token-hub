@@ -35,9 +35,9 @@ pytz==2026.1.post1
 PyYAML==6.0.3
 soupsieve==2.8.3
 SQLAlchemy==2.0.48
-tomli==2.4.0
+tomli==2.4.1
 typing_extensions==4.15.0
-Werkzeug==3.1.6
+Werkzeug==3.1.7
 # TODO: [DEPENDABOT PR #847] zope.event 6.x is a major version change. Review for
 # breaking changes (transitive dep for gevent) before upgrading from 5.0 to 6.1
 zope.event==5.0
@@ -45,7 +45,7 @@ zope.event==5.0
 # breaking changes (transitive dep for gevent) before upgrading from 7.2 to 8.2
 zope.interface==7.2
 python-dateutil==2.9.0.post0
-cryptography==46.0.5
+cryptography==46.0.6
 Flask-WTF==1.2.2
 python-dotenv==1.2.2
 
