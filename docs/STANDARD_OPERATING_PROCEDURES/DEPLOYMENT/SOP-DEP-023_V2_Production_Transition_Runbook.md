@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|SOP-DEP-023| 1.1 | 2026-03-08 | 1.0 |Normative|
+| SOP-DEP-023 | 1.2 | 2026-03-29 | 1.1 | Normative |
 
 ## I. Purpose
 
@@ -10,11 +10,19 @@ Provide the explicit operator workflow for moving the current v2 branch from liv
 
 ## II. Scope
 
-TBD
+Production transition work for `codex/v2.0` after successful live testing, including maintenance-mode usage, migration execution, post-deploy verification, rollback decision points, and operator sign-off.
+
 ## III. Authority Level
-Normative. Subordinate to CORE invariant definitions.
+
+Normative (SOP Tier). Subordinate to `INV-CORE-000`.
+
 ## IV. Dependencies
-None specified.
+
+- `INV-CORE-000_Core_Invariants.md`
+- `SOP-DB-009_Migration_Compliance_Review.md`
+- `SOP-DEP-022_V2_Live_Test_Runbook.md`
+- `SOP-DEP-016_Rollback_Procedures.md`
+
 ## V. Preconditions
 
 - `codex/v2.0` is the approved deployment branch.
