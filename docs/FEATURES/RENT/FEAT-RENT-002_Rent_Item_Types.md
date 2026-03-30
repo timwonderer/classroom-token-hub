@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| FEAT-ARC-002     | 1.1     | 2026-03-08     | 1.0        | Normative       |
+| FEAT-ARC-002     | 1.2     | 2026-03-30     | 1.1        | Normative       |
 
 ## I. Purpose
 This feature extends the existing itemized rent system by adding distinct item types to each rent item, driving different behaviors for privileges, free-uses, and pass renewals.
@@ -59,11 +59,28 @@ Normative (FEAT Tier). Subordinate to INV-CORE-000 and FEAT-CORE-000.
 **Rule:** If at least one student has successfully paid rent for the current coverage period, rent item *type semantics* are immutable until the next period rolls over.
 **Blocked Changes:** `rent_item_type`, `use_limit`, `hall_pass_count`.
 
+### Cycle Base-Rate Lock
+**Rule:** If at least one valid (non-void) rent payment exists in a join-code coverage cycle, the cycle base rent amount is locked to the first valid payer's base amount.
+**Implication:** Mid-cycle rent amount changes do not retroactively raise required payment for that active cycle; updated rates apply at the next cycle boundary.
+
+### Waiver-Aware Paid Status
+**Rule:** A student coverage period is considered paid when either:
+- qualifying rent payments satisfy the required total for the cycle, or
+- an active waiver covers that coverage due date for the same join code (or global waiver scope).
+
+### Penalty Reversal Correction
+**Rule:** Admins may execute a targeted correction for the active cycle when mid-cycle rate changes caused late penalties to be applied against students who met the locked base rate by grace.
+**Effect:**
+- creates a positive `Rent Late Fee Reversal` transaction for impacted students
+- clears misapplied `late_fee_charged` values for those cycle payments
+- preserves legitimate late fees for students who were actually late
+
 ### Top-Off Logic
 Calculation: `top_off_amount = hall_pass_count - rent_hall_passes`. Added to `Student.hall_passes`, and sets `rent_hall_passes = hall_pass_count`.
 
 ## VIII. API Surface and Route Changes
 - `POST /admin/rent-settings`: Validates modifications against the mid-period lock rule, automatically toggles store constraints based on item type.
+- `POST /admin/rent/reverse-cycle-penalties`: Reverses misapplied late fees for the current cycle using the locked-rate and grace-window checks.
 - `POST /student/rent/pay/<period>`: Processes rent payment and distributes grants (privilege badges, uses_remaining updates, pass topoffs).
 - `POST /api/purchase-item`: Detects if item is `rent_linked` and processes a zero-cost redemption if the student has remaining uses. Subtracts `uses_remaining`.
 

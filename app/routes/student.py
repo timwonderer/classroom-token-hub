@@ -3094,6 +3094,70 @@ def _total_paid_by_grace(payments, grace_end_date):
     )
 
 
+def _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date):
+    """Return the first valid payer's base rent for a join_code coverage cycle."""
+    if not join_code or not coverage_due_date:
+        return None
+
+    cycle_payments = RentPayment.query.filter(
+        RentPayment.join_code == join_code,
+        RentPayment.coverage_month == coverage_due_date.month,
+        RentPayment.coverage_year == coverage_due_date.year,
+    ).order_by(RentPayment.payment_date.asc()).all()
+    if not cycle_payments:
+        return None
+
+    for payment in cycle_payments:
+        txn = Transaction.query.filter(
+            Transaction.student_id == payment.student_id,
+            Transaction.type == 'Rent Payment',
+            Transaction.join_code == join_code,
+            Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+            Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+            Transaction.amount == -payment.amount_paid,
+        ).first()
+        if txn is None or txn.is_void:
+            continue
+
+        late_fee = (payment.late_fee_charged or Decimal('0.00'))
+        base_amount = (payment.amount_paid or Decimal('0.00')) - late_fee
+        if base_amount > Decimal('0.00'):
+            return base_amount
+
+    return None
+
+
+def _get_effective_rent_amount_for_coverage_period(settings, payments, coverage_due_date, join_code=None):
+    """
+    Return the effective base rent for the coverage period.
+
+    If the class rate changed mid-cycle, lock to the first valid payer's base
+    amount for that join code. As a fallback, keep a student's earlier paid
+    base amount when the setting update happened after their first payment.
+    """
+    current_amount = settings.rent_amount or Decimal('0.00')
+
+    locked_amount = _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date)
+    if locked_amount is not None:
+        return locked_amount
+
+    if payments:
+        updated_at = getattr(settings, 'updated_at', None)
+        if updated_at:
+            payment_dates = [ensure_utc(p.payment_date) for p in payments if p.payment_date]
+            if payment_dates:
+                earliest = min(payment_dates)
+                if ensure_utc(updated_at) > earliest:
+                    base_paid = sum(
+                        (p.amount_paid or Decimal('0.00')) - (p.late_fee_charged or Decimal('0.00'))
+                        for p in payments
+                    )
+                    if base_paid > Decimal('0.00'):
+                        return base_paid
+
+    return current_amount
+
+
 def _filter_valid_rent_payments(payments, student_id, join_code, seat_ids=None):
     """Return payments that have a matching, non-void rent transaction."""
     if not payments:
@@ -3145,7 +3209,7 @@ def _filter_valid_rent_payments(payments, student_id, join_code, seat_ids=None):
     return valid_payments
 
 
-def _is_coverage_period_paid(settings, valid_payments, coverage_due_date, include_late_fee=True):
+def _is_coverage_period_paid(settings, valid_payments, coverage_due_date, include_late_fee=True, join_code=None):
     """
     Return True when a coverage period is fully paid.
 
@@ -3155,7 +3219,13 @@ def _is_coverage_period_paid(settings, valid_payments, coverage_due_date, includ
     """
     if not settings or not coverage_due_date:
         return False
-    if settings.rent_amount <= Decimal('0.00'):
+    effective_rent_amount = _get_effective_rent_amount_for_coverage_period(
+        settings,
+        valid_payments,
+        coverage_due_date,
+        join_code=join_code,
+    )
+    if effective_rent_amount <= Decimal('0.00'):
         return True
     if not valid_payments:
         return False
@@ -3164,11 +3234,111 @@ def _is_coverage_period_paid(settings, valid_payments, coverage_due_date, includ
     grace_for_coverage = coverage_due_date + timedelta(days=settings.grace_period_days)
     paid_by_grace = _total_paid_by_grace(valid_payments, grace_for_coverage)
 
-    required_total = settings.rent_amount
-    if include_late_fee and paid_by_grace < settings.rent_amount:
+    required_total = effective_rent_amount
+    if include_late_fee and paid_by_grace < effective_rent_amount:
         required_total += settings.late_fee
 
     return total_paid >= required_total
+
+
+def _get_active_rent_waiver(student_id, join_code, coverage_due_date):
+    """Return the waiver row covering the given coverage period, if any."""
+    from app.models import RentWaiver
+
+    if not student_id or not coverage_due_date:
+        return None
+    query = RentWaiver.query.filter(
+        RentWaiver.student_id == student_id,
+        RentWaiver.waiver_start_date <= coverage_due_date,
+        RentWaiver.waiver_end_date >= coverage_due_date,
+    )
+    if join_code:
+        query = query.filter(
+            db.or_(
+                RentWaiver.join_code == join_code,
+                RentWaiver.join_code.is_(None),
+            )
+        )
+    return query.order_by(RentWaiver.created_at.desc(), RentWaiver.id.desc()).first()
+
+
+def _has_active_rent_waiver(student_id, join_code, coverage_due_date):
+    """Return True when a waiver covers the given coverage period."""
+    return _get_active_rent_waiver(student_id, join_code, coverage_due_date) is not None
+
+
+def _iter_rent_waiver_coverage_dates(settings, waiver):
+    """Expand a waiver row into the individual coverage due dates it covers."""
+    if not settings or not waiver:
+        return []
+
+    delta = _get_rent_period_delta(settings)
+    dates = []
+    current = ensure_utc(waiver.waiver_start_date)
+    end = ensure_utc(waiver.waiver_end_date)
+
+    while current and end and current <= end:
+        dates.append(current)
+        next_date = _add_rent_period(current, delta)
+        if next_date <= current:
+            break
+        current = next_date
+
+    return dates
+
+
+def _get_rent_coverage_label(coverage_due_date):
+    if not coverage_due_date:
+        return "Unknown"
+    return (ensure_utc(coverage_due_date) + timedelta(days=1)).strftime('%b %Y')
+
+
+def _expand_rent_waiver_history(settings, waivers, *, now=None):
+    """Return one waiver-history row per covered rent period."""
+    now = ensure_utc(now or utc_now())
+    current_coverage_due_date = _calculate_rent_coverage_due_date(settings, now) if settings else None
+    entries = []
+
+    for waiver in waivers or []:
+        for coverage_due_date in _iter_rent_waiver_coverage_dates(settings, waiver):
+            coverage_day = ensure_utc(coverage_due_date).date()
+            current_day = ensure_utc(current_coverage_due_date).date() if current_coverage_due_date else None
+
+            if current_day is None or coverage_day > current_day:
+                status = 'upcoming'
+                status_label = 'Upcoming'
+                cancellable = True
+            elif current_day and coverage_day == current_day:
+                status = 'current'
+                status_label = 'Current'
+                cancellable = False
+            else:
+                status = 'used'
+                status_label = 'Used'
+                cancellable = False
+
+            entries.append({
+                'waiver': waiver,
+                'student': waiver.student,
+                'join_code': waiver.join_code,
+                'coverage_due_date': coverage_due_date,
+                'coverage_label': _get_rent_coverage_label(coverage_due_date),
+                'status': status,
+                'status_label': status_label,
+                'is_cancellable': cancellable,
+                'created_at': ensure_utc(waiver.created_at) if waiver.created_at else None,
+                'reason': waiver.reason,
+            })
+
+    status_rank = {'current': 0, 'upcoming': 1, 'used': 2}
+    entries.sort(
+        key=lambda item: (
+            status_rank.get(item['status'], 3),
+            -(item['coverage_due_date'].timestamp() if item['coverage_due_date'] else 0),
+            -(item['created_at'].timestamp() if item['created_at'] else 0),
+        )
+    )
+    return entries
 
 
 def _is_student_coverage_period_paid(
@@ -3179,13 +3349,17 @@ def _is_student_coverage_period_paid(
     coverage_due_date,
     seat_ids=None,
     include_late_fee=True,
+    include_waivers=True,
 ):
-    """Return True when a student's specific coverage period is fully paid."""
+    """Return True when a student's specific coverage period is fully paid or waived."""
     if not settings or not coverage_due_date or not join_code:
         return False
     normalized_period = (period or '').strip().upper()
     if not normalized_period:
         return False
+
+    if include_waivers and _has_active_rent_waiver(student_id, join_code, coverage_due_date):
+        return True
 
     coverage_scope = seat_scoped_filter(RentPayment, student_id, seat_ids or [])
     coverage_payments = RentPayment.query.filter(
@@ -3207,6 +3381,7 @@ def _is_student_coverage_period_paid(
         valid_payments,
         coverage_due_date,
         include_late_fee=include_late_fee,
+        join_code=join_code,
     )
 
 
