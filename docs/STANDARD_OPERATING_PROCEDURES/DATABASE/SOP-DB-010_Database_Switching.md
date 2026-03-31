@@ -20,11 +20,12 @@ Normative (SOP Tier). Subordinate to INV-CORE-000.
 
 This repository uses branch-based database switching through the shared git hooks.
 
-### Protected v2 Branch
+### Protected v2 Branches
 
 - `codex/v2.0`
+- `codex/v2-*`
 
-This branch must use:
+These branches must use:
 
 - the team-configured v2 dev database
 
@@ -40,16 +41,23 @@ This is not the same database as the protected dev/migration database.
 
 All other branches may use:
 
-- `postgresql://postgres:postgres@localhost/production_dev`
+- `postgresql://postgres:postgres@localhost:5432/production_dev`
 
 ## VI. How It Works
 
 When you checkout a branch, the `hooks/post-checkout` hook updates `DATABASE_URL` in `.env` for the branch class it recognizes.
 
+The hook and `./scripts/switch-db.sh` only allow the approved local dev URLs for this repo:
+
+- `postgresql://postgres:postgres@localhost:5432/classroom_economy`
+- `postgresql://postgres:postgres@localhost:5432/production_dev`
+
+If `.env` contains a different `DATABASE_URL`, the tooling refuses to overwrite it. This is a safety guard against accidentally pointing local branch work at a deployed or otherwise non-local database.
+
 ## VII. Manual Switching
 
 ```bash
-# Switch to production_dev (blocked on protected v2 branch)
+# Switch to production_dev (blocked on protected v2 branches)
 ./scripts/switch-db.sh production_dev
 
 # Switch to classroom_economy
@@ -64,6 +72,7 @@ When you checkout a branch, the `hooks/post-checkout` hook updates `DATABASE_URL
 - `classroom_economy` is the v2 dev and migration rehearsal database.
 - `classroom_economy_test` is the required PostgreSQL test database.
 - `production_dev` is for non-v2 development branches.
+- Any branch matching `codex/v2-*` is treated as v2 work and routes to `classroom_economy`.
 
 ## IX. Setup for Contributors
 

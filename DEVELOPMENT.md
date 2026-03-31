@@ -35,8 +35,9 @@ Run once after clone:
 
 This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch-aware DB switching:
 
-- Protected v2 branch: `codex/v2.0` -> `classroom_economy`
+- V2 branches matching `codex/v2.0` or `codex/v2-*` -> `classroom_economy`
 - All other branches -> `production_dev`
+- The switching scripts refuse to overwrite a non-local `DATABASE_URL`, to reduce the chance of pointing local dev work at a deployed production database
 
 ## Current v2.0 State
 
