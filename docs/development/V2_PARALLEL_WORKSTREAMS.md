@@ -113,7 +113,7 @@ Port the live-test-critical transaction-idempotency, frozen analytics payloads, 
 
 **Goal**
 
-Close the non-code launch blockers: migration rehearsal, smoke-route ownership, runbook completeness, and evidence capture.
+Close the non-code launch blockers needed for live testing and production transition without doing a broad operational-doc overhaul that will be invalidated by later route and class-scope refactors.
 
 **Primary source areas**
 
@@ -133,9 +133,10 @@ Close the non-code launch blockers: migration rehearsal, smoke-route ownership, 
 **Deliverables**
 
 - named smoke-route ownership model
-- runbook completion fixes
+- launch-critical runbook completion fixes only
 - documented rehearsal record template
 - updated blocker status in the readiness matrix
+- explicit deferral note for deeper operations/doc restructuring that should wait until after `V2_ADMIN_ROUTE_REFACTOR` and `V2_Class_Scope_Normalization_Target`
 
 **Required verification**
 
@@ -146,6 +147,7 @@ Close the non-code launch blockers: migration rehearsal, smoke-route ownership, 
 
 - Can start immediately
 - Final blocker closure depends on Threads 1 and 2 landing and being validated
+- Do not undertake major runbook taxonomy or architecture-driven rewrite work until the post-port refactor targets are ready
 
 ### Thread 4: Insurance Reconciliation Wave
 
