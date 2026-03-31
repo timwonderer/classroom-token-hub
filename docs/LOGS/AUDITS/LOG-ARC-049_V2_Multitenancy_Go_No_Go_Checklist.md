@@ -44,7 +44,7 @@ Branch: `codex/v2.0`
 | 14 | Archived economy read-only policy | Not Started | Archived economies have explicit documented and tested runtime policy | contract doc + tests |
 | 15 | Full sysadmin tenancy audit | Not Started | `system_admin.py` routes are reviewed against v2 join-code contract | route audit matrix |
 | 16 | Global-balance property deprecation cleanup | Not Started | Legacy aggregate convenience properties are either retired or fully documented as transitional only | code/doc review |
-| 17 | Economy/rent correction wave from main | In Progress | Rebalance timing, rent-cycle locking, penalty reversal, and shared insurance recommendation sourcing are implemented on `codex/v2.0`; remaining live-test economy deltas stay visible | `app/utils/economy_policy.py`, `app/utils/economy_rebalance.py`, `tests/test_economy_policy_mode.py`, `tests/test_rent_penalty_reversal.py` |
+| 17 | Economy/rent correction wave from main | In Progress | Rebalance timing, rent-cycle locking, penalty reversal, and centralized pricing recommendation sourcing are implemented on `codex/v2.0`; remaining live-test economy deltas stay visible | `app/utils/economy_policy.py`, `app/utils/economy_rebalance.py`, `tests/test_economy_policy_mode.py`, `tests/test_rent_penalty_reversal.py` |
 
 ## Readiness Artifact
 

@@ -198,6 +198,8 @@ All agent-generated values must:
 
 Agents should *never* output arbitrary values without referencing this framework.
 
+For application runtime behavior, the backend implementation of these recommendation ratios shall be centralized in `app/utils/economy_policy.py`. Routes, templates, APIs, and background jobs must consume that shared helper rather than recreating formulas.
+
 ---
 
 ## XIII. Non-Negotiable Design Rules

@@ -46,7 +46,7 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 - Migration heads are resolved in repo with `e8f1a2b3c4d5_merge_remaining_v2_heads.py`.
 - Full-suite validation succeeded on the PostgreSQL test database.
 - Economy policy scheduling, rebalance timing, rent-cycle locking, and penalty-reversal corrections have landed on `codex/v2.0`.
-- Insurance premium guidance now uses a shared backend recommendation source so economy-health and insurance setup/edit surfaces read from the same documented ratios.
+- Pricing recommendation logic is now centralized in `app/utils/economy_policy.py`, with the checker, rebalance preview, economy APIs, and insurance setup/edit pages consuming that shared source instead of duplicating pricing math.
 
 ### Required Before Live Testing
 

@@ -61,9 +61,11 @@ from app.utils.join_code import generate_join_code
 from app.utils.economy_balance import EconomyBalanceChecker
 from app.utils.economy_policy import (
     POLICY_MODES,
+    convert_weekly_amount_to_frequency,
     get_insurance_premium_recommendation,
     get_class_feature_settings,
     get_feature_settings_row,
+    get_price_recommendation_context,
     normalize_policy_mode,
     replace_enabled_class_features,
     resolve_class_scope,
@@ -1450,31 +1452,6 @@ def _resolve_banking_settings_for_block(admin_id, block_name):
     )
 
 
-def _inverse_weekly_amount(value, frequency, custom_frequency_value=None, custom_frequency_unit=None):
-    from app.models import _quantize_currency
-
-    amount = _quantize_currency(value)
-    frequency = (frequency or 'weekly').lower()
-
-    if frequency == 'monthly':
-        return _quantize_currency(amount * Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH)))
-    if frequency == 'weekly':
-        return amount
-    if frequency == 'biweekly':
-        return _quantize_currency(amount * Decimal('2'))
-    if frequency == 'daily':
-        return _quantize_currency(amount / Decimal('7'))
-    if frequency == 'custom':
-        unit = (custom_frequency_unit or 'days').lower()
-        freq_value = Decimal(str(custom_frequency_value or 1))
-        if unit == 'weeks':
-            return _quantize_currency(amount * freq_value)
-        if unit == 'months':
-            return _quantize_currency(amount * Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH)) * freq_value)
-        return _quantize_currency(amount / (Decimal('7') / freq_value))
-    return amount
-
-
 def _format_money(value):
     if value is None:
         return "-"
@@ -1542,16 +1519,14 @@ def _build_policy_summary(admin_id, selected_block, analysis, rent_settings, ins
 
 def _build_rebalance_preview(admin_id, selected_block, checker, cwi, rent_settings, insurance_policies):
     preview_items = []
-    recommendations = checker.generate_recommendations(cwi)
+    recommendations = get_price_recommendation_context(checker.policy_mode, cwi) or {}
 
     if rent_settings and rent_settings.is_enabled:
-        recommended_monthly = Decimal(str(recommendations['rent']['recommended']))
-        recommended_weekly = recommended_monthly / Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH))
-        recommended_amount = _inverse_weekly_amount(
-            recommended_weekly,
+        recommended_amount = convert_weekly_amount_to_frequency(
+            Decimal(str(recommendations['rent_weekly']['recommended'])),
             rent_settings.frequency_type,
-            rent_settings.custom_frequency_value,
-            getattr(rent_settings, 'custom_frequency_unit', None),
+            custom_frequency_value=rent_settings.custom_frequency_value,
+            custom_frequency_unit=getattr(rent_settings, 'custom_frequency_unit', None),
         )
         current_amount = Decimal(str(rent_settings.rent_amount or 0))
         if current_amount != recommended_amount:
@@ -1575,7 +1550,10 @@ def _build_rebalance_preview(admin_id, selected_block, checker, cwi, rent_settin
         if not policy.is_active:
             continue
         current_premium = Decimal(str(policy.premium or 0))
-        recommended_premium = _inverse_weekly_amount(recommended_insurance_weekly, policy.charge_frequency)
+        recommended_premium = convert_weekly_amount_to_frequency(
+            recommended_insurance_weekly,
+            policy.charge_frequency,
+        )
         if current_premium == recommended_premium:
             continue
         preview_items.append({
@@ -10970,7 +10948,7 @@ def api_calculate_cwi():
         checker = EconomyBalanceChecker(admin_id, block)
         cwi_calc = checker.calculate_cwi(temp_settings, expected_weekly_hours)
 
-        recommendations = checker._generate_recommendations(cwi_calc.cwi, [])
+        recommendations = get_price_recommendation_context(checker.policy_mode, cwi_calc.cwi)
 
         return jsonify({
             'status': 'success',

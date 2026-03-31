@@ -14,7 +14,12 @@ from app.models import (
     TeacherBlock,
 )
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
-from app.utils.economy_policy import get_feature_settings_row, get_insurance_premium_recommendation
+from app.utils.economy_policy import (
+    convert_weekly_amount_to_frequency,
+    get_feature_settings_row,
+    get_insurance_premium_recommendation,
+    get_price_recommendation_context,
+)
 
 
 def _login_admin(client, admin_id):
@@ -187,6 +192,29 @@ def test_insurance_premium_recommendation_matches_checker_output(client):
     assert recommendation['min'] == Decimal('16.31')
     assert recommendation['max'] == Decimal('39.13')
     assert recommendation['recommended'] == Decimal('26.09')
+
+
+def test_price_recommendation_context_centralizes_policy_output(client):
+    context = get_price_recommendation_context('comfortable', Decimal('50.00'))
+
+    assert context is not None
+    assert context['policy_mode'] == 'comfortable'
+    assert context['rent_weekly']['recommended'] == 28.75
+    assert context['rent']['recommended'] == 125.01
+    assert context['insurance_premium_weekly']['recommended'] == 3.5
+    assert context['insurance_coverage']['multiplier_recommended'] == 5.0
+    assert context['store_tiers']['premium']['max'] == 9.0
+
+
+def test_convert_weekly_amount_to_frequency_supports_custom_schedules(client):
+    assert convert_weekly_amount_to_frequency(Decimal('10.00'), 'weekly') == Decimal('10.00')
+    assert convert_weekly_amount_to_frequency(Decimal('10.00'), 'monthly') == Decimal('43.48')
+    assert convert_weekly_amount_to_frequency(
+        Decimal('10.00'),
+        'custom',
+        custom_frequency_value=2,
+        custom_frequency_unit='weeks',
+    ) == Decimal('20.00')
 
 
 def test_edit_insurance_policy_renders_shared_recommendation_text(client):

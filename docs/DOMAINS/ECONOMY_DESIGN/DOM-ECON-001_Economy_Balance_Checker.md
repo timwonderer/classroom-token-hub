@@ -27,7 +27,7 @@ Teachers must specify their **expected weekly hours** (or minutes) in payroll se
 Core Python module that:
 - Calculates CWI dynamically based on payroll settings
 - Validates economy settings against standard ratios (defined in DOM-ECON-002)
-- Generates teacher recommendations
+- Returns teacher recommendation payloads from the shared economy-policy layer
 - Performs budget survival tests
 
 ### 2. Admin Economy Health Page (`/admin/economy-health`)
@@ -47,7 +47,7 @@ Three RESTful endpoints for real-time validation:
 JavaScript class for real-time validation in forms (debounce 500ms).
 Usage requires standard data attributes (e.g., `data-economy-validate="rent"`).
 
-Client-side pages may display validation results, but ratio derivation and recommendation values remain backend-owned. Insurance premium guidance shown outside the validation API must come from the same backend recommendation source used by Economy Health and the checker-backed forms.
+Client-side pages may display validation results, but ratio derivation and recommendation values remain backend-owned. Recommendation math shall originate in `app/utils/economy_policy.py`; `EconomyBalanceChecker`, admin routes, and templates are consumers of that source, not alternative calculators.
 
 ## VII. Integrated Pages
 The balance checker is currently integrated into:
