@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| FEAT-ECON-001 | 1.0 | 2026-03-08 | N/A | Normative |
+| FEAT-ECON-001 | 1.1 | 2026-03-30 | 1.0 | Normative |
 
 ## I. Purpose
 
@@ -10,7 +10,7 @@ This document defines the normative user-facing feature contract for teacher eco
 
 ## II. Scope
 
-This feature applies to teacher-scoped economy configuration in Economy Health, including policy mode selection, alignment status, rebalance preview, immediate activation, and next-payroll activation.
+This feature applies to teacher-scoped economy configuration in Economy Health, including policy mode selection, alignment status, rebalance preview, immediate activation, and scheduled activation on due renewal events.
 
 ## III. Authority Level
 
@@ -58,9 +58,9 @@ A classroom economy rebalance shall be in exactly one of the following states:
 
 1. no pending rebalance
 2. preview generated but not scheduled
-3. scheduled for next payroll
+3. scheduled for next renewal
 4. applied immediately
-5. applied on payroll execution
+5. applied when due on renewal/payroll evaluation
 
 Forbidden transitions:
 
@@ -90,7 +90,7 @@ Forbidden transitions:
 Teacher may choose one of the following:
 
 - apply immediately
-- schedule for next payroll run
+- schedule for next renewal (rent cycle rollover and/or insurance renewal)
 
 ## VIII. Behavior Rules
 
@@ -111,7 +111,11 @@ Routes and templates shall not contain independent pricing formulas. Templates m
 
 ### 3. Activation Timing
 
-If the teacher selects next-payroll activation, the rebalance payload shall be stored and activated by the next teacher payroll execution.
+If the teacher selects scheduled activation, the rebalance payload shall be stored and activated when change-level due conditions are met:
+
+- rent changes activate at the next valid rent renewal boundary
+- insurance changes activate when the selected policy renews
+- legacy `next_payroll` payloads remain supported and are treated as renewal-scheduled for compatibility
 
 ### 4. Safety Rules
 
@@ -161,7 +165,7 @@ At minimum, the system shall log:
 - policy mode changes
 - immediate rebalance applications
 - scheduled rebalance creation
-- payroll-triggered rebalance activation
+- due rebalance activation events (including payroll-triggered evaluation)
 
 Timestamps shall remain UTC at rest.
 
@@ -177,7 +181,7 @@ Timestamps shall remain UTC at rest.
 1. Economy Health shall display the active policy mode and alignment status.
 2. Teachers shall be able to change policy mode without immediate config mutation.
 3. Teachers shall be able to review and selectively apply supported rebalance changes.
-4. Next-payroll activation shall apply pending changes during payroll execution.
+4. Scheduled activation shall apply pending changes at their due renewal trigger, including payroll-time checks.
 5. Rent, store, and insurance settings shall continue to surface CWI-based recommendations.
 6. Insurance settings shall validate premium, max claim, period cap, and waiting period.
 
