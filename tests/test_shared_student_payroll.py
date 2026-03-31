@@ -2,8 +2,9 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from app import db
-from app.models import Admin, Student, StudentTeacher, TapEvent, PayrollSettings, TeacherBlock
+from app.models import Admin, Seat, Student, StudentTeacher, TapEvent, PayrollSettings, TeacherBlock, Transaction
 from app.payroll import calculate_payroll
+from tests.helpers.class_scope import create_class_scope
 
 
 def test_shared_student_diff_teacher_diff_period(client):
@@ -167,19 +168,44 @@ def test_balance_separation_by_join_code(client):
 
     student = Student(first_name="BalanceTest", last_initial="B", block="P1", salt=b'salt')
     db.session.add(student)
+    db.session.flush()
+    create_class_scope(
+        teacher=t1,
+        join_code="JC1",
+        student=student,
+        block="P1",
+        display_name="P1",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
+    create_class_scope(
+        teacher=t1,
+        join_code="JC2",
+        student=student,
+        block="P1",
+        display_name="P1",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
     db.session.commit()
+    seat_1 = Seat.query.filter_by(student_id=student.id, join_code='JC1').first()
+    seat_2 = Seat.query.filter_by(student_id=student.id, join_code='JC2').first()
+    assert seat_1 is not None
+    assert seat_2 is not None
 
     # 2. Add Transactions for JC1
     # Checking: +100
     # Savings: +50
-    db.session.add(Transaction(student_id=student.id, amount=100, account_type='checking', type='deposit', join_code='JC1', teacher_id=t1.id))
-    db.session.add(Transaction(student_id=student.id, amount=50, account_type='savings', type='deposit', join_code='JC1', teacher_id=t1.id))
+    db.session.add(Transaction(student_id=student.id, seat_id=seat_1.id, amount=100, account_type='checking', type='deposit', join_code='JC1', teacher_id=t1.id))
+    db.session.add(Transaction(student_id=student.id, seat_id=seat_1.id, amount=50, account_type='savings', type='deposit', join_code='JC1', teacher_id=t1.id))
     
     # 3. Add Transactions for JC2
     # Checking: +200
     # Savings: +100
-    db.session.add(Transaction(student_id=student.id, amount=200, account_type='checking', type='deposit', join_code='JC2', teacher_id=t1.id))
-    db.session.add(Transaction(student_id=student.id, amount=100, account_type='savings', type='deposit', join_code='JC2', teacher_id=t1.id))
+    db.session.add(Transaction(student_id=student.id, seat_id=seat_2.id, amount=200, account_type='checking', type='deposit', join_code='JC2', teacher_id=t1.id))
+    db.session.add(Transaction(student_id=student.id, seat_id=seat_2.id, amount=100, account_type='savings', type='deposit', join_code='JC2', teacher_id=t1.id))
     
     db.session.commit()
 

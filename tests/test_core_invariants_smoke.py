@@ -8,6 +8,8 @@ from app import db
 from app.hash_utils import get_random_salt, hash_username
 from app.models import (
     Admin,
+    ClassMembership,
+    ClassFeature,
     InsuranceClaim,
     InsurancePolicy,
     RentPayment,
@@ -21,6 +23,7 @@ from app.models import (
     Transaction,
     TransactionStatus,
 )
+from tests.helpers.class_scope import create_class_scope
 
 
 pytestmark = pytest.mark.critical
@@ -50,7 +53,42 @@ def _create_student(first_name: str, block: str = "A") -> Student:
 
 
 def _link_student_to_teacher(student: Student, admin: Admin, join_code: str, block: str = "A") -> None:
+    if not db.session.query(ClassMembership.id).filter_by(
+        join_code=join_code,
+        admin_id=admin.id,
+        role="admin",
+    ).first():
+        create_class_scope(
+            teacher=admin,
+            join_code=join_code,
+            student=student,
+            block=block,
+            display_name=block,
+        )
+        db.session.flush()
+    elif not db.session.query(ClassMembership.id).filter_by(
+        join_code=join_code,
+        student_id=student.id,
+        role="student",
+    ).first():
+        db.session.add(ClassMembership(
+            join_code=join_code,
+            student_id=student.id,
+            role="student",
+        ))
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=admin.id))
+    class_row = db.session.query(ClassMembership.join_code).filter_by(
+        join_code=join_code,
+        admin_id=admin.id,
+        role="admin",
+    ).first()
+    if class_row:
+        from app.models import ClassEconomy
+        economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+        if economy:
+            for feature_name in ClassFeature.feature_names():
+                if not ClassFeature.query.filter_by(class_id=economy.class_id, feature_name=feature_name).first():
+                    db.session.add(ClassFeature(class_id=economy.class_id, feature_name=feature_name))
     db.session.add(
         TeacherBlock(
             teacher_id=admin.id,

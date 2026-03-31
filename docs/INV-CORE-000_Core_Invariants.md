@@ -1,7 +1,7 @@
 # Core Invariants of Classroom Token Hub
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|INV-CORE-000| 1.1 | 2026-03-08 | 1.0 |Foundational|
+|INV-CORE-000| 1.2 | 2026-03-31 | 1.0 |Foundational|
 
 ## I. Purpose
 This document defines the core invariants, or underlying principles, that drives the design of this application. Any future development of this application must stay within the boundaries of these invariants. This document serves as top level authority in which all other levels of authority derives from.
@@ -99,3 +99,30 @@ Authority is strictly scoped to defined roles. No role may exercise cross-tenant
 #### Prohibited Action
 - Storage of `join_code` linked data or accounts after a deletion action has been completed
 - Retention of recoverable financial history after tenant deletion.
+
+---
+### 6. Class Identity and Membership Model (Existence-Based)
+
+#### Statement
+Class and membership are existence-based, not lifecycle-based. A `class_id` either exists or does not exist. Membership represents existence within a class, not a state.
+
+#### Constraints
+- `class_id` is the sole authority for class identity and boundary.
+- A class MUST NOT have lifecycle states such as "active", "inactive", or "archived".
+- Membership MUST NOT use lifecycle labels (e.g., `status`, `is_active`). Membership exists if and only if a record exists for a given `class_id`.
+- Student state within a class is limited to:
+  - `unclaimed` (teacher-created placeholder)
+  - `claimed` (identity established)
+- Labels such as `block`, `period`, `section`, or display names are metadata only and MUST NOT be used for identity, scoping, grouping, or lifecycle decisions.
+- All settings, aggregates, and operations MUST be scoped by `class_id` (or its public alias `join_code`), not by labels.
+
+#### Deletion Semantics
+- Removing a student from a class erases that student from that class context entirely, as if they never existed in that class.
+- If a student has no remaining class associations, the student MUST be deleted from the system entirely.
+- Deletion logic MUST be driven by surviving `class_id` associations only.
+
+#### Prohibited Action
+- Branching logic on class or membership lifecycle labels (e.g., `if status == "active"`).
+- Using labels (`block`, `period`, `section`) as identifiers or join/filter keys for ownership or lifecycle.
+- Retaining student or membership records after their last `class_id` association is removed.
+- Any cleanup or preservation rule based on `teacher_id + label` instead of `class_id`.

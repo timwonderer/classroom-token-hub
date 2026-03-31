@@ -15,6 +15,7 @@
 - **[v2 Launch Readiness Matrix](docs/development/V2_LAUNCH_READINESS_MATRIX.md)** - Current launch blockers and readiness status
 - **[v2 Documentation Compliance Sweep](docs/development/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md)** - Active-doc compliance status for v2
 - **[v2 Parallel Workstreams](docs/development/V2_PARALLEL_WORKSTREAMS.md)** - Parallel execution map for multi-threaded v2 work
+- **[v2 Class ID Invariant Backlog](docs/development/V2_CLASS_ID_INVARIANT_BACKLOG.md)** - Deferred cleanup for class lifecycle and membership semantics that violate the `class_id` model
 - **[v2 Live-Test Runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md)** - Internal validation workflow before live testing
 
 ## Branch and Database Truth
@@ -85,6 +86,7 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 - Lower-priority guide refreshes where wording is stale but not dangerous.
 - Compatibility shim reduction for legacy aliases that still exist only to ease migration or testing.
 - Class-scope normalization project to move internal scoping from `join_code` to `class_id`.
+- Class-identity invariant cleanup that removes pseudo-lifecycle semantics from class and membership layers.
 
 ## v2.0 Technical Direction
 

@@ -2,7 +2,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from app.extensions import db
-from app.models import Admin, ClassEconomy, ClassMembership, Student, StudentTeacher, TeacherBlock, Transaction, TransactionStatus
+from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TransactionStatus
+from tests.helpers.class_scope import create_class_scope
 
 
 def _login_admin(client, admin_id):
@@ -22,30 +23,13 @@ def test_admin_payroll_displays_scoped_balances_only(client):
     db.session.add(student)
     db.session.flush()
 
-    class_a = ClassEconomy(
-        join_code="PAYA01",
-        teacher_id=teacher_a.id,
-        status="active",
-        is_active=True,
-        created_by_admin_id=teacher_a.id,
-    )
-    class_b = ClassEconomy(
-        join_code="PAYB01",
-        teacher_id=teacher_b.id,
-        status="active",
-        is_active=True,
-        created_by_admin_id=teacher_b.id,
-    )
-    db.session.add_all([class_a, class_b])
+    class_a = create_class_scope(teacher=teacher_a, join_code="PAYA01", student=student, block="A", display_name="A")
+    class_b = create_class_scope(teacher=teacher_b, join_code="PAYB01", student=student, block="A", display_name="A")
     db.session.flush()
 
     db.session.add_all([
         StudentTeacher(student_id=student.id, teacher_id=teacher_a.id),
         StudentTeacher(student_id=student.id, teacher_id=teacher_b.id),
-        ClassMembership(join_code="PAYA01", admin_id=teacher_a.id, role="admin", status="active"),
-        ClassMembership(join_code="PAYB01", admin_id=teacher_b.id, role="admin", status="active"),
-        ClassMembership(join_code="PAYA01", student_id=student.id, role="student", status="active"),
-        ClassMembership(join_code="PAYB01", student_id=student.id, role="student", status="active"),
         TeacherBlock(
             teacher_id=teacher_a.id,
             block="A",

@@ -5,6 +5,7 @@ from datetime import datetime, timezone, timedelta
 from app import db
 from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TapEvent, StudentBlock, PayrollSettings, User, Seat
 from app.hash_utils import get_random_salt, hash_username
+from tests.helpers.class_scope import create_class_scope
 
 
 def _create_admin(username: str) -> tuple[Admin, str]:
@@ -97,45 +98,43 @@ def test_student_detail_recovers_from_stale_class_context(client):
     student_a = _create_student("Alice", teacher)
     student_b = _create_student("Bob", teacher)
 
+    class_a = create_class_scope(
+        teacher=teacher,
+        join_code="JOINA",
+        student=student_a,
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
+    class_b = create_class_scope(
+        teacher=teacher,
+        join_code="JOINB",
+        student=student_b,
+        block="B",
+        display_name="B",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
+    db.session.flush()
+    seat_a = Seat.query.filter_by(student_id=student_a.id, join_code="JOINA", class_id=class_a.class_id).first()
+    assert seat_a is not None
+    Seat.query.filter_by(student_id=student_b.id, join_code="JOINB", class_id=class_b.class_id).first()
+
     # Teacher has two class contexts; stale session context points to the other student.
-    db.session.add_all([
-        TeacherBlock(
-            teacher_id=teacher.id,
-            block="A",
-            class_label="A",
-            first_name="Alice",
-            last_initial="A",
-            last_name_hash_by_part=["x"],
-            dob_sum_hash=None,
-            salt=get_random_salt(),
-            first_half_hash="alice-seat",
-            join_code="JOINA",
-            student_id=student_a.id,
-            is_claimed=True,
-        ),
-        TeacherBlock(
-            teacher_id=teacher.id,
-            block="B",
-            class_label="B",
-            first_name="Bob",
-            last_initial="A",
-            last_name_hash_by_part=["y"],
-            dob_sum_hash=None,
-            salt=get_random_salt(),
-            first_half_hash="bob-seat",
-            join_code="JOINB",
-            student_id=student_b.id,
-            is_claimed=True,
-        ),
+    db.session.add(
         Transaction(
             student_id=student_a.id,
+            seat_id=seat_a.id,
             amount=25,
             type="bonus",
             account_type="checking",
             description="Scoped tx",
             join_code="JOINA",
         ),
-    ])
+    )
     db.session.commit()
 
     _login_admin(client, teacher, secret)
@@ -508,32 +507,35 @@ def test_enforce_daily_limits_taps_out_when_limit_reached_in_scope(client):
     teacher, secret = _create_admin("teacher-a")
     student = _create_student("AliceLimit", teacher)
 
+    class_scope = create_class_scope(
+        teacher=teacher,
+        join_code="JOINA",
+        student=student,
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
+    db.session.flush()
+    seat = Seat.query.filter_by(student_id=student.id, join_code="JOINA", class_id=class_scope.class_id).first()
+    assert seat is not None
+
     db.session.add_all([
-        TeacherBlock(
-            teacher_id=teacher.id,
-            block="A",
-            class_label="A",
-            first_name="AliceLimit",
-            last_initial="A",
-            last_name_hash_by_part=["x"],
-            dob_sum_hash=None,
-            salt=get_random_salt(),
-            first_half_hash="alice-limit-seat",
-            join_code="JOINA",
-            student_id=student.id,
-            is_claimed=True,
-        ),
         PayrollSettings(
             teacher_id=teacher.id,
+            join_code="JOINA",
+            class_id=class_scope.class_id,
             block="A",
             is_active=True,
             settings_mode="simple",
-            daily_limit_hours=0.001,  # ~3.6 seconds
+            daily_limit_hours=0.001,
             pay_rate=0.25,
             payroll_frequency_days=14,
         ),
         TapEvent(
             student_id=student.id,
+            seat_id=seat.id,
             period="A",
             status="active",
             join_code="JOINA",

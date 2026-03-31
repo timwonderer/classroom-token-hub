@@ -116,28 +116,12 @@ def test_calculate_payroll(client):
 
 
 def test_calculate_payroll_ignores_other_class_manual_payment_anchor(client):
-    from app.models import Admin, TeacherBlock, Student, ClassEconomy
+    from app.models import Admin, TeacherBlock, Student
+    from tests.helpers.class_scope import create_class_scope
 
     teacher = Admin(username="prof_multiclass", totp_secret="s")
     db.session.add(teacher)
     db.session.commit()
-
-    class_a = ClassEconomy(
-        join_code="PAYA01",
-        teacher_id=teacher.id,
-        created_by_admin_id=teacher.id,
-        status="active",
-        is_active=True,
-    )
-    class_b = ClassEconomy(
-        join_code="PAYB01",
-        teacher_id=teacher.id,
-        created_by_admin_id=teacher.id,
-        status="active",
-        is_active=True,
-    )
-    db.session.add_all([class_a, class_b])
-    db.session.flush()
 
     student = Student(
         first_name="Multi",
@@ -147,6 +131,21 @@ def test_calculate_payroll_ignores_other_class_manual_payment_anchor(client):
         has_completed_setup=True,
     )
     db.session.add(student)
+    db.session.flush()
+    class_a = create_class_scope(
+        teacher=teacher,
+        join_code="PAYA01",
+        student=student,
+        block="A",
+        display_name="A",
+    )
+    class_b = create_class_scope(
+        teacher=teacher,
+        join_code="PAYB01",
+        student=student,
+        block="B",
+        display_name="B",
+    )
     db.session.flush()
 
     db.session.add_all([
@@ -383,7 +382,8 @@ def test_get_pay_rate_for_block_no_teacher_id(client):
 def test_get_cached_payroll_with_meta(client):
     """Test the caching logic for payroll."""
     from app.payroll import get_cached_payroll_with_meta
-    from app.models import Admin, Student, TeacherBlock, PayrollCache, TapEvent, ClassEconomy
+    from app.models import Admin, Student, TeacherBlock, PayrollCache, TapEvent
+    from tests.helpers.class_scope import create_class_scope
     from datetime import datetime, timedelta, timezone
     
     # Setup Teacher
@@ -391,19 +391,17 @@ def test_get_cached_payroll_with_meta(client):
     db.session.add(teacher)
     db.session.commit()
     
-    class_economy = ClassEconomy(
-        join_code="CACHE1",
-        teacher_id=teacher.id,
-        created_by_admin_id=teacher.id,
-        status="active",
-        is_active=True,
-    )
-    db.session.add(class_economy)
-    db.session.flush()
-
     # Setup Student
     student = Student(first_name="CacheUser", last_initial="T", block="A", salt=b's', has_completed_setup=True)
     db.session.add(student)
+    db.session.flush()
+    class_economy = create_class_scope(
+        teacher=teacher,
+        join_code="CACHE1",
+        student=student,
+        block="A",
+        display_name="A",
+    )
     db.session.commit()
     
     # Link

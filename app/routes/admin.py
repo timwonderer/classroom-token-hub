@@ -6330,7 +6330,7 @@ def add_rent_waiver():
             try:
                 dt = datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
                 if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
+                    dt = ensure_utc(dt)
                 waiver_windows.append((dt, dt, 1))
                 past_due_window_count += 1
             except (ValueError, AttributeError):

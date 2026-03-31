@@ -7,6 +7,8 @@ from app import db
 from app.hash_utils import get_random_salt, hash_username
 from app.models import (
     Admin,
+    ClassMembership,
+    Seat,
     Student,
     StudentTeacher,
     TeacherBlock,
@@ -17,6 +19,36 @@ from app.models import (
     Transaction,
 )
 from app.routes.student import _calculate_rent_coverage_due_date
+from tests.helpers.class_scope import create_class_scope
+
+
+def _ensure_class_scope(teacher: Admin, student: Student, join_code: str, block: str = "A") -> None:
+    if not db.session.query(ClassMembership.id).filter_by(
+        join_code=join_code,
+        admin_id=teacher.id,
+        role="admin",
+    ).first():
+        create_class_scope(
+            teacher=teacher,
+            join_code=join_code,
+            student=student,
+            block=block,
+            display_name=block,
+            create_claimed_teacher_block=True,
+            teacher_block_claimed=True,
+            create_seat=True,
+        )
+        db.session.flush()
+    elif not db.session.query(ClassMembership.id).filter_by(
+        join_code=join_code,
+        student_id=student.id,
+        role="student",
+    ).first():
+        db.session.add(ClassMembership(
+            join_code=join_code,
+            student_id=student.id,
+            role="student",
+        ))
 
 
 def test_overdue_rent_payment_restores_privileges(client):
@@ -40,21 +72,9 @@ def test_overdue_rent_payment_restores_privileges(client):
     db.session.commit()
 
     join_code = "JOINA"
-    seat = TeacherBlock(
-        teacher_id=teacher.id,
-        block="A",
-        first_name="Rent",
-        last_initial="P",
-        last_name_hash_by_part=None,
-        dob_sum_hash=None,
-        salt=b"rent_salt",
-        first_half_hash="hash_a",
-        join_code=join_code,
-        student_id=student.id,
-        is_claimed=True,
-    )
-    db.session.add(seat)
-    db.session.commit()
+    _ensure_class_scope(teacher, student, join_code, block="A")
+    seat = Seat.query.filter_by(student_id=student.id, join_code=join_code).first()
+    assert seat is not None
 
     now = datetime.now(timezone.utc)
     rent_settings = RentSettings(
@@ -114,6 +134,7 @@ def test_overdue_rent_payment_restores_privileges(client):
     required_amount = rent_settings.rent_amount + (rent_settings.late_fee if late_fee_applies else Decimal("0.00"))
     payment = RentPayment(
         student_id=student.id,
+        seat_id=seat.id,
         period="A",
         join_code=join_code,
         amount_paid=required_amount,
@@ -127,6 +148,7 @@ def test_overdue_rent_payment_restores_privileges(client):
     )
     transaction = Transaction(
         student_id=student.id,
+        seat_id=seat.id,
         teacher_id=teacher.id,
         join_code=join_code,
         amount=-required_amount,
@@ -164,21 +186,9 @@ def test_voided_payment_does_not_restore_privileges(client):
     db.session.commit()
 
     join_code = "JOINV"
-    seat = TeacherBlock(
-        teacher_id=teacher.id,
-        block="A",
-        first_name="Void",
-        last_initial="P",
-        last_name_hash_by_part=None,
-        dob_sum_hash=None,
-        salt=b"rent_salt",
-        first_half_hash="hash_a",
-        join_code=join_code,
-        student_id=student.id,
-        is_claimed=True,
-    )
-    db.session.add(seat)
-    db.session.commit()
+    _ensure_class_scope(teacher, student, join_code, block="A")
+    seat = Seat.query.filter_by(student_id=student.id, join_code=join_code).first()
+    assert seat is not None
 
     now = datetime.now(timezone.utc)
     rent_settings = RentSettings(
@@ -235,6 +245,7 @@ def test_voided_payment_does_not_restore_privileges(client):
 
     payment = RentPayment(
         student_id=student.id,
+        seat_id=seat.id,
         period="A",
         join_code=join_code,
         amount_paid=required_amount,
@@ -248,6 +259,7 @@ def test_voided_payment_does_not_restore_privileges(client):
     )
     voided_tx = Transaction(
         student_id=student.id,
+        seat_id=seat.id,
         teacher_id=teacher.id,
         join_code=join_code,
         amount=-required_amount,
@@ -266,6 +278,7 @@ def test_voided_payment_does_not_restore_privileges(client):
 
     valid_tx = Transaction(
         student_id=student.id,
+        seat_id=seat.id,
         teacher_id=teacher.id,
         join_code=join_code,
         amount=-required_amount,
@@ -276,6 +289,7 @@ def test_voided_payment_does_not_restore_privileges(client):
     )
     valid_payment = RentPayment(
         student_id=student.id,
+        seat_id=seat.id,
         period="A",
         join_code=join_code,
         amount_paid=required_amount,
@@ -317,20 +331,9 @@ def test_overdue_rent_payment_with_timestamp_drift_restores_privileges(client):
     db.session.commit()
 
     join_code = "JOIND"
-    db.session.add(TeacherBlock(
-        teacher_id=teacher.id,
-        block="A",
-        first_name="Drift",
-        last_initial="P",
-        last_name_hash_by_part=None,
-        dob_sum_hash=None,
-        salt=b"rent_salt",
-        first_half_hash="hash_a",
-        join_code=join_code,
-        student_id=student.id,
-        is_claimed=True,
-    ))
-    db.session.commit()
+    _ensure_class_scope(teacher, student, join_code, block="A")
+    seat = Seat.query.filter_by(student_id=student.id, join_code=join_code).first()
+    assert seat is not None
 
     now = datetime.now(timezone.utc)
     rent_settings = RentSettings(
@@ -386,6 +389,7 @@ def test_overdue_rent_payment_with_timestamp_drift_restores_privileges(client):
     txn_timestamp = now + timedelta(seconds=45)  # outside old 5s window; inside new tolerance
     db.session.add(RentPayment(
         student_id=student.id,
+        seat_id=seat.id,
         period="A",
         join_code=join_code,
         amount_paid=required_amount,
@@ -399,6 +403,7 @@ def test_overdue_rent_payment_with_timestamp_drift_restores_privileges(client):
     ))
     db.session.add(Transaction(
         student_id=student.id,
+        seat_id=seat.id,
         teacher_id=teacher.id,
         join_code=join_code,
         amount=-required_amount,

@@ -2,7 +2,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from app.extensions import db
-from app.models import Admin, ClassEconomy, ClassMembership, Student, StudentTeacher, TeacherBlock, Transaction, TransactionStatus
+from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TransactionStatus
+from tests.helpers.class_scope import create_class_scope
 
 
 def _login_student(client, student_id, join_code):
@@ -23,17 +24,14 @@ def _build_multi_class_student():
     db.session.flush()
 
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
+    class_a = create_class_scope(teacher=teacher, join_code="STUDSC1", student=student, block="A", display_name="A")
+    class_b = create_class_scope(teacher=teacher, join_code="STUDSC2", student=student, block="B", display_name="B")
     db.session.add_all([
-        ClassEconomy(join_code="STUDSC1", teacher_id=teacher.id, status="active", created_by_admin_id=teacher.id),
-        ClassEconomy(join_code="STUDSC2", teacher_id=teacher.id, status="active", created_by_admin_id=teacher.id),
-        ClassMembership(join_code="STUDSC1", admin_id=teacher.id, role="admin", status="active"),
-        ClassMembership(join_code="STUDSC2", admin_id=teacher.id, role="admin", status="active"),
-        ClassMembership(join_code="STUDSC1", student_id=student.id, role="student", status="active"),
-        ClassMembership(join_code="STUDSC2", student_id=student.id, role="student", status="active"),
         TeacherBlock(
             teacher_id=teacher.id,
             block="A",
             join_code="STUDSC1",
+            class_id=class_a.class_id,
             student_id=student.id,
             is_claimed=True,
             first_name=student.first_name,
@@ -47,6 +45,7 @@ def _build_multi_class_student():
             teacher_id=teacher.id,
             block="B",
             join_code="STUDSC2",
+            class_id=class_b.class_id,
             student_id=student.id,
             is_claimed=True,
             first_name=student.first_name,

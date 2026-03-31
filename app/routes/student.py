@@ -3254,12 +3254,7 @@ def _get_active_rent_waiver(student_id, join_code, coverage_due_date):
         RentWaiver.waiver_end_date >= coverage_due_date,
     )
     if join_code:
-        query = query.filter(
-            db.or_(
-                RentWaiver.join_code == join_code,
-                RentWaiver.join_code.is_(None),
-            )
-        )
+        query = query.filter(RentWaiver.join_code == join_code)
     return query.order_by(RentWaiver.created_at.desc(), RentWaiver.id.desc()).first()
 
 

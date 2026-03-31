@@ -4,7 +4,8 @@ from decimal import Decimal
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db
-from app.models import Admin, StoreItem, StoreItemBlock, Student, StudentItem, StudentTeacher, TeacherBlock, Transaction
+from app.models import Admin, ClassMembership, StoreItem, StoreItemBlock, Student, StudentItem, StudentTeacher, TeacherBlock, Transaction
+from tests.helpers.class_scope import create_class_scope
 
 
 def _login_student(client, student_id, join_code):
@@ -25,6 +26,29 @@ def _create_student(teacher, first_name, join_code, block='A'):
     student.passphrase_hash = generate_password_hash('password')
     db.session.add(student)
     db.session.flush()
+    if not db.session.query(ClassMembership.id).filter_by(
+        join_code=join_code,
+        admin_id=teacher.id,
+        role='admin',
+    ).first():
+        create_class_scope(
+            teacher=teacher,
+            join_code=join_code,
+            student=student,
+            block=block,
+            display_name=block,
+        )
+        db.session.flush()
+    elif not db.session.query(ClassMembership.id).filter_by(
+        join_code=join_code,
+        student_id=student.id,
+        role='student',
+    ).first():
+        db.session.add(ClassMembership(
+            join_code=join_code,
+            student_id=student.id,
+            role='student',
+        ))
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
@@ -566,4 +590,3 @@ def test_whole_class_collective_allows_purchase_per_class_for_same_teacher(clien
     items_class2 = StudentItem.query.filter_by(store_item_id=item_class2.id, join_code='JOINMULTI2').all()
     assert len(items_class1) == 1
     assert len(items_class2) == 1
-

@@ -4,8 +4,8 @@ Regression tests for the class deletion audit fixes (2026-02-21).
 Covers:
   - P1: BalanceCache rows are deleted when a join code is hard-deleted
   - P2: Sysadmin period deletion uses join_code scope, not legacy Student.block
-  - P3: PayrollSettings / RentSettings are cleaned up when the last join code
-        for a block name is deleted
+  - P3: PayrollSettings / RentSettings lifecycle does not extend across
+        unrelated classes that only share a display label
 
 See docs/security/CLASS_DELETION_AUDIT.md for the full audit report.
 """
@@ -16,8 +16,6 @@ from datetime import datetime, timezone
 from app import db
 from app.models import (
     Admin,
-    ClassEconomy,
-    ClassMembership,
     Student,
     StudentTeacher,
     TeacherBlock,
@@ -28,6 +26,7 @@ from app.models import (
     StudentBlock,
 )
 from app.hash_utils import get_random_salt, hash_hmac
+from tests.helpers.class_scope import create_class_scope
 from app.utils.username_migration import build_hashed_username_fields
 
 
@@ -80,24 +79,13 @@ def _create_student(teacher: Admin, first_name: str, block: str, join_code: str)
     db.session.add(student)
     db.session.flush()
 
-    db.session.add(ClassEconomy(
+    create_class_scope(
+        teacher=teacher,
         join_code=join_code,
+        student=student,
+        block=block,
         display_name=block,
-        status="active",
-        created_by_admin_id=teacher.id,
-    ))
-    db.session.add(ClassMembership(
-        join_code=join_code,
-        admin_id=teacher.id,
-        role="admin",
-        status="active",
-    ))
-    db.session.add(ClassMembership(
-        join_code=join_code,
-        student_id=student.id,
-        role="student",
-        status="active",
-    ))
+    )
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
@@ -328,10 +316,12 @@ def test_rent_settings_deleted_when_last_join_code_for_block_removed(client):
     assert db.session.get(RentSettings, rs_id) is None
 
 
-def test_payroll_settings_preserved_when_other_join_code_for_block_exists(client):
+def test_payroll_settings_deleted_even_if_other_class_shares_block_label(client):
     """
-    PayrollSettings for block 'A' must NOT be deleted if the teacher still has
-    another join code under that same block name.
+    PayrollSettings for block 'A' are deleted with the class that owns them.
+
+    A second class using the same display label is irrelevant because labels
+    are metadata, not an identity or lifecycle boundary.
     """
     teacher, secret, teacher_username = _create_teacher("teacher-ps-keep")
     _create_student(teacher, "Pat", "A", "PSKP1")  # will be deleted
@@ -348,38 +338,14 @@ def test_payroll_settings_preserved_when_other_join_code_for_block_exists(client
     )
     db.session.add(student2)
     db.session.flush()
-    db.session.add(ClassEconomy(
+    create_class_scope(
+        teacher=teacher,
         join_code="PSKP2",
-        display_name="A",
-        status="active",
-        created_by_admin_id=teacher.id,
-    ))
-    db.session.add(ClassMembership(
-        join_code="PSKP2",
-        admin_id=teacher.id,
-        role="admin",
-        status="active",
-    ))
-    db.session.add(ClassMembership(
-        join_code="PSKP2",
-        student_id=student2.id,
-        role="student",
-        status="active",
-    ))
-    db.session.add(StudentTeacher(student_id=student2.id, teacher_id=teacher.id))
-    db.session.add(TeacherBlock(
-        teacher_id=teacher.id,
+        student=student2,
         block="A",
-        first_name="Paula",
-        last_initial="P",
-        last_name_hash_by_part=None,
-        dob_sum_hash=None,
-        salt=salt2,
-        first_half_hash=fhh2,
-        join_code="PSKP2",  # different join code, same block
-        is_claimed=True,
-        student_id=student2.id,
-    ))
+        display_name="A",
+    )
+    db.session.add(StudentTeacher(student_id=student2.id, teacher_id=teacher.id))
     db.session.commit()
 
     ps = PayrollSettings(teacher_id=teacher.id, block="A", pay_rate=0.50)
@@ -388,7 +354,7 @@ def test_payroll_settings_preserved_when_other_join_code_for_block_exists(client
     ps_id = ps.id
 
     _login_teacher(client, teacher, secret, teacher_username)
-    # Delete only PSKP1 — PSKP2 still exists for block A
+    # Delete only PSKP1. PSKP2 shares the label, but not the class identity.
     resp = client.post(
         "/admin/join-code/delete",
         json={
@@ -400,8 +366,9 @@ def test_payroll_settings_preserved_when_other_join_code_for_block_exists(client
     )
     assert resp.get_json()["status"] == "success"
 
-    # PayrollSettings must still be there (block A still has PSKP2)
-    assert db.session.get(PayrollSettings, ps_id) is not None
+    # The settings are removed with the deleted class; same-label siblings do
+    # not preserve them.
+    assert db.session.get(PayrollSettings, ps_id) is None
 
 
 def test_account_deletion_requires_gate(client):

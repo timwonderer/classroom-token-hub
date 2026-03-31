@@ -11,20 +11,20 @@ from datetime import datetime, timedelta, timezone
 
 
 def _attach_student_to_class(student, join_code="ATTEND1", block="A"):
-    from app.models import Admin, ClassEconomy, TeacherBlock, StudentTeacher, User, Seat
+    from app.models import Admin, TeacherBlock, StudentTeacher, User, Seat
+    from tests.helpers.class_scope import create_class_scope
 
     teacher = Admin(username=f"teacher_{join_code}_{student.id or 'new'}", totp_secret="s")
     db.session.add(teacher)
     db.session.flush()
 
-    class_economy = ClassEconomy(
+    class_economy = create_class_scope(
+        teacher=teacher,
         join_code=join_code,
-        teacher_id=teacher.id,
-        created_by_admin_id=teacher.id,
-        status="active",
-        is_active=True,
+        student=student,
+        block=block,
+        display_name=block,
     )
-    db.session.add(class_economy)
     db.session.flush()
 
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))

@@ -15,6 +15,7 @@ from app import db
 from app.models import Admin, ClassEconomy, EconomySnapshot, PayrollSettings, TeacherBlock
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 from app.routes import admin as admin_routes
+from tests.helpers.class_scope import create_class_scope
 
 
 @pytest.fixture
@@ -28,26 +29,21 @@ def admin_with_payroll(client):
     db.session.add(admin)
     db.session.flush()
 
-    # Create class seat/join-code context for block-selected economy APIs
-    db.session.add(TeacherBlock(
-        teacher_id=admin.id,
-        block="A",
-        class_label="A",
-        first_name="Scope",
-        last_initial="A",
-        last_name_hash_by_part=None,
-        dob_sum_hash=None,
-        salt=b'salt',
-        first_half_hash="econ-fixture-a",
+    class_scope = create_class_scope(
+        teacher=admin,
         join_code="ECONA001",
-        student_id=None,
-        is_claimed=False
-    ))
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=False,
+    )
+    db.session.flush()
 
     # Create payroll settings with specific expected_weekly_hours
     payroll_settings = PayrollSettings(
         teacher_id=admin.id,
         join_code="ECONA001",
+        class_id=class_scope.class_id,
         block="A",
         pay_rate=0.25,  # $0.25/min = $15/hour
         expected_weekly_hours=8.0,  # Custom value, not 5.0
@@ -366,38 +362,27 @@ def test_different_expected_hours_per_block(client):
     db.session.flush()
 
     # Create payroll settings for different blocks with different hours
-    db.session.add(TeacherBlock(
-        teacher_id=admin.id,
-        block="A",
-        class_label="A",
-        first_name="Scope",
-        last_initial="A",
-        last_name_hash_by_part=None,
-        dob_sum_hash=None,
-        salt=b'salt',
-        first_half_hash="econ-multi-a",
+    class_a = create_class_scope(
+        teacher=admin,
         join_code="ECONMULA",
-        student_id=None,
-        is_claimed=False
-    ))
-    db.session.add(TeacherBlock(
-        teacher_id=admin.id,
-        block="B",
-        class_label="B",
-        first_name="Scope",
-        last_initial="B",
-        last_name_hash_by_part=None,
-        dob_sum_hash=None,
-        salt=b'salt',
-        first_half_hash="econ-multi-b",
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=False,
+    )
+    class_b = create_class_scope(
+        teacher=admin,
         join_code="ECONMULB",
-        student_id=None,
-        is_claimed=False
-    ))
+        block="B",
+        display_name="B",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=False,
+    )
 
     payroll_a = PayrollSettings(
         teacher_id=admin.id,
         join_code="ECONMULA",
+        class_id=class_a.class_id,
         block="A",
         pay_rate=0.25,
         expected_weekly_hours=5.0,  # Block A: 5 hours
@@ -409,6 +394,7 @@ def test_different_expected_hours_per_block(client):
     payroll_b = PayrollSettings(
         teacher_id=admin.id,
         join_code="ECONMULB",
+        class_id=class_b.class_id,
         block="B",
         pay_rate=0.25,
         expected_weekly_hours=10.0,  # Block B: 10 hours
@@ -1044,6 +1030,14 @@ def test_analyze_block_prefers_join_code_scoped_payroll_settings(client):
     db.session.add(admin)
     db.session.flush()
 
+    class_scope = create_class_scope(
+        teacher=admin,
+        join_code="JOINA123",
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=False,
+    )
     db.session.add(TeacherBlock(
         teacher_id=admin.id,
         block="A",
@@ -1073,6 +1067,7 @@ def test_analyze_block_prefers_join_code_scoped_payroll_settings(client):
     db.session.add(PayrollSettings(
         teacher_id=admin.id,
         join_code="JOINA123",
+        class_id=class_scope.class_id,
         block=None,
         pay_rate=0.25,
         expected_weekly_hours=9.0,

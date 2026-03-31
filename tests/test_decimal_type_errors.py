@@ -360,6 +360,7 @@ class TestDecimalTypeErrors:
         from app.models import (
             Admin, Student, StudentTeacher, InsurancePolicy, StudentInsurance,
         )
+        from tests.helpers.class_scope import create_class_scope
 
         # Create teacher
         teacher = Admin(username='teacher_claim_cap', totp_secret='test_secret')
@@ -386,6 +387,7 @@ class TestDecimalTypeErrors:
         policy = InsurancePolicy(
             policy_code='CAP-POLICY-001',
             teacher_id=teacher.id,
+            join_code='CLAIMCAP1',
             title='Cap Test Policy',
             description='',
             premium=Decimal('5.00'),
@@ -399,10 +401,23 @@ class TestDecimalTypeErrors:
         db.session.add(policy)
         db.session.flush()
 
+        create_class_scope(
+            teacher=teacher,
+            join_code='CLAIMCAP1',
+            student=student,
+            block='A',
+            display_name='A',
+            create_claimed_teacher_block=True,
+            teacher_block_claimed=True,
+            create_seat=True,
+        )
+        db.session.flush()
+
         # Enroll student (active, payment current, coverage started)
         enrollment = StudentInsurance(
             student_id=student.id,
             policy_id=policy.id,
+            join_code='CLAIMCAP1',
             status='active',
             coverage_start_date=datetime.now(timezone.utc) - timedelta(days=5),
             payment_current=True,
@@ -413,6 +428,7 @@ class TestDecimalTypeErrors:
         # Log in as student
         with client.session_transaction() as sess:
             sess['student_id'] = student.id
+            sess['current_join_code'] = 'CLAIMCAP1'
             sess['login_time'] = datetime.now(timezone.utc).isoformat()
 
         # GET the file_claim route — must not raise TypeError

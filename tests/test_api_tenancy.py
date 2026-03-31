@@ -20,6 +20,7 @@ from app.models import (
     TeacherBlock,
 )
 from app.hash_utils import get_random_salt, hash_username
+from tests.helpers.class_scope import create_class_scope
 
 
 def _create_admin(username: str) -> tuple[Admin, str]:
@@ -93,7 +94,11 @@ def _create_tap_event(student: Student, status: str = "active"):
 
 def _create_claimed_seat(teacher: Admin, student: Student, join_code: str, block: str = "A"):
     """Create a claimed teacher block (seat) for join-code scoped tests."""
-    if not ClassEconomy.query.filter_by(join_code=join_code).first():
+    if not db.session.query(ClassMembership.id).filter_by(
+        join_code=join_code,
+        admin_id=teacher.id,
+        role="admin",
+    ).first():
         _create_class_scope(teacher, student, join_code)
 
     seat = TeacherBlock(
@@ -117,24 +122,28 @@ def _create_claimed_seat(teacher: Admin, student: Student, join_code: str, block
 
 def _create_class_scope(teacher: Admin, student: Student, join_code: str):
     """Create the v2 class economy and memberships for a teacher/student pair."""
-    db.session.add(ClassEconomy(
-        join_code=join_code,
-        teacher_id=teacher.id,
-        status="active",
-        created_by_admin_id=teacher.id,
-    ))
-    db.session.add(ClassMembership(
+    if not db.session.query(ClassMembership.id).filter_by(
         join_code=join_code,
         admin_id=teacher.id,
         role="admin",
-        status="active",
-    ))
-    db.session.add(ClassMembership(
+    ).first():
+        create_class_scope(
+            teacher=teacher,
+            join_code=join_code,
+            student=student,
+        )
+        db.session.flush()
+
+    if not db.session.query(ClassMembership.id).filter_by(
         join_code=join_code,
         student_id=student.id,
         role="student",
-        status="active",
-    ))
+    ).first():
+        db.session.add(ClassMembership(
+            join_code=join_code,
+            student_id=student.id,
+            role="student",
+        ))
     db.session.commit()
 
 

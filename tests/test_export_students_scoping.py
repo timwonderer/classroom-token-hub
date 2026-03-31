@@ -3,7 +3,8 @@ from io import StringIO
 
 from app import db
 from app.hash_utils import get_random_salt, hash_username
-from app.models import Admin, ClassEconomy, ClassMembership, Student, StudentTeacher, TeacherBlock, Transaction
+from app.models import Admin, ClassMembership, Student, StudentTeacher, TeacherBlock, Transaction
+from tests.helpers.class_scope import create_class_scope
 
 
 def _create_admin(username: str) -> Admin:
@@ -31,29 +32,28 @@ def _create_student(first_name: str, teacher: Admin) -> Student:
 
 
 def _add_claimed_seat(admin: Admin, student: Student, block: str, join_code: str):
-    if db.session.get(ClassEconomy, join_code) is None:
-        db.session.add(ClassEconomy(
+    if db.session.query(ClassMembership.id).filter_by(
+        join_code=join_code,
+        admin_id=admin.id,
+        role="admin",
+    ).first() is None:
+        create_class_scope(
+            teacher=admin,
             join_code=join_code,
+            block=block,
             display_name=block,
-            status="active",
-            created_by_admin_id=admin.id,
-        ))
-        db.session.add(ClassMembership(
-            join_code=join_code,
-            admin_id=admin.id,
-            role="admin",
-            status="active",
-        ))
-    existing_student_membership = ClassMembership.query.filter_by(
+        )
+        db.session.flush()
+
+    if db.session.query(ClassMembership.id).filter_by(
         join_code=join_code,
         student_id=student.id,
-    ).first()
-    if existing_student_membership is None:
+        role="student",
+    ).first() is None:
         db.session.add(ClassMembership(
             join_code=join_code,
             student_id=student.id,
             role="student",
-            status="active",
         ))
 
     seat = TeacherBlock(
