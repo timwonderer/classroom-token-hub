@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-009       | 1.1     | 2026-03-08     | 1.0        | Normative       |
+| SOP-DB-009       | 1.2     | 2026-03-30     | 1.1        | Normative       |
 
 **Branch:** `codex/v2.0`
 **Status:** Current-state readiness summary for v2 live testing
@@ -31,8 +31,16 @@ The earlier migration-compliance audit remains historically useful, but it shoul
 - Active engineering branch is `codex/v2.0`.
 - Current repository migration heads are resolved by `e8f1a2b3c4d5_merge_remaining_v2_heads.py`.
 - Membership constraint hardening is present in `a11213ca4afb_harden_class_economy_membership_checks.py`.
-- Full PostgreSQL suite passes on the v2 test database:
-  - `664 passed, 1 skipped`
+- Local rehearsal on 2026-03-30 confirmed:
+  - `flask db heads` -> `q9r0s1t2u3v4 (head)`
+  - `flask db current` -> `q9r0s1t2u3v4 (head)`
+  - `DATABASE_URL=<team-dev-migration-db-url> flask db upgrade` completed without revision drift
+
+### Currently Blocking
+
+- The latest PostgreSQL validation run on 2026-03-30 did not pass:
+  - `543 passed, 102 failed, 63 errors, 1 skipped`
+- Manual smoke-route execution and operator sign-off should remain blocked until the automated validation failures are triaged and the test baseline is restored.
 
 ### Still Important
 
@@ -44,10 +52,9 @@ The earlier migration-compliance audit remains historically useful, but it shoul
 
 ### Required Before Live Testing
 
-- Rehearse `flask db upgrade` on the team-configured v2 dev/migration database.
-- Confirm head state and `alembic_version` before and after rehearsal.
-- Run the PostgreSQL test suite on the team-configured test database.
-- Execute the smoke-route checklist from the v2 live-test runbook.
+- Re-run the PostgreSQL test suite on the team-configured test database after the current failures are triaged.
+- Capture named operator confirmation and independent verifier confirmation in the rehearsal record.
+- Execute the smoke-route checklist from the v2 live-test runbook after automated validation is green again.
 
 ### Required Before Production
 
@@ -68,7 +75,9 @@ The earlier migration-compliance audit remains historically useful, but it shoul
 ```bash
 flask db heads
 flask db current
-flask db upgrade
+bash scripts/check-migrations.sh
+DATABASE_URL=<team-dev-migration-db-url> flask db upgrade
+DATABASE_URL=<team-dev-migration-db-url> flask db current
 DATABASE_URL=<team-test-db-url> pytest -q
 ```
 
@@ -80,6 +89,13 @@ Before live testing, attach the output of the live-test runbook and record:
 - head state after upgrade
 - smoke-check result
 - rollback decision: not needed / needed / blocked
+- operator confirmation
+- independent verifier confirmation
 
-## XI. Amendment
+## XI. Deferral Boundary
+
+- This compliance review is a current-state readiness summary, not a full rewrite of the historical migration audit record.
+- Broader migration-policy cleanup, taxonomy changes, and architecture-driven documentation restructuring remain deferred until the post-port refactor targets are ready.
+
+## XII. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.

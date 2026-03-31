@@ -73,6 +73,12 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 - Confirm monitoring, maintenance-mode usage, and post-deploy verification steps are current.
 - Port production-required `origin/main` deltas still marked open in the reconciliation tracker.
 
+## Operations Doc Boundaries
+
+- This branch now carries only launch-critical v2 runbook fixes needed for live testing and production transition.
+- Deeper operations-document restructuring, route-taxonomy cleanup, and architecture-driven SOP rewrites are intentionally deferred until after `docs/development/V2_ADMIN_ROUTE_REFACTOR.md` and `docs/development/V2_Class_Scope_Normalization_Target.md` are ready to land.
+- Until those refactors land, prefer targeted supersession notes, explicit operator record templates, and current-command verification over broad documentation reorganization.
+
 ### Post-Live-Test Cleanup
 
 - Broader historical audit cleanup and supersession notes.
