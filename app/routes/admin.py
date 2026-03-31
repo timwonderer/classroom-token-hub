@@ -61,12 +61,23 @@ from app.utils.join_code import generate_join_code
 from app.utils.economy_balance import EconomyBalanceChecker
 from app.utils.economy_policy import (
     POLICY_MODES,
+    convert_weekly_amount_to_frequency,
+    get_insurance_premium_recommendation,
     get_class_feature_settings,
     get_feature_settings_row,
+    get_price_recommendation_context,
     normalize_policy_mode,
     replace_enabled_class_features,
     resolve_class_scope,
     resolve_feature_class,
+)
+from app.utils.economy_rebalance import (
+    REBALANCE_ACTIVATION_IMMEDIATE,
+    REBALANCE_ACTIVATION_LEGACY_NEXT_PAYROLL,
+    REBALANCE_ACTIVATION_NEXT_RENEWAL,
+    activate_due_rebalances,
+    apply_rebalance_changes,
+    prepare_scheduled_rebalance_changes,
 )
 from app.utils.claim_credentials import (
     compute_primary_claim_hash,
@@ -1449,31 +1460,6 @@ def _resolve_banking_settings_for_block(admin_id, block_name):
     )
 
 
-def _inverse_weekly_amount(value, frequency, custom_frequency_value=None, custom_frequency_unit=None):
-    from app.models import _quantize_currency
-
-    amount = _quantize_currency(value)
-    frequency = (frequency or 'weekly').lower()
-
-    if frequency == 'monthly':
-        return _quantize_currency(amount * Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH)))
-    if frequency == 'weekly':
-        return amount
-    if frequency == 'biweekly':
-        return _quantize_currency(amount * Decimal('2'))
-    if frequency == 'daily':
-        return _quantize_currency(amount / Decimal('7'))
-    if frequency == 'custom':
-        unit = (custom_frequency_unit or 'days').lower()
-        freq_value = Decimal(str(custom_frequency_value or 1))
-        if unit == 'weeks':
-            return _quantize_currency(amount * freq_value)
-        if unit == 'months':
-            return _quantize_currency(amount * Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH)) * freq_value)
-        return _quantize_currency(amount / (Decimal('7') / freq_value))
-    return amount
-
-
 def _format_money(value):
     if value is None:
         return "-"
@@ -1541,16 +1527,14 @@ def _build_policy_summary(admin_id, selected_block, analysis, rent_settings, ins
 
 def _build_rebalance_preview(admin_id, selected_block, checker, cwi, rent_settings, insurance_policies):
     preview_items = []
-    recommendations = checker.generate_recommendations(cwi)
+    recommendations = get_price_recommendation_context(checker.policy_mode, cwi) or {}
 
     if rent_settings and rent_settings.is_enabled:
-        recommended_monthly = Decimal(str(recommendations['rent']['recommended']))
-        recommended_weekly = recommended_monthly / Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH))
-        recommended_amount = _inverse_weekly_amount(
-            recommended_weekly,
+        recommended_amount = convert_weekly_amount_to_frequency(
+            Decimal(str(recommendations['rent_weekly']['recommended'])),
             rent_settings.frequency_type,
-            rent_settings.custom_frequency_value,
-            getattr(rent_settings, 'custom_frequency_unit', None),
+            custom_frequency_value=rent_settings.custom_frequency_value,
+            custom_frequency_unit=getattr(rent_settings, 'custom_frequency_unit', None),
         )
         current_amount = Decimal(str(rent_settings.rent_amount or 0))
         if current_amount != recommended_amount:
@@ -1574,7 +1558,10 @@ def _build_rebalance_preview(admin_id, selected_block, checker, cwi, rent_settin
         if not policy.is_active:
             continue
         current_premium = Decimal(str(policy.premium or 0))
-        recommended_premium = _inverse_weekly_amount(recommended_insurance_weekly, policy.charge_frequency)
+        recommended_premium = convert_weekly_amount_to_frequency(
+            recommended_insurance_weekly,
+            policy.charge_frequency,
+        )
         if current_premium == recommended_premium:
             continue
         preview_items.append({
@@ -1593,6 +1580,20 @@ def _build_rebalance_preview(admin_id, selected_block, checker, cwi, rent_settin
         })
 
     return preview_items
+
+
+def _build_insurance_recommendation_context(admin_id, *, block=None, charge_frequency='weekly'):
+    payroll_settings = _resolve_admin_payroll_settings_for_block(admin_id, block)
+    if not payroll_settings:
+        return None
+
+    checker = EconomyBalanceChecker(admin_id, block)
+    cwi_calc = checker.calculate_cwi(payroll_settings)
+    return get_insurance_premium_recommendation(
+        checker.policy_mode,
+        Decimal(str(cwi_calc.cwi)),
+        frequency=charge_frequency,
+    )
 
 
 def _load_economy_rebalance_context(admin_id, selected_block):
@@ -1624,38 +1625,7 @@ def _load_economy_rebalance_context(admin_id, selected_block):
 
 
 def _apply_rebalance_plan(admin_id, settings_row, change_plan, activation_mode):
-    applied_labels = []
-
-    for change in change_plan:
-        change_type = change.get('type')
-        if change_type == 'rent':
-            rent_settings = None
-            join_code = change.get('join_code')
-            block = change.get('block')
-            if join_code:
-                rent_settings = RentSettings.query.filter_by(
-                    teacher_id=admin_id,
-                    join_code=join_code,
-                    is_enabled=True,
-                ).order_by(desc(RentSettings.block.isnot(None))).first()
-            if not rent_settings and block:
-                rent_settings = _resolve_rent_settings_for_block(admin_id, block)
-            if rent_settings:
-                rent_settings.rent_amount = Decimal(str(change.get('new_value')))
-                applied_labels.append('Rent')
-        elif change_type == 'insurance':
-            policy = InsurancePolicy.query.filter_by(
-                teacher_id=admin_id,
-                id=change.get('policy_id'),
-                is_active=True,
-            ).first()
-            if policy:
-                policy.premium = Decimal(str(change.get('new_value')))
-                applied_labels.append(f"Insurance: {policy.title}")
-
-    settings_row.economy_pending_rebalance_json = None
-    settings_row.economy_last_rebalanced_at = utc_now()
-    settings_row.economy_last_rebalanced_by = admin_id
+    applied_labels = apply_rebalance_changes(admin_id, settings_row, change_plan, activation_mode)
     current_app.logger.info(
         "Applied economy rebalance for teacher=%s block=%s activation=%s changes=%s",
         admin_id,
@@ -6090,6 +6060,130 @@ def remove_rent_waiver(waiver_id):
     return redirect(url_for('admin.rent_settings'))
 
 
+@admin_bp.route('/rent/reverse-cycle-penalties', methods=['POST'])
+@admin_required
+def reverse_cycle_penalties():
+    """Reverse misapplied rent late fees for the current cycle."""
+    from app.routes.student import (
+        RENT_PAYMENT_MATCH_TOLERANCE_SECONDS,
+        _calculate_rent_coverage_due_date,
+        _calculate_rent_timeline,
+        _get_locked_rent_amount_for_join_code_cycle,
+    )
+
+    admin_id = session.get('admin_id')
+    join_code = session.get('current_join_code')
+    settings_block = request.form.get('settings_block') or request.args.get('settings_block')
+
+    if not join_code:
+        flash("No class period selected. Please select a class first.", "error")
+        return redirect(url_for('admin.rent_settings'))
+
+    teacher_block = TeacherBlock.query.filter_by(
+        teacher_id=admin_id,
+        join_code=join_code,
+    ).first()
+    if not teacher_block:
+        flash("Could not find a class matching the current session.", "error")
+        return redirect(url_for('admin.rent_settings'))
+
+    block = teacher_block.block
+    rent_settings = RentSettings.query.filter_by(
+        teacher_id=admin_id,
+        block=block,
+    ).first()
+    if not rent_settings or not rent_settings.is_enabled:
+        flash("Rent system is not enabled for this class.", "info")
+        return redirect(url_for('admin.rent_settings', settings_block=settings_block or block))
+
+    now = utc_now()
+    timeline = _calculate_rent_timeline(rent_settings, now)
+    coverage_due_date = timeline.get('coverage_due_date')
+    if not coverage_due_date:
+        flash("No active coverage period found for this class.", "info")
+        return redirect(url_for('admin.rent_settings', settings_block=settings_block or block))
+
+    locked_rate = _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date)
+    if locked_rate is None:
+        flash("No valid payments found for the current cycle — nothing to reverse.", "info")
+        return redirect(url_for('admin.rent_settings', settings_block=settings_block or block))
+
+    grace_end_date = coverage_due_date + timedelta(days=rent_settings.grace_period_days)
+    cycle_payments = RentPayment.query.filter(
+        RentPayment.join_code == join_code,
+        RentPayment.coverage_month == coverage_due_date.month,
+        RentPayment.coverage_year == coverage_due_date.year,
+    ).order_by(RentPayment.student_id, RentPayment.payment_date).all()
+
+    payments_by_student = defaultdict(list)
+    for payment in cycle_payments:
+        txn = Transaction.query.filter(
+            Transaction.student_id == payment.student_id,
+            Transaction.type == 'Rent Payment',
+            Transaction.join_code == join_code,
+            Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+            Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+            Transaction.amount == -payment.amount_paid,
+        ).first()
+        if txn and not txn.is_void:
+            payments_by_student[payment.student_id].append(payment)
+
+    students_fixed = 0
+    total_refunded = Decimal('0.00')
+
+    for student_id, payments in payments_by_student.items():
+        student = db.session.get(Student, student_id)
+        if not student:
+            continue
+
+        paid_by_grace = sum(
+            payment.amount_paid for payment in payments
+            if payment.payment_date and ensure_utc(payment.payment_date) <= ensure_utc(grace_end_date)
+        )
+        total_late_fee_charged = sum(payment.late_fee_charged or Decimal('0.00') for payment in payments)
+        if total_late_fee_charged <= Decimal('0.00'):
+            continue
+
+        if paid_by_grace >= locked_rate:
+            refund_amount = total_late_fee_charged
+            db.session.add(Transaction(
+                student_id=student_id,
+                teacher_id=admin_id,
+                join_code=join_code,
+                amount=refund_amount,
+                account_type='checking',
+                status=TransactionStatus.PENDING,
+                type='Rent Late Fee Reversal',
+                description=(
+                    f'Late fee reversal: rate was raised mid-cycle for '
+                    f'{coverage_due_date.strftime("%B %Y")} (locked at ${locked_rate:.2f})'
+                ),
+            ))
+
+            for payment in payments:
+                if payment.late_fee_charged and payment.late_fee_charged > Decimal('0.00'):
+                    payment.late_fee_charged = Decimal('0.00')
+                    payment.was_late = False
+
+            students_fixed += 1
+            total_refunded += refund_amount
+
+    if students_fixed:
+        db.session.commit()
+        flash(
+            f"Reversed misapplied late fees for {students_fixed} student(s). Total refunded: ${total_refunded:.2f}.",
+            "success",
+        )
+    else:
+        flash(
+            "No misapplied penalties found for the current cycle at the locked rate "
+            f"(${locked_rate:.2f}). Students who were genuinely late keep their fees.",
+            "info",
+        )
+
+    return redirect(url_for('admin.rent_settings', settings_block=settings_block or block))
+
+
 # -------------------- INSURANCE MANAGEMENT --------------------
 
 
@@ -6307,6 +6401,12 @@ def insurance_management():
             policy_pending_claim_counts.get(claim.policy_id, 0) + 1
         )
 
+    insurance_recommendation = _build_insurance_recommendation_context(
+        admin_id,
+        block=settings_block,
+        charge_frequency=form.charge_frequency.data or 'monthly',
+    )
+
     return render_template('admin_insurance.html',
                           form=form,
                           policies=policies,
@@ -6320,7 +6420,8 @@ def insurance_management():
                           next_tier_category_id=next_tier_category_id,
                           teacher_blocks=teacher_blocks,
                           settings_block=settings_block,
-                          class_labels_by_block=class_labels_by_block)
+                          class_labels_by_block=class_labels_by_block,
+                          insurance_recommendation=insurance_recommendation)
 
 
 @admin_bp.route('/insurance/edit/<int:policy_id>', methods=['GET', 'POST'])
@@ -6378,7 +6479,13 @@ def edit_insurance_policy(policy_id):
         InsurancePolicy.id != policy_id
     ).all()
 
-    payroll_settings = PayrollSettings.query.filter_by(teacher_id=session.get('admin_id'), is_active=True).first()
+    recommendation_block = policy.blocks_list[0] if policy.blocks_list else None
+    payroll_settings = _resolve_admin_payroll_settings_for_block(session.get('admin_id'), recommendation_block)
+    insurance_recommendation = _build_insurance_recommendation_context(
+        session.get('admin_id'),
+        block=recommendation_block,
+        charge_frequency=policy.charge_frequency or 'monthly',
+    )
 
     return render_template(
         'admin_edit_insurance_policy.html',
@@ -6387,7 +6494,8 @@ def edit_insurance_policy(policy_id):
         available_policies=available_policies,
         tier_groups=tier_groups,
         next_tier_category_id=next_tier_category_id,
-        payroll_settings=payroll_settings
+        payroll_settings=payroll_settings,
+        insurance_recommendation=insurance_recommendation,
     )
 
 
@@ -7245,13 +7353,20 @@ def apply_economy_rebalance():
     if not selected_block:
         flash("Select a class period before applying a rebalance.", "warning")
         return redirect(url_for('admin.economy_health'))
-    activation_mode = (request.form.get('activation_mode') or 'next_payroll').strip().lower()
+    activation_mode = (request.form.get('activation_mode') or REBALANCE_ACTIVATION_NEXT_RENEWAL).strip().lower()
     selected_keys = set(request.form.getlist('selected_changes'))
     settings_row = get_feature_settings_row(admin_id, block=selected_block, create=True)
     if not settings_row:
         flash("Class scope not found for the selected period.", "warning")
         return redirect(url_for('admin.economy_health', block=selected_block, review_rebalance=1))
-    allowed_activation_modes = {'immediate', 'next_payroll'}
+    allowed_activation_modes = {
+        REBALANCE_ACTIVATION_IMMEDIATE,
+        REBALANCE_ACTIVATION_NEXT_RENEWAL,
+        REBALANCE_ACTIVATION_LEGACY_NEXT_PAYROLL,
+    }
+
+    if activation_mode == REBALANCE_ACTIVATION_LEGACY_NEXT_PAYROLL:
+        activation_mode = REBALANCE_ACTIVATION_NEXT_RENEWAL
 
     if activation_mode not in allowed_activation_modes:
         flash("Invalid rebalance activation mode.", "warning")
@@ -7294,18 +7409,28 @@ def apply_economy_rebalance():
         flash("No rebalance changes were selected.", "warning")
         return redirect(url_for('admin.economy_health', block=effective_block, review_rebalance=1))
 
-    if activation_mode == 'immediate' and request.form.get('confirm_immediate') != 'yes':
+    if activation_mode == REBALANCE_ACTIVATION_IMMEDIATE and request.form.get('confirm_immediate') != 'yes':
         flash("Confirm the immediate change warning before applying now.", "warning")
         return redirect(url_for('admin.economy_health', block=effective_block, review_rebalance=1))
 
-    if activation_mode == 'immediate':
-        applied_labels = _apply_rebalance_plan(admin_id, settings_row, change_plan, activation_mode='immediate')
+    if activation_mode == REBALANCE_ACTIVATION_IMMEDIATE:
+        applied_labels = _apply_rebalance_plan(
+            admin_id,
+            settings_row,
+            change_plan,
+            activation_mode=REBALANCE_ACTIVATION_IMMEDIATE,
+        )
         db.session.commit()
         flash(f"Applied economy rebalance now for {len(applied_labels)} setting(s).", "success")
     else:
+        scheduled_changes = prepare_scheduled_rebalance_changes(
+            change_plan,
+            rent_settings=rent_settings,
+            insurance_policies=insurance_policies,
+        )
         settings_row.economy_pending_rebalance_json = json.dumps({
-            'activation_mode': 'next_payroll',
-            'changes': change_plan,
+            'activation_mode': REBALANCE_ACTIVATION_NEXT_RENEWAL,
+            'changes': scheduled_changes,
             'scheduled_at': utc_now().isoformat(),
         })
         db.session.commit()
@@ -7315,7 +7440,10 @@ def apply_economy_rebalance():
             effective_block,
             [change.get('type') for change in change_plan],
         )
-        flash(f"Scheduled economy rebalance for the next payroll run ({len(change_plan)} setting(s)).", "success")
+        flash(
+            f"Scheduled economy rebalance for the renewal after the upcoming bill ({len(change_plan)} setting(s)).",
+            "success",
+        )
 
     return redirect(url_for('admin.economy_health', block=effective_block))
 
@@ -7325,6 +7453,8 @@ def apply_economy_rebalance():
 def economy_health():
     """Show a holistic view of the current economy configuration and CWI health."""
     admin_id = session.get("admin_id")
+    activate_due_rebalances(admin_id)
+    db.session.commit()
 
     blocks = _get_teacher_blocks()
     # Always use per-class view since CWI is inherently per-class (multi-tenancy by join_code)
@@ -7615,35 +7745,7 @@ def run_payroll():
             db.session.add(tx)
             count += 1
 
-        settings_rows = FeatureSettings.query.filter(
-            FeatureSettings.teacher_id == current_admin_id,
-            FeatureSettings.join_code == selected_join_code,
-            FeatureSettings.economy_pending_rebalance_json.isnot(None),
-        ).all()
-        scheduled_rebalances_applied = 0
-        for settings_row in settings_rows:
-            try:
-                payload = json.loads(settings_row.economy_pending_rebalance_json or '{}')
-            except (TypeError, ValueError):
-                current_app.logger.warning(
-                    "Skipping invalid pending economy rebalance for teacher=%s block=%s",
-                    current_admin_id,
-                    settings_row.block,
-                )
-                settings_row.economy_pending_rebalance_json = None
-                continue
-
-            if payload.get('activation_mode') != 'next_payroll':
-                settings_row.economy_pending_rebalance_json = None
-                continue
-
-            changes = payload.get('changes') or []
-            if not isinstance(changes, list) or not changes:
-                settings_row.economy_pending_rebalance_json = None
-                continue
-
-            _apply_rebalance_plan(current_admin_id, settings_row, changes, activation_mode='next_payroll')
-            scheduled_rebalances_applied += 1
+        scheduled_rebalances_applied, _scheduled_labels = activate_due_rebalances(current_admin_id)
 
         db.session.commit()
         current_app.logger.info(f"Payroll complete. Created {count} transactions.")
@@ -10941,7 +11043,7 @@ def api_calculate_cwi():
         checker = EconomyBalanceChecker(admin_id, block)
         cwi_calc = checker.calculate_cwi(temp_settings, expected_weekly_hours)
 
-        recommendations = checker._generate_recommendations(cwi_calc.cwi, [])
+        recommendations = get_price_recommendation_context(checker.policy_mode, cwi_calc.cwi)
 
         return jsonify({
             'status': 'success',

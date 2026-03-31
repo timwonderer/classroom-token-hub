@@ -16,15 +16,22 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 0
 fi
 
-if is_protected_branch "$BRANCH_NAME"; then
-  target_url="$CLASSROOM_ECONOMY_DB_URL"
-  target_name="classroom_economy"
-else
-  target_url="$PRODUCTION_DEV_DB_URL"
-  target_name="production_dev"
+target_name="$(db_name_for_branch "$BRANCH_NAME")"
+target_url="$(db_url_for_name "$target_name")"
+
+if [ -z "$target_url" ]; then
+  echo "Error: could not resolve database URL for branch '$BRANCH_NAME'"
+  exit 1
 fi
 
 if grep -q "^DATABASE_URL=" "$ENV_FILE"; then
+  current_url=$(grep "^DATABASE_URL=" "$ENV_FILE" | head -n 1 | cut -d= -f2-)
+  if [ -n "$current_url" ] && ! is_allowed_local_db_url "$current_url"; then
+    echo "Error: refusing to overwrite non-local DATABASE_URL in .env"
+    echo "  Current: $current_url"
+    echo "  Allowed local URLs are limited to classroom_economy and production_dev."
+    exit 1
+  fi
   escaped_target_url=$(printf '%s' "$target_url" | sed 's/[&/|]/\\&/g')
   sed -i.bak "s|^DATABASE_URL=.*|DATABASE_URL=$escaped_target_url|" "$ENV_FILE"
   rm -f "$ENV_FILE.bak"

@@ -156,6 +156,11 @@
       <span class="material-symbols-outlined me-1">event_busy</span>Waivers
     </button>
   </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="corrections-tab" data-bs-toggle="tab" data-bs-target="#corrections" type="button" role="tab">
+      <span class="material-symbols-outlined me-1">undo</span>Corrections
+    </button>
+  </li>
 </ul>
 
 <div class="tab-content" id="rentTabContent">
@@ -868,6 +873,39 @@
         </div>
       </div>
     </form>
+  </div>
+
+  <div class="tab-pane fade" id="corrections" role="tabpanel">
+    <div class="row">
+      <div class="col-lg-6 mb-4">
+        <div class="card shadow">
+          <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0">
+              <span class="material-symbols-outlined me-2">undo</span>Reverse Misapplied Late Fees
+            </h5>
+          </div>
+          <div class="card-body">
+            <p class="mb-3">
+              If the rent rate was changed mid-cycle, students who paid the original rate on time
+              may have been incorrectly charged late fees. This refunds those late fees and
+              keeps the current cycle locked to the <strong>first payer's rate</strong>.
+            </p>
+            <p class="text-muted small mb-3">
+              Students who were actually late still keep their late fees. The updated rent amount
+              continues to apply on the next cycle.
+            </p>
+            <form method="POST" action="{{ url_for('admin.reverse_cycle_penalties') }}"
+                  onsubmit="return confirm('Reverse misapplied late fees for the current cycle? This creates refund transactions for affected students.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <input type="hidden" name="settings_block" value="{{ settings.block if settings else '' }}" />
+              <button type="submit" class="btn btn-warning w-100">
+                <span class="material-symbols-outlined me-2">payments</span>Reverse Misapplied Late Fees
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- WAIVERS TAB -->

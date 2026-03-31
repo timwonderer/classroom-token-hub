@@ -9,7 +9,7 @@ description: Historical go/no-go checklist for the v2 multi-tenancy rollout.
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-ARC-049 | 1.0 | 2026-03-08 | N/A | Informative |
+| LOG-ARC-049 | 1.1 | 2026-03-29 | 1.0 | Informative |
 
 ## I. Purpose
 
@@ -18,6 +18,16 @@ Preserve the historical release-readiness checklist for the v2 multi-tenancy rol
 ## II. Scope
 
 This document is a historical release artifact and does not supersede active SOP runbooks.
+
+## Active Sources of Truth
+
+Use these documents for current v2 execution work:
+
+- `docs/development/V2_MAIN_RECONCILIATION_TRACKER.md`
+- `docs/development/V2_LAUNCH_READINESS_MATRIX.md`
+- `docs/development/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`
+- `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md`
+- `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md`
 
 ## III. Historical Checklist
 
@@ -44,6 +54,7 @@ Branch: `codex/v2.0`
 | 14 | Archived economy read-only policy | Not Started | Archived economies have explicit documented and tested runtime policy | contract doc + tests |
 | 15 | Full sysadmin tenancy audit | Not Started | `system_admin.py` routes are reviewed against v2 join-code contract | route audit matrix |
 | 16 | Global-balance property deprecation cleanup | Not Started | Legacy aggregate convenience properties are either retired or fully documented as transitional only | code/doc review |
+| 17 | Economy/rent correction wave from main | In Progress | Rebalance timing, rent-cycle locking, penalty reversal, and centralized pricing recommendation sourcing are implemented on `codex/v2.0`; remaining live-test economy deltas stay visible | `app/utils/economy_policy.py`, `app/utils/economy_rebalance.py`, `tests/test_economy_policy_mode.py`, `tests/test_rent_penalty_reversal.py` |
 
 ## Readiness Artifact
 
@@ -53,6 +64,7 @@ Branch: `codex/v2.0`
 - Full suite result on PostgreSQL test DB is `664 passed, 1 skipped`.
 - Current class authority is `ClassMembership` + `ClassEconomy`, with `current_join_code` as active session context.
 - Migration heads are resolved in repo with the current merge migration.
+- The first `origin/main` economy/rent reconciliation wave is landed on `codex/v2.0`, including rent-cycle locking, penalty reversal, and shared insurance recommendation sourcing.
 
 ### Must Finish Before Live Testing
 
@@ -87,20 +99,6 @@ Branch: `codex/v2.0`
 2. Clarify archived-economy behavior and complete remaining compatibility cleanup.
 3. Consolidate or supersede stale historical audit notes with cross-links to current SOPs.
 
-## Deferred Main-Branch Feature Reconciliation
+## Main-Branch Feature Reconciliation
 
-Track features present on `origin/main` but not yet intentionally reconciled into `codex/v2.0`. This is separate from v2 stabilization so feature divergence stays visible without obscuring readiness gates.
-
-| Source | Feature / Commit | Classification | Status | Notes |
-|---|---|---|---|---|
-| `origin/main` | `589d6ba7` - economy policy mode and rebalance hardening (`#1077`) | Must evaluate before production | Deferred | Review `app/utils/economy_policy.py`, `app/utils/economy_balance.py`, `tests/test_economy_policy_mode.py`, and related migration/doc changes before deciding whether to port before live testing or after live-test feedback. |
-
-### Reconciliation Workflow
-
-1. Diff `origin/main...codex/v2.0` before each major v2 milestone.
-2. Group unique `origin/main` commits by feature, not by file count.
-3. Classify each as:
-   - must-port before live testing
-   - must-port before production
-   - safe to defer
-4. Record owner, source commit/PR, and merge strategy before implementation starts.
+Main-branch feature reconciliation now lives in `docs/development/V2_MAIN_RECONCILIATION_TRACKER.md`. Keep this historical checklist focused on the 2026-03-08 go/no-go snapshot and use the new tracker for current parity decisions.

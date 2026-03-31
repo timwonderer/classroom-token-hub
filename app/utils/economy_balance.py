@@ -16,7 +16,12 @@ from dataclasses import dataclass
 from enum import Enum
 from decimal import Decimal
 
-from app.utils.economy_policy import get_active_policy_mode, get_policy_profile, normalize_policy_mode
+from app.utils.economy_policy import (
+    get_active_policy_mode,
+    get_policy_profile,
+    get_price_recommendation_context,
+    normalize_policy_mode,
+)
 
 
 class WarningLevel(Enum):
@@ -1246,104 +1251,8 @@ class EconomyBalanceChecker:
         Returns:
             Dictionary of recommendations per feature
         """
-        warnings = warnings or []
-        rent_min_ratio_weekly, rent_max_ratio_weekly, rent_default_ratio_weekly = self._ratio_band(
-            "rent_weekly",
-            self.RENT_MIN_RATIO,
-            self.RENT_MAX_RATIO,
-            self.RENT_DEFAULT_RATIO,
-        )
-        utilities_min_ratio, utilities_max_ratio, utilities_default_ratio = self._ratio_band(
-            "utilities_weekly",
-            self.UTILITIES_MIN_RATIO,
-            self.UTILITIES_MAX_RATIO,
-            self.UTILITIES_DEFAULT_RATIO,
-        )
-        insurance_min_ratio, insurance_max_ratio, insurance_default_ratio = self._ratio_band(
-            "insurance_weekly",
-            self.INSURANCE_MIN_RATIO,
-            self.INSURANCE_MAX_RATIO,
-            self.INSURANCE_DEFAULT_RATIO,
-        )
-        fine_min_ratio, fine_max_ratio, fine_default_ratio = self._ratio_band(
-            "fine_weekly",
-            self.FINE_MIN_RATIO,
-            self.FINE_MAX_RATIO,
-            self.FINE_DEFAULT_RATIO,
-        )
-        coverage_min_multiplier, coverage_max_multiplier, _ = self._insurance_multiplier_band(
-            "insurance_coverage_multiplier",
-            self.COVERAGE_MIN_MULTIPLIER,
-            self.COVERAGE_MAX_MULTIPLIER,
-            (self.COVERAGE_MIN_MULTIPLIER + self.COVERAGE_MAX_MULTIPLIER) / 2,
-        )
-        period_min_multiplier, period_max_multiplier, _ = self._insurance_multiplier_band(
-            "insurance_period_cap_multiplier",
-            self.PERIOD_MIN_MULTIPLIER,
-            self.PERIOD_MAX_MULTIPLIER,
-            (self.PERIOD_MIN_MULTIPLIER + self.PERIOD_MAX_MULTIPLIER) / 2,
-        )
-        waiting_min_days, waiting_max_days, waiting_recommended_days = self._waiting_period_band()
-        store_tiers = self._store_tiers()
-
-        recommendations = {
-            "policy_mode": self.policy_mode,
-            "policy_label": self.policy_profile["label"],
-            "rent": {
-                "min": round(cwi * rent_min_ratio_weekly * self.AVERAGE_WEEKS_PER_MONTH, 2),
-                "max": round(cwi * rent_max_ratio_weekly * self.AVERAGE_WEEKS_PER_MONTH, 2),
-                "recommended": round(cwi * rent_default_ratio_weekly * self.AVERAGE_WEEKS_PER_MONTH, 2),
-            },
-            "utilities": {
-                "min": round(cwi * utilities_min_ratio, 2),
-                "max": round(cwi * utilities_max_ratio, 2),
-                "recommended": round(cwi * utilities_default_ratio, 2),
-            },
-            "insurance_premium_weekly": {
-                "min": round(cwi * insurance_min_ratio, 2),
-                "max": round(cwi * insurance_max_ratio, 2),
-                "recommended": round(cwi * insurance_default_ratio, 2),
-            },
-            "insurance_coverage": {
-                "multiplier_min": round(coverage_min_multiplier, 2),
-                "multiplier_max": round(coverage_max_multiplier, 2),
-            },
-            "insurance_period_cap": {
-                "multiplier_min": round(period_min_multiplier, 2),
-                "multiplier_max": round(period_max_multiplier, 2),
-            },
-            "insurance_waiting_period_days": {
-                "min": waiting_min_days,
-                "max": waiting_max_days,
-                "recommended": waiting_recommended_days,
-            },
-            "fine": {
-                "min": round(cwi * fine_min_ratio, 2),
-                "max": round(cwi * fine_max_ratio, 2),
-                "recommended": round(cwi * fine_default_ratio, 2),
-            },
-            "store_tiers": {
-                "basic": {
-                    "min": round(cwi * store_tiers[PricingTier.BASIC][0], 2),
-                    "max": round(cwi * store_tiers[PricingTier.BASIC][1], 2),
-                },
-                "standard": {
-                    "min": round(cwi * store_tiers[PricingTier.STANDARD][0], 2),
-                    "max": round(cwi * store_tiers[PricingTier.STANDARD][1], 2),
-                },
-                "premium": {
-                    "min": round(cwi * store_tiers[PricingTier.PREMIUM][0], 2),
-                    "max": round(cwi * store_tiers[PricingTier.PREMIUM][1], 2),
-                },
-                "luxury": {
-                    "min": round(cwi * store_tiers[PricingTier.LUXURY][0], 2),
-                    "max": round(cwi * store_tiers[PricingTier.LUXURY][1], 2),
-                },
-            },
-            "min_weekly_savings": round(cwi * self._minimum_ratio("savings_weekly", self.MIN_WEEKLY_SAVINGS_RATIO), 2),
-        }
-
-        return recommendations
+        recommendations = get_price_recommendation_context(self.policy_mode, cwi)
+        return recommendations or {}
 
     def _generate_recommendations(self, cwi: float, warnings: List[BalanceWarning]) -> Dict[str, Any]:
         return self.generate_recommendations(cwi, warnings)

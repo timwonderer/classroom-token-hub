@@ -196,6 +196,8 @@ This enables:
 - **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)** — Up-to-date database reference
 - **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)** — REST API documentation
 - **[Development Priorities](DEVELOPMENT.md)** — Current priorities, roadmap, and tasks
+- **[v2 Main Reconciliation Tracker](docs/development/V2_MAIN_RECONCILIATION_TRACKER.md)** — Main-only feature clusters and port strategy
+- **[v2 Launch Readiness Matrix](docs/development/V2_LAUNCH_READINESS_MATRIX.md)** — Live-test and production launch blockers
 - **[v2 Live-Test Runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md)** — Operator workflow before live testing
 - **[Changelog](CHANGELOG.md)** — Version history and notable changes
 
