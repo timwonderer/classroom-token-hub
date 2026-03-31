@@ -18,10 +18,11 @@ import secrets
 import threading
 import qrcode
 import hashlib
+from types import SimpleNamespace
 from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from app.utils.time import utc_now, ensure_utc, local_date_end_utc, local_date_bounds_utc, UTC_MIN
+from app.utils.time import utc_now, ensure_utc, local_date_end_utc, local_date_bounds_utc, UTC_MIN, normalize_for_db
 from decimal import Decimal, InvalidOperation
 
 from flask import (
@@ -46,7 +47,7 @@ from app.models import (
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
     RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent, Seat,
-    BalanceCache, ClassMembership, ClassEconomy,
+    BalanceCache, ClassMembership, ClassEconomy, EconomySnapshot, _quantize_currency,
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
 from app.forms import (
@@ -114,6 +115,7 @@ from app.utils.student_deletion import (
     remove_student_from_teacher_scope,
 )
 from app.utils.seat_scope import get_seat_ids_for_student_join, seat_scoped_filter, transaction_scope_filter
+from app.utils.transaction_idempotency import create_idempotent_transaction, void_refund_key
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
 from app.attendance import (
@@ -1407,6 +1409,254 @@ def _resolve_join_code_for_block(admin_id, block_name):
         .first()
     )
     return row[0] if row and row[0] else None
+
+
+def _build_economy_snapshot_from_analysis(join_code, checker, analysis):
+    recommendations = analysis.recommendations or {}
+    rent = recommendations.get('rent') or {}
+    insurance = recommendations.get('insurance_premium_weekly') or {}
+    store_tiers = recommendations.get('store_tiers') or {}
+    return EconomySnapshot(
+        join_code=join_code,
+        policy_mode=checker.policy_mode,
+        pay_rate=Decimal(str(analysis.cwi.pay_rate_per_minute or 0)),
+        expected_hours=Decimal(str((analysis.cwi.expected_weekly_minutes or 0) / 60.0)).quantize(Decimal('0.01')),
+        weekly_cwi=Decimal(str(analysis.cwi.cwi or 0)).quantize(Decimal('0.01')),
+        rent_min=Decimal(str(rent.get('min', 0))).quantize(Decimal('0.01')),
+        rent_recommended=Decimal(str(rent.get('recommended', 0))).quantize(Decimal('0.01')),
+        rent_max=Decimal(str(rent.get('max', 0))).quantize(Decimal('0.01')),
+        insurance_weekly_min=Decimal(str(insurance.get('min', 0))).quantize(Decimal('0.01')),
+        insurance_weekly_recommended=Decimal(str(insurance.get('recommended', 0))).quantize(Decimal('0.01')),
+        insurance_weekly_max=Decimal(str(insurance.get('max', 0))).quantize(Decimal('0.01')),
+        store_tier_min={
+            key: str(_quantize_currency((values or {}).get('min', 0)))
+            for key, values in store_tiers.items()
+        },
+        store_tier_max={
+            key: str(_quantize_currency((values or {}).get('max', 0)))
+            for key, values in store_tiers.items()
+        },
+        analysis_payload=_serialize_economy_analysis_payload(analysis),
+    )
+
+
+def _economy_refresh_timezone():
+    return pytz.timezone(current_app.config.get('ECONOMY_REFRESH_TIMEZONE', 'America/Los_Angeles'))
+
+
+def _json_safe_value(value):
+    if isinstance(value, Decimal):
+        if value == value.to_integral_value():
+            return int(value)
+        return float(value)
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _json_safe_value(item) for key, item in value.items()}
+    return value
+
+
+def _economy_weekly_refresh_bounds(now_utc=None):
+    now = ensure_utc(now_utc or utc_now())
+    local_now = now.astimezone(_economy_refresh_timezone())
+    days_since_sunday = (local_now.weekday() + 1) % 7
+    weekly_start_local = (local_now - timedelta(days=days_since_sunday)).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    next_weekly_start_local = weekly_start_local + timedelta(days=7)
+    return ensure_utc(weekly_start_local), ensure_utc(next_weekly_start_local)
+
+
+def _economy_monthly_refresh_bounds(now_utc=None):
+    now = ensure_utc(now_utc or utc_now())
+    local_now = now.astimezone(_economy_refresh_timezone())
+    monthly_start_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if monthly_start_local.month == 12:
+        next_monthly_start_local = monthly_start_local.replace(year=monthly_start_local.year + 1, month=1)
+    else:
+        next_monthly_start_local = monthly_start_local.replace(month=monthly_start_local.month + 1)
+    return ensure_utc(monthly_start_local), ensure_utc(next_monthly_start_local)
+
+
+def _economy_analysis_schedule(snapshot=None, *, now_utc=None, frozen=True):
+    current_time = ensure_utc(now_utc or utc_now())
+    weekly_window_start, next_weekly_refresh = _economy_weekly_refresh_bounds(current_time)
+    monthly_window_start, next_monthly_refresh = _economy_monthly_refresh_bounds(current_time)
+    last_updated = ensure_utc(snapshot.effective_at) if snapshot and snapshot.effective_at else current_time
+    return {
+        'frozen': frozen,
+        'last_updated_at': last_updated.isoformat(),
+        'refresh_timezone': _economy_refresh_timezone().zone,
+        'weekly_refresh_label': 'Sunday 12:00 AM',
+        'monthly_refresh_label': '1st of each month 12:00 AM',
+        'weekly_window_start_at': weekly_window_start.isoformat(),
+        'monthly_window_start_at': monthly_window_start.isoformat(),
+        'next_weekly_refresh_at': next_weekly_refresh.isoformat(),
+        'next_monthly_refresh_at': next_monthly_refresh.isoformat(),
+    }
+
+
+def _serialize_economy_analysis_payload(analysis, *, snapshot=None, now_utc=None, frozen=True):
+    warnings_by_level = {
+        'critical': [],
+        'warning': [],
+        'info': [],
+    }
+    warning_items = []
+
+    for warning in analysis.warnings:
+        warning_payload = {
+            'feature': warning.feature,
+            'level': warning.level.value,
+            'message': warning.message,
+            'current_value': _json_safe_value(warning.current_value),
+            'recommended_min': _json_safe_value(warning.recommended_min),
+            'recommended_max': _json_safe_value(warning.recommended_max),
+            'cwi_ratio': _json_safe_value(warning.cwi_ratio),
+        }
+        warning_items.append(warning_payload)
+        warnings_by_level[warning.level.value].append(warning_payload)
+
+    return {
+        'status': 'success',
+        'cwi': _json_safe_value(analysis.cwi.cwi),
+        'is_balanced': analysis.is_balanced,
+        'budget_survival_test_passed': analysis.budget_survival_test_passed,
+        'weekly_savings': _json_safe_value(analysis.weekly_savings),
+        'warnings': warnings_by_level,
+        'warning_items': warning_items,
+        'recommendations': _json_safe_value(analysis.recommendations),
+        'cwi_breakdown': {
+            'pay_rate_per_hour': float(analysis.cwi.pay_rate_per_minute) * 60,
+            'pay_rate_per_minute': float(analysis.cwi.pay_rate_per_minute),
+            'expected_weekly_hours': float(analysis.cwi.expected_weekly_minutes) / 60.0,
+            'expected_weekly_minutes': float(analysis.cwi.expected_weekly_minutes),
+            'notes': _json_safe_value(analysis.cwi.notes),
+        },
+        'analysis_schedule': _economy_analysis_schedule(snapshot, now_utc=now_utc, frozen=frozen),
+    }
+
+
+def _deserialize_economy_analysis_payload(payload):
+    if not payload:
+        return None
+
+    warnings = []
+    for warning in payload.get('warning_items', []):
+        warnings.append(SimpleNamespace(
+            feature=warning.get('feature'),
+            message=warning.get('message'),
+            current_value=warning.get('current_value'),
+            recommended_min=warning.get('recommended_min'),
+            recommended_max=warning.get('recommended_max'),
+            cwi_ratio=warning.get('cwi_ratio'),
+            level=SimpleNamespace(value=warning.get('level', 'info')),
+        ))
+
+    breakdown = payload.get('cwi_breakdown') or {}
+    cwi = SimpleNamespace(
+        cwi=payload.get('cwi'),
+        pay_rate_per_minute=breakdown.get('pay_rate_per_minute'),
+        expected_weekly_minutes=breakdown.get('expected_weekly_minutes'),
+        notes=breakdown.get('notes') or [],
+    )
+    return SimpleNamespace(
+        cwi=cwi,
+        is_balanced=payload.get('is_balanced'),
+        budget_survival_test_passed=payload.get('budget_survival_test_passed'),
+        weekly_savings=payload.get('weekly_savings'),
+        warnings=warnings,
+        recommendations=payload.get('recommendations') or {},
+        analysis_schedule=payload.get('analysis_schedule') or {},
+    )
+
+
+def _current_economy_snapshot_inputs(checker, payroll_settings, expected_weekly_hours=None):
+    pay_rate = Decimal(str(payroll_settings.pay_rate or 0)).quantize(Decimal('0.0001'))
+    source_hours = expected_weekly_hours
+    if source_hours is None:
+        source_hours = payroll_settings.expected_weekly_hours if payroll_settings.expected_weekly_hours is not None else 5.0
+    hours = Decimal(str(source_hours)).quantize(Decimal('0.01'))
+    return {
+        'policy_mode': checker.policy_mode,
+        'pay_rate': pay_rate,
+        'expected_hours': hours,
+    }
+
+
+def _economy_snapshot_matches_inputs(snapshot, *, expected_inputs):
+    if not snapshot:
+        return False
+    return (
+        snapshot.policy_mode == expected_inputs['policy_mode']
+        and Decimal(str(snapshot.pay_rate)).quantize(Decimal('0.0001')) == expected_inputs['pay_rate']
+        and Decimal(str(snapshot.expected_hours)).quantize(Decimal('0.01')) == expected_inputs['expected_hours']
+    )
+
+
+def _get_frozen_economy_analysis_payload(
+    admin_id,
+    block,
+    checker,
+    payroll_settings,
+    *,
+    rent_settings=None,
+    insurance_policies=None,
+    fines=None,
+    store_items=None,
+    expected_weekly_hours=None,
+):
+    expected_inputs = _current_economy_snapshot_inputs(
+        checker,
+        payroll_settings,
+        expected_weekly_hours=expected_weekly_hours,
+    )
+    join_code = _resolve_join_code_for_block(admin_id, block)
+    weekly_window_start, _next_weekly_refresh = _economy_weekly_refresh_bounds()
+    weekly_window_start_db = normalize_for_db(weekly_window_start)
+    latest_snapshot = None
+
+    if join_code and expected_weekly_hours is None:
+        latest_snapshot = (
+            EconomySnapshot.query
+            .filter(
+                EconomySnapshot.join_code == join_code,
+                EconomySnapshot.effective_at >= weekly_window_start_db,
+            )
+            .order_by(EconomySnapshot.effective_at.desc(), EconomySnapshot.id.desc())
+            .first()
+        )
+        if _economy_snapshot_matches_inputs(latest_snapshot, expected_inputs=expected_inputs) and latest_snapshot.analysis_payload:
+            payload = dict(latest_snapshot.analysis_payload)
+            payload['analysis_schedule'] = _economy_analysis_schedule(latest_snapshot, frozen=True)
+            payload['snapshot_cached'] = True
+            return payload, latest_snapshot
+
+    analysis = checker.analyze_economy(
+        payroll_settings=payroll_settings,
+        rent_settings=rent_settings,
+        insurance_policies=insurance_policies,
+        fines=fines,
+        store_items=store_items,
+        expected_weekly_hours=float(expected_inputs['expected_hours']),
+    )
+
+    if join_code and expected_weekly_hours is None:
+        snapshot = _build_economy_snapshot_from_analysis(join_code, checker, analysis)
+        snapshot.analysis_payload = _serialize_economy_analysis_payload(analysis, snapshot=snapshot, frozen=True)
+        db.session.add(snapshot)
+        db.session.commit()
+        payload = dict(snapshot.analysis_payload)
+        payload['analysis_schedule'] = _economy_analysis_schedule(snapshot, frozen=True)
+        payload['snapshot_cached'] = False
+        return payload, snapshot
+
+    payload = _serialize_economy_analysis_payload(analysis, frozen=False)
+    payload['snapshot_cached'] = False
+    return payload, None
 
 
 def _resolve_payroll_settings_for_block(admin_id, block_name):
@@ -5890,6 +6140,7 @@ def rent_settings():
                         'block': block_name,
                         'months_behind': months_behind,
                         'unpaid_months': unpaid_month_labels,
+                        'unpaid_due_dates': list(unpaid_due_dates),
                     }
                     unpaid_rent_log.append(item)
 
@@ -5925,6 +6176,34 @@ def rent_settings():
                 'coverage_label': coverage_label,
                 'amount_paid': payment.amount_paid,
                 'payment_date': payment.payment_date,
+            })
+
+    student_past_due_json = {}
+    current_coverage_due_date = None
+    upcoming_coverage_due_date = None
+    if settings and settings.is_enabled:
+        now_for_waiver = utc_now()
+        from app.routes.student import (
+            _calculate_rent_coverage_due_date as _crd,
+            _calculate_upcoming_rent_due_date as _curd,
+            _calculate_rent_deadlines as _crdeadlines,
+        )
+        current_coverage_due_date = _crd(settings, now_for_waiver)
+        _cur_due, _ = _crdeadlines(settings, now_for_waiver)
+        upcoming_coverage_due_date = _curd(settings, _cur_due, current_coverage_due_date)
+
+    waiver_join_code = session.get('current_join_code')
+    for log_item in unpaid_rent_log:
+        if log_item.get('join_code') != waiver_join_code:
+            continue
+        sid = str(log_item['student'].id)
+        dates = log_item.get('unpaid_due_dates', [])
+        labels = log_item.get('unpaid_months', [])
+        student_past_due_json.setdefault(sid, [])
+        for due_date, label in zip(dates, labels):
+            student_past_due_json[sid].append({
+                'label': label,
+                'date_iso': due_date.isoformat(),
             })
 
     # Determine period label based on frequency type
@@ -5975,76 +6254,140 @@ def rent_settings():
                           unpaid_rent_log=unpaid_rent_log,
                           current_period_start=current_period_start,
                           current_period_end=current_period_end,
-                          next_due_date=next_due_date)
+                          next_due_date=next_due_date,
+                          student_past_due_json=student_past_due_json,
+                          current_coverage_due_date=current_coverage_due_date,
+                          upcoming_coverage_due_date=upcoming_coverage_due_date)
 
 
 @admin_bp.route('/rent-waiver/add', methods=['POST'])
 @admin_required
 def add_rent_waiver():
     """Add rent waiver for selected students."""
+    from app.routes.student import (
+        _add_rent_period,
+        _calculate_rent_coverage_due_date,
+        _calculate_rent_deadlines,
+        _calculate_upcoming_rent_due_date,
+        _get_rent_period_delta,
+    )
+
     student_ids = request.form.getlist('student_ids')
-    periods_count = int(request.form.get('periods_count', 1))
+    waiver_scopes = request.form.getlist('waiver_scope')
+    past_due_dates_iso = request.form.getlist('past_due_dates')
+    future_periods_count = 1
+    if 'future' in waiver_scopes:
+        raw_future_periods = request.form.get('future_periods_count', '') or ''
+        try:
+            future_periods_count = max(1, int(raw_future_periods))
+        except ValueError:
+            flash("Future periods count must be a positive whole number.", "danger")
+            return redirect(url_for('admin.rent_settings'))
     reason = request.form.get('reason', '')
+    settings_block = request.form.get('settings_block', '')
 
     if not student_ids:
         flash("Please select at least one student.", "danger")
         return redirect(url_for('admin.rent_settings'))
 
-    # Get rent settings to calculate waiver period
+    if not waiver_scopes:
+        flash("Please select at least one waiver scope (past due, current, or future).", "danger")
+        return redirect(url_for('admin.rent_settings'))
+
     admin_id = session.get("admin_id")
-    settings = RentSettings.query.filter_by(teacher_id=admin_id).first()
+    join_code = session.get('current_join_code')
+
+    settings_query = RentSettings.query.filter_by(teacher_id=admin_id)
+    if settings_block:
+        settings_query = settings_query.filter_by(block=settings_block)
+    settings = settings_query.first()
     if not settings:
         flash("Rent settings not configured.", "danger")
         return redirect(url_for('admin.rent_settings'))
 
-    # Calculate waiver end date based on frequency
+    if not join_code and settings_block:
+        tb = TeacherBlock.query.filter_by(teacher_id=admin_id, block=settings_block).first()
+        if tb:
+            join_code = tb.join_code
+    if not join_code:
+        flash(
+            "Unable to resolve the class join code for this waiver. Please select a class/block and try again.",
+            "danger",
+        )
+        return redirect(url_for('admin.rent_settings'))
+
     now = utc_now()
-    waiver_start = now
+    period_delta = _get_rent_period_delta(settings)
+    coverage_due_date = _calculate_rent_coverage_due_date(settings, now)
+    current_due, _ = _calculate_rent_deadlines(settings, now)
+    upcoming_due_date = _calculate_upcoming_rent_due_date(settings, current_due, coverage_due_date)
 
-    # Calculate days per period based on frequency type
-    if settings.frequency_type == 'daily':
-        days_per_period = 1
-    elif settings.frequency_type == 'weekly':
-        days_per_period = 7
-    elif settings.frequency_type == 'monthly':
-        days_per_period = 30
-    elif settings.frequency_type == 'custom':
-        if settings.custom_frequency_unit == 'days':
-            days_per_period = settings.custom_frequency_value
-        elif settings.custom_frequency_unit == 'weeks':
-            days_per_period = settings.custom_frequency_value * 7
-        elif settings.custom_frequency_unit == 'months':
-            days_per_period = settings.custom_frequency_value * 30
-        else:
-            days_per_period = 30
-    else:
-        days_per_period = 30
+    waiver_windows = []
+    past_due_window_count = 0
 
-    total_days = days_per_period * periods_count
-    waiver_end = waiver_start + timedelta(days=total_days)
+    if 'past_due' in waiver_scopes:
+        for iso_str in past_due_dates_iso:
+            try:
+                dt = datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                waiver_windows.append((dt, dt, 1))
+                past_due_window_count += 1
+            except (ValueError, AttributeError):
+                continue
 
-    # Get current admin
-    admin_id = session.get('admin_id')
+    if 'current' in waiver_scopes and coverage_due_date:
+        waiver_windows.append((coverage_due_date, coverage_due_date, 1))
 
-    # Create waivers for each student
+    if 'future' in waiver_scopes and upcoming_due_date:
+        future_end = upcoming_due_date
+        for _ in range(future_periods_count - 1):
+            future_end = _add_rent_period(future_end, period_delta)
+        waiver_windows.append((upcoming_due_date, future_end, future_periods_count))
+
+    if not waiver_windows:
+        flash("No valid waiver periods could be determined. Check that rent is configured and a scope was selected.", "danger")
+        return redirect(url_for('admin.rent_settings', settings_block=settings_block))
+
+    scope_labels = []
+    if 'past_due' in waiver_scopes:
+        scope_labels.append(f"{past_due_window_count} past-due period(s)")
+    if 'current' in waiver_scopes:
+        scope_labels.append("current period")
+    if 'future' in waiver_scopes:
+        scope_labels.append(f"{future_periods_count} future period(s)")
+    scope_str = ", ".join(scope_labels) or "selected periods"
+
     count = 0
     for student_id in student_ids:
         student = _get_student_or_404(int(student_id))
-        if student:
+        for waiver_start, waiver_end, periods_count in waiver_windows:
             waiver = RentWaiver(
                 student_id=student.id,
+                join_code=join_code,
                 waiver_start_date=waiver_start,
                 waiver_end_date=waiver_end,
                 periods_count=periods_count,
                 reason=reason,
-                created_by_teacher_id=admin_id
+                created_by_teacher_id=admin_id,
             )
             db.session.add(waiver)
-            count += 1
+        description = f"Rent waiver added for {student.full_name} covering: {scope_str}."
+        if reason:
+            description = f"{description} Reason: {reason}"
+        db.session.add(AnalyticsEvent(
+            teacher_id=admin_id,
+            join_code=join_code,
+            event_type='rent_waiver',
+            event_date=now,
+            description=description[:255],
+            created_by_admin=True,
+        ))
+        count += 1
 
     db.session.commit()
-    flash(f"Rent waiver added for {count} student(s) for {periods_count} period(s).", "success")
-    return redirect(url_for('admin.rent_settings'))
+    flash(f"Rent waiver added for {count} student(s) covering: {scope_str}.", "success")
+    return redirect(url_for('admin.rent_settings', settings_block=settings_block))
 
 
 @admin_bp.route('/rent-waiver/<int:waiver_id>/remove', methods=['POST'])
@@ -6054,7 +6397,19 @@ def remove_rent_waiver(waiver_id):
     waiver = RentWaiver.query.get_or_404(waiver_id)
     _get_student_or_404(waiver.student_id)
     student_name = waiver.student.full_name
+    admin_id = session.get("admin_id")
+    join_code = waiver.join_code or session.get('current_join_code')
     db.session.delete(waiver)
+    if admin_id and join_code:
+        removal_description = (f"Rent waiver removed for {student_name}.")[:255]
+        db.session.add(AnalyticsEvent(
+            teacher_id=admin_id,
+            join_code=join_code,
+            event_type='rent_waiver',
+            event_date=utc_now(),
+            description=removal_description,
+            created_by_admin=True,
+        ))
     db.session.commit()
     flash(f"Rent waiver removed for {student_name}.", "success")
     return redirect(url_for('admin.rent_settings'))
@@ -7077,7 +7432,8 @@ def void_transaction(transaction_id):
                 if not student_item.redemption_date:
                     student_item.redemption_date = utc_now()
 
-            reversal_tx = Transaction(
+            reversal_tx, _ = create_idempotent_transaction(
+                idempotency_key=void_refund_key(tx.id),
                 student_id=tx.student_id,
                 teacher_id=tx.teacher_id,
                 join_code=tx.join_code,
@@ -7088,8 +7444,6 @@ def void_transaction(transaction_id):
                 original_transaction_id=tx.id,
                 description=f"Void refund for transaction #{tx.id}: {tx.description}",
             )
-            db.session.add(reversal_tx)
-            db.session.flush()
             tx.reversal_transaction_id = reversal_tx.id
 
         elif tx.type == 'Rent Payment':
@@ -7113,7 +7467,8 @@ def void_transaction(transaction_id):
                 db.session.delete(matched_rent_payment)
 
             if not is_pending:
-                reversal_tx = Transaction(
+                reversal_tx, _ = create_idempotent_transaction(
+                    idempotency_key=void_refund_key(tx.id),
                     student_id=tx.student_id,
                     teacher_id=tx.teacher_id,
                     join_code=tx.join_code,
@@ -7124,8 +7479,6 @@ def void_transaction(transaction_id):
                     original_transaction_id=tx.id,
                     description=f"Void refund for transaction #{tx.id}: {tx.description}",
                 )
-                db.session.add(reversal_tx)
-                db.session.flush()
                 tx.reversal_transaction_id = reversal_tx.id
 
         elif tx.type == 'insurance_premium':
@@ -7160,7 +7513,8 @@ def void_transaction(transaction_id):
                 matched_enrollment.days_unpaid = max(1, matched_enrollment.days_unpaid or 0)
 
             if not is_pending:
-                reversal_tx = Transaction(
+                reversal_tx, _ = create_idempotent_transaction(
+                    idempotency_key=void_refund_key(tx.id),
                     student_id=tx.student_id,
                     teacher_id=tx.teacher_id,
                     join_code=tx.join_code,
@@ -7171,8 +7525,6 @@ def void_transaction(transaction_id):
                     original_transaction_id=tx.id,
                     description=f"Void refund for transaction #{tx.id}: {tx.description}",
                 )
-                db.session.add(reversal_tx)
-                db.session.flush()
                 tx.reversal_transaction_id = reversal_tx.id
         
         else:
@@ -7180,7 +7532,8 @@ def void_transaction(transaction_id):
             if not is_pending:
                 # Invert amount
                 reversal_amount = -(tx.amount or Decimal('0.00'))
-                reversal_tx = Transaction(
+                reversal_tx, _ = create_idempotent_transaction(
+                    idempotency_key=void_refund_key(tx.id),
                     student_id=tx.student_id,
                     teacher_id=tx.teacher_id,
                     join_code=tx.join_code,
@@ -7191,8 +7544,6 @@ def void_transaction(transaction_id):
                     original_transaction_id=tx.id,
                     description=f"Void refund for transaction #{tx.id}: {tx.description}",
                 )
-                db.session.add(reversal_tx)
-                db.session.flush()
                 tx.reversal_transaction_id = reversal_tx.id
 
         tx.is_void = True
@@ -7508,20 +7859,26 @@ def economy_health():
     warnings_by_feature = {}
     recommendations = {}
     cwi_calc = None
+    snapshot = None
+    analysis_schedule = None
     expected_hours = payroll_settings.expected_weekly_hours if payroll_settings and payroll_settings.expected_weekly_hours is not None else 5.0
     pay_rate_per_minute = payroll_settings.pay_rate if payroll_settings else None
 
     if payroll_settings:
         checker = EconomyBalanceChecker(admin_id, selected_block)
-        analysis = checker.analyze_economy(
-            payroll_settings=payroll_settings,
+        payload, snapshot = _get_frozen_economy_analysis_payload(
+            admin_id,
+            selected_block,
+            checker,
+            payroll_settings,
             rent_settings=rent_settings,
             insurance_policies=insurance_policies,
             fines=fines,
             store_items=store_items,
-            expected_weekly_hours=expected_hours
         )
+        analysis = _deserialize_economy_analysis_payload(payload)
         cwi_calc = analysis.cwi
+        analysis_schedule = analysis.analysis_schedule
         pay_rate_per_minute = cwi_calc.pay_rate_per_minute
         recommendations = analysis.recommendations
 
@@ -7578,6 +7935,8 @@ def economy_health():
         warnings_by_level=warnings_by_level,
         warnings_by_feature=warnings_by_feature,
         recommendations=recommendations,
+        snapshot=snapshot,
+        analysis_schedule=analysis_schedule,
         policy_modes=POLICY_MODES,
         policy_summary=policy_summary,
         rebalance_preview=rebalance_preview,
@@ -11168,48 +11527,18 @@ def api_economy_analyze():
         else:
             expected_weekly_hours = None  # Will read from payroll_settings
 
-        analysis = checker.analyze_economy(
-            payroll_settings=payroll_settings,
+        payload, _snapshot = _get_frozen_economy_analysis_payload(
+            admin_id,
+            block,
+            checker,
+            payroll_settings,
             rent_settings=rent_settings,
             insurance_policies=insurance_policies,
             fines=fines,
             store_items=store_items,
-            expected_weekly_hours=expected_weekly_hours
+            expected_weekly_hours=expected_weekly_hours,
         )
-
-        # Format response
-        warnings_by_level = {
-            'critical': [],
-            'warning': [],
-            'info': []
-        }
-
-        for w in analysis.warnings:
-            warnings_by_level[w.level.value].append({
-                'feature': w.feature,
-                'message': w.message,
-                'current_value': w.current_value,
-                'recommended_min': w.recommended_min,
-                'recommended_max': w.recommended_max,
-                'cwi_ratio': w.cwi_ratio
-            })
-
-        return jsonify({
-            'status': 'success',
-            'cwi': analysis.cwi.cwi,
-            'is_balanced': analysis.is_balanced,
-            'budget_survival_test_passed': analysis.budget_survival_test_passed,
-            'weekly_savings': analysis.weekly_savings,
-            'warnings': warnings_by_level,
-            'recommendations': analysis.recommendations,
-            'cwi_breakdown': {
-                'pay_rate_per_hour': float(analysis.cwi.pay_rate_per_minute) * 60,
-                'pay_rate_per_minute': float(analysis.cwi.pay_rate_per_minute),
-                'expected_weekly_hours': float(analysis.cwi.expected_weekly_minutes) / 60.0,
-                'expected_weekly_minutes': float(analysis.cwi.expected_weekly_minutes),
-                'notes': analysis.cwi.notes
-            }
-        })
+        return jsonify(payload)
 
     except Exception as e:
         current_app.logger.error(f"Error analyzing economy: {e}")

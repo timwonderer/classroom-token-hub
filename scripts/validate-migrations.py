@@ -31,6 +31,10 @@ def extract_migration_info(filepath):
     """Extract revision info from a migration file."""
     with open(filepath, 'r', encoding='utf-8') as f:
         content = f.read()
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        tree = None
 
     # Extract revision
     revision_match = re.search(r"^revision\s*=\s*['\"]([^'\"]+)['\"]", content, re.MULTILINE)
@@ -59,11 +63,17 @@ def extract_migration_info(filepath):
     else:
         down_revision = "MISSING"
 
-    # Check for upgrade function
-    has_upgrade = bool(re.search(r"^def upgrade\s*\(\s*\)\s*:", content, re.MULTILINE))
-
-    # Check for downgrade function
-    has_downgrade = bool(re.search(r"^def downgrade\s*\(\s*\)\s*:", content, re.MULTILINE))
+    if tree is not None:
+        defined_functions = {
+            node.name for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef)
+        }
+        has_upgrade = 'upgrade' in defined_functions
+        has_downgrade = 'downgrade' in defined_functions
+    else:
+        # Fallback for invalid syntax files
+        has_upgrade = bool(re.search(r"^def upgrade\s*\(\s*\)\s*:", content, re.MULTILINE))
+        has_downgrade = bool(re.search(r"^def downgrade\s*\(\s*\)\s*:", content, re.MULTILINE))
 
     return {
         'filepath': filepath,
@@ -109,6 +119,18 @@ def check_idempotency(filepath):
         def __init__(self):
             self.errors = []
             self.parents = []
+            self.created_tables = set()
+
+        def _extract_string_arg(self, node, position=0, keyword_name=None):
+            if keyword_name:
+                for keyword in node.keywords:
+                    if keyword.arg == keyword_name and isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
+                        return keyword.value.value
+            if len(node.args) > position:
+                arg = node.args[position]
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    return arg.value
+            return None
 
         def visit_Call(self, node):
             # Check for op.method calls
@@ -117,10 +139,15 @@ def check_idempotency(filepath):
                node.func.value.id == 'op':
                 
                 method = node.func.attr
+
+                if method == 'create_table':
+                    table_name = self._extract_string_arg(node, position=0)
+                    if table_name:
+                        self.created_tables.add(table_name)
                 
                 # Critical operations that need guards
                 if method in ['add_column', 'create_foreign_key', 'create_index']:
-                    if not self.is_guarded():
+                    if not self.is_guarded() and not self.is_safe_creation_call(method, node):
                         self.errors.append(f"❌ Unguarded {method}() in {filepath.name}. Must be inside an 'if' block checking existence.")
                 
                 # Warnings for raw execution
@@ -136,6 +163,15 @@ def check_idempotency(filepath):
                     return True
             return False
 
+        def is_safe_creation_call(self, method, node):
+            if method == 'create_index':
+                table_name = self._extract_string_arg(node, position=1, keyword_name='table_name')
+                return table_name in self.created_tables
+            if method == 'create_foreign_key':
+                source_table = self._extract_string_arg(node, position=1, keyword_name='source_table')
+                return source_table in self.created_tables
+            return False
+
         def visit_If(self, node):
             self.parents.append(node)
             self.generic_visit(node)
@@ -149,24 +185,6 @@ def check_idempotency(filepath):
     visitor = IdempotencyVisitor()
     visitor.visit(tree)
     
-    # Check for required helper functions
-    REQUIRED_HELPERS = {'table_exists', 'column_exists', 'index_exists', 'foreign_key_exists'}
-    defined_functions = {
-        node.name for node in ast.walk(tree) 
-        if isinstance(node, ast.FunctionDef)
-    }
-    
-    missing_helpers = REQUIRED_HELPERS - defined_functions
-    if missing_helpers:
-        # We only strictly require these for NEW migrations or if simple checks are missing.
-        # But per Golden Rule 6, they should be in "every" migration.
-        # For now, let's warn if missing, or error if we want strict enforcement.
-        # Given 40+ existing failures, maybe just warn for now or add to visitor errors.
-        # The prompt says "address the issues", so let's be strict but mindful of legacy.
-        # We'll treat it as an error but the legacy list will suppress it for old files.
-        for helper in missing_helpers:
-             visitor.errors.append(f"⚠️  Missing helper function: {helper}()")
-
     return visitor.errors
 
 

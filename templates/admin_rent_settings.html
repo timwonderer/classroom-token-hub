@@ -918,13 +918,14 @@
             <h5 class="mb-0"><span class="material-symbols-outlined me-2">add_circle</span>Add Rent Waiver</h5>
           </div>
           <div class="card-body">
-            <form method="POST" action="{{ url_for('admin.add_rent_waiver') }}">
+            <form method="POST" action="{{ url_for('admin.add_rent_waiver') }}" id="waiverForm">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <input type="hidden" name="settings_block" value="{{ settings.block if settings else '' }}" />
 
               <div class="mb-3">
-                <label class="form-label fw-bold">Select Students</label>
-                <select class="form-select" id="waiver_student_ids" name="student_ids" multiple size="8" required>
-                  {% for student in all_students %}
+                <label class="form-label fw-bold">1. Select Students</label>
+                <select class="form-select" id="waiver_student_ids" name="student_ids" multiple size="7" required>
+                  {% for student in all_students if not settings or student.block == settings.block %}
                   <option value="{{ student.id }}">{{ student.full_name }} (Block {{ student.block }})</option>
                   {% endfor %}
                 </select>
@@ -932,21 +933,73 @@
               </div>
 
               <div class="mb-3">
-                <label for="periods_count" class="form-label fw-bold">Number of Periods to Waive</label>
-                <input type="number" class="form-control" id="periods_count" name="periods_count" min="1" value="1"
-                  required>
-                <small class="text-muted">How many rent periods to skip</small>
+                <label class="form-label fw-bold">2. Apply Waiver To</label>
+                <div class="d-flex flex-column gap-2">
+                  <div class="form-check" id="scope_past_due_wrapper">
+                    <input class="form-check-input waiver-scope-check" type="checkbox"
+                           name="waiver_scope" value="past_due"
+                           id="scope_past_due" disabled>
+                    <label class="form-check-label text-muted" for="scope_past_due" id="scope_past_due_label">
+                      Past Due Periods
+                      <small class="ms-1 text-muted fst-italic" id="past_due_hint">(select students first)</small>
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input waiver-scope-check" type="checkbox"
+                           name="waiver_scope" value="current"
+                           id="scope_current"
+                           {% if not current_coverage_due_date %}disabled{% endif %}>
+                    <label class="form-check-label {% if not current_coverage_due_date %}text-muted{% endif %}" for="scope_current">
+                      Current Period
+                      {% if not current_coverage_due_date %}
+                      <small class="ms-1 text-muted fst-italic">(no active period)</small>
+                      {% endif %}
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input waiver-scope-check" type="checkbox"
+                           name="waiver_scope" value="future"
+                           id="scope_future">
+                    <label class="form-check-label" for="scope_future">Future Periods</label>
+                  </div>
+                </div>
+              </div>
+
+              <div id="past_due_section" class="mb-3 d-none">
+                <label class="form-label fw-semibold text-secondary">Select past-due periods to waive:</label>
+                <div id="past_due_periods_container" class="ps-2">
+                  <p class="text-muted small mb-0">Select students above to see their past-due periods.</p>
+                </div>
+                <div id="past_due_empty_msg" class="d-none">
+                  <p class="text-muted small mb-0">No past-due periods found for selected students.</p>
+                </div>
+              </div>
+
+              <div id="future_section" class="mb-3 d-none">
+                <label for="future_periods_count" class="form-label fw-semibold text-secondary">
+                  Number of future periods to waive:
+                </label>
+                <input type="number" class="form-control" id="future_periods_count"
+                       name="future_periods_count" min="1" value="1">
+                <small class="text-muted">Starts from the next upcoming due date</small>
               </div>
 
               <div class="mb-3">
                 <label for="waiver_reason" class="form-label fw-bold">Reason (Optional)</label>
-                <textarea class="form-control" id="waiver_reason" name="reason" rows="3"></textarea>
-                <small class="text-muted">Note for why rent is being waived</small>
+                <textarea class="form-control" id="waiver_reason" name="reason" rows="2"></textarea>
               </div>
 
-              <button type="submit" class="btn btn-primary w-100">
+              <button type="submit" class="btn btn-primary w-100" id="waiverSubmitBtn" disabled>
                 <span class="material-symbols-outlined me-2">check_circle</span>Add Waiver
               </button>
+              <noscript>
+                <div class="alert alert-warning mt-2 mb-0 small">
+                  JavaScript is disabled. Client-side validation will be skipped, but you can still submit this form.
+                </div>
+                <button type="submit" class="btn btn-primary w-100 mt-2">
+                  <span class="material-symbols-outlined me-2">check_circle</span>Add Waiver
+                </button>
+              </noscript>
             </form>
           </div>
         </div>
@@ -965,8 +1018,7 @@
                 <thead>
                   <tr>
                     <th>Student</th>
-                    <th>Periods</th>
-                    <th>Valid Until</th>
+                    <th>Covers</th>
                     <th>Reason</th>
                     <th>Action</th>
                   </tr>
@@ -975,10 +1027,18 @@
                   {% for waiver in active_waivers %}
                   <tr>
                     <td>{{ waiver.student.full_name }}</td>
-                    <td>{{ waiver.periods_count }}</td>
                     <td>
-                      <span class="local-timestamp"
-                        data-timestamp="{{ format_utc_iso(waiver.waiver_end_date) }}"></span>
+                      {% if waiver.waiver_start_date == waiver.waiver_end_date %}
+                        <span class="local-timestamp"
+                          data-timestamp="{{ format_utc_iso(waiver.waiver_start_date) }}"></span>
+                      {% else %}
+                        <span class="local-timestamp"
+                          data-timestamp="{{ format_utc_iso(waiver.waiver_start_date) }}"></span>
+                        &ndash;
+                        <span class="local-timestamp"
+                          data-timestamp="{{ format_utc_iso(waiver.waiver_end_date) }}"></span>
+                        <small class="text-muted">({{ waiver.periods_count }} period{{ 's' if waiver.periods_count != 1 }})</small>
+                      {% endif %}
                     </td>
                     <td>{{ waiver.reason or '-' }}</td>
                     <td>
@@ -1007,6 +1067,97 @@
 </div>
 
 <script>
+  (function () {
+    const studentPastDueData = {{ student_past_due_json | tojson }};
+    const studentSelect = document.getElementById('waiver_student_ids');
+    const scopePastDue = document.getElementById('scope_past_due');
+    const scopeCurrent = document.getElementById('scope_current');
+    const scopeFuture = document.getElementById('scope_future');
+    const pastDueSection = document.getElementById('past_due_section');
+    const futureSection = document.getElementById('future_section');
+    const periodsContainer = document.getElementById('past_due_periods_container');
+    const emptyMsg = document.getElementById('past_due_empty_msg');
+    const submitBtn = document.getElementById('waiverSubmitBtn');
+    const pastDueHint = document.getElementById('past_due_hint');
+
+    function getSelectedStudentIds() {
+      if (!studentSelect) return [];
+      return Array.from(studentSelect.selectedOptions).map(o => o.value);
+    }
+
+    function buildPastDuePeriods(studentIds) {
+      const map = {};
+      studentIds.forEach(sid => {
+        (studentPastDueData[sid] || []).forEach(d => { map[d.date_iso] = d.label; });
+      });
+      return Object.keys(map).sort().reverse().map(iso => ({ date_iso: iso, label: map[iso] }));
+    }
+
+    function updatePastDueSection() {
+      const ids = getSelectedStudentIds();
+      const periods = buildPastDuePeriods(ids);
+      const hasPastDue = periods.length > 0;
+
+      scopePastDue.disabled = !hasPastDue;
+      if (!hasPastDue) {
+        scopePastDue.checked = false;
+        pastDueSection.classList.add('d-none');
+      }
+      pastDueHint.textContent = ids.length === 0 ? '(select students first)' : (hasPastDue ? '' : '(none found)');
+
+      periodsContainer.innerHTML = '';
+      if (periods.length === 0) {
+        emptyMsg.classList.remove('d-none');
+        return;
+      }
+      emptyMsg.classList.add('d-none');
+      periods.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'form-check';
+        div.innerHTML = `
+          <input class="form-check-input past-due-period-check" type="checkbox"
+                 name="past_due_dates" value="${p.date_iso}" id="pd_${p.date_iso}" checked>
+          <label class="form-check-label" for="pd_${p.date_iso}">${p.label}</label>`;
+        periodsContainer.appendChild(div);
+      });
+    }
+
+    function updateScopeSections() {
+      pastDueSection.classList.toggle('d-none', !scopePastDue.checked);
+      futureSection.classList.toggle('d-none', !scopeFuture.checked);
+    }
+
+    function updateSubmitBtn() {
+      const hasStudents = getSelectedStudentIds().length > 0;
+      const hasScope = [scopePastDue, scopeCurrent, scopeFuture].some(c => c.checked);
+      const pastDueOk = !scopePastDue.checked ||
+        periodsContainer.querySelectorAll('.past-due-period-check:checked').length > 0;
+      submitBtn.disabled = !(hasStudents && hasScope && pastDueOk);
+    }
+
+    if (studentSelect) {
+      studentSelect.addEventListener('change', () => {
+        updatePastDueSection();
+        updateSubmitBtn();
+      });
+    }
+
+    [scopePastDue, scopeCurrent, scopeFuture].forEach(cb => {
+      if (cb) cb.addEventListener('change', () => {
+        updateScopeSections();
+        updateSubmitBtn();
+      });
+    });
+
+    if (periodsContainer) {
+      periodsContainer.addEventListener('change', updateSubmitBtn);
+    }
+
+    updatePastDueSection();
+    updateScopeSections();
+    updateSubmitBtn();
+  })();
+
   function toggleRentSettings() {
     const isEnabled = document.getElementById('is_enabled').checked;
     const container = document.getElementById('rentSettingsContainer');
