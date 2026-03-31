@@ -23,8 +23,8 @@ def _build_issue_context():
 
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.add_all([
-        ClassEconomy(join_code="ISSUEA1", status="active", created_by_admin_id=teacher.id),
-        ClassEconomy(join_code="ISSUEB1", status="active", created_by_admin_id=teacher.id),
+        ClassEconomy(join_code="ISSUEA1", teacher_id=teacher.id, status="active", created_by_admin_id=teacher.id),
+        ClassEconomy(join_code="ISSUEB1", teacher_id=teacher.id, status="active", created_by_admin_id=teacher.id),
     ])
     category = IssueCategory(
         name=f"Issue Reverse Category {datetime.now(timezone.utc).isoformat()}",

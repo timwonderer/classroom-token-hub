@@ -16,8 +16,8 @@ def test_pay_rate_scoping_strictness(client):
     db.session.commit()
     
     # Create Class Economies
-    class_a = ClassEconomy(join_code='CLASS-A', display_name='Class A', created_by_admin_id=teacher.id)
-    class_b = ClassEconomy(join_code='CLASS-B', display_name='Class B', created_by_admin_id=teacher.id)
+    class_a = ClassEconomy(join_code='CLASS-A', teacher_id=teacher.id, display_name='Class A', created_by_admin_id=teacher.id)
+    class_b = ClassEconomy(join_code='CLASS-B', teacher_id=teacher.id, display_name='Class B', created_by_admin_id=teacher.id)
     db.session.add_all([class_a, class_b])
     db.session.commit()
 
@@ -83,7 +83,7 @@ def test_daily_limit_scoping_strictness(client):
     db.session.add(teacher)
     db.session.commit()
     
-    class_x = ClassEconomy(join_code='CLASS-X', display_name='Class X', created_by_admin_id=teacher.id)
+    class_x = ClassEconomy(join_code='CLASS-X', teacher_id=teacher.id, display_name='Class X', created_by_admin_id=teacher.id)
     db.session.add(class_x)
     db.session.commit()
     

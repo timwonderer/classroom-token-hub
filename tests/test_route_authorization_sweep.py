@@ -30,12 +30,12 @@ def test_hall_pass_active_requires_teacher_public_id_and_scopes_to_teacher_class
     db.session.flush()
 
     db.session.add_all([
-        ClassEconomy(join_code="HPASS01", status="active", created_by_admin_id=admin.id),
-        ClassEconomy(join_code="HPASS02", status="active", created_by_admin_id=admin.id),
-        ClassEconomy(join_code="HPASS99", status="active", created_by_admin_id=other_admin.id),
-        ClassMembership(join_code="HPASS01", admin_id=admin.id, role="admin", status="active"),
-        ClassMembership(join_code="HPASS02", admin_id=admin.id, role="admin", status="active"),
-        ClassMembership(join_code="HPASS99", admin_id=other_admin.id, role="admin", status="active"),
+        ClassEconomy(join_code="HPASS01", teacher_id=admin.id, status="active", created_by_admin_id=admin.id),
+        ClassEconomy(join_code="HPASS02", teacher_id=admin.id, status="active", created_by_admin_id=admin.id),
+        ClassEconomy(join_code="HPASS99", teacher_id=other_admin.id, status="active", created_by_admin_id=other_admin.id),
+        ClassMembership(join_code="HPASS01", admin_id=admin.id, role="admin"),
+        ClassMembership(join_code="HPASS02", admin_id=admin.id, role="admin"),
+        ClassMembership(join_code="HPASS99", admin_id=other_admin.id, role="admin"),
     ])
 
     from app.models import HallPassLog
@@ -102,8 +102,8 @@ def test_approve_redemption_requires_membership(client):
     db.session.add(student)
     db.session.flush()
 
-    db.session.add(ClassEconomy(join_code="REDEEM1", status="active", created_by_admin_id=admin_owner.id))
-    db.session.add(ClassMembership(join_code="REDEEM1", admin_id=admin_owner.id, role="admin", status="active"))
+    db.session.add(ClassEconomy(join_code="REDEEM1", teacher_id=admin_owner.id, status="active", created_by_admin_id=admin_owner.id))
+    db.session.add(ClassMembership(join_code="REDEEM1", admin_id=admin_owner.id, role="admin"))
     # Intruder has NO membership
     
     # Create Item and StudentItem
@@ -145,12 +145,12 @@ def test_file_claim_scoped_to_class(client):
 
     # Class A and Class B
     db.session.add_all([
-        ClassEconomy(join_code="CLAIM_A", status="active", created_by_admin_id=admin.id),
-        ClassEconomy(join_code="CLAIM_B", status="active", created_by_admin_id=admin.id),
-        ClassMembership(join_code="CLAIM_A", admin_id=admin.id, role="admin", status="active"),
-        ClassMembership(join_code="CLAIM_B", admin_id=admin.id, role="admin", status="active"),
-        ClassMembership(join_code="CLAIM_A", student_id=student.id, role="student", status="active"),
-        ClassMembership(join_code="CLAIM_B", student_id=student.id, role="student", status="active"),
+        ClassEconomy(join_code="CLAIM_A", teacher_id=admin.id, status="active", created_by_admin_id=admin.id),
+        ClassEconomy(join_code="CLAIM_B", teacher_id=admin.id, status="active", created_by_admin_id=admin.id),
+        ClassMembership(join_code="CLAIM_A", admin_id=admin.id, role="admin"),
+        ClassMembership(join_code="CLAIM_B", admin_id=admin.id, role="admin"),
+        ClassMembership(join_code="CLAIM_A", student_id=student.id, role="student"),
+        ClassMembership(join_code="CLAIM_B", student_id=student.id, role="student"),
     ])
     db.session.flush()
 

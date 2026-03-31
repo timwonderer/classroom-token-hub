@@ -30,6 +30,7 @@ def test_get_total_earnings_defensive_checks(client, app):
         # Create ClassEconomy first for FK constraint
         economy = ClassEconomy(
             join_code=join_code,
+            teacher_id=teacher.id,
             display_name='Test Class',
             status='active',
             created_by_admin_id=teacher.id
@@ -106,6 +107,7 @@ def test_get_total_earnings_with_negative_amounts(client, app):
         # Create ClassEconomy first for FK constraint
         economy = ClassEconomy(
             join_code=join_code,
+            teacher_id=teacher.id,
             display_name='Test Class 2',
             status='active',
             created_by_admin_id=teacher.id
@@ -187,6 +189,7 @@ def test_get_total_earnings_with_zero_amount(client, app):
         # Create ClassEconomy first for FK constraint
         economy = ClassEconomy(
             join_code=join_code,
+            teacher_id=teacher.id,
             display_name='Test Class 3',
             status='active',
             created_by_admin_id=teacher.id
@@ -255,6 +258,7 @@ def test_get_total_earnings_with_mocked_null_amount(client, app):
         # Create ClassEconomy first for FK constraint
         economy = ClassEconomy(
             join_code=join_code,
+            teacher_id=teacher.id,
             display_name='Test Class 4',
             status='active',
             created_by_admin_id=teacher.id

@@ -17,6 +17,9 @@ from app.utils.opaque_refs import make_opaque_ref
 
 def test_sysadmin_resolve_issue_issues_bug_reward_transaction(client):
     teacher = Admin(username="teacher_issue_reward", totp_secret="secret")
+    db.session.add(teacher)
+    db.session.flush()
+
     sysadmin = SystemAdmin(username="sysadmin_issue_reward", totp_secret="secret")
     student = Student(first_name="Bug", last_initial="R", block="A", salt=b"salt")
     category = IssueCategory(
@@ -24,8 +27,8 @@ def test_sysadmin_resolve_issue_issues_bug_reward_transaction(client):
         category_type="general",
         is_active=True,
     )
-    economy = ClassEconomy(join_code="JOINBUG123", status="active")
-    db.session.add_all([teacher, sysadmin, student, category, economy])
+    economy = ClassEconomy(join_code="JOINBUG123", teacher_id=teacher.id, status="active")
+    db.session.add_all([sysadmin, student, category, economy])
     db.session.flush()
 
     issue = Issue(

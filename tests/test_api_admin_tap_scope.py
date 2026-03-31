@@ -26,11 +26,11 @@ def _setup_shared_student_with_split_membership():
     db.session.add_all([
         StudentTeacher(student_id=student.id, teacher_id=admin_a.id),
         StudentTeacher(student_id=student.id, teacher_id=admin_b.id),
-        ClassEconomy(join_code="TAPA01", status="active", created_by_admin_id=admin_a.id),
-        ClassEconomy(join_code="TAPB01", status="active", created_by_admin_id=admin_b.id),
-        ClassMembership(join_code="TAPA01", admin_id=admin_a.id, role="admin", status="active"),
-        ClassMembership(join_code="TAPB01", admin_id=admin_b.id, role="admin", status="active"),
-        ClassMembership(join_code="TAPB01", student_id=student.id, role="student", status="active"),
+        ClassEconomy(join_code="TAPA01", teacher_id=admin_a.id, status="active", created_by_admin_id=admin_a.id),
+        ClassEconomy(join_code="TAPB01", teacher_id=admin_b.id, status="active", created_by_admin_id=admin_b.id),
+        ClassMembership(join_code="TAPA01", admin_id=admin_a.id, role="admin"),
+        ClassMembership(join_code="TAPB01", admin_id=admin_b.id, role="admin"),
+        ClassMembership(join_code="TAPB01", student_id=student.id, role="student"),
     ])
     db.session.flush()
 

@@ -39,9 +39,9 @@ def student_in_class(client, teacher_admin):
     db.session.add(seat)
     
     # Setup Class Context
-    db.session.add(ClassEconomy(join_code='JOINCODE123', status="active", created_by_admin_id=teacher_admin.id))
-    db.session.add(ClassMembership(join_code='JOINCODE123', admin_id=teacher_admin.id, role="admin", status="active"))
-    db.session.add(ClassMembership(join_code='JOINCODE123', student_id=student.id, role="student", status="active"))
+    db.session.add(ClassEconomy(join_code='JOINCODE123', teacher_id=teacher_admin.id, status="active", created_by_admin_id=teacher_admin.id))
+    db.session.add(ClassMembership(join_code='JOINCODE123', admin_id=teacher_admin.id, role="admin"))
+    db.session.add(ClassMembership(join_code='JOINCODE123', student_id=student.id, role="student"))
     db.session.commit()
     db.session.refresh(student)
     return student

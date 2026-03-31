@@ -40,7 +40,7 @@ def multi_teacher_data(client):
         # Create StudentTeacher association
         db.session.add(StudentTeacher(
             student_id=student.id,
-            admin_id=teacher1.id
+            teacher_id=teacher1.id
         ))
     
     # Create students for teacher2
@@ -59,7 +59,7 @@ def multi_teacher_data(client):
         # Create StudentTeacher association
         db.session.add(StudentTeacher(
             student_id=student.id,
-            admin_id=teacher2.id
+            teacher_id=teacher2.id
         ))
     
     db.session.commit()
@@ -213,7 +213,7 @@ def test_system_admin_flag_not_set_accidentally(client):
         db.session.flush()
         db.session.add(StudentTeacher(
             student_id=student.id,
-            admin_id=teacher2.id
+            teacher_id=teacher2.id
         ))
     
     db.session.commit()
@@ -288,7 +288,7 @@ def test_orphaned_students_from_deleted_teacher(client):
         # Create StudentTeacher association (the ONLY way to link students to teachers)
         db.session.add(StudentTeacher(
             student_id=student.id,
-            admin_id=teacher1_id
+            teacher_id=teacher1_id
         ))
     
     db.session.commit()
@@ -352,6 +352,5 @@ def test_orphaned_students_from_deleted_teacher(client):
         # Since there are no StudentTeacher links for teacher2 (ID reuse), they see 0 students
         assert len(students) == 0, \
             f"Security Fix: New teacher with reused ID should see 0 orphaned students, but saw {len(students)}."
-
 
 

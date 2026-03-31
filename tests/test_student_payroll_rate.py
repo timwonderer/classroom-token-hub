@@ -11,7 +11,7 @@ def test_student_payroll_uses_teacher_block_pay_rate(client):
     db.session.flush()
 
     # Create ClassEconomy to satisfy FK
-    economy = ClassEconomy(join_code="RATEA123", status="active")
+    economy = ClassEconomy(join_code="RATEA123", teacher_id=teacher.id, status="active")
     db.session.add(economy)
     db.session.flush()
 

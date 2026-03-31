@@ -8,6 +8,7 @@ from app.models import (
     Admin,
     InsurancePolicy,
     RentPayment,
+    Seat,
     StoreItem,
     Student,
     StudentInsurance,
@@ -42,6 +43,12 @@ def _build_teacher_student(join_code='VOID123'):
     db.session.flush()
 
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
+    db.session.add(Seat(
+        student_id=student.id,
+        join_code=join_code,
+        block='A',
+        role='student',
+    ))
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
         block='A',

@@ -85,18 +85,18 @@ def setup_multi_teacher_hall_pass_history(client):
     join_code3 = "CLASS-C"
     join_code4 = "CLASS-D"
     db.session.add_all([
-        ClassEconomy(join_code=join_code1, status="active", created_by_admin_id=teacher1.id),
-        ClassEconomy(join_code=join_code2, status="active", created_by_admin_id=teacher1.id),
-        ClassEconomy(join_code=join_code3, status="active", created_by_admin_id=teacher2.id),
-        ClassEconomy(join_code=join_code4, status="active", created_by_admin_id=teacher2.id),
-        ClassMembership(join_code=join_code1, admin_id=teacher1.id, role="admin", status="active"),
-        ClassMembership(join_code=join_code2, admin_id=teacher1.id, role="admin", status="active"),
-        ClassMembership(join_code=join_code3, admin_id=teacher2.id, role="admin", status="active"),
-        ClassMembership(join_code=join_code4, admin_id=teacher2.id, role="admin", status="active"),
-        ClassMembership(join_code=join_code1, student_id=student1.id, role="student", status="active"),
-        ClassMembership(join_code=join_code2, student_id=student2.id, role="student", status="active"),
-        ClassMembership(join_code=join_code3, student_id=student3.id, role="student", status="active"),
-        ClassMembership(join_code=join_code4, student_id=student4.id, role="student", status="active"),
+        ClassEconomy(join_code=join_code1, teacher_id=teacher1.id, status="active", created_by_admin_id=teacher1.id),
+        ClassEconomy(join_code=join_code2, teacher_id=teacher1.id, status="active", created_by_admin_id=teacher1.id),
+        ClassEconomy(join_code=join_code3, teacher_id=teacher2.id, status="active", created_by_admin_id=teacher2.id),
+        ClassEconomy(join_code=join_code4, teacher_id=teacher2.id, status="active", created_by_admin_id=teacher2.id),
+        ClassMembership(join_code=join_code1, admin_id=teacher1.id, role="admin"),
+        ClassMembership(join_code=join_code2, admin_id=teacher1.id, role="admin"),
+        ClassMembership(join_code=join_code3, admin_id=teacher2.id, role="admin"),
+        ClassMembership(join_code=join_code4, admin_id=teacher2.id, role="admin"),
+        ClassMembership(join_code=join_code1, student_id=student1.id, role="student"),
+        ClassMembership(join_code=join_code2, student_id=student2.id, role="student"),
+        ClassMembership(join_code=join_code3, student_id=student3.id, role="student"),
+        ClassMembership(join_code=join_code4, student_id=student4.id, role="student"),
     ])
     db.session.flush()
 
@@ -244,7 +244,7 @@ def test_hall_pass_history_with_shared_student(client, setup_multi_teacher_hall_
     # Share student1 (originally teacher1's) with teacher2
     shared_link = StudentTeacher(
         student_id=student1_id,
-        admin_id=teacher2_id
+        teacher_id=teacher2_id
     )
     db.session.add(shared_link)
     db.session.commit()
