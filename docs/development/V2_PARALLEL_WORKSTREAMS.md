@@ -59,9 +59,13 @@ Port the `main`-only economy-policy, rebalance-timing, rent-locking, and penalty
 
 ### Thread 2: Idempotency, Waivers, Settlement, and Banking Safety
 
+**Status**
+
+Completed and merged into `codex/v2.0` on 2026-03-30.
+
 **Goal**
 
-Port the live-test-critical transaction-idempotency, waiver-scope, perk-suppression, settlement, and related banking fixes from `main`.
+Port the live-test-critical transaction-idempotency, frozen analytics payloads, waiver-scope, perk-suppression, settlement, and related banking fixes from `main`.
 
 **Primary source clusters**
 

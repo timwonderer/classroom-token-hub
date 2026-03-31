@@ -1,6 +1,6 @@
 # V2 Launch Readiness Matrix
 
-**Last Updated:** 2026-03-29
+**Last Updated:** 2026-03-30
 **Scope:** `codex/v2.0` live-test candidate readiness, informed by the active v2 runbooks, migration review, historical checklist, and the main-reconciliation tracker.
 
 ## Status Vocabulary
@@ -20,7 +20,7 @@
 | Live-test migration rehearsal | `blocked` | `SOP-DEP-022_V2_Live_Test_Runbook.md` | Runbook exists, but repo docs do not record a completed rehearsal on the team dev/migration DB | Capture before/after head state, upgrade result, and smoke status |
 | Smoke-route checklist ownership | `needs refresh` | `SOP-DEP-022`, `DEVELOPMENT.md` | Smoke routes are listed, but owner and sign-off path are not captured in a single status artifact | Assign operator owner and record execution outcome |
 | PostgreSQL validation baseline | `needs refresh` | `DEVELOPMENT.md`, `README.md`, `LOG-ARC-049` | Baseline remains `664 passed, 1 skipped`, but it predates this reconciliation wave | Re-run after each must-port implementation wave |
-| Economy/rent launch-critical main deltas | `blocked` | `docs/development/V2_MAIN_RECONCILIATION_TRACKER.md` | Policy scheduling, rent locking, idempotency, and waiver fixes remain unported | Implement and verify the live-test clusters |
+| Economy/rent launch-critical main deltas | `needs refresh` | `docs/development/V2_MAIN_RECONCILIATION_TRACKER.md` | The major live-test economy/rent wave has landed on `codex/v2.0`; confirm whether the remaining adjacent CWI warning-bypass delta stays pre-live-test or moves later | Refresh the tracker/readiness docs and leave only intentional open items |
 | Production transition runbook completeness | `needs refresh` | `SOP-DEP-023_V2_Production_Transition_Runbook.md` | Runbook exists, but owner/sign-off detail and scope needed cleanup | Keep scope/dependencies explicit and attach operator sign-off record |
 | Backup and restore rehearsal | `blocked` | `SOP-DEP-023`, `SOP-DEP-016`, operator process | Required by docs but not evidenced in repo-facing readiness artifacts | Record successful rehearsal on intended topology |
 | Maintenance-mode and deploy workflow safety | `needs refresh` | `SOP-DEP-023`, `.github/workflows/*`, reconciliation tracker | Workflow fix exists on `main` and is still pending on v2 | Port workflow fix and verify maintenance toggling path |
@@ -34,10 +34,7 @@
 These items must be closed before treating `codex/v2.0` as ready for live testing:
 
 1. Complete the v2 dev/migration database rehearsal from `SOP-DEP-022` and attach evidence.
-2. Port the launch-critical `origin/main` deltas:
-   - economy policy scheduling and rent-cycle locking
-   - transaction idempotency and frozen analytics payloads
-   - rent waivers, perk suppression, settlement, and sysadmin logging
+2. Refresh the reconciliation tracker so only intentional pre-live-test deltas remain open.
 3. Re-run PostgreSQL validation after the live-test port wave.
 4. Record smoke-route execution outcome with named operator ownership.
 5. Close active-doc issues still marked `needs update` in the documentation sweep.

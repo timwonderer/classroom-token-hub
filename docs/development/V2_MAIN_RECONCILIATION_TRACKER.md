@@ -1,8 +1,8 @@
 # V2 Main Reconciliation Tracker
 
-**Last Updated:** 2026-03-29
+**Last Updated:** 2026-03-30
 **Source Branches:** `codex/v2.0` vs `origin/main`
-**Diff Snapshot:** `git rev-list --left-right --count codex/v2.0...origin/main` -> `132 51`
+**Diff Snapshot:** `git rev-list --left-right --count codex/v2.0...origin/main` -> `143 51`
 **Purpose:** Current source of truth for features present on `origin/main` that have not yet been intentionally reconciled into `codex/v2.0`.
 
 This tracker replaces the partial main-feature note previously embedded in `LOG-ARC-049`. `LOG-ARC-049` remains a historical readiness artifact; this document is the active parity tracker.
@@ -12,6 +12,7 @@ This tracker replaces the partial main-feature note previously embedded in `LOG-
 - `must-port before live test`
 - `must-port before production`
 - `safe to defer`
+- `landed on codex/v2.0`
 
 ## Port Strategy Vocabulary
 
@@ -31,11 +32,11 @@ This tracker replaces the partial main-feature note previously embedded in `LOG-
 
 | Cluster | Source commits / PRs | Feature summary | Affected subsystems | Migration impact | Test impact | Doc impact | Classification | Port strategy | Rationale |
 |---|---|---|---|---|---|---|---|---|---|
-| Economy policy scheduling and rent-cycle locking | `589d6ba7` (`#1077`), `67a23022` (`#1103`), `a84da5a1` (`#1104`), `bac180ab` (`#1105`) | Refines economy policy mode, rebalance timing, CWI warning bypass controls, per-join-code rent rate locking, and penalty reversal behavior | `app/routes/admin.py`, `app/routes/student.py`, `app/utils/economy_balance.py`, `app/utils/economy_policy.py`, `app/utils/economy_rebalance.py`, admin economy/rent templates, JS | New migration on `main` for CWI warning bypass flags: `3f4a5b6c7d8e_add_cwi_warning_bypass_flags.py`. Earlier policy-mode migration already exists in v2 via separate history, so this is a delta port, not a raw migration replay | `tests/test_economy_policy_mode.py`, `tests/test_rent_penalty_reversal.py`, related economy API tests | `CHANGELOG.md`, `README.md`, economy feature/domain docs | `must-port before live test` | `manual port` | Economic correctness is part of live-test credibility. `codex/v2.0` already diverged around policy mode, so a direct cherry-pick is high risk |
+| Economy policy scheduling and rent-cycle locking | `589d6ba7` (`#1077`), `67a23022` (`#1103`), `a84da5a1` (`#1104`), `bac180ab` (`#1105`) | Refines economy policy mode, rebalance timing, CWI warning bypass controls, per-join-code rent rate locking, and penalty reversal behavior | `app/routes/admin.py`, `app/routes/student.py`, `app/utils/economy_balance.py`, `app/utils/economy_policy.py`, `app/utils/economy_rebalance.py`, admin economy/rent templates, JS | Core policy/rebalance/rent-locking behavior is already in v2; the remaining `main` delta is the CWI warning bypass flags from `3f4a5b6c7d8e_add_cwi_warning_bypass_flags.py` | `tests/test_economy_policy_mode.py`, `tests/test_rent_penalty_reversal.py`, related economy API tests | `CHANGELOG.md`, `README.md`, economy feature/domain docs | `must-port before live test` | `manual port` | Treat this as a narrow remaining delta, not a full unported cluster. Rent-cycle locking and penalty reversal are already landed on `codex/v2.0` |
 | Insurance modularization and tiered setup flow | `8b967da6` (`#1090`), `3a9d6e92` (`#1092`), `1f8e06d7` (`#1093`), `2cddd34c` (`#1095`), `1a3be409` (`#1096`) and follow-up fix/docs commits in the same series | Moves insurance products to modular tiered design, finalizes teacher guidance, and fixes form-mode transitions | `app/forms.py`, `app/models.py`, `app/routes/admin.py`, `app/routes/student.py`, insurance templates, economy policy helpers | New `main` migration `g9h0i1j2k3l4_modularize_insurance_products.py`; requires schema comparison against current v2 insurance tables before porting | `tests/test_insurance_modularization.py`, `tests/test_insurance_snapshots.py`, `tests/test_economy_policy_mode.py` | Insurance feature docs and teacher guidance copy | `must-port before production` | `manual port` | v2 already has its own tenancy and identity refactors. Insurance behavior matters, but it is safer to reconcile after live-test hardening items |
 | Insurance pricing snapshots, approval caps, and claim time-limit gate | `4f7f5647` (`#1097`), `ae2eb662` (`#1099`), `f670f53f` (`#1102`) | Adds economy snapshots for insurance pricing, fixes variable approval-cap handling, and changes claim time-limit evaluation to filing timestamp with teacher override | `app/models.py`, `app/routes/admin.py`, `app/utils/economy_policy.py`, `app/utils/economy_balance.py`, admin claim/policy templates | New `main` migrations: `h0i1j2k3l4m_add_economy_snapshot_table.py`, `k1l2m3n4o5p6_add_time_limit_override_to_claims.py` | `tests/test_insurance_snapshots.py`, `tests/test_insurance_security.py`, `tests/test_economy_policy_mode.py` | Insurance workflow/security docs | `must-port before production` | `manual port` | These are important correctness and claims-handling fixes, but they are schema-heavy and should be applied intentionally against the v2 schema, not merged blindly before the first live-test pass |
-| Transaction idempotency and frozen analytics payloads | `6de59151` (`#1100`) | Hardens transaction idempotency and stores analysis payloads with economy snapshots | `app/routes/admin.py`, `app/routes/api.py`, `app/utils/transaction_idempotency.py`, `app/utils/store.py`, economy health UI | New `main` migrations: `i1j2k3l4m5n6_add_analysis_payload_to_economy_snapshot.py`, `j2k3l4m5n6o7_add_transaction_idempotency_key.py` | `tests/test_transaction_idempotency.py`, `tests/test_economy_api.py`, `tests/test_void_transaction_rules.py` | Minimal doc updates on `main`; runtime impact is larger than doc impact | `must-port before live test` | `manual port` | This affects duplicate side effects and operator trust in economy analysis. Live testing without it risks invalid financial state |
-| Rent waivers, perk suppression, pending-transaction settlement, and sysadmin logging fixes | `8a87f8fc` (`#1107`), `da7d9336` (`#1108`), `5bf90899` (`#1109`) | Expands rent-waiver scope, suppresses misapplied perk grants, tightens transaction settlement behavior, and fixes related sysadmin/error logging | `app/routes/admin.py`, `app/routes/student.py`, `app/routes/api.py`, `app/utils/banking.py`, `app/utils/transaction_idempotency.py`, `app/routes/system_admin.py`, rent/shop templates, settlement script | No new DB migration in this cluster, but it changes state-transition semantics and introduces `scripts/settle_pending_transactions.py` | `tests/test_add_rent_waiver_route.py`, `tests/test_rent_item_types.py`, `tests/test_banking_core.py`, `tests/test_decimal_precision.py`, `tests/test_error_logging.py`, `tests/test_sysadmin_grafana_auth.py`, `tests/test_void_transaction_rules.py` | Deployment guide and rent-facing UI copy changed on `main` | `must-port before live test` | `manual port` | These are launch-critical correctness fixes for waivers, pending transactions, and operator visibility |
+| Transaction idempotency and frozen analytics payloads | `6de59151` (`#1100`) | Hardens transaction idempotency and stores analysis payloads with economy snapshots | `app/routes/admin.py`, `app/routes/api.py`, `app/utils/transaction_idempotency.py`, `app/utils/store.py`, economy health UI | Landed on `codex/v2.0` via v2-native migrations `p6q7r8s9t0u1_add_transaction_idempotency_key.py` and `q9r0s1t2u3v4_add_economy_snapshot_table.py` | `tests/test_transaction_idempotency.py`, `tests/test_economy_api.py`, `tests/test_void_transaction_rules.py` | Minimal doc updates on `main`; runtime impact is larger than doc impact | `landed on codex/v2.0` | `manual port` | Landed and verified on 2026-03-30. Remaining economy-health follow-up work is tracked separately from this cluster |
+| Rent waivers, perk suppression, pending-transaction settlement, and sysadmin logging fixes | `8a87f8fc` (`#1107`), `da7d9336` (`#1108`), `5bf90899` (`#1109`) | Expands rent-waiver scope, suppresses misapplied perk grants, tightens transaction settlement behavior, and fixes related sysadmin/error logging | `app/routes/admin.py`, `app/routes/student.py`, `app/routes/api.py`, `app/utils/banking.py`, `app/utils/transaction_idempotency.py`, `app/routes/system_admin.py`, rent/shop templates, settlement script | Landed on `codex/v2.0`; no additional DB migration was required beyond the idempotency/snapshot wave | `tests/test_add_rent_waiver_route.py`, `tests/test_rent_item_types.py`, `tests/test_banking_core.py`, `tests/test_decimal_precision.py`, `tests/test_error_logging.py`, `tests/test_sysadmin_grafana_auth.py`, `tests/test_void_transaction_rules.py` | Deployment guide and rent-facing UI copy changed on `main` | `landed on codex/v2.0` | `manual port` | Landed and verified on 2026-03-30. `tests/test_error_logging.py` remains a broader polish/follow-up area, not a blocker for this landed wave |
 | Collective goal reactivation instance codes | `4c664f0d` (`#1110`) | Prevents stale collective-goal progress from carrying across reactivation by introducing instance codes and updated reset behavior | `app/models.py`, `app/routes/admin.py`, `app/routes/api.py`, `app/routes/student.py`, `app/utils/store.py` | New `main` migrations: `a4b5c6d7e8f9_add_collective_goal_instance_codes.py`, `b5c6d7e8f9g0_merge_collective_instance_and_cwi_heads.py` | `tests/test_collective_goal_expiration.py` | No major active-doc dependency yet | `must-port before production` | `manual port` | Correctness bug, but narrower feature surface than the live-test blockers above |
 | Student support/store UX and privacy/logging polish | `29a59d91` (`#1088`), `e8da1dcc`, `b8fb169d`, `0717586a` | Simplifies support/store UI, improves issue display readability, and refreshes privacy/error-retention disclosures | `app/routes/student.py`, `app/routes/api.py`, `app/__init__.py`, `app/services/tlcp.py`, templates, CSS, `wsgi.py` | No DB migration | `tests/test_error_logging.py`, `tests/test_rent_item_types.py`, `tests/test_rent_privileges_overdue.py` | `templates/privacy.html`, user-facing copy | `safe to defer` | `defer` | Useful polish, but not required to establish v2 tenancy or launch safety |
 | Teacher decision history and observer-account specs | `2cf98c74` (`#1087`) | Adds teacher decision-history views plus draft specs for observer accounts and decision logs | `app/models.py`, `app/routes/admin.py`, `app/routes/student.py`, support templates | No DB migration in the sampled commit | `tests/test_pr1086_issue_views.py` | New docs under `docs/development/` | `safe to defer` | `defer` | Valuable future scope, not part of the current v2 launch contract |
@@ -92,85 +93,37 @@ The sections below are implementation-ready planning notes for all clusters not 
 
 ### 2. Transaction idempotency and frozen analytics payloads
 
-**Target behavior**
+**Status:** Landed on `codex/v2.0` on 2026-03-30
 
-- State-changing financial actions should reject duplicate replays safely.
-- Economy snapshots should preserve the analysis payload used for pricing and health displays.
+**What landed**
 
-**Files and subsystems to change**
-
-- `app/routes/admin.py`
-- `app/routes/api.py`
 - `app/utils/transaction_idempotency.py`
-- `app/utils/store.py`
-- `app/models.py`
+- purchase/refund/void wiring in `app/routes/api.py` and `app/routes/admin.py`
+- v2-native migrations `p6q7r8s9t0u1_add_transaction_idempotency_key.py` and `q9r0s1t2u3v4_add_economy_snapshot_table.py`
+- frozen economy analysis payload caching in `app/routes/admin.py`
+- updated regression coverage in `tests/test_transaction_idempotency.py`, `tests/test_economy_api.py`, and `tests/test_void_transaction_rules.py`
 
-**Migration handling**
+**Verification completed**
 
-- Implement v2-native schema changes for transaction idempotency key and snapshot analysis payload.
-- Validate uniqueness/index strategy against current v2 transaction tables before writing the migration.
-
-**Merge/conflict risk**
-
-- High for routes, moderate for the helper module.
-- The helper itself may be portable, but route wiring must be reconciled manually with v2 tenancy changes.
-
-**Required tests**
-
-- Port `tests/test_transaction_idempotency.py`
-- Update `tests/test_economy_api.py`
-- Update `tests/test_void_transaction_rules.py`
-
-**Operational verification**
-
-- Replay the same redeem/void/settlement request twice and confirm one durable effect.
-- Confirm operator-facing analysis snapshots remain stable across later recalculations.
+- duplicate replay tests for transaction flows
+- frozen snapshot reuse / override bypass / recompute-on-input-change tests
+- migration lint and repo validator pass for the new v2-native schema path
 
 ### 3. Rent waivers, perk suppression, settlement, and sysadmin logging
 
-**Target behavior**
+**Status:** Landed on `codex/v2.0` on 2026-03-30
 
-- Rent waivers can be created with the intended scope without granting unintended perks.
-- Pending-transaction settlement remains numerically safe and auditable.
-- Sysadmin logging and error-reporting behavior remain intact under the latest waiver and banking flows.
+**What landed**
 
-**Files and subsystems to change**
+- multi-scope waivers in `app/routes/admin.py` and `templates/admin_rent_settings.html`
+- waiver-aware rent display and perk suppression in `app/routes/student.py` and `templates/student_rent.html`
+- settlement sweep helpers in `app/utils/banking.py` and `scripts/settle_pending_transactions.py`
+- sysadmin Grafana/session fixes in `app/auth.py` and `app/routes/system_admin.py`
+- supporting regressions in `tests/test_add_rent_waiver_route.py`, `tests/test_rent_item_types.py`, `tests/test_banking_core.py`, `tests/test_decimal_precision.py`, `tests/test_sysadmin_grafana_auth.py`, and `tests/test_void_transaction_rules.py`
 
-- `app/routes/admin.py`
-- `app/routes/student.py`
-- `app/routes/api.py`
-- `app/routes/system_admin.py`
-- `app/utils/banking.py`
-- `app/utils/transaction_idempotency.py`
-- `templates/admin_rent_settings.html`
-- `templates/student_rent.html`
-- `templates/student_shop.html`
-- `scripts/settle_pending_transactions.py`
+**Follow-up note**
 
-**Migration handling**
-
-- No DB migration expected from the sampled `main` changes.
-- Confirm the behavior does not assume columns introduced only by other deferred clusters.
-
-**Merge/conflict risk**
-
-- High in admin/student routes because v2 has broader class-scope and session changes.
-- Low for standalone settlement scripting, provided it is reviewed for join-code-safe semantics.
-
-**Required tests**
-
-- Port `tests/test_add_rent_waiver_route.py`
-- Update `tests/test_rent_item_types.py`
-- Update `tests/test_banking_core.py`
-- Update `tests/test_decimal_precision.py`
-- Update `tests/test_error_logging.py`
-- Port `tests/test_sysadmin_grafana_auth.py`
-
-**Operational verification**
-
-- Create waivers across multiple classes and confirm scope isolation.
-- Confirm waived rent does not grant store perks accidentally.
-- Run settlement paths on a test DB and verify balances and audit records stay consistent.
+- `tests/test_error_logging.py` remains a broader polish/follow-up area and is not the gating item for this landed wave
 
 ### 4. Insurance modularization and tiered setup flow
 

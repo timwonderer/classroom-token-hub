@@ -64,7 +64,7 @@ Branch: `codex/v2.0`
 - Full suite result on PostgreSQL test DB is `664 passed, 1 skipped`.
 - Current class authority is `ClassMembership` + `ClassEconomy`, with `current_join_code` as active session context.
 - Migration heads are resolved in repo with the current merge migration.
-- The first `origin/main` economy/rent reconciliation wave is landed on `codex/v2.0`, including rent-cycle locking, penalty reversal, and shared insurance recommendation sourcing.
+- The first `origin/main` economy/rent reconciliation wave is landed on `codex/v2.0`, including rent-cycle locking, penalty reversal, transaction idempotency, frozen economy snapshots, waiver scope, settlement safety, and sysadmin Grafana/session fixes.
 
 ### Must Finish Before Live Testing
 
