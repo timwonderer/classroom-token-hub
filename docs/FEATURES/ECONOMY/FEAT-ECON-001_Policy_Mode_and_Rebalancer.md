@@ -105,6 +105,8 @@ The initial implementation shall support rebalance previews and updates for:
 
 The rebalance preview shall consume `EconomyBalanceChecker` outputs. No duplicate ratio calculator shall be introduced in the UI layer.
 
+Insurance premium recommendation text shown in insurance setup or edit surfaces shall also derive from the shared backend economy-policy/checker recommendation source. The UI shall not maintain a separate premium-range formula.
+
 ### 3. Activation Timing
 
 If the teacher selects next-payroll activation, the rebalance payload shall be stored and activated by the next teacher payroll execution.

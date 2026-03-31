@@ -47,6 +47,8 @@ Three RESTful endpoints for real-time validation:
 JavaScript class for real-time validation in forms (debounce 500ms).
 Usage requires standard data attributes (e.g., `data-economy-validate="rent"`).
 
+Client-side pages may display validation results, but ratio derivation and recommendation values remain backend-owned. Insurance premium guidance shown outside the validation API must come from the same backend recommendation source used by Economy Health and the checker-backed forms.
+
 ## VII. Integrated Pages
 The balance checker is currently integrated into:
 1. **Payroll Page** (`/admin/payroll`)
@@ -54,6 +56,7 @@ The balance checker is currently integrated into:
 3. **Insurance Policy Editor** (`/admin/insurance/edit/<id>`)
 4. **Store Item Editor** (`/admin/store/edit/<id>`)
 5. **Fines** (via API)
+6. **Insurance Policy Creation** (`/admin/insurance`) for shared premium guidance text
 
 ## VIII. Budget Survival Test
 The system performs a "Budget Survival Test" to ensure students can:

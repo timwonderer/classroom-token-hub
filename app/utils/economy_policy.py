@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Dict, Optional
 
 from flask import has_app_context
 
 
 POLICY_MODE_DEFAULT = "default"
+FREQUENCY_WEEK_MULTIPLIERS = {
+    "daily": Decimal("0.142857142857"),
+    "weekly": Decimal("1.0"),
+    "biweekly": Decimal("2.0"),
+    "monthly": Decimal("4.348214285714"),
+    "semester": Decimal("18.0"),
+    "yearly": Decimal("52.0"),
+}
 FEATURE_FLAGS = {
     "payroll",
     "insurance",
@@ -89,6 +98,54 @@ def normalize_policy_mode(value: Optional[str]) -> str:
 
 def get_policy_profile(mode: Optional[str]) -> Dict[str, Any]:
     return POLICY_MODES[normalize_policy_mode(mode)]
+
+
+def convert_weekly_amount_to_frequency(value: Optional[Decimal], frequency: Optional[str]) -> Optional[Decimal]:
+    if value is None:
+        return None
+
+    normalized_frequency = (frequency or "weekly").strip().lower()
+    multiplier = FREQUENCY_WEEK_MULTIPLIERS.get(normalized_frequency, FREQUENCY_WEEK_MULTIPLIERS["weekly"])
+    return (Decimal(str(value)) * multiplier).quantize(Decimal("0.01"))
+
+
+def get_insurance_premium_recommendation(
+    mode: Optional[str],
+    cwi: Optional[Decimal],
+    *,
+    frequency: str = "weekly",
+) -> Optional[Dict[str, Any]]:
+    """
+    Shared premium guidance for insurance pricing.
+
+    This helper is the backend source for the values shown in economy-health style
+    recommendations and insurance setup/edit guidance. It follows the policy-mode
+    profile ratios, which in turn implement the documented economics contract:
+    - docs/FEATURES/ECONOMY/FEAT-ECON-001_Policy_Mode_and_Rebalancer.md
+    - docs/DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification.md
+    """
+    if cwi is None:
+        return None
+
+    profile = get_policy_profile(mode)
+    insurance_weekly = profile.get("ratios", {}).get("insurance_weekly", {})
+    cwi_decimal = Decimal(str(cwi)).quantize(Decimal("0.01"))
+    weekly_min = (cwi_decimal * Decimal(str(insurance_weekly.get("min", 0.05)))).quantize(Decimal("0.01"))
+    weekly_max = (cwi_decimal * Decimal(str(insurance_weekly.get("max", 0.12)))).quantize(Decimal("0.01"))
+    weekly_recommended = (
+        cwi_decimal * Decimal(str(insurance_weekly.get("recommended", 0.08)))
+    ).quantize(Decimal("0.01"))
+
+    return {
+        "frequency": (frequency or "weekly").strip().lower(),
+        "cwi": cwi_decimal,
+        "min_weekly": weekly_min,
+        "max_weekly": weekly_max,
+        "recommended_weekly": weekly_recommended,
+        "min": convert_weekly_amount_to_frequency(weekly_min, frequency),
+        "max": convert_weekly_amount_to_frequency(weekly_max, frequency),
+        "recommended": convert_weekly_amount_to_frequency(weekly_recommended, frequency),
+    }
 
 
 def _resolve_join_code_for_block(teacher_id: int, block: Optional[str]) -> Optional[str]:

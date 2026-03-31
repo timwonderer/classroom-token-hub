@@ -1,6 +1,6 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-30
 **Current Released Version:** 1.9.0
 **Engineering State:** v2.0 live-test candidate
 **Active Integration Branch:** `codex/v2.0`
@@ -45,6 +45,8 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 - Branch consolidation is complete: prior merge-prep branches were folded into `codex/v2.0` and pruned.
 - Migration heads are resolved in repo with `e8f1a2b3c4d5_merge_remaining_v2_heads.py`.
 - Full-suite validation succeeded on the PostgreSQL test database.
+- Economy policy scheduling, rebalance timing, rent-cycle locking, and penalty-reversal corrections have landed on `codex/v2.0`.
+- Insurance premium guidance now uses a shared backend recommendation source so economy-health and insurance setup/edit surfaces read from the same documented ratios.
 
 ### Required Before Live Testing
 
@@ -53,6 +55,7 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 - Rehearse migration upgrade flow on the v2 dev database with operator-facing verification steps.
 - Complete smoke-route checklist and confirm it can be executed by someone who did not author the branch.
 - Remove or supersede stale docs that still imply deleted branches or legacy TeacherBlock fallback plans.
+- Finish the remaining live-test economy deltas: transaction idempotency, waiver/perk suppression, settlement handling, and related sysadmin logging fixes.
 
 ### Required Before Production
 

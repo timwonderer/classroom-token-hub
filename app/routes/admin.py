@@ -61,6 +61,7 @@ from app.utils.join_code import generate_join_code
 from app.utils.economy_balance import EconomyBalanceChecker
 from app.utils.economy_policy import (
     POLICY_MODES,
+    get_insurance_premium_recommendation,
     get_class_feature_settings,
     get_feature_settings_row,
     normalize_policy_mode,
@@ -1593,6 +1594,20 @@ def _build_rebalance_preview(admin_id, selected_block, checker, cwi, rent_settin
         })
 
     return preview_items
+
+
+def _build_insurance_recommendation_context(admin_id, *, block=None, charge_frequency='weekly'):
+    payroll_settings = _resolve_admin_payroll_settings_for_block(admin_id, block)
+    if not payroll_settings:
+        return None
+
+    checker = EconomyBalanceChecker(admin_id, block)
+    cwi_calc = checker.calculate_cwi(payroll_settings)
+    return get_insurance_premium_recommendation(
+        checker.policy_mode,
+        Decimal(str(cwi_calc.cwi)),
+        frequency=charge_frequency,
+    )
 
 
 def _load_economy_rebalance_context(admin_id, selected_block):
@@ -6307,6 +6322,12 @@ def insurance_management():
             policy_pending_claim_counts.get(claim.policy_id, 0) + 1
         )
 
+    insurance_recommendation = _build_insurance_recommendation_context(
+        admin_id,
+        block=settings_block,
+        charge_frequency=form.charge_frequency.data or 'monthly',
+    )
+
     return render_template('admin_insurance.html',
                           form=form,
                           policies=policies,
@@ -6320,7 +6341,8 @@ def insurance_management():
                           next_tier_category_id=next_tier_category_id,
                           teacher_blocks=teacher_blocks,
                           settings_block=settings_block,
-                          class_labels_by_block=class_labels_by_block)
+                          class_labels_by_block=class_labels_by_block,
+                          insurance_recommendation=insurance_recommendation)
 
 
 @admin_bp.route('/insurance/edit/<int:policy_id>', methods=['GET', 'POST'])
@@ -6378,7 +6400,13 @@ def edit_insurance_policy(policy_id):
         InsurancePolicy.id != policy_id
     ).all()
 
-    payroll_settings = PayrollSettings.query.filter_by(teacher_id=session.get('admin_id'), is_active=True).first()
+    recommendation_block = policy.blocks_list[0] if policy.blocks_list else None
+    payroll_settings = _resolve_admin_payroll_settings_for_block(session.get('admin_id'), recommendation_block)
+    insurance_recommendation = _build_insurance_recommendation_context(
+        session.get('admin_id'),
+        block=recommendation_block,
+        charge_frequency=policy.charge_frequency or 'monthly',
+    )
 
     return render_template(
         'admin_edit_insurance_policy.html',
@@ -6387,7 +6415,8 @@ def edit_insurance_policy(policy_id):
         available_policies=available_policies,
         tier_groups=tier_groups,
         next_tier_category_id=next_tier_category_id,
-        payroll_settings=payroll_settings
+        payroll_settings=payroll_settings,
+        insurance_recommendation=insurance_recommendation,
     )
 
 

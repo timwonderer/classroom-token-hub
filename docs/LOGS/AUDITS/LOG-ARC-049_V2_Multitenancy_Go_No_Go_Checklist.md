@@ -44,6 +44,7 @@ Branch: `codex/v2.0`
 | 14 | Archived economy read-only policy | Not Started | Archived economies have explicit documented and tested runtime policy | contract doc + tests |
 | 15 | Full sysadmin tenancy audit | Not Started | `system_admin.py` routes are reviewed against v2 join-code contract | route audit matrix |
 | 16 | Global-balance property deprecation cleanup | Not Started | Legacy aggregate convenience properties are either retired or fully documented as transitional only | code/doc review |
+| 17 | Economy/rent correction wave from main | In Progress | Rebalance timing, rent-cycle locking, penalty reversal, and shared insurance recommendation sourcing are implemented on `codex/v2.0`; remaining live-test economy deltas stay visible | `app/utils/economy_policy.py`, `app/utils/economy_rebalance.py`, `tests/test_economy_policy_mode.py`, `tests/test_rent_penalty_reversal.py` |
 
 ## Readiness Artifact
 
@@ -53,6 +54,7 @@ Branch: `codex/v2.0`
 - Full suite result on PostgreSQL test DB is `664 passed, 1 skipped`.
 - Current class authority is `ClassMembership` + `ClassEconomy`, with `current_join_code` as active session context.
 - Migration heads are resolved in repo with the current merge migration.
+- The first `origin/main` economy/rent reconciliation wave is landed on `codex/v2.0`, including rent-cycle locking, penalty reversal, and shared insurance recommendation sourcing.
 
 ### Must Finish Before Live Testing
 
@@ -93,7 +95,7 @@ Track features present on `origin/main` but not yet intentionally reconciled int
 
 | Source | Feature / Commit | Classification | Status | Notes |
 |---|---|---|---|---|
-| `origin/main` | `589d6ba7` - economy policy mode and rebalance hardening (`#1077`) | Must evaluate before production | Deferred | Review `app/utils/economy_policy.py`, `app/utils/economy_balance.py`, `tests/test_economy_policy_mode.py`, and related migration/doc changes before deciding whether to port before live testing or after live-test feedback. |
+| `origin/main` | `589d6ba7` - economy policy mode and rebalance hardening (`#1077`) | Must evaluate before production | Partially Completed | Core economy/rent corrections and shared insurance recommendation sourcing are now on `codex/v2.0`. Remaining live-test economy deltas still include idempotency and waiver/settlement follow-up from later `main` commits. |
 
 ### Reconciliation Workflow
 
