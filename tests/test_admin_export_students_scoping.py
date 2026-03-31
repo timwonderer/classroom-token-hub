@@ -4,13 +4,12 @@ from decimal import Decimal
 from app.extensions import db
 from app.models import (
     Admin,
-    ClassEconomy,
-    ClassMembership,
     Student,
     StudentTeacher,
     Transaction,
     TransactionStatus,
 )
+from tests.helpers.class_scope import create_class_scope
 
 
 def _login_admin(client, admin_id):
@@ -21,24 +20,7 @@ def _login_admin(client, admin_id):
 
 
 def _attach_student_to_class(student, teacher, join_code):
-    economy = ClassEconomy(
-        join_code=join_code,
-        status="active",
-        created_by_admin_id=teacher.id,
-    )
-    db.session.add(economy)
-    db.session.add(ClassMembership(
-        join_code=join_code,
-        admin_id=teacher.id,
-        role="admin",
-        status="active",
-    ))
-    db.session.add(ClassMembership(
-        join_code=join_code,
-        student_id=student.id,
-        role="student",
-        status="active",
-    ))
+    create_class_scope(teacher=teacher, join_code=join_code, student=student)
 
 
 def test_export_students_uses_only_teacher_owned_join_codes(client):

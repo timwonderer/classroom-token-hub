@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 
 from app.extensions import db
-from app.models import Admin, ClassEconomy, ClassMembership, Issue, IssueCategory, Student, TeacherBlock
+from app.models import Admin, ClassEconomy, Issue, IssueCategory, Student
+from tests.helpers.class_scope import create_class_scope
 
 
 def _login_admin(client, admin_id):
@@ -17,21 +18,12 @@ def test_set_current_class_requires_membership_even_if_teacherblock_exists(clien
     db.session.add_all([admin_a, admin_b])
     db.session.flush()
 
-    db.session.add(ClassEconomy(join_code="GATE001", teacher_id=admin_b.id, status="active", created_by_admin_id=admin_b.id))
-    db.session.add(ClassMembership(join_code="GATE001", admin_id=admin_b.id, role="admin", status="active"))
-    # Stale/legacy seat should not grant access without ClassMembership
-    db.session.add(TeacherBlock(
-        teacher_id=admin_a.id,
-        block="A",
+    create_class_scope(
+        teacher=admin_b,
         join_code="GATE001",
-        is_claimed=False,
-        first_name="Legacy",
-        last_initial="X",
-        last_name_hash_by_part=[],
-        dob_sum_hash=None,
-        salt=b"salt",
-        first_half_hash="hash",
-    ))
+        teacher_block_teacher=admin_a,
+        teacher_block_claimed=False,
+    )
     db.session.commit()
 
     _login_admin(client, admin_a.id)
@@ -47,20 +39,12 @@ def test_delete_join_code_requires_membership_even_if_teacherblock_exists(client
     db.session.add_all([admin_a, admin_b])
     db.session.flush()
 
-    db.session.add(ClassEconomy(join_code="DELG001", teacher_id=admin_b.id, status="active", created_by_admin_id=admin_b.id))
-    db.session.add(ClassMembership(join_code="DELG001", admin_id=admin_b.id, role="admin", status="active"))
-    db.session.add(TeacherBlock(
-        teacher_id=admin_a.id,
-        block="A",
+    create_class_scope(
+        teacher=admin_b,
         join_code="DELG001",
-        is_claimed=False,
-        first_name="Legacy",
-        last_initial="Y",
-        last_name_hash_by_part=[],
-        dob_sum_hash=None,
-        salt=b"salt",
-        first_half_hash="hash",
-    ))
+        teacher_block_teacher=admin_a,
+        teacher_block_claimed=False,
+    )
     db.session.commit()
 
     _login_admin(client, admin_a.id)
@@ -74,8 +58,7 @@ def test_delete_join_code_requires_confirmation(client):
     db.session.add(admin)
     db.session.flush()
 
-    db.session.add(ClassEconomy(join_code="CONF001", teacher_id=admin.id, status="active", created_by_admin_id=admin.id))
-    db.session.add(ClassMembership(join_code="CONF001", admin_id=admin.id, role="admin", status="active"))
+    create_class_scope(teacher=admin, join_code="CONF001")
     db.session.commit()
 
     _login_admin(client, admin.id)
@@ -104,12 +87,8 @@ def test_issues_queue_respects_current_join_code_membership_scope(client):
     db.session.add(student)
     db.session.flush()
 
-    db.session.add_all([
-        ClassEconomy(join_code="ISSGA1", teacher_id=admin.id, status="active", created_by_admin_id=admin.id),
-        ClassEconomy(join_code="ISSGB1", teacher_id=admin.id, status="active", created_by_admin_id=admin.id),
-        ClassMembership(join_code="ISSGA1", admin_id=admin.id, role="admin", status="active"),
-        ClassMembership(join_code="ISSGB1", admin_id=admin.id, role="admin", status="active"),
-    ])
+    create_class_scope(teacher=admin, join_code="ISSGA1")
+    create_class_scope(teacher=admin, join_code="ISSGB1")
 
     category = IssueCategory(
         name=f"Issue Gate Category {datetime.now(timezone.utc).isoformat()}",

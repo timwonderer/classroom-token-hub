@@ -13,7 +13,7 @@ import os
 from werkzeug.security import generate_password_hash
 
 from app import db
-from app.models import Admin, Student, TeacherBlock, RentSettings, RentItem, ClassEconomy, Transaction, TransactionStatus
+from app.models import Admin, Student, TeacherBlock, RentSettings, RentItem, ClassEconomy, Transaction, TransactionStatus, Seat
 from app.hash_utils import get_random_salt, hash_username
 
 
@@ -45,6 +45,7 @@ def setup_rent_with_items(client):
     # Create ClassEconomy first for FK constraint
     economy = ClassEconomy(
         join_code="TESTA",
+        teacher_id=teacher.id,
         display_name='Test Rent Class',
         status='active',
         created_by_admin_id=teacher.id
@@ -66,6 +67,13 @@ def setup_rent_with_items(client):
         is_claimed=True,
     )
     db.session.add(seat)
+    db.session.add(Seat(
+        student_id=student.id,
+        class_id=economy.class_id,
+        join_code="TESTA",
+        block="A",
+        role="student",
+    ))
     db.session.commit()
 
     # Create rent settings (join-code scoped)

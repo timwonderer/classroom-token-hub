@@ -11,6 +11,7 @@ from app.models import (
     ClassEconomy,
     ClassMembership,
     RedemptionAuditLog,
+    Seat,
     StoreItem,
     Student,
     StudentItem,
@@ -35,23 +36,24 @@ def student_in_class(client, teacher_admin):
     db.session.add(student)
     db.session.flush()
 
-    db.session.add(ClassEconomy(
+    class_economy = ClassEconomy(
         join_code='AUDIT123',
+        teacher_id=teacher_admin.id,
         display_name='A',
         status='active',
         created_by_admin_id=teacher_admin.id,
-    ))
+    )
+    db.session.add(class_economy)
+    db.session.flush()
     db.session.add(ClassMembership(
         join_code='AUDIT123',
         admin_id=teacher_admin.id,
         role='admin',
-        status='active',
     ))
     db.session.add(ClassMembership(
         join_code='AUDIT123',
         student_id=student.id,
         role='student',
-        status='active',
     ))
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher_admin.id))
     db.session.add(TeacherBlock(
@@ -66,6 +68,13 @@ def student_in_class(client, teacher_admin):
         dob_sum_hash=None,
         salt=b'salt',
         first_half_hash='hash',
+    ))
+    db.session.add(Seat(
+        student_id=student.id,
+        class_id=class_economy.class_id,
+        join_code='AUDIT123',
+        block='A',
+        role='student',
     ))
     db.session.commit()
     return student

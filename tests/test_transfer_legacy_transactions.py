@@ -11,7 +11,7 @@ not count toward balances in a class-scoped student session.
 
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
-from app.models import Student, Admin, Transaction, TeacherBlock, ClassEconomy, TransactionStatus
+from app.models import Student, Admin, Transaction, TeacherBlock, ClassEconomy, TransactionStatus, Seat
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 
@@ -52,6 +52,7 @@ def setup_student_with_legacy_transactions(client):
     # Create ClassEconomy first for FK constraint
     economy = ClassEconomy(
         join_code=join_code,
+        teacher_id=teacher.id,
         display_name='Math Period 1A',
         status='active',
         created_by_admin_id=teacher.id
@@ -75,6 +76,13 @@ def setup_student_with_legacy_transactions(client):
         claimed_at=datetime.now(timezone.utc)
     )
     db.session.add(seat)
+    db.session.add(Seat(
+        student_id=student.id,
+        class_id=economy.class_id,
+        join_code=join_code,
+        block="Period1",
+        role="student",
+    ))
     db.session.commit()
 
     # Add first transaction as a legacy row with NULL join_code.

@@ -11,6 +11,7 @@ from app.models import (
     IssueCategory, InsurancePolicy, InsurancePolicyBlock
 )
 from app.utils.deletion import collapse_universe
+from tests.helpers.class_scope import create_class_scope
 
 def test_collapse_universe_cascades_and_cleans_up(client):
     admin = Admin(username="collapse_admin", totp_secret="secret")
@@ -27,31 +28,32 @@ def test_collapse_universe_cascades_and_cleans_up(client):
 
     join_code = "COLL01"
     
-    economy = ClassEconomy(join_code=join_code, teacher_id=admin.id, status="active", created_by_admin_id=admin.id)
-    membership = ClassMembership(join_code=join_code, admin_id=admin.id, role="admin", status="active")
-    
-    # We add a student membership for student A (who has no other class)
-    student_membership = ClassMembership(join_code=join_code, student_id=student.id, role="student", status="active")
-    
-    # We add a student membership for student B (who has another class)
-    student_b_membership = ClassMembership(join_code=join_code, student_id=student_b.id, role="student", status="active")
-    
-    db.session.add_all([economy, membership, student_membership, student_b_membership])
+    economy = create_class_scope(
+        teacher=admin,
+        join_code=join_code,
+        student=student,
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+    )
+    db.session.add(ClassMembership(join_code=join_code, student_id=student_b.id, role="student"))
     db.session.flush()
+    membership = ClassMembership.query.filter_by(join_code=join_code, admin_id=admin.id, role="admin").first()
     
     # Student B has another class
     join_code_survive = "SURV01"
-    economy_survive = ClassEconomy(join_code=join_code_survive, teacher_id=admin.id, status="active", created_by_admin_id=admin.id)
-    student_b_membership_survive = ClassMembership(join_code=join_code_survive, student_id=student_b.id, role="student", status="active")
-    db.session.add_all([economy_survive, student_b_membership_survive])
+    create_class_scope(
+        teacher=admin,
+        join_code=join_code_survive,
+        create_teacher_membership=False,
+        create_student_membership=False,
+    )
+    db.session.add(ClassMembership(join_code=join_code_survive, student_id=student_b.id, role="student"))
     
     # Bridge row
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=admin.id))
     db.session.add(StudentTeacher(student_id=student_b.id, teacher_id=admin.id))
 
     # TeacherBlock
-    db.session.add(TeacherBlock(teacher_id=admin.id, block="A", join_code=join_code, is_claimed=True, student_id=student.id, first_name="C", last_initial="S", last_name_hash_by_part=[], dob_sum_hash=None, salt=b"s", first_half_hash="h"))
-    
     # Settings
     db.session.add(PayrollSettings(teacher_id=admin.id, block="A"))
     db.session.add(RentSettings(teacher_id=admin.id, block="A"))
@@ -133,8 +135,7 @@ def test_admin_join_code_delete_route(client):
     db.session.flush()
 
     join_code = "ROUT01"
-    db.session.add(ClassEconomy(join_code=join_code, teacher_id=admin.id, status="active", created_by_admin_id=admin.id))
-    db.session.add(ClassMembership(join_code=join_code, admin_id=admin.id, role="admin", status="active"))
+    create_class_scope(teacher=admin, join_code=join_code)
     db.session.commit()
 
     with client.session_transaction() as sess:
