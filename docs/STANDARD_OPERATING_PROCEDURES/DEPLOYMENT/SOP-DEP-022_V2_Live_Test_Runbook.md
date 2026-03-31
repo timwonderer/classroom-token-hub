@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-022      | 1.1     | 2026-03-30     | 1.0        | Normative       |
+| SOP-DEP-022      | 1.2     | 2026-03-31     | 1.1      | Normative       |
 
 ## I. Purpose
 Provide the exact operator workflow for preparing the current v2 branch for live testing.
@@ -63,6 +63,19 @@ Required named roles for each rehearsal or go-live smoke pass:
 
 The primary operator and engineering escalation owner may be the same person if staffing requires it. The independent verifier must be a different person from the branch author.
 
+### Solo-Operator Exception
+
+In single-operator environments where an independent verifier is not available, the operator MAY assume all roles (primary operator, independent verifier, and engineering escalation owner), provided that all of the following are satisfied:
+
+- the full PostgreSQL-backed test suite passes with no failures
+- all defined smoke routes in Section VIII are executed and recorded
+- results are fully documented in the Rehearsal Record (Section X)
+- any known risks, anomalies, or deviations are explicitly noted prior to go/no-go decision
+
+Optional augmentation (solo mode only):
+- AI-assisted review MAY be used to identify potential defects or invariant violations
+- AI output is advisory only and MUST NOT be treated as independent verification authority
+
 ## VIII. Smoke Routes
 
 Verify these paths manually after upgrade:
@@ -97,7 +110,7 @@ Use this template for the rehearsal artifact or ticket comment:
 Live-Test Rehearsal Record
 Date:
 Branch:
-Commit SHA:
+Commit SHA: (populate after commit using `git rev-parse HEAD`)
 Primary operator:
 Independent verifier:
 Engineering escalation owner:
@@ -132,7 +145,34 @@ Decision
 - Independent verifier confirmation:
 ```
 
-## XI. Backup and Rollback Decision
+---
+## XI. Rehearsal Record Storage and Finalization
+
+The rehearsal record is completed in two phases:
+
+### Phase 1 — Pre-Commit Rehearsal
+- Execute all steps in Sections VI–VIII.
+- Fill out the rehearsal record with all available information.
+- Leave `Commit SHA` as pending.
+
+### Phase 2 — Commit and Finalization
+- Commit the validated changes.
+- Retrieve the commit SHA:
+
+```bash
+git rev-parse HEAD
+```
+
+- Update the rehearsal record with the actual commit SHA.
+- Store the finalized record in one of the following:
+  - a LOGS-AUD-* artifact file in the repository, or
+  - a linked ticket / PR comment that is retained as an audit record
+
+The stored record MUST be immutable after finalization and must correspond exactly to the deployed commit.
+
+---
+
+## XII. Backup and Rollback Decision
 
 Before live testing:
 
@@ -140,7 +180,7 @@ Before live testing:
 2. If migration rehearsal fails, stop and rollback before exposing testers.
 3. If smoke checks fail after upgrade, revert to backup or hold the environment in maintenance mode until resolved.
 
-## XII. Required Output Record
+## XIII. Required Output Record
 
 Capture and store:
 
@@ -150,10 +190,10 @@ Capture and store:
 - smoke-check status
 - final go/no-go decision for live testing
 
-## XIII. Deferral Boundary
+## XIV. Deferral Boundary
 
 - This runbook intentionally avoids a broader route-taxonomy rewrite or operations-document restructure.
 - Any deeper cleanup driven by route renames, class-scope normalization, or cross-SOP reorganization is deferred until after `V2_ADMIN_ROUTE_REFACTOR` and `V2_Class_Scope_Normalization_Target`.
 
-## XIV. Amendment
+## XV. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.
