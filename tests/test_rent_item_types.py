@@ -1,7 +1,7 @@
 import pytest
 import re
 from decimal import Decimal
-from app.models import RentItem, RentSettings, RentPayment, RentWaiver, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher, ClassEconomy, ClassMembership
+from app.models import RentItem, RentSettings, RentPayment, RentWaiver, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher, ClassEconomy, ClassMembership, Seat
 from app.extensions import db
 from datetime import datetime, timezone, timedelta
 
@@ -39,18 +39,72 @@ def student_in_class(client, teacher_admin):
     db.session.add(seat)
     
     # Setup Class Context
-    db.session.add(ClassEconomy(join_code='JOINCODE123', teacher_id=teacher_admin.id, status="active", created_by_admin_id=teacher_admin.id))
+    class_economy = ClassEconomy(join_code='JOINCODE123', teacher_id=teacher_admin.id, status="active", created_by_admin_id=teacher_admin.id)
+    db.session.add(class_economy)
+    db.session.flush()
+    db.session.add(Seat(
+        student_id=student.id,
+        class_id=class_economy.class_id,
+        join_code='JOINCODE123',
+        block='A',
+        role='student',
+    ))
     db.session.add(ClassMembership(join_code='JOINCODE123', admin_id=teacher_admin.id, role="admin"))
     db.session.add(ClassMembership(join_code='JOINCODE123', student_id=student.id, role="student"))
     db.session.commit()
     db.session.refresh(student)
     return student
 
-def test_admin_configure_rent_item_types(client, teacher_admin):
+
+@pytest.fixture
+def admin_class_scope(client, teacher_admin):
+    """Create a class-scoped seat so admin feature routes can resolve scope."""
+    student = Student(first_name="Scope", last_initial="S", block="A", salt=b"scope-salt")
+    db.session.add(student)
+    db.session.flush()
+
+    class_economy = ClassEconomy(
+        join_code='JOINCODE123',
+        teacher_id=teacher_admin.id,
+        status="active",
+        created_by_admin_id=teacher_admin.id,
+    )
+    db.session.add(class_economy)
+    db.session.flush()
+
+    db.session.add_all([
+        StudentTeacher(student_id=student.id, teacher_id=teacher_admin.id),
+        TeacherBlock(
+            teacher_id=teacher_admin.id,
+            block='A',
+            join_code='JOINCODE123',
+            student_id=student.id,
+            is_claimed=True,
+            first_name='Scope',
+            last_initial='S',
+            salt=b'scope-salt',
+            first_half_hash='scope-hash',
+        ),
+        Seat(
+            student_id=student.id,
+            class_id=class_economy.class_id,
+            join_code='JOINCODE123',
+            block='A',
+            role='student',
+        ),
+        ClassMembership(join_code='JOINCODE123', admin_id=teacher_admin.id, role="admin"),
+        ClassMembership(join_code='JOINCODE123', student_id=student.id, role="student"),
+    ])
+    db.session.commit()
+
+    return class_economy
+
+def test_admin_configure_rent_item_types(client, teacher_admin, admin_class_scope):
     """Test that admin can configure different rent item types."""
     with client.session_transaction() as sess:
         sess['admin_id'] = teacher_admin.id
         sess['is_admin'] = True
+        sess['current_join_code'] = admin_class_scope.join_code
 
     # Get settings block
     settings = RentSettings(teacher_id=teacher_admin.id, block='A', is_enabled=True)
@@ -259,11 +313,12 @@ def test_student_use_per_use_item(client, teacher_admin, student_in_class):
     assert student_item.uses_remaining == 0
     assert student_item.status == 'processing' # Should move to processing/redeemed
 
-def test_prevent_deletion_of_linked_items(client, teacher_admin):
+def test_prevent_deletion_of_linked_items(client, teacher_admin, admin_class_scope):
     """Test that admin cannot delete store items linked to rent settings."""
     with client.session_transaction() as sess:
         sess['admin_id'] = teacher_admin.id
         sess['is_admin'] = True
+        sess['current_join_code'] = admin_class_scope.join_code
 
     # Create linked item
     store_item = StoreItem(
@@ -431,6 +486,7 @@ def test_unpaid_period_revokes_rent_hall_passes_and_payment_restores_immediately
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -522,6 +578,7 @@ def test_hall_pass_top_off_restores_after_base_rent_paid_even_with_late_fee_due(
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -603,6 +660,7 @@ def test_hall_pass_top_off_accepts_legacy_whitespace_period_values(client, teach
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -678,10 +736,18 @@ def test_mid_period_lock_blocks_semantic_changes(client, teacher_admin):
     with client.session_transaction() as sess:
         sess['admin_id'] = teacher_admin.id
         sess['is_admin'] = True
+        sess['current_join_code'] = 'LOCKTEST'
 
     # Create settings and a rent item
+    db.session.add(ClassEconomy(
+        join_code='LOCKTEST',
+        teacher_id=teacher_admin.id,
+        status="active",
+        created_by_admin_id=teacher_admin.id,
+    ))
+    db.session.add(ClassMembership(join_code='LOCKTEST', admin_id=teacher_admin.id, role="admin"))
     settings = RentSettings(
-        teacher_id=teacher_admin.id, block='A', is_enabled=True,
+        teacher_id=teacher_admin.id, block='A', join_code='LOCKTEST', is_enabled=True,
         rent_amount=Decimal('50.00'), frequency_type='monthly',
         due_day_of_month=1, first_rent_due_date=datetime(2026, 2, 1, tzinfo=timezone.utc)
     )
@@ -756,9 +822,17 @@ def test_mid_period_lock_allows_new_items(client, teacher_admin):
     with client.session_transaction() as sess:
         sess['admin_id'] = teacher_admin.id
         sess['is_admin'] = True
+        sess['current_join_code'] = 'LOCKTEST2'
 
+    db.session.add(ClassEconomy(
+        join_code='LOCKTEST2',
+        teacher_id=teacher_admin.id,
+        status="active",
+        created_by_admin_id=teacher_admin.id,
+    ))
+    db.session.add(ClassMembership(join_code='LOCKTEST2', admin_id=teacher_admin.id, role="admin"))
     settings = RentSettings(
-        teacher_id=teacher_admin.id, block='A', is_enabled=True,
+        teacher_id=teacher_admin.id, block='A', join_code='LOCKTEST2', is_enabled=True,
         rent_amount=Decimal('50.00'), frequency_type='monthly',
         due_day_of_month=1, first_rent_due_date=datetime(2026, 2, 1, tzinfo=timezone.utc)
     )
@@ -1145,6 +1219,7 @@ def test_shop_keeps_item_purchasable_when_per_use_and_privilege_links_overlap(cl
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -1399,6 +1474,7 @@ def test_api_hall_pass_item_skips_rent_perk_zero_cost_flow(client, teacher_admin
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -1641,11 +1717,12 @@ def test_shop_displays_rent_perk_price_as_free_when_rent_paid_without_grant_row(
     assert b'Rent Perk price: $0.00' in resp.data
 
 
-def test_admin_store_hides_delete_button_for_rent_linked_items(client, teacher_admin):
+def test_admin_store_hides_delete_button_for_rent_linked_items(client, teacher_admin, admin_class_scope):
     """Rent-linked items should hide delete even when legacy is_rent_linked flag is stale."""
     with client.session_transaction() as sess:
         sess['admin_id'] = teacher_admin.id
         sess['is_admin'] = True
+        sess['current_join_code'] = admin_class_scope.join_code
 
     settings = RentSettings(teacher_id=teacher_admin.id, block='A', is_enabled=True)
     db.session.add(settings)
@@ -2031,6 +2108,7 @@ def test_rent_payment_hall_pass_top_off_recovers_from_stale_counter(client, teac
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -2093,6 +2171,7 @@ def test_waiver_does_not_grant_rent_perks_in_shop(client, teacher_admin, student
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -2105,6 +2184,7 @@ def test_waiver_does_not_grant_rent_perks_in_shop(client, teacher_admin, student
 
     privilege_store_item = StoreItem(
         teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
         name='Waiver Desk Privilege',
         price=Decimal('50.00'),
         is_active=True,
@@ -2113,6 +2193,7 @@ def test_waiver_does_not_grant_rent_perks_in_shop(client, teacher_admin, student
     )
     per_use_store_item = StoreItem(
         teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
         name='Waiver Pencil Per Use',
         price=Decimal('3.00'),
         is_active=True,
@@ -2186,6 +2267,7 @@ def test_shop_keeps_rent_perks_when_payment_exists_alongside_waiver(client, teac
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -2198,6 +2280,7 @@ def test_shop_keeps_rent_perks_when_payment_exists_alongside_waiver(client, teac
 
     privilege_store_item = StoreItem(
         teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
         name='Paid + Waived Privilege',
         price=Decimal('50.00'),
         is_active=True,
@@ -2260,9 +2343,11 @@ def test_shop_keeps_rent_perks_when_payment_exists_alongside_waiver(client, teac
     assert resp.status_code == 200
     html = resp.data.decode('utf-8')
 
-    privilege_card = re.search(
-        rf'data-item-id="{privilege_store_item.id}"[^>]*data-has-rent-free-purchase="([^"]+)"',
+    privilege_button = re.search(
+        rf'data-item-id="{privilege_store_item.id}"[^>]*>',
         html,
+        re.DOTALL,
     )
-    assert privilege_card is not None
-    assert privilege_card.group(1) == 'true'
+    assert privilege_button is not None
+    assert 'disabled' in privilege_button.group(0)
+    assert 'Included in your rent!' in html

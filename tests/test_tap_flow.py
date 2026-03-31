@@ -13,13 +13,15 @@ def parse_server_state(html):
     return json.loads(script.string)
 
 def create_claimed_seat(teacher_id, student_id, block, join_code, salt=None):
-    from app.models import TeacherBlock, ClassEconomy
+    from app.models import TeacherBlock, ClassEconomy, Seat
     if salt is None:
         salt = get_random_salt()
 
     # Ensure ClassEconomy exists for FK constraint
-    if not db.session.get(ClassEconomy, join_code):
-        db.session.add(ClassEconomy(join_code=join_code, teacher_id=teacher_id, display_name=f"Class {join_code}"))
+    class_economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+    if not class_economy:
+        class_economy = ClassEconomy(join_code=join_code, teacher_id=teacher_id, display_name=f"Class {join_code}")
+        db.session.add(class_economy)
         db.session.flush()
 
     tb = TeacherBlock(
@@ -36,6 +38,15 @@ def create_claimed_seat(teacher_id, student_id, block, join_code, salt=None):
         is_claimed=True
     )
     db.session.add(tb)
+    db.session.flush()
+
+    db.session.add(Seat(
+        student_id=student_id,
+        class_id=class_economy.class_id,
+        join_code=join_code,
+        block=block,
+        role="student",
+    ))
     return tb
 
 def test_dynamic_blocks_and_tap_flow(client):

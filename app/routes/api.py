@@ -38,6 +38,7 @@ from app.routes.student import (
 )
 from app.utils.economy_policy import resolve_class_scope, resolve_feature_class
 from app.utils.overdraft import charge_overdraft_fee_if_needed
+from app.utils.seat_scope import get_seat_ids_for_student_join
 from app.utils.transaction_idempotency import (
     MAX_IDEMPOTENCY_KEY_LENGTH,
     create_idempotent_transaction,
@@ -372,6 +373,7 @@ def purchase_item():
     join_code = context['join_code']
     teacher_id = context['teacher_id']
     current_block = context.get('block', '').strip().upper()
+    seat_ids = get_seat_ids_for_student_join(student.id, join_code)
     purchase_idempotency_key = None
     if client_purchase_id:
         purchase_idempotency_key = purchase_transaction_key(
@@ -444,6 +446,7 @@ def purchase_item():
                 current_block,
                 join_code,
                 coverage_due_date,
+                seat_ids=seat_ids,
             )
 
         rent_item_links = RentItem.query.filter(
@@ -495,6 +498,7 @@ def purchase_item():
                     current_block,
                     join_code,
                     coverage_due_date,
+                    seat_ids=seat_ids,
                 )
 
                 # Student is late if they haven't fully settled the coverage period

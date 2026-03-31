@@ -2,7 +2,7 @@
 from datetime import datetime, timezone, timedelta
 import pytest
 from app.extensions import db
-from app.models import Admin, ClassEconomy, ClassMembership, Student, Transaction, TransactionStatus, StoreItem, StudentItem, IssueCategory, Issue
+from app.models import Admin, ClassEconomy, ClassMembership, Student, Transaction, TransactionStatus, StoreItem, StudentItem, IssueCategory, Issue, TeacherBlock, Seat
 
 def _login_admin(client, admin_id):
     with client.session_transaction() as sess:
@@ -151,6 +151,36 @@ def test_file_claim_scoped_to_class(client):
         ClassMembership(join_code="CLAIM_B", admin_id=admin.id, role="admin"),
         ClassMembership(join_code="CLAIM_A", student_id=student.id, role="student"),
         ClassMembership(join_code="CLAIM_B", student_id=student.id, role="student"),
+    ])
+    db.session.flush()
+
+    class_a = ClassEconomy.query.filter_by(join_code="CLAIM_A").first()
+    class_b = ClassEconomy.query.filter_by(join_code="CLAIM_B").first()
+    db.session.add_all([
+        TeacherBlock(
+            teacher_id=admin.id,
+            block="A",
+            first_name="Claimer",
+            last_initial="S",
+            salt=b"salt",
+            first_half_hash="claim-a-hash",
+            join_code="CLAIM_A",
+            student_id=student.id,
+            is_claimed=True,
+        ),
+        TeacherBlock(
+            teacher_id=admin.id,
+            block="B",
+            first_name="Claimer",
+            last_initial="S",
+            salt=b"salt",
+            first_half_hash="claim-b-hash",
+            join_code="CLAIM_B",
+            student_id=student.id,
+            is_claimed=True,
+        ),
+        Seat(student_id=student.id, class_id=class_a.class_id, join_code="CLAIM_A", block="A", role="student"),
+        Seat(student_id=student.id, class_id=class_b.class_id, join_code="CLAIM_B", block="B", role="student"),
     ])
     db.session.flush()
 
