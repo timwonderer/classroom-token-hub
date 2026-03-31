@@ -9,6 +9,7 @@
 
 - **[Architecture Guide](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)** - System design and patterns
 - **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)** - Current data models and transitional compatibility notes
+- **[Class Scope Normalization Target](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-014_Class_Scope_Normalization_Target.md)** - Deferred post-port target for `class_id`-first internal scoping
 - **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)** - Runtime contract for public, student, and admin APIs
 - **[v2 Main Reconciliation Tracker](docs/development/V2_MAIN_RECONCILIATION_TRACKER.md)** - `origin/main` features not yet reconciled into `codex/v2.0`
 - **[v2 Launch Readiness Matrix](docs/development/V2_LAUNCH_READINESS_MATRIX.md)** - Current launch blockers and readiness status
@@ -77,6 +78,7 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 - Broader historical audit cleanup and supersession notes.
 - Lower-priority guide refreshes where wording is stale but not dangerous.
 - Compatibility shim reduction for legacy aliases that still exist only to ease migration or testing.
+- Class-scope normalization project to move internal scoping from `join_code` to `class_id`.
 
 ## v2.0 Technical Direction
 

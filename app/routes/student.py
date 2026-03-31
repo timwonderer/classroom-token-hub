@@ -25,7 +25,7 @@ from app.extensions import db, limiter
 from app.models import (
     Student, Transaction, TransactionStatus, TapEvent, StoreItem, StoreItemBlock, StudentItem,
     RentSettings, RentPayment, InsurancePolicy, StudentInsurance, InsuranceClaim,
-    BankingSettings, UserReport, FeatureSettings, Issue, Seat, User
+    BankingSettings, UserReport, FeatureSettings, Issue, Seat, User, _quantize_currency
 )
 from app.auth import (
     admin_required,
@@ -2716,6 +2716,7 @@ def shop():
                     join_code,
                     coverage_due_date,
                     seat_ids=seat_ids,
+                    include_waivers=False,
                 )
 
             rent_store_items = RentItem.query.filter(
@@ -3621,12 +3622,14 @@ def rent():
         late_fee = settings.late_fee
 
     total_due = settings.rent_amount + late_fee if rent_is_active else Decimal('0.00')
+    active_waiver = _get_active_rent_waiver(student.id, join_code, payment_due_date) if payment_due_date else None
     is_paid = total_paid >= total_due if rent_is_active else False
     is_late = now > grace_end_date_for_status and not is_paid if rent_is_active else False
     remaining_amount = max(Decimal('0.00'), total_due - total_paid) if rent_is_active else Decimal('0.00')
 
     period_status[current_block] = {
         'is_paid': is_paid,
+        'is_waived': bool(active_waiver and total_paid <= Decimal('0.00')),
         'is_late': is_late,
         'payments': payments,
         'total_paid': total_paid,
@@ -3634,7 +3637,8 @@ def rent():
         'remaining_amount': remaining_amount,
         'late_fee': late_fee,
         'rent_is_active': rent_is_active,
-        'is_preview_period': is_preview_period
+        'is_preview_period': is_preview_period,
+        'waiver': active_waiver,
     }
 
     # Get scoped balances for this class only
@@ -3648,6 +3652,43 @@ def rent():
     ).order_by(
         RentPayment.payment_date.desc()
     ).limit(24).all()  # Increased to show more history with multiple periods
+
+    waiver_history = []
+    if settings:
+        waiver_rows = [
+            waiver for waiver in getattr(student, 'rent_waivers', [])
+            if waiver.join_code == join_code or waiver.join_code is None
+        ]
+        waiver_history = _expand_rent_waiver_history(settings, waiver_rows, now=now)
+
+    payment_history_rows = []
+    for payment in payment_history:
+        payment_history_rows.append({
+            'period_month': payment.period_month,
+            'period_year': payment.period_year,
+            'amount_paid': payment.amount_paid,
+            'recorded_at': payment.payment_date,
+            'status_text': (
+                f"Paid late with fee of ${payment.late_fee_charged:.2f}"
+                if payment.was_late else "On Time"
+            ),
+            'entry_type': 'payment',
+        })
+
+    for waiver_entry in waiver_history:
+        payment_history_rows.append({
+            'period_month': waiver_entry['coverage_due_date'].month,
+            'period_year': waiver_entry['coverage_due_date'].year,
+            'amount_paid': None,
+            'recorded_at': waiver_entry['created_at'] or waiver_entry['coverage_due_date'],
+            'status_text': waiver_entry['status_label'],
+            'entry_type': 'waiver',
+        })
+
+    payment_history_rows.sort(
+        key=lambda row: ensure_utc(row['recorded_at']) if row.get('recorded_at') else now,
+        reverse=True,
+    )
 
     # Get rent items for this setting to show what rent includes
     from app.models import RentItem
@@ -3675,7 +3716,7 @@ def rent():
                           grace_end_date=grace_end_date,
                           grace_end_date_for_status=grace_end_date_for_status,  # Add grace date for the payment period
                           preview_start_date=preview_start_date,
-                          payment_history=payment_history,
+                          payment_history=payment_history_rows,
                           rent_items=rent_items,
                           days_until_due=days_until_due)
 
@@ -3810,10 +3851,10 @@ def rent_pay(period):
         late_fee = settings.late_fee
 
     # Total amount due (rent + late fee if applicable)
-    total_due = settings.rent_amount + late_fee
+    total_due = _quantize_currency(settings.rent_amount + late_fee)
 
     # Calculate remaining amount to pay
-    remaining_amount = total_due - total_paid_so_far
+    remaining_amount = _quantize_currency(total_due - total_paid_so_far)
 
     # Check if already fully paid
     if remaining_amount <= 0:
@@ -3826,7 +3867,6 @@ def rent_pay(period):
     # Determine payment amount based on incremental setting
     if settings.allow_incremental_payment and payment_amount_input:
         try:
-            from app.models import _quantize_currency
             payment_amount = _quantize_currency(payment_amount_input)
             # Validate payment amount
             if payment_amount <= Decimal('0'):
@@ -3911,9 +3951,9 @@ def rent_pay(period):
     if is_late and late_fee > Decimal('0.00'):
         # If this is a partial payment, allocate late fee proportionally
         if is_partial:
-            late_fee_for_this_payment = (payment_amount / total_due) * late_fee
+            late_fee_for_this_payment = _quantize_currency((payment_amount / total_due) * late_fee)
         else:
-            late_fee_for_this_payment = late_fee
+            late_fee_for_this_payment = _quantize_currency(late_fee)
 
     # Record rent payment with coverage period (pre-paid system)
     payment = RentPayment(

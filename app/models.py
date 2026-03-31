@@ -758,6 +758,49 @@ class ClassEconomy(db.Model):
     )
     created_by_admin = db.relationship('Admin', foreign_keys=[created_by_admin_id])
 
+    @property
+    def status(self):
+        return "active"
+
+    @status.setter
+    def status(self, _value):
+        return None
+
+
+class EconomySnapshot(db.Model):
+    """Frozen economy analysis payload scoped to a class join code."""
+    __tablename__ = 'economy_snapshot'
+
+    id = db.Column(db.Integer, primary_key=True)
+    join_code = db.Column(
+        db.String(20),
+        db.ForeignKey('class_economies.join_code', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    policy_mode = db.Column(db.String(20), nullable=False, default='default')
+    pay_rate = db.Column(db.Numeric(precision=12, scale=4), nullable=False)
+    expected_hours = db.Column(db.Numeric(precision=8, scale=2), nullable=False)
+    weekly_cwi = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+    effective_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+
+    rent_min = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+    rent_recommended = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+    rent_max = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+
+    insurance_weekly_min = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+    insurance_weekly_recommended = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+    insurance_weekly_max = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+
+    store_tier_min = db.Column(db.JSON, nullable=False)
+    store_tier_max = db.Column(db.JSON, nullable=False)
+    analysis_payload = db.Column(db.JSON, nullable=True)
+
+    economy = db.relationship(
+        'ClassEconomy',
+        backref=db.backref('economy_snapshots', lazy='dynamic', passive_deletes=True),
+    )
+
 
 class ClassMembership(db.Model):
     """Represents a teacher or student membership in a class economy."""
@@ -877,6 +920,7 @@ class Transaction(db.Model):
     effective_at = db.Column(db.DateTime(timezone=True), default=utc_now)
 
     description = db.Column(db.String(255))
+    idempotency_key = db.Column(db.String(128), nullable=True, unique=True, index=True)
     is_void = db.Column(db.Boolean, default=False)
     # References for compensating/reversal ledger entries.
     # Stored as IDs to keep compatibility simple across backends/migrations.
@@ -1403,6 +1447,14 @@ class RentWaiver(db.Model):
     student = db.relationship('Student', backref='rent_waivers')
     seat = db.relationship('Seat', backref='rent_waivers')
     created_by = db.relationship('Admin', backref='rent_waivers_created')
+
+    @property
+    def created_by_admin_id(self):
+        return self.created_by_teacher_id
+
+    @created_by_admin_id.setter
+    def created_by_admin_id(self, value):
+        self.created_by_teacher_id = value
 
 
 @sa.event.listens_for(HallPassLog, "before_insert")

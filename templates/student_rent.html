@@ -62,7 +62,7 @@
 {% set card_border = "border-success" %}
 {% set card_header_bg = "bg-success text-white" %}
 {% set status_icon = "check_circle" %}
-{% set status_text = "Paid" %}
+{% set status_text = "Waived" if status.is_waived else "Paid" %}
 {% elif status.is_late or (days_until_due is not none and days_until_due < 0) %} {# Past due status: status.is_late is
     authoritative (checks grace period), days_until_due < 0 is a fallback visual indicator for overdue bills #} {% set
     card_border="border-dark" %} {% set card_header_bg="bg-dark text-white" %} {% set status_icon="cancel" %} {% set
@@ -133,9 +133,9 @@
             <p class="mb-0">
                 {{ payment_due_date.strftime('%B %d, %Y') }}
                 {% if status.is_late %}
-                <span class="badge bg-danger ms-2">OVERDUE</span>
+                <span class="text-danger fw-semibold ms-2">Overdue</span>
                 {% elif status.is_preview_period %}
-                <span class="badge bg-info ms-2">Preview Period</span>
+                <span class="text-info fw-semibold ms-2">Preview period</span>
                 {% endif %}
             </p>
         </div>
@@ -153,7 +153,14 @@
 
         {% endif %}
 
-        {% if status.is_paid %}
+        {% if status.is_paid and status.is_waived %}
+        <div class="alert alert-info mb-0">
+            <strong>This rent period has been waived.</strong>
+            {% if status.waiver and status.waiver.reason %}
+            <br>{{ status.waiver.reason }}
+            {% endif %}
+        </div>
+        {% elif status.is_paid %}
         <div class="alert alert-success mb-0">
             <strong>Great work, {{ student.display_first_name }}!</strong>
             {% if status.payments %}
@@ -254,17 +261,16 @@
                         be charged a late fee of <strong>${{ "%.2f"|format(settings.late_fee) }}</strong>
                     </li>
                     <li class="mb-2">
-                        You are {% if settings.allow_incremental_payment %}<span
-                            class="badge bg-success">allowed</span>{% else %}<span class="badge bg-danger">not
-                            allowed</span>{% endif %} to pay your rent in small chunks.
+                        You are {% if settings.allow_incremental_payment %}<strong>allowed</strong>{% else
+                        %}<strong>not allowed</strong>{% endif %} to pay your rent in small chunks.
                     </li>
                     <li class="mb-2">
                         You
                         {% if settings.bill_preview_enabled and settings.bill_preview_days %}
-                        <span class="badge bg-success">can</span> start paying your rent <strong> {{
+                        <strong>can</strong> start paying your rent <strong> {{
                             settings.bill_preview_days }} days </strong> before due date
                         {% else %}
-                        <span class="badge bg-danger">cannot</span> pay your rent until the due date.
+                        <strong>cannot</strong> pay your rent until the due date.
                         {% endif %}
                     </li>
                 </ul>
@@ -288,8 +294,8 @@
                         <tr>
                             <th>Period</th>
                             <th>Month/Year</th>
-                            <th>Amount Paid</th>
-                            <th>Payment Date</th>
+                            <th>Amount</th>
+                            <th>Recorded</th>
                             <th>Status</th>
                         </tr>
                     </thead>
@@ -303,16 +309,15 @@
                                 }}
                                 {{ payment.period_year }}
                             </td>
-                            <td>${{ "%.2f"|format(payment.amount_paid) }}</td>
-                            <td>{{ payment.payment_date.strftime('%b %d, %Y') }}</td>
                             <td>
-                                {% if payment.was_late %}
-                                <span class="badge bg-warning text-dark">Paid late with fee of ${{
-                                    "%.2f"|format(payment.late_fee_charged) }}</span>
+                                {% if payment.entry_type == 'waiver' %}
+                                <span class="text-muted">Waived</span>
                                 {% else %}
-                                <span class="badge bg-success">On Time</span>
+                                ${{ "%.2f"|format(payment.amount_paid) }}
                                 {% endif %}
                             </td>
+                            <td>{{ payment.recorded_at.strftime('%b %d, %Y') if payment.recorded_at else '-' }}</td>
+                            <td>{{ payment.status_text }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

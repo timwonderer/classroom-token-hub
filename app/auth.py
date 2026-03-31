@@ -17,6 +17,7 @@ from app.extensions import db
 # -------------------- SESSION CONFIGURATION --------------------
 
 SESSION_TIMEOUT_MINUTES = 10
+SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES = 60
 
 
 def _table_exists(table_name: str) -> bool:
@@ -59,6 +60,24 @@ def _get_safe_next_path() -> str:
         path = "/" + path
 
     return path
+
+
+def _is_grafana_proxy_subrequest() -> bool:
+    path = request.path or ""
+    return path.startswith("/sysadmin/grafana/") or path == "/sysadmin/grafana/auth-check"
+
+
+def _expire_system_admin_session():
+    session.pop("is_system_admin", None)
+    session.pop("sysadmin_id", None)
+    session.pop("last_activity", None)
+    session.pop("sysadmin_auth_username", None)
+    session.pop("passkey_sysadmin_auth_username", None)
+    session.pop("force_sysadmin_username_migration", None)
+
+
+def _system_admin_timeout_expired(last_activity) -> bool:
+    return (utc_now() - last_activity) > timedelta(minutes=SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES)
 
 
 # -------------------- AUTHENTICATION DECORATORS --------------------
@@ -206,14 +225,19 @@ def system_admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not session.get("is_system_admin"):
+            if _is_grafana_proxy_subrequest():
+                return jsonify({"error": "System administrator access required."}), 401
             flash("System administrator access required.")
             return redirect(url_for('sysadmin.login', next=request.path))
         last_activity = session.get('last_activity')
         now = utc_now()
         if last_activity:
             last_activity = datetime.fromisoformat(last_activity)
-            if now - last_activity > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
-                session.clear()
+            last_activity = last_activity if last_activity.tzinfo else last_activity.replace(tzinfo=utc_now().tzinfo)
+            if _system_admin_timeout_expired(last_activity):
+                _expire_system_admin_session()
+                if _is_grafana_proxy_subrequest():
+                    return jsonify({"error": "Session expired. Please log in again."}), 401
                 flash("Session expired. Please log in again.")
                 return redirect(url_for('sysadmin.login', next=request.path))
         session['last_activity'] = now.isoformat()

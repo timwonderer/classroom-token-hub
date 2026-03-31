@@ -33,7 +33,11 @@ from app.models import (
     HallPassSettings, PayrollFine, PayrollReward,
     PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory, IssueResolutionAction
 )
-from app.auth import system_admin_required, SESSION_TIMEOUT_MINUTES
+from app.auth import (
+    system_admin_required,
+    _expire_system_admin_session,
+    _system_admin_timeout_expired,
+)
 from app.forms import SystemAdminLoginForm, SystemAdminInviteForm
 
 # Import utility functions
@@ -132,10 +136,8 @@ def auth_check():
     if last_activity_str:
         last_activity = datetime.fromisoformat(last_activity_str)
         last_activity = ensure_utc(last_activity)
-        if (utc_now() - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
-            session.pop("is_system_admin", None)
-            session.pop("sysadmin_id", None)
-            session.pop("last_activity", None)
+        if _system_admin_timeout_expired(last_activity):
+            _expire_system_admin_session()
             raise Unauthorized("Session expired")
 
     # Update activity to keep session alive.
@@ -143,7 +145,7 @@ def auth_check():
     return ("", 204)
 
 @sysadmin_bp.route('/login', methods=['GET', 'POST'])
-@limiter.limit("10 per minute")
+@limiter.limit("10 per minute", methods=["POST"])
 def login():
     """System admin login with TOTP authentication."""
     session.pop("is_system_admin", None)
@@ -1410,8 +1412,6 @@ def grafana_auth_check():
     Exempt from rate limiting to prevent blocking Grafana's multiple auth checks per page.
     """
     from flask import Response
-    from datetime import datetime, timedelta, timezone
-    from app.auth import SESSION_TIMEOUT_MINUTES
     from app.models import SystemAdmin
 
     # Check if user is logged in as system admin
@@ -1423,8 +1423,8 @@ def grafana_auth_check():
     if last_activity_str:
         last_activity = datetime.fromisoformat(last_activity_str)
         last_activity = ensure_utc(last_activity)
-        if (utc_now() - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
-            session.clear()
+        if _system_admin_timeout_expired(last_activity):
+            _expire_system_admin_session()
             return Response('Unauthorized: Session expired', 401)
 
     # Update activity to keep session alive
@@ -1434,7 +1434,7 @@ def grafana_auth_check():
     sysadmin = db.session.get(SystemAdmin, session.get('sysadmin_id'))
     if not sysadmin:
         # Admin was deleted but session still exists
-        session.clear()
+        _expire_system_admin_session()
         return Response('Unauthorized', 401)
 
     # Sanitize username for header (prevent response splitting)
