@@ -9,8 +9,9 @@ import pyotp
 from datetime import datetime, timezone
 
 from app import db
-from app.models import Admin, Student, StudentTeacher, TeacherBlock, SystemAdmin, ClassEconomy
+from app.models import Admin, Student, StudentTeacher, TeacherBlock, SystemAdmin
 from app.hash_utils import get_random_salt, hash_hmac
+from tests.helpers.class_scope import create_class_scope
 
 
 def _create_admin(username: str) -> tuple[Admin, str]:
@@ -50,16 +51,17 @@ def _create_student_with_teacher_block(first_name: str, teacher: Admin, block: s
     # Create StudentTeacher link
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     
-    # Create ClassEconomy for FK constraint
     join_code = f"TEST{teacher.id}{block}"
-    if not db.session.get(ClassEconomy, join_code):
-        economy = ClassEconomy(
+    if not TeacherBlock.query.filter_by(join_code=join_code).first():
+        create_class_scope(
+            teacher=teacher,
             join_code=join_code,
+            student=student,
+            block=block,
             display_name=f'Test Class {teacher.id}{block}',
-            status='active',
-            created_by_admin_id=teacher.id
+            create_teacher_membership=False,
+            create_student_membership=False,
         )
-        db.session.add(economy)
         db.session.flush()
     
     # Create TeacherBlock entry
