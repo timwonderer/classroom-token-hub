@@ -389,6 +389,15 @@
               <!-- Economy Balance Check -->
               <div id="cwi-info" class="mb-3"></div>
               <div id="economy-warnings" class="mb-3"></div>
+              {% if insurance_recommendation %}
+              <div class="alert alert-info small" id="insurance-premium-guidance">
+                Recommended {{ insurance_recommendation.frequency }} premium range:
+                <strong>${{ '%.2f'|format(insurance_recommendation.min) }}-${{ '%.2f'|format(insurance_recommendation.max) }}</strong>.
+                Ideal target:
+                <strong>${{ '%.2f'|format(insurance_recommendation.recommended) }}</strong>.
+                These values are derived from the current CWI of ${{ '%.2f'|format(insurance_recommendation.cwi) }}/week.
+              </div>
+              {% endif %}
 
               <!-- SIMPLE MODE -->
               <div id="simpleModeFields">

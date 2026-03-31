@@ -15,10 +15,26 @@ if [ ! -d "migrations" ]; then
     exit 0
 fi
 
+# Resolve a Python interpreter that matches the project environment.
+PYTHON_BIN=""
+if [ -n "${VIRTUAL_ENV:-}" ] && [ -x "${VIRTUAL_ENV}/bin/python" ]; then
+    PYTHON_BIN="${VIRTUAL_ENV}/bin/python"
+elif [ -x "venv/bin/python" ]; then
+    PYTHON_BIN="venv/bin/python"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_BIN="$(command -v python)"
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN="$(command -v python3)"
+else
+    echo "⚠️  Warning: no Python interpreter found, skipping migration head check"
+    exit 0
+fi
+
 echo "🔍 Checking for multiple migration heads..."
+echo "   Using Python: ${PYTHON_BIN}"
 
 # Check for multiple heads using Python
-python3 << 'PYTHON_SCRIPT'
+"${PYTHON_BIN}" << 'PYTHON_SCRIPT'
 import sys
 import os
 
@@ -51,7 +67,7 @@ try:
         print(f"✓ Migration heads check passed ({len(heads)} head)")
 
 except ImportError:
-    print("⚠️  Warning: alembic not installed, skipping migration head check")
+    print(f"⚠️  Warning: alembic not installed in {sys.executable}, skipping migration head check")
     sys.exit(0)
 except Exception as e:
     print(f"⚠️  Warning: Could not check migration heads: {e}")

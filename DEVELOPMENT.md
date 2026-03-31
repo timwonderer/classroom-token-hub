@@ -1,6 +1,6 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-30
 **Current Released Version:** 1.9.0
 **Engineering State:** v2.0 live-test candidate
 **Active Integration Branch:** `codex/v2.0`
@@ -35,8 +35,9 @@ Run once after clone:
 
 This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch-aware DB switching:
 
-- Protected v2 branch: `codex/v2.0` -> `classroom_economy`
+- V2 branches matching `codex/v2.0` or `codex/v2-*` -> `classroom_economy`
 - All other branches -> `production_dev`
+- The switching scripts refuse to overwrite a non-local `DATABASE_URL`, to reduce the chance of pointing local dev work at a deployed production database
 
 ## Current v2.0 State
 
@@ -48,6 +49,8 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 - Branch consolidation is complete: prior merge-prep branches were folded into `codex/v2.0` and pruned.
 - Migration heads are resolved in repo with `e8f1a2b3c4d5_merge_remaining_v2_heads.py`.
 - Full-suite validation succeeded on the PostgreSQL test database.
+- Economy policy scheduling, rebalance timing, rent-cycle locking, and penalty-reversal corrections have landed on `codex/v2.0`.
+- Pricing recommendation logic is now centralized in `app/utils/economy_policy.py`, with the checker, rebalance preview, economy APIs, and insurance setup/edit pages consuming that shared source instead of duplicating pricing math.
 - Main-branch feature divergence is now tracked in `docs/development/V2_MAIN_RECONCILIATION_TRACKER.md`.
 
 ### Required Before Live Testing
@@ -56,6 +59,8 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 - Refresh migration-compliance status so current exceptions are explicit and not buried in historical audit language.
 - Rehearse migration upgrade flow on the v2 dev database with operator-facing verification steps.
 - Complete smoke-route checklist and confirm it can be executed by someone who did not author the branch.
+- Remove or supersede stale docs that still imply deleted branches or legacy TeacherBlock fallback plans.
+- Finish the remaining live-test economy deltas: transaction idempotency, waiver/perk suppression, settlement handling, and related sysadmin logging fixes.
 - Port launch-critical `origin/main` deltas called out in the v2 reconciliation tracker.
 - Close active-doc issues still marked open in `docs/development/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`.
 

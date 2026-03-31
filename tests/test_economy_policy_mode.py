@@ -22,7 +22,12 @@ from app.routes.student import (
     _is_coverage_period_paid,
 )
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
-from app.utils.economy_policy import get_feature_settings_row
+from app.utils.economy_policy import (
+    convert_weekly_amount_to_frequency,
+    get_feature_settings_row,
+    get_insurance_premium_recommendation,
+    get_price_recommendation_context,
+)
 from app.utils.economy_rebalance import (
     REBALANCE_ACTIVATION_NEXT_RENEWAL,
     activate_due_rebalances,
@@ -180,6 +185,62 @@ def test_comfortable_policy_uses_requested_ratio_profile(client):
     assert recommendations['insurance_period_cap']['multiplier_max'] == 12.0
     assert recommendations['insurance_waiting_period_days']['min'] == 3
     assert recommendations['insurance_waiting_period_days']['max'] == 7
+
+
+def test_insurance_premium_recommendation_matches_checker_output(client):
+    admin, payroll_settings, _, _ = _create_admin_with_block()
+
+    checker = EconomyBalanceChecker(admin.id, 'A', policy_mode='default')
+    analysis = checker.analyze_economy(payroll_settings)
+    recommendation = get_insurance_premium_recommendation(
+        'default',
+        Decimal(str(analysis.cwi.cwi)),
+        frequency='monthly',
+    )
+
+    assert recommendation is not None
+    assert recommendation['min_weekly'] == Decimal(str(analysis.recommendations['insurance_premium_weekly']['min'])).quantize(Decimal('0.01'))
+    assert recommendation['max_weekly'] == Decimal(str(analysis.recommendations['insurance_premium_weekly']['max'])).quantize(Decimal('0.01'))
+    assert recommendation['recommended_weekly'] == Decimal(str(analysis.recommendations['insurance_premium_weekly']['recommended'])).quantize(Decimal('0.01'))
+    assert recommendation['min'] == Decimal('16.31')
+    assert recommendation['max'] == Decimal('39.13')
+    assert recommendation['recommended'] == Decimal('26.09')
+
+
+def test_price_recommendation_context_centralizes_policy_output(client):
+    context = get_price_recommendation_context('comfortable', Decimal('50.00'))
+
+    assert context is not None
+    assert context['policy_mode'] == 'comfortable'
+    assert context['rent_weekly']['recommended'] == 28.75
+    assert context['rent']['recommended'] == 125.01
+    assert context['insurance_premium_weekly']['recommended'] == 3.5
+    assert context['insurance_coverage']['multiplier_recommended'] == 5.0
+    assert context['store_tiers']['premium']['max'] == 9.0
+
+
+def test_convert_weekly_amount_to_frequency_supports_custom_schedules(client):
+    assert convert_weekly_amount_to_frequency(Decimal('10.00'), 'weekly') == Decimal('10.00')
+    assert convert_weekly_amount_to_frequency(Decimal('10.00'), 'monthly') == Decimal('43.48')
+    assert convert_weekly_amount_to_frequency(
+        Decimal('10.00'),
+        'custom',
+        custom_frequency_value=2,
+        custom_frequency_unit='weeks',
+    ) == Decimal('20.00')
+
+
+def test_edit_insurance_policy_renders_shared_recommendation_text(client):
+    admin, _, _, _ = _create_admin_with_block()
+    policy = _create_insurance_policy(admin.id, 'Coverage', Decimal('40.00'), block='A')
+    _login_admin(client, admin.id)
+
+    response = client.get(f'/admin/insurance/edit/{policy.id}')
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'Keep monthly premium costs in the $16.31-$39.13 range.' in html
+    assert 'Ideal target: $26.09' in html
 
 
 def test_update_economy_policy_creates_block_scoped_settings(client):

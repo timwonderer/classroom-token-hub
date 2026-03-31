@@ -101,9 +101,13 @@ The initial implementation shall support rebalance previews and updates for:
 - rent amount
 - insurance premiums
 
-### 2. Checker Dependency
+### 2. Recommendation Source of Truth
 
-The rebalance preview shall consume `EconomyBalanceChecker` outputs. No duplicate ratio calculator shall be introduced in the UI layer.
+All recommendation math for rebalance preview, insurance premium guidance, rent guidance, store guidance, and API recommendation payloads shall originate from `app/utils/economy_policy.py`.
+
+`EconomyBalanceChecker` may expose recommendation payloads, but it shall do so by delegating to the shared economy-policy helper rather than recomputing ratios locally.
+
+Routes and templates shall not contain independent pricing formulas. Templates may render backend-provided recommendation values only.
 
 ### 3. Activation Timing
 
