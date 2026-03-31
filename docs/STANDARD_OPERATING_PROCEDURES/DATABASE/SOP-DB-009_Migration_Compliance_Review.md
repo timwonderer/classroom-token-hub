@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-009       | 1.2     | 2026-03-30     | 1.1        | Normative       |
+| SOP-DB-009       | 1.3     | 2026-03-31     | 1.2        | Normative       |
 
 **Branch:** `codex/v2.0`
 **Status:** Current-state readiness summary for v2 live testing
@@ -36,11 +36,16 @@ The earlier migration-compliance audit remains historically useful, but it shoul
   - `flask db current` -> `q9r0s1t2u3v4 (head)`
   - `DATABASE_URL=<team-dev-migration-db-url> flask db upgrade` completed without revision drift
 
-### Currently Blocking
+### Current Validation Baseline
 
-- The latest PostgreSQL validation run on 2026-03-30 did not pass:
-  - `543 passed, 102 failed, 63 errors, 1 skipped`
-- Manual smoke-route execution and operator sign-off should remain blocked until the automated validation failures are triaged and the test baseline is restored.
+- The latest PostgreSQL validation run on 2026-03-31 passed:
+  - `708 passed, 1 skipped`
+- Repository-side blocker triage is complete for the current branch state.
+
+### Still Blocking Final Operational Closure
+
+- Manual smoke-route execution still requires the named operator and independent verifier record from the live-test rehearsal.
+- Final Thread 3 closure still depends on the adjacent launch threads landing and validating cleanly.
 
 ### Still Important
 
@@ -52,9 +57,8 @@ The earlier migration-compliance audit remains historically useful, but it shoul
 
 ### Required Before Live Testing
 
-- Re-run the PostgreSQL test suite on the team-configured test database after the current failures are triaged.
 - Capture named operator confirmation and independent verifier confirmation in the rehearsal record.
-- Execute the smoke-route checklist from the v2 live-test runbook after automated validation is green again.
+- Execute the smoke-route checklist from the v2 live-test runbook and record the result now that automated validation is green again.
 
 ### Required Before Production
 
