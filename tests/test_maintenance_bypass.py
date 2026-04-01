@@ -1,13 +1,21 @@
 import os
+from pathlib import Path
+from dotenv import dotenv_values
 import pytest
 from app import create_app
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DOTENV_PATH = PROJECT_ROOT / ".env"
+TEST_DATABASE_URL = dotenv_values(DOTENV_PATH).get("TEST_DATABASE_URL") or os.environ.get("TEST_DATABASE_URL")
+if not TEST_DATABASE_URL:
+    raise RuntimeError("TEST_DATABASE_URL must be set in .env for maintenance tests.")
+
 REQUIRED_ENV = {
     'SECRET_KEY': 'test-secret',
-    'DATABASE_URL': 'sqlite:///:memory:',
+    'DATABASE_URL': TEST_DATABASE_URL,
     'FLASK_ENV': 'testing',
-    'ENCRYPTION_KEY': 'x' * 32,
-    'PEPPER_KEY': 'y' * 32,
+    'ENCRYPTION_KEY': 'jhe53bcYZI4_MZS4Kb8hu8-xnQHHvwqSX8LN4sDtzbw=',
+    'PEPPER_KEY': 'tKiXIAgaPqsOOhR1PqvdEQo4BelrN5SP3cpWxVYrsHk=',
 }
 
 

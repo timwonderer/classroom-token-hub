@@ -1,22 +1,11 @@
 import pytest
-from app import app, db, Student, TapEvent, Transaction
+from app import db, Student, TapEvent, Transaction
 from app.payroll import calculate_payroll
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 # Tolerance for floating point comparisons
 FLOAT_TOLERANCE = 0.0001
-
-@pytest.fixture
-def client():
-    app.config['TESTING'] = True
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-    with app.test_client() as client:
-        with app.app_context():
-            db.create_all()
-            yield client
-            db.drop_all()
-
 
 @pytest.fixture
 def test_teacher(client):

@@ -1,15 +1,23 @@
-
 import os
+from pathlib import Path
+from dotenv import dotenv_values
 from app import create_app, db
 from app.models import Admin, TeacherBlock
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DOTENV_PATH = PROJECT_ROOT / ".env"
+TEST_DATABASE_URL = dotenv_values(DOTENV_PATH).get("TEST_DATABASE_URL") or os.environ.get("TEST_DATABASE_URL")
+if not TEST_DATABASE_URL:
+    raise RuntimeError("TEST_DATABASE_URL must be set in .env for verification tests.")
 
 # Set required environment variables for testing
 os.environ['FLASK_ENV'] = 'testing'
 os.environ.setdefault('SECRET_KEY', 'test_secret')
-os.environ.setdefault('DATABASE_URL', 'sqlite:///:memory:') # Use in-memory DB for safety
+os.environ['DATABASE_URL'] = TEST_DATABASE_URL
 os.environ.setdefault('TURNSTILE_SITE_KEY', 'test')
 os.environ.setdefault('TURNSTILE_SECRET_KEY', 'test')
-os.environ.setdefault('ENCRYPTION_KEY', 'test_key_must_be_32_bytes_long_exact!!')
+os.environ.setdefault('ENCRYPTION_KEY', 'jhe53bcYZI4_MZS4Kb8hu8-xnQHHvwqSX8LN4sDtzbw=')
+os.environ.setdefault('PEPPER_KEY', 'tKiXIAgaPqsOOhR1PqvdEQo4BelrN5SP3cpWxVYrsHk=')
 
 def test_onboarding_status_no_class_period_fix():
     """

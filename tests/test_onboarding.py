@@ -1,36 +1,10 @@
 import pytest
 
 pytestmark = [pytest.mark.critical, pytest.mark.regression]
-import os
-from cryptography.fernet import Fernet
-
-# Set env before importing app or running tests
-os.environ["FLASK_ENV"] = "testing"
-
 import json
 from datetime import datetime, timezone
-from app import create_app, db
+from app import db
 from app.models import Admin, TeacherOnboarding
-
-@pytest.fixture
-def client():
-    # Ensure env vars are set for testing
-    os.environ["FLASK_ENV"] = "testing"
-    os.environ["SECRET_KEY"] = "test_secret"
-    os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-    os.environ["ENCRYPTION_KEY"] = Fernet.generate_key().decode()
-    os.environ["PEPPER_KEY"] = "test_pepper"
-
-    app = create_app()
-    app.config['TESTING'] = True
-    app.config['WTF_CSRF_ENABLED'] = False # Disable CSRF for tests usually, but here we might want to test it or bypass it
-
-    with app.test_client() as client:
-        with app.app_context():
-            db.create_all()
-            yield client
-            db.session.remove()
-            db.drop_all()
 
 def login_admin(client, username='admin'):
     # Create admin if not exists

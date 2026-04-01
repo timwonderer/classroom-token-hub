@@ -3,25 +3,9 @@ Tests for the attendance log page to ensure it renders with proper context.
 """
 import pytest
 from datetime import datetime, timezone
-from app import app, db
+from app import db
 from app.models import Admin, Student, TapEvent, StudentTeacher
 from app.hash_utils import hash_username, get_random_salt
-
-
-@pytest.fixture
-def client():
-    """Create a test client with a test database."""
-    app.config['TESTING'] = True
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-    app.config['WTF_CSRF_ENABLED'] = False
-    
-    with app.test_client() as client:
-        with app.app_context():
-            db.create_all()
-            yield client
-            db.session.remove()
-            db.drop_all()
-
 
 @pytest.fixture
 def admin_with_data(client):

@@ -17,6 +17,7 @@ if not test_database_url:
 # Override env vars for testing
 os.environ["SECRET_KEY"] = "test-secret"
 os.environ["TEST_DATABASE_URL"] = test_database_url
+os.environ["DATABASE_URL"] = test_database_url
 os.environ["FLASK_ENV"] = "testing"
 os.environ["PEPPER_KEY"] = "test-primary-pepper"
 os.environ["PEPPER_LEGACY_KEYS"] = "legacy-pepper"
@@ -32,15 +33,89 @@ os.environ.setdefault("PEPPER_KEY", "tKiXIAgaPqsOOhR1PqvdEQo4BelrN5SP3cpWxVYrsHk
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pytest
-from sqlalchemy import event, text
+from sqlalchemy import event, inspect, text
+from sqlalchemy.exc import IntegrityError
 from app import app as flask_app, db, Student
 from app.extensions import limiter
+
+_POSTGRES_SCHEMA_READY = False
 
 
 def _set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
+
+
+def _reset_database_state():
+    """Ensure the Postgres test schema exists, then clear table contents."""
+    import app.models  # Ensure model metadata is registered before create_all().
+
+    global _POSTGRES_SCHEMA_READY
+    db.session.remove()
+    dialect = db.engine.dialect.name
+
+    if dialect == "postgresql":
+        if not _POSTGRES_SCHEMA_READY:
+            with db.engine.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        SELECT pg_terminate_backend(pid)
+                        FROM pg_stat_activity
+                        WHERE datname = current_database()
+                          AND pid <> pg_backend_pid()
+                        """
+                    )
+                )
+                conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+                conn.execute(text("CREATE SCHEMA public"))
+                enum_rows = conn.execute(
+                    text(
+                        """
+                        SELECT t.typname
+                        FROM pg_type AS t
+                        JOIN pg_namespace AS n ON n.oid = t.typnamespace
+                        WHERE t.typtype = 'e' AND n.nspname = 'public'
+                        """
+                    )
+                )
+                for row in enum_rows:
+                    conn.execute(text(f'DROP TYPE IF EXISTS "{row.typname}" CASCADE'))
+            db.engine.dispose()
+            try:
+                db.create_all()
+            except IntegrityError:
+                db.session.remove()
+                with db.engine.begin() as conn:
+                    enum_rows = conn.execute(
+                        text(
+                            """
+                            SELECT t.typname
+                            FROM pg_type AS t
+                            JOIN pg_namespace AS n ON n.oid = t.typnamespace
+                            WHERE t.typtype = 'e' AND n.nspname = 'public'
+                            """
+                        )
+                    )
+                    for row in enum_rows:
+                        conn.execute(text(f'DROP TYPE IF EXISTS "{row.typname}" CASCADE'))
+                db.engine.dispose()
+                db.create_all()
+            _POSTGRES_SCHEMA_READY = True
+
+        with db.engine.begin() as conn:
+            existing_tables = inspect(conn).get_table_names(schema="public")
+            for table_name in existing_tables:
+                try:
+                    conn.execute(text(f'TRUNCATE TABLE public."{table_name}" RESTART IDENTITY CASCADE'))
+                except Exception:
+                    continue
+        return
+
+    db.create_all()
+    db.drop_all()
+    db.create_all()
 
 
 @pytest.fixture
@@ -60,8 +135,7 @@ def app():
     
     # Ensure strict separation - if connection fails, test fails
     with flask_app.app_context():
-        db.drop_all()
-        db.create_all()
+        _reset_database_state()
 
     yield flask_app
 
@@ -75,19 +149,13 @@ def client(app):
     ctx = app.app_context()
     ctx.push()
     
-    # Create all tables for the test
-    db.session.remove()
-    db.drop_all()
-    db.create_all()
     limiter.reset()
     
     client = flask_app.test_client()
     yield client
     
-    # Teardown: Drop all tables after test
     limiter.reset()
     db.session.remove()
-    db.drop_all()
     ctx.pop()
 
 
