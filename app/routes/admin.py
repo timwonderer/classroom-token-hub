@@ -5040,7 +5040,6 @@ def add_individual_student():
                     current_admin_id = session.get("admin_id")
 
                     # Check if this teacher is already linked to this student
-                    from app.models import StudentTeacher
                     existing_link = StudentTeacher.query.filter_by(
                         student_id=existing_student.id,
                         teacher_id=current_admin_id
@@ -5071,7 +5070,7 @@ def add_individual_student():
 
         db.session.add(new_student)
         db.session.flush()
-        _link_student_to_admin(new_student, current_admin_id)
+        db.session.add(StudentTeacher(student_id=new_student.id, teacher_id=current_admin_id))
         
         # Ensure ClassEconomy record exists before creating TeacherBlock
         _ensure_join_code_anchors(current_admin_id, join_code)
@@ -5199,7 +5198,6 @@ def add_manual_student():
                         existing_student.first_half_hash = canonical_hash
                     flash(f"Student {first_name} {last_name} already exists. Linking to your class.", "warning")
                     # Link to this teacher
-                    from app.models import StudentTeacher
                     current_admin_id = session.get("admin_id")
                     existing_link = StudentTeacher.query.filter_by(
                         student_id=existing_student.id,
@@ -5240,7 +5238,7 @@ def add_manual_student():
 
         db.session.add(new_student)
         db.session.flush()
-        _link_student_to_admin(new_student, current_admin_id)
+        db.session.add(StudentTeacher(student_id=new_student.id, teacher_id=current_admin_id))
         
         # Ensure ClassEconomy record exists before creating TeacherBlock
         _ensure_join_code_anchors(current_admin_id, join_code)

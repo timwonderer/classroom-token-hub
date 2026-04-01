@@ -1,7 +1,17 @@
 from datetime import datetime, timezone
 
 from app.extensions import db
-from app.models import Admin, ClassEconomy, Issue, IssueCategory, PayrollSettings, StoreItem, Student
+from app.models import (
+    Admin,
+    ClassEconomy,
+    Issue,
+    IssueCategory,
+    PayrollSettings,
+    StoreItem,
+    Student,
+    StudentTeacher,
+    TeacherBlock,
+)
 from tests.helpers.class_scope import create_class_scope
 
 
@@ -159,6 +169,98 @@ def test_add_individual_student_requires_current_class_context(client):
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/admin/students")
     assert db.session.query(Student).count() == initial_student_count
+
+
+def test_add_individual_student_creates_single_teacher_block_for_new_student(client):
+    admin = Admin(username="student_single_tb_admin", totp_secret="secret")
+    db.session.add(admin)
+    db.session.flush()
+
+    create_class_scope(
+        teacher=admin,
+        join_code="SING001",
+        block="A",
+        teacher_block_teacher=admin,
+        teacher_block_claimed=False,
+    )
+    db.session.commit()
+
+    _login_admin(client, admin.id)
+    with client.session_transaction() as sess:
+        sess["current_join_code"] = "SING001"
+
+    initial_student_count = Student.query.count()
+    initial_link_count = StudentTeacher.query.filter_by(teacher_id=admin.id).count()
+    initial_block_count = TeacherBlock.query.filter_by(teacher_id=admin.id, block="A").count()
+
+    response = client.post(
+        "/admin/student/add-individual",
+        data={
+            "first_name": "Indivuniq",
+            "last_name": "Guarduniq",
+            "dob": "2010-01-02",
+            "block": "A",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert Student.query.count() == initial_student_count + 1
+    assert StudentTeacher.query.filter_by(teacher_id=admin.id).count() == initial_link_count + 1
+    assert TeacherBlock.query.filter_by(teacher_id=admin.id, block="A").count() == initial_block_count + 1
+
+    linked_seats = TeacherBlock.query.filter_by(teacher_id=admin.id, block="A").filter(TeacherBlock.student_id.isnot(None)).all()
+    assert len(linked_seats) == 1
+    assert linked_seats[0].is_claimed is False
+    assert linked_seats[0].join_code == "SING001"
+
+
+def test_add_manual_student_creates_single_teacher_block_for_new_student(client):
+    admin = Admin(username="manual_single_tb_admin", totp_secret="secret")
+    db.session.add(admin)
+    db.session.flush()
+
+    create_class_scope(
+        teacher=admin,
+        join_code="MANU001",
+        block="B",
+        teacher_block_teacher=admin,
+        teacher_block_claimed=False,
+    )
+    db.session.commit()
+
+    _login_admin(client, admin.id)
+    with client.session_transaction() as sess:
+        sess["current_join_code"] = "MANU001"
+
+    initial_student_count = Student.query.count()
+    initial_link_count = StudentTeacher.query.filter_by(teacher_id=admin.id).count()
+    initial_block_count = TeacherBlock.query.filter_by(teacher_id=admin.id, block="B").count()
+
+    response = client.post(
+        "/admin/student/add-manual",
+        data={
+            "first_name": "Manualuniq",
+            "last_name": "Seatuniq",
+            "dob": "2010-03-04",
+            "block": "B",
+            "username": "",
+            "pin": "",
+            "passphrase": "",
+            "hall_passes": "3",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert Student.query.count() == initial_student_count + 1
+    assert StudentTeacher.query.filter_by(teacher_id=admin.id).count() == initial_link_count + 1
+    assert TeacherBlock.query.filter_by(teacher_id=admin.id, block="B").count() == initial_block_count + 1
+
+    linked_seats = TeacherBlock.query.filter_by(teacher_id=admin.id, block="B").filter(TeacherBlock.student_id.isnot(None)).all()
+    assert len(linked_seats) == 1
+    assert linked_seats[0].is_claimed is False
+    assert linked_seats[0].join_code == "MANU001"
 
 
 def test_store_create_requires_current_class_context(client):

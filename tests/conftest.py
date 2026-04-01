@@ -33,13 +33,10 @@ os.environ.setdefault("PEPPER_KEY", "tKiXIAgaPqsOOhR1PqvdEQo4BelrN5SP3cpWxVYrsHk
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pytest
-from sqlalchemy import event, inspect, text
+from sqlalchemy import event, text
 from sqlalchemy.exc import IntegrityError
 from app import app as flask_app, db, Student
 from app.extensions import limiter
-
-_POSTGRES_SCHEMA_READY = False
-
 
 def _set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
@@ -47,70 +44,52 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
     cursor.close()
 
 
-def _reset_database_state():
-    """Ensure the Postgres test schema exists, then clear table contents."""
+def _drop_public_enums(conn):
+    enum_rows = conn.execute(
+        text(
+            """
+            SELECT t.typname
+            FROM pg_type AS t
+            JOIN pg_namespace AS n ON n.oid = t.typnamespace
+            WHERE t.typtype = 'e' AND n.nspname = 'public'
+            """
+        )
+    )
+    for row in enum_rows:
+        conn.execute(text(f'DROP TYPE IF EXISTS "{row.typname}" CASCADE'))
+
+
+def _rebuild_database_state():
+    """Rebuild the Postgres test database schema from scratch."""
     import app.models  # Ensure model metadata is registered before create_all().
 
-    global _POSTGRES_SCHEMA_READY
     db.session.remove()
     dialect = db.engine.dialect.name
 
     if dialect == "postgresql":
-        if not _POSTGRES_SCHEMA_READY:
-            with db.engine.begin() as conn:
-                conn.execute(
-                    text(
-                        """
-                        SELECT pg_terminate_backend(pid)
-                        FROM pg_stat_activity
-                        WHERE datname = current_database()
-                          AND pid <> pg_backend_pid()
-                        """
-                    )
-                )
-                conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
-                conn.execute(text("CREATE SCHEMA public"))
-                enum_rows = conn.execute(
-                    text(
-                        """
-                        SELECT t.typname
-                        FROM pg_type AS t
-                        JOIN pg_namespace AS n ON n.oid = t.typnamespace
-                        WHERE t.typtype = 'e' AND n.nspname = 'public'
-                        """
-                    )
-                )
-                for row in enum_rows:
-                    conn.execute(text(f'DROP TYPE IF EXISTS "{row.typname}" CASCADE'))
-            db.engine.dispose()
-            try:
-                db.create_all()
-            except IntegrityError:
-                db.session.remove()
-                with db.engine.begin() as conn:
-                    enum_rows = conn.execute(
-                        text(
-                            """
-                            SELECT t.typname
-                            FROM pg_type AS t
-                            JOIN pg_namespace AS n ON n.oid = t.typnamespace
-                            WHERE t.typtype = 'e' AND n.nspname = 'public'
-                            """
-                        )
-                    )
-                    for row in enum_rows:
-                        conn.execute(text(f'DROP TYPE IF EXISTS "{row.typname}" CASCADE'))
-                db.engine.dispose()
-                db.create_all()
-            _POSTGRES_SCHEMA_READY = True
-
         with db.engine.begin() as conn:
-            existing_tables = inspect(conn).get_table_names(schema="public")
-            for table_name in existing_tables:
-                try:
-                    conn.execute(text(f'TRUNCATE TABLE public."{table_name}" RESTART IDENTITY CASCADE'))
-                except Exception:
-                    continue
+            conn.execute(
+                text(
+                    """
+                    SELECT pg_terminate_backend(pid)
+                    FROM pg_stat_activity
+                    WHERE datname = current_database()
+                      AND pid <> pg_backend_pid()
+                    """
+                )
+            )
+            conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+            conn.execute(text("CREATE SCHEMA public"))
+            _drop_public_enums(conn)
+        db.engine.dispose()
+        try:
+            db.create_all()
+        except IntegrityError:
+            db.session.remove()
+            with db.engine.begin() as conn:
+                _drop_public_enums(conn)
+            db.engine.dispose()
+        db.create_all()
         return
 
     db.create_all()
@@ -119,7 +98,7 @@ def _reset_database_state():
 
 
 @pytest.fixture
-def app():
+def app(request):
     """Provide the Flask app instance for tests."""
 
     test_db_url = os.environ.get("TEST_DATABASE_URL")
@@ -132,12 +111,13 @@ def app():
         SESSION_COOKIE_SECURE=False,
         RATELIMIT_ENABLED=False,
     )
-    
-    # Ensure strict separation - if connection fails, test fails
-    with flask_app.app_context():
-        _reset_database_state()
 
-    yield flask_app
+    with flask_app.app_context():
+        _rebuild_database_state()
+
+        yield flask_app
+
+        db.session.remove()
 
 
 @pytest.fixture
