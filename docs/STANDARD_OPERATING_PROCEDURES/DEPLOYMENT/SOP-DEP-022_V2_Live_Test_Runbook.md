@@ -168,6 +168,10 @@ git rev-parse HEAD
   - a LOGS-AUD-* artifact file in the repository, or
   - a linked ticket / PR comment that is retained as an audit record
 
+Recommended repo-tracked artifact:
+
+- `docs/LOGS/AUDITS/LOG-DEP-024_V2_Live_Test_Rehearsal_Checklist.md`
+
 The stored record MUST be immutable after finalization and must correspond exactly to the deployed commit.
 
 ---
