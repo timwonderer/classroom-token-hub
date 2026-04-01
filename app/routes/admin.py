@@ -181,6 +181,163 @@ ADMIN_FEATURE_PATH_PREFIXES = {
     '/admin/insurance': 'insurance',
 }
 
+ADMIN_CLASS_CONTEXT_ENDPOINTS = {
+    'admin.add_individual_student',
+    'admin.add_manual_student',
+}
+
+ADMIN_CLASS_CONTEXT_REDIRECTS = {
+    'admin.add_individual_student': 'admin.students',
+    'admin.add_manual_student': 'admin.students',
+}
+
+
+def _route_matches_prefix(path: str, prefix: str) -> bool:
+    return path == prefix or path.startswith(f"{prefix}/")
+
+
+def _get_admin_class_context_redirect_endpoint() -> str:
+    redirect_endpoint = ADMIN_CLASS_CONTEXT_REDIRECTS.get(request.endpoint)
+    if redirect_endpoint:
+        return redirect_endpoint
+
+    for prefix, feature_name in ADMIN_FEATURE_PATH_PREFIXES.items():
+        if _route_matches_prefix(request.path, prefix):
+            if feature_name == 'store':
+                return 'admin.store_management'
+            if feature_name == 'payroll':
+                return 'admin.payroll'
+    return 'admin.dashboard'
+
+
+def _get_requested_admin_join_code() -> str | None:
+    if request.method == 'GET':
+        candidate = request.args.get('join_code')
+    elif request.is_json:
+        payload = request.get_json(silent=True) or {}
+        candidate = payload.get('join_code')
+    else:
+        candidate = request.form.get('join_code')
+
+    normalized = (candidate or '').strip()
+    return normalized or None
+
+
+def _admin_write_has_join_code_conflict(admin_id: int | None) -> bool:
+    if not admin_id or request.method == 'GET':
+        return False
+
+    requested_join_code = _get_requested_admin_join_code()
+    if not requested_join_code:
+        return False
+
+    session_join_code = _get_current_admin_join_code(admin_id)
+    if not session_join_code:
+        return True
+
+    return requested_join_code != session_join_code
+
+
+def _route_uses_admin_class_context() -> bool:
+    endpoint = request.endpoint or ''
+    if not endpoint.startswith('admin.'):
+        return False
+    if endpoint == 'admin.set_current_class':
+        return False
+    if endpoint in ADMIN_CLASS_CONTEXT_ENDPOINTS:
+        return True
+    return any(_route_matches_prefix(request.path, prefix) for prefix in ADMIN_FEATURE_PATH_PREFIXES)
+
+
+def _route_requires_admin_class_context() -> bool:
+    if not _route_uses_admin_class_context():
+        return False
+    return request.method != 'GET'
+
+
+def _resolve_admin_class_context(admin_id: int | None) -> dict | None:
+    if not admin_id:
+        return None
+
+    if request.method == 'GET':
+        requested_join_code = _get_requested_admin_join_code()
+        if requested_join_code:
+            if not _admin_owns_join_code(admin_id, requested_join_code):
+                return None
+            candidate_join_code = requested_join_code
+        else:
+            candidate_join_code = _get_current_admin_join_code(admin_id)
+    else:
+        candidate_join_code = _get_current_admin_join_code(admin_id)
+
+    current_join_code = (candidate_join_code or '').strip()
+    if not current_join_code:
+        return None
+
+    class_row = (
+        ClassEconomy.query.with_entities(ClassEconomy.class_id, ClassEconomy.teacher_id)
+        .filter(ClassEconomy.join_code == current_join_code)
+        .first()
+    )
+    if not class_row or class_row.teacher_id != admin_id:
+        return None
+
+    return {
+        'join_code': current_join_code,
+        'class_id': class_row.class_id,
+    }
+
+
+def _handle_mismatched_admin_class_context():
+    admin_id = session.get('admin_id')
+    current_app.logger.error(
+        "Blocked admin write with mismatched class context",
+        extra={
+            'admin_id': admin_id,
+            'endpoint': request.endpoint,
+            'method': request.method,
+            'path': request.path,
+            'session_join_code': _get_current_admin_join_code(admin_id),
+            'requested_join_code': _get_requested_admin_join_code(),
+        },
+    )
+
+    message = "Switch to the selected class before making changes."
+    if request.is_json:
+        return jsonify({'status': 'error', 'message': message}), 400
+
+    flash(message, 'error')
+    return redirect(url_for(_get_admin_class_context_redirect_endpoint()))
+
+
+def _handle_missing_admin_class_context():
+    """Block class-scoped writes when the teacher has not selected an active class."""
+    admin_id = session.get('admin_id')
+    if not admin_id:
+        return None
+
+    current_join_code = _get_current_admin_join_code(admin_id)
+    if current_join_code:
+        return None
+
+    current_app.logger.error(
+        "Blocked admin write without class context",
+        extra={
+            'admin_id': admin_id,
+            'endpoint': request.endpoint,
+            'method': request.method,
+            'path': request.path,
+        },
+    )
+
+    message = "Select a class before making changes."
+    if request.is_json:
+        return jsonify({'status': 'error', 'message': message}), 400
+
+    flash(message, 'error')
+    redirect_endpoint = _get_admin_class_context_redirect_endpoint()
+    return redirect(url_for(redirect_endpoint))
+
 
 @admin_bp.before_request
 def before_request():
@@ -192,6 +349,27 @@ def before_request():
     """
     if request.method == 'GET':
         g.read_only = True
+
+    g.admin_class_context = None
+    g.admin_join_code = None
+    g.admin_class_id = None
+
+    admin_id = session.get('admin_id')
+    if admin_id and _route_uses_admin_class_context():
+        if _route_requires_admin_class_context() and _admin_write_has_join_code_conflict(admin_id):
+            return _handle_mismatched_admin_class_context()
+
+        context = _resolve_admin_class_context(admin_id)
+        if context:
+            g.admin_class_context = context
+            g.admin_join_code = context['join_code']
+            g.admin_class_id = context['class_id']
+
+    if _route_requires_admin_class_context() and g.admin_class_context is None:
+        response = _handle_missing_admin_class_context()
+        if response is not None:
+            return response
+
     return None
 
 
