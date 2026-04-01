@@ -8,6 +8,9 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+- **Combined Dependabot dependency updates** — Bumped 7 packages in a single pass: `gunicorn` 25.1.0 → 25.3.0, `Pygments` 2.19.2 → 2.20.0, `tomli` 2.4.0 → 2.4.1, `Werkzeug` 3.1.6 → 3.1.7, `cryptography` 46.0.5 → 46.0.6, `redis` 7.3.0 → 7.4.0, `requests` 2.32.5 → 2.33.0.
+
 ### Fixed
 - **Rent cycle rate lock now functional** — `_get_locked_rent_amount_for_join_code_cycle` was broken in #1103 because it searched for `transaction_id` on `RentPayment`, a column that does not exist. The function now uses the same timestamp-based transaction matching used throughout the rest of the rent payment code. The locked rate is the **first valid payer's base amount** (not the maximum), preventing a mid-cycle rate increase from affecting students who already paid at the original rate.
 - **Mid-cycle rate-increase fallback for per-student effective amount** — `_get_effective_rent_amount_for_coverage_period` now also checks whether the student's own payments predate a `RentSettings.updated_at` change. If so, the total base they already paid is used as the effective threshold, ensuring a rebalance never retroactively marks a student as late.
