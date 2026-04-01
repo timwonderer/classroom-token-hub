@@ -37,7 +37,11 @@ def settle_pending_transaction_contexts(limit: int | None = None) -> dict[str, i
     settled_contexts = 0
     failed_contexts = 0
 
-    for student_id, join_code in context_query.yield_per(1000):
+    # Materialize the contexts before iterating because the loop commits per
+    # context, which invalidates server-side cursors on PostgreSQL.
+    pending_contexts = context_query.all()
+
+    for student_id, join_code in pending_contexts:
         try:
             settle_balances(student_id, join_code)
             db.session.commit()

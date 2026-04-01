@@ -339,7 +339,7 @@ def test_recovery_preserves_balance_and_transactions(client, recovery_data):
         student_id=student.id, join_code=join_code
     ).count()
 
-    student.reset_code = "PRESERVE1"
+    student.reset_code = "PRESRV01"
     student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
     student.recovery_status = 'to_be_claimed'
     db.session.commit()
@@ -347,7 +347,7 @@ def test_recovery_preserves_balance_and_transactions(client, recovery_data):
     # Run recovery (new simplified flow — just lookup)
     client.post("/recovery/lookup", data={
         "join_code": join_code,
-        "reset_code": "PRESERVE1",
+        "reset_code": "PRESRV01",
     }, follow_redirects=True)
 
     # Verify economic data untouched

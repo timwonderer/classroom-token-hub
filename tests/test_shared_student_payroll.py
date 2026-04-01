@@ -19,7 +19,7 @@ def test_shared_student_diff_teacher_diff_period(client):
     db.session.add_all([t1, t2])
     db.session.commit()
 
-    student = Student(first_name="ScenarioA", last_initial="S", block="Period 1, Period 2", salt=b's')
+    student = Student(first_name="ScenarioA", last_initial="S", block="P1,P2", salt=b's')
     db.session.add(student)
     db.session.commit()
 
@@ -29,12 +29,12 @@ def test_shared_student_diff_teacher_diff_period(client):
     
     # T1 -> Period 1 (JC1)
     tb1 = TeacherBlock(
-        teacher_id=t1.id, block="PERIOD 1", join_code="JC1", student_id=student.id, is_claimed=True,
+        teacher_id=t1.id, block="P1", join_code="JC1", student_id=student.id, is_claimed=True,
         first_name="S", last_initial="S", salt=b's', first_half_hash="h", dob_sum_hash=None, last_name_hash_by_part=None
     )
     # T2 -> Period 2 (JC2)
     tb2 = TeacherBlock(
-        teacher_id=t2.id, block="PERIOD 2", join_code="JC2", student_id=student.id, is_claimed=True,
+        teacher_id=t2.id, block="P2", join_code="JC2", student_id=student.id, is_claimed=True,
         first_name="S", last_initial="S", salt=b's', first_half_hash="h", dob_sum_hash=None, last_name_hash_by_part=None
     )
     db.session.add_all([tb1, tb2])
@@ -47,12 +47,12 @@ def test_shared_student_diff_teacher_diff_period(client):
     # 2. Attendance
     now = datetime.now(timezone.utc)
     # T1 Class (P1) - 60 mins
-    db.session.add(TapEvent(student_id=student.id, period="PERIOD 1", status="active", timestamp=now-timedelta(hours=2), join_code="JC1"))
-    db.session.add(TapEvent(student_id=student.id, period="PERIOD 1", status="inactive", timestamp=now-timedelta(hours=1), join_code="JC1"))
+    db.session.add(TapEvent(student_id=student.id, period="P1", status="active", timestamp=now-timedelta(hours=2), join_code="JC1"))
+    db.session.add(TapEvent(student_id=student.id, period="P1", status="inactive", timestamp=now-timedelta(hours=1), join_code="JC1"))
     
     # T2 Class (P2) - 30 mins
-    db.session.add(TapEvent(student_id=student.id, period="PERIOD 2", status="active", timestamp=now-timedelta(minutes=30), join_code="JC2"))
-    db.session.add(TapEvent(student_id=student.id, period="PERIOD 2", status="inactive", timestamp=now, join_code="JC2"))
+    db.session.add(TapEvent(student_id=student.id, period="P2", status="active", timestamp=now-timedelta(minutes=30), join_code="JC2"))
+    db.session.add(TapEvent(student_id=student.id, period="P2", status="inactive", timestamp=now, join_code="JC2"))
     db.session.commit()
 
     # 3. Pay T1
@@ -81,7 +81,7 @@ def test_same_teacher_same_block_diff_context(client):
     db.session.add(t1)
     db.session.commit()
 
-    student = Student(first_name="ScenarioB", last_initial="S", block="PERIOD 1", salt=b's')
+    student = Student(first_name="ScenarioB", last_initial="S", block="P1", salt=b's')
     db.session.add(student)
     db.session.commit()
 
@@ -90,12 +90,12 @@ def test_same_teacher_same_block_diff_context(client):
     
     # Seat 1: Algebra (Period 1) -> JC1
     tb1 = TeacherBlock(
-        teacher_id=t1.id, block="PERIOD 1", join_code="JC1", student_id=student.id, is_claimed=True,
+        teacher_id=t1.id, block="P1", join_code="JC1", student_id=student.id, is_claimed=True,
         first_name="S", last_initial="S", salt=b's', first_half_hash="h", dob_sum_hash=None, last_name_hash_by_part=None
     )
     # Seat 2: Geometry (Period 1) -> JC2 (Same Block Name!)
     tb2 = TeacherBlock(
-        teacher_id=t1.id, block="PERIOD 1", join_code="JC2", student_id=student.id, is_claimed=True,
+        teacher_id=t1.id, block="P1", join_code="JC2", student_id=student.id, is_claimed=True,
         first_name="S", last_initial="S", salt=b's', first_half_hash="h", dob_sum_hash=None, last_name_hash_by_part=None
     )
     db.session.add_all([tb1, tb2])
@@ -108,8 +108,8 @@ def test_same_teacher_same_block_diff_context(client):
 
     # 2. Attendance - Tap JC1 ONLY
     now = datetime.now(timezone.utc)
-    db.session.add(TapEvent(student_id=student.id, period="PERIOD 1", status="active", timestamp=now-timedelta(hours=1), join_code="JC1"))
-    db.session.add(TapEvent(student_id=student.id, period="PERIOD 1", status="inactive", timestamp=now, join_code="JC1"))
+    db.session.add(TapEvent(student_id=student.id, period="P1", status="active", timestamp=now-timedelta(hours=1), join_code="JC1"))
+    db.session.add(TapEvent(student_id=student.id, period="P1", status="inactive", timestamp=now, join_code="JC1"))
     db.session.commit()
 
     # 3. Pay T1
@@ -125,9 +125,6 @@ def test_same_teacher_same_block_diff_context(client):
     # NOTE: This mirrors the current production behavior where `student.block` is a
     # comma-separated list that may contain duplicate block names when a student joins
     # two classes with identical period names. If that behavior changes, update this test.
-    student.block = "PERIOD 1, PERIOD 1"
-    db.session.commit()
-
     # Run Payroll
     # Iteration 1: "PERIOD 1". Resolves... JC1? or JC2?
     # `get_join_code_for_student_period` returns ONE join code (ordered by id desc).

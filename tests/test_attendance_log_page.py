@@ -26,7 +26,7 @@ def admin_with_data(client):
         first_name='Test',
         last_initial='T',
         pin_hash='hashed_pin',
-        block='PERIOD1,PERIOD2'
+        block='PERIOD1'
     )
     salt2 = get_random_salt()
     student2 = Student(
@@ -146,7 +146,7 @@ def test_attendance_log_tenant_scoping(client):
         first_name='Student1',
         last_initial='S',
         pin_hash='hash1',
-        block='ADMIN1PERIOD'
+        block='ADM1PER'
     )
     salt2 = get_random_salt()
     student2 = Student(
@@ -155,7 +155,7 @@ def test_attendance_log_tenant_scoping(client):
         first_name='Student2',
         last_initial='S',
         pin_hash='hash2',
-        block='ADMIN2PERIOD'
+        block='ADM2PER'
     )
     db.session.add_all([student1, student2])
     db.session.flush()
@@ -168,13 +168,13 @@ def test_attendance_log_tenant_scoping(client):
     # Create tap events
     tap1 = TapEvent(
         student_id=student1.id,
-        period='ADMIN1PERIOD',
+        period='ADM1PER',
         status='active',
         timestamp=datetime.now(timezone.utc)
     )
     tap2 = TapEvent(
         student_id=student2.id,
-        period='ADMIN2PERIOD',
+        period='ADM2PER',
         status='active',
         timestamp=datetime.now(timezone.utc)
     )
@@ -194,5 +194,5 @@ def test_attendance_log_tenant_scoping(client):
     html = response.data.decode('utf-8')
     
     # Admin1 should see their period but not admin2's period
-    assert 'ADMIN1PERIOD' in html, "Admin1 should see their own period"
-    assert 'ADMIN2PERIOD' not in html, "Admin1 should not see admin2's period"
+    assert 'ADM1PER' in html, "Admin1 should see their own period"
+    assert 'ADM2PER' not in html, "Admin1 should not see admin2's period"
