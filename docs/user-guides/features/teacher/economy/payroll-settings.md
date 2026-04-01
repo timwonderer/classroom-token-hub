@@ -7,7 +7,7 @@ description: Configure pay rates, block settings, and payroll behavior.
 keywords: [payroll, pay rate, settings, blocks]
 related:
   - user-guides/features/teacher/economy/payroll-run
-  - user-guides/diagnostics/teacher-attendance-payroll
+  - user-guides/diagnostics/teacher/attendance-payroll
 ---
 
 # Payroll Settings

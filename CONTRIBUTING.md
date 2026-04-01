@@ -241,6 +241,29 @@ If deployment fails with a "multiple heads" error, follow this procedure careful
    flask db current  # Should match local
    ```
 
+## Documentation Link Checks
+
+The repository uses a layered approach for documentation link validation. No single tool reliably covers local files, Markdown web links, runtime docs routes, and deployed production behavior.
+
+Use these checks for the right failure class:
+
+```bash
+# 1. Fast local-file validation for docs and static HTML
+lychee . --offline
+
+# 2. Throttled Markdown web-link validation
+pip install md-dead-link-check
+md-dead-link-check --config pyproject.toml
+
+# 3. Low-rate production docs smoke test against curated URLs
+python scripts/check_production_docs.py
+```
+
+Notes:
+- `lychee` is configured by `lychee.toml` and excludes Jinja templates to avoid false positives.
+- `md-dead-link-check` is configured in `pyproject.toml` with conservative throttling and selected third-party exclusions.
+- The production smoke test reads `docs/production-docs-manifest.txt`. Keep that file small and representative so it remains stable and avoids rate limiting.
+
 ---
 
 #### When to Use Which Scenario:

@@ -7,7 +7,7 @@ description: Resolve missed taps, long sessions, and attendance discrepancies.
 keywords: [attendance, corrections, tap errors]
 related:
   - user-guides/features/teacher/classroom/attendance-approvals
-  - user-guides/diagnostics/teacher-attendance-payroll
+  - user-guides/diagnostics/teacher/attendance-payroll
 ---
 
 # Fix Attendance Errors

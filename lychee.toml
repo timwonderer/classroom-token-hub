@@ -1,0 +1,10 @@
+no_progress = true
+
+exclude = [
+  "^mailto:",
+  "^tel:",
+]
+
+exclude_path = [
+  "(^|/)templates/",
+]
