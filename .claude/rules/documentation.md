@@ -563,7 +563,7 @@ Before committing:
 ```bash
 # Check for broken internal links
 grep -r "](/" docs/
-grep -r "\\.md)" .
+grep -Er '\]\([^)]*\.md([?#][^)]*)?\)' .
 ```
 
 ### Markdown Linter
