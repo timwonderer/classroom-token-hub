@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import socket
 import sys
 import time
 from collections import deque
@@ -105,6 +106,10 @@ def fetch_url(
         return False, exc.code, detail, body, content_type
     except error.URLError as exc:
         return False, None, str(exc.reason), "", None
+    except TimeoutError:
+        return False, None, "timed out", "", None
+    except socket.timeout:
+        return False, None, "timed out", "", None
 
 
 def is_docs_url(url: str, docs_root: str) -> bool:

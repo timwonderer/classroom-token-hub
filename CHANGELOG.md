@@ -679,7 +679,7 @@ and this project follows semantic versioning principles.
   - Remediation: Disabled workflow by renaming to `summary.yml.DISABLED`
   - Impact: No exploitation detected - vulnerability fixed proactively
   - Documentation: See `docs/security/PROMPTPWND_REMEDIATION.md` for full details
-  - Reference: [Aikido Security PromptPwnd Disclosure](https://www.aikido.dev/blog/promptpwnd-ai-prompt-injection-in-github-actions) (December 2025)
+  - Reference: [Aikido Security PromptPwnd Disclosure](https://www.aikido.dev/blog/promptpwnd-github-actions-ai-agents) (December 2025)
 - **Comprehensive Attack Surface Security Audit Completed** - Full security review of codebase, CI/CD, and infrastructure
   - Audited: GitHub Actions workflows, authentication, authorization, encryption, multi-tenancy, dependencies, and API security
   - Findings: 16 total findings (2 critical, 2 high, 3 medium, 4 low, 5 informational)

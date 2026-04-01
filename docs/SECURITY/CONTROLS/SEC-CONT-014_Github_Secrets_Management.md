@@ -66,8 +66,8 @@ Copy the entire contents of the file.
 
 ### 2.1 Open Your Repository
 
-1. Go to: https://github.com/YOUR_USERNAME/classroom-economy
-   - (Replace YOUR_USERNAME with your actual GitHub username)
+1. Go to: https://github.com/timwonderer/classroom-economy
+   - If you are working in a fork, replace `timwonderer` with your repository owner.
 
 ### 2.2 Access Settings
 

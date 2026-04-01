@@ -323,7 +323,7 @@ Use proper markdown:
 
 > Blockquotes for important notes
 
-[Links](url) to related docs
+[Links](https://example.com/) to related docs
 ```
 
 ---
@@ -563,7 +563,7 @@ Before committing:
 ```bash
 # Check for broken internal links
 grep -r "](/" docs/
-grep -r "\[.*\](.*\.md)" .
+grep -r "\\.md)" .
 ```
 
 ### Markdown Linter

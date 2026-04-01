@@ -181,7 +181,7 @@ response = Response(resp.iter_content(chunk_size=8192), resp.status_code, respon
 
 ## References
 
-- CodeQL Security Alerts: https://github.com/timwonderer/classroom-economy/security/code-scanning
+- CodeQL Security Alerts: https://docs.github.com/en/code-security/code-scanning/managing-code-scanning-alerts/about-code-scanning-alerts
 - OWASP XSS Prevention: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
 - GitHub Actions Security: https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
 
