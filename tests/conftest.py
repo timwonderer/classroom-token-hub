@@ -1,13 +1,22 @@
 import os
 import sys
-from dotenv import load_dotenv
+from pathlib import Path
+from dotenv import dotenv_values, load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from the project root .env file
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DOTENV_PATH = PROJECT_ROOT / ".env"
+load_dotenv(dotenv_path=DOTENV_PATH)
+
+# Read TEST_DATABASE_URL directly from .env so tests can use the dedicated test DB
+dotenv_config = dotenv_values(DOTENV_PATH)
+test_database_url = dotenv_config.get("TEST_DATABASE_URL") or os.environ.get("TEST_DATABASE_URL")
+if not test_database_url:
+    raise RuntimeError("TEST_DATABASE_URL must be set in .env for tests.")
 
 # Override env vars for testing
 os.environ["SECRET_KEY"] = "test-secret"
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+os.environ["TEST_DATABASE_URL"] = test_database_url
 os.environ["FLASK_ENV"] = "testing"
 os.environ["PEPPER_KEY"] = "test-primary-pepper"
 os.environ["PEPPER_LEGACY_KEYS"] = "legacy-pepper"
@@ -37,9 +46,8 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
 @pytest.fixture
 def app():
     """Provide the Flask app instance for tests."""
-    # Use a separate test database to avoid clashing with dev data.
-    # Prefer TEST_DATABASE_URL if set, otherwise use DATABASE_URL (sqlite in-memory in tests).
-    test_db_url = os.environ.get("TEST_DATABASE_URL", os.environ["DATABASE_URL"])
+
+    test_db_url = os.environ.get("TEST_DATABASE_URL")
 
     flask_app.config.update(
         TESTING=True,
