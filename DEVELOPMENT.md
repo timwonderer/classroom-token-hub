@@ -95,6 +95,7 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 - Class-scoped reads and writes are membership-gated, not `teacher_id`-gated.
 - Public teacher identity uses `Admin.public_id` / `teacher_public_id`, not numeric teacher IDs.
 - v2 documentation should not describe TeacherBlock fallback as intended runtime behavior.
+- Use `db.session.get(Model, id)`, not `Model.query.get(id)`. Treat `Query.get()` as banned in new development.
 
 ## Focus Areas
 

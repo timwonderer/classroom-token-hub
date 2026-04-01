@@ -27,7 +27,7 @@ with app.app_context():
     print()
     
     for student_id, tb_count in limbo_students:
-        student = Student.query.get(student_id)
+        student = db.session.get(Student, student_id)
         print(f"Student {student_id}: {student.first_name}/{student.last_initial}")
         print(f"  Linked to {tb_count} TeacherBlocks")
         

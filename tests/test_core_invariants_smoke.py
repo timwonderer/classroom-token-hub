@@ -23,6 +23,7 @@ from app.models import (
     Transaction,
     TransactionStatus,
 )
+from tests.helpers.admin_context import login_admin
 from tests.helpers.class_scope import create_class_scope
 
 
@@ -107,10 +108,7 @@ def _link_student_to_teacher(student: Student, admin: Admin, join_code: str, blo
 
 
 def _login_admin(client, admin_id: int) -> None:
-    with client.session_transaction() as sess:
-        sess["is_admin"] = True
-        sess["admin_id"] = admin_id
-        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+    login_admin(client, admin_id)
 
 
 def _login_student(client, student_id: int, join_code: str) -> None:
@@ -285,7 +283,7 @@ def test_insurance_approval_creates_reimbursement_transaction(client):
     db.session.add(claim)
     db.session.commit()
 
-    _login_admin(client, admin.id)
+    login_admin(client, admin.id, "JOIN-INS")
     response = client.post(
         f"/admin/insurance/claim/{claim.id}",
         data={"status": "approved", "approved_amount": "", "rejection_reason": "", "admin_notes": ""},

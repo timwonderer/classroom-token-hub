@@ -8,9 +8,10 @@ students cannot access those routes even via direct URL.
 import pytest
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
-from app.models import Student, Admin, Transaction, TeacherBlock, ClassEconomy, ClassFeature, PayrollReward, StoreItem
+from app.models import Student, Admin, Transaction, TeacherBlock, ClassEconomy, ClassFeature, ClassMembership, PayrollReward, StoreItem
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
+from tests.helpers.admin_context import login_admin
 
 
 @pytest.fixture
@@ -312,6 +313,7 @@ def test_admin_banking_rejects_disabled_class_scope(client):
     )
     db.session.add(economy)
     db.session.flush()
+    db.session.add(ClassMembership(join_code=join_code, admin_id=teacher.id, role="admin"))
 
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
@@ -436,9 +438,15 @@ def test_admin_payroll_reward_delete_rejects_disabled_class_scope(client):
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = teacher.id
+        sess['current_join_code'] = 'PRW2'
 
-    response = client.post(f'/admin/payroll/rewards/{reward.id}/delete?join_code=PRW2')
-    assert response.status_code == 404
+    response = client.post(
+        f'/admin/payroll/rewards/{reward.id}/delete',
+        data={'join_code': 'PRW2'},
+    )
+    assert response.status_code == 302
+    db.session.refresh(reward)
+    assert reward.is_active is True
 
 
 def test_admin_store_delete_rejects_disabled_class_scope(client):
@@ -462,9 +470,16 @@ def test_admin_store_delete_rejects_disabled_class_scope(client):
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = teacher.id
+        sess['current_join_code'] = 'STD2'
 
-    response = client.post(f'/admin/store/delete/{store_item.id}?join_code=STD2', follow_redirects=False)
-    assert response.status_code == 404
+    response = client.post(
+        f'/admin/store/delete/{store_item.id}',
+        data={'join_code': 'STD2'},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    db.session.refresh(store_item)
+    assert store_item.is_active is True
 
 
 def test_student_rent_rejects_disabled_feature_scope(client):

@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from app import db
 from app.hash_utils import get_random_salt, hash_username
-from app.models import Admin, IdentityProfile, RentPayment, RentSettings, RentWaiver, Student, TeacherBlock, Transaction
+from app.models import Admin, ClassEconomy, ClassMembership, IdentityProfile, RentPayment, RentSettings, RentWaiver, Student, TeacherBlock, Transaction
 from app.routes.student import (
     RENT_PAYMENT_MATCH_TOLERANCE_SECONDS,
     _get_locked_rent_amount_for_join_code_cycle,
@@ -33,6 +33,13 @@ def _make_admin_with_block(join_code="LOCKA1", block="A", suffix="rv"):
     db.session.add(identity)
     db.session.flush()
 
+    db.session.add(ClassEconomy(
+        join_code=join_code,
+        teacher_id=admin.id,
+        created_by_admin_id=admin.id,
+    ))
+    db.session.flush()
+    db.session.add(ClassMembership(join_code=join_code, admin_id=admin.id, role="admin"))
     db.session.add(TeacherBlock(
         teacher_id=admin.id,
         block=block,
@@ -44,6 +51,7 @@ def _make_admin_with_block(join_code="LOCKA1", block="A", suffix="rv"):
         salt=b'1234567890123456',
         first_half_hash='hashvalue',
         join_code=join_code,
+        class_id=db.session.query(ClassEconomy.class_id).filter_by(join_code=join_code).scalar(),
     ))
     settings = RentSettings(
         teacher_id=admin.id,
@@ -148,9 +156,10 @@ def test_waiver_marks_coverage_period_as_paid(client):
     assert _is_student_coverage_period_paid(settings, student.id, "A", "WAIV1", coverage) is True
 
 
-def test_reverse_cycle_penalties_refunds_only_misapplied_fees(client):
+def test_reverse_cycle_penalties_refunds_only_misapplied_fees(client, monkeypatch):
     admin, settings = _make_admin_with_block("REVFEE", suffix="reverse")
     coverage = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr('app.routes.admin.utc_now', lambda: datetime(2026, 3, 15, tzinfo=timezone.utc))
     on_time_student = _make_student("ontime")
     late_student = _make_student("late")
 

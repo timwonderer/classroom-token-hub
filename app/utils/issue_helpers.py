@@ -73,7 +73,7 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
 
     # If transaction-specific, include transaction details
     if related_transaction_id:
-        transaction = Transaction.query.get(related_transaction_id)
+        transaction = db.session.get(Transaction, related_transaction_id)
         if transaction:
             snapshot['transaction'] = {
                 'id': transaction.id,

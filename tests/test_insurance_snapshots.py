@@ -3,6 +3,8 @@ from decimal import Decimal
 
 from app import db
 from app.models import Admin, InsurancePolicy, InsuranceClaim, StudentInsurance, StudentTeacher, Transaction, TransactionStatus
+from tests.helpers.admin_context import login_admin
+from tests.helpers.class_scope import create_class_scope
 
 
 def _create_policy(admin_id: int, *, title: str = "Snapshot Coverage", max_claim_amount=Decimal("75.00")):
@@ -81,6 +83,8 @@ def test_admin_claim_approval_uses_frozen_claim_cap(client, test_student):
 
     db.session.add(StudentTeacher(student_id=test_student.id, teacher_id=admin.id))
     db.session.commit()
+    create_class_scope(teacher=admin, join_code="JOIN-SNAP-1", student=test_student, block="A")
+    db.session.commit()
 
     policy = _create_policy(admin.id, title="Claim Cap Policy", max_claim_amount=Decimal("100.00"))
 
@@ -124,10 +128,7 @@ def test_admin_claim_approval_uses_frozen_claim_cap(client, test_student):
     db.session.add(claim)
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess["is_admin"] = True
-        sess["admin_id"] = admin.id
-        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+    login_admin(client, admin.id, "JOIN-SNAP-1")
 
     client.post(
         f"/admin/insurance/claim/{claim.id}",

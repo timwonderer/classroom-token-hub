@@ -15,6 +15,8 @@ from app.models import (
     RentSettings,
     RentItem,
 )
+from tests.helpers.admin_context import login_admin
+from tests.helpers.class_scope import create_class_scope
 
 
 @pytest.fixture
@@ -81,6 +83,17 @@ def _build_claim(enrollment, policy, student_id, transaction):
     )
 
 
+def _ensure_admin_class_scope(admin, student, join_code="JOIN-INS-SEC", block="A"):
+    from app.models import StudentTeacher
+
+    if not db.session.query(StudentTeacher.id).filter_by(student_id=student.id, teacher_id=admin.id).first():
+        db.session.add(StudentTeacher(student_id=student.id, teacher_id=admin.id))
+    if not db.session.query(InsurancePolicy.id).filter_by(teacher_id=admin.id).first():
+        pass
+    create_class_scope(teacher=admin, join_code=join_code, student=student, block=block)
+    db.session.commit()
+
+
 def test_duplicate_transaction_claim_blocked(client, test_student, admin_user):
     from app.models import StudentTeacher
 
@@ -88,6 +101,7 @@ def test_duplicate_transaction_claim_blocked(client, test_student, admin_user):
     st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
     db.session.add(st)
     db.session.commit()
+    _ensure_admin_class_scope(admin_user, test_student)
 
     policy = _create_policy(admin_user.id)
     enrollment = _enroll_student(test_student.id, policy.id)
@@ -114,6 +128,7 @@ def test_voided_transaction_cannot_be_approved(client, test_student, admin_user)
     st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
     db.session.add(st)
     db.session.commit()
+    _ensure_admin_class_scope(admin_user, test_student)
 
     policy = _create_policy(admin_user.id)
     enrollment = _enroll_student(test_student.id, policy.id)
@@ -123,10 +138,7 @@ def test_voided_transaction_cannot_be_approved(client, test_student, admin_user)
     db.session.add(claim)
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess["is_admin"] = True
-        sess["admin_id"] = admin_user.id
-        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+    login_admin(client, admin_user.id, "JOIN-INS-SEC")
 
     response = client.post(
         f"/admin/insurance/claim/{claim.id}",
@@ -150,6 +162,7 @@ def test_hard_deny_transaction_type_cannot_be_approved(client, test_student, adm
     st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
     db.session.add(st)
     db.session.commit()
+    _ensure_admin_class_scope(admin_user, test_student)
 
     policy = _create_policy(admin_user.id)
     enrollment = _enroll_student(test_student.id, policy.id)
@@ -169,10 +182,7 @@ def test_hard_deny_transaction_type_cannot_be_approved(client, test_student, adm
     db.session.add(claim)
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess["is_admin"] = True
-        sess["admin_id"] = admin_user.id
-        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+    login_admin(client, admin_user.id, "JOIN-INS-SEC")
 
     response = client.post(
         f"/admin/insurance/claim/{claim.id}",
@@ -242,6 +252,7 @@ def test_pending_transaction_cannot_be_approved(client, test_student, admin_user
     st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
     db.session.add(st)
     db.session.commit()
+    _ensure_admin_class_scope(admin_user, test_student)
 
     policy = _create_policy(admin_user.id)
     enrollment = _enroll_student(test_student.id, policy.id)
@@ -261,10 +272,7 @@ def test_pending_transaction_cannot_be_approved(client, test_student, admin_user
     db.session.add(claim)
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess["is_admin"] = True
-        sess["admin_id"] = admin_user.id
-        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+    login_admin(client, admin_user.id, "JOIN-INS-SEC")
 
     response = client.post(
         f"/admin/insurance/claim/{claim.id}",
@@ -283,6 +291,7 @@ def test_rent_privilege_purchase_cannot_be_approved(client, test_student, admin_
     st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
     db.session.add(st)
     db.session.commit()
+    _ensure_admin_class_scope(admin_user, test_student)
 
     policy = _create_policy(admin_user.id)
     enrollment = _enroll_student(test_student.id, policy.id)
@@ -330,10 +339,7 @@ def test_rent_privilege_purchase_cannot_be_approved(client, test_student, admin_
     db.session.add(claim)
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess["is_admin"] = True
-        sess["admin_id"] = admin_user.id
-        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+    login_admin(client, admin_user.id, "JOIN-INS-SEC")
 
     response = client.post(
         f"/admin/insurance/claim/{claim.id}",

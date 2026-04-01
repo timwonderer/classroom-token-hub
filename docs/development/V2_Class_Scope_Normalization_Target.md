@@ -138,6 +138,16 @@ Until the normalization project starts:
 - document any new scope shortcut that would need to be revisited by the normalization
   project
 
+## Active Runtime Guardrail
+
+Current live-test hardening adds one immediate rule ahead of the deferred normalization project:
+
+- admin/teacher writes must originate from an explicit canonical session class context
+- `current_join_code` is currently the enforced runtime boundary for admin writes
+- request-level `join_code` may help scope reads, but it does not replace canonical session context for writes
+
+This is an interim runtime invariant, not the final target-state architecture. The eventual target remains `current_class_id`-driven internal scope.
+
 ## Decision
 
 This architecture target is accepted, but implementation is deferred until the port is

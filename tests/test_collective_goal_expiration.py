@@ -19,6 +19,7 @@ from werkzeug.security import generate_password_hash
 from app.extensions import db
 from app.models import Admin, ClassMembership, StoreItem, StudentItem, StudentTeacher, TeacherBlock, Transaction
 from app.utils.store import process_expired_collective_goals, refund_pending_collective_purchases
+from tests.helpers.admin_context import login_admin
 from tests.helpers.class_scope import create_class_scope
 
 
@@ -29,10 +30,8 @@ def _login_student(client, student_id, join_code):
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
 
 
-def _login_admin(client, admin_id):
-    with client.session_transaction() as sess:
-        sess['admin_id'] = admin_id
-        sess['is_admin'] = True
+def _login_admin(client, admin_id, join_code=None):
+    login_admin(client, admin_id, join_code)
 
 
 def _create_teacher(username):
@@ -517,7 +516,7 @@ def test_delete_active_collective_item_refunds_pending(client):
     db.session.add(si)
     db.session.commit()
 
-    _login_admin(client, teacher.id)
+    _login_admin(client, teacher.id, 'JOINDEL')
     resp = client.post(f'/admin/store/delete/{item.id}')
     # Redirect expected after delete
     assert resp.status_code in (200, 302)
@@ -546,7 +545,7 @@ def test_delete_inactive_collective_item_does_not_refund(client):
     db.session.add(si)
     db.session.commit()
 
-    _login_admin(client, teacher.id)
+    _login_admin(client, teacher.id, 'JOINDELINACT')
     resp = client.post(f'/admin/store/delete/{item.id}')
     assert resp.status_code in (200, 302)
 

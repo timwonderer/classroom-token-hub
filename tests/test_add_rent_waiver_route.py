@@ -7,6 +7,7 @@ from app.models import (
     Admin,
     AnalyticsEvent,
     ClassEconomy,
+    ClassMembership,
     IdentityProfile,
     RentSettings,
     RentWaiver,
@@ -14,6 +15,7 @@ from app.models import (
     StudentTeacher,
     TeacherBlock,
 )
+from tests.helpers.admin_context import login_admin
 
 
 def _make_admin(suffix):
@@ -31,6 +33,7 @@ def _make_teacher_block(admin_id, block, join_code):
     economy = ClassEconomy(join_code=join_code, teacher_id=admin_id, created_by_admin_id=admin_id)
     db.session.add(economy)
     db.session.flush()
+    db.session.add(ClassMembership(join_code=join_code, admin_id=admin_id, role="admin"))
     tb = TeacherBlock(
         teacher_id=admin_id,
         block=block,
@@ -89,12 +92,9 @@ def _link_student(student, admin):
 
 
 def _login_admin(client, admin_id, join_code):
+    login_admin(client, admin_id, join_code)
     with client.session_transaction() as sess:
-        sess['is_admin'] = True
-        sess['admin_id'] = admin_id
-        sess['current_join_code'] = join_code
         sess['is_system_admin'] = False
-        sess['last_activity'] = datetime.now(timezone.utc).isoformat()
 
 
 def test_past_due_scope_creates_one_waiver_per_date(client, app):
@@ -244,7 +244,7 @@ def test_missing_join_code_flashes_error(client, app):
         assert RentWaiver.query.filter_by(student_id=student.id).count() == 0
         with client.session_transaction() as sess:
             flashes = sess.get('_flashes', [])
-        assert any('join code' in message.lower() for _category, message in flashes)
+        assert any('select a class' in message.lower() for _category, message in flashes)
 
 
 def test_invalid_past_due_dates_skipped_count_reflects_actual(client, app):

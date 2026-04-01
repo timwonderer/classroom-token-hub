@@ -30,6 +30,12 @@ That is not the v2 model.
 - Revisit settings models and cleanup rules that still act like `teacher_id + block` is a durable ownership boundary.
 - Remove stale tests that still construct impossible class worlds through deprecated lifecycle fields.
 
+## Current Guardrail
+
+- Teacher/admin write flows now fail at the request boundary unless the session carries a valid canonical class context.
+- For current runtime behavior, admin writes are session-authoritative on `current_join_code`; request-level scope alone is not sufficient.
+- Test fixtures for admin writes must establish canonical class scope explicitly instead of relying on teacher-only or block-only setup.
+
 ## Explicit Non-Goals For Current Launch Work
 
 - No broad architecture rewrite during live-test blocker reduction.
@@ -42,4 +48,3 @@ Resume this backlog after launch-critical validation blockers are closed and the
 
 - `docs/development/V2_ADMIN_ROUTE_REFACTOR.md`
 - `docs/development/V2_Class_Scope_Normalization_Target.md`
-

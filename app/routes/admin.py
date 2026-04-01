@@ -6693,7 +6693,7 @@ def add_rent_waiver():
 @admin_required
 def remove_rent_waiver(waiver_id):
     """Remove a rent waiver."""
-    waiver = RentWaiver.query.get_or_404(waiver_id)
+    waiver = db.get_or_404(RentWaiver, waiver_id)
     _get_student_or_404(waiver.student_id)
     student_name = waiver.student.full_name
     admin_id = session.get("admin_id")
@@ -7082,7 +7082,7 @@ def insurance_management():
 @admin_required
 def edit_insurance_policy(policy_id):
     """Edit existing insurance policy."""
-    policy = InsurancePolicy.query.get_or_404(policy_id)
+    policy = db.get_or_404(InsurancePolicy, policy_id)
 
     # Verify this policy belongs to the current teacher
     if policy.teacher_id != session.get('admin_id'):
@@ -7157,7 +7157,7 @@ def edit_insurance_policy(policy_id):
 @admin_required
 def deactivate_insurance_policy(policy_id):
     """Deactivate an insurance policy."""
-    policy = InsurancePolicy.query.get_or_404(policy_id)
+    policy = db.get_or_404(InsurancePolicy, policy_id)
 
     # Verify this policy belongs to the current teacher
     if policy.teacher_id != session.get('admin_id'):
@@ -7178,7 +7178,7 @@ def delete_insurance_policy(policy_id):
     this safely deletes only the current teacher's policy data without affecting
     other teachers.
     """
-    policy = InsurancePolicy.query.get_or_404(policy_id)
+    policy = db.get_or_404(InsurancePolicy, policy_id)
 
     # Verify this policy belongs to the current teacher
     if policy.teacher_id != session.get('admin_id'):
@@ -7244,7 +7244,7 @@ def delete_insurance_policy(policy_id):
 @admin_required
 def mass_remove_policy(policy_id):
     """Cancel insurance policy for multiple or all students."""
-    policy = InsurancePolicy.query.get_or_404(policy_id)
+    policy = db.get_or_404(InsurancePolicy, policy_id)
 
     # Verify this policy belongs to the current teacher
     if policy.teacher_id != session.get('admin_id'):

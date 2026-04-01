@@ -168,10 +168,15 @@ def test_admin_configure_rent_item_types(client, teacher_admin, admin_class_scop
     assert items[2].hall_pass_count == 2
     assert items[2].store_item_id is None # NOT synced to store (logic update)
 
-def test_store_sync_logic(client, teacher_admin):
+def test_store_sync_logic(client, teacher_admin, admin_class_scope):
     """Test that store items are created/updated correctly based on type."""
     # Setup settings
-    settings = RentSettings(teacher_id=teacher_admin.id, block='A', is_enabled=True)
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        join_code=admin_class_scope.join_code,
+        block='A',
+        is_enabled=True,
+    )
     db.session.add(settings)
     db.session.commit()
 
