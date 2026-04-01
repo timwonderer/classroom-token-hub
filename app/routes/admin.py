@@ -5138,6 +5138,8 @@ def store_management():
             abort(404)
         new_item = StoreItem(
             teacher_id=admin_id,
+            join_code=selected_scope['join_code'],
+            class_id=selected_scope['class_id'],
             name=form.name.data,
             description=form.description.data,
             price=form.price.data,
@@ -5621,6 +5623,16 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
     """
     from app.models import RentItem, StoreItem, StoreItemBlock
 
+    join_code = _resolve_join_code_for_block(teacher_id, block)
+    class_id = _ensure_join_code_anchors(teacher_id, join_code, class_label=block) if join_code else None
+    if not join_code or not class_id:
+        current_app.logger.warning(
+            "Skipping rent-to-store sync for teacher %s block %s due to missing class scope",
+            teacher_id,
+            block,
+        )
+        return
+
     rent_items = RentItem.query.filter_by(rent_setting_id=rent_settings.id).all()
 
     for rent_item in rent_items:
@@ -5672,6 +5684,10 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
 
             if store_item:
                 # Update existing store item
+                if not store_item.join_code:
+                    store_item.join_code = join_code
+                if not store_item.class_id:
+                    store_item.class_id = class_id
                 store_item.name = rent_item.name
                 store_item.description = description
                 store_item.price = rent_item.store_price
@@ -5688,6 +5704,8 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                 # especially for multi-use items or privileges valid for a period
                 store_item = StoreItem(
                     teacher_id=teacher_id,
+                    join_code=join_code,
+                    class_id=class_id,
                     name=rent_item.name,
                     description=description,
                     price=rent_item.store_price,
