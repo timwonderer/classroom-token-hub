@@ -24,8 +24,8 @@ Mark each item when complete.
 
 ### 1. Branch and Environment
 
-- [x] Current branch is `codex/v2.0`
-- [x] Worktree is clean
+- [ ] Current branch is `codex/v2.0`
+- [ ] Worktree is clean
 - [ ] `.env` points to the intended v2 dev/migration database
 - [ ] PostgreSQL test database target is identified for validation run
 
