@@ -9,7 +9,7 @@
 
 - **[Architecture Guide](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)** - System design and patterns
 - **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)** - Current data models and transitional compatibility notes
-- **[Class Scope Normalization Target](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-014_Class_Scope_Normalization_Target.md)** - Deferred post-port target for `class_id`-first internal scoping
+- **[Class Scope Normalization Target](docs/development/V2_Class_Scope_Normalization_Target.md)** - Deferred post-port target for `class_id`-first internal scoping
 - **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)** - Runtime contract for public, student, and admin APIs
 - **[v2 Main Reconciliation Tracker](docs/development/V2_MAIN_RECONCILIATION_TRACKER.md)** - `origin/main` features not yet reconciled into `codex/v2.0`
 - **[v2 Launch Readiness Matrix](docs/development/V2_LAUNCH_READINESS_MATRIX.md)** - Current launch blockers and readiness status
@@ -25,7 +25,7 @@
 - Test runs must use the team-configured PostgreSQL test database.
 - The validated v2 branch state passed:
   - `DATABASE_URL=<team-test-db-url> pytest -q`
-  - Result: `664 passed, 1 skipped`
+  - Result: `708 passed, 1 skipped`
 
 ## Git Hooks
 

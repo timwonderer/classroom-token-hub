@@ -16,9 +16,9 @@
 |---|---|---|---|---|
 | Branch and database truth | `done` | `DEVELOPMENT.md`, `README.md`, git branch state | Active v2 branch is `codex/v2.0`; docs distinguish v2 dev DB vs test DB | Keep current unless branch strategy changes |
 | Main-branch feature reconciliation tracker | `done` | `docs/development/V2_MAIN_RECONCILIATION_TRACKER.md` | All sampled `origin/main` feature clusters are now tracked and classified | Revisit before each major v2 milestone |
-| Migration compliance summary | `needs refresh` | `SOP-DB-009_Migration_Compliance_Review.md` | Summary now includes the 2026-03-30 local rehearsal evidence and the restored PostgreSQL baseline on 2026-03-31, but still needs the named operator/verifier record for rehearsal completion | Attach named operator confirmation, independent verifier confirmation, and final rehearsal artifact |
+| Migration compliance summary | `needs refresh` | `SOP-DB-009_Migration_Compliance_Review.md` | Summary now includes the 2026-03-30 local rehearsal evidence and the restored PostgreSQL baseline on 2026-03-31, but still needs the named operator record and either an independent verifier record or a documented solo-operator exception | Attach named operator confirmation, independent verifier confirmation or solo-operator exception record, and final rehearsal artifact |
 | Live-test migration rehearsal | `needs refresh` | `SOP-DEP-022_V2_Live_Test_Runbook.md` | 2026-03-30 rehearsal reached `q9r0s1t2u3v4 (head)` before and after upgrade on the configured dev DB; PostgreSQL validation is now green again, so the remaining step is operator-owned smoke execution and sign-off | Record smoke execution outcome and named sign-off in the rehearsal artifact |
-| Smoke-route checklist ownership | `needs refresh` | `SOP-DEP-022`, `DEVELOPMENT.md` | Smoke-route ownership model is now documented, but the specific named operator and independent verifier are still pending execution | Record named owners and execution outcome in the rehearsal artifact |
+| Smoke-route checklist ownership | `needs refresh` | `SOP-DEP-022`, `DEVELOPMENT.md` | Smoke-route ownership model is now documented, but the specific named operator and either an independent verifier or a solo-operator exception record are still pending execution | Record named owners and execution outcome in the rehearsal artifact |
 | PostgreSQL validation baseline | `done` | `DEVELOPMENT.md`, `README.md`, `SOP-DB-009` | Latest local PostgreSQL validation on 2026-03-31 passed with `708 passed, 1 skipped` on the configured test DB | Re-run only if launch-critical changes land before live testing |
 | Economy/rent launch-critical main deltas | `needs refresh` | `docs/development/V2_MAIN_RECONCILIATION_TRACKER.md` | The major live-test economy/rent wave has landed on `codex/v2.0`; confirm whether the remaining adjacent CWI warning-bypass delta stays pre-live-test or moves later | Refresh the tracker/readiness docs and leave only intentional open items |
 | Production transition runbook completeness | `done` | `SOP-DEP-023_V2_Production_Transition_Runbook.md` | Runbook now has named operator roles, current workflow references, launch-critical smoke coverage, and a production transition record template | Revisit only if deployment workflow or maintenance controls change materially |
@@ -34,7 +34,7 @@
 
 These items must be closed before treating `codex/v2.0` as ready for live testing:
 
-1. Complete the v2 dev/migration database rehearsal artifact from `SOP-DEP-022` with named operator and independent verifier confirmation.
+1. Complete the v2 dev/migration database rehearsal artifact from `SOP-DEP-022` with named operator confirmation and either independent verifier confirmation or a documented solo-operator exception.
 2. Refresh the reconciliation tracker so only intentional pre-live-test deltas remain open.
 3. Record smoke-route execution outcome with named operator ownership now that automated validation is green.
 4. Close active-doc issues still marked `needs update` in the documentation sweep.

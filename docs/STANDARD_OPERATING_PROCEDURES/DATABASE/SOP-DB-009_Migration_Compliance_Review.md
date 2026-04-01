@@ -44,7 +44,8 @@ The earlier migration-compliance audit remains historically useful, but it shoul
 
 ### Still Blocking Final Operational Closure
 
-- Manual smoke-route execution still requires the named operator and independent verifier record from the live-test rehearsal.
+- Manual smoke-route execution still requires the named operator record from the live-test rehearsal.
+- If the rehearsal uses the solo-operator exception from `SOP-DEP-022`, the record must explicitly document that exception and its required conditions instead of naming a separate independent verifier.
 - Final Thread 3 closure still depends on the adjacent launch threads landing and validating cleanly.
 
 ### Still Important
@@ -57,7 +58,8 @@ The earlier migration-compliance audit remains historically useful, but it shoul
 
 ### Required Before Live Testing
 
-- Capture named operator confirmation and independent verifier confirmation in the rehearsal record.
+- Capture named operator confirmation in the rehearsal record.
+- If a separate verifier is unavailable, document solo-operator exception usage and confirm the additional solo-mode conditions from `SOP-DEP-022`.
 - Execute the smoke-route checklist from the v2 live-test runbook and record the result now that automated validation is green again.
 
 ### Required Before Production
@@ -94,7 +96,7 @@ Before live testing, attach the output of the live-test runbook and record:
 - smoke-check result
 - rollback decision: not needed / needed / blocked
 - operator confirmation
-- independent verifier confirmation
+- independent verifier confirmation, or explicit solo-operator exception record
 
 ## XI. Deferral Boundary
 
