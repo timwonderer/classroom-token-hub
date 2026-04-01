@@ -542,6 +542,7 @@ def _populate_policy_from_form(policy, form, *, next_tier_category_id=None):
     policy.max_claims_period = FREQUENCY_TO_CLAIM_PERIOD.get(form.charge_frequency.data, 'month')
     policy.max_claim_amount = None if is_non_monetary else form.max_claim_amount.data
     policy.max_payout_per_period = None if is_non_monetary else form.max_payout_per_period.data
+    policy.bypass_cwi_warnings = form.bypass_cwi_warnings.data
     policy.claim_type = form.claim_type.data
     policy.is_monetary = not is_non_monetary
     policy.no_repurchase_after_cancel = form.no_repurchase_after_cancel.data
@@ -1740,7 +1741,99 @@ def _max_alignment(statuses):
     return max(statuses, key=lambda item: rank.get(item, 0)) if statuses else 'aligned'
 
 
-def _build_policy_summary(admin_id, selected_block, analysis, rent_settings, insurance_policies, fines):
+def _warning_feature_prefixes_for_policy(policy):
+    title = getattr(policy, 'title', '')
+    return {
+        f'Insurance: {title}',
+        f'Coverage: {title}',
+        f'Period Cap: {title}',
+        f'Waiting Period: {title}',
+    }
+
+
+def _is_actionable_economy_warning(warning):
+    level = getattr(getattr(warning, 'level', None), 'value', None) or getattr(warning, 'level', None)
+    return level in {'critical', 'warning'}
+
+
+def _is_bypassed_economy_warning(warning, rent_settings, insurance_policies, store_items):
+    feature = getattr(warning, 'feature', '')
+    if feature == 'Rent' and rent_settings and getattr(rent_settings, 'bypass_cwi_warnings', False):
+        return True
+
+    for policy in insurance_policies or []:
+        if getattr(policy, 'bypass_cwi_warnings', False) and feature in _warning_feature_prefixes_for_policy(policy):
+            return True
+
+    for item in store_items or []:
+        if getattr(item, 'bypass_cwi_warnings', False) and feature == f'Store Item: {item.name}':
+            return True
+
+    return False
+
+
+def _filter_economy_health_warnings(analysis, rent_settings, insurance_policies, fines, store_items, *, selected_block=None):
+    filtered = []
+    for warning in analysis.warnings if analysis else []:
+        if not _is_actionable_economy_warning(warning):
+            continue
+        if _is_bypassed_economy_warning(warning, rent_settings, insurance_policies, store_items):
+            continue
+        filtered.append(warning)
+
+    warnings_by_level = {'critical': [], 'warning': [], 'info': []}
+    warnings_by_feature = {}
+    for warning in filtered:
+        warnings_by_level[warning.level.value].append(warning)
+        warnings_by_feature.setdefault(warning.feature, []).append(warning)
+
+    insurance_prefixes = set()
+    for policy in insurance_policies or []:
+        if getattr(policy, 'bypass_cwi_warnings', False):
+            continue
+        insurance_prefixes.update(_warning_feature_prefixes_for_policy(policy))
+
+    summary_rows = []
+
+    def add_summary(label, count, link_label, link_href):
+        if count <= 0:
+            return
+        summary_rows.append({
+            'label': label,
+            'count': count,
+            'link_label': link_label,
+            'link_href': link_href,
+        })
+
+    add_summary(
+        'Rent',
+        len([w for w in filtered if w.feature == 'Rent']) if rent_settings else 0,
+        'Adjust rent',
+        url_for('admin.rent_settings', settings_block=selected_block) if rent_settings else None,
+    )
+    add_summary(
+        'Insurance',
+        len([w for w in filtered if w.feature in insurance_prefixes]),
+        'Review insurance',
+        url_for('admin.insurance_management', settings_block=selected_block),
+    )
+    add_summary(
+        'Fees',
+        len([w for w in filtered if w.feature.startswith('Fine:')]) if fines else 0,
+        'Review payroll fines',
+        url_for('admin.payroll', cwi_block=selected_block),
+    )
+    add_summary(
+        'Store',
+        len([w for w in filtered if w.feature.startswith('Store Item:')]) if store_items else 0,
+        'Update store',
+        url_for('admin.store_management'),
+    )
+
+    return filtered, warnings_by_level, warnings_by_feature, summary_rows
+
+
+def _build_policy_summary(admin_id, selected_block, analysis, rent_settings, insurance_policies, fines, *, warnings=None):
     settings_row = get_feature_settings_row(admin_id, block=selected_block, create=False)
     policy_mode = normalize_policy_mode(getattr(settings_row, 'economy_policy_mode', 'default'))
 
@@ -1757,10 +1850,14 @@ def _build_policy_summary(admin_id, selected_block, analysis, rent_settings, ins
             'warning_count': len(warnings),
         })
 
-    warnings = analysis.warnings if analysis else []
-    add_category('rent', 'Rent', [w for w in warnings if w.feature == 'Rent'] if rent_settings else [])
-    add_category('insurance', 'Insurance', [w for w in warnings if w.feature.startswith('Insurance:')] if insurance_policies else [])
-    add_category('fine', 'Fees', [w for w in warnings if w.feature.startswith('Fine:')] if fines else [])
+    warning_items = warnings if warnings is not None else (analysis.warnings if analysis else [])
+    add_category('rent', 'Rent', [w for w in warning_items if w.feature == 'Rent'] if rent_settings else [])
+    add_category(
+        'insurance',
+        'Insurance',
+        [w for w in warning_items if w.feature.startswith(('Insurance:', 'Coverage:', 'Period Cap:', 'Waiting Period:'))] if insurance_policies else []
+    )
+    add_category('fine', 'Fees', [w for w in warning_items if w.feature.startswith('Fine:')] if fines else [])
     overall_status = _max_alignment([category['status'] for category in categories])
 
     return {
@@ -5048,6 +5145,7 @@ def store_management():
             auto_expiry_days=form.auto_expiry_days.data,
             is_active=form.is_active.data,
             is_long_term_goal=form.is_long_term_goal.data,
+            bypass_cwi_warnings=form.bypass_cwi_warnings.data,
             # Bundle settings
             is_bundle=form.is_bundle.data,
             bundle_quantity=form.bundle_quantity.data if form.is_bundle.data else None,
@@ -5774,6 +5872,7 @@ def rent_settings():
             block_settings.bill_preview_days = int(request.form.get('bill_preview_days', 7))
             block_settings.allow_incremental_payment = request.form.get('allow_incremental_payment') == 'on'
             block_settings.prevent_purchase_when_late = request.form.get('prevent_purchase_when_late') == 'on'
+            block_settings.bypass_cwi_warnings = request.form.get('bypass_cwi_warnings') == 'on'
 
         db.session.commit()
 
@@ -7857,6 +7956,8 @@ def economy_health():
     analysis = None
     warnings_by_level = {'critical': [], 'warning': [], 'info': []}
     warnings_by_feature = {}
+    actionable_warnings = []
+    health_warning_summary = []
     recommendations = {}
     cwi_calc = None
     snapshot = None
@@ -7882,9 +7983,14 @@ def economy_health():
         pay_rate_per_minute = cwi_calc.pay_rate_per_minute
         recommendations = analysis.recommendations
 
-        for warning in analysis.warnings:
-            warnings_by_level[warning.level.value].append(warning)
-            warnings_by_feature.setdefault(warning.feature, []).append(warning)
+        actionable_warnings, warnings_by_level, warnings_by_feature, health_warning_summary = _filter_economy_health_warnings(
+            analysis,
+            rent_settings,
+            insurance_policies,
+            fines,
+            store_items,
+            selected_block=selected_block,
+        )
 
     policy_summary = _build_policy_summary(
         admin_id,
@@ -7893,6 +7999,7 @@ def economy_health():
         rent_settings,
         insurance_policies,
         fines,
+        warnings=actionable_warnings,
     )
     rebalance_preview = []
     show_rebalance_review = request.args.get('review_rebalance') == '1'
@@ -7934,6 +8041,8 @@ def economy_health():
         analysis=analysis,
         warnings_by_level=warnings_by_level,
         warnings_by_feature=warnings_by_feature,
+        actionable_warning_count=len(actionable_warnings),
+        health_warning_summary=health_warning_summary,
         recommendations=recommendations,
         snapshot=snapshot,
         analysis_schedule=analysis_schedule,

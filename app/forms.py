@@ -30,6 +30,7 @@ class StoreItemForm(FlaskForm):
     auto_expiry_days = IntegerField('Item Expiry in Days (optional, for delayed-use items)', validators=[Optional()])
     is_active = BooleanField('Item is Active', default=True)
     is_long_term_goal = BooleanField('Long-Term Goal Item (exclude from CWI balance checks)', default=False)
+    bypass_cwi_warnings = BooleanField('Bypass CWI Warnings', default=False)
     blocks = SelectMultipleField('Visible to Periods/Blocks (leave empty for all)', choices=[], validators=[Optional()])
 
     # Bundle settings
@@ -170,6 +171,7 @@ class InsurancePolicyForm(FlaskForm):
     max_claims_count = IntegerField('Claims per Coverage Period Limit', validators=[Optional()])
     max_claim_amount = FloatField('Per Claim Limit', validators=[Optional()])
     max_payout_per_period = FloatField('Per Coverage Period Limit', validators=[Optional()])
+    bypass_cwi_warnings = BooleanField('Bypass CWI Warnings', default=False)
 
     # Special rules
     no_repurchase_after_cancel = BooleanField('No Re-Enrollment', default=False)
