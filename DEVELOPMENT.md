@@ -667,7 +667,7 @@ Version 1.0 has been successfully released with the following criteria met:
 
 ## Getting Help
 
-- **Documentation Issues:** Check [docs/README.md](docs/GITHUB_SITE/README.md) for navigation
+- **Documentation Issues:** Check [docs/README.md](docs/README.md) for navigation
 - **Technical Questions:** Review [Architecture Guide](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)
 - **Security Concerns:** See [Security Audits](docs/SECURITY/)
 - **Contributing:** Read [CONTRIBUTING.md](CONTRIBUTING.md)

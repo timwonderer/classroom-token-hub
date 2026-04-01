@@ -1,0 +1,22 @@
+[tool.md_dead_link_check]
+timeout = 10
+check_web_links = true
+validate_ssl = true
+catch_response_codes = [404, 410, 500]
+exclude_files = [
+  "templates/*",
+  "docs/LOGS/AUDITS/*",
+]
+exclude_links = [
+  "https://fonts.googleapis.com/*",
+  "https://fonts.gstatic.com/*",
+  "https://cdn.jsdelivr.net/*",
+  "https://img.shields.io/*",
+]
+force_get_requests_for_links = [
+  "https://app.classroomtokenhub.com/*",
+]
+throttle_groups = 40
+throttle_delay = 30
+throttle_max_delay = 240
+

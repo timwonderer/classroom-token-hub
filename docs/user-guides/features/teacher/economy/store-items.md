@@ -7,7 +7,7 @@ description: Create and manage store items, pricing, and availability.
 keywords: [store, items, pricing, inventory, redemption]
 related:
   - user-guides/features/teacher/economy/store-redemptions
-  - user-guides/diagnostics/teacher-store
+  - user-guides/diagnostics/teacher/store
 ---
 
 # Store Items

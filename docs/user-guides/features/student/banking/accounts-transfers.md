@@ -6,7 +6,7 @@ roles: [student]
 description: View checking and savings balances and transfer funds.
 keywords: [accounts, checking, savings, transfer]
 related:
-  - user-guides/diagnostics/student-money
+  - user-guides/diagnostics/student/money
 ---
 
 # Accounts and Transfers

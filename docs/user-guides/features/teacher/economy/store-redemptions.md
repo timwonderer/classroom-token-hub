@@ -7,7 +7,7 @@ description: Review pending redemptions and purchase history.
 keywords: [store, redemptions, purchase history]
 related:
   - user-guides/features/teacher/economy/store-items
-  - user-guides/diagnostics/teacher-store
+  - user-guides/diagnostics/teacher/store
 ---
 
 # Store Redemptions

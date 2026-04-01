@@ -7,7 +7,7 @@ description: Run payroll, review previews, and confirm payments.
 keywords: [payroll, run payroll, paychecks]
 related:
   - user-guides/features/teacher/economy/payroll-settings
-  - user-guides/diagnostics/teacher-attendance-payroll
+  - user-guides/diagnostics/teacher/attendance-payroll
 ---
 
 # Run Payroll

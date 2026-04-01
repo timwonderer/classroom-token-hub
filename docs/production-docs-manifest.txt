@@ -1,0 +1,24 @@
+# Curated production docs smoke-test paths.
+# Keep this list small and representative so it stays stable and avoids rate limiting.
+
+/docs
+/docs/user-guides/
+/docs/user-guides/student_guide
+/docs/user-guides/teacher_manual
+/docs/user-guides/sysadmin_manual
+/docs/user-guides/economy_guide
+/docs/user-guides/diagnostics/student
+/docs/user-guides/diagnostics/teacher
+/docs/user-guides/features/student/
+/docs/user-guides/features/teacher/
+/docs/user-guides/features/sysadmin/
+/docs/user-guides/legal/
+/docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation
+/docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference
+/docs/DOMAINS/ECONOMY_DESIGN/DOM-ECON-001_Economy_Balance_Checker
+/docs/DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification
+/docs/FEATURES/ECONOMY/FEAT-ECON-001_Policy_Mode_and_Rebalancer
+/docs/LOGS/AUDITS/LOG-ARC-031_Project_History
+/docs/LOGS/RELEASES/LOG-REL-002_Changelog_Mirror
+/docs/STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_Documentation_Index
+
