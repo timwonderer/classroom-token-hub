@@ -587,7 +587,7 @@ class EconomyBalanceChecker {
 const style = document.createElement('style');
 style.textContent = `
     .is-warning {
-        border-color: #ffc107 !important;
+        border-color: var(--warning) !important;
     }
 
     .economy-balance-feedback {
@@ -599,19 +599,19 @@ style.textContent = `
     }
 
     .economy-balance-feedback .alert-danger {
-        border-left-color: #dc3545;
+        border-left-color: var(--danger);
     }
 
     .economy-balance-feedback .alert-warning {
-        border-left-color: #ffc107;
+        border-left-color: var(--warning);
     }
 
     .economy-balance-feedback .alert-success {
-        border-left-color: #28a745;
+        border-left-color: var(--success);
     }
 
     .economy-balance-feedback .alert-info {
-        border-left-color: #17a2b8;
+        border-left-color: var(--info);
     }
 
     .cwi-info-box {
@@ -619,8 +619,8 @@ style.textContent = `
         max-width: none;
         padding: 1rem;
         margin-bottom: 1rem;
-        background: linear-gradient(135deg, #e3f2fd 0%, #f0f8ff 100%);
-        border-left: 4px solid #2196f3;
+        background: linear-gradient(135deg, var(--info-subtle) 0%, color-mix(in srgb, var(--primary-subtle) 45%, white) 100%);
+        border-left: 4px solid var(--info);
     }
 
     .cwi-value {

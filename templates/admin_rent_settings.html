@@ -1304,6 +1304,80 @@
       const economyHealthUrl = '{{ url_for("admin.economy_health", block=settings_block) }}';
       let latestAnalysis = null;
 
+      const renderRecommendationCard = ({ titleText, rangeStrongText = null, rangeSuffixText = '', tooltipText = '', muted = false }) => {
+        if (!recommendationBox) return;
+
+        recommendationBox.replaceChildren();
+
+        const card = document.createElement('div');
+        card.className = `rent-recommendation-card${muted ? ' rent-recommendation-card-muted' : ''}`;
+
+        const header = document.createElement('div');
+        header.className = 'rent-recommendation-header';
+
+        const content = document.createElement('div');
+
+        if (!muted) {
+          const eyebrow = document.createElement('div');
+          eyebrow.className = 'rent-recommendation-eyebrow';
+          eyebrow.textContent = 'Recommended Range';
+          content.appendChild(eyebrow);
+        }
+
+        const title = document.createElement('div');
+        title.className = 'rent-recommendation-title';
+        title.append(document.createTextNode(titleText));
+
+        if (rangeStrongText) {
+          title.append(document.createTextNode(' '));
+          const strong = document.createElement('strong');
+          strong.textContent = rangeStrongText;
+          title.appendChild(strong);
+        }
+
+        if (rangeSuffixText) {
+          title.append(document.createTextNode(' '));
+          const suffix = document.createElement('span');
+          suffix.className = 'text-muted';
+          suffix.textContent = rangeSuffixText;
+          title.appendChild(suffix);
+        }
+
+        title.append(document.createTextNode('.'));
+        content.appendChild(title);
+        header.appendChild(content);
+
+        if (tooltipText) {
+          const tooltipButton = document.createElement('button');
+          tooltipButton.type = 'button';
+          tooltipButton.className = 'btn btn-link rent-recommendation-info p-0';
+          tooltipButton.setAttribute('data-bs-toggle', 'tooltip');
+          tooltipButton.setAttribute('data-bs-placement', 'top');
+          tooltipButton.setAttribute('title', tooltipText);
+
+          const icon = document.createElement('span');
+          icon.className = 'material-symbols-outlined icon-inline';
+          icon.textContent = 'info';
+          tooltipButton.appendChild(icon);
+          header.appendChild(tooltipButton);
+        }
+
+        card.appendChild(header);
+
+        const meta = document.createElement('div');
+        meta.className = 'rent-recommendation-meta';
+
+        const actionLink = document.createElement('a');
+        actionLink.href = economyHealthUrl;
+        actionLink.className = 'btn btn-sm btn-primary rent-recommendation-action';
+        actionLink.textContent = 'Open Economy Health';
+        meta.appendChild(actionLink);
+
+        card.appendChild(meta);
+        recommendationBox.appendChild(card);
+        recommendationBox.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(trigger => new bootstrap.Tooltip(trigger));
+      };
+
       const renderRentRecommendation = (result) => {
         if (!recommendationBox || !result?.recommendations) return;
 
@@ -1321,30 +1395,12 @@
         const tooltipText = latestAnalysis
           ? `This range is based on your current Classroom Wage Index of ${economyChecker.formatCurrency(latestAnalysis.cwi)} and your payroll configuration for this class.`
           : 'This range is based on your current Classroom Wage Index and payroll configuration for this class.';
-
-        recommendationBox.innerHTML = `
-          <div class="rent-recommendation-card">
-            <div class="rent-recommendation-header">
-              <div>
-                <div class="rent-recommendation-eyebrow">Recommended Range</div>
-                <div class="rent-recommendation-title">
-                  Based on your current payroll settings and the calculated CWI, the recommended range for rent is
-                  <strong>${economyChecker.formatCurrency(result.recommendations.min)} - ${economyChecker.formatCurrency(result.recommendations.max)}</strong>
-                  <span class="text-muted">${frequencyLabel}</span>.
-                </div>
-              </div>
-              <button type="button" class="btn btn-link rent-recommendation-info p-0"
-                data-bs-toggle="tooltip" data-bs-placement="top" title="${tooltipText}">
-                <span class="material-symbols-outlined icon-inline">info</span>
-              </button>
-            </div>
-            <div class="rent-recommendation-meta">
-              <a href="${economyHealthUrl}" class="btn btn-sm btn-primary rent-recommendation-action">Open Economy Health</a>
-            </div>
-          </div>
-        `;
-
-        recommendationBox.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(trigger => new bootstrap.Tooltip(trigger));
+        renderRecommendationCard({
+          titleText: 'Based on your current payroll settings and the calculated CWI, the recommended range for rent is',
+          rangeStrongText: `${economyChecker.formatCurrency(result.recommendations.min)} - ${economyChecker.formatCurrency(result.recommendations.max)}`,
+          rangeSuffixText: frequencyLabel,
+          tooltipText,
+        });
       };
 
       const renderRentAmountFeedback = (result) => {
@@ -1403,16 +1459,10 @@
           rentAmountInput.dispatchEvent(new Event('input'));
         }
       }).catch(err => {
-        if (recommendationBox) {
-          recommendationBox.innerHTML = `
-            <div class="rent-recommendation-card rent-recommendation-card-muted">
-              <div class="rent-recommendation-title">Configure payroll first to see the recommended rent range for this class.</div>
-              <div class="rent-recommendation-meta">
-                <a href="${economyHealthUrl}" class="btn btn-sm btn-primary rent-recommendation-action">Open Economy Health</a>
-              </div>
-            </div>
-          `;
-        }
+        renderRecommendationCard({
+          titleText: 'Configure payroll first to see the recommended rent range for this class',
+          muted: true,
+        });
         if (rentAmountFeedback) {
           rentAmountFeedback.className = 'd-block mt-1 rent-amount-feedback text-muted';
           rentAmountFeedback.textContent = 'Payroll data is required for live rent guidance.';
