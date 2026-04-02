@@ -778,6 +778,39 @@ a:hover {
     font-size: 0.98rem;
 }
 
+.shell-brand-icon {
+    font-size: 30px;
+    line-height: 1;
+    vertical-align: middle;
+    font-weight: 200;
+}
+
+.shell-role-label {
+    margin-top: 0;
+    font-size: 12px;
+    font-weight: 300;
+}
+
+.shell-toast-layer {
+    z-index: 1050;
+}
+
+.shell-toast-layer--student {
+    z-index: 1080;
+}
+
+.shell-toast-layer--sysadmin {
+    z-index: 1100;
+}
+
+.maintenance-banner-icon {
+    font-size: 18px;
+}
+
+.page-title-icon {
+    font-size: 2rem;
+}
+
 /* ─── Student Shell Specifics ─── */
 .student-sidebar {
     width: var(--sidebar-width);
@@ -814,6 +847,20 @@ a:hover {
     font-size: 0.9rem;
     color: rgba(255, 255, 255, 0.85);
     margin-bottom: 1.25rem;
+}
+
+.student-identity-name {
+    font-size: 24px;
+}
+
+.student-identity-role {
+    margin-top: 0;
+    font-size: 10pt;
+    color: white;
+}
+
+.student-class-switch-error-icon {
+    font-size: 18px;
 }
 
 .class-switcher .form-select {
@@ -957,6 +1004,23 @@ body.sysadmin-shell {
     border-bottom: 1px solid rgba(212, 168, 87, 0.2);
     margin-bottom: 1rem;
     font-size: 0.95rem;
+}
+
+.sysadmin-identity-icon {
+    font-size: 16px;
+    color: var(--sysadmin-accent);
+    vertical-align: middle;
+}
+
+.sysadmin-identity-role {
+    margin-top: 0;
+    font-size: 10pt;
+    color: color-mix(in srgb, var(--secondary) 60%, transparent);
+}
+
+.external-link-icon {
+    font-size: 14px;
+    opacity: 0.5;
 }
 
 .sysadmin-nav {
@@ -1292,6 +1356,19 @@ table.js-sortable thead th:hover .sort-indicator {
 
 /* ─── Icon Normalization ─── */
 .material-symbols-outlined {
+    font-family: 'Material Symbols Outlined', sans-serif;
+    font-weight: normal;
+    font-style: normal;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 
