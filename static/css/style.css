@@ -3329,6 +3329,271 @@ body.maintenance-active .sidebar {
     font-weight: 700;
 }
 
+.getting-started-widget {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1050;
+}
+
+.gs-bubble {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    cursor: pointer;
+    background: var(--primary);
+    border: 1px solid var(--secondary);
+    border-radius: 50%;
+    box-shadow: 0 4px 12px color-mix(in srgb, black 20%, transparent);
+    transition: all 0.3s ease;
+    animation: slideInUp 0.3s ease-out;
+}
+
+.gs-bubble:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px color-mix(in srgb, black 40%, transparent);
+}
+
+.gs-bubble-icon {
+    color: white;
+    font-size: 32px;
+    font-weight: 400;
+}
+
+.gs-bubble-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 24px;
+    padding: 2px 6px;
+    color: white;
+    background: var(--danger);
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.getting-started-widget:has(#gsBody.show) .gs-bubble {
+    display: none;
+}
+
+.gs-panel {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 400px;
+    max-width: calc(100vw - 48px);
+    background: white;
+    border: 3px solid var(--secondary);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px color-mix(in srgb, black 15%, transparent);
+    animation: slideInUp 0.3s ease-out;
+}
+
+.gs-panel-header {
+    padding: 16px;
+    color: white;
+    background: var(--primary);
+    border-radius: 10px 10px 0 0;
+    cursor: pointer;
+    user-select: none;
+}
+
+.gs-panel-header h6 {
+    color: white;
+    font-weight: 400;
+}
+
+.gs-panel-header .material-symbols-outlined {
+    color: var(--secondary);
+    font-weight: 400;
+}
+
+.gs-progress-badge {
+    padding: 2px 8px;
+    background: color-mix(in srgb, white 20%, transparent);
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.btn-close-widget {
+    padding: 0;
+    margin-left: 8px;
+    color: white;
+    background: none;
+    border: none;
+    cursor: pointer;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.btn-close-widget:hover {
+    opacity: 1;
+}
+
+.btn-close-widget .material-symbols-outlined {
+    font-size: 20px;
+}
+
+.gs-panel-body {
+    padding: 16px;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.gs-checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.gs-section-header {
+    margin-top: 8px;
+    margin-bottom: 8px;
+    padding-left: 4px;
+}
+
+.gs-section-header:first-child {
+    margin-top: 0;
+}
+
+.gs-section-badge {
+    font-size: 0.9rem;
+}
+
+.gs-section-header .badge {
+    padding: 4px 10px;
+    letter-spacing: 0.5px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.gs-item {
+    padding: 12px;
+    background: var(--neutral-50);
+    border: 1px solid var(--secondary);
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.gs-item:hover {
+    background: var(--neutral-200);
+    border-color: var(--primary);
+}
+
+.gs-item.completed {
+    background: var(--success-subtle);
+    border-color: var(--success);
+}
+
+.gs-item.completed .form-check-input:checked {
+    background-color: var(--success);
+    border-color: var(--success);
+}
+
+.gs-item.skipped {
+    background: var(--neutral-50);
+    border-color: var(--neutral-200);
+    opacity: 0.6;
+}
+
+.gs-item.skipped .form-check-input {
+    opacity: 0.5;
+}
+
+.gs-item-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.gs-item-content .form-check {
+    flex: 1;
+    margin: 0;
+}
+
+.gs-item-content .form-check-label {
+    margin-bottom: 0;
+    cursor: default;
+}
+
+.gs-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.gs-item-actions .btn {
+    padding: 4px 12px;
+    font-size: 0.875rem;
+}
+
+.gs-item-actions .btn-outline-primary:hover {
+    color: white;
+    background-color: var(--success);
+    border-color: var(--success);
+}
+
+.gs-item-actions .btn-outline-secondary:hover {
+    color: white;
+    background-color: var(--warning);
+    border-color: var(--warning);
+}
+
+.gs-link-icon {
+    font-size: 16px;
+}
+
+.gs-congratulations {
+    margin-top: 0.5rem;
+}
+
+.gs-congratulations-card {
+    padding: 10px;
+    color: white;
+    background-color: var(--primary);
+    border-radius: 0 0 10px 10px;
+}
+
+.gs-congratulations-title {
+    color: var(--secondary);
+}
+
+.gs-congratulations-copy {
+    font-weight: 300;
+}
+
+@keyframes slideInUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOutDown {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+
+    to {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+}
+
 @media (max-width: 768px) {
     .legal-page,
     .standalone-error-page,
@@ -3343,6 +3608,29 @@ body.maintenance-active .sidebar {
 
     .error-page-card .error-header h1 {
         font-size: 3rem;
+    }
+
+    .getting-started-widget {
+        right: 16px;
+        bottom: 16px;
+    }
+
+    .gs-bubble {
+        width: 56px;
+        height: 56px;
+    }
+
+    .gs-bubble-icon {
+        font-size: 28px;
+    }
+
+    .gs-bubble-badge {
+        padding: 2px 5px;
+        font-size: 10px;
+    }
+
+    .gs-panel {
+        max-width: calc(100vw - 32px);
     }
 }
 
