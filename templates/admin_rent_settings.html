@@ -1308,8 +1308,11 @@
         if (!recommendationBox || !result?.recommendations) return;
 
         const frequencyType = document.getElementById('frequency_type')?.value || 'monthly';
-        const customFrequencyValue = document.getElementById('custom_frequency_value')?.value || 1;
-        const customFrequencyUnit = document.getElementById('custom_frequency_unit')?.value || 'days';
+        // Cast to Number so raw DOM text can never be reinterpreted as HTML in innerHTML
+        const customFrequencyValue = Number(document.getElementById('custom_frequency_value')?.value) || 1;
+        const ALLOWED_UNITS = new Set(['days', 'weeks', 'months']);
+        const rawUnit = (document.getElementById('custom_frequency_unit')?.value || 'days').toLowerCase();
+        const customFrequencyUnit = ALLOWED_UNITS.has(rawUnit) ? rawUnit : 'days';
         const frequencyLabel = economyChecker.getRentFrequencyLabel(
           frequencyType,
           customFrequencyValue,
