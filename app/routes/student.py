@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 
-from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app, has_app_context
+from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app, has_app_context, has_request_context, g
 from sqlalchemy import or_, func, select, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.orm import selectinload
@@ -126,10 +126,19 @@ def get_current_class_context():
         dict with keys: join_code, teacher_id, block, seat_id
         None if no context available
     """
+    if not has_request_context():
+        return None
+
+    if getattr(g, "_current_class_context_loaded", False):
+        cached_context = getattr(g, "_current_class_context", None)
+        return cached_context.copy() if isinstance(cached_context, dict) else cached_context
+
     from app.models import TeacherBlock
 
     student = get_logged_in_student()
     if not student:
+        g._current_class_context = None
+        g._current_class_context_loaded = True
         return None
 
     # Check if a join code is already selected in session
@@ -142,6 +151,8 @@ def get_current_class_context():
     ).all()
 
     if not claimed_seats:
+        g._current_class_context = None
+        g._current_class_context_loaded = True
         return None
 
     # If no join code selected, default to first claimed seat
@@ -163,12 +174,15 @@ def get_current_class_context():
         session['current_join_code'] = current_seat.join_code
 
     # Return full class context
-    return {
+    context = {
         'join_code': current_seat.join_code,
         'teacher_id': current_seat.teacher_id,
         'block': current_seat.block,
         'seat_id': current_seat.id
     }
+    g._current_class_context = context.copy()
+    g._current_class_context_loaded = True
+    return context.copy()
 
 
 def _activate_rebalances_for_context(context=None):
