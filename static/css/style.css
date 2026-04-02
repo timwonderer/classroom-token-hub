@@ -281,6 +281,12 @@ a:hover {
     background: transparent;
 }
 
+.btn-group > .btn-outline-primary,
+.btn-group-vertical > .btn-outline-primary {
+    background: color-mix(in srgb, var(--primary) 10%, white);
+    color: var(--primary) !important;
+}
+
 .btn-outline-primary:hover {
     background-color: var(--primary) !important;
     color: white !important;
@@ -2646,14 +2652,19 @@ body.maintenance-active .sidebar {
 
 .hall-pass-setup-page {
     min-height: 100vh;
-    padding: 2rem 1rem;
+    padding: 2rem;
     font-family: var(--font-family);
-    background-color: var(--surface);
+    background: var(--neutral-50);
 }
 
 .hall-pass-setup-page .setup-container {
-    max-width: 900px;
+    width: min(100%, 960px);
     margin: 0 auto;
+}
+
+.hall-pass-setup-page .card {
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
 }
 
 .hall-pass-setup-page .master-toggle-container {
@@ -2731,7 +2742,8 @@ body.maintenance-active .sidebar {
 }
 
 .hall-pass-setup-page .limit-field input {
-    max-width: 150px;
+    width: 100%;
+    max-width: none;
 }
 
 .hall-pass-setup-page .form-check-input {
@@ -2764,7 +2776,8 @@ body.maintenance-active .sidebar {
 }
 
 .hall-pass-setup-page .total-field input {
-    max-width: 200px;
+    width: 100%;
+    max-width: none;
 }
 
 .hall-pass-setup-page .total-field input:disabled {
@@ -2775,6 +2788,501 @@ body.maintenance-active .sidebar {
 .hall-pass-setup-page .total-help-text {
     margin-top: 0.25rem;
     font-size: 0.8rem;
+}
+
+.rent-recommendation-card {
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--info-border, color-mix(in srgb, var(--info) 28%, white));
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--info-subtle) 78%, white);
+}
+
+.rent-recommendation-card-muted {
+    background: var(--surface);
+}
+
+.rent-recommendation-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.rent-recommendation-eyebrow {
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--info);
+}
+
+.rent-recommendation-title {
+    font-size: 0.98rem;
+    line-height: 1.55;
+    color: var(--text-primary);
+}
+
+.rent-recommendation-info {
+    color: var(--info);
+    text-decoration: none;
+}
+
+.rent-recommendation-meta {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 1rem;
+    margin-top: 0.875rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.rent-recommendation-action {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: var(--primary-contrast, white);
+    box-shadow: var(--shadow-sm);
+}
+
+.rent-recommendation-action:hover,
+.rent-recommendation-action:focus {
+    border-color: color-mix(in srgb, var(--primary) 88%, black);
+    background: color-mix(in srgb, var(--primary) 88%, black);
+    color: var(--primary-contrast, white);
+}
+
+.rent-amount-feedback {
+    font-size: 0.88rem;
+    font-weight: 500;
+    line-height: 1.45;
+}
+
+.rent-amount-feedback-warning {
+    color: var(--warning-text);
+}
+
+.rent-amount-feedback-success {
+    color: var(--success-text);
+}
+
+@media (max-width: 768px) {
+    .rent-recommendation-header,
+    .rent-recommendation-meta {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+.offline-page,
+.legal-page,
+.maintenance-page,
+.standalone-error-page {
+    min-height: 100vh;
+    font-family: var(--font-family);
+}
+
+.offline-page,
+.legal-page,
+.standalone-error-page {
+    background: var(--neutral-100);
+}
+
+.offline-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.offline-card {
+    width: min(100%, 26rem);
+}
+
+.offline-icon {
+    margin-bottom: 1.25rem;
+    color: var(--primary);
+    font-size: 4rem;
+    line-height: 1;
+}
+
+.legal-page {
+    padding: 2rem;
+}
+
+.legal-container {
+    width: min(100%, 72rem);
+    margin: 0 auto;
+    padding: 3rem;
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+}
+
+.legal-title {
+    margin-bottom: 0.5rem;
+    color: var(--primary);
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+.legal-subtitle-light {
+    font-weight: 300;
+}
+
+.legal-last-updated {
+    margin-bottom: 2rem;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+.legal-container h2 {
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border-color);
+    color: var(--primary);
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.legal-container h3 {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.legal-container p,
+.legal-container li {
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+.legal-container p {
+    margin-bottom: 1rem;
+}
+
+.legal-container ul {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+}
+
+.legal-container li {
+    margin-bottom: 0.75rem;
+}
+
+.legal-container a {
+    color: var(--info);
+    text-decoration: none;
+}
+
+.legal-container a:hover {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+.legal-summary-box,
+.legal-highlight-box,
+.legal-info-box,
+.legal-role-box {
+    margin: 1.5rem 0;
+    padding: 1.5rem;
+    border-radius: var(--radius-md);
+}
+
+.legal-summary-box {
+    background: var(--info-subtle);
+    border-left: 4px solid var(--info);
+}
+
+.legal-summary-box h3 {
+    margin-top: 0;
+    color: var(--info);
+    font-size: 1.1rem;
+}
+
+.legal-summary-box p:last-child,
+.legal-highlight-box p:last-child {
+    margin-bottom: 0;
+}
+
+.legal-highlight-box {
+    background: var(--warning-subtle);
+    border-left: 4px solid var(--warning);
+}
+
+.legal-role-box--teacher {
+    background: var(--warning-subtle);
+    border-left: 4px solid var(--warning);
+}
+
+.legal-role-box--teacher h3 {
+    margin-top: 0;
+    color: var(--warning-text);
+}
+
+.legal-role-box--student {
+    background: var(--info-subtle);
+    border-left: 4px solid var(--info);
+}
+
+.legal-role-box--student h3 {
+    margin-top: 0;
+    color: var(--info);
+}
+
+.legal-additional-info {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--info);
+}
+
+.legal-info-box {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: var(--neutral-100);
+    border-left: 3px solid var(--neutral-500);
+}
+
+.legal-table {
+    width: 100%;
+    margin: 1rem 0 1.5rem;
+    border-collapse: collapse;
+}
+
+.legal-table th,
+.legal-table td {
+    padding: 0.85rem;
+    border: 1px solid var(--border-color);
+    vertical-align: top;
+    text-align: left;
+}
+
+.legal-table th {
+    background: var(--neutral-100);
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.maintenance-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 30%, black));
+}
+
+.maintenance-card {
+    width: min(100%, 60rem);
+    padding: 2rem;
+    border: none;
+    overflow: hidden;
+}
+
+.maintenance-header {
+    padding: 0 1.75rem 1rem;
+    background: linear-gradient(135deg, color-mix(in srgb, white 8%, transparent), color-mix(in srgb, white 2%, transparent));
+    border-bottom: 1px solid color-mix(in srgb, white 10%, transparent);
+}
+
+.maintenance-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.85rem;
+    background: color-mix(in srgb, white 15%, transparent);
+    color: white;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.maintenance-title-icon {
+    color: var(--primary);
+    font-size: 2.5rem;
+    vertical-align: -10%;
+}
+
+.maintenance-title {
+    color: var(--primary);
+}
+
+.maintenance-note {
+    margin-top: 1rem;
+    padding: 1rem;
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--primary) 16%, transparent);
+    border: 1px solid var(--primary);
+    border-left-width: 8px;
+}
+
+.maintenance-note-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: fit-content;
+    padding: 3px 8px;
+    color: white;
+    background: var(--primary);
+    font-size: 12pt;
+    font-weight: 400;
+    text-align: center;
+}
+
+.maintenance-note-icon {
+    font-size: 24px;
+    vertical-align: -25%;
+}
+
+.maintenance-body {
+    padding: 0 1.75rem;
+    background: var(--surface);
+}
+
+.maintenance-badge-banner {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    color: var(--text-primary);
+    border-left: 8px solid var(--primary);
+}
+
+.maintenance-badge-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: fit-content;
+    padding: 3px 8px;
+    color: white;
+    text-align: center;
+    font-size: 12pt;
+    font-weight: 400;
+}
+
+.maintenance-badge-copy {
+    margin-top: 0.5rem;
+    margin-bottom: 0;
+}
+
+.maintenance-info-tile {
+    padding: 1rem 1.25rem;
+    background: var(--neutral-50);
+}
+
+.maintenance-tile-label {
+    letter-spacing: 0.08em;
+    font-size: 0.8rem;
+}
+
+.maintenance-bypass-note {
+    font-size: 0.8rem;
+}
+
+.maintenance-footer-note {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}
+
+.standalone-error-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.error-page-card {
+    width: min(100%, 56rem);
+    overflow: hidden;
+    background: var(--surface);
+    box-shadow: 0 10px 10px color-mix(in srgb, black 30%, transparent);
+}
+
+.error-page-card .error-header h1 {
+    margin: 0;
+    color: white;
+    font-size: 4rem;
+    font-weight: 400;
+}
+
+.error-page-card .error-header p {
+    margin: 0.5rem 0 0;
+    color: white;
+    font-size: 2rem;
+    opacity: 0.9;
+}
+
+.error-page-status-box {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: var(--primary-subtle);
+    border-left: 4px solid var(--primary);
+}
+
+.error-page-status-box h5 {
+    margin-bottom: 1rem;
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.error-page-status-box p,
+.error-page-status-box ul {
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.error-page-status-box ul {
+    margin-bottom: 0;
+}
+
+.error-page-refresh {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    text-align: center;
+    background: var(--success-subtle);
+    border: 1px solid var(--success);
+}
+
+.error-page-refresh p,
+.error-page-refresh .countdown {
+    margin: 0;
+    color: var(--success-text);
+}
+
+.error-page-refresh .countdown {
+    font-weight: 700;
+}
+
+@media (max-width: 768px) {
+    .legal-page,
+    .standalone-error-page,
+    .maintenance-page {
+        padding: 1rem;
+    }
+
+    .legal-container,
+    .maintenance-card {
+        padding: 1.5rem;
+    }
+
+    .error-page-card .error-header h1 {
+        font-size: 3rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .hall-pass-setup-page {
+        padding: 1rem;
+    }
+
+    .hall-pass-setup-page .master-toggle-container,
+    .hall-pass-setup-page .pass-type-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .hall-pass-setup-page .pass-type-limits {
+        grid-template-columns: 1fr;
+    }
 }
 
 .hall-pass-setup-page .tooltip-inner,

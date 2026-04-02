@@ -23,6 +23,7 @@ class EconomyBalanceChecker {
         this.debounceTimer = null;
         this.currentCWI = null;
         this.bypassSelector = options.bypassSelector || null;
+        this.resultHandler = typeof options.resultHandler === 'function' ? options.resultHandler : null;
 
         if (this.autoValidate) {
             this.initializeAutoValidation();
@@ -181,7 +182,18 @@ class EconomyBalanceChecker {
 
         try {
             const result = await this.validate(feature, value, frequency, additionalParams);
-            this.displayWarnings(result.warnings, result.recommendations);
+            if (this.resultHandler) {
+                this.resultHandler({
+                    input,
+                    feature,
+                    value,
+                    frequency,
+                    additionalParams,
+                    result,
+                });
+            } else {
+                this.displayWarnings(result.warnings, result.recommendations);
+            }
 
             // Add visual feedback to input
             this.updateInputFeedback(input, result.warnings);
@@ -521,6 +533,31 @@ class EconomyBalanceChecker {
         container.innerHTML = html;
     }
 
+    formatCurrency(value) {
+        const amount = Number(value);
+        if (!Number.isFinite(amount)) {
+            return '$0.00';
+        }
+        return `$${amount.toFixed(2)}`;
+    }
+
+    getRentFrequencyLabel(frequencyType, customFrequencyValue = null, customFrequencyUnit = null) {
+        if (frequencyType === 'custom') {
+            const value = customFrequencyValue || 1;
+            const unit = (customFrequencyUnit || 'days').toLowerCase();
+            const singularUnit = unit.endsWith('s') ? unit.slice(0, -1) : unit;
+            const labelUnit = Number(value) === 1 ? singularUnit : (unit.endsWith('s') ? unit : `${unit}s`);
+            return `per ${value} ${labelUnit}`;
+        }
+
+        return {
+            daily: 'per day',
+            weekly: 'per week',
+            biweekly: 'per 2 weeks',
+            monthly: 'per month',
+        }[frequencyType] || 'per period';
+    }
+
     /**
      * Add recommendation badges to form sections
      */
@@ -578,6 +615,8 @@ style.textContent = `
     }
 
     .cwi-info-box {
+        width: 100%;
+        max-width: none;
         padding: 1rem;
         margin-bottom: 1rem;
         background: linear-gradient(135deg, #e3f2fd 0%, #f0f8ff 100%);

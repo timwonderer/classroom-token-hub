@@ -4,154 +4,15 @@
 <head>
   <meta charset="UTF-8">
   <title>Privacy & Data Handling | Classroom Token Hub</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
   <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
-  <style>
-    body {
-      background: var(--neutral-100);
-      font-family: var(--font-family);
-      padding: 2rem;
-      min-height: 100vh;
-    }
-
-    .container {
-      background-color: var(--surface);
-      padding: 3rem;
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-lg);
-      max-width: 80%;
-      margin: auto;
-    }
-
-    h1 {
-      color: var(--primary);
-      font-weight: 700;
-      font-size: 2rem;
-      margin-bottom: 0.5rem;
-    }
-
-    .last-updated {
-      color: var(--text-secondary);
-      font-size: 0.95rem;
-      margin-bottom: 2rem;
-    }
-
-    h2 {
-      color: var(--primary);
-      font-weight: 600;
-      font-size: 1.5rem;
-      margin-top: 2rem;
-      margin-bottom: 1rem;
-      border-bottom: 2px solid var(--border-color);
-      padding-bottom: 0.5rem;
-    }
-
-    h3 {
-      font-weight: 600;
-      font-size: 1.2rem;
-      margin-top: 1.5rem;
-      margin-bottom: 1rem;
-    }
-
-    .teacher-section {
-      background-color: var(--warning-subtle);
-      border-left: 4px solid var(--warning);
-      padding: 1.5rem;
-      margin: 1.5rem 0;
-      border-radius: 5px;
-    }
-
-    .teacher-section h3 {
-      color: var(--warning);
-      margin-top: 0;
-    }
-
-    .student-section {
-      background-color: var(--info-subtle);
-      border-left: 4px solid var(--info);
-      padding: 1.5rem;
-      margin: 1.5rem 0;
-      border-radius: 5px;
-    }
-
-    .student-section h3 {
-      color: var(--info);
-      margin-top: 0;
-    }
-
-    .student-section .additional-info {
-      margin-top: 1rem;
-      padding-top: 1rem;
-      border-top: 1px solid var(--info);
-    }
-
-    ul {
-      margin-bottom: 1rem;
-      padding-left: 1.5rem;
-    }
-
-    li {
-      margin-bottom: 0.75rem;
-      line-height: 1.6;
-    }
-
-    li strong {
-      color: var(--primary);
-    }
-
-    p {
-      line-height: 1.6;
-      color: var(--text-primary);
-      margin-bottom: 1rem;
-    }
-
-    .info-box {
-      background-color: var(--neutral-100);
-      padding: 1rem;
-      border-radius: 5px;
-      margin: 1rem 0;
-      border-left: 3px solid var(--neutral-500);
-    }
-
-    .retention-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 1rem 0 1.5rem;
-    }
-
-    .retention-table th,
-    .retention-table td {
-      border: 1px solid var(--border-color);
-      padding: 0.85rem;
-      vertical-align: top;
-      text-align: left;
-    }
-
-    .retention-table th {
-      background: var(--neutral-100);
-      color: var(--primary);
-      font-weight: 600;
-    }
-
-    .btn-secondary {
-      background-color: var(--neutral-500);
-      border: none;
-      padding: 0.75rem 1.5rem;
-      font-weight: 500;
-      transition: background-color 0.2s;
-    }
-
-    .btn-secondary:hover {
-      background-color: var(--neutral-600);
-    }
-  </style>
 </head>
 
-<body>
-  <div class="container">
-    <h1>Classroom Token Hub Data Handling and Privacy Policy</h1>
-    <p class="last-updated">Last Updated: March 13, 2026</p>
+<body class="legal-page">
+  <div class="legal-container">
+    <h1 class="legal-title">Classroom Token Hub Data Handling and Privacy Policy</h1>
+    <p class="legal-last-updated">Last Updated: March 13, 2026</p>
 
     <h2>Purpose</h2>
     <p>This document explains the type of data you will provide in order to use this application, ways we handle and
@@ -164,7 +25,7 @@
 
     <h2>What you must provide to use this application</h2>
 
-    <div class="teacher-section">
+    <div class="legal-role-box legal-role-box--teacher">
       <h3>If you are a teacher user</h3>
       <ul>
         <li><strong>Date of Birth</strong>: Used for identity verification in account recovery.</li>
@@ -175,7 +36,7 @@
       </ul>
     </div>
 
-    <div class="student-section">
+    <div class="legal-role-box legal-role-box--student">
       <h3>If you are a student user</h3>
       <p>When your teacher created your account, they have given us these information:</p>
       <ul>
@@ -186,7 +47,7 @@
         <li><strong>Class Identifier</strong>: We use this to show you the name of the class.</li>
       </ul>
 
-      <div class="additional-info">
+      <div class="legal-additional-info">
         <p><strong>In addition, you will need to provide</strong></p>
         <ul>
           <li><strong>Theme Word</strong>: A unique word that you associate with yourself; used to generate your login
@@ -232,7 +93,7 @@
     <h3>Operational Retention Schedule</h3>
     <p>The application also keeps limited operational and security records so we can authenticate users, correlate support tickets, investigate failures, and keep the service stable. The table below describes the current default retention windows and how deletion works.</p>
 
-    <table class="retention-table">
+    <table class="legal-table">
       <thead>
         <tr>
           <th>Data category</th>

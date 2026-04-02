@@ -507,15 +507,14 @@
             <div id="collapseAmount" class="accordion-collapse collapse show" aria-labelledby="headingAmount"
               data-bs-parent="#rentSettingsAccordion">
               <div class="accordion-body">
-                <!-- Economy Balance Check -->
-                <div id="cwi-info" class="mb-3"></div>
+                <div id="rent-recommendation-box" class="mb-4"></div>
 
                 <div class="row">
                   <div class="col-md-6 mb-3">
                     <label for="rent_amount" class="form-label fw-bold">Rent Amount ($)</label>
                     <input type="number" step="0.01" min="0" class="form-control" id="rent_amount" name="rent_amount"
                       value="{{ settings.rent_amount }}" data-economy-validate="rent" required>
-                    <small class="text-muted">How much students pay per rent period</small>
+                    <small id="rent-amount-feedback" class="d-block mt-1 text-muted">How much students pay per rent period</small>
                   </div>
 
                   <div class="col-md-6 mb-3">
@@ -1299,40 +1298,159 @@
 
     // Initialize Economy Balance Checker
     if (typeof EconomyBalanceChecker !== 'undefined') {
+      const recommendationBox = document.getElementById('rent-recommendation-box');
+      const rentAmountFeedback = document.getElementById('rent-amount-feedback');
+      const economyWarnings = document.getElementById('economy-warnings');
+      const economyHealthUrl = '{{ url_for("admin.economy_health", block=settings_block) }}';
+      let latestAnalysis = null;
+
+      const renderRentRecommendation = (result) => {
+        if (!recommendationBox || !result?.recommendations) return;
+
+        const frequencyType = document.getElementById('frequency_type')?.value || 'monthly';
+        const customFrequencyValue = document.getElementById('custom_frequency_value')?.value || 1;
+        const customFrequencyUnit = document.getElementById('custom_frequency_unit')?.value || 'days';
+        const frequencyLabel = economyChecker.getRentFrequencyLabel(
+          frequencyType,
+          customFrequencyValue,
+          customFrequencyUnit
+        );
+        const tooltipText = latestAnalysis
+          ? `This range is based on your current Classroom Wage Index of ${economyChecker.formatCurrency(latestAnalysis.cwi)} and your payroll configuration for this class.`
+          : 'This range is based on your current Classroom Wage Index and payroll configuration for this class.';
+
+        recommendationBox.innerHTML = `
+          <div class="rent-recommendation-card">
+            <div class="rent-recommendation-header">
+              <div>
+                <div class="rent-recommendation-eyebrow">Recommended Range</div>
+                <div class="rent-recommendation-title">
+                  Based on your current payroll settings and the calculated CWI, the recommended range for rent is
+                  <strong>${economyChecker.formatCurrency(result.recommendations.min)} - ${economyChecker.formatCurrency(result.recommendations.max)}</strong>
+                  <span class="text-muted">${frequencyLabel}</span>.
+                </div>
+              </div>
+              <button type="button" class="btn btn-link rent-recommendation-info p-0"
+                data-bs-toggle="tooltip" data-bs-placement="top" title="${tooltipText}">
+                <span class="material-symbols-outlined icon-inline">info</span>
+              </button>
+            </div>
+            <div class="rent-recommendation-meta">
+              <a href="${economyHealthUrl}" class="btn btn-sm btn-primary rent-recommendation-action">Open Economy Health</a>
+            </div>
+          </div>
+        `;
+
+        recommendationBox.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(trigger => new bootstrap.Tooltip(trigger));
+      };
+
+      const renderRentAmountFeedback = (result) => {
+        if (!rentAmountFeedback) return;
+
+        if (economyChecker.isBypassed()) {
+          rentAmountFeedback.className = 'd-block mt-1 rent-amount-feedback text-muted';
+          rentAmountFeedback.textContent = 'CWI guidance is currently bypassed for this class.';
+          return;
+        }
+
+        const warning = result?.warnings?.[0];
+        if (!warning) {
+          rentAmountFeedback.className = 'd-block mt-1 rent-amount-feedback text-muted';
+          rentAmountFeedback.textContent = 'How much students pay per rent period';
+          return;
+        }
+
+        if (warning.level === 'warning') {
+          const lowerMessage = warning.message.toLowerCase();
+          rentAmountFeedback.className = 'd-block mt-1 rent-amount-feedback rent-amount-feedback-warning';
+          rentAmountFeedback.textContent = lowerMessage.includes('too high')
+            ? 'Rent may be too high compared to your payroll.'
+            : 'Rent may be too low compared to your payroll.';
+          return;
+        }
+
+        rentAmountFeedback.className = 'd-block mt-1 rent-amount-feedback rent-amount-feedback-success';
+        rentAmountFeedback.textContent = 'Rent is within the recommended range for your payroll.';
+      };
+
       const economyChecker = new EconomyBalanceChecker({
         warningsContainer: '#economy-warnings',
         bypassSelector: '#bypass_cwi_warnings',
-        expectedWeeklyHours: {{ (payroll_settings.expected_weekly_hours if payroll_settings and payroll_settings.expected_weekly_hours is not none else 5.0) | float }}
-    });
+        expectedWeeklyHours: {{ (payroll_settings.expected_weekly_hours if payroll_settings and payroll_settings.expected_weekly_hours is not none else 5.0) | float }},
+        resultHandler: ({ feature, result }) => {
+          if (feature !== 'rent') {
+            economyChecker.displayWarnings(result.warnings, result.recommendations);
+            return;
+          }
 
-  // Display CWI info if payroll is configured
-  const currentBlock = '{{ settings_block }}';
-  economyChecker.analyzeEconomy(null, currentBlock).then(analysis => {
-    economyChecker.displayCWIInfo(analysis, '#cwi-info');
-  }).catch(err => {
-    console.log('Payroll not configured yet, skipping CWI display');
-  });
+          if (economyWarnings) {
+            economyWarnings.innerHTML = '';
+            economyWarnings.style.display = 'none';
+          }
+          renderRentRecommendation(result);
+          renderRentAmountFeedback(result);
+        }
+      });
 
-  // Re-validate rent when frequency changes
-  const rentAmountInput = document.getElementById('rent_amount');
-  if (rentAmountInput) {
-    const fieldsToWatch = [
-      { id: 'frequency_type', event: 'change' },
-      { id: 'custom_frequency_value', event: 'input' },
-      { id: 'custom_frequency_unit', event: 'change' }
-    ];
-
-    fieldsToWatch.forEach(field => {
-      const inputElement = document.getElementById(field.id);
-      if (inputElement) {
-        inputElement.addEventListener(field.event, function () {
-          // Trigger validation on rent amount
+      const currentBlock = '{{ settings_block }}';
+      economyChecker.analyzeEconomy(null, currentBlock).then(analysis => {
+        latestAnalysis = analysis;
+        const rentAmountInput = document.getElementById('rent_amount');
+        if (rentAmountInput?.value) {
           rentAmountInput.dispatchEvent(new Event('input'));
+        }
+      }).catch(err => {
+        if (recommendationBox) {
+          recommendationBox.innerHTML = `
+            <div class="rent-recommendation-card rent-recommendation-card-muted">
+              <div class="rent-recommendation-title">Configure payroll first to see the recommended rent range for this class.</div>
+              <div class="rent-recommendation-meta">
+                <a href="${economyHealthUrl}" class="btn btn-sm btn-primary rent-recommendation-action">Open Economy Health</a>
+              </div>
+            </div>
+          `;
+        }
+        if (rentAmountFeedback) {
+          rentAmountFeedback.className = 'd-block mt-1 rent-amount-feedback text-muted';
+          rentAmountFeedback.textContent = 'Payroll data is required for live rent guidance.';
+        }
+        console.log('Payroll not configured yet, skipping rent guidance');
+      });
+
+      const rentAmountInput = document.getElementById('rent_amount');
+      if (rentAmountInput) {
+        const fieldsToWatch = [
+          { id: 'frequency_type', event: 'change' },
+          { id: 'custom_frequency_value', event: 'input' },
+          { id: 'custom_frequency_unit', event: 'change' }
+        ];
+
+        fieldsToWatch.forEach(field => {
+          const inputElement = document.getElementById(field.id);
+          if (inputElement) {
+            inputElement.addEventListener(field.event, function () {
+              rentAmountInput.dispatchEvent(new Event('input'));
+            });
+          }
         });
+
+        const bypassInput = document.getElementById('bypass_cwi_warnings');
+        if (bypassInput) {
+          bypassInput.addEventListener('change', function () {
+            if (this.checked) {
+              if (economyWarnings) {
+                economyWarnings.innerHTML = '';
+                economyWarnings.style.display = 'none';
+              }
+              renderRentAmountFeedback(null);
+              return;
+            }
+
+            rentAmountInput.dispatchEvent(new Event('input'));
+          });
+        }
       }
-    });
-  }
-  }
+    }
 
   // -------------------- CLASS SELECTOR & APPLY TO ALL --------------------
   const settingsBlockSelector = document.getElementById('settings_block_selector');

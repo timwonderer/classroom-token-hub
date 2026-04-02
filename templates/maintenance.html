@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scheduled Maintenance</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -15,151 +15,24 @@
         rel="stylesheet">
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
-    <style>
-        :root {
-            --gradient-start: var(--primary);
-            --gradient-end: color-mix(in srgb, var(--primary) 30%, black);
-            --text-primary: var(--neutral-900);
-            --text-secondary: var(--neutral-500);
-            --card-bg: var(--surface);
-            --muted-bg: var(--neutral-50);
-        }
-
-        .material-symbols-outlined {
-            font-variation-settings:
-                'FILL' 0,
-                'wght' 400,
-                'GRAD' 0,
-                'opsz' 24;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        body {
-            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-            font-family: Inter, sans-serif;
-        }
-
-        .card {
-            border: none;
-
-            padding: 2rem;
-            max-width: 960px;
-            width: 100%;
-            overflow: hidden;
-        }
-
-        .card-header {
-            background: linear-gradient(135deg, color-mix(in srgb, white 8%, transparent), color-mix(in srgb, white 2%, transparent));
-            border-bottom: 1px solid color-mix(in srgb, white 10%, transparent);
-            padding: 0 1.75rem 1rem 1.75rem;
-
-        }
-
-        .status-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            background: color-mix(in srgb, white 15%, transparent);
-            color: white;
-            padding: 0.4rem 0.85rem;
-
-            font-size: 0.95rem;
-            font-weight: 600;
-        }
-
-        .card-body {
-            padding: 0 1.75rem 0 1.75rem;
-            background: var(--card-bg);
-        }
-
-        .lead {
-            color: var(--text-primary);
-            font-weight: 700;
-            font-size: 1.2rem;
-        }
-
-        .text-secondary {
-            color: var(--text-secondary) !important;
-        }
-
-        .icon-circle {
-            width: 56px;
-            height: 56px;
-
-            background: color-mix(in srgb, var(--primary) 12%, transparent);
-            color: var(--gradient-start);
-            display: grid;
-            place-items: center;
-            font-size: 1.6rem;
-        }
-
-        .info-tile {
-            background: var(--muted-bg);
-
-            padding: 1rem 1.25rem;
-        }
-
-        .list-group-item {
-            border: none;
-            padding: 0.75rem 0;
-        }
-
-        .footer-note {
-            font-size: 0.95rem;
-            color: var(--text-secondary);
-        }
-
-        .badge-container {
-            margin-bottom: 1rem;
-
-            padding: 1rem;
-            border-style: solid;
-            border-width: 0 0 0 8px;
-            color: black;
-        }
-
-        .badge-label {
-            font-weight: 400;
-            font-size: 12pt;
-            color: white;
-            padding: 3px 8px 3px 8px;
-            width: fit-content;
-
-            text-align: center;
-        }
-
-        .badge-icon {
-            font-size: 24px;
-            vertical-align: middle;
-        }
-    </style>
 </head>
 
-<body>
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center text-white" style="margin:0">
+<body class="maintenance-page">
+    <div class="card maintenance-card">
+        <div class="card-header maintenance-header d-flex justify-content-between align-items-center text-white">
             <div>
-                <div class="status-pill">
-                    <span class="material-symbols-outlined" style="color: var(--primary); font-size:40px;vertical-align:-10%"
+                <div class="maintenance-status-pill">
+                    <span class="material-symbols-outlined maintenance-title-icon"
                         aria-hidden="true">computer_cancel</span>
-                    <span class="fs-2 align-middle" style="color: var(--primary);">Classrooom Token Hub is <span
-                            style="font-weight:300">{{ status_description or "Unavailable" }}</span></span>
+                    <span class="fs-2 align-middle maintenance-title">Classrooom Token Hub is <span
+                            class="fw-light">{{ status_description or "Unavailable" }}</span></span>
                 </div>
-                <div
-                    style=" padding: 1rem; background-color: color-mix(in srgb, var(--primary) 16%, transparent); border-style: solid; border-color: var(--primary) var(--primary) var(--primary) var(--primary); border-width: 1px 1px 1px 8px; margin-top: 1rem; color: black;">
-                    <div class="bg-primary text-white"
-                        style="font-weight: 400; font-size: 12pt;  padding: 3px 8px 3px 8px; width: fit-content; text-align: center;">
-                        <span class="material-symbols-outlined" style="font-size: 24px; vertical-align: -25%;"
+                <div class="maintenance-note">
+                    <div class="maintenance-note-label">
+                        <span class="material-symbols-outlined maintenance-note-icon"
                             aria-hidden="true">info</span> NOTE
                     </div>
-                    <div style="margin-top: 0.5rem; margin-bottom: 0;font-weight:300">
+                    <div class="mt-2 mb-0 fw-light">
                         <span style="font-weight:600">Classroom Token Hub</span> is an independently developed project
                         by a single public school teacher developer. Because this project initially started as a passion
                         project and has since grown into a full-featured web application that is offered to other
@@ -172,20 +45,19 @@
             </div>
         </div>
 
-        <div class="card-body">
-            <div id="badge-container" class="badge-container">
-                <div id="badge-label" class="badge-label">
-                    <span id="badge-icon" class="material-symbols-outlined badge-icon" aria-hidden="true">{{ badge_icon
+        <div class="card-body maintenance-body">
+            <div id="badge-container" class="maintenance-badge-banner">
+                <div id="badge-label" class="maintenance-badge-label">
+                    <span id="badge-icon" class="material-symbols-outlined maintenance-note-icon" aria-hidden="true">{{ badge_icon
                         }}</span> <span id="badge-text">{{ badge_text|upper }}</span>
                 </div>
-                <div style="margin-top: 0.5rem; margin-bottom: 0;">{{ message or "We have detected an issue with the
+                <div class="maintenance-badge-copy">{{ message or "We have detected an issue with the
                     application and we are currently investigating it." }}</div>
             </div>
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
-                    <div class="info-tile h-100 border border-2 shadow-sm">
-                        <div class="fw-semibold text-uppercase text-secondary"
-                            style="letter-spacing: 0.08em; font-size: 0.8rem;">Planned timeline</div>
+                    <div class="maintenance-info-tile h-100 border border-2 shadow-sm">
+                        <div class="fw-semibold text-uppercase text-secondary maintenance-tile-label">Planned timeline</div>
                         <div class="fs-5 fw-bold mt-1">{{ expected_back or "We currently do not have an estimated time
                             of recovery." }}</div>
                         <p class="mb-0 text-secondary mt-1">Depending on the complexity of the issue, the actual time
@@ -193,9 +65,8 @@
                     </div>
                 </div>
                 <div class="col-md-6">
-                    <div class="info-tile h-100 border border-2 shadow-sm">
-                        <div class="fw-semibold text-uppercase text-secondary"
-                            style="letter-spacing: 0.08em; font-size: 0.8rem;">Want to know the latest?</div>
+                    <div class="maintenance-info-tile h-100 border border-2 shadow-sm">
+                        <div class="fw-semibold text-uppercase text-secondary maintenance-tile-label">Want to know the latest?</div>
                         <p class="mb-0 text-secondary mt-1">Visit <a href="https://status.classroomtokenhub.com"
                                 target="_blank" rel="noopener noreferrer">https://status.classroomtokenhub.com</a> for
                             real-time updates.</p>
@@ -206,20 +77,19 @@
             <div class="row g-3 align-items-center mb-3">
                 <div class="col-md-8">
                     <div class="mt-2">
-                        <a href="/sysadmin/login?next=%2F" class="btn btn-sm btn-outline-light"
-                            style="background:var(--primary);color:white;border-color:var(--primary)">
+                        <a href="/sysadmin/login?next=%2F" class="btn btn-sm btn-primary">
                             <span class="material-symbols-outlined icon-md"
                                 aria-hidden="true">admin_panel_settings</span>
                             System Admin: Sign In For Bypass
                         </a>
-                        <div class="text-secondary mt-2" style="font-size:0.8rem">Authorized system admins can sign in
+                        <div class="text-secondary mt-2 maintenance-bypass-note">Authorized system admins can sign in
                             to bypass maintenance and test live functionality (teacher/student flows) without exposing
                             the app to end users.</div>
                     </div>
                 </div>
                 <div class="col-md-4 text-md-end text-center">
                     <button id="refreshButton" class="btn btn-primary px-4" type="button">Refresh Page</button>
-                    <div class="footer-note mt-2">We'll retry automatically in <span id="countdown">60</span>s.</div>
+                    <div class="maintenance-footer-note mt-2">We'll retry automatically in <span id="countdown">60</span>s.</div>
                 </div>
             </div>
         </div>
