@@ -2524,6 +2524,12 @@ class TeacherOnboarding(db.Model):
         self.widget_dismissed_at = utc_now()
         self.last_activity_at = utc_now()
 
+    def undismiss_widget(self):
+        """Restore the getting started widget after it was dismissed."""
+        self.widget_dismissed = False
+        self.widget_dismissed_at = None
+        self.last_activity_at = utc_now()
+
 
 # -------------------- ANNOUNCEMENT MODEL --------------------
 class Announcement(db.Model):
