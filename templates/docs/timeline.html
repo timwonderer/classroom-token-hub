@@ -4,389 +4,7 @@
 
 {% block title %}Project Timeline — Classroom Token Hub{% endblock %}
 
-{% block extra_head %}
-<style>
-/* ── Page-scoped timeline tokens ──────────────────────────────────────────────
-   All category/era colors are defined once here as CSS custom properties.
-   No hex codes appear in any rule below — every color reference uses var().
-   Per design_system.md: "NEVER use hex codes in templates."
-   ─────────────────────────────────────────────────────────────────────────── */
-:root {
-    /* Features (green) */
-    --tl-features:         #2e7d5b;
-    --tl-features-bg:      #e6f4ed;
-
-    /* Fixes / crises (red) */
-    --tl-fixes:            #c0392b;
-    --tl-fixes-bg:         #fef2f2;
-    --tl-fixes-border:     #fca5a5;
-
-    /* Security (orange) */
-    --tl-security:         #d35400;
-    --tl-security-text:    #c05621;
-    --tl-security-bg:      #fff7ed;
-
-    /* Architecture (blue) */
-    --tl-arch:             #2980b9;
-    --tl-arch-text:        #2563eb;
-    --tl-arch-bg:          #eff6ff;
-
-    /* Philosophy / Era I (purple) */
-    --tl-phil:             #7d3c98;
-    --tl-phil-dark:        #5b2d7e;
-    --tl-phil-text:        #7c3aed;
-    --tl-phil-bg:          #faf5ff;
-    --tl-phil-bg-light:    #f3e8ff;
-    --tl-phil-border:      #d8b4fe;
-
-    /* Mobile (sky) */
-    --tl-mobile-bg:        #e0f2fe;
-    --tl-mobile-text:      #0369a1;
-
-    /* Analytics (leaf green) */
-    --tl-analytics-bg:     #f0fdf4;
-    --tl-analytics-text:   #15803d;
-
-    /* Warning / lesson (amber) */
-    --tl-warning-bg:       #fefce8;
-    --tl-warning-text:     #854d0e;
-    --tl-warning-border:   #fde68a;
-
-    /* Patch badge (light green) */
-    --tl-patch-bg:         #f0f9f5;
-    --tl-patch-border:     #b2dfcc;
-
-    /* Era II background (amber) */
-    --tl-era-ii-bg:        #fff3e0;
-    --tl-era-ii-border:    #fdba74;
-
-    /* Era III background (sky) */
-    --tl-era-iii-bg:       #e0f2fe;
-    --tl-era-iii-border:   #7dd3fc;
-
-    /* Era IV background (leaf green) */
-    --tl-era-iv-bg:        #dcfce7;
-    --tl-era-iv-border:    #86efac;
-
-    /* Release badge border (teal-tinted) */
-    --tl-release-border:   #b2d0cc;
-
-    /* Hero darkening shade (deep teal for gradient end) */
-    --tl-hero-dark:        #0d2e2a;
-}
-
-/* ── Timeline Page Layout ── */
-.timeline-page {
-    background: var(--neutral-100);
-    min-height: 100vh;
-}
-
-/* ── Hero ── */
-.timeline-hero {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--tl-hero-dark) 100%);
-    color: white;
-    padding: 3.5rem 0 2.5rem;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-}
-.timeline-hero::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-}
-.timeline-hero h1 { font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 700; margin-bottom: 0.5rem; color: white; }
-.timeline-hero .subtitle { font-size: 1.1rem; opacity: 0.8; max-width: 600px; margin: 0 auto 1.5rem; }
-.timeline-hero .badge-row { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
-.timeline-hero .stat-badge {
-    /* White tint over dark primary background — white overlay, not Bootstrap opacity utility */
-    background: color-mix(in srgb, white 12%, transparent);
-    border: 1px solid color-mix(in srgb, white 20%, transparent);
-    border-radius: var(--radius-pill);
-    padding: 0.25rem 0.85rem;
-    font-size: 0.82rem;
-    font-weight: 500;
-}
-
-/* ── Filters ── */
-.timeline-filters {
-    background: var(--surface);
-    border-bottom: 1px solid var(--neutral-200);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    padding: 0.75rem 0;
-}
-.filter-group { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: center; }
-.filter-btn {
-    border: 1.5px solid var(--neutral-300);
-    background: transparent;
-    color: var(--text-secondary);
-    border-radius: var(--radius-pill);
-    padding: 0.3rem 1rem;
-    font-size: 0.8rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-.filter-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-subtle); }
-.filter-btn.active                              { background: var(--primary);      color: white; border-color: var(--primary); }
-.filter-btn[data-filter="features"].active      { background: var(--tl-features);  border-color: var(--tl-features); }
-.filter-btn[data-filter="fixes"].active         { background: var(--tl-fixes);     border-color: var(--tl-fixes); }
-.filter-btn[data-filter="security"].active      { background: var(--tl-security);  border-color: var(--tl-security); }
-.filter-btn[data-filter="architecture"].active  { background: var(--tl-arch);      border-color: var(--tl-arch); }
-.filter-btn[data-filter="philosophy"].active    { background: var(--tl-phil);      border-color: var(--tl-phil); }
-
-/* ── Main Timeline Container ── */
-.timeline-wrap { max-width: 900px; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
-
-/* ── Era Dividers ── */
-.era-divider {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin: 2.5rem 0 1.5rem;
-}
-.era-divider-line { flex: 1; height: 1px; background: var(--neutral-200); }
-.era-badge {
-    border-radius: var(--radius-pill);
-    padding: 0.4rem 1.2rem;
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-.era-i   { background: var(--tl-phil-bg-light); color: var(--tl-phil);     border: 1px solid var(--tl-phil-border); }
-.era-ii  { background: var(--tl-era-ii-bg);     color: var(--tl-fixes);    border: 1px solid var(--tl-era-ii-border); }
-.era-iii { background: var(--tl-era-iii-bg);    color: var(--tl-arch);     border: 1px solid var(--tl-era-iii-border); }
-.era-iv  { background: var(--tl-era-iv-bg);     color: var(--tl-features); border: 1px solid var(--tl-era-iv-border); }
-
-/* ── Timeline Track ── */
-.timeline-track {
-    position: relative;
-    padding-left: 2.5rem;
-}
-.timeline-track::before {
-    content: '';
-    position: absolute;
-    left: 0.65rem;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: linear-gradient(to bottom, var(--neutral-200), var(--neutral-300), var(--neutral-200));
-}
-
-/* ── Timeline Entry ── */
-.tl-entry {
-    position: relative;
-    margin-bottom: 1.25rem;
-    transition: opacity 0.25s ease, transform 0.25s ease;
-}
-.tl-entry.hidden {
-    display: none;
-}
-
-/* ── Dot on the line ── */
-.tl-dot {
-    position: absolute;
-    left: -2.5rem;
-    top: 1rem;
-    width: 1.1rem;
-    height: 1.1rem;
-    border-radius: 50%;
-    border: 2.5px solid var(--surface);
-    box-shadow: 0 0 0 2px var(--neutral-300);
-    background: var(--neutral-400);
-    z-index: 1;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.tl-dot.dot-features     { background: var(--tl-features); box-shadow: 0 0 0 2px var(--tl-features); }
-.tl-dot.dot-fixes        { background: var(--tl-fixes);    box-shadow: 0 0 0 2px var(--tl-fixes); }
-.tl-dot.dot-security     { background: var(--tl-security); box-shadow: 0 0 0 2px var(--tl-security); }
-.tl-dot.dot-architecture { background: var(--tl-arch);     box-shadow: 0 0 0 2px var(--tl-arch); }
-.tl-dot.dot-philosophy   { background: var(--tl-phil);     box-shadow: 0 0 0 2px var(--tl-phil); }
-.tl-dot.dot-milestone    { background: var(--secondary);   box-shadow: 0 0 0 2px var(--secondary); width: 1.3rem; height: 1.3rem; left: -2.6rem; top: 0.9rem; }
-
-.tl-entry:hover .tl-dot { transform: scale(1.3); }
-
-/* ── Card ── */
-.tl-card {
-    background: var(--surface);
-    border: 1px solid var(--neutral-200);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    box-shadow: var(--shadow-sm);
-    transition: box-shadow 0.2s ease;
-}
-.tl-entry:hover .tl-card { box-shadow: var(--shadow-md); }
-
-.tl-card-header {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: 0.9rem 1rem;
-    cursor: pointer;
-    user-select: none;
-}
-.tl-card-header:hover { background: var(--neutral-50); }
-
-.tl-version-badge {
-    font-size: 0.72rem;
-    font-weight: 700;
-    padding: 0.2rem 0.55rem;
-    border-radius: var(--radius-sm);
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-    flex-shrink: 0;
-    margin-top: 0.15rem;
-}
-.badge-release  { background: var(--primary-subtle);    color: var(--primary);          border: 1px solid var(--tl-release-border); }
-.badge-patch    { background: var(--tl-patch-bg);       color: var(--tl-features);      border: 1px solid var(--tl-patch-border); }
-.badge-crisis   { background: var(--tl-fixes-bg);       color: var(--tl-fixes);         border: 1px solid var(--tl-fixes-border); }
-.badge-milestone{ background: var(--tl-warning-bg);     color: var(--tl-warning-text);  border: 1px solid var(--tl-warning-border); }
-.badge-future   { background: var(--tl-phil-bg-light);  color: var(--tl-phil);          border: 1px solid var(--tl-phil-border); }
-.badge-era      { background: var(--neutral-50);        color: var(--text-secondary);   border: 1px solid var(--neutral-200); font-style: italic; }
-
-.tl-meta { flex: 1; min-width: 0; }
-.tl-title { font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin: 0 0 0.25rem; }
-.tl-date  { font-size: 0.75rem; color: var(--text-muted); }
-
-.tl-tags { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.3rem; }
-.tl-tag  {
-    font-size: 0.68rem;
-    font-weight: 600;
-    padding: 0.1rem 0.45rem;
-    border-radius: var(--radius-pill);
-    letter-spacing: 0.03em;
-}
-.tag-features     { background: var(--tl-features-bg);  color: var(--tl-features); }
-.tag-fixes        { background: var(--tl-fixes-bg);      color: var(--tl-fixes); }
-.tag-security     { background: var(--tl-security-bg);   color: var(--tl-security-text); }
-.tag-architecture { background: var(--tl-arch-bg);       color: var(--tl-arch-text); }
-.tag-philosophy   { background: var(--tl-phil-bg);       color: var(--tl-phil-text); }
-.tag-mobile       { background: var(--tl-mobile-bg);     color: var(--tl-mobile-text); }
-.tag-analytics    { background: var(--tl-analytics-bg);  color: var(--tl-analytics-text); }
-.tag-docs         { background: var(--neutral-50);       color: var(--neutral-600); border: 1px solid var(--neutral-200); }
-
-.tl-chevron {
-    flex-shrink: 0;
-    transition: transform 0.2s ease;
-    color: var(--text-muted);
-    font-size: 1.1rem;
-    line-height: 1;
-    margin-top: 0.1rem;
-}
-.tl-card.expanded .tl-chevron { transform: rotate(180deg); }
-
-.tl-card-body {
-    border-top: 1px solid var(--neutral-100);
-    padding: 1rem;
-    font-size: 0.875rem;
-    color: var(--text-primary);
-    display: none;
-}
-.tl-card.expanded .tl-card-body { display: block; }
-
-.tl-card-body ul { padding-left: 1.25rem; margin: 0.5rem 0; }
-.tl-card-body li { margin-bottom: 0.3rem; line-height: 1.5; }
-.tl-card-body .lesson-box {
-    background: var(--tl-warning-bg);
-    border-left: 3px solid var(--secondary);
-    padding: 0.6rem 0.9rem;
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    margin-top: 0.75rem;
-    font-size: 0.82rem;
-}
-.tl-card-body .lesson-box strong { color: var(--tl-warning-text); }
-.tl-card-body .crisis-box {
-    background: var(--tl-fixes-bg);
-    border-left: 3px solid var(--tl-fixes);
-    padding: 0.6rem 0.9rem;
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    margin-top: 0.75rem;
-    font-size: 0.82rem;
-}
-.tl-card-body .crisis-box strong { color: var(--tl-fixes); }
-
-/* ── No results ── */
-.no-results {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: var(--text-muted);
-    display: none;
-}
-
-/* ── Philosophy Section ── */
-.philosophy-section {
-    background: var(--surface);
-    border: 1px solid var(--neutral-200);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    margin-top: 2.5rem;
-}
-.philosophy-section .ph-header {
-    background: linear-gradient(135deg, var(--tl-phil), var(--tl-phil-dark));
-    color: white;
-    padding: 1.2rem 1.5rem;
-}
-
-.philosophy-section h5 {color: white;}
-.philosophy-section .ph-body { padding: 1.25rem 1.5rem; }
-.anti-goal-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 0.75rem;
-    margin-top: 0.75rem;
-}
-.anti-goal-item {
-    background: var(--neutral-50);
-    border: 1px solid var(--neutral-200);
-    border-radius: var(--radius-md);
-    padding: 0.7rem 0.9rem;
-    font-size: 0.82rem;
-    line-height: 1.5;
-}
-.anti-goal-item .ag-no  { color: var(--tl-fixes);    font-weight: 700; font-size: 0.7rem; letter-spacing: 0.05em; display: block; margin-bottom: 0.2rem; }
-.anti-goal-item .ag-yes { color: var(--tl-features);  font-size: 0.75rem; margin-top: 0.25rem; display: block; }
-
-/* ── Quote ── */
-.project-quote {
-    background: var(--primary-subtle);
-    border: 1px solid var(--tl-release-border);
-    border-radius: var(--radius-lg);
-    padding: 1.5rem;
-    margin-top: 2rem;
-
-}
-.project-quote blockquote {
-    font-size: 0.95rem;
-    line-height: 1.75;
-    color: var(--text-primary);
-
-    margin: 0 0 1rem;
-}
-.project-quote cite { font-size: 0.8rem; color: var(--text-muted); font-style: normal; }
-
-/* ── Back link ── */
-.back-bar {
-    background: var(--surface);
-    border-bottom: 1px solid var(--neutral-200);
-    padding: 0.6rem 1rem;
-}
-.back-bar a { color: var(--text-secondary); font-size: 0.82rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem; }
-.back-bar a:hover { color: var(--primary); }
-
-/* ── Responsive ── */
-@media (max-width: 576px) {
-    .timeline-track { padding-left: 2rem; }
-    .timeline-track::before { left: 0.5rem; }
-    .tl-dot { left: -2rem; width: 0.9rem; height: 0.9rem; top: 1.1rem; }
-    .tl-dot.dot-milestone { left: -2.15rem; width: 1.1rem; height: 1.1rem; }
-}
-</style>
-{% endblock %}
+{% block extra_head %}{% endblock %}
 
 {% block content %}
 <div class="timeline-page">
@@ -395,7 +13,7 @@
     <div class="back-bar">
         <div class="container">
             <a href="{{ url_for('docs.index') }}">
-                <span class="material-symbols-outlined" style="font-size:1rem;">arrow_back</span>
+                <span class="material-symbols-outlined timeline-back-icon">arrow_back</span>
                 Help & Support
             </a>
         </div>
@@ -416,23 +34,23 @@
             <div class="filter-group">
                 <button class="filter-btn active" data-filter="all" aria-pressed="true">All</button>
                 <button class="filter-btn" data-filter="features" aria-pressed="false">
-                    <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">add_circle</span>
+                    <span class="material-symbols-outlined timeline-inline-icon">add_circle</span>
                     Features
                 </button>
                 <button class="filter-btn" data-filter="fixes" aria-pressed="false">
-                    <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">build</span>
+                    <span class="material-symbols-outlined timeline-inline-icon">build</span>
                     Fixes & Crises
                 </button>
                 <button class="filter-btn" data-filter="security" aria-pressed="false">
-                    <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">security</span>
+                    <span class="material-symbols-outlined timeline-inline-icon">security</span>
                     Security
                 </button>
                 <button class="filter-btn" data-filter="architecture" aria-pressed="false">
-                    <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">schema</span>
+                    <span class="material-symbols-outlined timeline-inline-icon">schema</span>
                     Architecture
                 </button>
                 <button class="filter-btn" data-filter="philosophy" aria-pressed="false">
-                    <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">lightbulb</span>
+                    <span class="material-symbols-outlined timeline-inline-icon">lightbulb</span>
                     Philosophy
                 </button>
             </div>
@@ -446,7 +64,7 @@
         <div class="era-divider" data-era="all philosophy architecture">
             <div class="era-divider-line"></div>
             <span class="era-badge era-i">
-                <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">auto_awesome</span>
+                <span class="material-symbols-outlined timeline-era-icon">auto_awesome</span>
                 What if, I just build it myself?
             </span>
             <div class="era-divider-line"></div>
@@ -487,7 +105,7 @@
                             <li><strong>Insurance as Reality Response</strong> — Attendance isn't purely a moral choice; punishment disguised as realism is neither accurate nor educational</li>
                         </ul>
                         <strong>The Name Change: "Classroom Economy" → "Classroom Token Hub"</strong>
-                        <p style="margin-top:0.5rem">Not just a rebrand — a philosophical shift from a gimmick to a persistent, interconnected system. A hub for comprehensive financial literacy.</p>
+                        <p class="timeline-genesis-note">Not just a rebrand — a philosophical shift from a gimmick to a persistent, interconnected system. A hub for comprehensive financial literacy.</p>
                         <div class="lesson-box">
                             <strong>Key Learning:</strong> Real students find real bugs that simulated testing misses. Security must be foundational, not retrofitted.
                         </div>
@@ -536,7 +154,7 @@
         <div class="era-divider" data-era="all fixes security architecture">
             <div class="era-divider-line"></div>
             <span class="era-badge era-ii">
-                <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">crisis_alert</span>
+                <span class="material-symbols-outlined timeline-era-icon">crisis_alert</span>
                 Oh no, why can I see other classes?
             </span>
             <div class="era-divider-line"></div>
@@ -685,7 +303,7 @@
         <div class="era-divider" data-era="all features security architecture">
             <div class="era-divider-line"></div>
             <span class="era-badge era-iii">
-                <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">rocket_launch</span>
+                <span class="material-symbols-outlined timeline-era-icon">rocket_launch</span>
                 Wouldn't it be nice to have that too?
             </span>
             <div class="era-divider-line"></div>
@@ -961,7 +579,7 @@
         <div class="era-divider" data-era="all features fixes">
             <div class="era-divider-line"></div>
             <span class="era-badge era-iv">
-                <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">verified</span>
+                <span class="material-symbols-outlined timeline-era-icon">verified</span>
                 This is Classroom Token Hub. Your classroom economy, reimagined.
             </span>
             <div class="era-divider-line"></div>
@@ -1071,18 +689,18 @@
 
         <!-- No results message -->
         <div class="no-results" id="noResults">
-            <span class="material-symbols-outlined" style="font-size:2.5rem; color:var(--neutral-300); display:block; margin-bottom:0.5rem;">search_off</span>
+            <span class="material-symbols-outlined timeline-no-results-icon">search_off</span>
             No entries match this filter. Try a different category.
         </div>
 
         <!-- Philosophy Section -->
         <div class="philosophy-section">
             <div class="ph-header">
-                <h5 style="margin:0; font-weight:700;">
-                    <span class="material-symbols-outlined" style="vertical-align:middle; margin-right:0.4rem;">lightbulb</span>
+                <h5 class="timeline-philosophy-title">
+                    <span class="material-symbols-outlined timeline-philosophy-icon">lightbulb</span>
                     No, we are not about that life
                 </h5>
-                <p style="margin:0.3rem 0 0; opacity:0.8; font-size:0.85rem;">Classroom Token Hub was created as a classroom economy system that fosters responsibility and shared accountability. Flashy features and gamification are antithesis to our design principles. The following features were intentially omitted to preserve the integrity and consistency with our philosophy.</p>
+                <p class="timeline-philosophy-copy">Classroom Token Hub was created as a classroom economy system that fosters responsibility and shared accountability. Flashy features and gamification are antithesis to our design principles. The following features were intentially omitted to preserve the integrity and consistency with our philosophy.</p>
             </div>
             <div class="ph-body">
                 <div class="anti-goal-grid">

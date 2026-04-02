@@ -11498,8 +11498,8 @@ def onboarding_undismiss_widget():
             onboarding_record = TeacherOnboarding(teacher_id=admin_id)
             db.session.add(onboarding_record)
 
-        # Un-dismiss the widget by setting widget_dismissed_at to None
-        onboarding_record.widget_dismissed_at = None
+        # Restore the widget's active state so status checks show it again.
+        onboarding_record.undismiss_widget()
 
         db.session.commit()
 

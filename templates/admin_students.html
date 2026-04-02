@@ -9,21 +9,6 @@
 {%- endmacro %}
 
 {% block extra_styles %}
-<style>
-  .block-tab-content {
-    min-height: 400px;
-  }
-
-  .quick-action-btn {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
-  }
-
-  .hold-delete-btn:disabled {
-    cursor: not-allowed;
-    opacity: 0.65;
-  }
-</style>
 <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
 {% endblock %}
 
@@ -52,8 +37,7 @@
           <h2 class="accordion-header" id="headingAdd">
             <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
               data-bs-target="#collapseAdd" aria-expanded="false" aria-controls="collapseAdd">
-              <span class="material-symbols-outlined me-2"
-                style="font-size:25pt; vertical-align:middle;">person_add</span>
+              <span class="material-symbols-outlined icon-section me-2">person_add</span>
               <strong>Adding Students</strong>
             </button>
           </h2>
@@ -84,8 +68,7 @@
           <h2 class="accordion-header" id="headingClaim">
             <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
               data-bs-target="#collapseClaim" aria-expanded="false" aria-controls="collapseClaim">
-              <span class="material-symbols-outlined me-2"
-                style="font-size:25pt; vertical-align:middle;">person_check</span>
+              <span class="material-symbols-outlined icon-section me-2">person_check</span>
               <strong>Student Claim Account</strong>
             </button>
           </h2>
@@ -129,8 +112,7 @@
           <h2 class="accordion-header" id="headingEditClaim">
             <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
               data-bs-target="#collapseEditClaim" aria-expanded="false" aria-controls="collapseEditClaim">
-              <span class="material-symbols-outlined me-2"
-                style="font-size:25pt; vertical-align:middle;">person_text</span>
+              <span class="material-symbols-outlined icon-section me-2">person_text</span>
               <strong>Update Student Context</strong>
             </button>
           </h2>
@@ -166,8 +148,7 @@
           <h2 class="accordion-header" id="headingReset">
             <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
               data-bs-target="#collapseReset" aria-expanded="false" aria-controls="collapseReset">
-              <span class="material-symbols-outlined me-2"
-                style="font-size:25pt; vertical-align:middle;">restart_alt</span>
+              <span class="material-symbols-outlined icon-section me-2">restart_alt</span>
               <strong>Reset Student Account</strong>
             </button>
           </h2>
@@ -190,8 +171,7 @@
           <h2 class="accordion-header" id="headingRemove">
             <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
               data-bs-target="#collapseRemove" aria-expanded="false" aria-controls="collapseRemove">
-              <span class="material-symbols-outlined me-2"
-                style="font-size:25pt; vertical-align:middle;">person_remove</span>
+              <span class="material-symbols-outlined icon-section me-2">person_remove</span>
               <strong>Remove Students</strong>
             </button>
           </h2>
@@ -212,8 +192,7 @@
           <h2 class="accordion-header" id="headingExport">
             <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
               data-bs-target="#collapseExport" aria-expanded="false" aria-controls="collapseExport">
-              <span class="material-symbols-outlined me-2"
-                style="font-size:25pt; vertical-align:middle;">download</span>
+              <span class="material-symbols-outlined icon-section me-2">download</span>
               <strong>Export Class Roster</strong>
             </button>
           </h2>
@@ -240,19 +219,19 @@
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="roster-tab" data-bs-toggle="tab" data-bs-target="#roster" type="button"
       role="tab">
-      <span class="material-symbols-outlined me-1" style="vertical-align: middle;">groups</span>Class Roster
+      <span class="material-symbols-outlined me-1 icon-inline">groups</span>Class Roster
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="bulk-upload-tab" data-bs-toggle="tab" data-bs-target="#bulk-upload" type="button"
       role="tab">
-      <span class="material-symbols-outlined me-1" style="vertical-align: middle;">cloud_upload</span>Bulk Upload
+      <span class="material-symbols-outlined me-1 icon-inline">cloud_upload</span>Bulk Upload
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="individual-upload-tab" data-bs-toggle="tab" data-bs-target="#individual-upload"
       type="button" role="tab">
-      <span class="material-symbols-outlined me-1" style="vertical-align: middle;">person_add</span>Individual Upload
+      <span class="material-symbols-outlined me-1 icon-inline">person_add</span>Individual Upload
     </button>
   </li>
 </ul>
@@ -266,7 +245,7 @@
         </h5>
         <div>
           <a href="{{ url_for('admin.export_students') }}" class="btn btn-light btn-sm me-2">
-            <span class="material-symbols-outlined me-1" style="vertical-align: middle;">download</span> Export All
+            <span class="material-symbols-outlined me-1 icon-inline">download</span> Export All
           </a>
         </div>
       </div>
@@ -279,7 +258,7 @@
               data-bs-toggle="pill" data-bs-target="#block-{{ block }}"
               data-join-code="{{ join_codes_by_block.get(block|upper, '') }}" type="button" role="tab">
               {% if block == "Unassigned" %}
-              <span class="material-symbols-outlined me-1" style="vertical-align: middle;">help</span>{{ block }}
+              <span class="material-symbols-outlined me-1 icon-inline">help</span>{{ block }}
               {% else %}
               {{ class_label(block) }}
               {% endif %}
@@ -341,7 +320,7 @@
                           style="letter-spacing: 0.2em; background-color: white;">
                         <button class="btn btn-outline-success btn-lg join-code-copy-btn" type="button"
                           data-block="{{ block }}" data-join-code="{{ join_codes_by_block[block|upper] }}">
-                          <span class="material-symbols-outlined" style="vertical-align: middle;">content_copy</span>
+                          <span class="material-symbols-outlined icon-inline">content_copy</span>
                           Copy
                         </button>
                       </div>
@@ -526,7 +505,7 @@
                 <div class="mb-2">
                   <button type="button" class="btn btn-sm btn-outline-danger me-2"
                     onclick="deleteEntireBlock('{{ block }}')">
-                    <span class="material-symbols-outlined" style="vertical-align: middle;">delete_forever</span> Delete
+                    <span class="material-symbols-outlined icon-inline">delete_forever</span> Delete
                     All Students in {{ class_label(block) }}
                   </button>
                 </div>
@@ -594,12 +573,12 @@
                             data-student-name="{{ student.first_name }}"
                             data-student-last-initial="{{ student.last_initial }}"
                             data-student-block="{{ student.block }}" data-student-dob-sum="{{ student.dob_sum }}">
-                            <span class="material-symbols-outlined" style="vertical-align: middle;">edit</span>
+                            <span class="material-symbols-outlined icon-inline">edit</span>
                           </button>
                           <button class="btn btn-sm btn-outline-danger quick-action-btn" data-bs-toggle="modal"
                             data-bs-target="#deleteStudentModal" data-student-id="{{ student.id }}"
                             data-student-name="{{ student.full_name }}">
-                            <span class="material-symbols-outlined" style="vertical-align: middle;">delete</span>
+                            <span class="material-symbols-outlined icon-inline">delete</span>
                           </button>
                         </td>
                       </tr>
@@ -611,7 +590,7 @@
             </div>
             {% else %}
             <div class="alert alert-info">
-              <span class="material-symbols-outlined me-2" style="vertical-align: middle;">info</span>No students have
+              <span class="material-symbols-outlined me-2 icon-inline">info</span>No students have
               claimed accounts in {{ class_label(block) }} yet.
             </div>
             {% endif %}
@@ -627,7 +606,7 @@
     <div class="card shadow">
       <div class="card-header bg-success text-white">
         <h5 class="mb-0"><span class="material-symbols-outlined me-2"
-            style="vertical-align: middle;">cloud_upload</span>Bulk Student Upload</h5>
+            class="icon-inline">cloud_upload</span>Bulk Student Upload</h5>
       </div>
       <div class="card-body">
         <div class="row">
@@ -641,7 +620,7 @@
                 <ol class="mb-3">
                   <li class="mb-2">Download the CSV template using the button below</li>
                   <a href="{{ url_for('admin.download_csv_template') }}" class="btn btn-outline-primary">
-                    <span class="material-symbols-outlined me-2" style="vertical-align: middle;">download</span>Download
+                    <span class="material-symbols-outlined me-2 icon-inline">download</span>Download
                     Template
                   </a>
 
@@ -652,7 +631,7 @@
                 </ol>
                 <div class="alert alert-warning mb-0">
                   <strong><span class="material-symbols-outlined me-2"
-                      style="vertical-align: middle;">warning</span>Important:</strong>
+                      class="icon-inline">warning</span>Important:</strong>
                   <ul class="mb-0 mt-2">
                     <li>Do not modify the header row</li>
                     <li>Date of Birth must be in MM/DD/YYYY format</li>
@@ -667,7 +646,7 @@
               <div class="card-header text-dark"
                 style="background-color: var(--secondary);border-color: var(--secondary); border-style:solid; border-width:2px;">
                 <h6 class="mb-0 text-muted"><span class="material-symbols-outlined me-2"
-                    style="vertical-align: middle;">cloud_upload</span>Upload File</h6>
+                    class="icon-inline">cloud_upload</span>Upload File</h6>
               </div>
               <div class="card-body" style="border-color: var(--secondary); border-style:solid; border-width: 2px;">
                 <form action="{{ url_for('admin.upload_students') }}" method="post" enctype="multipart/form-data">
@@ -681,7 +660,7 @@
                   <div class="d-grid gap-2">
                     <button type="submit" class="btn btn-warning text-white btn-lg">
                       <span class="material-symbols-outlined me-2"
-                        style="vertical-align: middle;">cloud_upload</span>Upload Students
+                        class="icon-inline">cloud_upload</span>Upload Students
                     </button>
                   </div>
                 </form>
@@ -698,7 +677,7 @@
     <div class="card shadow">
       <div class="card-header bg-primary text-white">
         <h5 class="mb-0"><span class="material-symbols-outlined me-2"
-            style="vertical-align: middle;">person_add</span>Add Individual Student</h5>
+            class="icon-inline">person_add</span>Add Individual Student</h5>
       </div>
       <div class="card-body">
         <div class="row justify-content-center">
@@ -709,7 +688,7 @@
               <div class="card  mb-3">
                 <div class="card-header bg-primary text-white">
                   <h6 class="mb-0 text-white"><span class="material-symbols-outlined me-2"
-                      style="vertical-align: middle;">person</span>Student Information</h6>
+                      class="icon-inline">person</span>Student Information</h6>
                 </div>
                 <div class="card-body">
                   <div class="row">
@@ -757,7 +736,7 @@
 
               <div class="d-grid">
                 <button type="submit" class="btn btn-primary btn-lg">
-                  <span class="material-symbols-outlined me-2" style="vertical-align: middle;">person_add</span>Add
+                  <span class="material-symbols-outlined me-2 icon-inline">person_add</span>Add
                   Student
                 </button>
               </div>
@@ -788,8 +767,8 @@
           <!-- Basic Information -->
           <div class="card border-primary mb-3">
             <div class="card-header bg-primary-subtle text-primary">
-              <h6 class="mb-0 text-white"><span class="material-symbols-outlined me-2"
-                  style="vertical-align: middle;">person</span>Basic Information</h6>
+              <h6 class="mb-0"><span class="material-symbols-outlined me-2"
+                  class="icon-inline">person</span>Basic Information</h6>
             </div>
             <div class="card-body">
               <div class="row">
@@ -815,8 +794,8 @@
           <!-- Class Assignment -->
           <div class="card border-primary mb-3">
             <div class="card-header bg-primary-subtle text-primary">
-              <h6 class="mb-0 text-white"><span class="material-symbols-outlined me-2"
-                  style="vertical-align: middle;">calendar_today</span>Class Assignment</h6>
+              <h6 class="mb-0"><span class="material-symbols-outlined me-2"
+                  class="icon-inline">calendar_today</span>Class Assignment</h6>
             </div>
             <div class="card-body">
               <p class="text-muted small mb-2">Select all blocks this student attends (can select multiple):</p>
@@ -860,8 +839,8 @@
           <!-- Login Management -->
           <div class="card border-primary mb-3">
             <div class="card-header bg-primary-subtle">
-              <h6 class="mb-0 text-white"><span class="material-symbols-outlined me-2"
-                  style="vertical-align: middle;">key</span>Login Management</h6>
+              <h6 class="mb-0"><span class="material-symbols-outlined me-2"
+                  class="icon-inline">key</span>Login Management</h6>
             </div>
             <div class="card-body">
               <div class="d-flex justify-content-between align-items-center">
@@ -878,7 +857,7 @@
               </div>
               <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" style="display:none;">
                 <small><span class="material-symbols-outlined me-2"
-                    style="vertical-align: middle;">warning</span>Student will need to re-claim their account using
+                    class="icon-inline">warning</span>Student will need to re-claim their account using
                   their name and date of birth.</small>
               </div>
             </div>
@@ -886,7 +865,7 @@
 
           <div class="alert alert-info mb-0">
             <small><span class="material-symbols-outlined me-2"
-                style="vertical-align: middle;">info</span><strong>Note:</strong> Changing the name will update what the
+                class="icon-inline">info</span><strong>Note:</strong> Changing the name will update what the
               student needs to enter during the account claim process.</small>
           </div>
         </div>
@@ -907,7 +886,7 @@
       <div class="modal-content">
         <div class="modal-header bg-danger text-white">
           <h5 class="modal-title" id="deleteStudentModalLabel">
-            <span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>Delete Student
+            <span class="material-symbols-outlined me-2 icon-inline">warning</span>Delete Student
           </h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
@@ -916,7 +895,7 @@
           <input type="hidden" id="delete_student_id" name="student_id">
 
           <div class="alert alert-danger">
-            <h6><span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>Warning</h6>
+            <h6><span class="material-symbols-outlined me-2 icon-inline">warning</span>Warning</h6>
             <p>You are about to delete <strong id="delete_student_name"></strong>.</p>
             <p class="mb-0">This action will permanently delete:</p>
             <ul class="mb-0">
@@ -987,7 +966,7 @@
     navigator.clipboard.writeText(code).then(function () {
       // Show success feedback
       const originalHTML = btn.innerHTML;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="vertical-align: middle;">check</span> Copied!';
+      btn.innerHTML = '<span class="material-symbols-outlined icon-inline">check</span> Copied!';
       btn.classList.remove('btn-outline-success');
       btn.classList.add('btn-success');
 

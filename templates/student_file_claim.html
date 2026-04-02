@@ -6,30 +6,10 @@
 
 {% block extra_styles %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
-<style>
-    .EasyMDEContainer .CodeMirror {
-        min-height: 120px;
-    }
-    .editor-toolbar {
-        border-radius: 4px 4px 0 0;
-    }
-    .CodeMirror {
-        border-radius: 0 0 4px 4px;
-    }
-    .claim-transaction-table th,
-    .claim-transaction-table td {
-        vertical-align: middle;
-    }
-    .claim-transaction-row {
-        cursor: pointer;
-    }
-    .claim-transaction-row.is-selected {
-        background: rgba(13, 110, 253, 0.08);
-    }
-</style>
 {% endblock %}
 
 {% block content %}
+<div class="claim-form-page">
 <p class="text-muted mb-4">Submit a claim for {{ contract_title }}.</p>
 
 <div class="row">
@@ -331,4 +311,5 @@
     syncSelectedTransaction();
   });
 </script>
+</div>
 {% endblock %}

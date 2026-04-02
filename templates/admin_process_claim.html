@@ -5,17 +5,6 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
-<style>
-    .EasyMDEContainer .CodeMirror {
-        min-height: 100px;
-    }
-    .editor-toolbar {
-        border-radius: 4px 4px 0 0;
-    }
-    .CodeMirror {
-        border-radius: 0 0 4px 4px;
-    }
-</style>
 {% endblock %}
 
 {% block content %}
@@ -113,7 +102,7 @@
         {% if claim.time_limit_override_reason %}
         <h6>Time Limit Override:</h6>
         <div class="alert alert-warning py-2 small">
-          <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;">edit_note</span>
+          <span class="material-symbols-outlined icon-inline me-1">edit_note</span>
           {{ claim.time_limit_override_reason | markdown }}
         </div>
         {% endif %}
@@ -201,9 +190,9 @@
         {% if time_limit_errors %}
           {% for error in time_limit_errors %}
             <div class="alert alert-warning py-2 small">
-              <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;">schedule</span>
+              <span class="material-symbols-outlined icon-inline me-1">schedule</span>
               {{ error }}
-              <div class="mt-1 text-muted" style="font-size:0.9em;">Override available — see form below.</div>
+              <div class="mt-1 text-muted text-caption">Override available — see form below.</div>
             </div>
           {% endfor %}
         {% endif %}
@@ -282,7 +271,7 @@
       {% if time_limit_errors %}
       <div class="mb-3 border border-warning rounded p-3 bg-warning-subtle">
         <label class="form-label fw-bold text-warning-emphasis">
-          <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;">edit_note</span>
+          <span class="material-symbols-outlined icon-inline me-1">edit_note</span>
           Time Limit Override Reason
           <span class="badge bg-warning text-dark ms-1">Required to approve</span>
         </label>

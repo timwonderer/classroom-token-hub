@@ -31,13 +31,13 @@
 {% set status = period_status[current_block] %}
 
 <div class="alert alert-info mb-4">
-    <span class="material-symbols-outlined" style="vertical-align: middle;">arrow_circle_left</span> To see your bills
+    <span class="material-symbols-outlined icon-inline">arrow_circle_left</span> To see your bills
     from another class, use the <strong>Switch Classes</strong> menu on the left.
 </div>
 
 <div class="card mb-4">
     <div class="card-header">
-        <span class="material-symbols-outlined" style="vertical-align: middle;">account_balance</span> Your Balance
+        <span class="material-symbols-outlined icon-inline">account_balance</span> Your Balance
     </div>
     <div class="card-body">
         <div class="row text-center">
@@ -82,7 +82,7 @@
         <h5 class="mb-0 d-flex align-items-center justify-content-between">
             <span>Class: {{ current_block|upper }}</span>
             <span>
-                <span class="material-symbols-outlined" style="vertical-align: middle;">{{ status_icon }}</span> {{
+                <span class="material-symbols-outlined icon-inline">{{ status_icon }}</span> {{
                 status_text }}
             </span>
         </h5>
@@ -100,8 +100,7 @@
             <ul class="list-unstyled mb-0">
                 {% for item in rent_items %}
                 <li class="d-flex align-items-start mb-2">
-                    <span class="material-symbols-outlined text-success me-2"
-                        style="font-size: 20px;">check_circle</span>
+                    <span class="material-symbols-outlined icon-md text-success me-2">check_circle</span>
                     <div>
                         <strong>{{ item.name }}</strong>
                         {% if item.description %}
@@ -238,7 +237,7 @@
 
     <div class="card bg-light mt-4 border-primary">
         <div class="card-header bg-primary text-white ">
-            <span class="material-symbols-outlined" style="vertical-align: middle;">info</span> Rent Information
+            <span class="material-symbols-outlined icon-inline">info</span> Rent Information
         </div>
         <div class="card-body">
             <div class="row">

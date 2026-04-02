@@ -15,345 +15,19 @@
         rel="stylesheet">
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
-    <style>
-        .material-symbols-outlined {
-            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-            vertical-align: middle;
-        }
-    </style>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-
-            font-family: 'Inter', sans-serif;
-            color: var(--text-primary);
-            min-height: 100vh;
-            padding: 2rem;
-        }
-
-        .page-header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-
-        .page-header h1 {
-            font-weight: 800;
-            font-size: 2.5rem;
-            color: white;
-            text-shadow: 0 2px 10px color-mix(in srgb, black 20%, transparent);
-            margin-bottom: 0.5rem;
-        }
-
-        .page-header p {
-            font-size: 1.1rem;
-            color: color-mix(in srgb, white 90%, transparent);
-            font-weight: 500;
-        }
-
-        .terminal-container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-
-        .two-column-layout {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
-        }
-
-        @media (max-width: 992px) {
-            .two-column-layout {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .card {
-            background: white;
-            border-radius: 24px;
-            padding: 3rem;
-            box-shadow: 0 20px 60px color-mix(in srgb, black 30%, transparent);
-            border: none;
-        }
-
-        .card-title {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: 1.5rem;
-            text-align: center;
-        }
-
-        .form-label {
-            font-weight: 600;
-            font-size: 1.1rem;
-            color: var(--text-primary);
-            margin-bottom: 0.8rem;
-        }
-
-        .form-control {
-            border: 2px solid var(--border-color);
-            border-radius: 12px;
-            padding: 1rem;
-            font-size: 1.1rem;
-            transition: all 0.3s ease;
-        }
-
-        .form-control:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 10%, transparent);
-        }
-
-        .form-control-lg {
-            font-size: 2rem;
-            padding: 1.5rem;
-            text-align: center;
-            font-weight: 700;
-        }
-
-        .btn {
-            border-radius: 12px;
-            padding: 1rem 2rem;
-            font-weight: 600;
-            font-size: 1.1rem;
-            border: none;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .btn-primary {
-            background: var(--primary);
-            box-shadow: var(--shadow-md);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: var(--primary-hover);
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-lg);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, var(--success) 0%, var(--success) 100%);
-            box-shadow: 0 4px 15px color-mix(in srgb, var(--success) 40%, transparent);
-        }
-
-        .btn-success:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px color-mix(in srgb, var(--success) 60%, transparent);
-        }
-
-        .btn-warning {
-            background: linear-gradient(135deg, var(--warning) 0%, var(--warning) 100%);
-            color: white;
-            box-shadow: 0 4px 15px color-mix(in srgb, var(--warning) 40%, transparent);
-        }
-
-        .btn-warning:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px color-mix(in srgb, var(--warning) 60%, transparent);
-        }
-
-        .btn-secondary {
-            background: var(--text-secondary);
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background: var(--text-primary);
-            transform: translateY(-2px);
-        }
-
-        .alert {
-            border-radius: 16px;
-            border: none;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .alert h4 {
-            font-weight: 700;
-            margin-bottom: 1rem;
-            font-size: 1.5rem;
-        }
-
-        .alert p {
-            margin-bottom: 0.5rem;
-            font-size: 1.05rem;
-        }
-
-        .alert-info {
-            background: linear-gradient(135deg, var(--info-subtle) 0%, var(--info-subtle) 100%);
-            color: var(--info);
-        }
-
-        .alert-success {
-            background: linear-gradient(135deg, var(--success-subtle) 0%, var(--success-subtle) 100%);
-            color: var(--success);
-        }
-
-        .alert-danger {
-            background: linear-gradient(135deg, var(--danger-subtle) 0%, var(--danger-subtle) 100%);
-            color: var(--danger);
-        }
-
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 0.5rem 0;
-        }
-
-        .info-row strong {
-            color: var(--text-primary);
-        }
-
-        /* Queue Styles */
-        .queue-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .stat-box {
-            background: var(--surface);
-            border-radius: 12px;
-            padding: 1rem;
-            text-align: center;
-            border-left: 4px solid var(--primary);
-        }
-
-        .stat-box.warning {
-            border-left-color: var(--warning);
-        }
-
-        .stat-box.danger {
-            border-left-color: var(--danger);
-        }
-
-        .stat-number {
-            font-size: 2.5rem;
-            font-weight: 800;
-            color: var(--primary);
-        }
-
-        .stat-number.warning {
-            color: var(--warning);
-        }
-
-        .stat-number.danger {
-            color: var(--danger);
-        }
-
-        .stat-label {
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: var(--text-primary);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-top: 0.3rem;
-        }
-
-        .queue-list {
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .queue-item {
-            background: var(--surface);
-            border-radius: 12px;
-            padding: 1rem;
-            margin-bottom: 0.8rem;
-            border-left: 4px solid var(--primary);
-            display: grid;
-            grid-template-columns: 40px 1fr auto;
-            gap: 0.8rem;
-            align-items: center;
-        }
-
-        .queue-position {
-            font-size: 1.5rem;
-            font-weight: 800;
-            color: var(--primary);
-            text-align: center;
-        }
-
-        .queue-student-name {
-            font-size: 1rem;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .queue-destination {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-        }
-
-        .queue-time {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            text-align: right;
-        }
-
-        .empty-queue {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-secondary);
-        }
-
-        .empty-queue-icon {
-            font-size: 3rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .limit-warning {
-            background: linear-gradient(135deg, var(--danger-subtle) 0%, var(--danger-subtle) 100%);
-            color: var(--danger);
-            padding: 1rem;
-            border-radius: 12px;
-            margin-bottom: 1.5rem;
-            text-align: center;
-            font-weight: 600;
-            font-size: 0.95rem;
-            border: 2px solid var(--danger);
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .card {
-            animation: slideIn 0.4s ease-out;
-        }
-    </style>
 </head>
 
-<body class='bg-primary'>
+<body class="hall-pass-terminal-page">
     <div class="terminal-container">
         <div class="page-header">
-            <h1 style="font-weight:400"><span class="material-symbols-outlined"
-                    style="font-size: 2.5rem;">meeting_room</span> Hall Pass Check In & Out</h1>
+            <h1 style="font-weight:400"><span class="material-symbols-outlined icon-xl">meeting_room</span> Hall Pass Check In & Out</h1>
             <p>Classroom Token Hub</p>
         </div>
 
         <div class="two-column-layout">
             <!-- Left Column: Hall Pass Control -->
-            <div class="card">
-                <h2 class="card-title"> <span class="material-symbols-outlined"
-                        style="font-size:25pt; vertical-align: middle;">outbound</span> Leaving or Coming Back?</h2>
+            <div class="terminal-card">
+                <h2 class="card-title"> <span class="material-symbols-outlined icon-section">outbound</span> Leaving or Coming Back?</h2>
 
                 <div id="inputScreen">
                     <div class="mb-4">
@@ -414,9 +88,8 @@
             </div>
 
             <!-- Right Column: Queue Display -->
-            <div class="card">
-                <h2 class="card-title"><span class="material-symbols-outlined"
-                        style="font-size:25pt; vertical-align: middle;">pending_actions</span> Current Queue Status</h2>
+            <div class="terminal-card">
+                <h2 class="card-title"><span class="material-symbols-outlined icon-section">pending_actions</span> Current Queue Status</h2>
 
                 <div class="queue-stats">
                     <div class="stat-box">
@@ -440,15 +113,14 @@
 
                 <div class="queue-list" id="queueList"></div>
                 <div id="emptyQueue" class="empty-queue" style="display: none;">
-                    <div class="empty-queue-icon"><span class="material-symbols-outlined"
-                            style="font-size: 3rem;">check_circle</span></div>
+                    <div class="empty-queue-icon"><span class="material-symbols-outlined icon-success-hero">check_circle</span></div>
                     <div>No one in queue</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let currentPassNumber = '';
 

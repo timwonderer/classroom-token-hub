@@ -10,7 +10,7 @@
     <div class="card-header">
       <div class="d-flex justify-content-between align-items-center">
         <h5 class="mb-0">
-          <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">group</span>
+          <span class="material-symbols-outlined icon-md">group</span>
           All Teachers
         </h5>
         <span class="badge bg-light text-dark">{{ admins|length }} total</span>
@@ -68,7 +68,7 @@
                     <div class="modal-content">
                       <div class="modal-header bg-danger text-white">
                         <h5 class="modal-title" id="deleteModalLabel{{ admin.id }}">
-                          <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">warning</span>
+                          <span class="material-symbols-outlined icon-md">warning</span>
                           Delete Admin: {{ admin.username }}
                         </h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -126,7 +126,7 @@
         </div>
       {% else %}
         <div class="p-5 text-center text-muted">
-          <span class="material-symbols-outlined d-block" style="font-size: 64px; opacity: 0.3;">person_off</span>
+          <span class="material-symbols-outlined icon-hero opacity-25 d-block">person_off</span>
           <h4>No teachers registered</h4>
           <p>No admin (teacher) accounts have been created yet.</p>
           <p class="small">Use the invite code system to allow teachers to sign up.</p>

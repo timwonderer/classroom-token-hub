@@ -8,26 +8,26 @@
     <div class="card">
         <div class="card-header">
             <h5 class="mb-0">
-                <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">description</span>
+                <span class="material-symbols-outlined icon-md">description</span>
                 System Log File
             </h5>
         </div>
         <div class="card-body">
             <div class="alert alert-info mb-3">
-                <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;">info</span>
+                <span class="material-symbols-outlined icon-inline">info</span>
                 <strong>Newest logs at the bottom</strong> - Scroll down to see the most recent entries
             </div>
 
-            <div class="log-box" style="background: var(--neutral-900); color: var(--neutral-50); border-radius: 0.5rem; padding: 1.5rem; max-height: 70vh; overflow-y: auto; font-family: monospace; font-size: 0.9rem; line-height: 1.4;">
+            <div class="log-box">
                 {% for log in logs %}
                     {% if log.message.strip() %}
-                    <div class="log-entry" style="padding: 0.3rem 0; border-bottom: 1px solid var(--text-primary); margin: 0.2rem 0;">
-                        <div class="log-header" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.2rem;">
-                            <span class="timestamp" style="color: var(--info); flex-shrink: 0;">{{ log.timestamp }}</span>
-                            <span class="level {% if log.level == 'ERROR' %}text-danger{% elif log.level == 'WARNING' %}text-warning{% endif %}" style="font-weight: bold; flex-shrink: 0;">[{{ log.level }}]</span>
-                            <span class="module" style="color: var(--text-secondary); flex-shrink: 0;">{{ log.module }}</span>
+                    <div class="log-entry">
+                        <div class="log-header">
+                            <span class="log-timestamp">{{ log.timestamp }}</span>
+                            <span class="log-level level {% if log.level == 'ERROR' %}text-danger{% elif log.level == 'WARNING' %}text-warning{% endif %}">[{{ log.level }}]</span>
+                            <span class="log-module">{{ log.module }}</span>
                         </div>
-                        <pre class="message" style="white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; font-family: monospace; font-size: 0.9rem; line-height: 1.4; margin: 0; color: var(--neutral-50);">{{ log.message | safe }}</pre>
+                        <pre class="log-message">{{ log.message | safe }}</pre>
                     </div>
                     {% endif %}
                 {% endfor %}
@@ -38,19 +38,10 @@
     <div class="row mt-4">
         <div class="col-12 text-center">
             <a href="{{ url_for('sysadmin.logs_testing') }}" class="btn btn-outline-secondary">
-                <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;">arrow_back</span>
+                <span class="material-symbols-outlined icon-inline">arrow_back</span>
                 Back to Logs & Testing
             </a>
         </div>
     </div>
 </div>
-
-<style>
-    .log-entry .level.ERROR {
-        color: var(--danger);
-    }
-    .log-entry .level.WARNING {
-        color: var(--warning);
-    }
-</style>
 {% endblock %}
