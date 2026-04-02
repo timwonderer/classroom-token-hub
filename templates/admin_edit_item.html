@@ -7,20 +7,10 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
 <script src="{{ static_url('js/economy-balance.js') }}"></script>
 <script src="{{ static_url('js/item-form-economy.js') }}"></script>
-<style>
-    .EasyMDEContainer .CodeMirror {
-        min-height: 150px;
-    }
-    .editor-toolbar {
-        border-radius: 4px 4px 0 0;
-    }
-    .CodeMirror {
-        border-radius: 0 0 4px 4px;
-    }
-</style>
 {% endblock %}
 
 {% block content %}
+<div class="store-item-edit-page">
 
 <div class="card shadow mb-4">
     <div class="card-header bg-primary text-white">
@@ -364,4 +354,5 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+</div>
 {% endblock %}

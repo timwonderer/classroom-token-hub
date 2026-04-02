@@ -2358,3 +2358,743 @@ body.maintenance-active .sidebar {
 .issue-resolved-meta {
     min-width: 150px;
 }
+
+.student-stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+.student-stat-label {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.negative-balance {
+    color: var(--danger);
+}
+
+.positive-balance {
+    color: var(--success);
+}
+
+.transfer-processing-note {
+    display: none;
+}
+
+.transfer-processing-note.is-visible {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.claim-form-page .EasyMDEContainer .CodeMirror,
+.store-item-edit-page .EasyMDEContainer .CodeMirror {
+    min-height: 150px;
+}
+
+.claim-transaction-table th,
+.claim-transaction-table td {
+    vertical-align: middle;
+}
+
+.claim-transaction-row {
+    cursor: pointer;
+}
+
+.claim-transaction-row.is-selected {
+    background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.log-box {
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 1.5rem;
+    border-radius: var(--radius-sm);
+    background: var(--neutral-900);
+    color: var(--neutral-50);
+    font-family: monospace;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.log-entry {
+    margin: 0.2rem 0;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid var(--text-primary);
+}
+
+.log-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.2rem;
+}
+
+.log-timestamp {
+    flex-shrink: 0;
+    color: var(--info);
+}
+
+.log-level {
+    flex-shrink: 0;
+    font-weight: 700;
+}
+
+.log-module {
+    flex-shrink: 0;
+    color: var(--text-secondary);
+}
+
+.log-message {
+    margin: 0;
+    color: var(--neutral-50);
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    font-family: monospace;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.grayed-out {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.warning-banner {
+    border-left: 4px solid var(--warning);
+}
+
+.issue-timeline-marker i {
+    font-size: 0.5rem;
+}
+
+.hall-pass-queue-page {
+    min-height: 100vh;
+    padding: 2rem;
+    color: var(--text-primary);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+}
+
+.hall-pass-queue-page .queue-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.hall-pass-queue-page .queue-title {
+    margin-bottom: 0.5rem;
+    text-align: center;
+    font-size: 3rem;
+    font-weight: 800;
+    color: white;
+    text-shadow: 0 2px 10px color-mix(in srgb, black 20%, transparent);
+}
+
+.hall-pass-queue-page .queue-subtitle {
+    margin-bottom: 2.5rem;
+    text-align: center;
+    font-size: 1.3rem;
+    font-weight: 500;
+    color: color-mix(in srgb, white 90%, transparent);
+}
+
+.hall-pass-queue-page .queue-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+}
+
+.hall-pass-queue-page .stat-card,
+.hall-pass-queue-page .queue-list-container {
+    background: white;
+    box-shadow: 0 10px 30px color-mix(in srgb, black 15%, transparent);
+}
+
+.hall-pass-queue-page .stat-card {
+    padding: 2rem;
+    text-align: center;
+    border-radius: 20px;
+}
+
+.hall-pass-queue-page .stat-number {
+    margin-bottom: 0.5rem;
+    font-size: 3.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.hall-pass-queue-page .stat-number.warning {
+    background: linear-gradient(135deg, var(--warning) 0%, var(--warning) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.hall-pass-queue-page .stat-number.danger {
+    background: linear-gradient(135deg, var(--danger) 0%, var(--danger) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.hall-pass-queue-page .stat-label {
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+}
+
+.hall-pass-queue-page .queue-list-container {
+    padding: 2.5rem;
+    border-radius: 20px;
+}
+
+.hall-pass-queue-page .queue-list-header {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 3px solid var(--border-color);
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.hall-pass-queue-page .queue-item,
+.hall-pass-terminal-page .queue-item {
+    display: grid;
+    align-items: center;
+    border-left: 4px solid var(--primary);
+    background: var(--surface);
+}
+
+.hall-pass-queue-page .queue-item {
+    grid-template-columns: 60px 1fr 120px;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 1.5rem;
+    border-radius: 12px;
+    animation: fadeIn 0.4s ease-out;
+}
+
+.hall-pass-queue-page .queue-position {
+    text-align: center;
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--primary);
+}
+
+.hall-pass-queue-page .queue-student-name {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.hall-pass-queue-page .queue-destination {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.hall-pass-queue-page .queue-time {
+    text-align: right;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.hall-pass-queue-page .empty-queue,
+.hall-pass-terminal-page .empty-queue {
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.hall-pass-queue-page .empty-queue {
+    padding: 4rem 2rem;
+}
+
+.hall-pass-queue-page .empty-queue-icon {
+    margin-bottom: 1rem;
+    font-size: 5rem;
+}
+
+.hall-pass-queue-page .empty-queue-text {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.hall-pass-queue-page .limit-warning,
+.hall-pass-terminal-page .limit-warning {
+    text-align: center;
+    font-weight: 600;
+    border: 2px solid var(--danger);
+    background: linear-gradient(135deg, var(--danger-subtle) 0%, var(--danger-subtle) 100%);
+    color: var(--danger);
+}
+
+.hall-pass-queue-page .limit-warning {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    border-radius: 16px;
+    font-size: 1.1rem;
+}
+
+.hall-pass-setup-page {
+    min-height: 100vh;
+    padding: 2rem 1rem;
+    font-family: var(--font-family);
+    background-color: var(--surface);
+}
+
+.hall-pass-setup-page .setup-container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.hall-pass-setup-page .master-toggle-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    background: white;
+}
+
+.hall-pass-setup-page .master-toggle-label,
+.hall-pass-setup-page .totals-header {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.hall-pass-setup-page .master-toggle-status,
+.hall-pass-setup-page .info-text,
+.hall-pass-setup-page .limit-field label,
+.hall-pass-setup-page .total-field label,
+.hall-pass-setup-page .total-help-text {
+    color: var(--text-secondary);
+}
+
+.hall-pass-setup-page .master-toggle-status {
+    margin-top: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.hall-pass-setup-page .pass-type-row {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: white;
+}
+
+.hall-pass-setup-page .pass-type-row.disabled {
+    opacity: 0.6;
+    background: var(--surface);
+}
+
+.hall-pass-setup-page .pass-type-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+
+.hall-pass-setup-page .pass-type-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.hall-pass-setup-page .pass-type-limits {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.hall-pass-setup-page .limit-field {
+    display: flex;
+    flex-direction: column;
+}
+
+.hall-pass-setup-page .limit-field label {
+    margin-bottom: 0.25rem;
+    font-size: 0.85rem;
+}
+
+.hall-pass-setup-page .limit-field input {
+    max-width: 150px;
+}
+
+.hall-pass-setup-page .form-check-input {
+    width: 3rem;
+    height: 1.5rem;
+    cursor: pointer;
+}
+
+.hall-pass-setup-page .form-check-input:disabled,
+.hall-pass-setup-page .form-check-input.blocked-toggle {
+    cursor: not-allowed;
+}
+
+.hall-pass-setup-page .totals-container {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    border: 2px dashed var(--border-color);
+    border-radius: 12px;
+    background: var(--surface);
+}
+
+.hall-pass-setup-page .total-field {
+    margin-bottom: 1rem;
+}
+
+.hall-pass-setup-page .total-field label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.hall-pass-setup-page .total-field input {
+    max-width: 200px;
+}
+
+.hall-pass-setup-page .total-field input:disabled {
+    cursor: not-allowed;
+    background: var(--border-color);
+}
+
+.hall-pass-setup-page .total-help-text {
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+}
+
+.hall-pass-setup-page .tooltip-inner,
+.hall-pass-terminal-page .tooltip-inner {
+    font-size: 0.85rem;
+    background-color: var(--text-primary);
+}
+
+.hall-pass-setup-page .tooltip.bs-tooltip-top .tooltip-arrow::before,
+.hall-pass-terminal-page .tooltip.bs-tooltip-top .tooltip-arrow::before {
+    border-top-color: var(--text-primary);
+}
+
+.hall-pass-terminal-page {
+    min-height: 100vh;
+    padding: 2rem;
+    font-family: var(--font-family);
+    color: var(--text-primary);
+    background: var(--primary);
+}
+
+.hall-pass-terminal-page .page-header {
+    margin-bottom: 2rem;
+    text-align: center;
+}
+
+.hall-pass-terminal-page .page-header h1 {
+    margin-bottom: 0.5rem;
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: white;
+    text-shadow: 0 2px 10px color-mix(in srgb, black 20%, transparent);
+}
+
+.hall-pass-terminal-page .page-header p {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: color-mix(in srgb, white 90%, transparent);
+}
+
+.hall-pass-terminal-page .terminal-container {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.hall-pass-terminal-page .two-column-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.hall-pass-terminal-page .terminal-card {
+    padding: 3rem;
+    border: none;
+    border-radius: 24px;
+    background: white;
+    box-shadow: 0 20px 60px color-mix(in srgb, black 30%, transparent);
+    animation: slideIn 0.4s ease-out;
+}
+
+.hall-pass-terminal-page .card-title {
+    margin-bottom: 1.5rem;
+    text-align: center;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.hall-pass-terminal-page .form-label {
+    margin-bottom: 0.8rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.hall-pass-terminal-page .form-control {
+    padding: 1rem;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    font-size: 1.1rem;
+    transition: all 0.3s ease;
+}
+
+.hall-pass-terminal-page .form-control:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.hall-pass-terminal-page .form-control-lg {
+    padding: 1.5rem;
+    text-align: center;
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+.hall-pass-terminal-page .btn {
+    padding: 1rem 2rem;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: all 0.3s ease;
+}
+
+.hall-pass-terminal-page .btn-primary {
+    color: white;
+    background: var(--primary);
+    box-shadow: var(--shadow-md);
+}
+
+.hall-pass-terminal-page .btn-primary:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-lg);
+}
+
+.hall-pass-terminal-page .btn-success {
+    background: linear-gradient(135deg, var(--success) 0%, var(--success) 100%);
+    box-shadow: 0 4px 15px color-mix(in srgb, var(--success) 40%, transparent);
+}
+
+.hall-pass-terminal-page .btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px color-mix(in srgb, var(--success) 60%, transparent);
+}
+
+.hall-pass-terminal-page .btn-warning {
+    color: white;
+    background: linear-gradient(135deg, var(--warning) 0%, var(--warning) 100%);
+    box-shadow: 0 4px 15px color-mix(in srgb, var(--warning) 40%, transparent);
+}
+
+.hall-pass-terminal-page .btn-warning:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px color-mix(in srgb, var(--warning) 60%, transparent);
+}
+
+.hall-pass-terminal-page .btn-secondary {
+    color: white;
+    background: var(--text-secondary);
+}
+
+.hall-pass-terminal-page .btn-secondary:hover {
+    background: var(--text-primary);
+    transform: translateY(-2px);
+}
+
+.hall-pass-terminal-page .alert {
+    margin-bottom: 1.5rem;
+    padding: 1.5rem;
+    border: none;
+    border-radius: 16px;
+}
+
+.hall-pass-terminal-page .alert h4 {
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.hall-pass-terminal-page .alert p {
+    margin-bottom: 0.5rem;
+    font-size: 1.05rem;
+}
+
+.hall-pass-terminal-page .alert-info {
+    color: var(--info);
+    background: linear-gradient(135deg, var(--info-subtle) 0%, var(--info-subtle) 100%);
+}
+
+.hall-pass-terminal-page .alert-success {
+    color: var(--success);
+    background: linear-gradient(135deg, var(--success-subtle) 0%, var(--success-subtle) 100%);
+}
+
+.hall-pass-terminal-page .alert-danger {
+    color: var(--danger);
+    background: linear-gradient(135deg, var(--danger-subtle) 0%, var(--danger-subtle) 100%);
+}
+
+.hall-pass-terminal-page .info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+}
+
+.hall-pass-terminal-page .info-row strong {
+    color: var(--text-primary);
+}
+
+.hall-pass-terminal-page .queue-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.hall-pass-terminal-page .stat-box {
+    padding: 1rem;
+    border-left: 4px solid var(--primary);
+    border-radius: 12px;
+    text-align: center;
+    background: var(--surface);
+}
+
+.hall-pass-terminal-page .stat-box.warning {
+    border-left-color: var(--warning);
+}
+
+.hall-pass-terminal-page .stat-box.danger {
+    border-left-color: var(--danger);
+}
+
+.hall-pass-terminal-page .stat-number {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--primary);
+}
+
+.hall-pass-terminal-page .stat-number.warning {
+    color: var(--warning);
+}
+
+.hall-pass-terminal-page .stat-number.danger {
+    color: var(--danger);
+}
+
+.hall-pass-terminal-page .stat-label {
+    margin-top: 0.3rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+}
+
+.hall-pass-terminal-page .queue-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.hall-pass-terminal-page .queue-item {
+    grid-template-columns: 40px 1fr auto;
+    gap: 0.8rem;
+    margin-bottom: 0.8rem;
+    padding: 1rem;
+    border-radius: 12px;
+}
+
+.hall-pass-terminal-page .queue-position {
+    text-align: center;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--primary);
+}
+
+.hall-pass-terminal-page .queue-student-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.hall-pass-terminal-page .queue-destination,
+.hall-pass-terminal-page .queue-time {
+    color: var(--text-secondary);
+}
+
+.hall-pass-terminal-page .queue-destination {
+    font-size: 0.85rem;
+}
+
+.hall-pass-terminal-page .queue-time {
+    text-align: right;
+    font-size: 0.8rem;
+}
+
+.hall-pass-terminal-page .empty-queue {
+    padding: 2rem;
+}
+
+.hall-pass-terminal-page .empty-queue-icon {
+    margin-bottom: 0.5rem;
+    font-size: 3rem;
+}
+
+.hall-pass-terminal-page .limit-warning {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    border-radius: 12px;
+    font-size: 0.95rem;
+}
+
+@media (max-width: 992px) {
+    .hall-pass-terminal-page .two-column-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
