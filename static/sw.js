@@ -58,7 +58,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // Skip caching for authenticated routes (multi-tenancy safety)
-  const authRoutes = ['/admin', '/student', '/system-admin', '/api'];
+  const authRoutes = ['/admin', '/student', '/system-admin', '/sysadmin', '/api'];
   if (authRoutes.some((route) => url.pathname.startsWith(route))) {
     // Network-only for authenticated routes
     return;
