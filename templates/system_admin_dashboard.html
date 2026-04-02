@@ -59,7 +59,7 @@
 
     <!-- ── Quick Actions ── -->
     <div class="mb-4">
-        <h6 class="text-uppercase fw-bold mb-3" style="font-size:0.75rem; letter-spacing:0.08em; color:var(--text-secondary);">Quick
+        <h6 class="page-header eyebrow mb-3">Quick
             Actions</h6>
         <div class="row g-3">
             <div class="col-6 col-md-4 col-lg-2">
@@ -107,10 +107,9 @@
         <div class="col-12 col-lg-6">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-3">
-                    <span class="material-symbols-outlined text-primary" style="font-size:20px;">history_edu</span>
+                    <span class="material-symbols-outlined sysadmin-card-title-icon text-primary">history_edu</span>
                     <h6 class="mb-0 fw-semibold">Recent Teacher Registrations</h6>
-                    <a href="{{ url_for('sysadmin.manage_teachers') }}" class="btn btn-sm btn-outline-secondary ms-auto"
-                        style="font-size:0.75rem;">View All</a>
+                    <a href="{{ url_for('sysadmin.manage_teachers') }}" class="btn btn-sm btn-outline-secondary ms-auto sysadmin-pill-copy">View All</a>
                 </div>
                 <div class="card-body p-0">
                     {% if recent_teachers %}
@@ -119,14 +118,12 @@
                         <li class="list-group-item border-bottom py-3">
                             <div class="d-flex align-items-center justify-content-between">
                                 <div class="d-flex align-items-center gap-2">
-                                    <div class="rounded-circle bg-primary-subtle d-flex align-items-center justify-content-center"
-                                        style="width:36px;height:36px;flex-shrink:0;">
-                                        <span class="material-symbols-outlined text-primary"
-                                            style="font-size:18px;">person</span>
+                                    <div class="sysadmin-avatar-chip rounded-circle bg-primary-subtle">
+                                        <span class="material-symbols-outlined text-primary">person</span>
                                     </div>
                                     <div>
-                                        <div class="fw-semibold" style="font-size:0.9rem;">{{ teacher.get_sysadmin_display_name() }}</div>
-                                        <div class="text-muted" style="font-size:0.75rem;">
+                                        <div class="fw-semibold sysadmin-name-sm">{{ teacher.get_sysadmin_display_name() }}</div>
+                                        <div class="text-muted sysadmin-meta-xs">
                                             Joined {{ teacher.created_at.strftime('%b %d, %Y') if teacher.created_at
                                             else 'Unknown' }}
                                         </div>
@@ -139,8 +136,7 @@
                     </ul>
                     {% else %}
                     <div class="p-4 text-center text-muted">
-                        <span class="material-symbols-outlined d-block mb-2"
-                            style="font-size:40px;opacity:0.3;">person_off</span>
+                        <span class="material-symbols-outlined d-block mb-2 sysadmin-empty-state-icon">person_off</span>
                         No teachers registered yet
                     </div>
                     {% endif %}
@@ -152,10 +148,9 @@
         <div class="col-12 col-lg-6">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-3">
-                    <span class="material-symbols-outlined text-danger" style="font-size:20px;">error</span>
+                    <span class="material-symbols-outlined sysadmin-card-title-icon text-danger">error</span>
                     <h6 class="mb-0 fw-semibold">Recent Errors</h6>
-                    <a href="{{ url_for('sysadmin.combined_logs') }}" class="btn btn-sm btn-outline-secondary ms-auto"
-                        style="font-size:0.75rem;">View All</a>
+                    <a href="{{ url_for('sysadmin.combined_logs') }}" class="btn btn-sm btn-outline-secondary ms-auto sysadmin-pill-copy">View All</a>
                 </div>
                 <div class="card-body p-0">
                     {% if recent_errors %}
@@ -163,21 +158,20 @@
                         {% for error in recent_errors %}
                         <li class="list-group-item border-bottom py-3">
                             <div class="d-flex align-items-start gap-2">
-                                <span class="badge mt-1
+                                <span class="badge mt-1 sysadmin-badge-xs
                                         {% if '500' in (error.error_type or '') %}bg-danger
                                         {% elif '404' in (error.error_type or '') %}bg-secondary
                                         {% elif '403' in (error.error_type or '') %}bg-danger
                                         {% elif '401' in (error.error_type or '') %}bg-info
-                                        {% else %}bg-warning text-dark{% endif %}"
-                                    style="font-size:0.7rem; flex-shrink:0;">
+                                        {% else %}bg-warning text-dark{% endif %}">
                                     {{ (error.error_type or 'ERR').split(' ')[0] }}
                                 </span>
                                 <div class="flex-grow-1 min-width-0">
-                                    <div class="text-truncate" style="font-size:0.82rem; max-width:260px;"
+                                    <div class="text-truncate sysadmin-truncate-note"
                                         title="{{ error.error_message }}">
                                         {{ error.error_message or 'No message' }}
                                     </div>
-                                    <div class="text-muted" style="font-size:0.72rem;">
+                                    <div class="text-muted sysadmin-meta-2xs">
                                         {{ error.request_method }} {{ error.request_path }}
                                         {% if error.timestamp %}
                                         · <span class="local-timestamp"
@@ -191,8 +185,7 @@
                     </ul>
                     {% else %}
                     <div class="p-4 text-center text-muted">
-                        <span class="material-symbols-outlined d-block mb-2 text-success"
-                            style="font-size:40px;">check_circle</span>
+                        <span class="material-symbols-outlined d-block mb-2 text-success sysadmin-empty-state-icon">check_circle</span>
                         No recent errors — system is healthy
                     </div>
                     {% endif %}
@@ -204,8 +197,7 @@
     <!-- ── System Admins ── -->
     <div class="card border-0 shadow-sm">
         <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-3">
-            <span class="material-symbols-outlined"
-                style="font-size:20px; color: var(--sysadmin-accent);">admin_panel_settings</span>
+            <span class="material-symbols-outlined sysadmin-card-title-icon text-secondary">admin_panel_settings</span>
             <h6 class="mb-0 fw-semibold">System Administrators</h6>
             <span class="badge bg-secondary ms-auto">{{ system_admin_count }}</span>
         </div>
@@ -224,12 +216,10 @@
                         <tr>
                             <td class="ps-3">
                                 <div class="d-flex align-items-center gap-2">
-                                    <div class="rounded-circle d-flex align-items-center justify-content-center"
-                                        style="width:32px;height:32px;flex-shrink:0;background:color-mix(in srgb, var(--secondary) 15%, transparent);">
-                                        <span class="material-symbols-outlined"
-                                            style="font-size:16px;color:var(--sysadmin-accent);">shield_person</span>
+                                    <div class="sysadmin-admin-chip">
+                                        <span class="material-symbols-outlined">shield_person</span>
                                     </div>
-                                    <span class="fw-semibold" style="font-size:0.9rem;">{{ admin.get_display_username() }}</span>
+                                    <span class="fw-semibold sysadmin-name-sm">{{ admin.get_display_username() }}</span>
                                 </div>
                             </td>
                             <td><span class="badge bg-success-subtle text-success">Active</span></td>

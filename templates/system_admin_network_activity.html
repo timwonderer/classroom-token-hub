@@ -10,29 +10,13 @@
     <div class="col-md-4 mb-3">
       <div class="card stat-card">
         <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center">
-            <div>
-              <p class="text-muted mb-1" style="font-size: 0.85rem;">Total Requests</p>
-              <h3 class="mb-0 fw-bold" style="color: var(--brand-primary);">{{ total_requests }}</h3>
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+              <p class="sysadmin-metric-eyebrow">Total Requests</p>
+              <h3 class="sysadmin-metric-value sysadmin-metric-value-primary">{{ total_requests }}</h3>
             </div>
             <div>
-              <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-primary); opacity: 0.3;">cloud</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-md-4 mb-3">
-      <div class="card stat-card">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center">
-            <div>
-              <p class="text-muted mb-1" style="font-size: 0.85rem;">Unique IP Addresses</p>
-              <h3 class="mb-0 fw-bold" style="color: var(--brand-teal);">{{ unique_ips }}</h3>
-            </div>
-            <div>
-              <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-teal); opacity: 0.3;">router</span>
+              <span class="material-symbols-outlined sysadmin-ghost-icon text-primary">cloud</span>
             </div>
           </div>
         </div>
@@ -42,13 +26,29 @@
     <div class="col-md-4 mb-3">
       <div class="card stat-card">
         <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center">
-            <div>
-              <p class="text-muted mb-1" style="font-size: 0.85rem;">Error Types</p>
-              <h3 class="mb-0 fw-bold" style="color: var(--brand-gold);">{{ error_type_stats|length }}</h3>
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+              <p class="sysadmin-metric-eyebrow">Unique IP Addresses</p>
+              <h3 class="sysadmin-metric-value sysadmin-metric-value-info">{{ unique_ips }}</h3>
             </div>
             <div>
-              <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-gold); opacity: 0.3;">category</span>
+              <span class="material-symbols-outlined sysadmin-ghost-icon text-info">router</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+      <div class="card stat-card">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+              <p class="sysadmin-metric-eyebrow">Error Types</p>
+              <h3 class="sysadmin-metric-value sysadmin-metric-value-secondary">{{ error_type_stats|length }}</h3>
+            </div>
+            <div>
+              <span class="material-symbols-outlined sysadmin-ghost-icon text-secondary">category</span>
             </div>
           </div>
         </div>
@@ -61,7 +61,7 @@
     <div class="col-md-6">
       <div class="card">
         <div class="card-header">
-          <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">filter_alt</span> Filter by IP Address</h5>
+          <h5 class="mb-0"><span class="material-symbols-outlined sysadmin-card-title-icon">filter_alt</span> Filter by IP Address</h5>
         </div>
         <div class="card-body">
           <form method="GET" action="{{ url_for('sysadmin.network_activity') }}" class="mb-0">
@@ -85,10 +85,10 @@
     <div class="col-md-6">
       <div class="card">
         <div class="card-header">
-          <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">analytics</span> Error Type Distribution</h5>
+          <h5 class="mb-0"><span class="material-symbols-outlined sysadmin-card-title-icon">analytics</span> Error Type Distribution</h5>
         </div>
         <div class="card-body">
-          <div class="list-group list-group-flush" style="max-height: 200px; overflow-y: auto;">
+          <div class="list-group list-group-flush sysadmin-scroll-panel-sm">
             {% for error_type, count in error_type_stats %}
             <div class="list-group-item bg-transparent border-bottom d-flex justify-content-between align-items-center py-2">
               <span class="small">{{ error_type or 'Unknown' }}</span>
@@ -108,14 +108,14 @@
     <div class="card-header">
       <div class="d-flex justify-content-between align-items-center">
         <h5 class="mb-0">
-          <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">network_check</span>
+          <span class="material-symbols-outlined sysadmin-card-title-icon">network_check</span>
           {% if current_ip %}
             Network Activity for {{ current_ip }}
           {% else %}
             All Network Activity
           {% endif %}
         </h5>
-        <span class="badge bg-light text-dark">{{ pagination.total }} requests</span>
+        <span class="badge bg-light text-dark sysadmin-pill-copy">{{ pagination.total }} requests</span>
       </div>
     </div>
     <div class="card-body p-0">
@@ -124,12 +124,12 @@
           <table class="table table-hover mb-0">
             <thead>
               <tr>
-                <th style="width: 180px;">Timestamp</th>
-                <th style="width: 80px;">Method</th>
+                <th class="w-auto" style="min-width: 180px;">Timestamp</th>
+                <th class="w-auto" style="min-width: 80px;">Method</th>
                 <th>Request Path</th>
-                <th style="width: 150px;">Status</th>
-                <th style="width: 140px;">IP Address</th>
-                <th style="width: 80px;">Details</th>
+                <th class="w-auto" style="min-width: 150px;">Status</th>
+                <th class="w-auto" style="min-width: 140px;">IP Address</th>
+                <th class="w-auto" style="min-width: 80px;">Details</th>
               </tr>
             </thead>
             <tbody>
@@ -183,7 +183,7 @@
                     <div class="modal-content">
                       <div class="modal-header bg-primary text-white">
                         <h5 class="modal-title" id="activityModalLabel{{ log.id }}">
-                          <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">info</span>
+                          <span class="material-symbols-outlined sysadmin-card-title-icon">info</span>
                           Request Details #{{ log.id }}
                         </h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -224,7 +224,7 @@
                         {% if log.stack_trace %}
                           <div class="mb-3">
                             <strong>Stack Trace:</strong>
-                            <pre class="bg-dark text-light p-3 rounded" style="max-height: 300px; overflow-y: auto;"><code>{{ log.stack_trace }}</code></pre>
+                            <pre class="bg-dark text-light p-3 rounded sysadmin-log-output"><code>{{ log.stack_trace }}</code></pre>
                           </div>
                         {% endif %}
                       </div>
@@ -271,7 +271,7 @@
 
       {% else %}
         <div class="p-5 text-center text-muted">
-          <span class="material-symbols-outlined d-block" style="font-size: 64px; opacity: 0.3;">wifi_off</span>
+          <span class="material-symbols-outlined d-block sysadmin-ghost-icon">wifi_off</span>
           <h4>No network activity logged yet</h4>
           <p>Network requests will appear here as they occur.</p>
         </div>

@@ -23,6 +23,8 @@ Here are some issues that teachers typically encounter.
 - [Analytics Dashboard](teacher/analytics.md)
 - [Rent Itemization](teacher/rent-itemization.md)
 
-## Direct Support Tickets
+## Teacher Support Tickets
 
-Teachers can now submit class-scoped support tickets directly from **Help & Support** (`/admin/help-support`). Select the class scope (join code), describe the issue, and the ticket is delivered directly to system administration without a teacher triage step. Note that you must have at least one class set up (with a join code) before you can submit a direct support ticket; if you have no classes yet, create a class first (see [Students and Join Codes](teacher/students.md)).
+Teachers can now submit class-scoped support tickets from **Help & Support** (`/admin/help-support`). To submit a ticket, select the class in which you are encountering a problem and provide information regarding your issue. Note that you must have at least one class set up (with a join code) before you can submit a direct support ticket; if you have no classes yet, create a class first (see [Students and Join Codes](teacher/students.md)).
+
+Please note that this support route is meant for **teachers to report problems they have encountered while logged in as a teacher**. If your students are encountering issues, they must initiate a support ticket from their account so useful contextual information can be captured. All student-initiated tickets will be triaged by the teacher first. If the teacher cannot resolve the issue, the ticket can then be escalated to developer review. For more information, please review [Student Guide - Help Center](../features/student/support/help-center.md)

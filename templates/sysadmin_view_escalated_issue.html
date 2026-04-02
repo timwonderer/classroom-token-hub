@@ -6,7 +6,7 @@
 <div class="container-fluid">
     <!-- Back Button -->
     <a href="{{ url_for('sysadmin.support_tickets') }}?tab=issues" class="btn btn-outline-secondary mb-3">
-        <span class="material-symbols-outlined me-2">arrow_back</span>Back to Escalated Issues
+        <span class="material-symbols-outlined icon-inline me-2">arrow_back</span>Back to Escalated Issues
     </a>
 
     <div class="row">
@@ -16,7 +16,7 @@
                 <div class="card-header bg-primary text-white">
                     <div class="d-flex justify-content-between align-items-center">
                         <h4 class="mb-0">
-                            <span class="material-symbols-outlined me-2">flag</span>Issue {{ issue_ref[:12] }}...
+                            <span class="material-symbols-outlined icon-inline me-2">flag</span>Issue {{ issue_ref[:12] }}...
                         </h4>
                         <span class="badge
                             {% if issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}bg-warning text-dark
@@ -31,7 +31,7 @@
                     <div class="mb-3">
                         <h6 class="text-muted mb-2">Escalated By</h6>
                         <p class="mb-0">
-                            <span class="material-symbols-outlined me-2">badge</span>
+                            <span class="material-symbols-outlined icon-inline me-2">badge</span>
                             <strong>{{ issue.teacher.get_sysadmin_display_name() }}</strong>
                             {% if issue.share_class_name_with_sysadmin and issue.class_label %}
                             <span class="text-muted">| {{ issue.class_label }}</span>
@@ -45,7 +45,7 @@
                     <div class="mb-3">
                         <h6 class="text-muted mb-2">Student Reference</h6>
                         <p class="mb-0">
-                            <span class="material-symbols-outlined me-2">tag</span>
+                            <span class="material-symbols-outlined icon-inline me-2">tag</span>
                             <code>{{ issue.opaque_student_reference }}</code>
                             <small class="text-muted d-block mt-1">
                                 Non-reversible identifier for privacy protection
@@ -58,8 +58,16 @@
                     <!-- Category -->
                     <div class="mb-3">
                         <h6 class="text-muted mb-2">Category</h6>
-                        <span class="badge bg-secondary">{{ issue.category.name if issue.category else 'Unknown' }}</span>
-                        <span class="badge bg-light text-dark ms-2">{{ issue.issue_type|title }}</span>
+                        <div class="sysadmin-detail-grid">
+                            <div>
+                                <div class="sysadmin-data-label">Category</div>
+                                <div class="sysadmin-data-value">{{ issue.category.name if issue.category else 'Unknown' }}</div>
+                            </div>
+                            <div>
+                                <div class="sysadmin-data-label">Issue Type</div>
+                                <div class="sysadmin-data-value">{{ issue.issue_type|title }}</div>
+                            </div>
+                        </div>
                     </div>
 
                     <hr>
@@ -108,7 +116,7 @@
                         <div class="col-md-6 mb-3">
                             <h6 class="text-muted mb-2">Escalated</h6>
                             <p class="mb-0">
-                                <span class="material-symbols-outlined me-2">arrow_circle_up</span>
+                                <span class="material-symbols-outlined icon-inline me-2">arrow_circle_up</span>
                                 <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span>
                             </p>
                         </div>
@@ -116,7 +124,7 @@
                         <div class="col-md-6 mb-3">
                             <h6 class="text-muted mb-2">Reviewed</h6>
                             <p class="mb-0">
-                                <span class="material-symbols-outlined me-2">visibility</span>
+                                <span class="material-symbols-outlined icon-inline me-2">visibility</span>
                                 <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.sysadmin_reviewed_at) }}"></span>
                             </p>
                         </div>
@@ -141,7 +149,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">info</span>System Context Snapshot
+                        <span class="material-symbols-outlined icon-inline me-2">info</span>System Context Snapshot
                     </h5>
                 </div>
                 <div class="card-body">
@@ -180,7 +188,7 @@
                     <p class="mb-0 mt-2"><strong>Description:</strong> {{ issue.context_snapshot.transaction.description }}</p>
                     {% if issue.context_snapshot.transaction.is_void %}
                     <div class="alert alert-danger mt-2 mb-0">
-                        <span class="material-symbols-outlined me-2">cancel</span>Transaction was voided
+                        <span class="material-symbols-outlined icon-inline me-2">cancel</span>Transaction was voided
                     </div>
                     {% endif %}
                     {% endif %}
@@ -192,7 +200,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">hub</span>Correlation Pack
+                        <span class="material-symbols-outlined icon-inline me-2">hub</span>Correlation Pack
                     </h5>
                     <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#correlationPackBody" aria-expanded="false" aria-controls="correlationPackBody">
                         Toggle
@@ -284,7 +292,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-success text-white">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">check_circle</span>Record Technical Resolution
+                        <span class="material-symbols-outlined icon-inline me-2">check_circle</span>Record Technical Resolution
                     </h5>
                 </div>
                 <div class="card-body">
@@ -316,7 +324,7 @@
                         </div>
 
                         <button type="submit" class="btn btn-success w-100">
-                            <span class="material-symbols-outlined me-2">check_circle</span>Mark Dev Resolved
+                            <span class="material-symbols-outlined icon-inline me-2">check_circle</span>Mark Dev Resolved
                         </button>
                     </form>
                 </div>
@@ -328,7 +336,7 @@
             <div class="card shadow-sm">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">history</span>Status History
+                        <span class="material-symbols-outlined icon-inline me-2">history</span>Status History
                     </h5>
                 </div>
                 <div class="card-body">
@@ -337,7 +345,7 @@
                         <div class="mb-3">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <span class="badge bg-secondary">{{ entry.new_status|replace('_', ' ')|title }}</span>
+                                    <div class="sysadmin-data-value">{{ entry.new_status|replace('_', ' ')|title }}</div>
                                     <small class="text-muted d-block mt-1">
                                         by {{ entry.changed_by_type|title }}
                                     </small>

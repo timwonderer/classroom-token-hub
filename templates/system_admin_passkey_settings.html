@@ -10,7 +10,7 @@
             <div class="card mb-4">
                 <div class="card-body">
                     <h2 class="mb-2">
-                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 32px;">fingerprint</span>
+                        <span class="material-symbols-outlined icon-xl">fingerprint</span>
                         Passkey Authentication
                     </h2>
                     <p class="text-muted">
@@ -37,11 +37,11 @@
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined" style="vertical-align: middle;">security</span>
+                        <span class="material-symbols-outlined icon-inline">security</span>
                         Your Passkeys
                     </h5>
                     <button class="btn btn-primary" id="registerPasskeyButton">
-                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 18px;">add</span>
+                        <span class="material-symbols-outlined icon-md">add</span>
                         Register New Passkey
                     </button>
                 </div>
@@ -56,17 +56,17 @@
                                         <h6 class="mb-0">{{ cred.authenticator_name or "Unnamed Passkey" }}</h6>
                                     </div>
                                     <div class="text-muted small">
-                                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 14px;">calendar_today</span>
+                                        <span class="material-symbols-outlined icon-sm">calendar_today</span>
                                         Registered: {{ cred.created_at.strftime('%B %d, %Y at %I:%M %p') if cred.created_at else 'Unknown' }}
                                     </div>
                                     {% if cred.last_used %}
                                     <div class="text-muted small">
-                                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 14px;">schedule</span>
+                                        <span class="material-symbols-outlined icon-sm">schedule</span>
                                         Last used: {{ cred.last_used.strftime('%B %d, %Y at %I:%M %p') }}
                                     </div>
                                     {% else %}
                                     <div class="text-muted small">
-                                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 14px;">schedule</span>
+                                        <span class="material-symbols-outlined icon-sm">schedule</span>
                                         Never used
                                     </div>
                                     {% endif %}
@@ -74,7 +74,7 @@
                                 <button class="btn btn-sm btn-outline-danger delete-passkey-btn"
                                         data-credential-id="{{ cred.id }}"
                                         data-credential-name="{{ cred.authenticator_name or 'Unnamed Passkey' }}">
-                                    <span class="material-symbols-outlined" style="font-size: 16px;">delete</span>
+                                    <span class="material-symbols-outlined icon-inline">delete</span>
                                     Delete
                                 </button>
                             </div>
@@ -82,7 +82,7 @@
                         </div>
                     {% else %}
                         <div class="text-center py-5">
-                            <span class="material-symbols-outlined text-muted mb-3" style="font-size: 64px;">security_key</span>
+                            <span class="material-symbols-outlined icon-hero text-muted mb-3">security_key</span>
                             <p class="text-muted">
                                 You don't have any passkeys registered yet.<br>
                                 Click "Register New Passkey" above to get started.
@@ -138,7 +138,7 @@
             } catch (error) {
                 alert('Error: ' + error.message);
                 this.disabled = false;
-                this.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px;">delete</span> Delete';
+                this.innerHTML = '<span class="material-symbols-outlined icon-inline">delete</span> Delete';
             }
         });
     });

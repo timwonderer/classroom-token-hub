@@ -4,26 +4,6 @@
 {% block page_icon %}person{% endblock %}
 
 {% block extra_styles %}
-<style>
-    .stat-value {
-        font-size: 2rem;
-        font-weight: bold;
-    }
-
-    .stat-label {
-        color: var(--text-secondary);
-        font-size: 0.875rem;
-        text-transform: uppercase;
-    }
-
-    .negative-balance {
-        color: var(--danger);
-    }
-
-    .positive-balance {
-        color: var(--success);
-    }
-</style>
 {% endblock %}
 
 {% block content %}
@@ -50,9 +30,9 @@
     <div class="col-md-3 mb-3">
         <div class="card stat-card shadow-sm h-100">
             <div class="card-body text-center">
-                <div class="stat-label mb-2">Checking Balance</div>
+                <div class="student-stat-label mb-2">Checking Balance</div>
                 <div
-                    class="stat-value {% if scoped_checking_balance < 0 %}negative-balance{% else %}positive-balance{% endif %}">
+                    class="student-stat-value {% if scoped_checking_balance < 0 %}negative-balance{% else %}positive-balance{% endif %}">
                     ${{ "%.2f"|format(scoped_checking_balance) }}
                 </div>
             </div>
@@ -61,8 +41,8 @@
     <div class="col-md-3 mb-3">
         <div class="card stat-card shadow-sm h-100">
             <div class="card-body text-center">
-                <div class="stat-label mb-2">Savings Balance</div>
-                <div class="stat-value positive-balance">
+                <div class="student-stat-label mb-2">Savings Balance</div>
+                <div class="student-stat-value positive-balance">
                     ${{ "%.2f"|format(scoped_savings_balance) }}
                 </div>
             </div>
@@ -71,8 +51,8 @@
     <div class="col-md-3 mb-3">
         <div class="card stat-card shadow-sm h-100">
             <div class="card-body text-center">
-                <div class="stat-label mb-2">Total Earnings</div>
-                <div class="stat-value text-success">
+                <div class="student-stat-label mb-2">Total Earnings</div>
+                <div class="student-stat-value text-success">
                     ${{ "%.2f"|format(scoped_total_earnings) }}
                 </div>
             </div>
@@ -81,8 +61,8 @@
     <div class="col-md-3 mb-3">
         <div class="card stat-card shadow-sm h-100">
             <div class="card-body text-center">
-                <div class="stat-label mb-2">Hall Passes</div>
-                <div class="stat-value text-info">
+                <div class="student-stat-label mb-2">Hall Passes</div>
+                <div class="student-stat-value text-info">
                     {{ student.hall_passes }}
                 </div>
             </div>

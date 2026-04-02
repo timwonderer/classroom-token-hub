@@ -8,24 +8,11 @@
 <link rel="stylesheet" href="{{ static_url('css/admin-insurance-advisor.css') }}">
 <script src="{{ static_url('js/economy-balance.js') }}"></script>
 <script src="{{ static_url('js/insurance-badge-select.js') }}"></script>
-<style>
-  .EasyMDEContainer .CodeMirror {
-    min-height: 150px;
-  }
-
-  .editor-toolbar {
-    border-radius: 4px 4px 0 0;
-  }
-
-  .CodeMirror {
-    border-radius: 0 0 4px 4px;
-  }
-</style>
 {% endblock %}
 
 {% block content %}
 
-<div class="container-fluid">
+<div class="container-fluid insurance-policy-edit-page">
   <div class="row mb-3">
     <div class="col">
       <nav aria-label="breadcrumb">
@@ -379,7 +366,7 @@
                               <span>{{ policy_info.title }}</span>
                               {% if policy_info.level %}
                               <span
-                                class="badge rounded-pill bg-light border border-{{ group.color }} text-{{ group.color }} text-uppercase"
+                                class="badge bg-light border border-{{ group.color }} text-{{ group.color }} text-uppercase"
                                 style="font-size: 0.6rem;">
                                 {{ policy_info.level.replace('_', ' ') }}
                               </span>

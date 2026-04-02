@@ -177,6 +177,33 @@ def test_onboarding_dismiss_widget_endpoint_creates_record(client):
     assert onboarding.widget_dismissed is True
 
 
+def test_onboarding_undismiss_widget_endpoint(client):
+    """Test that undismiss-widget fully restores widget visibility state."""
+    admin = login_admin(client)
+
+    onboarding = TeacherOnboarding(teacher_id=admin.id)
+    onboarding.dismiss_widget()
+    db.session.add(onboarding)
+    db.session.commit()
+
+    response = client.post('/admin/onboarding/undismiss-widget',
+                          json={},
+                          content_type='application/json')
+
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data['status'] == 'success'
+
+    db.session.refresh(onboarding)
+    assert onboarding.widget_dismissed is False
+    assert onboarding.widget_dismissed_at is None
+
+    status_response = client.get('/admin/onboarding/status')
+    assert status_response.status_code == 200
+    status_data = json.loads(status_response.data)
+    assert status_data['dismissed'] is False
+
+
 def test_onboarding_skip_task_endpoint(client):
     """Test the /admin/onboarding/skip-task endpoint."""
     admin = login_admin(client)
