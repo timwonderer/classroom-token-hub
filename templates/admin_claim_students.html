@@ -9,12 +9,12 @@
     <div class="card shadow">
       <div class="card-body">
         <h2 class="card-title mb-4">
-          <span class="material-symbols-outlined" style="vertical-align: middle;">group_add</span>
+          <span class="material-symbols-outlined icon-inline">group_add</span>
           Welcome! Let's set up your student roster
         </h2>
 
         <div class="alert alert-info">
-          <h5><span class="material-symbols-outlined" style="vertical-align: middle;">info</span> One-Time Setup</h5>
+          <h5><span class="material-symbols-outlined icon-inline">info</span> One-Time Setup</h5>
           <p class="mb-2">
             We found <strong>{{ orphaned_students|length }} student(s)</strong> in the system that haven't been assigned to a teacher yet.
           </p>
@@ -26,13 +26,13 @@
 
         {% if orphaned_students|length == 0 %}
           <div class="alert alert-success">
-            <h5><span class="material-symbols-outlined" style="vertical-align: middle;">check_circle</span> All Set!</h5>
+            <h5><span class="material-symbols-outlined icon-inline">check_circle</span> All Set!</h5>
             <p class="mb-0">There are no orphaned students in the system. You're ready to go!</p>
           </div>
           <form method="POST" action="{{ url_for('admin.claim_students') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <button type="submit" class="btn btn-primary">
-              <span class="material-symbols-outlined" style="vertical-align: middle;">check</span>
+              <span class="material-symbols-outlined icon-inline">check</span>
               Complete Setup
             </button>
           </form>
@@ -43,11 +43,11 @@
             <div class="mb-3 d-flex justify-content-between align-items-center">
               <div>
                 <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAll()">
-                  <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 18px;">select_all</span>
+                  <span class="material-symbols-outlined icon-md">select_all</span>
                   Select All
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">
-                  <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 18px;">deselect</span>
+                  <span class="material-symbols-outlined icon-md">deselect</span>
                   Deselect All
                 </button>
               </div>
@@ -100,12 +100,12 @@
 
             <!-- Submit Buttons -->
             <div class="mt-4 d-flex justify-content-between">
-              <button type="submit" class="btn btn-primary btn-lg">
-                <span class="material-symbols-outlined" style="vertical-align: middle;">check</span>
+              <button type="submit" class="btn btn-primary">
+                <span class="material-symbols-outlined icon-inline">check</span>
                 Claim Selected Students
               </button>
               <button type="submit" class="btn btn-outline-secondary" onclick="return confirm('Are you sure you don\'t want to claim any students? You can always assign them later via the system admin.')">
-                <span class="material-symbols-outlined" style="vertical-align: middle;">skip_next</span>
+                <span class="material-symbols-outlined icon-inline">skip_next</span>
                 Skip for Now
               </button>
             </div>

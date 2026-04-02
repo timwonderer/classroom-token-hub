@@ -23,8 +23,7 @@
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button"
                         data-bs-toggle="collapse" data-bs-target="#attendanceGuideControls" aria-expanded="false"
                         aria-controls="attendanceGuideControls">
-                        <span class="material-symbols-outlined me-2"
-                            style="font-size:25pt; vertical-align:middle;">toggle_on</span>
+                        <span class="material-symbols-outlined icon-section me-2">toggle_on</span>
                         <strong>Attendance Controls</strong>
                     </button>
                 </h2>
@@ -45,8 +44,7 @@
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button"
                         data-bs-toggle="collapse" data-bs-target="#attendanceGuideFilters" aria-expanded="false"
                         aria-controls="attendanceGuideFilters">
-                        <span class="material-symbols-outlined me-2"
-                            style="font-size:25pt; vertical-align:middle;">filter_alt</span>
+                        <span class="material-symbols-outlined icon-section me-2">filter_alt</span>
                         <strong>Filter Attendance History</strong>
                     </button>
                 </h2>
@@ -63,8 +61,7 @@
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button"
                         data-bs-toggle="collapse" data-bs-target="#attendanceGuideReview" aria-expanded="false"
                         aria-controls="attendanceGuideReview">
-                        <span class="material-symbols-outlined me-2"
-                            style="font-size:25pt; vertical-align:middle;">history</span>
+                        <span class="material-symbols-outlined icon-section me-2">history</span>
                         <strong>Review Records</strong>
                     </button>
                 </h2>
@@ -88,8 +85,8 @@
     <div class="card-body py-3">
         <div class="row align-items-center g-3">
             <div class="col-auto">
-                <span class="material-symbols-outlined"
-                    style="font-size: 2rem; color: var(--brand-primary);">summarize</span>
+                <span class="material-symbols-outlined icon-xl"
+                    style="color: var(--brand-primary);">summarize</span>
             </div>
             <div class="col">
                 <div class="row g-3">
@@ -174,7 +171,7 @@
             <div class="card-header bg-white py-3">
                 <div class="d-flex justify-content-between align-items-center">
                     <h5 class="mb-0 fw-bold">
-                        <span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;">history</span>
+                        <span class="material-symbols-outlined me-2 icon-inline">history</span>
                         Attendance History
                     </h5>
                 </div>
@@ -220,11 +217,11 @@
                     <div class="col-12 d-flex align-items-center gap-2">
                         <button class="btn btn-sm btn-primary" onclick="loadAttendanceHistory()">
                             <span class="material-symbols-outlined"
-                                style="font-size: 1rem; vertical-align: text-bottom;">filter_alt</span>
+                                class="icon-inline">filter_alt</span>
                             Apply
                         </button>
                         <button class="btn btn-sm btn-outline-secondary" onclick="resetFilters()" title="Reset filters">
-                            <span class="material-symbols-outlined" style="font-size: 1rem;">refresh</span>
+                            <span class="material-symbols-outlined icon-inline">refresh</span>
                         </button>
                     </div>
                 </div>
@@ -377,9 +374,9 @@
     function getStatusBadge(status) {
         const escapedStatus = escapeHtml(status);
         if (status === 'active') {
-            return '<span class="badge bg-success"><span class="material-symbols-outlined" style="font-size: 0.875rem; vertical-align: text-bottom;">login</span> Start Work</span>';
+            return '<span class="badge bg-success"><span class="material-symbols-outlined icon-inline">login</span> Start Work</span>';
         } else if (status === 'inactive') {
-            return '<span class="badge bg-danger"><span class="material-symbols-outlined" style="font-size: 0.875rem; vertical-align: text-bottom;">logout</span> Break / Done</span>';
+            return '<span class="badge bg-danger"><span class="material-symbols-outlined icon-inline">logout</span> Break / Done</span>';
         }
         return '<span class="badge bg-secondary">' + escapedStatus + '</span>';
     }
@@ -492,7 +489,7 @@
         html += `
         <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
             <a class="page-link" href="#" onclick="loadAttendanceHistory(${currentPage - 1}); return false;">
-                <span class="material-symbols-outlined" style="font-size: 1rem;">chevron_left</span>
+                <span class="material-symbols-outlined icon-inline">chevron_left</span>
             </a>
         </li>
     `;
@@ -532,7 +529,7 @@
         html += `
         <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
             <a class="page-link" href="#" onclick="loadAttendanceHistory(${currentPage + 1}); return false;">
-                <span class="material-symbols-outlined" style="font-size: 1rem;">chevron_right</span>
+                <span class="material-symbols-outlined icon-inline">chevron_right</span>
             </a>
         </li>
     `;

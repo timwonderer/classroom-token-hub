@@ -21,7 +21,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header" id="hallPassGuideHeadingQueue">
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideQueue" aria-expanded="false" aria-controls="hallPassGuideQueue">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">settings</span>
+                        <span class="material-symbols-outlined icon-section me-2">settings</span>
                         <strong>Queue Settings</strong>
                     </button>
                 </h2>
@@ -37,7 +37,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header" id="hallPassGuideHeadingSettingsBreakdown">
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideSettingsBreakdown" aria-expanded="false" aria-controls="hallPassGuideSettingsBreakdown">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tune</span>
+                        <span class="material-symbols-outlined icon-section me-2">tune</span>
                         <strong>Settings Breakdown</strong>
                     </button>
                 </h2>
@@ -59,7 +59,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header" id="hallPassGuideHeadingApprove">
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideApprove" aria-expanded="false" aria-controls="hallPassGuideApprove">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">check_circle</span>
+                        <span class="material-symbols-outlined icon-section me-2">check_circle</span>
                         <strong>Approve or Reject Requests</strong>
                     </button>
                 </h2>
@@ -72,7 +72,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header" id="hallPassGuideHeadingTrack">
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideTrack" aria-expanded="false" aria-controls="hallPassGuideTrack">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">logout</span>
+                        <span class="material-symbols-outlined icon-section me-2">logout</span>
                         <strong>Track Students Out</strong>
                     </button>
                 </h2>
@@ -88,7 +88,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header" id="hallPassGuideHeadingDisplays">
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideDisplays" aria-expanded="false" aria-controls="hallPassGuideDisplays">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tv</span>
+                        <span class="material-symbols-outlined icon-section me-2">tv</span>
                         <strong>Display Screens</strong>
                     </button>
                 </h2>
@@ -123,7 +123,7 @@
         <div class="card-body py-3">
             <div class="row align-items-center g-3">
                 <div class="col-auto">
-                    <span class="material-symbols-outlined text-primary" style="font-size: 1.5rem;">settings</span>
+                    <span class="material-symbols-outlined text-primary icon-xl">settings</span>
                 </div>
                 <div class="col-md-4">
                     <div class="d-flex align-items-center">
@@ -144,7 +144,7 @@
                 </div>
                 <div class="col-auto">
                     <a href="{{ url_for('admin.hall_pass_setup') }}" class="btn btn-outline-primary btn-sm">
-                        <span class="material-symbols-outlined align-middle" style="font-size: 1.1rem;">tune</span>
+                        <span class="material-symbols-outlined align-middle icon-inline">tune</span>
                         Configure Pass Types
                     </a>
                 </div>
@@ -161,7 +161,7 @@
             <ul class="nav nav-tabs card-header-tabs" id="hallPassTabs" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active d-flex align-items-center" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab" aria-controls="pending" aria-selected="true">
-                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;">schedule</span>
+                        <span class="material-symbols-outlined me-2 icon-inline">schedule</span>
                         <span class="fw-bold">Pending</span>
                         {% if pending_requests %}
                             <span class="badge bg-warning text-dark ms-2">{{ pending_requests|length }}</span>
@@ -170,7 +170,7 @@
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link d-flex align-items-center" id="approved-tab" data-bs-toggle="tab" data-bs-target="#approved" type="button" role="tab" aria-controls="approved" aria-selected="false">
-                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;">check_circle</span>
+                        <span class="material-symbols-outlined me-2 icon-inline">check_circle</span>
                         <span class="fw-bold">Approved</span>
                         {% if approved_queue %}
                             <span class="badge bg-info ms-2">{{ approved_queue|length }}</span>
@@ -179,7 +179,7 @@
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link d-flex align-items-center" id="out-tab" data-bs-toggle="tab" data-bs-target="#out" type="button" role="tab" aria-controls="out" aria-selected="false">
-                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;">logout</span>
+                        <span class="material-symbols-outlined me-2 icon-inline">logout</span>
                         <span class="fw-bold">Out</span>
                         {% if out_of_class %}
                             <span class="badge bg-success ms-2">{{ out_of_class|length }}</span>
@@ -188,7 +188,7 @@
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link d-flex align-items-center" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">
-                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;">history</span>
+                        <span class="material-symbols-outlined me-2 icon-inline">history</span>
                         <span class="fw-bold">History</span>
                     </button>
                 </li>
@@ -208,10 +208,10 @@
                                     </div>
                                     <div class="btn-group" role="group">
                                         <button class="btn btn-sm btn-success" onclick="handlePassAction({{ req.id }}, 'approve')">
-                                            <span class="material-symbols-outlined" style="font-size: 1rem;">check</span> Approve
+                                            <span class="material-symbols-outlined icon-inline">check</span> Approve
                                         </button>
                                         <button class="btn btn-sm btn-danger" onclick="handlePassAction({{ req.id }}, 'reject')">
-                                            <span class="material-symbols-outlined" style="font-size: 1rem;">close</span> Reject
+                                            <span class="material-symbols-outlined icon-inline">close</span> Reject
                                         </button>
                                     </div>
                                 </div>
@@ -236,7 +236,7 @@
                                         <small class="d-block text-muted">Approved: {{ req.decision_time | format_datetime }} | Period: {{ req.period }}</small>
                                     </div>
                                     <button class="btn btn-sm btn-primary" onclick="handlePassAction({{ req.id }}, 'leave')" {% if out_of_class %}disabled{% endif %}>
-                                        <span class="material-symbols-outlined" style="font-size: 1rem;">logout</span> Left Class
+                                        <span class="material-symbols-outlined icon-inline">logout</span> Left Class
                                     </button>
                                 </div>
                             {% endfor %}
@@ -260,7 +260,7 @@
                                         <small class="d-block text-muted">Left: {{ req.left_time | format_datetime }} | Period: {{ req.period }}</small>
                                     </div>
                                     <button class="btn btn-sm btn-secondary" onclick="handlePassAction({{ req.id }}, 'return')">
-                                        <span class="material-symbols-outlined" style="font-size: 1rem;">login</span> Returned
+                                        <span class="material-symbols-outlined icon-inline">login</span> Returned
                                     </button>
                                 </div>
                             {% endfor %}
@@ -319,7 +319,7 @@
                         </div>
                         <div class="col-md-2 d-flex align-items-end">
                             <button class="btn btn-sm btn-primary w-100" onclick="loadHistory()">
-                                <span class="material-symbols-outlined" style="font-size: 1rem;">filter_alt</span> Apply
+                                <span class="material-symbols-outlined icon-inline">filter_alt</span> Apply
                             </button>
                         </div>
                     </div>
