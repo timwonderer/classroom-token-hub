@@ -1001,7 +1001,7 @@ body.sysadmin-shell {
 }
 
 .sysadmin-nav-signout:hover {
-    color: #ff6666 !important;
+    color: color-mix(in srgb, var(--danger) 85%, white) !important;
     border-color: rgba(220, 80, 80, 0.4) !important;
 }
 
@@ -1295,6 +1295,12 @@ table.js-sortable thead th:hover .sort-indicator {
 
 .icon-md {
     font-size: 1.125rem;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.icon-lg {
+    font-size: 1.5rem;
     line-height: 1;
     vertical-align: middle;
 }

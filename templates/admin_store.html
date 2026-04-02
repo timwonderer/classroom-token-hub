@@ -272,7 +272,7 @@
         </div>
         {% else %}
         <div class="text-center text-muted py-3">
-          <span class="material-symbols-outlined" style="font-size: 2rem;">check_circle</span>
+          <span class="material-symbols-outlined icon-section">check_circle</span>
           <p class="mb-0">No pending redemption requests</p>
         </div>
         {% endif %}
@@ -328,7 +328,7 @@
         </div>
         {% else %}
         <div class="text-center text-muted py-3">
-          <span class="material-symbols-outlined" style="font-size: 2rem;">remove_shopping_cart</span>
+          <span class="material-symbols-outlined icon-section">remove_shopping_cart</span>
           <p class="mb-0">No purchases yet</p>
         </div>
         {% endif %}
@@ -412,7 +412,7 @@
                 {% endif %}
                 {% if item.collective_goal_expires_at %}
                 <div class="small text-muted mt-1">
-                  <span class="material-symbols-outlined icon-inline" style="font-size: 13px;">schedule</span>
+                  <span class="material-symbols-outlined icon-sm">schedule</span>
                   <strong>Deadline:</strong> {{ item.collective_goal_expires_at.strftime('%b %d, %Y') }}
                 </div>
                 {% endif %}
