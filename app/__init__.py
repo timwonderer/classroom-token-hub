@@ -43,6 +43,7 @@ if missing_vars:
 from app.utils.encryption import PIIEncryptedType
 from app.utils.helpers import format_utc_iso, is_safe_url, render_markdown
 from app.utils.constants import THEME_PROMPTS
+from app.telemetry import annotate_request_context_span, init_tracing
 
 
 def url_encode_filter(s):
@@ -332,6 +333,9 @@ def create_app():
     csrf.init_app(app)
     limiter.init_app(app)
 
+    with app.app_context():
+        init_tracing(app, db.engine)
+
     # -------------------- LOGGING --------------------
     log_level_name = os.getenv("LOG_LEVEL", "INFO").upper()
     log_level = getattr(logging, log_level_name, logging.INFO)
@@ -377,12 +381,14 @@ def create_app():
     @app.before_request
     def ensure_request_id():
         g.request_id = _get_request_id()
+        annotate_request_context_span()
 
     @app.before_request
     def capture_correlation_context():
         from app.services.tlcp import resolve_actor_context
 
         g.correlation_context = resolve_actor_context()
+        annotate_request_context_span()
 
     @app.after_request
     def attach_request_id_header(response):
