@@ -20,142 +20,10 @@
 <script src="{{ static_url('js/economy-balance.js') }}"></script>
 <script src="{{ static_url('js/insurance-badge-select.js') }}"></script>
 <link rel="stylesheet" href="{{ static_url('css/admin-insurance-advisor.css') }}">
-<style>
-  .EasyMDEContainer .CodeMirror {
-    min-height: 120px;
-  }
-
-  .editor-toolbar {
-    border-radius: 4px 4px 0 0;
-  }
-
-  .CodeMirror {
-    border-radius: 0 0 4px 4px;
-  }
-
-  #advancedInsuranceAccordion .accordion-item {
-    border: 2px solid var(--neutral-200);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    margin-bottom: 0.75rem;
-  }
-
-  #advancedInsuranceAccordion .accordion-button {
-    font-weight: 500;
-    padding: 0.9rem 1rem;
-    background-color: var(--surface);
-    color: var(--text-primary);
-  }
-
-  #advancedInsuranceAccordion .accordion-button:not(.collapsed) {
-    box-shadow: inset 0 -1px 0 var(--border-color);
-    background-color: var(--neutral-50);
-  }
-
-  #advancedInsuranceAccordion .accordion-body {
-    padding: 1.15rem 1.2rem 1.25rem;
-    background-color: var(--surface);
-  }
-
-  /* Section Specific Coding */
-  #advancedInsuranceAccordion .advanced-section-basic {
-    border-color: var(--primary);
-  }
-
-  #advancedInsuranceAccordion .advanced-section-basic .accordion-button {
-    color: var(--primary);
-  }
-
-  #advancedInsuranceAccordion .advanced-section-pricing {
-    border-color: var(--success);
-  }
-
-  #advancedInsuranceAccordion .advanced-section-pricing .accordion-button {
-    color: var(--success);
-  }
-
-  #advancedInsuranceAccordion .advanced-section-coverage {
-    border-color: var(--info);
-  }
-
-  #advancedInsuranceAccordion .advanced-section-coverage .accordion-button {
-    color: var(--info);
-  }
-
-  #advancedInsuranceAccordion .advanced-section-rules {
-    border-color: var(--warning);
-  }
-
-  #advancedInsuranceAccordion .advanced-section-rules .accordion-button {
-    color: color-mix(in srgb, var(--warning), black 20%);
-  }
-
-  #advancedInsuranceAccordion .advanced-section-tiered {
-    border-color: var(--secondary);
-  }
-
-  #advancedInsuranceAccordion .advanced-section-tiered .accordion-button {
-    color: var(--secondary-text);
-    /* Ensure readable variance */
-    /* Secondary text might be dark on Gold, but here accordion button has white bg, so we need text color */
-    /* Teacher Secondary is Gold. Text is neutral-900. */
-    /* If we use border-secondary (Gold), text should probably be Neutral-900 or Primary. */
-    color: var(--neutral-800);
-  }
-
-  #advancedInsuranceAccordion .accordion-button:focus {
-    box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--primary) 20%, transparent);
-  }
-
-  .insurance-step-card {
-    border: 1px solid var(--neutral-200);
-    border-radius: var(--radius-lg);
-    background: linear-gradient(180deg, var(--surface) 0%, color-mix(in srgb, var(--surface), var(--neutral-50) 65%) 100%);
-    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
-    padding: 1.1rem 1.1rem 1rem;
-    margin-bottom: 1rem;
-  }
-
-  .insurance-step-eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--primary);
-    margin-bottom: 0.35rem;
-  }
-
-  .insurance-step-title {
-    font-size: 1.02rem;
-    font-weight: 700;
-    margin-bottom: 0.2rem;
-    color: var(--text-primary);
-  }
-
-  .insurance-step-copy {
-    color: var(--text-secondary);
-    font-size: 0.92rem;
-    margin-bottom: 1rem;
-  }
-
-  .insurance-workflow-banner {
-    border: 1px solid color-mix(in srgb, var(--primary), white 70%);
-    background: linear-gradient(135deg, color-mix(in srgb, var(--primary), white 92%) 0%, color-mix(in srgb, var(--info), white 90%) 100%);
-    border-radius: var(--radius-lg);
-    padding: 1rem 1.1rem;
-    margin-bottom: 1rem;
-  }
-
-  .insurance-workflow-banner p:last-child {
-    margin-bottom: 0;
-  }
-</style>
 {% endblock %}
 
 {% block content %}
+<div class="insurance-management-page">
 
 {% set review_policies = policies|selectattr('requires_review')|list %}
 {% if review_policies %}
@@ -3056,14 +2924,16 @@
     }
 
     // Handle class selector change
-    const settingsBlockSelector = document.getElementById('settings_block_selector');
-    if (settingsBlockSelector) {
-      settingsBlockSelector.addEventListener('change', function () {
-        const selectedBlock = this.value;
-        window.location.href = "{{ url_for('admin.insurance_management') }}?settings_block=" + encodeURIComponent(selectedBlock);
+        const settingsBlockSelector = document.getElementById('settings_block_selector');
+        if (settingsBlockSelector) {
+          settingsBlockSelector.addEventListener('change', function () {
+            const selectedBlock = this.value;
+            window.location.href = "{{ url_for('admin.insurance_management') }}?settings_block=" + encodeURIComponent(selectedBlock);
+          });
+        }
       });
-    }
-  });
 </script>
+
+</div>
 
 {% endblock %}

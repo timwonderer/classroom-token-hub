@@ -23,20 +23,10 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
 <script src="{{ static_url('js/economy-balance.js') }}"></script>
 <script src="{{ static_url('js/item-form-economy.js') }}"></script>
-<style>
-    .EasyMDEContainer .CodeMirror {
-        min-height: 120px;
-    }
-    .editor-toolbar {
-        border-radius: 4px 4px 0 0;
-    }
-    .CodeMirror {
-        border-radius: 0 0 4px 4px;
-    }
-</style>
 {% endblock %}
 
 {% block content %}
+<div class="store-management-page">
 
 <div class="offcanvas offcanvas-end" tabindex="-1" id="storeGuide" aria-labelledby="storeGuideLabel">
   <div class="offcanvas-header">
@@ -1169,5 +1159,7 @@
     }
   });
 </script>
+
+</div>
 
 {% endblock %}

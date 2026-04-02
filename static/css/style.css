@@ -1540,6 +1540,10 @@ table.js-sortable thead th:hover .sort-indicator {
     min-height: 100px;
 }
 
+.store-management-page .EasyMDEContainer .CodeMirror {
+    min-height: 120px;
+}
+
 .EasyMDEContainer .editor-toolbar {
     border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 }
