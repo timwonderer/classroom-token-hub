@@ -11,224 +11,23 @@
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
-        body {
-            background-color: var(--background);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 2rem 0;
-        }
-
-        .signup-container {
-            width: 100%;
-            max-width: 900px;
-            background: white;
-            box-shadow: var(--shadow-lg);
-            overflow: hidden;
-            display: flex;
-            min-height: 600px;
-        }
-
-        .signup-left {
-            flex: 1;
-            padding: 3rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            overflow-y: auto;
-            max-height: 100vh;
-        }
-
-        .signup-right {
-            flex: 1;
-            background: linear-gradient(135deg, var(--primary), var(--primary-hover));
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            padding: 3rem;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .signup-right::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-        }
-
-        .logo-img {
-            width: 400px;
-            height: 400px;
-            margin-bottom: 2rem;
-            position: relative;
-            z-index: 1;
-        }
-
         .subtitle {
-            color: var(--secondary) !important;
             margin-bottom: 1.5rem;
-        }
-
-        .form-label {
-            color: var(--secondary) !important;
-            text-transform: uppercase;
-            font-weight: 600;
-            font-size: 0.75rem;
-            letter-spacing: 0.05em;
-        }
-
-        .btn-primary {
-            background: var(--primary);
-            border: none;
-            color: white;
-            transition: all 0.3s ease;
-        }
-
-        .btn-primary:hover {
-            background: var(--primary-hover);
-            color: white;
-        }
-
-        .btn-outline-secondary:hover {
-            background: var(--secondary);
-            border-color: var(--secondary);
-            color: var(--text-primary);
-        }
-
-        .alert {
-            border: none;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-        }
-
-        .alert-info {
-            background-color: var(--info-subtle);
-            color: var(--info);
-        }
-
-        .alert-success {
-            background-color: var(--success-subtle);
-            color: var(--success);
-        }
-
-        .alert-danger {
-            background-color: var(--danger-subtle);
-            color: var(--danger);
-        }
-
-        .qr-panel {
-            background-color: var(--background);
-            border: 2px solid var(--border-color);
-            border-radius: 12px;
-            padding: 2rem;
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-
-        .qr-panel img {
-            max-width: 200px;
-            border-radius: 8px;
-            box-shadow: var(--shadow-md);
-            margin-bottom: 1rem;
-        }
-
-        .manual-code {
-            background: white;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 1rem;
-            font-family: 'Courier New', monospace;
-            letter-spacing: 0.08em;
-            font-weight: 700;
-            color: var(--primary);
-            font-size: 1.1rem;
-            margin-top: 0.5rem;
-            word-break: break-all;
-        }
-
-        .step-group {
-            text-align: center;
-            margin-bottom: 1.5rem;
-        }
-
-        .step-indicator {
-            width: 48px;
-            height: 48px;
-            border: 2px solid var(--primary);
-            border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--primary);
-            font-weight: 700;
-            font-size: 1.25rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .step-label {
-            color: var(--secondary);
-            font-size: 0.875rem;
-        }
-
-        .footer-links {
-            text-align: center;
-            padding-top: 1.5rem;
-            border-top: 1px solid var(--border-color);
-            margin-top: 2rem;
-        }
-
-        .footer-links a {
-            color: var(--secondary);
-            text-decoration: none;
-            font-size: 0.875rem;
-        }
-
-        .footer-links a:hover {
-            color: var(--primary);
-            text-decoration: underline;
         }
 
         .form-group {
             margin-bottom: 1.5rem;
         }
 
-        .totp-input {
-            letter-spacing: 0.3em;
-            font-family: 'Courier New', monospace;
-            text-align: center;
-            font-size: 1.5rem;
-            font-weight: 600;
-        }
-
-        @media (max-width: 768px) {
-            .signup-container {
-                flex-direction: column;
-                margin: 1rem;
-                min-height: auto;
-            }
-
-            .signup-right {
-                display: none;
-            }
-
-            .signup-left {
-                padding: 2rem;
-            }
+        .manual-code {
+            font-size: 1.1rem;
         }
     </style>
 </head>
 
-<body>
-    <div class="signup-container">
-        <div class="signup-left">
+<body class="auth-page">
+    <div class="login-container">
+        <div class="login-left login-left--scrollable">
             <div class="mb-3">
                 <small class="text-muted">TEACHER SETUP</small>
                 <h1 class="h3 fw-bold text-primary">Set Up Your Authenticator</h1>
@@ -296,7 +95,7 @@
                 <a href="{{ url_for('main.terms') }}" class="ms-3">Terms of Service</a>
             </div>
         </div>
-        <div class="signup-right">
+        <div class="login-right">
             <img src="{{ static_url('images/logo_teacher_transparent_512.png') }}" alt="Teacher Logo" class="logo-img">
         </div>
     </div>

@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>500 - Internal Server Error</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -14,184 +14,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--surface);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-        }
-
-        .error-container {
-            background: var(--surface);
-            box-shadow: var(--shadow-lg);
-            max-width: 900px;
-            width: 100%;
-            overflow: hidden;
-            border-radius: var(--radius-lg);
-        }
-
-        .error-header {
-            background: var(--primary);
-            color: white;
-            padding: 2rem;
-            text-align: center;
-        }
-
-        .error-header h1 {
-            font-size: 4rem;
-            font-weight: 400;
-            margin: 0;
-            color: white;
-        }
-
-        .error-header p {
-            font-size: 1.2rem;
-            margin: 0.5rem 0 0 0;
-            opacity: 0.9;
-        }
-
-        .error-body {
-            padding: 2rem;
-        }
-
-        .error-message {
-            background: var(--surface);
-            border-left: 4px solid var(--danger);
-            padding: 1rem;
-            margin-bottom: 1.5rem;
-
-        }
-
-        .error-message h5 {
-            color: var(--danger);
-            margin-bottom: 0.5rem;
-        }
-
-        .error-message code {
-            padding: 0.2rem 0.4rem;
-            color: var(--text-primary);
-            font-family: 'Google Sans Code', monospace;
-        }
-
-        .log-section {
-            margin-top: 1.5rem;
-        }
-
-        .log-output {
-            background: var(--neutral-900);
-            color: var(--neutral-200);
-            padding: 1rem;
-
-            max-height: 400px;
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 0.85rem;
-            line-height: 1.4;
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-
-        .log-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.5rem;
-        }
-
-        .btn-copy {
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 0.4rem 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: background 0.3s;
-        }
-
-        .btn-copy:hover {
-            background: var(--primary-hover);
-        }
-
-        .btn-copy.copied {
-            background: var(--success);
-        }
-
-        .actions {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1.5rem;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .btn-primary-custom {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
-            color: white;
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: transform 0.2s;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .btn-primary-custom:hover {
-            transform: translateY(-2px);
-            color: white;
-        }
-
-        .error-id {
-
-            padding: 0.5rem 1rem;
-
-            margin-top: 1rem;
-            font-size: 0.9rem;
-
-        }
-
-        @media (max-width: 768px) {
-            .error-header h1 {
-                font-size: 3rem;
-            }
-
-            .error-body {
-                padding: 1.5rem;
-            }
-
-            .actions {
-                flex-direction: column;
-            }
-
-            .btn-primary-custom {
-                width: 100%;
-                text-align: center;
-            }
-        }
-    </style>
 </head>
 
-<body>
-    <div class="error-container">
-        <div class="error-header">
-            <span class="material-symbols-outlined mb-2" style="font-size:3rem; vertical-align: middle;">error</span>
+<body class="standalone-page">
+    <div class="standalone-card">
+        <div class="standalone-header">
+            <span class="material-symbols-outlined icon-hero">error</span>
             <h1>500</h1>
-            <p style="font-size:2rem">Internal Server Error</p>
+            <p>Internal Server Error</p>
         </div>
 
-        <div class="error-body">
+        <div class="standalone-body">
             <div class="alert alert-warning" role="alert">
                 <strong>That was unexpected!</strong> Something went wrong when processing your last action. It could be
                 due to a bug in our codes, a sudden glitch on our servers, or an unexpected input you provided. You may
@@ -199,7 +32,7 @@
             </div>
 
             {% if error_id %}
-            <div class="error-id alert alert-info mb-0">
+            <div class="alert alert-info mb-0">
                 This error has been automatically logged with <strong>Error ID {{ error_id }}</strong>. Our support team
                 will address this issue as soon as possible. You don't need do anything at this time.
             </div>
@@ -207,22 +40,21 @@
 
 
 
-            <div class="log-section">
-                <div class="log-header">
+            <div class="mt-4">
+                <div class="error-log-header">
                     <h5> Most Recent Stack Trace (Last 50 Lines)</h5>
-                    <button class="btn-copy bg-primary text-white" onclick="copyLogs()">Copy Logs</button>
+                    <button class="btn btn-primary" onclick="copyLogs()">Copy Logs</button>
                 </div>
-                <div class="log-output mb-2" id="logOutput">{{ log_output or '[No log output available]' }}</div>
+                <div class="error-log-output mb-2" id="logOutput">{{ log_output or '[No log output available]' }}</div>
                 <p>If you wish to file a support ticket, please copy this log output and include it in your support
                     ticket.</p>
             </div>
-            <div class="actions">
-                <a href="/" class="btn bg-primary text-white">Return to Login Page</a>
-                <a href="javascript:history.back()" class="btn bg-primary text-white">Go Back to Last Page</a>
+            <div class="standalone-actions">
+                <a href="/" class="btn btn-primary">Return to Login Page</a>
+                <a href="javascript:history.back()" class="btn btn-primary">Go Back to Last Page</a>
                 <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener noreferrer"
-                    class="btn bg-secondary text-white">
-                    Check System Status <span class="material-symbols-outlined"
-                        style="vertical-align: middle;">open_in_new</span>
+                    class="btn btn-secondary">
+                    Check System Status <span class="material-symbols-outlined icon-inline">open_in_new</span>
                 </a>
             </div>
 
@@ -240,13 +72,15 @@
 
             try {
                 document.execCommand('copy');
-                const btn = event.target;
+                const btn = event.currentTarget;
                 btn.textContent = 'Copied!';
-                btn.classList.add('copied');
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-success');
 
                 setTimeout(() => {
                     btn.textContent = 'Copy Logs';
-                    btn.classList.remove('copied');
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-primary');
                 }, 2000);
             } catch (err) {
                 console.error('Failed to copy logs:', err);
