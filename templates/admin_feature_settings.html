@@ -4,76 +4,7 @@
 {% set current_page = "feature_settings" %}
 {% block page_icon %}tune{% endblock %}
 
-{% block extra_head %}
-<style>
-    .feature-card {
-        border-left: 4px solid transparent;
-    }
-    .feature-card.enabled {
-        border-left-color: var(--success);
-        border-left-width:4px;
-        background-color: color-mix(in srgb, var(--success) 6%, transparent);
-        color: var(--primary);
-    }
-    .feature-card.disabled {
-        border-left-color: var(--text-secondary);
-        border-left-width:4px;
-        color: var(--text-secondary);
-    }
-
-  
-
-    .feature-card .card-body {
-        display: flex;
-        gap: 1rem;
-        align-items: flex-start;
-        justify-content: space-between;
-    }
-    .feature-card .feature-info {
-        display: grid;
-        gap: 0.35rem;
-        flex: 1;
-    }
-    .feature-stack {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-    }
-    .period-badge {
-        font-size: 0.875rem;
-        padding: 0.5rem 1rem;
-        margin: 0.25rem;
-        border-radius: 8px;
-        cursor: pointer;
-    }
-    .period-badge.active {
-        background: linear-gradient(135deg, var(--brand-cyan) 0%, var(--brand-blue) 100%);
-        color: white;
-    }
-    .feature-toggle {
-        cursor: pointer;
-    }
-    .feature-toggle .form-check-input {
-        width: 3rem;
-        height: 1.5rem;
-        cursor: pointer;
-    }
-    .settings-summary {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-    .settings-summary .badge {
-        font-size: 0.75rem;
-    }
-    @media (max-width: 768px) {
-        .feature-card .card-body {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-    }
-</style>
-{% endblock %}
+{% block extra_head %}{% endblock %}
 
 {% block content %}
 <!-- Nav Tabs -->
@@ -115,15 +46,15 @@
                     <div class="collapse show" id="globalFeatureList">
                         <div class="feature-stack">
                             <!-- Payroll - Required Feature -->
-                            <div class="card feature-card enabled text-primary" style="border-style:solid; border-color:var(--secondary); border-width:4px;background-color:var(--secondary-light);">
+                            <div class="card feature-card feature-card-core enabled text-primary">
                                 <div class="card-body">
                                     <div class="d-flex align-items-center gap-3">
                                         <span class="material-symbols-outlined icon-xl text-primary">payments</span>
                                         <div class="feature-info">
-                                            <h5 class="card-title mb-0 d-flex align-items-center gap-2" style="font-size:2rem;">
+                                            <h5 class="card-title mb-0 d-flex align-items-center gap-2 feature-card-title-lg">
                                                 Payroll
-                                                <span class="badge bg-primary" style="font-size: 0.65rem; font-weight: 600;">Core Engine</span>
-                                                <span class="badge bg-success" style="font-size: 0.65rem; font-weight: 600;">Always Enabled</span>
+                                                <span class="badge bg-primary feature-badge-xs">Core Engine</span>
+                                                <span class="badge bg-success feature-badge-xs">Always Enabled</span>
                                             </h5>
                                             <p class="card-text text-primary  mb-0">Classroom Token Hub was designed to be a classroom economy engine from the ground up, and payroll is the heart of that engine. It provides the core functionality for time tracking, student payments, and overall economic flow. It is also the key component of Classroom Wage Index (CWI), a metric used to balance your classroom economy. </p><p class="mb-0">To learn more about payroll and CWI, please visit the Docs & Help site</p>
                                         </div>
@@ -156,8 +87,8 @@
                     </div>
 
                     <div class="mt-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
-                        <div class="alert alert-warning" style="display:block;border-left-width:4px;">
-                            When there is a conflict between Global and Per Period Settings, <strong>Per Period Setting will override Global Settings.</strong> <br><span style="font-size:0.8rem;">Use Per Period Setting to fine-tune specific class features and use the Global Setting to establish your baseline configuration.</span>
+                        <div class="alert alert-warning feature-settings-warning">
+                            When there is a conflict between Global and Per Period Settings, <strong>Per Period Setting will override Global Settings.</strong> <br><span class="feature-settings-caption">Use Per Period Setting to fine-tune specific class features and use the Global Setting to establish your baseline configuration.</span>
                         </div>
                         <button type="submit" class="btn btn-primary">
                             <span class="material-symbols-outlined icon-inline me-1">save</span>
@@ -207,20 +138,20 @@
 
                     <div class="feature-stack" id="periodFeatureToggles">
                         <!-- Payroll - Required Feature -->
-                        <div class="card h-100" style="border-left: 4px solid var(--info); background: linear-gradient(to right, var(--primary-subtle) 0%, white 100%);">
+                        <div class="card h-100 feature-card-period-core">
                             <div class="card-body py-3 d-flex align-items-center justify-content-between gap-3">
                                 <div class="d-flex align-items-center gap-3">
                                     <span class="material-symbols-outlined text-primary">payments</span>
                                     <div class="feature-info mb-0">
                                         <span class="fw-semibold d-flex align-items-center gap-2">
                                             Payroll
-                                            <span class="badge bg-primary" style="font-size: 0.6rem; font-weight: 600;">REQUIRED</span>
+                                            <span class="badge bg-primary feature-period-chip">REQUIRED</span>
                                         </span>
                                         <small class="text-muted">Time tracking and student payments</small>
                                     </div>
                                 </div>
                                 <div class="text-success fw-bold small d-flex align-items-center gap-1">
-                                    <span class="material-symbols-outlined" style="font-size: 1rem;">check_circle</span>
+                                    <span class="material-symbols-outlined icon-inline">check_circle</span>
                                     Always On
                                 </div>
                             </div>
