@@ -16,15 +16,15 @@ Diagnostic guide for resolving issues with hall pass approvals, tracking, and st
 > **We have changed the way student check-out/in for hall passes.** Instead of using a separate terminal, students will perform all actions within their dashboard. As a result, the hall pass terminal and queue systems have been retired. If you have saved your links to the terminal, queue, or verification page, please be advised that they are no longer valid.
 
 > [!NOTE]
-> **The Hall Pass Verification page has been upgraded to protect student privacy.** A new link has been created for your verification page. Instead of displaying the last 10 hall pass record, the verification page now requires school personnel to provide student name and class sections to look up a hall pass record. The verfication page will only display the record if:
+> **The Hall Pass Verification page has been upgraded to protect student privacy.** A new link has been created for your verification page. Instead of displaying the last 10 hall pass records, the verification page now requires school personnel to provide student name and class sections to look up a hall pass record. The verification page will only display the record if:
 >
 > 1. The entered name and class section matches a record in your hall pass history
 > 2. The record was created on the same day
 >
-> For example, if a hall monitor typed in "Monica C." and "Period 5" on 9/13/2025 using the link provided by Ms. Cortez, the verification page will show hall pass record if:
+> For example, if a hall monitor typed in "Monica C." and "Period 5" on 9/13/2025 using the link provided by Ms. Cortez, the verification page will show the hall pass record if:
 >
 > 1. Ms. Cortez's Period 5 has a student named Monica C.
-> 2. Monica C. have used a hall pass during Period 5
+> 2. Monica C. has used a hall pass during Period 5
 > 3. That hall pass record was dated 9/13/2025
 >
 > Otherwise, the verification page will return no result.
