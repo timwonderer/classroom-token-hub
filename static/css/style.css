@@ -2418,6 +2418,7 @@ table.js-sortable thead th:hover .sort-indicator {
 /* ─── Page Header ─── */
 .page-header {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: flex-start;
     gap: 1rem;
