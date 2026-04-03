@@ -19,7 +19,7 @@ The **Attendance** page lets you review the time-tracking records used by payrol
 
 ### Controlling Attendance Taps
 1. Open **Classroom > Attendance** in the teacher navigation.
-2. Use the class/block toggles to enable or pause **Start Work**, **Break**, and **Done** taps.
+2. Use the class/block toggles to enable or pause **Start Work** and **Break / Done** taps.
 3. Pause taps when class is not meeting or when you want to enforce a hard cutoff.
 
 ### Reviewing Attendance History
