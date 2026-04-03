@@ -19,9 +19,9 @@ Your dashboard is the central hub for your classroom economy. It summarizes your
 
 ### Navigating Your Dashboard
 1. Log in to your student account. The **Dashboard** is the first page you see. (You can always return here by clicking "Dashboard" in the sidebar).
-2. Review the top section to see your current checking and savings balances, as well as any recent transactions.
-3. Check your **Work and Pay** status to see if you are currently clocked in or on break.
-4. Use the quick action shortcuts to jump directly to the Store, your Bills, or your Bank Accounts.
+2. Review the greeting and weekly stats first, then check your attendance card to see whether you are currently working or on break.
+3. Scroll to the **Account Balances** section to see your current checking and savings balances.
+4. Use the available shortcuts from those cards to open transfers, payslips, or other account details.
 
 ## Important Notes
 > [!TIP]

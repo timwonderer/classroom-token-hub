@@ -15,16 +15,16 @@ This feature allows you to administer and oversee the teachers utilizing the pla
 ## Step-by-Step Instructions
 
 ### Viewing Teacher Details
-1. Navigate to **Manage Teachers** in the sysadmin sidebar.
+1. Navigate to **Teacher Management** in the sysadmin sidebar.
 2. Click **View Details** next to a teacher to see specific setup information for that account.
 
 ### Deleting Class Periods
-1. Navigate to **Manage Teachers**.
+1. Navigate to **Teacher Management**.
 2. Locate the teacher and select **Delete Periods**.
 3. Confirm the deletion of the specific duplicate or erroneous class period.
 
 ### Deleting a Teacher Account
-1. Navigate to **Manage Teachers**.
+1. Navigate to **Teacher Management**.
 2. Locate the teacher and select **Delete Account**.
 3. Confirm the deletion.
 

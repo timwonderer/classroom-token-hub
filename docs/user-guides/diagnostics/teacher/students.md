@@ -25,7 +25,7 @@ Diagnostic guide for resolving roster syncing, account claiming, and CSV upload 
 
 **Cause 2: Roster data mismatch**
 - **Check:** Look at the student's exact first name, last name, and DOB in the roster.
-- **Fix:** The student must type their first initial, full last name, and date of birth exactly as it appears in the roster to verify their identity.
+- **Fix:** The student must type their full first name, full last name, and date of birth exactly as it appears in the roster to verify their identity.
 
 **Cause 3: Seat already claimed**
 - **Check:** Check the student list to see if the row already has a linked username.

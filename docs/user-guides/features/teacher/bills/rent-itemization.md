@@ -19,11 +19,12 @@ Itemization allows you to break flat rent into smaller, understandable line-item
 ## Step-by-Step Instructions
 
 ### Configuring Itemized Rent
-1. Navigate to **Bills > Rent** in the teacher sidebar and open the **Itemization** tab.
-2. Add distinct line items that represent the components of your classroom rent.
-3. Set the specific amount and frequency for each item.
-4. If you use "Store Alternatives" (e.g., allowing a student to buy a "Premium Desk" pass instead of paying basic desk rent), configure those connections here.
-5. Save your changes and review the newly calculated total rent.
+1. Navigate to **Bills > Rent** in the teacher sidebar and open the **Settings** tab.
+2. Scroll to the **Rent Itemization (Optional)** section.
+3. Add distinct line items that represent the components of your classroom rent.
+4. Set the specific amount and frequency for each item.
+5. If you use "Store Alternatives" (e.g., allowing a student to buy a "Premium Desk" pass instead of paying basic desk rent), configure those connections in the same section.
+6. Save your changes and review the newly calculated total rent.
 
 ## Important Notes
 > [!NOTE]

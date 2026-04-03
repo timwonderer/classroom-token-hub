@@ -6,26 +6,29 @@ roles: [teacher]
 description: Resolve missed taps, long sessions, and attendance discrepancies.
 keywords: [attendance, corrections, tap errors]
 related:
-  - user-guides/features/teacher/classroom/attendance-approvals
-  - user-guides/diagnostics/teacher/attendance-payroll
+  - features/teacher/classroom/attendance-approvals
+  - diagnostics/teacher/attendance-payroll
 ---
 
 # Fix Attendance Errors
 
 ## Overview
-Use this guide when attendance records are missing, incomplete, or incorrect. Fixing these errors ensures accurate payroll calculations.
+Use this guide when attendance records are missing, incomplete, or unexpected. Attendance events feed payroll, so review issues before running payroll.
 
 ## Step-by-Step Instructions
 
-### Locating and Fixing Common Errors
-1. Navigate to **Classroom > Attendance** in the teacher sidebar.
-2. Expand the date range and clear filters to locate the specific student's record.
-3. Verify the student has both a **Start Work** tap and a corresponding **Break** or **Done** tap.
-4. If a session was left open too long (e.g., student forgot to clock out), use the attendance log tools to manually close it.
+### Diagnosing Common Issues
+1. Open **Classroom > Attendance**.
+2. Expand the date range and clear filters to find the student and event window.
+3. Confirm there is a valid **Start Work** event and a matching **Break / Done** event.
+4. If events are missing or invalid, use payroll adjustments/manual payment tools to correct compensation impact.
 
 ## Important Notes
 > [!IMPORTANT]
-> **Payroll Impact:** Attendance issues directly affect payroll calculations. Mismatched or missing taps will result in zero pay for that shift. You must correct the records *before* running payroll.
+> **Payroll impact:** Missing or mismatched taps can reduce projected or actual pay.
+
+> [!TIP]
+> **v1.x behavior:** Teachers cannot directly rewrite attendance history from this page; resolve compensation issues through payroll adjustments and issue workflows.
 
 ## Related guides
 - [Attendance and Approvals](attendance-approvals.md)

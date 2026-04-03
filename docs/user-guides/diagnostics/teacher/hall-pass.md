@@ -10,7 +10,7 @@ related:
 
 # Hall Pass Troubleshooting
 
-Diagnostic guide for resolving issues with hall pass approvals, tracking, and terminal usage.
+Diagnostic guide for resolving issues with hall pass approvals, tracking, and student self-checkout.
 
 ## Passes cannot be approved
 
@@ -39,8 +39,8 @@ Diagnostic guide for resolving issues with hall pass approvals, tracking, and te
 
 ### Causes & Solutions
 **Cause 1: Pass stuck as "Approved"**
-- **Check:** Verify if the student scanned the pass at the terminal.
-- **Fix:** The queue shows approved passes that haven't left yet. Terminal scans move passes from approved to left, then returned. If a student forgets to scan, manually mark them returned.
+- **Check:** Verify whether the student checked out from their dashboard.
+- **Fix:** Approved passes stay in the **Approved** tab until the student uses their dashboard to check out. After checkout, the pass moves to **Out**. When they return, use **Returned** so the pass moves to **History**.
 
 **Cause 2: Passes not deducted from balance**
 - **Check:** Check the reason selected for the pass.
@@ -48,5 +48,5 @@ Diagnostic guide for resolving issues with hall pass approvals, tracking, and te
 
 ## When to Contact Support
 Report this issue if:
-- The hall pass terminal tablet fails to load or connect to the system.
-- Passing scanning results in a systemic server error.
+- Approved passes never move out of **Approved** after the student checks out from their dashboard.
+- Returning a pass or loading Hall Pass Management results in a recurring server error.

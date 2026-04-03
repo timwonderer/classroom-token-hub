@@ -17,7 +17,7 @@ Feature toggles allow you to customize the platform to fit your specific classro
 ## Step-by-Step Instructions
 
 ### Toggling Features
-1. Navigate to **Settings > Features** in the teacher sidebar.
+1. Navigate to **Settings > Economy Features** in the teacher sidebar.
 2. Review the list of available modules (e.g., Banking, Rent, Store).
 3. Toggle features on or off depending on what you plan to use with your class.
 4. Changes are applied immediately and will show or hide the corresponding tabs for both you and your students.

@@ -19,8 +19,8 @@ If something doesn't look right with your Hall Passes, check this guide first be
 ## This is normal and expected when:
 - A teacher approves a pass and a pass number appears.
 - Office, Summons, or "Done for the day" passes do not deduct from your balance.
-- A pass only works at a terminal after it is approved.
-- A pass shows as returned without ever being marked left (requires a terminal or teacher action).
+- After approval, you check yourself out from your dashboard instead of using a hallway terminal.
+- Your pass changes from approved to returned only after you check out and your teacher marks you back in.
 
 ## When to report an issue to your teacher
 If you've checked everything above and the problem is still occurring:
