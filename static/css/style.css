@@ -3667,10 +3667,39 @@ body.maintenance-active .sidebar {
     border-right: 1px solid var(--border-color);
 }
 
+.docs-layout .docs-sidebar .docs-sidebar-inner {
+    top: 0;
+    max-height: 100vh;
+    padding-right: 0.5rem;
+    overflow-y: auto;
+}
+
+@supports (height: 100dvh) {
+    .docs-layout .docs-sidebar .docs-sidebar-inner {
+        max-height: 100dvh;
+    }
+}
+
 .docs-layout .docs-sidebar .nav-link {
     padding: 0.25rem 1rem;
     color: var(--text-primary);
     font-size: 0.9rem;
+}
+
+.docs-layout .docs-sidebar .docs-subaccordion .accordion-button {
+    padding: 0.45rem 1rem;
+    font-size: 0.9rem;
+    background: transparent;
+    box-shadow: none;
+}
+
+.docs-layout .docs-sidebar .docs-subaccordion .accordion-button:not(.collapsed) {
+    color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.docs-layout .docs-sidebar .docs-subaccordion .accordion-body {
+    padding: 0;
 }
 
 .docs-layout .docs-sidebar .nav-link:hover {

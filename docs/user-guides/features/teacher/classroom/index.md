@@ -16,10 +16,10 @@ This section groups all teacher classroom tools in one place.
 
 ## Students and Classes
 - [Class Setup and Join Codes](class-setup.md)
-- [Student Management Overview](students-overview.md)
+- [Students](students-overview.md)
 
 ## Attendance
-- [Attendance and Approvals](attendance-approvals.md)
+- [Attendance](attendance-approvals.md)
 - [Fix Attendance Errors](attendance-corrections.md)
 
 ## Hall Pass

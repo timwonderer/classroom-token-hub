@@ -175,18 +175,18 @@ These files referenced a menu item by an incorrect label.
 
 ### Frontmatter `related:` Path Issues
 
-Three files used a `user-guides/` prefix and dash-separated subdirectory paths in `related:` frontmatter entries, causing potential resolution failures.
+Six entries used dash-separated filenames instead of the nested `user-guides/.../...` paths expected by the docs router, causing resolution failures.
 
 | File | Original Entry | Corrected Entry |
 |------|---------------|-----------------|
-| `features/teacher/economy/transactions.md` | `user-guides/diagnostics/teacher-transactions-banking` | `diagnostics/teacher/transactions-banking` |
-| `features/teacher/settings/account-recovery.md` | `user-guides/diagnostics/teacher-login` | `diagnostics/teacher/login` |
-| `features/teacher/settings/feature-toggles.md` | `user-guides/diagnostics/teacher-onboarding` | `diagnostics/teacher/onboarding` |
-| `features/teacher/classroom/attendance-approvals.md` | `user-guides/features/student/work/start-end-work` | `features/student/work/start-end-work` |
-| `features/teacher/classroom/attendance-corrections.md` | `user-guides/features/teacher/classroom/attendance-approvals` | `features/teacher/classroom/attendance-approvals` |
-| `features/student/work/attendance-history.md` | `user-guides/diagnostics/student-attendance` | `diagnostics/student/attendance` |
+| `features/teacher/economy/transactions.md` | `user-guides/diagnostics/teacher-transactions-banking` | `user-guides/diagnostics/teacher/transactions-banking` |
+| `features/teacher/settings/account-recovery.md` | `user-guides/diagnostics/teacher-login` | `user-guides/diagnostics/teacher/login` |
+| `features/teacher/settings/feature-toggles.md` | `user-guides/diagnostics/teacher-onboarding` | `user-guides/diagnostics/teacher/onboarding` |
+| `features/teacher/classroom/attendance-approvals.md` | `user-guides/features/student/work/start-end-work` | `user-guides/features/student/work/start-end-work` |
+| `features/teacher/classroom/attendance-corrections.md` | `user-guides/features/teacher/classroom/attendance-approvals` | `user-guides/features/teacher/classroom/attendance-approvals` |
+| `features/student/work/attendance-history.md` | `user-guides/diagnostics/student-attendance` | `user-guides/diagnostics/student/attendance` |
 
-**Resolution:** All six entries corrected to use proper relative paths without the `user-guides/` prefix.
+**Resolution:** All six entries corrected to use resolvable `user-guides/...` paths with the proper nested directory segments.
 
 ---
 

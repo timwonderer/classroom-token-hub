@@ -6,7 +6,7 @@ roles: [teacher]
 description: Enable or disable optional features for your class.
 keywords: [features, toggles, settings]
 related:
-  - diagnostics/teacher/onboarding
+  - user-guides/diagnostics/teacher/onboarding
 ---
 
 # Feature Toggles

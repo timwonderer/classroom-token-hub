@@ -191,6 +191,6 @@ Use the rebalance review when you want the system to propose updated values for 
 
 For authoritative economy rules, see:
 
-- [DOM-ECON-001_Economy_Balance_Checker.md](../../docs/DOMAINS/ECONOMY_DESIGN/DOM-ECON-001_Economy_Balance_Checker.md)
-- [DOM-ECON-002_Economy_Specification.md](../../docs/DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification.md)
-- [FEAT-ECON-001_Policy_Mode_and_Rebalancer.md](../../docs/FEATURES/ECONOMY/FEAT-ECON-001_Policy_Mode_and_Rebalancer.md)
+- [DOM-ECON-001_Economy_Balance_Checker.md](../DOMAINS/ECONOMY_DESIGN/DOM-ECON-001_Economy_Balance_Checker.md)
+- [DOM-ECON-002_Economy_Specification.md](../DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification.md)
+- [FEAT-ECON-001_Policy_Mode_and_Rebalancer.md](../FEATURES/ECONOMY/FEAT-ECON-001_Policy_Mode_and_Rebalancer.md)

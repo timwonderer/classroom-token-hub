@@ -1,19 +1,22 @@
 ---
-title: Attendance and Approvals
+title: Attendance
 category: features
 subcategory: teacher-classroom
 roles: [teacher]
 description: Control attendance taps, review attendance records, and resolve discrepancies.
 keywords: [attendance, work, approvals, tap, start work, break, done]
 related:
-  - features/student/work/start-end-work
-  - features/teacher/economy/payroll-run
+  - user-guides/features/student/work/start-end-work
+  - user-guides/features/teacher/economy/payroll-run
 ---
 
-# Attendance and Approvals
+# Attendance
 
 ## Overview
 The **Attendance** page lets you review the time-tracking records used by payroll. You can also enable or pause attendance taps by class block.
+
+> [!NOTE]
+> **Bulk student tap actions happen on the Students page.** If you need to tap students in or out in bulk, use **Classroom > Students** rather than the **Attendance** page.
 
 ## Step-by-Step Instructions
 

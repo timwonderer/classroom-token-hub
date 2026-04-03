@@ -6,8 +6,8 @@ roles: [student]
 description: Review your attendance record and projected pay.
 keywords: [attendance history, projected pay, payroll]
 related:
-  - features/student/work/start-end-work
-  - diagnostics/student/attendance
+  - user-guides/features/student/work/start-end-work
+  - user-guides/diagnostics/student/attendance
 ---
 
 # Attendance History and Pay Status

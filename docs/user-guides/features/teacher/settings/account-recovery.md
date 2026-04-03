@@ -6,7 +6,7 @@ roles: [teacher]
 description: Set up account recovery for teacher accounts.
 keywords: [account recovery, teacher]
 related:
-  - diagnostics/teacher/login
+  - user-guides/diagnostics/teacher/login
 ---
 
 # Account Recovery

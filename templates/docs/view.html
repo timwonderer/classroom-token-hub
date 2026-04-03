@@ -15,7 +15,7 @@
         <div class="row">
             <!-- Sidebar Navigation -->
             <aside class="docs-sidebar col-md-3 col-lg-2 d-md-block bg-light collapse" id="docsSidebar">
-                <div class="position-sticky pt-3">
+                <div class="docs-sidebar-inner position-sticky pt-3">
                     <!-- Back Navigation -->
                     <div class="mb-3">
                         {% if session.get('student_id') %}
@@ -125,34 +125,271 @@
                                 <div class="accordion-body p-0">
                                     <ul class="nav flex-column">
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/payroll-run' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/payroll-run') }}">
-                                                <span class="material-symbols-outlined docs-nav-icon me-2">receipt_long</span>
-                                                Payroll
+                                            <a class="nav-link {% if doc_path == 'user-guides/teacher_manual' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}">
+                                                <span class="material-symbols-outlined docs-nav-icon me-2">menu_book</span>
+                                                Teacher Manual
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/store-items' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/store-items') }}">
-                                                <span class="material-symbols-outlined docs-nav-icon me-2">store</span>
-                                                Store & Items
-                                            </a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'user-guides/features/student/banking/accounts-transfers' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/banking/accounts-transfers') }}">
-                                                <span class="material-symbols-outlined docs-nav-icon me-2">account_balance</span>
-                                                Banking & Transfers
-                                            </a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'user-guides/economy_guide' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/economy_guide') }}">
-                                                <span class="material-symbols-outlined docs-nav-icon me-2">emoji_objects</span>
-                                                Economy Design
+                                            <a class="nav-link {% if doc_path == 'user-guides/student_guide' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/student_guide') }}">
+                                                <span class="material-symbols-outlined docs-nav-icon me-2">school</span>
+                                                Student Guide
                                             </a>
                                         </li>
                                     </ul>
+
+                                    <div class="accordion accordion-flush docs-subaccordion" id="featureGuidesSubaccordion">
+                                        <div class="accordion-item">
+                                            <h3 class="accordion-header">
+                                                <button class="accordion-button {% if not (doc_path.startswith('user-guides/features/teacher') or doc_path == 'user-guides/teacher_manual' or doc_path == 'user-guides/economy_guide') %}collapsed{% endif %}"
+                                                    type="button" data-bs-toggle="collapse" data-bs-target="#teacherFeaturesCollapse"
+                                                    aria-expanded="{% if doc_path.startswith('user-guides/features/teacher') or doc_path == 'user-guides/teacher_manual' or doc_path == 'user-guides/economy_guide' %}true{% else %}false{% endif %}">
+                                                    Teacher Features
+                                                </button>
+                                            </h3>
+                                            <div id="teacherFeaturesCollapse" class="accordion-collapse collapse {% if doc_path.startswith('user-guides/features/teacher') or doc_path == 'user-guides/teacher_manual' or doc_path == 'user-guides/economy_guide' %}show{% endif %}">
+                                                <div class="accordion-body p-0">
+                                                    <ul class="nav flex-column">
+                                                        <li class="nav-item">
+                                                            <a class="nav-link {% if doc_path == 'user-guides/features/teacher/index' %}active{% endif %}"
+                                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/index') }}">
+                                                                <span class="material-symbols-outlined docs-nav-icon me-2">list</span>
+                                                                All Teacher Guides
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                    <div class="accordion accordion-flush docs-subaccordion" id="teacherFeatureSections">
+                                                        <div class="accordion-item">
+                                                            <h4 class="accordion-header">
+                                                                <button class="accordion-button {% if not doc_path.startswith('user-guides/features/teacher/classroom') %}collapsed{% endif %}"
+                                                                    type="button" data-bs-toggle="collapse" data-bs-target="#teacherClassroomCollapse"
+                                                                    aria-expanded="{% if doc_path.startswith('user-guides/features/teacher/classroom') %}true{% else %}false{% endif %}">
+                                                                    Classroom
+                                                                </button>
+                                                            </h4>
+                                                            <div id="teacherClassroomCollapse" class="accordion-collapse collapse {% if doc_path.startswith('user-guides/features/teacher/classroom') %}show{% endif %}">
+                                                                <div class="accordion-body p-0">
+                                                                    <ul class="nav flex-column">
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/classroom/dashboard-overview' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/classroom/dashboard-overview') }}">Teacher Dashboard</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/classroom/class-setup' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/classroom/class-setup') }}">Class Setup and Join Codes</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/classroom/students-overview' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/classroom/students-overview') }}">Students</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/classroom/attendance-approvals' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/classroom/attendance-approvals') }}">Attendance</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/classroom/attendance-corrections' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/classroom/attendance-corrections') }}">Fix Attendance Errors</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/classroom/hall-pass' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/classroom/hall-pass') }}">Hall Pass</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/classroom/announcements' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/classroom/announcements') }}">Announcements</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/classroom/student-issues' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/classroom/student-issues') }}">Student Issues Queue</a></li>
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="accordion-item">
+                                                            <h4 class="accordion-header">
+                                                                <button class="accordion-button {% if not (doc_path.startswith('user-guides/features/teacher/economy') or doc_path == 'user-guides/economy_guide') %}collapsed{% endif %}"
+                                                                    type="button" data-bs-toggle="collapse" data-bs-target="#teacherEconomyCollapse"
+                                                                    aria-expanded="{% if doc_path.startswith('user-guides/features/teacher/economy') or doc_path == 'user-guides/economy_guide' %}true{% else %}false{% endif %}">
+                                                                    Economy
+                                                                </button>
+                                                            </h4>
+                                                            <div id="teacherEconomyCollapse" class="accordion-collapse collapse {% if doc_path.startswith('user-guides/features/teacher/economy') or doc_path == 'user-guides/economy_guide' %}show{% endif %}">
+                                                                <div class="accordion-body p-0">
+                                                                    <ul class="nav flex-column">
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/economy-health' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/economy-health') }}">Economy Health</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/analytics' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/analytics') }}">Analytics</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/payroll-run' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/payroll-run') }}">Run Payroll</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/payroll-settings' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/payroll-settings') }}">Payroll Settings</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/payroll-history' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/payroll-history') }}">Payroll History</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/payroll-adjustments' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/payroll-adjustments') }}">Payroll Adjustments</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/store-items' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/store-items') }}">Store Items</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/store-pricing' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/store-pricing') }}">Store Pricing</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/store-redemptions' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/store-redemptions') }}">Store Redemptions</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/banking-settings' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/banking-settings') }}">Banking Settings</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/transactions' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/transactions') }}">Transactions</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/banking-interest' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/banking-interest') }}">Banking Interest</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/banking-overdraft' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/banking-overdraft') }}">Banking Overdraft</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/economy_guide' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/economy_guide') }}">Classroom Economy Guide</a></li>
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="accordion-item">
+                                                            <h4 class="accordion-header">
+                                                                <button class="accordion-button {% if not doc_path.startswith('user-guides/features/teacher/bills') %}collapsed{% endif %}"
+                                                                    type="button" data-bs-toggle="collapse" data-bs-target="#teacherBillsCollapse"
+                                                                    aria-expanded="{% if doc_path.startswith('user-guides/features/teacher/bills') %}true{% else %}false{% endif %}">
+                                                                    Bills
+                                                                </button>
+                                                            </h4>
+                                                            <div id="teacherBillsCollapse" class="accordion-collapse collapse {% if doc_path.startswith('user-guides/features/teacher/bills') %}show{% endif %}">
+                                                                <div class="accordion-body p-0">
+                                                                    <ul class="nav flex-column">
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/bills/rent-settings' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/bills/rent-settings') }}">Rent Settings</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/bills/rent-itemization' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/bills/rent-itemization') }}">Rent Itemization</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/bills/rent-behaviors' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/bills/rent-behaviors') }}">Rent Behaviors</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/bills/rent-waivers' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/bills/rent-waivers') }}">Rent Waivers</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/bills/insurance-policies' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/bills/insurance-policies') }}">Insurance Policies</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/bills/insurance-enrollment' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/bills/insurance-enrollment') }}">Insurance Enrollment</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/bills/insurance-claims' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/bills/insurance-claims') }}">Insurance Claims</a></li>
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="accordion-item">
+                                                            <h4 class="accordion-header">
+                                                                <button class="accordion-button {% if not doc_path.startswith('user-guides/features/teacher/settings') %}collapsed{% endif %}"
+                                                                    type="button" data-bs-toggle="collapse" data-bs-target="#teacherSettingsCollapse"
+                                                                    aria-expanded="{% if doc_path.startswith('user-guides/features/teacher/settings') %}true{% else %}false{% endif %}">
+                                                                    Settings
+                                                                </button>
+                                                            </h4>
+                                                            <div id="teacherSettingsCollapse" class="accordion-collapse collapse {% if doc_path.startswith('user-guides/features/teacher/settings') %}show{% endif %}">
+                                                                <div class="accordion-body p-0">
+                                                                    <ul class="nav flex-column">
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/settings/personalization' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/settings/personalization') }}">Personalization</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/settings/passkey' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/settings/passkey') }}">Passkey</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/settings/feature-toggles' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/settings/feature-toggles') }}">Economy Features</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/settings/account-recovery' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/settings/account-recovery') }}">Account Recovery</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/teacher/settings/account-deletion' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/settings/account-deletion') }}">Account Deletion</a></li>
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="accordion-item">
+                                            <h3 class="accordion-header">
+                                                <button class="accordion-button {% if not (doc_path.startswith('user-guides/features/student') or doc_path == 'user-guides/student_guide') %}collapsed{% endif %}"
+                                                    type="button" data-bs-toggle="collapse" data-bs-target="#studentFeaturesCollapse"
+                                                    aria-expanded="{% if doc_path.startswith('user-guides/features/student') or doc_path == 'user-guides/student_guide' %}true{% else %}false{% endif %}">
+                                                    Student Features
+                                                </button>
+                                            </h3>
+                                            <div id="studentFeaturesCollapse" class="accordion-collapse collapse {% if doc_path.startswith('user-guides/features/student') or doc_path == 'user-guides/student_guide' %}show{% endif %}">
+                                                <div class="accordion-body p-0">
+                                                    <ul class="nav flex-column">
+                                                        <li class="nav-item">
+                                                            <a class="nav-link {% if doc_path == 'user-guides/features/student/index' %}active{% endif %}"
+                                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/index') }}">
+                                                                <span class="material-symbols-outlined docs-nav-icon me-2">list</span>
+                                                                All Student Guides
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                    <div class="accordion accordion-flush docs-subaccordion" id="studentFeatureSections">
+                                                        <div class="accordion-item">
+                                                            <h4 class="accordion-header">
+                                                                <button class="accordion-button {% if not doc_path.startswith('user-guides/features/student/account') %}collapsed{% endif %}"
+                                                                    type="button" data-bs-toggle="collapse" data-bs-target="#studentAccountCollapse"
+                                                                    aria-expanded="{% if doc_path.startswith('user-guides/features/student/account') %}true{% else %}false{% endif %}">
+                                                                    Account and Access
+                                                                </button>
+                                                            </h4>
+                                                            <div id="studentAccountCollapse" class="accordion-collapse collapse {% if doc_path.startswith('user-guides/features/student/account') %}show{% endif %}">
+                                                                <div class="accordion-body p-0">
+                                                                    <ul class="nav flex-column">
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/account/dashboard-overview' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/account/dashboard-overview') }}">Dashboard Overview</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/account/login-setup' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/account/login-setup') }}">Log In and First-Time Setup</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/account/join-class' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/account/join-class') }}">Join or Add a Class</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/account/switch-class' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/account/switch-class') }}">Switch Classes</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/account/reset-recovery' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/account/reset-recovery') }}">Reset or Recover Your Account</a></li>
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="accordion-item">
+                                                            <h4 class="accordion-header">
+                                                                <button class="accordion-button {% if not doc_path.startswith('user-guides/features/student/work') %}collapsed{% endif %}"
+                                                                    type="button" data-bs-toggle="collapse" data-bs-target="#studentWorkCollapse"
+                                                                    aria-expanded="{% if doc_path.startswith('user-guides/features/student/work') %}true{% else %}false{% endif %}">
+                                                                    Work and Pay
+                                                                </button>
+                                                            </h4>
+                                                            <div id="studentWorkCollapse" class="accordion-collapse collapse {% if doc_path.startswith('user-guides/features/student/work') %}show{% endif %}">
+                                                                <div class="accordion-body p-0">
+                                                                    <ul class="nav flex-column">
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/work/start-end-work' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/work/start-end-work') }}">Start and End Work</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/work/attendance-history' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/work/attendance-history') }}">Attendance History and Pay Status</a></li>
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="accordion-item">
+                                                            <h4 class="accordion-header">
+                                                                <button class="accordion-button {% if not doc_path.startswith('user-guides/features/student/store') %}collapsed{% endif %}"
+                                                                    type="button" data-bs-toggle="collapse" data-bs-target="#studentStoreCollapse"
+                                                                    aria-expanded="{% if doc_path.startswith('user-guides/features/student/store') %}true{% else %}false{% endif %}">
+                                                                    Store
+                                                                </button>
+                                                            </h4>
+                                                            <div id="studentStoreCollapse" class="accordion-collapse collapse {% if doc_path.startswith('user-guides/features/student/store') %}show{% endif %}">
+                                                                <div class="accordion-body p-0">
+                                                                    <ul class="nav flex-column">
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/store/browse-buy' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/store/browse-buy') }}">Browse and Buy Items</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/store/redemption-status' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/store/redemption-status') }}">Redemption Status</a></li>
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="accordion-item">
+                                                            <h4 class="accordion-header">
+                                                                <button class="accordion-button {% if not doc_path.startswith('user-guides/features/student/banking') %}collapsed{% endif %}"
+                                                                    type="button" data-bs-toggle="collapse" data-bs-target="#studentBankingCollapse"
+                                                                    aria-expanded="{% if doc_path.startswith('user-guides/features/student/banking') %}true{% else %}false{% endif %}">
+                                                                    Banking
+                                                                </button>
+                                                            </h4>
+                                                            <div id="studentBankingCollapse" class="accordion-collapse collapse {% if doc_path.startswith('user-guides/features/student/banking') %}show{% endif %}">
+                                                                <div class="accordion-body p-0">
+                                                                    <ul class="nav flex-column">
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/banking/accounts-transfers' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/banking/accounts-transfers') }}">Accounts and Transfers</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/banking/savings-interest' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/banking/savings-interest') }}">Savings Interest</a></li>
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="accordion-item">
+                                                            <h4 class="accordion-header">
+                                                                <button class="accordion-button {% if not doc_path.startswith('user-guides/features/student/bills') %}collapsed{% endif %}"
+                                                                    type="button" data-bs-toggle="collapse" data-bs-target="#studentBillsCollapse"
+                                                                    aria-expanded="{% if doc_path.startswith('user-guides/features/student/bills') %}true{% else %}false{% endif %}">
+                                                                    Bills
+                                                                </button>
+                                                            </h4>
+                                                            <div id="studentBillsCollapse" class="accordion-collapse collapse {% if doc_path.startswith('user-guides/features/student/bills') %}show{% endif %}">
+                                                                <div class="accordion-body p-0">
+                                                                    <ul class="nav flex-column">
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/bills/rent-payments' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/bills/rent-payments') }}">Pay Rent</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/bills/insurance-coverage' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/bills/insurance-coverage') }}">Insurance Coverage and Claims</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/bills/insurance-claims' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/bills/insurance-claims') }}">Submit an Insurance Claim</a></li>
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="accordion-item">
+                                                            <h4 class="accordion-header">
+                                                                <button class="accordion-button {% if not doc_path.startswith('user-guides/features/student/support') %}collapsed{% endif %}"
+                                                                    type="button" data-bs-toggle="collapse" data-bs-target="#studentSupportCollapse"
+                                                                    aria-expanded="{% if doc_path.startswith('user-guides/features/student/support') %}true{% else %}false{% endif %}">
+                                                                    Help and Support
+                                                                </button>
+                                                            </h4>
+                                                            <div id="studentSupportCollapse" class="accordion-collapse collapse {% if doc_path.startswith('user-guides/features/student/support') %}show{% endif %}">
+                                                                <div class="accordion-body p-0">
+                                                                    <ul class="nav flex-column">
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/support/help-center' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/support/help-center') }}">Help Center</a></li>
+                                                                        <li class="nav-item"><a class="nav-link {% if doc_path == 'user-guides/features/student/support/report-issues' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/support/report-issues') }}">Report Issues</a></li>
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

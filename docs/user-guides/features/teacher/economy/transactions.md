@@ -6,8 +6,8 @@ roles: [teacher]
 description: Review transaction history and void incorrect entries.
 keywords: [transactions, history, void]
 related:
-  - features/teacher/economy/banking-settings
-  - diagnostics/teacher/transactions-banking
+  - user-guides/features/teacher/economy/banking-settings
+  - user-guides/diagnostics/teacher/transactions-banking
 ---
 
 # Transactions
