@@ -11,6 +11,12 @@ related:
 
 # Hall Pass
 
+> [!IMPORTANT]
+> **Students no longer use a separate hall pass terminal.** After you approve a request, the student must check out and check back in from their dashboard. Retired terminal, queue, and old verification links should not be used for current hall pass workflows.
+
+> [!NOTE]
+> **The verification page now uses a privacy-protected lookup flow.** If you share a hall pass verification link with hall staff or office staff, make sure it is the current link. The page now requires a student name and class section, and it only returns same-day records that match your class history.
+
 ## Overview
 The Hall Pass queue allows you to review, approve, reject, and complete student hall pass requests in real time. Students check themselves out from their dashboard after approval, and you track the queue through the **Pending**, **Approved**, **Out**, and **History** tabs.
 

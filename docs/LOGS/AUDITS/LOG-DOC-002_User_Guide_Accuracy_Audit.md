@@ -2,7 +2,11 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-DOC-002      | 1.0     | 2026-04-02     | N/A        | Informative     |
+| LOG-DOC-002      | 1.2     | 2026-04-02     | N/A        | Informative     |
+
+**v1.0** — Initial audit completed. 14 issues identified.
+**v1.1** — Resolution recheck completed. All 14 issues confirmed resolved.
+**v1.2** — Post-resolution upgrade completed. Hall pass guides now include audience-specific retirement/privacy notices, and user-guide release-version references were removed.
 
 ---
 
@@ -18,11 +22,33 @@
 
 The audit identified a total of **14 distinct issues** across three categories: critical content errors (documented UI or features that do not exist or are deprecated), navigation label mismatches, and student-facing inaccuracies. No major unordered-list rendering defects were found; all files use proper `- item` syntax. Frontmatter `related:` path inconsistencies were found in three files.
 
+**All 14 issues have been resolved and verified.**
+
 ---
 
-## Critical Content Errors
+## Resolution Status
 
-### 1. Hall Pass Terminal Workflow — Documented as Current; System Is Deprecated (HTTP 410)
+| Priority | Issue | Affected Files | Status |
+|----------|-------|----------------|--------|
+| P0 | Hall pass terminal docs describe a deprecated (HTTP 410) system | 3 | ✅ Resolved |
+| P0 | Wrong button labels in hall pass teacher guide (Deny/Close vs Reject/Returned) | 1 | ✅ Resolved |
+| P1 | "Economy > Transactions" nav path does not exist | 1 | ✅ Resolved |
+| P1 | "Settings > Account Recovery" nav path does not exist | 1 | ✅ Resolved |
+| P1 | "Itemization" tab does not exist in Rent Settings | 1 | ✅ Resolved |
+| P1 | Student dashboard balance location described incorrectly | 1 | ✅ Resolved |
+| P1 | Broken relative paths in economy_guide.md developer section | 1 | ✅ Resolved |
+| P2 | Nav label mismatches (Work & Pay, Economy Features, Teacher Management, Logs) | 5 | ✅ Resolved |
+| P2 | PIN described as 4-digit only; passphrase step omitted | 1 | ✅ Resolved |
+| P2 | "Break / Done" described as two separate buttons | 1 | ✅ Resolved |
+| P3 | Frontmatter `related:` path format inconsistencies | 3 | ✅ Resolved |
+
+---
+
+## Original Findings
+
+### Critical Content Errors
+
+#### 1. Hall Pass Terminal Workflow — Documented as Current; System Is Deprecated (HTTP 410)
 
 **Files affected:**
 - `docs/user-guides/diagnostics/teacher/hall-pass.md`
@@ -37,128 +63,130 @@ The audit identified a total of **14 distinct issues** across three categories: 
 The current self-service routes are `/api/hall-pass/checkout` and `/api/hall-pass/checkin`, triggered from the student dashboard.
 
 **Specific problems per file:**
-- `diagnostics/teacher/hall-pass.md` — Describes a "terminal scan" troubleshooting workflow that references a physically unavailable endpoint.
-- `diagnostics/student/hall-pass.md` — States *"A pass only works at a terminal after it is approved."* This is the opposite of the current system. Students self-checkout from their own dashboard after approval.
-- `features/teacher/classroom/hall-pass.md` — Step-by-step instructions include a terminal scan step that does not exist.
+- `diagnostics/teacher/hall-pass.md` — Described a "terminal scan" troubleshooting workflow referencing a physically unavailable endpoint.
+- `diagnostics/student/hall-pass.md` — Stated *"A pass only works at a terminal after it is approved."* This is the opposite of the current system.
+- `features/teacher/classroom/hall-pass.md` — Step-by-step instructions included a terminal scan step that does not exist.
+
+**Resolution:** All three files updated to describe the student self-checkout flow from the dashboard. Terminal references removed entirely.
 
 ---
 
-### 2. Wrong Button Labels in Hall Pass Teacher Guide
+#### 2. Wrong Button Labels in Hall Pass Teacher Guide
 
 **File:** `docs/user-guides/features/teacher/classroom/hall-pass.md`
 
 **Evidence:** `templates/admin_hall_pass.html` defines tabs (Pending, Approved, Out, History) and button labels.
 
-| Document Says | Actual UI |
+| Document Said | Actual UI |
 |---------------|-----------|
 | **Deny** | **Reject** |
 | **Close** | **Returned** |
 | Passes move to "Closed" state | Passes appear in the **History** tab |
 
+**Resolution:** Button labels corrected to Approve/Reject and Returned. Tab states updated to Pending, Approved, Out, History.
+
 ---
 
-### 3. "Economy > Transactions" Navigation Path Does Not Exist
+#### 3. "Economy > Transactions" Navigation Path Does Not Exist
 
 **File:** `docs/user-guides/features/teacher/economy/transactions.md`
 
-**Doc says:** *"Navigate to **Economy > Transactions**"*
+**Evidence:** `/admin/transactions` is an explicit redirect to `/admin/banking`. No "Transactions" item exists in the Economy sidebar. Transactions are a tab within the Banking page.
 
-**Evidence:** `app/routes/admin.py` — the `/admin/transactions` route is an explicit redirect to `/admin/banking` with the comment: *"Redirect to banking page - transactions now under banking."* The Economy sidebar section in `templates/layout_admin.html` contains: Economy Health, Payroll, Store, Banking, Analytics. There is no "Transactions" item. Transactions are a tab within the Banking page.
+**Resolution:** Navigation instruction updated to **Economy > Banking**.
 
 ---
 
-### 4. "Settings > Account Recovery" Does Not Exist in Navigation
+#### 4. "Settings > Account Recovery" Does Not Exist in Navigation
 
 **File:** `docs/user-guides/features/teacher/settings/account-recovery.md`
 
-**Doc says:** *"Navigate to **Settings > Account Recovery**"*
+**Evidence:** Settings sidebar contains only: Personalization, Passkey, Economy Features, Account Deletion. Account recovery is surfaced as a Dashboard prompt via `/admin/setup-recovery`.
 
-**Evidence:** `templates/layout_admin.html` — Settings sidebar contains only: Personalization, Passkey, Economy Features, Account Deletion. No "Account Recovery" item exists. Account recovery is surfaced as a prompt on the Dashboard, handled by `app/routes/admin.py` at `/admin/setup-recovery`.
+**Resolution:** Guide updated to direct teachers to the Dashboard prompt rather than a Settings nav item.
 
 ---
 
-### 5. "Itemization" Tab Does Not Exist in Rent Settings
+#### 5. "Itemization" Tab Does Not Exist in Rent Settings
 
 **File:** `docs/user-guides/features/teacher/bills/rent-itemization.md`
 
-**Doc says:** *"open the **Itemization** tab"*
+**Evidence:** `templates/admin_rent_settings.html` tabs are: Overview, Settings, Waivers, Corrections. Rent itemization is a section within the Settings tab, labeled "Rent Itemization (Optional)."
 
-**Evidence:** `templates/admin_rent_settings.html` — tabs are: Overview, Settings, Waivers, Corrections. No "Itemization" tab exists. Rent itemization is a section *within* the Settings tab, labeled "Rent Itemization (Optional)." The step-by-step instructions in this file describe a tab interaction that does not exist in the UI.
+**Resolution:** Instructions updated to navigate to the Settings tab and scroll to the Rent Itemization section.
 
 ---
 
-### 6. Broken File Paths in Economy Guide
+#### 6. Broken File Paths in Economy Guide
 
 **File:** `docs/user-guides/economy_guide.md`
 
-The "For developers and tooling" section references three relative paths that do not resolve from `docs/user-guides/`:
-- `../DOMAINS/ECONOMY_DESIGN/DOM-ECON-001_Economy_Balance_Checker.md`
-- `../DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification.md`
-- `../FEATURES/ECONOMY/FEAT-ECON-001_Policy_Mode_and_Rebalancer.md`
+**Evidence:** Developer section used `../DOMAINS/` and `../FEATURES/` paths that resolved one directory level too high, placing them outside the `docs/` tree.
 
-The directories `DOMAINS/` and `FEATURES/` do not exist at `docs/DOMAINS/` or `docs/FEATURES/`. These documents reside under `docs/DOMAINS/ECONOMY_DESIGN/` and `docs/FEATURES/`, which would require paths beginning with `../../` from `docs/user-guides/`.
+**Resolution:** Paths corrected to `../../docs/DOMAINS/ECONOMY_DESIGN/` and `../../docs/FEATURES/ECONOMY/`. All three target files confirmed present on disk.
 
 ---
 
-## Navigation Label Mismatches
+### Navigation Label Mismatches
 
-These files reference a menu item by an incorrect label. The nav item exists but is named differently in the actual template.
+These files referenced a menu item by an incorrect label.
 
-| File | Document Says | Actual Label in Template |
-|------|---------------|--------------------------|
-| `features/student/work/attendance-history.md` | "Open **Payroll** from the student navigation" | **Work & Pay** (`layout_student.html`) |
-| `features/teacher/settings/feature-toggles.md` | "Navigate to **Settings > Features**" | **Economy Features** (`layout_admin.html`) |
-| `features/sysadmin/teacher-management.md` | "Navigate to **Manage Teachers**" | **Teacher Management** (`layout_system_admin.html`) |
-| `features/sysadmin/dashboard-overview.md` | References "**System Logs**" and "**Error Logs**" as separate nav items | Single **Logs** item; no "Error Logs" item (`layout_system_admin.html`) |
-| `diagnostics/teacher/students.md` | Student claim requires "first initial" | Claim form in `templates/admin_students.html` requires full **First Name** |
+| File | Document Said | Actual Label | Resolution |
+|------|---------------|--------------|------------|
+| `features/student/work/attendance-history.md` | "Open **Payroll**" | **Work & Pay** | ✅ Updated to "Work & Pay" |
+| `features/teacher/settings/feature-toggles.md` | "**Settings > Features**" | **Economy Features** | ✅ Updated to "Economy Features" |
+| `features/sysadmin/teacher-management.md` | "**Manage Teachers**" | **Teacher Management** | ✅ Updated to "Teacher Management" |
+| `features/sysadmin/dashboard-overview.md` | "**System Logs**" / "**Error Logs**" as separate items | Single **Logs** item | ✅ Consolidated to "Logs"; note added explaining grouping |
+| `diagnostics/teacher/students.md` | Claim requires "first initial" | Requires full **First Name** | ✅ Updated to full first name and last name |
 
 ---
 
-## Student-Facing Inaccuracies
+### Student-Facing Inaccuracies
 
-### 7. Dashboard Balance Location Is Wrong
+#### 7. Dashboard Balance Location Is Wrong
 
 **File:** `docs/user-guides/features/student/account/dashboard-overview.md`
 
-**Doc says:** *"look at the top section to see your current checking and savings balances"*
+**Evidence:** `templates/student_dashboard.html` — balances appear third in the layout, below Weekly Stats and the Attendance card.
 
-**Evidence:** `templates/student_dashboard.html` — actual layout order:
-1. Greeting + Weekly Stats (Days Tapped In, Minutes This Week, Earned/Spent This Week)
-2. Attendance card (Start Work / Break / Done)
-3. **Account Balances** (Checking Account, Savings Account cards)
-4. Recent Activity
-
-Balances are third in the layout, not at the top.
+**Resolution:** Guide updated to direct students to scroll to the Account Balances section after reviewing stats and attendance.
 
 ---
 
-### 8. "Break / Done" Is One Combined Button, Not Two Separate Actions
+#### 8. "Break / Done" Is One Combined Button
 
 **File:** `docs/user-guides/features/student/work/start-end-work.md`
 
-**Doc says:** *"click **Done** (or **Break**)"* — framed as two separate, interchangeable actions.
+**Evidence:** `templates/student_dashboard.html` — a single button labeled **"Break / Done"**, not two separate controls.
 
-**Evidence:** `templates/student_dashboard.html` — a single button is labeled **"Break / Done"**. There is one control, not two distinct buttons.
+**Resolution:** Guide updated to consistently refer to the single **Break / Done** button.
 
 ---
 
-### 9. Login Setup: Wrong PIN Length, Missing Passphrase Step
+#### 9. Login Setup: Wrong PIN Length, Missing Passphrase Step
 
 **File:** `docs/user-guides/features/student/account/login-setup.md`
 
-**Doc says:** *"secure 4-digit PIN"*
+**Evidence:** PIN accepts 4–8 digits, not strictly 4. Passphrase setup is a required step that was omitted entirely.
 
-**Evidence:** The student account creation flow accepts a PIN of **4–8 digits**, not strictly 4. Additionally, the guide omits the **passphrase** setup step entirely. Students must set a passphrase (used for purchases and transfers) during account setup; this is a required part of the onboarding experience that the guide does not mention.
+**Resolution:** Guide updated to specify **4-8 digit PIN** and now includes the passphrase creation step.
 
 ---
 
-## Frontmatter `related:` Path Issues
+### Frontmatter `related:` Path Issues
 
-Three files contain `related:` entries in their YAML frontmatter that may not resolve correctly depending on the rendering context.
+Three files used a `user-guides/` prefix and dash-separated subdirectory paths in `related:` frontmatter entries, causing potential resolution failures.
 
-- `features/teacher/classroom/attendance-approvals.md` — `related:` entries use paths beginning with `user-guides/` (e.g., `user-guides/features/student/work/start-end-work`), suggesting an absolute path from the `docs/` root rather than a relative path from the file's location.
-- `features/teacher/classroom/attendance-corrections.md` — Same pattern: `user-guides/features/teacher/classroom/attendance-approvals` and `user-guides/diagnostics/teacher/attendance-payroll`.
-- `features/student/work/attendance-history.md` — Same pattern. Also, `user-guides/diagnostics/student-attendance` appears to reference a file that does not exist; the correct path is likely `diagnostics/student/attendance`.
+| File | Original Entry | Corrected Entry |
+|------|---------------|-----------------|
+| `features/teacher/economy/transactions.md` | `user-guides/diagnostics/teacher-transactions-banking` | `diagnostics/teacher/transactions-banking` |
+| `features/teacher/settings/account-recovery.md` | `user-guides/diagnostics/teacher-login` | `diagnostics/teacher/login` |
+| `features/teacher/settings/feature-toggles.md` | `user-guides/diagnostics/teacher-onboarding` | `diagnostics/teacher/onboarding` |
+| `features/teacher/classroom/attendance-approvals.md` | `user-guides/features/student/work/start-end-work` | `features/student/work/start-end-work` |
+| `features/teacher/classroom/attendance-corrections.md` | `user-guides/features/teacher/classroom/attendance-approvals` | `features/teacher/classroom/attendance-approvals` |
+| `features/student/work/attendance-history.md` | `user-guides/diagnostics/student-attendance` | `diagnostics/student/attendance` |
+
+**Resolution:** All six entries corrected to use proper relative paths without the `user-guides/` prefix.
 
 ---
 
@@ -170,21 +198,3 @@ The following files were read and cross-referenced with no discrepancies identif
 - `features/teacher/classroom/attendance-corrections.md` — Correctly describes the append-only attendance log and diagnosis workflow.
 - `features/student/support/report-issues.md` — Describes the report icon next to attendance events; matches template behavior.
 - `diagnostics/teacher/attendance-payroll.md` — Content is accurate to the actual attendance and payroll workflow.
-
----
-
-## Priority Index
-
-| Priority | Issue | Affected Files |
-|----------|-------|----------------|
-| P0 | Hall pass terminal docs describe a deprecated (HTTP 410) system | 3 |
-| P0 | Wrong button labels in hall pass teacher guide (Deny/Close vs Reject/Returned) | 1 |
-| P1 | "Economy > Transactions" nav path does not exist | 1 |
-| P1 | "Settings > Account Recovery" nav path does not exist | 1 |
-| P1 | "Itemization" tab does not exist in Rent Settings | 1 |
-| P1 | Student dashboard balance location described incorrectly | 1 |
-| P1 | Broken relative paths in economy_guide.md developer section | 1 |
-| P2 | Nav label mismatches (Work & Pay, Economy Features, Teacher Management, Logs) | 5 |
-| P2 | PIN described as 4-digit only; passphrase step omitted | 1 |
-| P2 | "Break / Done" described as two separate buttons | 1 |
-| P3 | Frontmatter `related:` path format inconsistencies | 3 |

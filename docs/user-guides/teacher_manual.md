@@ -21,8 +21,8 @@ This page is a shortcut list. Use diagnostics for fast troubleshooting and featu
 - [Rent or insurance settings are not behaving](diagnostics/teacher/rent-insurance.md)
 - [Hall passes are stuck or not approving](diagnostics/teacher/hall-pass.md)
 - [Announcements or issue reports are missing](diagnostics/teacher/announcements-issues.md)
-- [Analytics dashboard not loading or showing wrong data](diagnostics/teacher/analytics.md) **(v1.7+)**
-- [Rent itemization or privilege badges not working](diagnostics/teacher/rent-itemization.md) **(v1.7+)**
+- [Analytics dashboard not loading or showing wrong data](diagnostics/teacher/analytics.md)
+- [Rent itemization or privilege badges not working](diagnostics/teacher/rent-itemization.md)
 
 ## Feature Guides (Structured by Section)
 - [Teacher Feature Guides Index](features/teacher/index.md)

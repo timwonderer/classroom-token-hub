@@ -29,7 +29,6 @@ Feature walkthroughs live under `features/`:
 - [Attribution](./legal/attribution.md)
 - [Third-Party Notices](./legal/third-party-notices.md)
 
-## v1.x Scope Note
+## Scope Note
 
-These guides are maintained for the **main branch (v1.x behavior)**. Navigation labels and workflows are validated against the current teacher/student/sysadmin web app, and may differ from future v2 work.
-
+These guides are maintained for the current teacher/student/sysadmin web app. Navigation labels and workflows are validated against the live product and may change as the application evolves.

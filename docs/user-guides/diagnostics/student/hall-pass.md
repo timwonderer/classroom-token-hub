@@ -11,6 +11,12 @@ related:
 
 If something doesn't look right with your Hall Passes, check this guide first before reporting an issue to your teacher.
 
+> [!IMPORTANT]
+> **Hall pass checkout happens in your dashboard now.** Do not look for a hallway terminal, queue screen, or scanner. After your teacher approves the request, open your dashboard and use the hall pass controls there to check out and check back in.
+
+> [!NOTE]
+> **Hall pass verification is now more private.** School staff may need your name and class period to confirm a pass, and verification only works for passes created that same day. If an older pass does not appear, that usually means the verification page is protecting your past records rather than that your pass is missing.
+
 ## If your request is denied or disappears, check these first:
 - Hall pass is enabled for your class period.
 - You have hall passes available (some teachers require passes for approval).

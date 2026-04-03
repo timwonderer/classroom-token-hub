@@ -28,7 +28,7 @@ Use this guide when attendance records are missing, incomplete, or unexpected. A
 > **Payroll impact:** Missing or mismatched taps can reduce projected or actual pay.
 
 > [!TIP]
-> **v1.x behavior:** Teachers cannot directly rewrite attendance history from this page; resolve compensation issues through payroll adjustments and issue workflows.
+> **Use the correction workflow:** Teachers cannot directly rewrite attendance history from this page; resolve compensation issues through payroll adjustments and issue workflows.
 
 ## Related guides
 - [Attendance and Approvals](attendance-approvals.md)

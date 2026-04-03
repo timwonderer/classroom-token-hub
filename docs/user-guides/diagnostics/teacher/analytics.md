@@ -189,7 +189,7 @@ Report via Help & Support with:
 
 - **Currently:** Some changes don't auto-generate events
 - **Workaround:** Track major changes manually in notes
-- **Future:** More auto-tracking coming in v1.8
+- **Future:** More auto-tracking is planned in a later update
 
 **Cause 2: Wrong Time Window**
 

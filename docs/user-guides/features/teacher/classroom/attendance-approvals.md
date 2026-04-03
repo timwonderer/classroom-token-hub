@@ -32,7 +32,7 @@ The **Attendance** page lets you review the time-tracking records used by payrol
 > **Missing data:** If records appear missing, clear filters and widen the date range first.
 
 > [!IMPORTANT]
-> **v1.x behavior:** The attendance log is append-only for teachers. Use payroll adjustments when pay needs correction rather than trying to edit historical tap events.
+> **Attendance history is append-only:** Use payroll adjustments when pay needs correction rather than trying to edit historical tap events.
 
 ## Related guides
 - [Start and End Work (Student)](../../student/work/start-end-work.md)
