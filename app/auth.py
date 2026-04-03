@@ -10,7 +10,7 @@ from app.utils.time import utc_now, ensure_utc
 from functools import wraps
 
 import sqlalchemy as sa
-from flask import session, flash, redirect, url_for, request, current_app, jsonify
+from flask import session, flash, redirect, url_for, request, current_app, jsonify, g, has_request_context
 from app.extensions import db
 
 
@@ -372,13 +372,27 @@ def get_logged_in_student():
     Returns:
         Student: The logged-in Student object, or None if not logged in.
     """
+    if not has_request_context():
+        return None
+
+    if getattr(g, "_logged_in_student_loaded", False):
+        return getattr(g, "_logged_in_student", None)
+
     # Import here to avoid circular imports
     from app.models import Student
     if 'student_id' not in session:
+        g._logged_in_student = None
+        g._logged_in_student_loaded = True
         return None
+
     student = db.session.get(Student, session['student_id'])
     if not is_student_account_active(student):
+        g._logged_in_student = None
+        g._logged_in_student_loaded = True
         return None
+
+    g._logged_in_student = student
+    g._logged_in_student_loaded = True
     return student
 
 

@@ -40,10 +40,14 @@ jobs:
         PASSWORDLESS_API_KEY: ${{ secrets.PASSWORDLESS_API_KEY }}
         PASSWORDLESS_API_PUBLIC: ${{ secrets.PASSWORDLESS_API_PUBLIC }}
         DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+        OTEL_TRACES_ENABLED: ${{ vars.OTEL_TRACES_ENABLED }}
+        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT }}
+        OTEL_SERVICE_NAME: ${{ vars.OTEL_SERVICE_NAME }}
+        OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
       run: |
         # Maintenance mode is managed exclusively by the toggle-maintenance workflow.
         # This deploy workflow never touches MAINTENANCE_* variables in .env.
-        SSH_ENV_VARS="TURNSTILE_SITE=$(printf %q "$TURNSTILE_SITE") TURNSTILE_SECRET=$(printf %q "$TURNSTILE_SECRET") PASSWORDLESS_API_KEY=$(printf %q "$PASSWORDLESS_API_KEY") PASSWORDLESS_API_PUBLIC=$(printf %q "$PASSWORDLESS_API_PUBLIC") DIGITALOCEAN_ACCESS_TOKEN=$(printf %q "$DIGITALOCEAN_ACCESS_TOKEN")"
+        SSH_ENV_VARS="TURNSTILE_SITE=$(printf %q "$TURNSTILE_SITE") TURNSTILE_SECRET=$(printf %q "$TURNSTILE_SECRET") PASSWORDLESS_API_KEY=$(printf %q "$PASSWORDLESS_API_KEY") PASSWORDLESS_API_PUBLIC=$(printf %q "$PASSWORDLESS_API_PUBLIC") DIGITALOCEAN_ACCESS_TOKEN=$(printf %q "$DIGITALOCEAN_ACCESS_TOKEN") OTEL_TRACES_ENABLED=$(printf %q "$OTEL_TRACES_ENABLED") OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=$(printf %q "$OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") OTEL_SERVICE_NAME=$(printf %q "$OTEL_SERVICE_NAME") OTEL_EXPORTER_OTLP_HEADERS=$(printf %q "$OTEL_EXPORTER_OTLP_HEADERS")"
 
         # Connect to the production server and deploy
         ssh root@"$PRODUCTION_SERVER_IP" "export ${SSH_ENV_VARS}; bash -s" << 'EOF'
@@ -81,6 +85,18 @@ jobs:
           sed -i '/^PASSWORDLESS_API_KEY=/d' .env 2>/dev/null || true
           sed -i '/^PASSWORDLESS_API_PUBLIC=/d' .env 2>/dev/null || true
           sed -i '/^DIGITALOCEAN_ACCESS_TOKEN=/d' .env 2>/dev/null || true
+          if [ -n "${OTEL_TRACES_ENABLED}" ]; then
+            sed -i '/^OTEL_TRACES_ENABLED=/d' .env 2>/dev/null || true
+          fi
+          if [ -n "${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT}" ]; then
+            sed -i '/^OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=/d' .env 2>/dev/null || true
+          fi
+          if [ -n "${OTEL_SERVICE_NAME}" ]; then
+            sed -i '/^OTEL_SERVICE_NAME=/d' .env 2>/dev/null || true
+          fi
+          if [ -n "${OTEL_EXPORTER_OTLP_HEADERS}" ]; then
+            sed -i '/^OTEL_EXPORTER_OTLP_HEADERS=/d' .env 2>/dev/null || true
+          fi
 
           # Add Turnstile keys if provided
           if [ -n "${TURNSTILE_SITE}" ]; then
@@ -106,6 +122,24 @@ jobs:
           if [ -n "${DIGITALOCEAN_ACCESS_TOKEN}" ]; then
             echo "DIGITALOCEAN_ACCESS_TOKEN=${DIGITALOCEAN_ACCESS_TOKEN}" >> .env
             echo "✓ DigitalOcean access token configured (length: ${#DIGITALOCEAN_ACCESS_TOKEN})"
+          fi
+
+          # Add OpenTelemetry tracing settings if provided
+          if [ -n "${OTEL_TRACES_ENABLED}" ]; then
+            echo "OTEL_TRACES_ENABLED=${OTEL_TRACES_ENABLED}" >> .env
+            echo "✓ OTEL_TRACES_ENABLED configured"
+          fi
+          if [ -n "${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT}" ]; then
+            echo "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT}" >> .env
+            echo "✓ OTLP traces endpoint configured"
+          fi
+          if [ -n "${OTEL_SERVICE_NAME}" ]; then
+            echo "OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME}" >> .env
+            echo "✓ OTEL service name configured"
+          fi
+          if [ -n "${OTEL_EXPORTER_OTLP_HEADERS}" ]; then
+            echo "OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}" >> .env
+            echo "✓ OTLP exporter headers configured"
           fi
 
           # Verify .env file contains the keys

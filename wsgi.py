@@ -34,6 +34,7 @@ import random
 # Import and create the Flask application using the factory pattern
 from app import app
 from app.extensions import db, migrate, csrf
+from app.template_context import get_payroll_status_context
 
 
 def maintenance_mode_enabled():
@@ -292,11 +293,7 @@ else:
 @app.context_processor
 def inject_payroll_status():
     """Make payroll settings status available in all templates."""
-    if maintenance_mode_enabled():
-        return dict(has_payroll_settings=False)
-
-    has_payroll_settings = PayrollSettings.query.first() is not None
-    return dict(has_payroll_settings=has_payroll_settings)
+    return get_payroll_status_context(maintenance_enabled=maintenance_mode_enabled())
 
 
 # -------------------- ERROR LOGGING UTILITIES --------------------
