@@ -57,6 +57,7 @@ This document is the canonical index of all formal documentation.
 - [INV-CORE-001_Authority_Model.md](../../INV-CORE-001_Authority_Model.md)
 ### LOGS/AUDITS
 
+- [LOG-DOC-002_User_Guide_Accuracy_Audit.md](../../LOGS/AUDITS/LOG-DOC-002_User_Guide_Accuracy_Audit.md)
 - [LOG-ARC-002_Testing_Summary_Legacy.md](../../LOGS/AUDITS/LOG-ARC-002_Testing_Summary_Legacy.md)
 - [LOG-ARC-003_Decimal_Refactoring.md](../../LOGS/AUDITS/LOG-ARC-003_Decimal_Refactoring.md)
 - [LOG-ARC-004_Doc_Review_2026_01.md](../../LOGS/AUDITS/LOG-ARC-004_Doc_Review_2026_01.md)

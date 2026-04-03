@@ -28,3 +28,7 @@ Feature walkthroughs live under `features/`:
 - [Commercial Use Policy](./legal/commercial.md)
 - [Attribution](./legal/attribution.md)
 - [Third-Party Notices](./legal/third-party-notices.md)
+
+## Scope Note
+
+These guides are maintained for the current teacher/student/sysadmin web app. Navigation labels and workflows are validated against the live product and may change as the application evolves.

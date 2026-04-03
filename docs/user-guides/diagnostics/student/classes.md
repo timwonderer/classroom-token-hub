@@ -14,7 +14,7 @@ If something doesn't look right with your Classes and Join Codes, check this gui
 ## If you cannot join a class, check these first:
 - Join codes are required and come from your teacher, one per class period.
 - If you are already logged in, use Add Class (not Claim Account).
-- Your first initial, last name, and date of birth must match your existing account.
+- Your first name, last name, and date of birth must match your existing account.
 - The seat for that join code might already be claimed by someone else.
 
 ## If your class list or balances look wrong, check these first:

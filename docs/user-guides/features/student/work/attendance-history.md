@@ -7,25 +7,25 @@ description: Review your attendance record and projected pay.
 keywords: [attendance history, projected pay, payroll]
 related:
   - user-guides/features/student/work/start-end-work
-  - user-guides/diagnostics/student-attendance
+  - user-guides/diagnostics/student/attendance
 ---
 
 # Attendance History and Pay Status
 
 ## Overview
-The Work and Pay page allows you to review your past attendance records from class and see your projected earnings before Payday.
+The **Work & Pay** page shows your attendance events, unpaid time, and projected earnings before payday.
 
 ## Step-by-Step Instructions
 
 ### Reviewing Your Work History
-1. Navigate to **Work and Pay** from the student sidebar.
-2. Review the list of your past attendance records (e.g., "Present", "Late", or "Absent") for each class block.
-3. Check the **Unpaid Time** section to see how much time your teacher has logged that hasn't been paid out yet.
-4. Check the **Projected Pay** section to see an estimate of how much money you will earn on your next paycheck.
+1. Open **Work & Pay** from the student navigation.
+2. In **Attendance Record**, review recent **Start Work** and **Break / Done** events for each block.
+3. Check **Unpaid Time** to see work time not yet paid.
+4. Open **Projected Pay** to estimate upcoming earnings.
 
 ## Important Notes
 > [!IMPORTANT]
-> **Check for errors:** If an attendance record or projected pay amount looks incorrect, click the help/flag icon next to the record to submit an issue report to your teacher before Payday runs.
+> **Check for errors early:** If an attendance event or projected pay amount looks wrong, use the report icon next to the event so your teacher can review it before payroll runs.
 
 ## Related guides
 - [Start and End Work](start-end-work.md)

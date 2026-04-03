@@ -6,26 +6,33 @@ roles: [teacher]
 description: Review and manage hall pass requests and the live queue.
 keywords: [hall pass, requests, queue]
 related:
-  - user-guides/diagnostics/teacher-hall-pass
+  - diagnostics/teacher/hall-pass
 ---
 
 # Hall Pass
 
+> [!IMPORTANT]
+> **Students no longer use a separate hall pass terminal.** After you approve a request, the student must check out and check back in from their dashboard. Retired terminal, queue, and old verification links should not be used for current hall pass workflows.
+
+> [!NOTE]
+> **The verification page now uses a privacy-protected lookup flow.** If you share a hall pass verification link with hall staff or office staff, make sure it is the current link. The page now requires a student name and class section, and it only returns same-day records that match your class history.
+
 ## Overview
-The Hall Pass queue allows you to review, approve, deny, or close student hall pass requests in real-time, functioning as a digital sign-out sheet.
+The Hall Pass queue allows you to review, approve, reject, and complete student hall pass requests in real time. Students check themselves out from their dashboard after approval, and you track the queue through the **Pending**, **Approved**, **Out**, and **History** tabs.
 
 ## Step-by-Step Instructions
 
 ### Managing Hall Pass Requests
 1. Navigate to **Classroom > Hall Pass** in the teacher sidebar.
-2. Review the live queue of active and pending requests.
+2. Review requests in the **Pending** tab, then open the other tabs to monitor approved, active, and completed passes.
 3. Open a specific request to see details (e.g., student name, destination, reason).
-4. Select **Approve** to allow the student to leave, or **Deny** if it is not a good time.
-5. When the student returns to the classroom, select **Close** on their active pass.
+4. Select **Approve** to allow the student to leave, or **Reject** if it is not a good time.
+5. After approval, the student checks out from their dashboard and the pass moves from **Approved** to **Out**.
+6. When the student returns to the classroom, select **Returned**. Completed passes appear in the **History** tab.
 
 ## Important Notes
 > [!IMPORTANT]
-> **Close the pass:** Always remember to close a pass when the student returns. Closing the pass stops their time-out clock and keeps the request history accurate for future audits.
+> **Mark passes returned:** Always mark a pass **Returned** when the student comes back. That stops the active timer and keeps the **History** tab accurate for later review.
 
 ## Related guides
 - [Teacher Hall Pass Diagnostics](../../../diagnostics/teacher/hall-pass.md)
