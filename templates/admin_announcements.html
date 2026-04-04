@@ -75,15 +75,15 @@
 {% if teacher_blocks and teacher_blocks|length > 1 %}
 <div class="card shadow-sm mb-4">
     <div class="card-body">
-        <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
             <span class="fw-bold text-muted">Filter by Period:</span>
-            <div class="btn-group btn-group-sm" role="group" id="periodFilter">
+            <div class="d-flex flex-wrap gap-1" role="group" id="periodFilter">
                 <input type="checkbox" class="btn-check" id="filter-all" checked>
-                <label class="btn btn-outline-primary" for="filter-all">All Periods</label>
+                <label class="btn btn-outline-primary btn-sm text-nowrap" for="filter-all">All Periods</label>
 
                 {% for block in teacher_blocks %}
                 <input type="checkbox" class="btn-check period-filter" id="filter-{{ block.join_code }}" data-join-code="{{ block.join_code }}" checked>
-                <label class="btn btn-outline-primary" for="filter-{{ block.join_code }}">{{ block.get_class_label() }} (Period {{ block.block }})</label>
+                <label class="btn btn-outline-primary btn-sm text-nowrap" for="filter-{{ block.join_code }}">{{ block.get_class_label() }} (Period {{ block.block }})</label>
                 {% endfor %}
             </div>
         </div>
