@@ -69,9 +69,9 @@ These rules appear repeatedly across the source docs and should be treated as no
 
 ### Scope
 
-- [ ] Refresh the live-test rehearsal artifact with named operator confirmation.
-- [ ] Record either independent verifier confirmation or a documented solo-operator exception.
-- [ ] Record smoke-route execution outcome with named ownership.
+- [x] Refresh the live-test rehearsal artifact with named operator confirmation.
+- [x] Record either independent verifier confirmation or a documented solo-operator exception.
+- [x] Record smoke-route execution outcome with named ownership.
 - [ ] Add the active v2 tracker/readiness/compliance docs to the documentation index.
 - [ ] Re-run the focused active-doc link check after live-test blocker code lands.
 - [ ] Refresh the readiness matrix so only intentional open items remain.
@@ -86,13 +86,13 @@ These rules appear repeatedly across the source docs and should be treated as no
 
 - [ ] Doc review against current branch and runbook commands
 - [ ] Active-doc link validation for the index, README, development docs, and v2 SOPs
-- [ ] Operator-owned smoke execution record review
+- [x] Operator-owned smoke execution record review
 
 ### Exit Criteria
 
 - [ ] `V2_LAUNCH_READINESS_MATRIX` no longer lists open pre-live-test documentation/evidence gaps except intentional deferrals.
 - [ ] The documentation index includes the active v2 launch tracker docs.
-- [ ] The rehearsal artifact names who ran it and how sign-off was handled.
+- [x] The rehearsal artifact names who ran it and how sign-off was handled.
 
 ## Project 2: Economy Policy And Rent-Cycle Corrections
 
