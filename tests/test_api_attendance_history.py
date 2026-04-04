@@ -110,10 +110,15 @@ def test_attendance_history_with_date_filters(client, admin_with_students):
         sess['admin_id'] = admin.id
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
     
-    # Use the tap event date to avoid timezone-boundary flakiness
+    # Use the tap event date to avoid timezone-boundary flakiness.
+    # Always convert to UTC first because psycopg2 may return timestamps
+    # in the PostgreSQL session timezone (e.g. Pacific), and the API
+    # endpoint interprets date filter parameters as UTC.
     event_ts = admin_with_students['tap_events'][0].timestamp
     if event_ts.tzinfo is None:
         event_ts = event_ts.replace(tzinfo=timezone.utc)
+    else:
+        event_ts = event_ts.astimezone(timezone.utc)
     today_str = event_ts.date().strftime('%Y-%m-%d')
     
     # Call the API endpoint with today's date as filter

@@ -3,6 +3,7 @@ from app.utils.time import utc_now, ensure_utc, normalize_for_db
 from sqlalchemy import func
 from flask import current_app
 from app.extensions import db
+import pytz
 # Import from shared utilities to avoid circular dependency with payroll.py
 from app.utils.attendance_helpers import get_join_code_for_student_period
 from app.utils.seat_scope import get_seat_ids_for_student_join, seat_scoped_filter
@@ -246,7 +247,14 @@ def get_all_block_statuses(student, join_code=None):
     from datetime import datetime, timezone
     from app.payroll import get_pay_rate_for_block
 
-    today = utc_now().date()
+    # Use Pacific day boundaries converted to UTC for consistent date filtering
+    # regardless of the PostgreSQL session timezone setting.
+    pacific = pytz.timezone('America/Los_Angeles')
+    now_pacific = utc_now().astimezone(pacific)
+    today_pacific = now_pacific.date()
+    today_start_pacific = pacific.localize(datetime.combine(today_pacific, datetime.min.time()))
+    today_start_utc = today_start_pacific.astimezone(timezone.utc)
+    today_end_utc = (today_start_pacific + timedelta(days=1)).astimezone(timezone.utc)
     if join_code:
         # Scope to claimed seats for the selected class
         claimed_seats = TeacherBlock.query.filter_by(
@@ -301,7 +309,8 @@ def get_all_block_statuses(student, join_code=None):
 
         done_query = TapEvent.query.filter(
             TapEvent.period == blk,
-            func.date(TapEvent.timestamp) == today,
+            TapEvent.timestamp >= today_start_utc,
+            TapEvent.timestamp < today_end_utc,
             TapEvent.reason != None,
             TapEvent.is_deleted == False  # Exclude deleted events
         )
