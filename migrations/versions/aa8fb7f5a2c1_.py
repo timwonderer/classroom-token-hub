@@ -1,7 +1,7 @@
-"""empty message
+"""Merge 0c0c22cef5ba and f6c7d8e9a0b1 heads
 
 Revision ID: aa8fb7f5a2c1
-Revises: 0c0c22cef5ba
+Revises: 0c0c22cef5ba, f6c7d8e9a0b1
 Create Date: 2026-02-17 03:26:07.531487
 
 """
@@ -77,8 +77,10 @@ depends_on = None
 
 
 def upgrade():
+    """Merge revision; no schema changes."""
     pass
 
 
 def downgrade():
+    """Merge revision; no schema changes."""
     pass

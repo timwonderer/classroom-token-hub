@@ -85,6 +85,7 @@ echo "🔍 Validating migration file syntax..."
 python3 << 'PYTHON_SCRIPT'
 import sys
 import os
+import re
 from pathlib import Path
 
 migration_dir = Path('migrations/versions')
@@ -106,10 +107,13 @@ for migration_file in migration_dir.glob('*.py'):
         with open(migration_file, 'r') as f:
             content = f.read()
 
+        upgrade_defs = re.findall(r'^\s*def\s+upgrade\s*\(\s*\)\s*(?:->\s*[^:]+)?\s*:', content, re.MULTILINE)
+        downgrade_defs = re.findall(r'^\s*def\s+downgrade\s*\(\s*\)\s*(?:->\s*[^:]+)?\s*:', content, re.MULTILINE)
+
         # Check for required components
-        if 'def upgrade():' not in content:
+        if not upgrade_defs:
             errors.append(f"{migration_file.name}: Missing upgrade() function")
-        if 'def downgrade():' not in content:
+        if not downgrade_defs:
             errors.append(f"{migration_file.name}: Missing downgrade() function")
         if 'revision =' not in content:
             errors.append(f"{migration_file.name}: Missing revision identifier")
@@ -117,14 +121,16 @@ for migration_file in migration_dir.glob('*.py'):
             errors.append(f"{migration_file.name}: Missing down_revision")
 
         # Check for common issues
-        if content.count('def upgrade():') > 1:
+        if len(upgrade_defs) > 1:
             errors.append(f"{migration_file.name}: Multiple upgrade() functions")
-        if content.count('def downgrade():') > 1:
+        if len(downgrade_defs) > 1:
             errors.append(f"{migration_file.name}: Multiple downgrade() functions")
 
+        merge_revision = bool(re.search(r"down_revision\s*=\s*\(", content))
+
         # Check for empty functions (potential issue)
-        if 'def upgrade():\n    pass' in content or 'def upgrade():\n        pass' in content:
-            if 'merge' not in migration_file.name.lower():
+        if re.search(r'^\s*def\s+upgrade\s*\(\s*\)\s*(?:->\s*[^:]+)?\s*:\s*\n\s+pass\b', content, re.MULTILINE):
+            if 'merge' not in migration_file.name.lower() and not merge_revision:
                 warnings.append(f"{migration_file.name}: Empty upgrade() function")
 
     except Exception as e:
