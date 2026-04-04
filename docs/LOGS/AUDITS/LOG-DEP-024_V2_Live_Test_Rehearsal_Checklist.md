@@ -19,73 +19,48 @@ Use this checklist when executing the live-test rehearsal for `codex/v2.0` again
 - `docs/development/V2_LAUNCH_READINESS_MATRIX.md`
 
 ## IV. Operator Checklist
+> [!NOTE]
+> Make a copy of this document to record findings of live test rehearsal. This document shall remain as a reference. 
 
 Mark each item when complete.
 
 ### 1. Branch and Environment
 
-- [x] Current branch is `codex/v2.0`
-- [x] Worktree is clean
-- [x] `.env` points to the intended v2 dev/migration database
-- [x] PostgreSQL test database target is identified for validation run
+- [ ] Current branch is `codex/v2.0`
+- [ ] Worktree is clean
+- [ ] `.env` points to the intended v2 dev/migration database
+- [ ] PostgreSQL test database target is identified for validation run
 
 ### 2. Pre-Upgrade Commands
 
-- [x] `flask db heads`
-- [x] `flask db current`
-- [x] `bash scripts/check-migrations.sh`
+- [ ] `flask db heads`
+- [ ] `flask db current`
+- [ ] `bash scripts/check-migrations.sh`
 
 Record outputs:
 
 ```text
 flask db heads:
-2bde3e5f00ac (head)
+
 flask db current:
-INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
-INFO  [alembic.runtime.migration] Will assume transactional DDL.
-2bde3e5f00ac (head)
+
 bash scripts/check-migrations.sh:
-┌────────────────────────────────────────────────────┐
-│   Database Migration Pre-Flight Check             │
-└────────────────────────────────────────────────────┘
 
-🔍 Checking for multiple migration heads...
-   Found 1 migration head(s)
-✓ Single migration head: 2bde3e5f00ac
-  Message: Add bypass_cwi_warnings to store_items, rent_settings, and insurance_policies
-
-🔍 Validating migration file syntax...
-   Validated 183 migration file(s)
-
-❌ Migration validation errors:
-   • o5p6q7r8s9t0_prepare_seats_for_identity_overhaul.py: Missing upgrade() function
-   • o5p6q7r8s9t0_prepare_seats_for_identity_overhaul.py: Missing downgrade() function
-   • l2m3n4o5p6q7_strict_feature_and_hall_pass_settings_scope.py: Missing upgrade() function
-   • l2m3n4o5p6q7_strict_feature_and_hall_pass_settings_scope.py: Missing downgrade() function
-   • i9j0k1l2m3n4_converge_class_scope_to_canonical_anchor.py: Missing upgrade() function
-   • i9j0k1l2m3n4_converge_class_scope_to_canonical_anchor.py: Missing downgrade() function
-   • j0k1l2m3n4o5_scope_payroll_cache_by_class.py: Missing upgrade() function
-   • j0k1l2m3n4o5_scope_payroll_cache_by_class.py: Missing downgrade() function
-   • n4o5p6q7r8s9_contract_class_lifecycle_and_feature_rows.py: Missing upgrade() function
-   • n4o5p6q7r8s9_contract_class_lifecycle_and_feature_rows.py: Missing downgrade() function
 ```
 
 ### 3. Migration Rehearsal
 
-- [x] `DATABASE_URL=<team-dev-migration-db-url> flask db upgrade`
-- [x] `DATABASE_URL=<team-dev-migration-db-url> flask db current`
-- [x] No revision drift or unexpected migration error occurred
+- [ ] `DATABASE_URL=<team-dev-migration-db-url> flask db upgrade`
+- [ ] `DATABASE_URL=<team-dev-migration-db-url> flask db current`
+- [ ] No revision drift or unexpected migration error occurred
 
 Record outputs:
 
 ```text
 DATABASE_URL=<team-dev-migration-db-url> flask db upgrade:
-INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
-INFO  [alembic.runtime.migration] Will assume transactional DDL.
+
 DATABASE_URL=<team-dev-migration-db-url> flask db current:
-INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
-INFO  [alembic.runtime.migration] Will assume transactional DDL.
-2bde3e5f00ac (head)
+
 ```
 
 ### 4. PostgreSQL Validation
