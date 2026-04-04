@@ -1159,14 +1159,12 @@ body.sysadmin-shell .eyebrow {
     .main-content {
         margin-left: 0 !important;
         width: 100% !important;
-        padding-bottom: 80px;
-        /* Space for bottom nav */
     }
 
     .student-main {
         margin-left: 0 !important;
         width: 100% !important;
-        padding: 1rem 0.85rem 5.5rem;
+        padding: 1rem 0.85rem 1rem;
     }
 }
 
@@ -1174,12 +1172,6 @@ body.sysadmin-shell .eyebrow {
 
     .mobile-menu-toggle,
     .sidebar-backdrop {
-        display: none !important;
-    }
-}
-
-@media (min-width: 992px) {
-    .mobile-bottom-nav {
         display: none !important;
     }
 }
@@ -1210,9 +1202,6 @@ body.sysadmin-shell .eyebrow {
         padding-left: 4rem;
     }
 
-    .sysadmin-content {
-        padding-bottom: calc(var(--sysadmin-bottom-nav-height, 64px) + 1rem);
-    }
 }
 
 .content-wrapper,
@@ -1220,52 +1209,6 @@ body.sysadmin-shell .eyebrow {
     margin-left: var(--sidebar-width);
     padding: 2rem;
     min-height: 100vh;
-}
-
-/* Mobile Bottom Nav */
-.mobile-bottom-nav {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 64px;
-    background: var(--surface);
-    border-top: 1px solid var(--border-color);
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    z-index: 1050;
-    padding-bottom: env(safe-area-inset-bottom);
-}
-
-.mobile-bottom-nav a {
-    color: var(--text-secondary);
-    font-size: 0.75rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    padding: 0.5rem;
-    border-radius: var(--radius-sm);
-}
-
-@media (hover: hover) {
-    .mobile-bottom-nav a:hover {
-        background-color: rgba(0, 0, 0, 0.03);
-        color: var(--text-primary);
-    }
-}
-
-.mobile-bottom-nav a.active {
-    color: var(--primary);
-    background-color: color-mix(in srgb, var(--primary) 10%, transparent);
-    font-weight: 600;
-}
-
-.mobile-bottom-nav a .material-symbols-outlined {
-    font-size: 24px;
 }
 
 /* ─── Subtle Utilities ─── */
