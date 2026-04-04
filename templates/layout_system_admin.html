@@ -156,37 +156,6 @@
                 </div>
     </main>
 
-    <!-- Mobile Bottom Navigation -->
-    <nav class="mobile-bottom-nav" role="navigation" aria-label="Quick navigation">
-        <a href="{{ url_for('sysadmin.dashboard') }}" class="{% if current_page == 'dashboard' %}active{% endif %}"
-            aria-label="Dashboard">
-            <span class="material-symbols-outlined">dashboard</span>
-            <span>Dashboard</span>
-        </a>
-        <a href="{{ url_for('sysadmin.manage_teachers') }}"
-            class="{% if current_page in ['teachers', 'teacher_overview'] %}active{% endif %}" aria-label="Teachers">
-            <span class="material-symbols-outlined">group</span>
-            <span>Teachers</span>
-        </a>
-        <a href="{{ url_for('sysadmin.support_tickets') }}"
-            class="{% if current_page in ['support_tickets', 'user_reports', 'issues'] %}active{% endif %}"
-            aria-label="Support">
-            <span class="material-symbols-outlined">support_agent</span>
-            <span>Support</span>
-        </a>
-        <a href="{{ url_for('sysadmin.combined_logs') }}"
-            class="{% if current_page in ['logs', 'sysadmin_error_logs', 'network_activity'] %}active{% endif %}"
-            aria-label="Logs">
-            <span class="material-symbols-outlined">description</span>
-            <span>Logs</span>
-        </a>
-        <a href="{{ url_for('sysadmin.announcements') }}"
-            class="{% if current_page == 'announcements' %}active{% endif %}" aria-label="Announcements">
-            <span class="material-symbols-outlined">campaign</span>
-            <span>Announce</span>
-        </a>
-    </nav>
-
     <script type="application/json" id="flashMessages">
         {{ get_flashed_messages(with_categories=true) | tojson }}
     </script>

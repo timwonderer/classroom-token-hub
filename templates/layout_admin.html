@@ -285,26 +285,6 @@
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Mobile Bottom Navigation (hidden on desktop, shown when sidebar is hidden) -->
-    <nav class="mobile-bottom-nav d-md-none">
-        <a href="{{ url_for('admin.dashboard') }}" class="{{ 'active' if current_page == 'dashboard' else '' }}" aria-label="Dashboard">
-            <span class="material-symbols-outlined">dashboard</span>
-            <span>Dashboard</span>
-        </a>
-        <a href="{{ url_for('admin.attendance_log') }}" class="{{ 'active' if current_page == 'attendance' else '' }}" aria-label="Attendance">
-            <span class="material-symbols-outlined">fact_check</span>
-            <span>Attendance</span>
-        </a>
-        <a href="{{ url_for('admin.students') }}" class="{{ 'active' if current_page == 'students' else '' }}" aria-label="Students">
-            <span class="material-symbols-outlined">group</span>
-            <span>Students</span>
-        </a>
-        <a href="{{ url_for('admin.store_management') }}" class="{{ 'active' if current_page == 'store' else '' }}" aria-label="Store">
-            <span class="material-symbols-outlined">storefront</span>
-            <span>Store</span>
-        </a>
-    </nav>
-
     <script type="application/json" id="flashMessages">
         {{ get_flashed_messages(with_categories=true) | tojson }}
     </script>

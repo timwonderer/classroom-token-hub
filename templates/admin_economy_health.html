@@ -286,21 +286,21 @@
 
           {% if cwi_calc %}
           <div class="row g-3">
-            <div class="col-md-4">
+            <div class="col-6 col-md-4">
               <div class="p-3 bg-light rounded h-100">
                 <div class="text-muted small">Weekly CWI</div>
                 <div class="h3 mb-0">${{ "%.2f"|format(cwi_calc.cwi) }}</div>
                 <div class="small text-muted">Perfect-attendance earnings per week</div>
               </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-6 col-md-4">
               <div class="p-3 bg-light rounded h-100">
                 <div class="text-muted small">Pay Rate</div>
                 <div class="h4 mb-0">${{ "%.2f"|format(pay_rate_per_minute or 0) }} / min</div>
                 <div class="small text-muted">${{ "%.2f"|format((pay_rate_per_minute or 0) * 60) }} per hour</div>
               </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-12 col-md-4">
               <div class="p-3 bg-light rounded h-100">
                 <div class="text-muted small">Expected Hours/Week</div>
                 <form method="post" action="{{ url_for('admin.update_expected_weekly_hours') }}">

@@ -203,15 +203,15 @@
           <table class="table table-striped js-sortable">
             <thead>
               <tr>
-                <th>Title</th>
-                <th>Premium</th>
-                <th>Frequency</th>
-                <th>Claim Type</th>
-                <th>Waiting Period</th>
-                <th>Max Claims</th>
-                <th>Status</th>
-                <th>Enrolled</th>
-                <th>Actions</th>
+                <th class="text-nowrap">Title</th>
+                <th class="text-nowrap">Premium</th>
+                <th class="text-nowrap">Frequency</th>
+                <th class="text-nowrap">Claim Type</th>
+                <th class="text-nowrap">Waiting Period</th>
+                <th class="text-nowrap">Max Claims</th>
+                <th class="text-nowrap">Status</th>
+                <th class="text-nowrap">Enrolled</th>
+                <th class="text-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -243,23 +243,23 @@
                   </span>
                 </td>
                 <td>{{ policy.student_policies.filter_by(status='active').count() }} students</td>
-                <td>
+                <td class="text-nowrap">
                   <a href="{{ url_for('admin.edit_insurance_policy', policy_id=policy.id) }}"
-                    class="btn btn-sm btn-outline-primary mb-1">
-                    <span class="material-symbols-outlined">edit</span> Edit
+                    class="btn btn-sm btn-outline-primary mb-1" aria-label="Edit {{ policy.title }}">
+                    <span class="material-symbols-outlined" aria-hidden="true">edit</span><span class="d-none d-lg-inline"> Edit</span>
                   </a>
-                  <button class="btn btn-sm btn-outline-warning mb-1" data-bs-toggle="modal"
+                  <button class="btn btn-sm btn-outline-warning mb-1" aria-label="Mass Remove {{ policy.title }}" data-bs-toggle="modal"
                     data-bs-target="#massRemoveModal" data-policy-id="{{ policy.id }}"
                     data-policy-title="{{ policy.title }}"
                     data-active-count="{{ policy.student_policies.filter_by(status='active').count() }}">
-                    <span class="material-symbols-outlined">person_remove</span> Mass Remove
+                    <span class="material-symbols-outlined" aria-hidden="true">person_remove</span><span class="d-none d-lg-inline"> Mass Remove</span>
                   </button>
-                  <button class="btn btn-sm btn-outline-danger mb-1" data-bs-toggle="modal"
+                  <button class="btn btn-sm btn-outline-danger mb-1" aria-label="Delete {{ policy.title }}" data-bs-toggle="modal"
                     data-bs-target="#deletePolicyModal" data-policy-id="{{ policy.id }}"
                     data-policy-title="{{ policy.title }}"
                     data-active-count="{{ policy.student_policies.filter_by(status='active').count() }}"
                     data-pending-claims="{{ policy.claims.filter_by(status='pending').count() }}">
-                    <span class="material-symbols-outlined">delete</span> Delete
+                    <span class="material-symbols-outlined" aria-hidden="true">delete</span><span class="d-none d-lg-inline"> Delete</span>
                   </button>
                 </td>
               </tr>

@@ -4,62 +4,63 @@
 {% block content %}
 <div class="mt-4">
 
-
-
-
-    <form method="get" action="{{ url_for('admin.payroll_history') }}" class="form-inline mb-3">
-        <div class="form-group mr-2">
-            <label for="block">Class:</label>
-            <select name="block" id="block" class="form-control ml-2" style="width: 150px;">
+    <form method="get" action="{{ url_for('admin.payroll_history') }}" class="row g-2 align-items-end mb-3">
+        <div class="col-auto">
+            <label for="block" class="form-label">Class:</label>
+            <select name="block" id="block" class="form-select" style="width: 150px;">
                 <option value="">All</option>
                 {% for b in blocks %}
                 <option value="{{ b }}" {% if request.args.get('block') == b %}selected{% endif %}>{{ class_labels_by_block.get(b, b) }}</option>
                 {% endfor %}
             </select>
         </div>
-        <div class="form-group mr-2">
-            <label for="start">From:</label>
-            <input type="date" name="start_date" class="form-control ml-2" style="width: 150px;" value="{{ request.args.get('start_date', '') }}">
+        <div class="col-auto">
+            <label for="start_date" class="form-label">From:</label>
+            <input type="date" name="start_date" id="start_date" class="form-control" value="{{ request.args.get('start_date', '') }}">
         </div>
-        <div class="form-group mr-2">
-            <label for="end">To:</label>
-            <input type="date" name="end_date" class="form-control ml-2" style="width: 150px;" value="{{ request.args.get('end_date', '') }}">
+        <div class="col-auto">
+            <label for="end_date" class="form-label">To:</label>
+            <input type="date" name="end_date" id="end_date" class="form-control" value="{{ request.args.get('end_date', '') }}">
         </div>
-        <button type="submit" class="btn btn-primary ml-2">Filter</button>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary">Filter</button>
+        </div>
     </form>
 
-    <table class="table table-striped table-bordered">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Class</th>
-                <th>Student</th>
-                <th>Amount</th>
-                <th>Notes</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if payroll_history %}
-                {% for entry in payroll_history %}
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered">
+            <thead>
                 <tr>
-                    <td>
-                      {% if entry.timestamp %}
-                        <span class="local-timestamp" data-timestamp="{{ format_utc_iso(entry.timestamp) }}"></span>
-                      {% else %}
-                        —
-                      {% endif %}
-                    </td>
-                    <td>{{ entry.class_label }}</td>
-                    <td><a href="{{ url_for('admin.student_detail', student_id=entry.student_id, join_code=entry.join_code) }}">{{ entry.student.full_name if entry.student else entry.student_name }}</a></td>
-                    <td>${{ "%.2f"|format(entry.amount) }}</td>
-                    <td>{{ entry.notes }}</td>
+                    <th class="text-nowrap">Date</th>
+                    <th class="text-nowrap">Class</th>
+                    <th class="text-nowrap">Student</th>
+                    <th class="text-nowrap">Amount</th>
+                    <th>Notes</th>
                 </tr>
-                {% endfor %}
-            {% else %}
-                <tr><td colspan="5" class="text-center">No payroll records found.</td></tr>
-            {% endif %}
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                {% if payroll_history %}
+                    {% for entry in payroll_history %}
+                    <tr>
+                        <td class="text-nowrap">
+                          {% if entry.timestamp %}
+                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(entry.timestamp) }}"></span>
+                          {% else %}
+                            —
+                          {% endif %}
+                        </td>
+                        <td>{{ entry.class_label }}</td>
+                        <td><a href="{{ url_for('admin.student_detail', student_id=entry.student_id, join_code=entry.join_code) }}">{{ entry.student.full_name if entry.student else entry.student_name }}</a></td>
+                        <td class="text-nowrap">${{ "%.2f"|format(entry.amount) }}</td>
+                        <td>{{ entry.notes }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr><td colspan="5" class="text-center">No payroll records found.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <script>
