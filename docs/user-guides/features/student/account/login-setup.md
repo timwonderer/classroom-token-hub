@@ -21,7 +21,7 @@ Use this guide if you are new to the classroom economy and need to claim your st
 1. Go to the student login page and select the option to **Claim Account**.
 2. Enter the join code provided by your teacher.
 3. Enter your first name, last name, and your date of birth exactly as your teacher entered them on their roster.
-4. Follow the prompts to create a unique username and a secure 4-digit PIN.
+4. Follow the prompts to enter a theme word. The system creates your username by combining that word with a random 4-digit number and your initials, then asks you to set a secure 4-digit PIN.
 
 ### Logging In (Daily)
 1. Go to the student login page.

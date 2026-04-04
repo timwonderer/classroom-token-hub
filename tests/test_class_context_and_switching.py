@@ -10,7 +10,7 @@ Ensures that:
 import os
 import pytest
 from flask import session
-from app.models import Student, Admin, TeacherBlock, ClassEconomy, ClassMembership
+from app.models import Student, Admin, TeacherBlock, ClassEconomy, ClassMembership, Seat
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 
@@ -359,6 +359,31 @@ def test_switch_class_success(client, setup_multi_class_student):
     # Verify session was updated
     with client.session_transaction() as sess:
         assert sess['current_join_code'] == 'TEACHER2B'
+
+
+def test_switch_class_materializes_bridge_seat_when_missing(client, setup_multi_class_student):
+    """Switching classes should create the seat bridge if only TeacherBlock exists."""
+    from datetime import datetime, timezone
+    data = setup_multi_class_student
+    student = data['student']
+
+    Seat.query.delete()
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = "TEACHER1A"
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    response = client.post('/student/switch-class/TEACHER2B')
+
+    assert response.status_code == 200
+    with client.session_transaction() as sess:
+        assert sess['current_join_code'] == 'TEACHER2B'
+        assert sess.get('current_seat_id') is not None
+
+    bridge_seat = Seat.query.filter_by(student_id=student.id, join_code='TEACHER2B').first()
+    assert bridge_seat is not None
 
 
 def test_switch_class_unauthorized(client, setup_multi_class_student):

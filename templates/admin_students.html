@@ -404,6 +404,9 @@
                       <tr>
                         <td>
                           <span class="fw-bold">{{ seat.first_name }} {{ seat.last_initial }}.</span>
+                          {% if seat.is_teacher %}
+                          <div><small class="text-muted">Claim DOB: 01/01/2001</small></div>
+                          {% endif %}
                         </td>
                         <td>
                           <small class="text-muted">{{ seat.created_at.strftime('%Y-%m-%d') if seat.created_at else
@@ -411,6 +414,9 @@
                         </td>
                         <td>
                           <span class="badge bg-warning text-dark">Waiting for Claim</span>
+                          {% if seat.is_teacher %}
+                          <div><small class="text-muted">Teacher shadow account</small></div>
+                          {% endif %}
                         </td>
                         <td>
                           <button type="button" class="btn btn-sm btn-outline-danger"

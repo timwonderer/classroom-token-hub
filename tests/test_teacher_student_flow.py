@@ -1,8 +1,9 @@
 import pytest
-from app.models import Student, TeacherBlock, Transaction, StoreItem, StudentItem, Admin
+from app.models import Student, TeacherBlock, Transaction, StoreItem, StudentItem, Admin, Seat, User, ClassMembership, StudentTeacher
 from app.utils.analytics_engine import AnalyticsEngine
 from app import db
 import time
+import re
 from datetime import datetime, timezone, timedelta
 
 @pytest.fixture
@@ -75,9 +76,14 @@ def test_teacher_student_lifecycle(client, teacher, app):
         assert student is not None
         assert student.is_teacher is True
         assert student.block == block
+        with client.session_transaction() as sess:
+            claimed_user_id = sess.get('claimed_user_id')
+            claimed_seat_id = sess.get('claimed_seat_id')
+        assert claimed_user_id is not None
+        assert claimed_seat_id is not None
 
         # Step 2: Create Username
-        # Note: Form expects 'write_in_word'. Logic: adjective + word + dob + initials
+        # Note: Form expects 'write_in_word'. Logic: adjective + word + random 4 digits + initials
         response = client.post('/student/create-username', data={
             'write_in_word': 'hero'
         }, follow_redirects=True)
@@ -93,6 +99,7 @@ def test_teacher_student_lifecycle(client, teacher, app):
 
         assert generated_username is not None
         assert 'hero' in generated_username
+        assert re.search(r"\d{4}TS$", generated_username) is not None
 
         # Step 3: Setup PIN/Passphrase
         response = client.post('/student/setup-pin-passphrase', data={
@@ -288,13 +295,10 @@ def test_teacher_student_lifecycle(client, teacher, app):
         assert count == 1
 
 
-def test_teacher_student_unique_identity_per_join_code(client, teacher, app):
+def test_teacher_student_reuses_identity_across_join_codes(client, teacher, app):
     """
     Verify that a teacher claiming seats in two different classes
-    gets two separate Student records with independent balances.
-
-    This prevents the multi-tenancy leak where global dedup would
-    link teacher seats across classes to the same Student record.
+    reuses one credential identity and adds a seat per class.
     """
     with app.app_context():
         teacher = db.session.merge(teacher)
@@ -330,7 +334,21 @@ def test_teacher_student_unique_identity_per_join_code(client, teacher, app):
             'pin': '1234', 'passphrase': 'secure alpha'
         })
 
-        # Claim seat in class B (should create a NEW Student record)
+        student_link_count_after_a = StudentTeacher.query.filter_by(
+            student_id=student_a.id,
+            teacher_id=teacher.id,
+        ).count()
+        membership_count_after_a = ClassMembership.query.filter_by(
+            student_id=student_a.id,
+        ).count()
+        user_a = (
+            User.query.join(Seat, Seat.user_id == User.id)
+            .filter(Seat.student_id == student_a.id)
+            .first()
+        )
+        assert user_a is not None
+
+        # Claim seat in class B (should reuse the existing teacher-shadow identity)
         response = client.post('/student/claim-account', data={
             'join_code': join_code_b,
             'first_initial': 'T',
@@ -347,7 +365,29 @@ def test_teacher_student_unique_identity_per_join_code(client, teacher, app):
         assert student_b is not None
         assert student_b.is_teacher is True
 
-        # CRITICAL: Two separate Student records
-        assert student_a.id != student_b.id, (
-            "Teacher seats in different classes must create separate Student records"
+        user_b = (
+            User.query.join(Seat, Seat.user_id == User.id)
+            .filter(Seat.student_id == student_b.id)
+            .first()
         )
+        assert user_b is not None
+
+        # V2 invariant: one teacher-shadow identity, many class-local seats
+        assert student_a.id == student_b.id
+        assert user_a.id == user_b.id
+        assert user_a.public_id == user_b.public_id
+        assert StudentTeacher.query.filter_by(
+            student_id=student_a.id,
+            teacher_id=teacher.id,
+        ).count() == student_link_count_after_a
+        assert ClassMembership.query.filter_by(
+            student_id=student_a.id,
+        ).count() == membership_count_after_a + 1
+
+        teacher_seats = (
+            Seat.query.filter_by(student_id=student_a.id, user_id=user_a.id)
+            .order_by(Seat.join_code.asc())
+            .all()
+        )
+        assert len(teacher_seats) == 2
+        assert {seat.join_code for seat in teacher_seats} == {join_code_a, join_code_b}

@@ -213,6 +213,8 @@ def test_add_individual_student_creates_single_teacher_block_for_new_student(cli
     assert len(linked_seats) == 1
     assert linked_seats[0].is_claimed is False
     assert linked_seats[0].join_code == "SING001"
+    assert linked_seats[0].dob_sum_hash is not None
+    assert linked_seats[0].last_name_hash_by_part
 
 
 def test_add_manual_student_creates_single_teacher_block_for_new_student(client):
@@ -261,6 +263,145 @@ def test_add_manual_student_creates_single_teacher_block_for_new_student(client)
     assert len(linked_seats) == 1
     assert linked_seats[0].is_claimed is False
     assert linked_seats[0].join_code == "MANU001"
+    assert linked_seats[0].dob_sum_hash is not None
+    assert linked_seats[0].last_name_hash_by_part
+
+
+def test_add_individual_student_uses_selected_class_join_code_when_block_has_other_scope(client):
+    admin = Admin(username="student_scope_admin", totp_secret="secret")
+    db.session.add(admin)
+    db.session.flush()
+
+    create_class_scope(
+        teacher=admin,
+        join_code="OLDA001",
+        block="A",
+        teacher_block_teacher=admin,
+        teacher_block_claimed=False,
+    )
+    create_class_scope(
+        teacher=admin,
+        join_code="NEWA001",
+        block="A",
+        teacher_block_teacher=admin,
+        teacher_block_claimed=False,
+    )
+    db.session.commit()
+
+    _login_admin(client, admin.id)
+    with client.session_transaction() as sess:
+        sess["current_join_code"] = "NEWA001"
+
+    response = client.post(
+        "/admin/student/add-individual",
+        data={
+            "first_name": "Scoped",
+            "last_name": "Student",
+            "dob": "2010-01-02",
+            "block": "A",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+
+    linked_seat = (
+        TeacherBlock.query
+        .filter_by(teacher_id=admin.id, block="A")
+        .filter(TeacherBlock.student_id.isnot(None))
+        .order_by(TeacherBlock.id.desc())
+        .first()
+    )
+    assert linked_seat is not None
+    assert linked_seat.join_code == "NEWA001"
+
+
+def test_add_individual_student_create_new_class_section_mints_new_join_code(client):
+    admin = Admin(username="student_new_class_admin", totp_secret="secret")
+    db.session.add(admin)
+    db.session.flush()
+
+    create_class_scope(
+        teacher=admin,
+        join_code="CURRA01",
+        block="A",
+        teacher_block_teacher=admin,
+        teacher_block_claimed=False,
+    )
+    db.session.commit()
+
+    _login_admin(client, admin.id)
+    with client.session_transaction() as sess:
+        sess["current_join_code"] = "CURRA01"
+
+    initial_class_count = ClassEconomy.query.count()
+
+    response = client.post(
+        "/admin/student/add-individual",
+        data={
+            "first_name": "Brand",
+            "last_name": "Newclass",
+            "dob": "2011-02-03",
+            "block_select": "__CREATE_NEW__",
+            "block": "B",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert ClassEconomy.query.count() == initial_class_count + 1
+
+    linked_seat = (
+        TeacherBlock.query
+        .filter_by(teacher_id=admin.id, block="B")
+        .filter(TeacherBlock.student_id.isnot(None))
+        .order_by(TeacherBlock.id.desc())
+        .first()
+    )
+    assert linked_seat is not None
+    assert linked_seat.join_code != "CURRA01"
+    assert ClassEconomy.query.filter_by(join_code=linked_seat.join_code).first() is not None
+
+    teacher_student_seat = TeacherBlock.query.filter_by(
+        teacher_id=admin.id,
+        join_code=linked_seat.join_code,
+        is_teacher=True,
+    ).first()
+    assert teacher_student_seat is not None
+    assert teacher_student_seat.class_label == "B"
+
+    with client.session_transaction() as sess:
+        assert sess["current_join_code"] == linked_seat.join_code
+
+
+def test_admin_students_surfaces_teacher_shadow_claim_dob(client):
+    admin = Admin(username="teacher_shadow_info_admin", totp_secret="secret")
+    db.session.add(admin)
+    db.session.flush()
+
+    create_class_scope(
+        teacher=admin,
+        join_code="SHADOW1",
+        block="B",
+        teacher_block_teacher=admin,
+        teacher_block_claimed=False,
+    )
+    db.session.commit()
+
+    from app.routes.admin import _ensure_teacher_student_seat
+
+    _ensure_teacher_student_seat(admin.id, "SHADOW1", "B")
+    db.session.commit()
+
+    _login_admin(client, admin.id)
+
+    response = client.get("/admin/students")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    assert "Join Code for B" in html
+    assert "Teacher S." in html
+    assert "Claim DOB: 01/01/2001" in html
 
 
 def test_store_create_requires_current_class_context(client):

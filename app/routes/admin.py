@@ -1369,6 +1369,10 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
     ).first()
 
     if existing_seat:
+        existing_seat.block = block
+        existing_seat.class_id = existing_seat.class_id or class_id
+        if block and existing_seat.class_label != block:
+            existing_seat.class_label = block
         return
 
     class_id = _ensure_join_code_anchors(teacher_id, join_code, class_label=block)
@@ -1390,7 +1394,7 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
         block=block,
         join_code=join_code,
         class_id=class_id,
-        class_label=f"Teacher's Student Account",
+        class_label=block,
         first_name=first_name,
         last_initial=last_initial,
         last_name_hash_by_part=last_name_hash_by_part,
@@ -1478,7 +1482,49 @@ def _ensure_join_code_anchors(teacher_id, join_code, class_label=None):
     return economy.class_id
 
 
-def _link_student_to_admin(student: Student, admin_id):
+def _generate_unique_teacher_join_code(block: str) -> str:
+    """Generate a teacher-scoped join code, falling back to a timestamp suffix."""
+    for _ in range(MAX_JOIN_CODE_RETRIES):
+        candidate = generate_join_code()
+        if not ClassEconomy.query.filter_by(join_code=candidate).first():
+            return candidate
+
+    block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
+    timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
+    return f"B{block_initial}{timestamp_suffix:04d}"
+
+
+def _resolve_student_add_class_context(admin_id: int | None, block: str) -> dict | None:
+    """Resolve the target class for add-student flows, creating one when requested."""
+    if not admin_id:
+        return None
+
+    block_select = (request.form.get('block_select') or '').strip()
+    if block_select != '__CREATE_NEW__':
+        return _resolve_admin_class_context(admin_id)
+
+    if not block:
+        return None
+
+    join_code = _generate_unique_teacher_join_code(block)
+    class_id = _ensure_join_code_anchors(admin_id, join_code, class_label=block)
+    _ensure_teacher_student_seat(admin_id, join_code, block)
+    session['current_join_code'] = join_code
+    return {
+        'join_code': join_code,
+        'class_id': class_id,
+    }
+
+
+def _link_student_to_admin(
+    student: Student,
+    admin_id,
+    *,
+    join_code: str | None = None,
+    class_id: str | None = None,
+    class_label: str | None = None,
+    block: str | None = None,
+):
     """
     Ensure the given admin is associated with the student.
     Creates both StudentTeacher link AND TeacherBlock record with join_code.
@@ -1486,7 +1532,9 @@ def _link_student_to_admin(student: Student, admin_id):
     if not admin_id:
         return
 
-    if not student.block:
+    target_block = (block or student.block or "").strip().upper()
+
+    if not target_block:
         current_app.logger.warning(
             f"Selected student has no block assigned, skipping TeacherBlock creation"
         )
@@ -1495,46 +1543,73 @@ def _link_student_to_admin(student: Student, admin_id):
     # 1. Create StudentTeacher link
     existing_link = StudentTeacher.query.filter_by(student_id=student.id, teacher_id=admin_id).first()
     if not existing_link:
-        db.session.add(StudentTeacher(student_id=student.id, teacher_id=admin_id))
+        db.session.add(StudentTeacher(student_id=student.id, teacher_id=admin_id, join_code=join_code))
+    elif join_code and not existing_link.join_code:
+        existing_link.join_code = join_code
 
-    # 2. Create or update TeacherBlock record with join_code
-    # Check if TeacherBlock exists for this student + teacher + block
-    existing_teacher_block = TeacherBlock.query.filter_by(
-        teacher_id=admin_id,
-        student_id=student.id,
-        block=student.block
-    ).first()
+    target_join_code = join_code
+    target_class_id = class_id
+    target_class_label = class_label
 
-    if not existing_teacher_block:
+    if target_join_code:
+        if not target_class_id:
+            target_class_id = _resolve_class_id(admin_id, target_join_code)
+        if target_class_label is None:
+            current_scope_block = TeacherBlock.query.filter_by(
+                teacher_id=admin_id,
+                join_code=target_join_code,
+            ).first()
+            if current_scope_block and current_scope_block.class_label:
+                target_class_label = current_scope_block.class_label
+    else:
         # Find or create a join_code for this teacher+block combo
         # Look for any existing TeacherBlock for this teacher+block (even unclaimed ones)
         any_block_record = TeacherBlock.query.filter_by(
             teacher_id=admin_id,
-            block=student.block
+            block=target_block
         ).first()
 
         if any_block_record and any_block_record.join_code:
             # Reuse existing join_code for this block
-            join_code = any_block_record.join_code
-            # Preserve class_label if it exists
-            class_label = any_block_record.class_label
+            target_join_code = any_block_record.join_code
+            target_class_label = any_block_record.class_label
         else:
             # Generate new join_code for this teacher+block
-            join_code = generate_join_code()
-            class_label = None
-        class_id = _resolve_class_id(admin_id, join_code)
+            target_join_code = generate_join_code()
+        target_class_id = _resolve_class_id(admin_id, target_join_code)
 
+    # 2. Create or update TeacherBlock record with join_code
+    existing_teacher_block_query = TeacherBlock.query.filter_by(
+        teacher_id=admin_id,
+        student_id=student.id,
+    )
+    if target_join_code:
+        existing_teacher_block_query = existing_teacher_block_query.filter_by(join_code=target_join_code)
+    else:
+        existing_teacher_block_query = existing_teacher_block_query.filter_by(block=target_block)
+    existing_teacher_block = existing_teacher_block_query.first()
+
+    if not existing_teacher_block and target_join_code:
+        existing_teacher_block = TeacherBlock.query.filter_by(
+            teacher_id=admin_id,
+            join_code=target_join_code,
+            block=target_block,
+            is_claimed=False,
+            first_half_hash=student.first_half_hash,
+        ).first()
+
+    if not existing_teacher_block:
         # Ensure ClassEconomy record exists before creating TeacherBlock
-        _ensure_join_code_anchors(admin_id, join_code, class_label=class_label)
+        _ensure_join_code_anchors(admin_id, target_join_code, class_label=target_class_label)
 
         # Create new TeacherBlock record
         new_teacher_block = TeacherBlock(
             teacher_id=admin_id,
             student_id=student.id,
-            block=student.block,
-            join_code=join_code,
-            class_id=class_id,
-            class_label=class_label,  # Preserve class_label if it exists
+            block=target_block,
+            join_code=target_join_code,
+            class_id=target_class_id,
+            class_label=target_class_label,  # Preserve class_label if it exists
             is_claimed=True,  # Mark as claimed since teacher manually added them
             first_name=student.first_name,
             last_initial=student.last_initial,
@@ -1545,12 +1620,15 @@ def _link_student_to_admin(student: Student, admin_id):
         )
         db.session.add(new_teacher_block)
         current_app.logger.info(
-            f"Created TeacherBlock for a student for teacher {admin_id} in block {student.block}"
+            f"Created TeacherBlock for a student for teacher {admin_id} in block {target_block}"
         )
     elif not existing_teacher_block.is_claimed:
         # TeacherBlock exists but not claimed - mark as claimed now
         existing_teacher_block.is_claimed = True
         existing_teacher_block.student_id = student.id
+        existing_teacher_block.class_id = existing_teacher_block.class_id or target_class_id
+        if target_class_label and not existing_teacher_block.class_label:
+            existing_teacher_block.class_label = target_class_label
         current_app.logger.info(
             f"Claimed existing TeacherBlock for student with join_code {existing_teacher_block.join_code}"
         )
@@ -4983,27 +5061,15 @@ def add_individual_student():
         last_name_parts = hash_last_name_parts(last_name, salt)
 
         current_admin_id = session.get("admin_id")
-        # Get or generate join code for this block.
-        existing_tb = TeacherBlock.query.filter_by(
-            teacher_id=current_admin_id,
-            block=block
-        ).first()
-        if existing_tb:
-            join_code = existing_tb.join_code
-        else:
-            join_code = None
-            for _ in range(MAX_JOIN_CODE_RETRIES):
-                candidate = generate_join_code()
-                if not TeacherBlock.query.filter_by(join_code=candidate).first():
-                    join_code = candidate
-                    break
-            else:
-                block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
-                timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
-                join_code = f"B{block_initial}{timestamp_suffix:04d}"
+        class_context = _resolve_student_add_class_context(current_admin_id, block)
+        if not class_context:
+            flash("Select a class before making changes.", "error")
+            return redirect(url_for('admin.students'))
 
-        class_id = _resolve_class_id(current_admin_id, join_code)
+        join_code = class_context['join_code']
+        class_id = class_context['class_id']
         dedupe_key = _build_teacher_block_dedupe_key(class_id, first_name, last_name, dob_date)
+        dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
 
         existing_seat_in_class = TeacherBlock.query.filter_by(
             teacher_id=current_admin_id,
@@ -5023,37 +5089,42 @@ def add_individual_student():
 
         # Check if any existing student matches (using new credential system)
         for existing_student in potential_duplicates:
-            if existing_student.first_name == first_name:
-                # Verify credential matches
-                credential_matches, is_primary, canonical_hash = match_claim_hash(
-                    existing_student.first_half_hash,
-                    first_initial,
-                    last_initial,
-                    dob_sum,
-                    existing_student.salt,
-                )
+            # Verify credential matches
+            credential_matches, is_primary, canonical_hash = match_claim_hash(
+                existing_student.first_half_hash,
+                first_initial,
+                last_initial,
+                dob_sum,
+                existing_student.salt,
+            )
 
-                if credential_matches:
-                    if canonical_hash and not is_primary:
-                        existing_student.first_half_hash = canonical_hash
-                    # Student already exists - link to this teacher instead of creating duplicate
-                    current_admin_id = session.get("admin_id")
+            if credential_matches:
+                if canonical_hash and not is_primary:
+                    existing_student.first_half_hash = canonical_hash
+                # Student already exists globally. Only block if this specific
+                # class already has a seat for them; teacher-level linkage alone
+                # does not mean they are already enrolled in the selected class.
+                current_admin_id = session.get("admin_id")
+                existing_class_seat = TeacherBlock.query.filter_by(
+                    teacher_id=current_admin_id,
+                    student_id=existing_student.id,
+                    join_code=join_code,
+                ).first()
 
-                    # Check if this teacher is already linked to this student
-                    existing_link = StudentTeacher.query.filter_by(
-                        student_id=existing_student.id,
-                        teacher_id=current_admin_id
-                    ).first()
+                if existing_class_seat:
+                    flash(f"Student {first_name} {last_name} is already in your class.", "info")
+                else:
+                    _link_student_to_admin(
+                        existing_student,
+                        current_admin_id,
+                        join_code=join_code,
+                        class_id=class_id,
+                        block=block,
+                    )
+                    db.session.commit()
+                    flash(f"Student {first_name} {last_name} already exists. Added to your class.", "success")
 
-                    if existing_link:
-                        flash(f"Student {first_name} {last_name} is already in your class.", "info")
-                    else:
-                        # Link this teacher to the existing student
-                        _link_student_to_admin(existing_student, current_admin_id)
-                        db.session.commit()
-                        flash(f"Student {first_name} {last_name} already exists. Added to your class.", "success")
-
-                    return redirect(url_for('admin.students'))
+                return redirect(url_for('admin.students'))
 
         # Create student
         new_student = Student(
@@ -5070,7 +5141,7 @@ def add_individual_student():
 
         db.session.add(new_student)
         db.session.flush()
-        db.session.add(StudentTeacher(student_id=new_student.id, teacher_id=current_admin_id))
+        db.session.add(StudentTeacher(student_id=new_student.id, teacher_id=current_admin_id, join_code=join_code))
         
         # Ensure ClassEconomy record exists before creating TeacherBlock
         _ensure_join_code_anchors(current_admin_id, join_code)
@@ -5080,6 +5151,8 @@ def add_individual_student():
             block=block,
             first_name=first_name,
             last_initial=last_initial,
+            last_name_hash_by_part=last_name_parts,
+            dob_sum_hash=dob_sum_hash,
             salt=salt,
             first_half_hash=first_half_hash,
             join_code=join_code,
@@ -5145,27 +5218,15 @@ def add_manual_student():
         last_name_parts = hash_last_name_parts(last_name, salt)
 
         current_admin_id = session.get("admin_id")
-        # Get or generate join code for this block.
-        existing_tb = TeacherBlock.query.filter_by(
-            teacher_id=current_admin_id,
-            block=block
-        ).first()
-        if existing_tb:
-            join_code = existing_tb.join_code
-        else:
-            join_code = None
-            for _ in range(MAX_JOIN_CODE_RETRIES):
-                candidate = generate_join_code()
-                if not TeacherBlock.query.filter_by(join_code=candidate).first():
-                    join_code = candidate
-                    break
-            else:
-                block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
-                timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
-                join_code = f"B{block_initial}{timestamp_suffix:04d}"
+        class_context = _resolve_student_add_class_context(current_admin_id, block)
+        if not class_context:
+            flash("Select a class before making changes.", "error")
+            return redirect(url_for('admin.students'))
 
-        class_id = _resolve_class_id(current_admin_id, join_code)
+        join_code = class_context['join_code']
+        class_id = class_context['class_id']
         dedupe_key = _build_teacher_block_dedupe_key(class_id, first_name, last_name, dob_date)
+        dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
 
         existing_seat_in_class = TeacherBlock.query.filter_by(
             teacher_id=current_admin_id,
@@ -5183,30 +5244,37 @@ def add_manual_student():
         ).all()
 
         for existing_student in potential_duplicates:
-            if existing_student.first_name == first_name:
-                # Verify credential matches (canonical + legacy)
-                credential_matches, is_primary, canonical_hash = match_claim_hash(
-                    existing_student.first_half_hash,
-                    first_initial,
-                    last_initial,
-                    dob_sum,
-                    existing_student.salt,
-                )
+            # Verify credential matches (canonical + legacy)
+            credential_matches, is_primary, canonical_hash = match_claim_hash(
+                existing_student.first_half_hash,
+                first_initial,
+                last_initial,
+                dob_sum,
+                existing_student.salt,
+            )
 
-                if credential_matches:
-                    if canonical_hash and not is_primary:
-                        existing_student.first_half_hash = canonical_hash
+            if credential_matches:
+                if canonical_hash and not is_primary:
+                    existing_student.first_half_hash = canonical_hash
+                current_admin_id = session.get("admin_id")
+                existing_class_seat = TeacherBlock.query.filter_by(
+                    teacher_id=current_admin_id,
+                    student_id=existing_student.id,
+                    join_code=join_code,
+                ).first()
+                if existing_class_seat:
+                    flash(f"Student {first_name} {last_name} is already in your class.", "info")
+                else:
                     flash(f"Student {first_name} {last_name} already exists. Linking to your class.", "warning")
-                    # Link to this teacher
-                    current_admin_id = session.get("admin_id")
-                    existing_link = StudentTeacher.query.filter_by(
-                        student_id=existing_student.id,
-                        teacher_id=current_admin_id
-                    ).first()
-                    if not existing_link:
-                        _link_student_to_admin(existing_student, current_admin_id)
-                        db.session.commit()
-                    return redirect(url_for('admin.students'))
+                    _link_student_to_admin(
+                        existing_student,
+                        current_admin_id,
+                        join_code=join_code,
+                        class_id=class_id,
+                        block=block,
+                    )
+                    db.session.commit()
+                return redirect(url_for('admin.students'))
 
         # Create student
         new_student = Student(
@@ -5238,7 +5306,7 @@ def add_manual_student():
 
         db.session.add(new_student)
         db.session.flush()
-        db.session.add(StudentTeacher(student_id=new_student.id, teacher_id=current_admin_id))
+        db.session.add(StudentTeacher(student_id=new_student.id, teacher_id=current_admin_id, join_code=join_code))
         
         # Ensure ClassEconomy record exists before creating TeacherBlock
         _ensure_join_code_anchors(current_admin_id, join_code)
@@ -5251,6 +5319,8 @@ def add_manual_student():
             block=block,
             first_name=first_name,
             last_initial=last_initial,
+            last_name_hash_by_part=None if is_claimed else last_name_parts,
+            dob_sum_hash=None if is_claimed else dob_sum_hash,
             salt=salt,
             first_half_hash=first_half_hash,
             join_code=join_code,

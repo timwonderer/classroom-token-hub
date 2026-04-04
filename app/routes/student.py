@@ -25,7 +25,8 @@ from app.extensions import db, limiter
 from app.models import (
     Student, Transaction, TransactionStatus, TapEvent, StoreItem, StoreItemBlock, StudentItem,
     RentSettings, RentPayment, InsurancePolicy, StudentInsurance, InsuranceClaim,
-    BankingSettings, UserReport, FeatureSettings, Issue, Seat, User, _quantize_currency
+    BankingSettings, UserReport, FeatureSettings, Issue, Seat, User, StudentTeacher,
+    ClassMembership, ClassEconomy, _quantize_currency
 )
 from app.auth import (
     admin_required,
@@ -111,7 +112,28 @@ def _find_linked_user_for_student(student_id: int | None) -> User | None:
     )
 
 
-def _get_or_create_bridge_seat_for_teacher_block(teacher_block, student_id: int | None = None) -> Seat | None:
+def _get_or_create_setup_user_for_student(student_id: int | None) -> User | None:
+    if not student_id:
+        return None
+
+    user = _find_linked_user_for_student(student_id)
+    if user:
+        return user
+
+    user = User(
+        username=f"pending_{student_id}_{secrets.token_urlsafe(8)}",
+        password_hash=generate_password_hash(secrets.token_urlsafe(24)),
+    )
+    db.session.add(user)
+    db.session.flush()
+    return user
+
+
+def _get_or_create_bridge_seat_for_teacher_block(
+    teacher_block,
+    student_id: int | None = None,
+    user_id: int | None = None,
+) -> Seat | None:
     if not teacher_block or not teacher_block.join_code:
         return None
 
@@ -124,6 +146,8 @@ def _get_or_create_bridge_seat_for_teacher_block(teacher_block, student_id: int 
         .first()
     )
     if seat:
+        if user_id and seat.user_id != user_id:
+            seat.user_id = user_id
         if seat.block_identifier is None and teacher_block.block:
             seat.block_identifier = teacher_block.block
         if seat.block is None and teacher_block.block:
@@ -133,7 +157,7 @@ def _get_or_create_bridge_seat_for_teacher_block(teacher_block, student_id: int 
         return seat
 
     seat = Seat(
-        user_id=None,
+        user_id=user_id,
         class_id=getattr(teacher_block, "class_id", None),
         role='student',
         block_identifier=teacher_block.block,
@@ -145,6 +169,73 @@ def _get_or_create_bridge_seat_for_teacher_block(teacher_block, student_id: int 
     db.session.add(seat)
     db.session.flush()
     return seat
+
+
+def _find_existing_teacher_shadow_student(teacher_id: int | None) -> Student | None:
+    if not teacher_id:
+        return None
+
+    return (
+        Student.query
+        .join(StudentTeacher, StudentTeacher.student_id == Student.id)
+        .filter(
+            StudentTeacher.teacher_id == teacher_id,
+            Student.is_teacher.is_(True),
+        )
+        .order_by(Student.id.asc())
+        .first()
+    )
+
+
+def _ensure_student_class_membership(student_id: int | None, join_code: str | None) -> None:
+    if not student_id or not join_code:
+        return
+
+    existing_membership = ClassMembership.query.filter_by(
+        join_code=join_code,
+        student_id=student_id,
+    ).first()
+    if existing_membership:
+        return
+
+    db.session.add(ClassMembership(
+        join_code=join_code,
+        student_id=student_id,
+        role='student',
+    ))
+
+
+def _ensure_class_anchor_for_teacher_block(teacher_block) -> str | None:
+    """Backfill the canonical class row for legacy seats before v2 membership writes."""
+    if not teacher_block or not teacher_block.join_code or not teacher_block.teacher_id:
+        return getattr(teacher_block, "class_id", None) if teacher_block else None
+
+    class_row = ClassEconomy.query.filter_by(join_code=teacher_block.join_code).first()
+    if class_row is None:
+        class_row = ClassEconomy(
+            join_code=teacher_block.join_code,
+            teacher_id=teacher_block.teacher_id,
+            created_by_admin_id=teacher_block.teacher_id,
+            display_name=teacher_block.block,
+            class_id=getattr(teacher_block, "class_id", None),
+        )
+        db.session.add(class_row)
+        db.session.flush()
+
+    teacher_block.class_id = teacher_block.class_id or class_row.class_id
+
+    admin_membership = ClassMembership.query.filter_by(
+        join_code=teacher_block.join_code,
+        admin_id=teacher_block.teacher_id,
+    ).first()
+    if not admin_membership:
+        db.session.add(ClassMembership(
+            join_code=teacher_block.join_code,
+            admin_id=teacher_block.teacher_id,
+            role='admin',
+        ))
+
+    return class_row.class_id
 
 
 def _get_claimed_setup_state():
@@ -815,12 +906,17 @@ def claim_account():
         # Check if this student already has an account (claiming from another teacher).
         # Use first_half_hash for matching — it stays set even after dob_sum is cleaned up
         # post-claim, so this lookup works regardless of cleanup state.
-        existing_student = Student.query.filter_by(
-            first_half_hash=matched_seat.first_half_hash
-        ).first()
+        existing_student = None
+        if matched_seat.is_teacher:
+            existing_student = _find_existing_teacher_shadow_student(matched_seat.teacher_id)
+        if not existing_student:
+            existing_student = Student.query.filter_by(
+                first_half_hash=matched_seat.first_half_hash
+            ).first()
 
         if existing_student:
             # Student already exists - link this seat to existing student
+            _ensure_class_anchor_for_teacher_block(matched_seat)
             matched_seat.student_id = existing_student.id
             matched_seat.is_claimed = True
             matched_seat.claimed_at = utc_now()
@@ -837,9 +933,18 @@ def claim_account():
             if not existing_link:
                 link = StudentTeacher(
                     student_id=existing_student.id,
-                    teacher_id=matched_seat.teacher_id
+                    teacher_id=matched_seat.teacher_id,
+                    join_code=matched_seat.join_code,
                 )
                 db.session.add(link)
+
+            _ensure_student_class_membership(existing_student.id, matched_seat.join_code)
+            linked_user = _get_or_create_setup_user_for_student(existing_student.id)
+            bridge_seat = _get_or_create_bridge_seat_for_teacher_block(
+                matched_seat,
+                existing_student.id,
+                linked_user.id if linked_user else None,
+            )
 
             db.session.commit()
 
@@ -849,12 +954,6 @@ def claim_account():
                 return redirect(url_for('student.login'))
             else:
                 # Continue setup process
-                bridge_seat = _get_or_create_bridge_seat_for_teacher_block(matched_seat, existing_student.id)
-                linked_user = _find_linked_user_for_student(existing_student.id)
-                if bridge_seat and linked_user and bridge_seat.user_id != linked_user.id:
-                    bridge_seat.user_id = linked_user.id
-                db.session.commit()
-
                 session['claimed_student_id'] = existing_student.id
                 session['claimed_seat_id'] = bridge_seat.id if bridge_seat else None
                 session['claimed_user_id'] = linked_user.id if linked_user else None
@@ -865,6 +964,7 @@ def claim_account():
 
         # New student - create Student record
         # Generate second_half_hash (DOB hash) for backward compatibility
+        _ensure_class_anchor_for_teacher_block(matched_seat)
         second_half_hash = hash_hmac(str(dob_sum).encode(), matched_seat.salt)
 
         new_student = Student(
@@ -887,12 +987,17 @@ def claim_account():
             db.session.rollback()
 
             # Look up the existing student directly by first_half_hash
-            existing_by_hash = Student.query.filter_by(
-                first_half_hash=matched_seat.first_half_hash
-            ).first()
+            existing_by_hash = None
+            if matched_seat.is_teacher:
+                existing_by_hash = _find_existing_teacher_shadow_student(matched_seat.teacher_id)
+            if not existing_by_hash:
+                existing_by_hash = Student.query.filter_by(
+                    first_half_hash=matched_seat.first_half_hash
+                ).first()
 
             if existing_by_hash:
                 # Link this seat to the existing student
+                _ensure_class_anchor_for_teacher_block(matched_seat)
                 matched_seat.student_id = existing_by_hash.id
                 matched_seat.is_claimed = True
                 matched_seat.claimed_at = utc_now()
@@ -909,9 +1014,18 @@ def claim_account():
                 if not existing_link:
                     link = StudentTeacher(
                         student_id=existing_by_hash.id,
-                        teacher_id=matched_seat.teacher_id
+                        teacher_id=matched_seat.teacher_id,
+                        join_code=matched_seat.join_code,
                     )
                     db.session.add(link)
+
+                _ensure_student_class_membership(existing_by_hash.id, matched_seat.join_code)
+                linked_user = _get_or_create_setup_user_for_student(existing_by_hash.id)
+                bridge_seat = _get_or_create_bridge_seat_for_teacher_block(
+                    matched_seat,
+                    existing_by_hash.id,
+                    linked_user.id if linked_user else None,
+                )
 
                 db.session.commit()
 
@@ -919,12 +1033,6 @@ def claim_account():
                     flash("This seat has been linked to your existing account. Please log in.", "claim")
                     return redirect(url_for('student.login'))
                 else:
-                    bridge_seat = _get_or_create_bridge_seat_for_teacher_block(matched_seat, existing_by_hash.id)
-                    linked_user = _find_linked_user_for_student(existing_by_hash.id)
-                    if bridge_seat and linked_user and bridge_seat.user_id != linked_user.id:
-                        bridge_seat.user_id = linked_user.id
-                    db.session.commit()
-
                     session['claimed_student_id'] = existing_by_hash.id
                     session['claimed_seat_id'] = bridge_seat.id if bridge_seat else None
                     session['claimed_user_id'] = linked_user.id if linked_user else None
@@ -952,16 +1060,23 @@ def claim_account():
         # Create StudentTeacher link
         link = StudentTeacher(
             student_id=new_student.id,
-            teacher_id=matched_seat.teacher_id
+            teacher_id=matched_seat.teacher_id,
+            join_code=matched_seat.join_code,
         )
         db.session.add(link)
-        bridge_seat = _get_or_create_bridge_seat_for_teacher_block(matched_seat, new_student.id)
+        _ensure_student_class_membership(new_student.id, matched_seat.join_code)
+        linked_user = _get_or_create_setup_user_for_student(new_student.id)
+        bridge_seat = _get_or_create_bridge_seat_for_teacher_block(
+            matched_seat,
+            new_student.id,
+            linked_user.id if linked_user else None,
+        )
         db.session.commit()
 
         # Start setup flow
         session['claimed_student_id'] = new_student.id
         session['claimed_seat_id'] = bridge_seat.id if bridge_seat else None
-        session.pop('claimed_user_id', None)
+        session['claimed_user_id'] = linked_user.id if linked_user else None
         session.pop('generated_username', None)
         session.pop('theme_prompt', None)
         session.pop('theme_slug', None)
@@ -998,12 +1113,9 @@ def create_username():
             "lucky", "mighty", "noble", "quick", "proud", "silly", "witty", "zesty", "sunny", "chill"
         ]
         adjective = random.choice(adjectives)
-        # Recovery resets use a transient random 4-digit segment; it is never
-        # stored separately and only survives as part of the username hash.
-        if student.recovery_status == 'to_be_claimed':
-            numeric_segment = random.randint(1000, 9999)
-        else:
-            numeric_segment = student.id or 0
+        # Username generation uses a transient backend-generated 4-digit
+        # segment so setup never derives usernames from DOB or stable IDs.
+        numeric_segment = random.randint(1000, 9999)
         initials = f"{student.first_name[0].upper()}{student.last_initial.upper()}"
         username = f"{adjective}{write_in_word}{numeric_segment}{initials}"
         # Save username plaintext in session for display
@@ -1252,6 +1364,7 @@ def add_class():
                 return redirect(_get_return_target())
 
         # Link the seat to the student and null out its PII (no longer needed post-claim)
+        _ensure_class_anchor_for_teacher_block(matched_seat)
         matched_seat.student_id = student.id
         matched_seat.is_claimed = True
         matched_seat.claimed_at = utc_now()
@@ -1262,9 +1375,18 @@ def add_class():
         if not existing_link:
             link = StudentTeacher(
                 student_id=student.id,
-                teacher_id=matched_seat.teacher_id
+                teacher_id=matched_seat.teacher_id,
+                join_code=matched_seat.join_code,
             )
             db.session.add(link)
+
+        _ensure_student_class_membership(student.id, matched_seat.join_code)
+        linked_user = _get_or_create_setup_user_for_student(student.id)
+        _get_or_create_bridge_seat_for_teacher_block(
+            matched_seat,
+            student.id,
+            linked_user.id if linked_user else None,
+        )
 
         # Update student's block to include the new block if not already there
         current_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
@@ -4227,8 +4349,21 @@ def switch_class(join_code):
     if not seat:
         return jsonify(status="error", message="You don't have access to that class."), 403
 
+    _ensure_class_anchor_for_teacher_block(seat)
+    linked_user = _get_or_create_setup_user_for_student(student.id)
+    bridge_seat = _get_or_create_bridge_seat_for_teacher_block(
+        seat,
+        student.id,
+        linked_user.id if linked_user else None,
+    )
+    db.session.commit()
+
     # Update session with new join code
     session['current_join_code'] = join_code
+    if bridge_seat:
+        session['current_seat_id'] = bridge_seat.id
+        if bridge_seat.user_id:
+            session['student_user_id'] = bridge_seat.user_id
     sync_student_session_context(student, join_code=join_code)
 
     # Get teacher name for response
