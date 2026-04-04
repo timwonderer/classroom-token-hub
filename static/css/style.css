@@ -1591,6 +1591,20 @@ table.js-sortable thead th:hover .sort-indicator {
         word-break: break-word;
     }
 
+    /* Reset word-breaking inside scrollable tables so text-nowrap works */
+    .table-responsive th,
+    .table-responsive td {
+        overflow-wrap: normal;
+        word-break: normal;
+    }
+
+    /* Ensure text-nowrap can't be overridden by ancestor word-break rules */
+    .text-nowrap {
+        white-space: nowrap !important;
+        overflow-wrap: normal !important;
+        word-break: normal !important;
+    }
+
     .card .d-flex > *,
     .alert .d-flex > *,
     .modal .d-flex > *,
