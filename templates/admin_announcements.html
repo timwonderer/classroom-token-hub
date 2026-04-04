@@ -112,17 +112,18 @@
                         <button type="button" class="btn btn-sm btn-outline-{{ 'success' if not announcement.is_active else 'secondary' }}"
                                 onclick="toggleAnnouncement({{ announcement.id }})"
                                 id="toggle-btn-{{ announcement.id }}"
-                                title="{{ 'Activate' if not announcement.is_active else 'Deactivate' }}">
-                            <span class="material-symbols-outlined">{{ 'visibility' if not announcement.is_active else 'visibility_off' }}</span>
+                                aria-label="{{ 'Activate' if not announcement.is_active else 'Deactivate' }} {{ announcement.title }}">
+                            <span class="material-symbols-outlined" aria-hidden="true">{{ 'visibility' if not announcement.is_active else 'visibility_off' }}</span>
                             <span class="d-none d-lg-inline">{{ 'Activate' if not announcement.is_active else 'Deactivate' }}</span>
                         </button>
                         <a href="{{ url_for('admin.announcement_edit', announcement_id=announcement.id) }}"
-                           class="btn btn-sm btn-outline-primary" title="Edit">
-                            <span class="material-symbols-outlined">edit</span><span class="d-none d-lg-inline"> Edit</span>
+                           class="btn btn-sm btn-outline-primary" aria-label="Edit {{ announcement.title }}">
+                            <span class="material-symbols-outlined" aria-hidden="true">edit</span><span class="d-none d-lg-inline"> Edit</span>
                         </a>
-                        <button type="button" class="btn btn-sm btn-outline-danger" title="Delete"
+                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                aria-label="Delete {{ announcement.title }}"
                                 onclick="deleteAnnouncement({{ announcement.id }}, '{{ announcement.title }}')">
-                            <span class="material-symbols-outlined">delete</span><span class="d-none d-lg-inline"> Delete</span>
+                            <span class="material-symbols-outlined" aria-hidden="true">delete</span><span class="d-none d-lg-inline"> Delete</span>
                         </button>
                     </div>
                 </div>

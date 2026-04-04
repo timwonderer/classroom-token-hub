@@ -245,21 +245,21 @@
                 <td>{{ policy.student_policies.filter_by(status='active').count() }} students</td>
                 <td class="text-nowrap">
                   <a href="{{ url_for('admin.edit_insurance_policy', policy_id=policy.id) }}"
-                    class="btn btn-sm btn-outline-primary mb-1" title="Edit">
-                    <span class="material-symbols-outlined">edit</span><span class="d-none d-lg-inline"> Edit</span>
+                    class="btn btn-sm btn-outline-primary mb-1" aria-label="Edit {{ policy.title }}">
+                    <span class="material-symbols-outlined" aria-hidden="true">edit</span><span class="d-none d-lg-inline"> Edit</span>
                   </a>
-                  <button class="btn btn-sm btn-outline-warning mb-1" title="Mass Remove" data-bs-toggle="modal"
+                  <button class="btn btn-sm btn-outline-warning mb-1" aria-label="Mass Remove {{ policy.title }}" data-bs-toggle="modal"
                     data-bs-target="#massRemoveModal" data-policy-id="{{ policy.id }}"
                     data-policy-title="{{ policy.title }}"
                     data-active-count="{{ policy.student_policies.filter_by(status='active').count() }}">
-                    <span class="material-symbols-outlined">person_remove</span><span class="d-none d-lg-inline"> Mass Remove</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">person_remove</span><span class="d-none d-lg-inline"> Mass Remove</span>
                   </button>
-                  <button class="btn btn-sm btn-outline-danger mb-1" title="Delete" data-bs-toggle="modal"
+                  <button class="btn btn-sm btn-outline-danger mb-1" aria-label="Delete {{ policy.title }}" data-bs-toggle="modal"
                     data-bs-target="#deletePolicyModal" data-policy-id="{{ policy.id }}"
                     data-policy-title="{{ policy.title }}"
                     data-active-count="{{ policy.student_policies.filter_by(status='active').count() }}"
                     data-pending-claims="{{ policy.claims.filter_by(status='pending').count() }}">
-                    <span class="material-symbols-outlined">delete</span><span class="d-none d-lg-inline"> Delete</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">delete</span><span class="d-none d-lg-inline"> Delete</span>
                   </button>
                 </td>
               </tr>
