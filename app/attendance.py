@@ -229,7 +229,9 @@ def get_session_status(student_id, period):
         )
     else:
         done_query = done_query.filter(TapEvent.student_id == student_id)
-    done = done_query.filter(func.lower(TapEvent.reason) == 'done').first() is not None
+    done = done_query.filter(
+        func.lower(TapEvent.reason).in_(['done', 'done for the day'])
+    ).first() is not None
 
     # Calculate unpaid duration
     last_payroll_time = get_last_payroll_time(student_id=student_id, join_code=join_code)
@@ -322,7 +324,9 @@ def get_all_block_statuses(student, join_code=None):
         else:
             done_query = done_query.filter(TapEvent.student_id == student.id)
 
-        done = done_query.filter(func.lower(TapEvent.reason) == 'done').first() is not None
+        done = done_query.filter(
+            func.lower(TapEvent.reason).in_(['done', 'done for the day'])
+        ).first() is not None
 
         duration = calculate_unpaid_attendance_seconds(
             student.id,

@@ -67,17 +67,12 @@ def _rebuild_database_state():
     dialect = db.engine.dialect.name
 
     if dialect == "postgresql":
+        # Close pooled connections from prior tests before resetting the schema.
+        # The previous pg_terminate_backend() approach was killing live backends
+        # during create_all(), which caused intermittent "server closed the
+        # connection unexpectedly" fixture failures.
+        db.engine.dispose()
         with db.engine.begin() as conn:
-            conn.execute(
-                text(
-                    """
-                    SELECT pg_terminate_backend(pid)
-                    FROM pg_stat_activity
-                    WHERE datname = current_database()
-                      AND pid <> pg_backend_pid()
-                    """
-                )
-            )
             conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
             conn.execute(text("CREATE SCHEMA public"))
             _drop_public_enums(conn)
