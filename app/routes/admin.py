@@ -8202,6 +8202,7 @@ def apply_scheduled_economy_rebalance_now():
         change_plan,
         REBALANCE_ACTIVATION_IMMEDIATE,
     )
+    settings_row.economy_pending_rebalance_json = None
     db.session.commit()
     flash(f"Applied scheduled economy update now for {len(applied_labels)} setting(s).", "success")
     return redirect(url_for('admin.economy_health', block=selected_block))

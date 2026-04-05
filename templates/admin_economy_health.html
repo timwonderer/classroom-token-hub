@@ -103,9 +103,8 @@
 <div class="container-fluid py-1 economy-health-page">
   <div class="d-flex flex-wrap  align-items-center mb-3 gap-3">
     <div class="d-flex align-items-center gap-2">
-      <p class="text-muted mb-0">Review your current CWI and see how payroll, rent, banking, insurance, and the store fit together.
-     
-      </p>
+      <p class="text-muted mb-0">Review your current CWI and see how payroll, rent, banking, insurance, and the store fit together.</p>
+      {{ help.help_icon("user-guides/diagnostics/teacher/attendance-payroll", "Economy health help") }}
     </div>
     {% if blocks|length >= 1 %}
     <div class="d-flex align-items-center gap-2">
@@ -131,22 +130,6 @@
 
   {% set balance_warning_count = warnings_by_level['critical']|length + warnings_by_level['warning']|length %}
   {% set non_banking_summary = health_warning_summary | rejectattr('label', 'equalto', 'Banking') | list %}
-  {% set quick_action = namespace(payroll=not payroll_settings, rent=false, insurance=false, store=false) %}
-  {% for level in ['critical', 'warning'] %}
-    {% for warning in warnings_by_level[level] %}
-      {% set feature_lower = warning.feature.lower() %}
-      {% if feature_lower.startswith('rent') %}
-        {% set quick_action.rent = true %}
-      {% elif feature_lower.startswith('insurance') %}
-        {% set quick_action.insurance = true %}
-      {% elif feature_lower.startswith('store') %}
-        {% set quick_action.store = true %}
-      {% elif feature_lower.startswith('fine') or feature_lower.startswith('budget survival test') %}
-        {% set quick_action.payroll = true %}
-      {% endif %}
-    {% endfor %}
-  {% endfor %}
-  {% set has_quick_actions = quick_action.payroll or quick_action.rent or quick_action.insurance or quick_action.store %}
 
   <div class="row g-3 mb-3">
     <div class="col-12 col-xl-6">
@@ -238,7 +221,7 @@
           <h5 class="mb-1"><span class="material-symbols-outlined me-2">tune</span>Economy Policy</h5>
           <p class="text-muted mb-0">Pick the classroom pressure profile, then optionally realign current settings.
              {% if policy_summary.updated_at %}
-          Last updated: {{ policy_summary.updated_at.strftime('%B %-d, %Y') if policy_summary.updated_at else '' }}
+          Last updated: {% if policy_summary.updated_at %}{{ policy_summary.updated_at.strftime('%B') }} {{ policy_summary.updated_at.day }}, {{ policy_summary.updated_at.year }}{% endif %}
           {% endif %}
           {% if selected_class_label %}
             <span class="fw-semibold">Currently viewing class: {{ selected_class_label }}</span>
@@ -298,7 +281,7 @@
 
         <div class="d-flex flex-wrap gap-2 align-items-center">
           <button class="btn btn-primary" type="submit">Save Policy Mode</button>
-          {% if policy_summary.pending_rebalance_json %}
+          {% if scheduled_rebalance %}
           <button class="btn btn-info" type="button" data-bs-toggle="modal" data-bs-target="#rebalanceReviewModal">Economy Update Scheduled</button>
           {% elif rebalance_preview %}
           <button class="btn btn-secondary" type="button" data-bs-toggle="modal" data-bs-target="#rebalanceReviewModal">Review Recommended Rebalance</button>
@@ -347,29 +330,30 @@
               <div class="row text-center g-2 mb-2">
             <div class="col-6">
               <div class="p-3 border rounded">
-                <div class="text-muted small">Pricing(s) that Requires Update</div>
+                <div class="text-muted small">Prices Requiring Update</div>
                 <div class="h4 mb-0 text-danger">{{ warnings_by_level['critical']|length }}</div>
               </div>
             </div>
             <div class="col-6">
               <div class="p-3 border rounded">
-                <div class="text-muted small">Pricing(s) that Needs Review</div>
+                <div class="text-muted small">Prices Needing Review</div>
                 <div class="h4 mb-0 text-warning">{{ warnings_by_level['warning']|length }}</div>
               </div>
             </div>
           </div>
               {% for row in non_banking_summary %}
               <div class="d-flex align-items-center mb-2 ">
-                <p class="mt-2 economy-health-page economy-health-item"><span class=" bg-light text-primary me-2 ">{{ row.label }}</span>
+                <p class="mt-2 economy-health-item"><span class=" bg-light text-primary me-2 ">{{ row.label }}</span>
                 {{ row.count }} pricing(s) might need adjustments.
                 {% if row.link_href %}
-                • <a href="{{ row.link_href }}" class="ms-1">{{ row.link_label }} <span class="material-symbols-outlined economy-health-inline-icon">arrow_circle_right</span></a></p>
+                • <a href="{{ row.link_href }}" class="ms-1">{{ row.link_label }} <span class="material-symbols-outlined economy-health-inline-icon">arrow_circle_right</span></a>
                 {% endif %}
+                </p>
               </div>
               {% endfor %}
-            {% else %}
+            {% elif balance_warning_count == 0 %}
             <div class="economy-health-empty-state economy-health-empty-state-centered">
-              <p class="text-muted mb-0">All princings are balanced within this economy</p>
+              <p class="text-muted mb-0">All pricings are balanced within this economy</p>
             </div>
 
             {% endif %}
