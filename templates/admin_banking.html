@@ -243,12 +243,12 @@
           <table class="table table-striped table-hover js-sortable">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Student</th>
-                <th>Class</th>
-                <th>Type</th>
-                <th>Account</th>
-                <th>Amount</th>
+                <th class="text-nowrap">Date</th>
+                <th class="text-nowrap">Student</th>
+                <th class="text-nowrap">Class</th>
+                <th class="text-nowrap">Type</th>
+                <th class="text-nowrap">Account</th>
+                <th class="text-nowrap">Amount</th>
                 <th>Description</th>
               </tr>
             </thead>
@@ -504,13 +504,12 @@
       <input type="hidden" name="apply_to_all" id="apply_to_all_input" value="false">
 
       <!-- Class Selector Banner -->
-        <div class="alert alert-primary d-flex align-items-center justify-content-between mb-4">
-        <div class="d-flex align-items-center gap-3">
+        <div class="alert alert-primary d-flex align-items-center justify-content-between mb-4 banking-settings-banner">
+        <div class="d-flex align-items-center gap-3 banking-settings-banner-main">
           <span class="material-symbols-outlined icon-section">school</span>
-          <div>
+          <div class="banking-settings-banner-copy">
             <h6 class="mb-1 fw-bold">Configuring Banking Settings For:</h6>
-            <select class="form-select form-select-sm" id="settings_block_selector"
-              style="width: auto; min-width: 200px;">
+            <select class="form-select form-select-sm banking-settings-banner-select" id="settings_block_selector">
               {% for block in teacher_blocks %}
               <option value="{{ block }}" {% if block==settings_block %}selected{% endif %}>
                 {{ class_labels_by_block.get(block, block) }}
@@ -519,7 +518,7 @@
             </select>
           </div>
         </div>
-        <div class="form-check form-switch">
+        <div class="form-check form-switch banking-settings-banner-toggle">
           <input class="form-check-input" type="checkbox" id="apply_to_all_checkbox" role="switch">
           <label class="form-check-label fw-bold" for="apply_to_all_checkbox">
             Apply to All Classes
