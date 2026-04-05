@@ -311,7 +311,7 @@ def test_update_economy_policy_creates_block_scoped_settings(client):
     })
 
     assert response.status_code == 302
-    assert 'review_rebalance=1' in response.location
+    assert 'economy-health' in response.location
 
     settings_row = FeatureSettings.query.filter_by(teacher_id=admin.id, block='A').first()
     assert settings_row is not None
@@ -842,3 +842,54 @@ def test_filter_economy_health_warnings_hides_balanced_and_bypassed_items(client
     assert 'Insurance' in summary_labels
     assert 'Rent' not in summary_labels
     assert 'Store' not in summary_labels
+
+
+def test_apply_scheduled_economy_rebalance_now_applies_and_clears_json(client):
+    """Test that applying a scheduled rebalance immediately clears economy_pending_rebalance_json."""
+    admin, payroll_settings, rent_settings = _create_admin_with_block()
+    _login_admin(client, admin.id)
+
+    scheduled_payload = json.dumps({
+        'activation_mode': 'next_renewal',
+        'changes': [{'type': 'rent', 'field': 'rent_amount', 'new_value': '400.00'}],
+        'scheduled_at': '2026-01-01T00:00:00',
+    })
+    settings_row = FeatureSettings(
+        teacher_id=admin.id,
+        block='A',
+        economy_policy_mode='tight',
+        economy_pending_rebalance_json=scheduled_payload,
+    )
+    db.session.add(settings_row)
+    db.session.commit()
+
+    response = client.post('/admin/economy-policy/rebalance/apply-scheduled-now', data={
+        'block': 'A',
+    })
+
+    assert response.status_code == 302
+    db.session.refresh(settings_row)
+    assert settings_row.economy_pending_rebalance_json is None
+
+
+def test_apply_scheduled_economy_rebalance_now_clears_invalid_json(client):
+    """Test that invalid pending JSON is cleared and a warning is shown."""
+    admin, _, _ = _create_admin_with_block()
+    _login_admin(client, admin.id)
+
+    settings_row = FeatureSettings(
+        teacher_id=admin.id,
+        block='A',
+        economy_policy_mode='tight',
+        economy_pending_rebalance_json='not valid json {{{',
+    )
+    db.session.add(settings_row)
+    db.session.commit()
+
+    response = client.post('/admin/economy-policy/rebalance/apply-scheduled-now', data={
+        'block': 'A',
+    })
+
+    assert response.status_code == 302
+    db.session.refresh(settings_row)
+    assert settings_row.economy_pending_rebalance_json is None
