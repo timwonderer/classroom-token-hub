@@ -60,6 +60,10 @@
     --text-secondary: var(--neutral-500);
     --text-muted: var(--neutral-500);
     --text-inverse: #ffffff;
+
+    --advisor-green: #1a4d47;
+    --steward-blue: #2F4F7F;
+    --guardian-gray: #303030;
 }
 
 /* ─── Teacher Theme (Advisor Green) ─── */

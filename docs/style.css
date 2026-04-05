@@ -73,6 +73,11 @@ nav {
     vertical-align: -15%;
 }
 
+.logo-transition {
+    font-size:3rem;
+    color:var(--secondary-color)
+}
+
 .logo-text {
     color: var(--primary-color);
 }
@@ -151,7 +156,7 @@ nav {
 .hero {
     background: var(--primary-dark);
     color: white;
-    padding: 2rem 0 3rem;
+    padding: 2rem;
     text-align: center;
 }
 
@@ -183,6 +188,17 @@ nav {
     gap: 1rem;
     justify-content: center;
     flex-wrap: wrap;
+}
+
+.hero-text {
+    color: var(--advisor-green);
+    padding-top: 2.5rem;
+    padding-left: 4rem;
+    padding-right:4rem;
+    padding-bottom: 2.5rem;
+    text-align: center;
+    font-weight:400;
+    background-color: var(--bg-light);
 }
 
 /* Badge */
