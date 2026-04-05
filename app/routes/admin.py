@@ -2142,7 +2142,10 @@ def _load_economy_rebalance_context(admin_id, selected_block):
     payroll_settings = settings_by_block.get(selected_block) if selected_block else None
     effective_block = selected_block
 
-    if not payroll_settings and all_payroll_settings:
+    # Only fall back to the first configured class when the user did not explicitly
+    # choose a block. If a block is selected in the URL, keep that class in view
+    # even when payroll has not been configured for it yet.
+    if not selected_block and not payroll_settings and all_payroll_settings:
         first_class_setting = next((s for s in all_payroll_settings if s.block), None)
         if first_class_setting:
             payroll_settings = first_class_setting
@@ -8067,7 +8070,7 @@ def update_economy_policy():
         policy_mode,
     )
     flash(f"Economy policy updated to {POLICY_MODES[policy_mode]['label']}.", "success")
-    return redirect(url_for('admin.economy_health', block=selected_block, review_rebalance=1))
+    return redirect(url_for('admin.economy_health', block=selected_block))
 
 
 @admin_bp.route('/economy-policy/rebalance', methods=['POST'])
@@ -8089,7 +8092,7 @@ def apply_economy_rebalance():
 
     if activation_mode not in allowed_activation_modes:
         flash("Invalid rebalance activation mode.", "warning")
-        return redirect(url_for('admin.economy_health', block=selected_block, review_rebalance=1))
+        return redirect(url_for('admin.economy_health', block=selected_block, rebalance_modal='recommended'))
 
     effective_block, payroll_settings, rent_settings, insurance_policies, _all_payroll_settings = _load_economy_rebalance_context(
         admin_id,
@@ -8098,7 +8101,7 @@ def apply_economy_rebalance():
 
     if not payroll_settings:
         flash("Payroll settings are required before a rebalance can be applied.", "warning")
-        return redirect(url_for('admin.economy_health', block=effective_block, review_rebalance=1))
+        return redirect(url_for('admin.economy_health', block=effective_block, rebalance_modal='recommended'))
 
     checker = EconomyBalanceChecker(admin_id, effective_block)
     analysis = checker.analyze_economy(
@@ -8126,11 +8129,11 @@ def apply_economy_rebalance():
 
     if not change_plan:
         flash("No rebalance changes were selected.", "warning")
-        return redirect(url_for('admin.economy_health', block=effective_block, review_rebalance=1))
+        return redirect(url_for('admin.economy_health', block=effective_block, rebalance_modal='recommended'))
 
     if activation_mode == REBALANCE_ACTIVATION_IMMEDIATE and request.form.get('confirm_immediate') != 'yes':
         flash("Confirm the immediate change warning before applying now.", "warning")
-        return redirect(url_for('admin.economy_health', block=effective_block, review_rebalance=1))
+        return redirect(url_for('admin.economy_health', block=effective_block, rebalance_modal='recommended'))
 
     if activation_mode == REBALANCE_ACTIVATION_IMMEDIATE:
         applied_labels = _apply_rebalance_plan(
@@ -8166,6 +8169,43 @@ def apply_economy_rebalance():
 
     return redirect(url_for('admin.economy_health', block=effective_block))
 
+
+@admin_bp.route('/economy-policy/rebalance/apply-scheduled-now', methods=['POST'])
+@admin_required
+def apply_scheduled_economy_rebalance_now():
+    admin_id = session.get('admin_id')
+    selected_block = (request.form.get('block') or '').strip().upper() or None
+    settings_row = get_feature_settings_row(admin_id, block=selected_block, create=False)
+
+    if not settings_row or not getattr(settings_row, 'economy_pending_rebalance_json', None):
+        flash("No scheduled economy update was found.", "warning")
+        return redirect(url_for('admin.economy_health', block=selected_block))
+
+    try:
+        payload = json.loads(settings_row.economy_pending_rebalance_json or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        settings_row.economy_pending_rebalance_json = None
+        db.session.commit()
+        flash("The scheduled economy update could not be read and was cleared.", "warning")
+        return redirect(url_for('admin.economy_health', block=selected_block))
+
+    change_plan = payload.get('changes') or []
+    if not change_plan:
+        settings_row.economy_pending_rebalance_json = None
+        db.session.commit()
+        flash("No scheduled economy update was found.", "warning")
+        return redirect(url_for('admin.economy_health', block=selected_block))
+
+    applied_labels = _apply_rebalance_plan(
+        admin_id,
+        settings_row,
+        change_plan,
+        REBALANCE_ACTIVATION_IMMEDIATE,
+    )
+    db.session.commit()
+    flash(f"Applied scheduled economy update now for {len(applied_labels)} setting(s).", "success")
+    return redirect(url_for('admin.economy_health', block=selected_block))
+
 @admin_bp.route('/economy-health')
 @admin_required
 def economy_health():
@@ -8177,6 +8217,7 @@ def economy_health():
     blocks = _get_teacher_blocks()
     # Always use per-class view since CWI is inherently per-class (multi-tenancy by join_code)
     selected_block = request.args.get('block') or (blocks[0] if blocks else None)
+    rebalance_modal = (request.args.get('rebalance_modal') or '').strip().lower() or None
 
     selected_block, payroll_settings, rent_settings, insurance_policies, all_payroll_settings = _load_economy_rebalance_context(
         admin_id,
@@ -8283,9 +8324,24 @@ def economy_health():
         fines,
         warnings=actionable_warnings,
     )
+    scheduled_rebalance = None
+    pending_rebalance_payload = None
+    if policy_summary.get('pending_rebalance_json'):
+        try:
+            pending_rebalance_payload = json.loads(policy_summary['pending_rebalance_json'])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pending_rebalance_payload = None
+
+    scheduled_changes = (pending_rebalance_payload or {}).get('changes') or []
+    if pending_rebalance_payload is not None and policy_summary.get('pending_rebalance_json'):
+        scheduled_rebalance = {
+            'activation_mode': pending_rebalance_payload.get('activation_mode'),
+            'scheduled_at': pending_rebalance_payload.get('scheduled_at'),
+            'changes': scheduled_changes,
+        }
+
     rebalance_preview = []
-    show_rebalance_review = request.args.get('review_rebalance') == '1'
-    if payroll_settings and show_rebalance_review:
+    if payroll_settings and (not policy_summary['is_aligned'] or scheduled_rebalance):
         checker = EconomyBalanceChecker(admin_id, selected_block, policy_mode=policy_summary['mode'])
         rebalance_preview = _build_rebalance_preview(
             admin_id,
@@ -8334,7 +8390,8 @@ def economy_health():
         policy_modes=POLICY_MODES,
         policy_summary=policy_summary,
         rebalance_preview=rebalance_preview,
-        show_rebalance_review=show_rebalance_review,
+        scheduled_rebalance=scheduled_rebalance,
+        rebalance_modal=rebalance_modal,
         feature_links=feature_links,
         payroll_link=url_for('admin.payroll', cwi_block=selected_block),
         banking_link=url_for('admin.banking'),

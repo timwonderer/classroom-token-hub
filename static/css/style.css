@@ -1587,8 +1587,8 @@ table.js-sortable thead th:hover .sort-indicator {
     .modal-body,
     .accordion-body,
     .list-group-item {
-        overflow-wrap: anywhere;
-        word-break: break-word;
+        overflow-wrap: break-word;
+        word-break: normal;
     }
 
     /* Reset word-breaking inside scrollable tables so text-nowrap works */
@@ -1652,6 +1652,45 @@ table.js-sortable thead th:hover .sort-indicator {
     .error-log-header {
         flex-direction: column;
         align-items: stretch;
+    }
+}
+
+.banking-settings-banner-main,
+.banking-settings-banner-copy,
+.banking-settings-banner-toggle {
+    min-width: 0;
+}
+
+.banking-settings-banner-select {
+    width: auto;
+    min-width: 200px;
+    max-width: 100%;
+}
+
+@media (max-width: 576px) {
+    .banking-settings-banner {
+        flex-wrap: wrap;
+        align-items: flex-start !important;
+        gap: 0.75rem;
+    }
+
+    .banking-settings-banner-main {
+        width: 100%;
+        align-items: flex-start !important;
+    }
+
+    .banking-settings-banner-copy {
+        flex: 1 1 auto;
+    }
+
+    .banking-settings-banner-select {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .banking-settings-banner-toggle {
+        width: 100%;
+        padding-left: 2.3rem;
     }
 }
 
@@ -5039,5 +5078,118 @@ body.maintenance-active .sidebar {
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+.economy-health-page .economy-health-card-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.economy-health-page .economy-health-card-heading p{
+    font-weight:400;
+    font-size: 0.8rem;
+}
+
+.economy-health-page .economy-health-card-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.35rem;
+    text-align: right;
+}
+
+.economy-health-page .economy-health-status-chip {
+    width: 2rem;
+    height: 2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-pill);
+    border: 1px solid transparent;
+    flex-shrink: 0;
+}
+
+.economy-health-page .economy-health-status-chip .material-symbols-outlined {
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.economy-health-page .economy-health-status-chip-sm {
+    width: 1.75rem;
+    height: 1.75rem;
+}
+
+.economy-health-page .economy-health-status-chip-success {
+    
+    color: var(--success);
+   
+}
+
+.economy-health-page .economy-health-status-chip-warning {
+
+    color: var(--warning-text);
+
+}
+
+.economy-health-page .economy-health-status-chip-danger {
+
+    color: var(--danger);
+
+}
+
+.economy-health-page .economy-health-status-chip-scheduled {
+    color: var(--info);
+}
+
+.economy-health-page .economy-health-status-chip-neutral {
+    background: var(--neutral-100);
+    color: var(--text-secondary);
+    border-color: var(--border-color);
+}
+
+.economy-health-page .economy-health-empty-state {
+    min-height: 2rem;
+    align-items: center;
+    text-align:center;
+    margin:auto;
+    font-size:1rem;
+
+}
+
+.economy-health-page .economy-health-empty-state-centered {
+    min-height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.economy-health-page .economy-health-empty-card-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.economy-health-page .economy-health-inline-icon {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    font-size: 1.1em;
+    line-height: 1;
+}
+
+.economy-heath-page .info-icon {
+    font-size:0.5rem;
+}
+
+.economy-health-page .economy-health-item{
+    font-size:1rem;
+}
+
+@media (max-width: 576px) {
+    .economy-health-page .economy-health-card-heading {
+        gap: 0.75rem;
     }
 }
