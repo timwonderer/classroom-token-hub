@@ -4,7 +4,7 @@ beautifulsoup4==4.14.3
 bcrypt==5.0.0
 bleach==6.3.0
 blinker==1.9.0
-click==8.3.1
+click==8.3.2
 exceptiongroup==1.3.1
 Flask==3.1.3
 Flask-Migrate==4.1.0
@@ -34,10 +34,10 @@ pytest-flask==1.3.0
 pytz==2026.1.post1
 PyYAML==6.0.3
 soupsieve==2.8.3
-SQLAlchemy==2.0.48
+SQLAlchemy==2.0.49
 tomli==2.4.1
 typing_extensions==4.15.0
-Werkzeug==3.1.7
+Werkzeug==3.1.8
 # TODO: [DEPENDABOT PR #847] zope.event 6.x is a major version change. Review for
 # breaking changes (transitive dep for gevent) before upgrading from 5.0 to 6.1
 zope.event==5.0
@@ -58,7 +58,7 @@ APScheduler==3.11.2
 Flask-Limiter==3.5.0
 redis==7.4.0
 passwordless==2.0.0
-requests==2.33.0
+requests==2.33.1
 opentelemetry-api==1.38.0
 opentelemetry-sdk==1.38.0
 opentelemetry-exporter-otlp-proto-http==1.38.0
