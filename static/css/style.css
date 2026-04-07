@@ -134,6 +134,8 @@ a:hover {
     border-color: var(--border-color) var(--border-color) transparent;
 }
 
+
+
 .nav-tabs .nav-link.active {
     color: var(--primary);
     background-color: var(--surface);
