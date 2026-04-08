@@ -1,6 +1,6 @@
 # V2 Main Reconciliation Tracker
 
-**Last Updated:** 2026-03-30
+**Last Updated:** 2026-04-08
 **Source Branches:** `codex/v2.0` vs `origin/main`
 **Diff Snapshot:** `git rev-list --left-right --count codex/v2.0...origin/main` -> `143 51`
 **Purpose:** Current source of truth for features present on `origin/main` that have not yet been intentionally reconciled into `codex/v2.0`.
@@ -32,7 +32,7 @@ This tracker replaces the partial main-feature note previously embedded in `LOG-
 
 | Cluster | Source commits / PRs | Feature summary | Affected subsystems | Migration impact | Test impact | Doc impact | Classification | Port strategy | Rationale |
 |---|---|---|---|---|---|---|---|---|---|
-| Economy policy scheduling and rent-cycle locking | `589d6ba7` (`#1077`), `67a23022` (`#1103`), `a84da5a1` (`#1104`), `bac180ab` (`#1105`) | Refines economy policy mode, rebalance timing, CWI warning bypass controls, per-join-code rent rate locking, and penalty reversal behavior | `app/routes/admin.py`, `app/routes/student.py`, `app/utils/economy_balance.py`, `app/utils/economy_policy.py`, `app/utils/economy_rebalance.py`, admin economy/rent templates, JS | Core policy/rebalance/rent-locking behavior is already in v2; the remaining `main` delta is the CWI warning bypass flags from `3f4a5b6c7d8e_add_cwi_warning_bypass_flags.py` | `tests/test_economy_policy_mode.py`, `tests/test_rent_penalty_reversal.py`, related economy API tests | `CHANGELOG.md`, `README.md`, economy feature/domain docs | `must-port before live test` | `manual port` | Treat this as a narrow remaining delta, not a full unported cluster. Rent-cycle locking and penalty reversal are already landed on `codex/v2.0` |
+| Economy policy scheduling and rent-cycle locking | `589d6ba7` (`#1077`), `67a23022` (`#1103`), `a84da5a1` (`#1104`), `bac180ab` (`#1105`) | Refines economy policy mode, rebalance timing, CWI warning bypass controls, per-join-code rent rate locking, and penalty reversal behavior | `app/routes/admin.py`, `app/routes/student.py`, `app/utils/economy_balance.py`, `app/utils/economy_policy.py`, `app/utils/economy_rebalance.py`, admin economy/rent templates, JS | Landed on `codex/v2.0`; the CWI warning bypass fields are present via v2-native migration `2bde3e5f00ac_add_bypass_cwi_warnings_to_store_items_.py` | `tests/test_economy_policy_mode.py`, `tests/test_rent_penalty_reversal.py`, related economy API and rent-display tests | `CHANGELOG.md`, `README.md`, economy feature/domain docs | `landed on codex/v2.0` | `manual port` | Verified on 2026-04-08 with focused economy policy, economy API, rent-display, and rent penalty regression tests |
 | Insurance modularization and tiered setup flow | `8b967da6` (`#1090`), `3a9d6e92` (`#1092`), `1f8e06d7` (`#1093`), `2cddd34c` (`#1095`), `1a3be409` (`#1096`) and follow-up fix/docs commits in the same series | Moves insurance products to modular tiered design, finalizes teacher guidance, and fixes form-mode transitions | `app/forms.py`, `app/models.py`, `app/routes/admin.py`, `app/routes/student.py`, insurance templates, economy policy helpers | New `main` migration `g9h0i1j2k3l4_modularize_insurance_products.py`; requires schema comparison against current v2 insurance tables before porting | `tests/test_insurance_modularization.py`, `tests/test_insurance_snapshots.py`, `tests/test_economy_policy_mode.py` | Insurance feature docs and teacher guidance copy | `must-port before production` | `manual port` | v2 already has its own tenancy and identity refactors. Insurance behavior matters, but it is safer to reconcile after live-test hardening items |
 | Insurance pricing snapshots, approval caps, and claim time-limit gate | `4f7f5647` (`#1097`), `ae2eb662` (`#1099`), `f670f53f` (`#1102`) | Adds economy snapshots for insurance pricing, fixes variable approval-cap handling, and changes claim time-limit evaluation to filing timestamp with teacher override | `app/models.py`, `app/routes/admin.py`, `app/utils/economy_policy.py`, `app/utils/economy_balance.py`, admin claim/policy templates | New `main` migrations: `h0i1j2k3l4m_add_economy_snapshot_table.py`, `k1l2m3n4o5p6_add_time_limit_override_to_claims.py` | `tests/test_insurance_snapshots.py`, `tests/test_insurance_security.py`, `tests/test_economy_policy_mode.py` | Insurance workflow/security docs | `must-port before production` | `manual port` | These are important correctness and claims-handling fixes, but they are schema-heavy and should be applied intentionally against the v2 schema, not merged blindly before the first live-test pass |
 | Transaction idempotency and frozen analytics payloads | `6de59151` (`#1100`) | Hardens transaction idempotency and stores analysis payloads with economy snapshots | `app/routes/admin.py`, `app/routes/api.py`, `app/utils/transaction_idempotency.py`, `app/utils/store.py`, economy health UI | Landed on `codex/v2.0` via v2-native migrations `p6q7r8s9t0u1_add_transaction_idempotency_key.py` and `q9r0s1t2u3v4_add_economy_snapshot_table.py` | `tests/test_transaction_idempotency.py`, `tests/test_economy_api.py`, `tests/test_void_transaction_rules.py` | Minimal doc updates on `main`; runtime impact is larger than doc impact | `landed on codex/v2.0` | `manual port` | Landed and verified on 2026-03-30. Remaining economy-health follow-up work is tracked separately from this cluster |
@@ -51,13 +51,16 @@ The sections below are implementation-ready planning notes for all clusters not 
 
 ### 1. Economy policy scheduling and rent-cycle locking
 
-**Target behavior**
+**Status:** Landed on `codex/v2.0` as of 2026-04-08
 
-- Preserve the existing v2 `current_join_code` and membership-based authority model.
-- Port `main`'s improved rent-cycle locking, next-cycle rebalance timing, penalty reversal behavior, and CWI warning bypass controls without reintroducing teacher-global assumptions.
-- Keep all economy-health calculations scoped to the selected class context.
+**What landed**
 
-**Files and subsystems to change**
+- v2 `current_join_code` and membership-based authority model preserved.
+- rent-cycle locking, next-cycle rebalance timing, penalty reversal behavior, and class-scoped economy-health behavior present on `codex/v2.0`.
+- CWI warning bypass fields present via v2-native migration `2bde3e5f00ac_add_bypass_cwi_warnings_to_store_items_.py`.
+- focused verification passed with economy policy, economy API, rent-display, and rent penalty regression tests.
+
+**Files and subsystems reconciled**
 
 - `app/routes/admin.py`
 - `app/routes/student.py`
@@ -68,28 +71,25 @@ The sections below are implementation-ready planning notes for all clusters not 
 - `templates/admin_rent_settings.html`
 - `static/js/economy-balance.js`
 
-**Migration handling**
+**Migration handling completed**
 
-- Compare `main` migration `3f4a5b6c7d8e_add_cwi_warning_bypass_flags.py` against the current v2 schema.
-- If the fields do not exist on `codex/v2.0`, implement a fresh v2-native migration instead of cherry-picking the original file.
-- Do not replay `main`'s already-diverged policy-mode migration chain.
+- The required CWI bypass fields are present through v2-native migration `2bde3e5f00ac_add_bypass_cwi_warnings_to_store_items_.py`.
+- The divergent `main` migration chain was not replayed.
 
-**Merge/conflict risk**
+**Merge/conflict status**
 
-- High. `codex/v2.0` already contains separate economy-policy and class-scope changes.
-- Treat helper extraction and route-level behavior as manual reconciliation work.
+- Resolved on `codex/v2.0`.
 
-**Required tests**
+**Verification completed**
 
-- Port or adapt `tests/test_economy_policy_mode.py`
-- Port `tests/test_rent_penalty_reversal.py`
-- Re-run related economy API and rent-display coverage on v2
-
-**Operational verification**
-
-- Verify rent penalties do not reverse incorrectly after rebalance changes.
-- Verify class A rebalance changes do not mutate class B rent cycles.
-- Verify CWI bypass controls are visible only where intended.
+- `tests/test_economy_policy_mode.py`
+- `tests/test_rent_penalty_reversal.py`
+- `tests/test_economy_api.py`
+- `tests/test_rent_display_dynamic.py`
+- `tests/test_rent_calculation_bug.py`
+- `tests/test_rent_frequency.py`
+- `tests/test_rent_item_types.py`
+- `tests/test_student_dashboard_rent.py`
 
 ### 2. Transaction idempotency and frozen analytics payloads
 

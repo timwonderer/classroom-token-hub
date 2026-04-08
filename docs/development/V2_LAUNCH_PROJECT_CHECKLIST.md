@@ -1,6 +1,6 @@
 # V2 Launch Project Checklist
 
-**Last Updated:** 2026-04-01  
+**Last Updated:** 2026-04-08
 **Purpose:** Consolidate the active `docs/development` v2 materials into one implementation-facing checklist organized by project, build order, invariants, and test expectations for v2 launch.  
 **Use this doc for:** sequencing work, assigning sections, and deciding what must be complete before live test, before production, or after launch.
 
@@ -31,8 +31,8 @@ This checklist is derived from the active and supporting development docs below.
 
 ### Phase 1: Pre-Live-Test Blockers
 
-- [ ] Project 1: Launch evidence and active-doc alignment
-- [ ] Project 2: Economy policy and rent-cycle corrections
+- [x] Project 1: Launch evidence and active-doc alignment
+- [x] Project 2: Economy policy and rent-cycle corrections
 
 ### Phase 2: Pre-Production Required Ports
 
@@ -72,26 +72,26 @@ These rules appear repeatedly across the source docs and should be treated as no
 - [x] Refresh the live-test rehearsal artifact with named operator confirmation.
 - [x] Record either independent verifier confirmation or a documented solo-operator exception.
 - [x] Record smoke-route execution outcome with named ownership.
-- [ ] Add the active v2 tracker/readiness/compliance docs to the documentation index.
-- [ ] Re-run the focused active-doc link check after live-test blocker code lands.
-- [ ] Refresh the readiness matrix so only intentional open items remain.
+- [x] Add the active v2 tracker/readiness/compliance docs to the documentation index.
+- [x] Re-run the focused active-doc link check after live-test blocker code lands.
+- [x] Refresh the readiness matrix so only intentional open items remain.
 
 ### Invariants To Preserve
 
-- [ ] Runbooks must reflect the actual branch, database, and migration truth on `codex/v2.0`.
-- [ ] Active docs must point to current trackers and SOPs, not retired checklist paths.
-- [ ] Historical artifacts may be superseded, but should not be rewritten as if they are active truth.
+- [x] Runbooks must reflect the actual branch, database, and migration truth on `codex/v2.0`.
+- [x] Active docs must point to current trackers and SOPs, not retired checklist paths.
+- [x] Historical artifacts may be superseded, but should not be rewritten as if they are active truth.
 
 ### Tests / Verification To Write Or Run
 
-- [ ] Doc review against current branch and runbook commands
-- [ ] Active-doc link validation for the index, README, development docs, and v2 SOPs
+- [x] Doc review against current branch and runbook commands
+- [x] Active-doc link validation for the index, README, development docs, and v2 SOPs
 - [x] Operator-owned smoke execution record review
 
 ### Exit Criteria
 
-- [ ] `V2_LAUNCH_READINESS_MATRIX` no longer lists open pre-live-test documentation/evidence gaps except intentional deferrals.
-- [ ] The documentation index includes the active v2 launch tracker docs.
+- [x] `V2_LAUNCH_READINESS_MATRIX` no longer lists open pre-live-test documentation/evidence gaps except intentional deferrals.
+- [x] The documentation index includes the active v2 launch tracker docs.
 - [x] The rehearsal artifact names who ran it and how sign-off was handled.
 
 ## Project 2: Economy Policy And Rent-Cycle Corrections
@@ -102,44 +102,44 @@ These rules appear repeatedly across the source docs and should be treated as no
 
 ### Scope
 
-- [ ] Port the remaining `main` economy-policy and rent-cycle correctness deltas into v2 manually.
-- [ ] Preserve existing v2 membership-based authority and `current_join_code` behavior.
-- [ ] Reconcile improved rent-cycle locking and next-cycle rebalance timing.
-- [ ] Reconcile penalty-reversal behavior.
-- [ ] Port the CWI warning bypass controls through a v2-native migration if fields are still missing.
-- [ ] Keep economy-health calculations scoped to selected class context only.
+- [x] Port the remaining `main` economy-policy and rent-cycle correctness deltas into v2 manually.
+- [x] Preserve existing v2 membership-based authority and `current_join_code` behavior.
+- [x] Reconcile improved rent-cycle locking and next-cycle rebalance timing.
+- [x] Reconcile penalty-reversal behavior.
+- [x] Port the CWI warning bypass controls through a v2-native migration if fields are still missing.
+- [x] Keep economy-health calculations scoped to selected class context only.
 
 ### Target Files
 
-- [ ] `app/routes/admin.py`
-- [ ] `app/routes/student.py`
-- [ ] `app/utils/economy_balance.py`
-- [ ] `app/utils/economy_policy.py`
-- [ ] `app/utils/economy_rebalance.py`
-- [ ] `templates/admin_economy_health.html`
-- [ ] `templates/admin_rent_settings.html`
-- [ ] `static/js/economy-balance.js`
+- [x] `app/routes/admin.py`
+- [x] `app/routes/student.py`
+- [x] `app/utils/economy_balance.py`
+- [x] `app/utils/economy_policy.py`
+- [x] `app/utils/economy_rebalance.py`
+- [x] `templates/admin_economy_health.html`
+- [x] `templates/admin_rent_settings.html`
+- [x] `static/js/economy-balance.js`
 
 ### Invariants To Preserve
 
-- [ ] Class A rebalance changes must not mutate class B rent cycles.
-- [ ] Rent penalties must not reverse incorrectly after rebalance changes.
-- [ ] CWI bypass controls must appear only where intended.
-- [ ] No port step may reintroduce teacher-global assumptions in place of class-scoped behavior.
-- [ ] If schema differs from `main`, implement a new v2 migration instead of replaying the old chain.
+- [x] Class A rebalance changes must not mutate class B rent cycles.
+- [x] Rent penalties must not reverse incorrectly after rebalance changes.
+- [x] CWI bypass controls must appear only where intended.
+- [x] No port step may reintroduce teacher-global assumptions in place of class-scoped behavior.
+- [x] If schema differs from `main`, implement a new v2 migration instead of replaying the old chain.
 
 ### Tests To Write Or Port
 
-- [ ] Port or adapt `tests/test_economy_policy_mode.py`
-- [ ] Port `tests/test_rent_penalty_reversal.py`
-- [ ] Re-run related economy API coverage
-- [ ] Re-run rent-display coverage
+- [x] Port or adapt `tests/test_economy_policy_mode.py`
+- [x] Port `tests/test_rent_penalty_reversal.py`
+- [x] Re-run related economy API coverage
+- [x] Re-run rent-display coverage
 
 ### Exit Criteria
 
-- [ ] Reconciliation tracker classifies the remaining economy/rent delta as landed or intentionally deferred.
-- [ ] The live-test readiness matrix no longer carries ambiguous status on launch-critical economy/rent deltas.
-- [ ] Required economy/rent regressions pass on the v2 branch.
+- [x] Reconciliation tracker classifies the remaining economy/rent delta as landed or intentionally deferred.
+- [x] The live-test readiness matrix no longer carries ambiguous status on launch-critical economy/rent deltas.
+- [x] Required economy/rent regressions pass on the v2 branch.
 
 ## Project 3: Low-Conflict Production Fixes
 
@@ -473,9 +473,9 @@ These rules appear repeatedly across the source docs and should be treated as no
 
 ### Must Be Complete Before Live Test
 
-- [ ] Project 1 complete
-- [ ] Project 2 complete
-- [ ] Readiness matrix reflects only intentional open items
+- [x] Project 1 complete
+- [x] Project 2 complete
+- [x] Readiness matrix reflects only intentional open items
 
 ### Must Be Complete Before Production
 

@@ -1,7 +1,7 @@
 # SOP-DOC-002: Documentation Index
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|SOP-DOC-002| 2.2 | 2026-03-08 | 2.1 |Normative|
+|SOP-DOC-002| 2.3 | 2026-04-08 | 2.2 |Normative|
 
 ## I. Purpose
 
@@ -46,6 +46,13 @@ None specified.
 
 - [DOM-ECON-001_Economy_Balance_Checker.md](../../DOMAINS/ECONOMY_DESIGN/DOM-ECON-001_Economy_Balance_Checker.md)
 - [DOM-ECON-002_Economy_Specification.md](../../DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification.md)
+### DEVELOPMENT
+
+- [V2_DOCUMENTATION_COMPLIANCE_SWEEP.md](../../development/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md)
+- [V2_LAUNCH_PROJECT_CHECKLIST.md](../../development/V2_LAUNCH_PROJECT_CHECKLIST.md)
+- [V2_LAUNCH_READINESS_MATRIX.md](../../development/V2_LAUNCH_READINESS_MATRIX.md)
+- [V2_MAIN_RECONCILIATION_TRACKER.md](../../development/V2_MAIN_RECONCILIATION_TRACKER.md)
+- [V2_PARALLEL_WORKSTREAMS.md](../../development/V2_PARALLEL_WORKSTREAMS.md)
 ### FEATURES/ANALYTICS
 
 - [FEAT-MET-001_Analytics_Specification.md](../../FEATURES/ANALYTICS/FEAT-MET-001_Analytics_Specification.md)

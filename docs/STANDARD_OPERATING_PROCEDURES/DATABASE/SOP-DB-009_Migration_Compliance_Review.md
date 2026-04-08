@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-009       | 1.3     | 2026-03-31     | 1.2        | Normative       |
+| SOP-DB-009       | 1.4     | 2026-04-08     | 1.3        | Normative       |
 
 **Branch:** `codex/v2.0`
 **Status:** Current-state readiness summary for v2 live testing
@@ -22,7 +22,7 @@ Normative (SOP Tier). Subordinate to INV-CORE-000.
 
 ## V. Executive Summary
 
-The earlier migration-compliance audit remains historically useful, but it should not be read as the current branch-status summary. The current v2 branch is merge-consolidated, the active heads are resolved in repo, and the PostgreSQL test suite passes. The remaining migration concern is operational: documenting and rehearsing the exact upgrade, verification, and rollback workflow before live testing and production.
+The earlier migration-compliance audit remains historically useful, but it should not be read as the current branch-status summary. The current v2 branch is merge-consolidated, the active heads are resolved in repo, and the PostgreSQL test suite passes. The live-test migration rehearsal and smoke-route record are complete in `LOG-ARC-050`; the remaining migration concern before production is backup/restore rehearsal and production-topology validation.
 
 ## VI. Current State
 
@@ -31,22 +31,24 @@ The earlier migration-compliance audit remains historically useful, but it shoul
 - Active engineering branch is `codex/v2.0`.
 - Current repository migration heads are resolved by `e8f1a2b3c4d5_merge_remaining_v2_heads.py`.
 - Membership constraint hardening is present in `a11213ca4afb_harden_class_economy_membership_checks.py`.
-- Local rehearsal on 2026-03-30 confirmed:
-  - `flask db heads` -> `q9r0s1t2u3v4 (head)`
-  - `flask db current` -> `q9r0s1t2u3v4 (head)`
+- Local live-test rehearsal report on 2026-04-03 confirmed:
+  - `flask db heads` -> `2bde3e5f00ac (head)`
+  - `flask db current` -> `2bde3e5f00ac (head)`
   - `DATABASE_URL=<team-dev-migration-db-url> flask db upgrade` completed without revision drift
+  - manual smoke routes passed after remediation
+  - solo-operator exception was documented
 
 ### Current Validation Baseline
 
-- The latest PostgreSQL validation run on 2026-03-31 passed:
-  - `708 passed, 1 skipped`
+- The latest PostgreSQL validation run in the completed live-test rehearsal report passed:
+  - `720 passed, 1 skipped`
 - Repository-side blocker triage is complete for the current branch state.
 
-### Still Blocking Final Operational Closure
+### Live-Test Operational Closure
 
-- Manual smoke-route execution still requires the named operator record from the live-test rehearsal.
-- If the rehearsal uses the solo-operator exception from `SOP-DEP-022`, the record must explicitly document that exception and its required conditions instead of naming a separate independent verifier.
-- Final Thread 3 closure still depends on the adjacent launch threads landing and validating cleanly.
+- `LOG-ARC-050_V2_Live_Test_Rehearsal_Report_04032026.md` records the named operator, solo-operator exception, migration rehearsal, PostgreSQL validation, smoke-route results, remediation, and final `GO` decision.
+- No app, migration, or test-code changes were found between the `LOG-ARC-050` committed SHA and the current branch head when checked on 2026-04-08.
+- Final Thread 3 live-test closure is complete unless new launch-critical app, migration, or test-code changes land before live testing.
 
 ### Still Important
 
@@ -58,9 +60,8 @@ The earlier migration-compliance audit remains historically useful, but it shoul
 
 ### Required Before Live Testing
 
-- Capture named operator confirmation in the rehearsal record.
-- If a separate verifier is unavailable, document solo-operator exception usage and confirm the additional solo-mode conditions from `SOP-DEP-022`.
-- Execute the smoke-route checklist from the v2 live-test runbook and record the result now that automated validation is green again.
+- No open migration-compliance item remains for the current live-test candidate.
+- Re-run the live-test rehearsal only if new launch-critical app, migration, or test-code changes land before live testing.
 
 ### Required Before Production
 
@@ -75,6 +76,7 @@ The earlier migration-compliance audit remains historically useful, but it shoul
   - is the active migration graph coherent?
   - can operators rehearse upgrade and verification safely?
   - are the remaining exceptions documented and accepted before live testing?
+- For the current live-test candidate, `LOG-ARC-050` answers the operator-rehearsal question with a final `GO` after remediation.
 
 ## IX. Required Validation Commands
 
@@ -89,7 +91,7 @@ DATABASE_URL=<team-test-db-url> pytest -q
 
 ## X. Owner Action
 
-Before live testing, attach the output of the live-test runbook and record:
+For the current live-test candidate, `LOG-ARC-050` provides the live-test runbook output and records:
 
 - head state before upgrade
 - head state after upgrade
@@ -97,6 +99,8 @@ Before live testing, attach the output of the live-test runbook and record:
 - rollback decision: not needed / needed / blocked
 - operator confirmation
 - independent verifier confirmation, or explicit solo-operator exception record
+
+Re-run and replace the readiness interpretation only if new launch-critical app, migration, or test-code changes land before live testing.
 
 ## XI. Deferral Boundary
 

@@ -353,7 +353,7 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 ## Support
 
-**Documentation:** [docs/README.md](docs/GITHUB_SITE/README.md)
+**Documentation:** [docs/README.md](docs/README.md)
 **Issues:** Use GitHub Issues for bug reports and feature requests
 **Security:** Report security issues privately to project maintainers
 
