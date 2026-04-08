@@ -1,577 +1,318 @@
 # Multi-Tenancy Scoping Rules
 
-**CRITICAL:** This project had a P0 data leak where students in multiple class periods with the same teacher saw aggregated data across all periods. **ALWAYS scope by `join_code`.**
+**CRITICAL:** This project had a P0 same-teacher multi-period data leak. Student data must always be resolved in the active class scope identified by `join_code`.
 
 ---
 
 ## The Golden Rules
 
-1. **`join_code` is the ABSOLUTE source of truth** for class isolation
-2. **EVERY query involving student data MUST be scoped by `join_code`**
-3. **NEVER query by `teacher_id` alone** for student data
-4. **ALWAYS test multi-tenancy scoping** for new features
-5. **NEVER assume one student = one class period**
+1. **`join_code` is the class isolation key.**
+2. **`ClassMembership` is the class-boundary authority.**
+3. **`StudentTeacher` defines teacher ownership, not class membership.**
+4. **`StudentBlock` stores per-student per-period state, not balances or membership authority.**
+5. **Never scope student data by `teacher_id` alone.**
 
 ---
 
-## Multi-Tenancy Context
+## Runtime Model
 
-### The Problem
+### Class scope
 
-**Without proper scoping:**
-- A student enrolled in Period 1 and Period 2 with the same teacher would see:
-  - Combined balances from both periods
-  - Transactions from both periods
-  - Attendance from both periods
-  - Wrong payroll calculations
-
-**This is a data leak and privacy violation.**
-
-### The Solution
-
-**`join_code` provides perfect isolation:**
-- Each class period has a unique `join_code`
-- All financial data is scoped by `join_code`
-- All queries must filter by the current `join_code`
-
----
-
-## Data Model Overview
-
-### Core Tables
-
-**Teacher/Admin:**
 ```python
-Admin (teacher account)
-├── id (primary key)
-└── username
+ClassEconomy
+├── join_code (PK)
+└── display_name / status / metadata
 
-TeacherBlock (class periods)
-├── id
-├── teacher_id (FK to Admin)
-├── join_code (unique per period)  # THE SOURCE OF TRUTH
-├── block_name (e.g., "Period 1")
-└── display_name
+ClassMembership
+├── join_code (FK to ClassEconomy)
+├── admin_id OR student_id
+├── role      # admin | student
+└── status    # active | archived
 ```
 
-**Student:**
+### Teacher ownership
+
 ```python
-Student
-├── id
-├── username
-├── first_name (encrypted)
-├── last_initial
-└── teacher_id (DEPRECATED - DO NOT USE)
-
-StudentBlock (student enrollment in specific period)
-├── id
-├── student_id (FK to Student)
-├── join_code (FK to TeacherBlock.join_code)  # CRITICAL FOR SCOPING
-├── checking_balance
-├── savings_balance
-└── is_active
-
-StudentTeacher (many-to-many relationship)
+StudentTeacher
 ├── student_id
 └── teacher_id
 ```
 
-**Financial Tables (ALL must have join_code):**
-- `Transaction` - Has `join_code`
-- `TapEvent` - Has `join_code`
-- `PayrollSettings` - Has `join_code`
-- `RentSettings` - Has `join_code`
-- `RentPayment` - Has `join_code`
-- `BankingSettings` - Has `join_code`
-- `InsurancePolicyBlock` - Has `join_code`
-- `StoreItemBlock` - Has `join_code`
+### Student records and per-class state
+
+```python
+Student
+├── id
+├── identity_id
+├── block
+├── join_code / join_code_id   # compatibility + claim flows
+├── credential hashes
+├── recovery fields
+└── opaque/internal references
+
+StudentBlock
+├── student_id
+├── seat_id
+├── period
+├── join_code
+├── tap_enabled
+├── done_for_day_date
+└── rent_hall_passes
+```
+
+### Financial and attendance scope
+
+- `Transaction.join_code`
+- `TapEvent.join_code`
+- `HallPassLog.join_code`
+- `PayrollSettings.join_code`
+- `RentSettings.join_code`
+- `BankingSettings.join_code`
+- `FeatureSettings.join_code`
+- `BalanceCache.join_code`
+
+`BalanceCache` stores posted balances. Student balances are read through scoped methods on `Student`, not from `StudentBlock`.
 
 ---
 
 ## Correct Scoping Patterns
 
-### Pattern 1: Get Students for Current Class Period
+### Pattern 1: Get students for the selected class
+
+Use session-backed helpers for ownership, then add class membership scope.
 
 ```python
-# ✅ CORRECT - Scoped by join_code
-def get_students_for_period(join_code):
-    """Get all students enrolled in this specific class period."""
-    students = Student.query.join(StudentBlock).filter(
-        StudentBlock.join_code == join_code,
-        StudentBlock.is_active == True
-    ).all()
-    return students
+from app.auth import get_admin_student_query
+from app.models import ClassMembership, Student
 
-# ❌ WRONG - Not scoped, returns students from all periods
-def get_students_for_teacher(teacher_id):
-    """DO NOT USE - Returns students from ALL periods."""
-    students = Student.query.filter_by(teacher_id=teacher_id).all()
-    return students
-```
 
-### Pattern 2: Get Transactions for Current Period
-
-```python
-# ✅ CORRECT - Scoped by join_code
-def get_period_transactions(join_code):
-    """Get transactions for this class period only."""
-    transactions = Transaction.query.filter_by(
-        join_code=join_code
-    ).order_by(Transaction.timestamp.desc()).all()
-    return transactions
-
-# ✅ CORRECT - Scoped by join_code AND student
-def get_student_transactions(student_id, join_code):
-    """Get student's transactions for specific period."""
-    transactions = Transaction.query.filter_by(
-        student_id=student_id,
-        join_code=join_code
-    ).order_by(Transaction.timestamp.desc()).all()
-    return transactions
-
-# ❌ WRONG - Not scoped, leaks across periods
-def get_student_transactions_bad(student_id):
-    """DO NOT USE - Returns transactions from ALL periods."""
-    transactions = Transaction.query.filter_by(
-        student_id=student_id
-    ).all()
-    return transactions
-```
-
-### Pattern 3: Get Student Balance
-
-```python
-# ✅ CORRECT - Get balance for specific period
-def get_student_balance(student_id, join_code):
-    """Get student's balance for specific class period."""
-    student_block = StudentBlock.query.filter_by(
-        student_id=student_id,
-        join_code=join_code
-    ).first()
-
-    if not student_block:
-        return None
-
-    return {
-        'checking': student_block.checking_balance,
-        'savings': student_block.savings_balance
-    }
-
-# ❌ WRONG - No way to scope to specific period
-def get_student_balance_bad(student_id):
-    """DO NOT USE - Which period's balance?"""
-    student = Student.query.get(student_id)
-    # Student doesn't have balance - StudentBlock does!
-    return None
-```
-
-### Pattern 4: Update Settings (Rent, Payroll, etc.)
-
-```python
-# ✅ CORRECT - Settings scoped to specific period
-def update_payroll_settings(join_code, pay_rate):
-    """Update payroll settings for this class period."""
-    settings = PayrollSettings.query.filter_by(
-        join_code=join_code
-    ).first()
-
-    if settings:
-        settings.pay_rate = pay_rate
-    else:
-        settings = PayrollSettings(
-            join_code=join_code,
-            pay_rate=pay_rate
+def get_students_for_current_class(join_code):
+    students = (
+        get_admin_student_query()
+        .join(
+            ClassMembership,
+            ClassMembership.student_id == Student.id,
         )
-        db.session.add(settings)
+        .filter(
+            ClassMembership.join_code == join_code,
+            ClassMembership.role == "student",
+            ClassMembership.status == "active",
+        )
+        .all()
+    )
+    return students
+```
 
-    db.session.commit()
-    return settings
+```python
+# WRONG: teacher ownership is not enough to identify one class
+students = Student.query.filter_by(teacher_id=teacher_id).all()
+```
 
-# ❌ WRONG - Settings by teacher_id affects all periods
-def update_payroll_settings_bad(teacher_id, pay_rate):
-    """DO NOT USE - Would apply to all periods."""
-    # This pattern doesn't work for multi-period teachers
-    pass
+### Pattern 2: Get class-scoped transactions
+
+```python
+def get_student_transactions(student_id, join_code):
+    return (
+        Transaction.query
+        .filter_by(student_id=student_id, join_code=join_code)
+        .order_by(Transaction.timestamp.desc())
+        .all()
+    )
+```
+
+### Pattern 3: Get class-scoped balances
+
+```python
+def get_student_balance(student, join_code, teacher_id):
+    return {
+        "checking": student.get_checking_balance(
+            join_code=join_code,
+            teacher_id=teacher_id,
+        ),
+        "savings": student.get_savings_balance(
+            join_code=join_code,
+            teacher_id=teacher_id,
+        ),
+    }
+```
+
+```python
+# WRONG: StudentBlock does not store balances
+student_block.checking_balance
+student_block.savings_balance
+```
+
+### Pattern 4: Update class-scoped settings
+
+```python
+def get_payroll_settings(join_code):
+    return PayrollSettings.query.filter_by(join_code=join_code).first()
+```
+
+```python
+# WRONG: teacher-global settings can affect multiple periods
+PayrollSettings.query.filter_by(teacher_id=teacher_id).first()
 ```
 
 ---
 
 ## Getting Current Class Context
 
-### In Student Routes
+### Student routes
 
 ```python
 from app.routes.student import get_current_class_context
 
-@student_bp.route('/dashboard')
-@student_required
-def dashboard():
-    """Student dashboard scoped to current class period."""
-    student_id = session.get('student_id')
 
-    # Get current class context (includes join_code)
-    context = get_current_class_context()
-    if not context:
-        return redirect(url_for('student.select_class'))
+context = get_current_class_context()
+if not context:
+    return redirect(url_for("student.select_class"))
 
-    join_code = context['join_code']
-
-    # All queries must use this join_code
-    student_block = StudentBlock.query.filter_by(
-        student_id=student_id,
-        join_code=join_code
-    ).first()
-
-    transactions = Transaction.query.filter_by(
-        student_id=student_id,
-        join_code=join_code
-    ).limit(10).all()
-
-    return render_template(
-        'student_dashboard.html',
-        student_block=student_block,
-        transactions=transactions
-    )
+join_code = context["join_code"]
+teacher_id = context["teacher_id"]
 ```
 
-### In Admin/Teacher Routes
+Use both values when you need a class-scoped balance read:
 
 ```python
-from app.auth import get_admin_student_query, get_student_for_admin
-
-@admin_bp.route('/students')
-@admin_required
-def students():
-    """View students for current class period."""
-    admin_id = session.get('admin_id')
-    join_code = session.get('current_join_code')  # Selected period
-
-    if not join_code:
-        # Teacher must select a class period first
-        return redirect(url_for('admin.select_class'))
-
-    # Use scoped helper
-    students_query = get_admin_student_query(admin_id, join_code)
-    students = students_query.all()
-
-    return render_template('admin_students.html', students=students)
+checking = student.get_checking_balance(
+    join_code=join_code,
+    teacher_id=teacher_id,
+)
 ```
+
+### Admin routes
+
+```python
+join_code = session.get("current_join_code")
+if not join_code:
+    return redirect(url_for("admin.index"))
+```
+
+For admin-accessible students:
+
+```python
+student = get_student_for_admin(student_id)
+if not student:
+    abort(404)
+```
+
+If the route is class-specific, validate the selected `join_code` before performing mutations or rendering class-bound data.
 
 ---
 
 ## Scoped Helper Functions
 
-**These are centralized in `app/auth.py`:**
+Helpers in `app/auth.py` are session-based.
 
-### `get_admin_student_query(admin_id, join_code)`
+### `get_admin_student_query(include_unassigned=True)`
 
-Returns a filtered query for students accessible to this admin in this period.
+- Returns students the current admin owns through `StudentTeacher`
+- Does **not** establish class-period scope by itself
+- Must be combined with `join_code` / `ClassMembership` / route-specific class checks when the route is period-specific
 
-```python
-# Usage
-students = get_admin_student_query(admin_id, join_code).all()
+### `get_student_for_admin(student_id, include_unassigned=True)`
 
-# Or with additional filters
-active_students = get_admin_student_query(admin_id, join_code).filter(
-    StudentBlock.is_active == True
-).all()
-```
-
-### `get_student_for_admin(admin_id, student_id, join_code)`
-
-Safely retrieves a student, ensuring the admin has access in this period.
-
-```python
-# Usage
-student = get_student_for_admin(admin_id, student_id, join_code)
-if not student:
-    flash("Student not found or no access", "error")
-    return redirect(url_for('admin.dashboard'))
-```
-
-**ALWAYS use these helpers instead of direct `Student.query` calls.**
+- Returns a single student if the current admin owns that student
+- For class-specific operations, still validate the selected class context
 
 ---
 
-## Common Multi-Tenancy Mistakes
+## Common Mistakes
 
-### ❌ MISTAKE 1: Querying by teacher_id
+### Mistake 1: Treating ownership as class scope
 
 ```python
-# WRONG - Returns students from ALL periods
-students = Student.query.filter_by(teacher_id=teacher_id).all()
+# WRONG
+students = get_admin_student_query().all()
 ```
 
 ```python
-# CORRECT - Scoped to specific period
-students = Student.query.join(StudentBlock).filter(
-    StudentBlock.join_code == join_code
-).all()
-```
-
-### ❌ MISTAKE 2: Forgetting join_code on new transactions
-
-```python
-# WRONG - Transaction without join_code
-transaction = Transaction(
-    student_id=student_id,
-    amount=50.0,
-    description="Payroll"
+# CORRECT
+students = (
+    get_admin_student_query()
+    .join(ClassMembership, ClassMembership.student_id == Student.id)
+    .filter(ClassMembership.join_code == join_code)
+    .all()
 )
-db.session.add(transaction)
+```
+
+### Mistake 2: Reading balances from `StudentBlock`
+
+```python
+# WRONG
+student_block = StudentBlock.query.filter_by(student_id=student.id, join_code=join_code).first()
+balance = student_block.checking_balance
 ```
 
 ```python
-# CORRECT - Always include join_code
-transaction = Transaction(
-    student_id=student_id,
-    join_code=join_code,  # REQUIRED
-    amount=50.0,
-    description="Payroll"
+# CORRECT
+balance = student.get_checking_balance(join_code=join_code, teacher_id=teacher_id)
+```
+
+### Mistake 3: Creating ledger records without `join_code`
+
+```python
+# WRONG
+db.session.add(Transaction(student_id=student.id, amount=50))
+```
+
+```python
+# CORRECT
+db.session.add(
+    Transaction(
+        student_id=student.id,
+        join_code=join_code,
+        amount=50,
+    )
 )
-db.session.add(transaction)
 ```
 
-### ❌ MISTAKE 3: Assuming one student = one StudentBlock
+### Mistake 4: Mixing hall-pass state with student lock state
 
-```python
-# WRONG - Returns first StudentBlock, might be wrong period
-student_block = StudentBlock.query.filter_by(
-    student_id=student_id
-).first()  # Which period???
-```
-
-```python
-# CORRECT - Specify the period
-student_block = StudentBlock.query.filter_by(
-    student_id=student_id,
-    join_code=join_code  # SPECIFIC PERIOD
-).first()
-```
-
-### ❌ MISTAKE 4: Using session student_id without join_code
-
-```python
-# WRONG - No period context
-@student_bp.route('/balance')
-def balance():
-    student_id = session.get('student_id')
-    # How do we know which period's balance to show?
-    return "???"
-```
-
-```python
-# CORRECT - Get current class context first
-@student_bp.route('/balance')
-def balance():
-    context = get_current_class_context()
-    join_code = context['join_code']
-    student_id = session.get('student_id')
-
-    student_block = StudentBlock.query.filter_by(
-        student_id=student_id,
-        join_code=join_code
-    ).first()
-
-    return render_template('balance.html', student_block=student_block)
-```
+- `HallPassLog.status` supports `pending`, `approved`, `rejected`, `left`, `returned`
+- `StudentBlock.done_for_day_date` is a separate per-class student lock state
 
 ---
 
-## Testing Multi-Tenancy
+## Current Status of Legacy Teacher Scoping
 
-### Required Test Pattern
-
-```python
-def test_transactions_scoped_by_join_code(client, app):
-    """Test transactions are isolated by join_code."""
-    with app.app_context():
-        # Setup: Create teacher with two class periods
-        teacher = Admin(username="teacher1", ...)
-        db.session.add(teacher)
-        db.session.flush()
-
-        # Period 1
-        block1 = TeacherBlock(
-            teacher_id=teacher.id,
-            join_code="PERIOD1",
-            block_name="Period 1"
-        )
-        db.session.add(block1)
-
-        student1 = Student(username="student1", ...)
-        db.session.add(student1)
-        db.session.flush()
-
-        student_block1 = StudentBlock(
-            student_id=student1.id,
-            join_code="PERIOD1",
-            checking_balance=100.0
-        )
-        db.session.add(student_block1)
-
-        transaction1 = Transaction(
-            student_id=student1.id,
-            join_code="PERIOD1",
-            amount=50.0,
-            description="Period 1 transaction"
-        )
-        db.session.add(transaction1)
-
-        # Period 2 (SAME student, different period)
-        block2 = TeacherBlock(
-            teacher_id=teacher.id,
-            join_code="PERIOD2",
-            block_name="Period 2"
-        )
-        db.session.add(block2)
-
-        student_block2 = StudentBlock(
-            student_id=student1.id,  # SAME STUDENT
-            join_code="PERIOD2",
-            checking_balance=200.0  # DIFFERENT BALANCE
-        )
-        db.session.add(student_block2)
-
-        transaction2 = Transaction(
-            student_id=student1.id,  # SAME STUDENT
-            join_code="PERIOD2",
-            amount=75.0,
-            description="Period 2 transaction"
-        )
-        db.session.add(transaction2)
-
-        db.session.commit()
-
-        # Execute: Query for PERIOD1 only
-        period1_transactions = Transaction.query.filter_by(
-            student_id=student1.id,
-            join_code="PERIOD1"
-        ).all()
-
-        # Assert: Only PERIOD1 transaction returned
-        assert len(period1_transactions) == 1
-        assert period1_transactions[0].amount == 50.0
-        assert period1_transactions[0].join_code == "PERIOD1"
-
-        # Execute: Query for PERIOD2 only
-        period2_transactions = Transaction.query.filter_by(
-            student_id=student1.id,
-            join_code="PERIOD2"
-        ).all()
-
-        # Assert: Only PERIOD2 transaction returned
-        assert len(period2_transactions) == 1
-        assert period2_transactions[0].amount == 75.0
-        assert period2_transactions[0].join_code == "PERIOD2"
-```
+- The runtime model does **not** include `students.teacher_id`.
+- Teacher ownership lives in `student_teachers`.
+- Class membership lives in `class_memberships`.
+- Some comments or legacy utilities still refer to older teacher-global assumptions; do not copy that pattern into new code.
 
 ---
 
-## Legacy `teacher_id` Column
+## Session Checklist
 
-### Current Status
-
-The `students.teacher_id` column is **DEPRECATED** and should not be used.
-
-**Why it exists:**
-- Legacy column from before multi-tenancy support
-- Kept for backward compatibility during migration
-
-**Why NOT to use it:**
-- Doesn't support multiple teachers per student
-- Doesn't distinguish between class periods
-- Will cause data leaks for multi-period students
-
-**Correct approach:**
-- Use `StudentTeacher` table for teacher-student relationships
-- Use `StudentBlock` table for period-specific data
-- Use `join_code` for all scoping
-
-### Migration Plan
-
-1. ✅ All routes updated to use `StudentTeacher` and `StudentBlock`
-2. ✅ All queries scoped by `join_code`
-3. ✅ Tests verify multi-tenancy isolation
-4. ⏳ **Future:** Remove `teacher_id` column entirely
-
-**DO NOT** add new code that uses `students.teacher_id`.
+- [ ] Resolve or validate the active `join_code`
+- [ ] Use ownership helpers for teacher access
+- [ ] Add class membership or route-specific class checks for period-specific reads/writes
+- [ ] Include `join_code` on new attendance, ledger, and hall-pass records
+- [ ] Use `Student.get_checking_balance()` / `get_savings_balance()` for balances
+- [ ] Do not use `teacher_id` alone for student scoping
 
 ---
 
-## Session Management
+## Tables That Must Be Class-Scoped
 
-### Student Sessions
-
-```python
-# When student logs in
-session['student_id'] = student.id
-session['user_type'] = 'student'
-
-# When student selects class period
-session['current_join_code'] = join_code
-
-# Always check for current_join_code in routes
-join_code = session.get('current_join_code')
-if not join_code:
-    return redirect(url_for('student.select_class'))
-```
-
-### Admin/Teacher Sessions
-
-```python
-# When teacher logs in
-session['admin_id'] = admin.id
-session['user_type'] = 'admin'
-
-# When teacher selects class period
-session['current_join_code'] = join_code
-
-# Always check for current_join_code in routes
-join_code = session.get('current_join_code')
-if not join_code:
-    return redirect(url_for('admin.select_class'))
-```
+- `transactions`
+- `tap_events`
+- `hall_pass_logs`
+- `student_blocks`
+- `balance_cache`
+- `payroll_settings`
+- `rent_settings`
+- `rent_payments`
+- `rent_waivers`
+- `banking_settings`
+- `feature_settings`
+- `student_items`
+- `student_insurance`
+- `insurance_claims`
 
 ---
 
-## Quick Reference
-
-### Correct Scoping Checklist
-
-- [ ] Query includes `join_code` filter
-- [ ] Using scoped helpers (`get_admin_student_query`, `get_student_for_admin`)
-- [ ] Getting `join_code` from session or context
-- [ ] Creating new records with `join_code`
-- [ ] Tests verify period isolation
-- [ ] NOT using `teacher_id` for scoping
-- [ ] NOT assuming one student = one period
-
-### Tables That MUST Be Scoped
-
-**Financial:**
-- `Transaction`
-- `TapEvent`
-- `PayrollSettings`
-- `PayrollReward`
-- `PayrollFine`
-- `RentSettings`
-- `RentPayment`
-- `RentWaiver`
-- `BankingSettings`
-
-**Store & Insurance:**
-- `StoreItemBlock`
-- `InsurancePolicyBlock`
-- `StudentInsurance`
-- `InsuranceClaim`
-
-**Student Data:**
-- `StudentBlock` (the scoping table itself)
-- Any query returning student data
-
----
-
-**Last Updated:** 2025-12-13
-**Critical Incident:** P0 same-teacher multi-period data leak (fixed 2025-11-29)
-**Documentation:** `docs/security/CRITICAL_SAME_TEACHER_LEAK.md`
+**Last Updated:** 2026-03-08
+**Critical Incident:** P0 same-teacher multi-period data leak

@@ -100,15 +100,8 @@ def test_student_dashboard_displays_balance(client, app):
         block = TeacherBlock(teacher_id=teacher.id, join_code=join_code)
         db.session.add(block)
 
-        student = Student(username="student1", teacher_id=teacher.id, ...)
+        student = create_student_for_join_code(join_code=join_code, teacher=teacher)
         db.session.add(student)
-
-        student_block = StudentBlock(
-            student_id=student.id,
-            join_code=join_code,
-            checking_balance=100.0
-        )
-        db.session.add(student_block)
         db.session.commit()
 
         # Login
@@ -561,12 +554,9 @@ def test_transfer_updates_balances(client, app):
     assert response.status_code == 200
     assert b'Transfer successful' in response.data
 
-    # Verify balances updated
-    sender_block = StudentBlock.query.filter_by(student_id=sender.id).first()
-    recipient_block = StudentBlock.query.filter_by(student_id=recipient.id).first()
-
-    assert sender_block.checking_balance == 75.0
-    assert recipient_block.checking_balance == 75.0
+    # Verify balances updated in the active class scope
+    assert sender.get_checking_balance(join_code=join_code, teacher_id=teacher.id) == 75.0
+    assert recipient.get_checking_balance(join_code=join_code, teacher_id=teacher.id) == 75.0
 ```
 
 ---

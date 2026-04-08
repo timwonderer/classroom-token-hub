@@ -470,7 +470,7 @@ def create_app():
             return None
 
         # Always allow health check and static assets.
-        if request.endpoint in {"main.health_check"}:
+        if request.endpoint in {"main.health_check", "main.health_invariants"}:
             return None
         if request.path.startswith("/static/"):
             return None
@@ -543,7 +543,7 @@ def create_app():
         # Skip for static files, health checks, and public routes
         if request.path.startswith("/static/"):
             return None
-        if request.endpoint in {"main.health_check"}:
+        if request.endpoint in {"main.health_check", "main.health_invariants"}:
             return None
 
         # Set tenant context for both admin and student sessions
@@ -595,7 +595,7 @@ def create_app():
         # Skip for static files and health checks
         if request.path.startswith("/static/"):
             return None
-        if request.endpoint in {"main.health_check", "main.health_check_deep"}:
+        if request.endpoint in {"main.health_check", "main.health_check_deep", "main.health_invariants"}:
             return None
 
         # Only check in production

@@ -16,6 +16,7 @@ import random
 import string
 import secrets
 import threading
+import uuid
 import qrcode
 import hashlib
 from types import SimpleNamespace
@@ -2641,6 +2642,7 @@ def give_bonus_all():
         applied_count += 1
 
         if amount < 0 and shortfall > 0:
+            _transfer_cid = str(uuid.uuid4())
             transfer_tx_withdraw = Transaction(
                 student_id=student.id,
                 teacher_id=current_admin_id,
@@ -2649,7 +2651,8 @@ def give_bonus_all():
                 account_type='savings',
                 status=TransactionStatus.PENDING,
                 type='Withdrawal',
-                description='Overdraft protection transfer to checking'
+                description='Overdraft protection transfer to checking',
+                transfer_correlation_id=_transfer_cid,
             )
             transfer_tx_deposit = Transaction(
                 student_id=student.id,
@@ -2659,7 +2662,8 @@ def give_bonus_all():
                 account_type='checking',
                 status=TransactionStatus.PENDING,
                 type='Deposit',
-                description='Overdraft protection transfer from savings'
+                description='Overdraft protection transfer from savings',
+                transfer_correlation_id=_transfer_cid,
             )
             db.session.add(transfer_tx_withdraw)
             db.session.add(transfer_tx_deposit)
@@ -9426,6 +9430,7 @@ def payroll_apply_fine(fine_id):
                 applied_count += 1
 
                 if shortfall > 0:
+                    _transfer_cid = str(uuid.uuid4())
                     transfer_tx_withdraw = Transaction(
                         student_id=student.id,
                         teacher_id=current_admin_id,
@@ -9434,7 +9439,8 @@ def payroll_apply_fine(fine_id):
                         account_type='savings',
                         status=TransactionStatus.PENDING,
                         type='Withdrawal',
-                        description='Overdraft protection transfer to checking'
+                        description='Overdraft protection transfer to checking',
+                        transfer_correlation_id=_transfer_cid,
                     )
                     transfer_tx_deposit = Transaction(
                         student_id=student.id,
@@ -9444,7 +9450,8 @@ def payroll_apply_fine(fine_id):
                         account_type='checking',
                         status=TransactionStatus.PENDING,
                         type='Deposit',
-                        description='Overdraft protection transfer from savings'
+                        description='Overdraft protection transfer from savings',
+                        transfer_correlation_id=_transfer_cid,
                     )
                     db.session.add(transfer_tx_withdraw)
                     db.session.add(transfer_tx_deposit)
@@ -9537,6 +9544,7 @@ def payroll_manual_payment():
                     applied_count += 1
 
                     if account_type == 'checking' and amount < 0 and shortfall > 0:
+                        _transfer_cid = str(uuid.uuid4())
                         transfer_tx_withdraw = Transaction(
                             student_id=student.id,
                             teacher_id=current_admin_id,
@@ -9545,7 +9553,8 @@ def payroll_manual_payment():
                             account_type='savings',
                             status=TransactionStatus.PENDING,
                             type='Withdrawal',
-                            description='Overdraft protection transfer to checking'
+                            description='Overdraft protection transfer to checking',
+                            transfer_correlation_id=_transfer_cid,
                         )
                         transfer_tx_deposit = Transaction(
                             student_id=student.id,
@@ -9555,7 +9564,8 @@ def payroll_manual_payment():
                             account_type='checking',
                             status=TransactionStatus.PENDING,
                             type='Deposit',
-                            description='Overdraft protection transfer from savings'
+                            description='Overdraft protection transfer from savings',
+                            transfer_correlation_id=_transfer_cid,
                         )
                         db.session.add(transfer_tx_withdraw)
                         db.session.add(transfer_tx_deposit)
