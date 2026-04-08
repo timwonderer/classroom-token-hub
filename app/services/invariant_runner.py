@@ -48,10 +48,19 @@ def _extract_supply_metrics(checks):
 
 def run_invariants():
     started_at = time.monotonic()
-    checks = [check() for check in _CHECKS]
+    checks = []
+    for check in _CHECKS:
+        try:
+            checks.append(check())
+        except Exception as exc:  # noqa: BLE001
+            checks.append({
+                "name": getattr(check, "__module__", "unknown").split(".")[-1],
+                "status": "FAIL",
+                "details": f"Unhandled exception: {exc}",
+            })
     duration_ms = round((time.monotonic() - started_at) * 1000)
 
-    failed = [c for c in checks if c["status"] == "FAIL"]
+    failed = [c for c in checks if c.get("status") == "FAIL"]
     supply_metrics = _extract_supply_metrics(checks)
 
     result = {

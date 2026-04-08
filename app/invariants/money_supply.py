@@ -3,7 +3,11 @@ Invariant: Money Supply Integrity
 
 Three checks against economic drift and exploitation. All assume:
   - credits are positive amount_cents, debits are negative (sign convention)
-  - only status='posted' AND NOT is_void rows contribute to balances
+  - only status='POSTED' AND NOT is_void rows contribute to balances
+
+Table: transaction (singular) — Transaction.__tablename__ = 'transaction'
+Status enum: uppercase in DB ('POSTED') per
+  migrations/versions/ec84c1f59c15_add_ledger_and_settlement_models.py
 
 ─────────────────────────────────────────────────────────────────────────────
 Check 1 — Aggregate balance consistency
@@ -39,7 +43,7 @@ Metrics emitted on every run (PASS or FAIL):
     total_supply_cents          — sum of all balance_cache rows
     total_posted_ledger_cents   — sum of all posted transaction amount_cents
     delta_cents                 — cache − ledger (should always be 0)
-    per_class_supply            — per-join_code breakdown (top 20)
+    per_class_supply            — per-join_code breakdown (top 20, logs only)
 """
 
 from sqlalchemy import text
@@ -64,8 +68,8 @@ def run():
 
         total_ledger_cents = db.session.execute(text("""
             SELECT COALESCE(SUM(amount_cents), 0)
-            FROM transactions
-            WHERE status = 'posted'
+            FROM transaction
+            WHERE status = 'POSTED'
               AND NOT is_void
         """)).scalar() or 0
 
@@ -86,8 +90,8 @@ def run():
                 SUM(amount_cents)   AS net_cents,
                 MIN(amount_cents)   AS min_cents,
                 MAX(amount_cents)   AS max_cents
-            FROM transactions
-            WHERE status = 'posted'
+            FROM transaction
+            WHERE status = 'POSTED'
               AND NOT is_void
               AND transfer_correlation_id IS NOT NULL
             GROUP BY transfer_correlation_id
@@ -108,8 +112,8 @@ def run():
 
         legacy_imbalanced = db.session.execute(text("""
             SELECT student_id, join_code, SUM(amount_cents) AS net_cents
-            FROM transactions
-            WHERE status = 'posted'
+            FROM transaction
+            WHERE status = 'POSTED'
               AND NOT is_void
               AND transfer_correlation_id IS NULL
               AND description ILIKE 'Transfer%'
@@ -123,7 +127,7 @@ def run():
                 f"legacy transfer rows (pre-migration, NULL correlation_id)"
             )
 
-        # ── Per-class supply breakdown (logged only, not a FAIL condition) ───
+        # ── Per-class supply breakdown (logged only via runner, not in HTTP) ─
 
         per_class = [
             {"join_code": row[0], "supply_cents": row[1]}

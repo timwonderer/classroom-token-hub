@@ -1,9 +1,11 @@
 """
 Invariant: Idempotency Key Uniqueness
 
-Verifies that no idempotency_key appears more than once in the transactions table.
+Verifies that no idempotency_key appears more than once in the transaction table.
 The database enforces this via a unique constraint, but this check validates the
 invariant at the application layer and catches any constraint bypasses.
+
+Table: transaction (singular) — Transaction.__tablename__ = 'transaction'
 """
 
 from sqlalchemy import text
@@ -14,7 +16,7 @@ def run():
     try:
         rows = db.session.execute(text("""
             SELECT idempotency_key, COUNT(*) AS occurrence_count
-            FROM transactions
+            FROM transaction
             WHERE idempotency_key IS NOT NULL
             GROUP BY idempotency_key
             HAVING COUNT(*) > 1
