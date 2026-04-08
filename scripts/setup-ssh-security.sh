@@ -6,10 +6,10 @@
 # by generating the KNOWN_HOSTS content that needs to be added to GitHub Secrets.
 #
 # Usage:
-#   ./scripts/setup-ssh-security.sh <production-server-ip>
+#   ./scripts/setup-ssh-security.sh <production-server-host>
 #
 # Example:
-#   ./scripts/setup-ssh-security.sh 142.93.123.45
+#   ./scripts/setup-ssh-security.sh classroom-token-hub.tailnet-name.ts.net
 #
 
 set -e
@@ -46,22 +46,22 @@ print_header() {
     echo ""
 }
 
-# Check if server IP was provided
+# Check if server host was provided
 if [ -z "$1" ]; then
-    print_error "Production server IP not provided"
+    print_error "Production server host not provided"
     echo ""
-    echo "Usage: $0 <production-server-ip>"
-    echo "Example: $0 142.93.123.45"
+    echo "Usage: $0 <production-server-host>"
+    echo "Example: $0 classroom-token-hub.tailnet-name.ts.net"
     echo ""
     exit 1
 fi
 
-SERVER_IP="$1"
+SERVER_HOST="$1"
 KNOWN_HOSTS_FILE="known_hosts_github_secret.txt"
 
 print_header "SSH Security Setup for GitHub Actions"
 
-print_info "Production Server IP: $SERVER_IP"
+print_info "Production Server Host: $SERVER_HOST"
 echo ""
 
 # Step 1: Get SSH host keys
@@ -75,12 +75,12 @@ if ! command -v ssh-keyscan &> /dev/null; then
 fi
 
 # Scan for host keys
-print_info "Running: ssh-keyscan -H $SERVER_IP"
-if ssh-keyscan -H "$SERVER_IP" > "$KNOWN_HOSTS_FILE" 2>/dev/null; then
+print_info "Running: ssh-keyscan -H $SERVER_HOST"
+if ssh-keyscan -H "$SERVER_HOST" > "$KNOWN_HOSTS_FILE"; then
     print_success "Successfully retrieved SSH host keys"
 else
     print_error "Failed to retrieve SSH host keys"
-    print_warning "Make sure the server is reachable and SSH port 22 is open"
+    print_warning "Make sure the host is reachable from this machine and SSH is listening"
     exit 1
 fi
 
@@ -88,9 +88,9 @@ fi
 if [ ! -s "$KNOWN_HOSTS_FILE" ]; then
     print_error "No host keys were retrieved"
     print_warning "This could mean:"
-    print_warning "  1. The server is not reachable"
-    print_warning "  2. SSH is not running on port 22"
-    print_warning "  3. A firewall is blocking the connection"
+    print_warning "  1. The server is not reachable from this machine"
+    print_warning "  2. SSH is not listening on the default port"
+    print_warning "  3. A firewall or Tailscale ACL is blocking the connection"
     rm -f "$KNOWN_HOSTS_FILE"
     exit 1
 fi
@@ -124,32 +124,12 @@ echo "   (or run: ${YELLOW}cat $KNOWN_HOSTS_FILE | xclip -selection clipboard${N
 echo "6. Click 'Add secret'"
 echo ""
 
-# Step 5: Workflow update instructions
-print_header "Step 4: Update GitHub Actions Workflows"
+# Step 5: Verification
+print_header "Step 4: Verification"
 
-echo "The following workflow files need to be updated:"
+echo "After adding the required GitHub Actions secrets:"
 echo ""
-echo "1. ${YELLOW}.github/workflows/deploy.yml${NC}"
-echo "   - Replace with: ${GREEN}.github/workflows/deploy.yml.FIXED${NC}"
-echo ""
-echo "2. ${YELLOW}.github/workflows/toggle-maintenance.yml${NC}"
-echo "   - Replace with: ${GREEN}.github/workflows/toggle-maintenance.yml.FIXED${NC}"
-echo ""
-print_info "Or run the following commands:"
-echo ""
-echo "  ${YELLOW}cp .github/workflows/deploy.yml.FIXED .github/workflows/deploy.yml${NC}"
-echo "  ${YELLOW}cp .github/workflows/toggle-maintenance.yml.FIXED .github/workflows/toggle-maintenance.yml${NC}"
-echo ""
-
-# Step 6: Verification
-print_header "Step 5: Verification"
-
-echo "After updating workflows and adding the secret:"
-echo ""
-echo "1. Commit and push your workflow changes:"
-echo "   ${YELLOW}git add .github/workflows/${NC}"
-echo "   ${YELLOW}git commit -m 'SECURITY: Enable SSH host key verification'${NC}"
-echo "   ${YELLOW}git push${NC}"
+echo "1. Confirm the Tailscale-backed workflows are present on the deployment branch"
 echo ""
 echo "2. Trigger a test deployment (or wait for next commit to main)"
 echo ""
@@ -199,8 +179,9 @@ print_success "Setup complete!"
 echo ""
 print_info "Next steps:"
 echo "  1. Add KNOWN_HOSTS to GitHub Secrets"
-echo "  2. Update workflow files"
-echo "  3. Test deployment"
+echo "  2. Set PRODUCTION_TAILSCALE_HOST to the same host used for ssh-keyscan"
+echo "  3. Add TS_OAUTH_CLIENT_ID and TS_OAUTH_SECRET for the Tailscale GitHub Action"
+echo "  4. Test deployment"
 echo ""
 print_info "For detailed instructions, see:"
 echo "  ${YELLOW}docs/security/SECURITY_REMEDIATION_GUIDE.md${NC}"

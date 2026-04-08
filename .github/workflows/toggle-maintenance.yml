@@ -46,6 +46,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+    - name: Connect to Tailscale
+      uses: tailscale/github-action@v4
+      with:
+        oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+        oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+        tags: tag:ci
+        ping: ${{ secrets.PRODUCTION_TAILSCALE_HOST }}
+
     - name: Set up SSH
       uses: webfactory/ssh-agent@v0.10.0
       with:
@@ -64,7 +72,7 @@ jobs:
 
     - name: Update maintenance mode on server
       env:
-        PRODUCTION_SERVER_IP: ${{ secrets.PRODUCTION_SERVER_IP }}
+        PRODUCTION_SERVER_HOST: ${{ secrets.PRODUCTION_TAILSCALE_HOST }}
         INPUT_ENABLED: ${{ inputs.enabled }}
         INPUT_MESSAGE: ${{ inputs.message }}
         INPUT_EXPECTED_END: ${{ inputs.expected_end }}
@@ -79,7 +87,7 @@ jobs:
 
         SSH_ENV_VARS="MODE_VALUE=$(printf %q "${MODE_VALUE}") MESSAGE=$(printf %q "${INPUT_MESSAGE}") EXPECTED_END=$(printf %q "${INPUT_EXPECTED_END}") CONTACT=$(printf %q "${INPUT_CONTACT}") BADGE_TYPE=$(printf %q "${INPUT_BADGE_TYPE}") STATUS_DESCRIPTION=$(printf %q "${INPUT_STATUS_DESCRIPTION}")"
 
-        ssh root@"$PRODUCTION_SERVER_IP" "export ${SSH_ENV_VARS}; bash -s" << 'EOF'
+        ssh root@"$PRODUCTION_SERVER_HOST" "export ${SSH_ENV_VARS}; bash -s" << 'EOF'
           set -e
 
           echo 'Navigating to project directory...'
@@ -146,4 +154,3 @@ jobs:
         else
           echo "Maintenance mode DISABLED - Site is live"
         fi
-
