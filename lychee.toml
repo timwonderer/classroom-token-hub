@@ -7,4 +7,5 @@ exclude = [
 
 exclude_path = [
   "(^|/)templates/",
+  "(^|/).claude/",
 ]

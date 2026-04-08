@@ -6,12 +6,16 @@ catch_response_codes = [404, 410, 500]
 exclude_files = [
   "templates/*",
   "docs/LOGS/AUDITS/*",
+  ".claude/**",
 ]
 exclude_links = [
   "https://fonts.googleapis.com/*",
   "https://fonts.gstatic.com/*",
   "https://cdn.jsdelivr.net/*",
   "https://img.shields.io/*",
+  "https://github.com/YOUR_USERNAME/*",
+  "https://github.com/YOUR_REPO/*",
+  "https://github.com/timwonderer/classroom-economy/security/*",
 ]
 force_get_requests_for_links = [
   "https://app.classroomtokenhub.com/*",
