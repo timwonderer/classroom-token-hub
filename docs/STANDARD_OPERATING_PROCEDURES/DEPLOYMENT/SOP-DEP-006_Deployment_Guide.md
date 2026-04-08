@@ -132,4 +132,21 @@ If you encounter migration errors that cannot be resolved, you can reset the dat
 The deployment workflow is defined in:
 
 - `.github/workflows/deploy.yml` (for Digital Ocean)
-- `.github/workflows/fly-deploy.yml` (for Fly.io staging)
+
+### Tailscale-backed DigitalOcean deployment
+
+The DigitalOcean deployment and maintenance workflows connect to the production server through Tailscale before running SSH. This allows the public SSH port to remain closed while preserving the existing SSH deploy script and host key verification.
+
+Required GitHub Actions secrets:
+
+- `TS_OAUTH_CLIENT_ID`: Tailscale OAuth client ID for the GitHub Actions runner.
+- `TS_OAUTH_SECRET`: Tailscale OAuth client secret.
+- `PRODUCTION_TAILSCALE_HOST`: The production server's Tailscale DNS name or 100.x address. Use this same value when generating `KNOWN_HOSTS`.
+- `KNOWN_HOSTS`: SSH host keys for `PRODUCTION_TAILSCALE_HOST`, generated with `./scripts/setup-ssh-security.sh <production-tailscale-host>`.
+- `DO_DEPLOY_KEY`: Existing SSH private key for the server.
+
+Tailscale requirements:
+
+- The server must be joined to the tailnet and reachable at `PRODUCTION_TAILSCALE_HOST`.
+- The OAuth client must be allowed to create ephemeral nodes tagged `tag:ci`.
+- Tailnet ACLs must allow `tag:ci` to reach the production server on SSH.

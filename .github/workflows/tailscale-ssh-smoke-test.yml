@@ -1,0 +1,40 @@
+name: Tailscale SSH Smoke Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - name: Connect to Tailscale
+      uses: tailscale/github-action@v4
+      with:
+        oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+        oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+        tags: tag:ci
+        ping: ${{ secrets.PRODUCTION_TAILSCALE_HOST }}
+
+    - name: Set up SSH
+      uses: webfactory/ssh-agent@v0.10.0
+      with:
+        ssh-private-key: ${{ secrets.DO_DEPLOY_KEY }}
+
+    - name: Set up SSH host key verification
+      env:
+        KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+      run: |
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+        chmod 644 ~/.ssh/known_hosts
+
+    - name: Verify SSH over Tailscale
+      env:
+        PRODUCTION_SERVER_HOST: ${{ secrets.PRODUCTION_TAILSCALE_HOST }}
+      run: |
+        ssh -o BatchMode=yes root@"$PRODUCTION_SERVER_HOST" 'set -e; echo "Connected as $(whoami) on $(hostname)"; test -d ~/classroom-economy'

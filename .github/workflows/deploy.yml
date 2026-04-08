@@ -16,6 +16,14 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
+    - name: Connect to Tailscale
+      uses: tailscale/github-action@v4
+      with:
+        oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+        oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+        tags: tag:ci
+        ping: ${{ secrets.PRODUCTION_TAILSCALE_HOST }}
+
     - name: Set up SSH
       uses: webfactory/ssh-agent@v0.10.0
       with:
@@ -34,7 +42,7 @@ jobs:
 
     - name: Deploy to DO Production Server
       env:
-        PRODUCTION_SERVER_IP: ${{ secrets.PRODUCTION_SERVER_IP }}
+        PRODUCTION_SERVER_HOST: ${{ secrets.PRODUCTION_TAILSCALE_HOST }}
         TURNSTILE_SITE: ${{ secrets.TURNSTILE_SITE_KEY }}
         TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET_KEY }}
         PASSWORDLESS_API_KEY: ${{ secrets.PASSWORDLESS_API_KEY }}
@@ -50,7 +58,7 @@ jobs:
         SSH_ENV_VARS="TURNSTILE_SITE=$(printf %q "$TURNSTILE_SITE") TURNSTILE_SECRET=$(printf %q "$TURNSTILE_SECRET") PASSWORDLESS_API_KEY=$(printf %q "$PASSWORDLESS_API_KEY") PASSWORDLESS_API_PUBLIC=$(printf %q "$PASSWORDLESS_API_PUBLIC") DIGITALOCEAN_ACCESS_TOKEN=$(printf %q "$DIGITALOCEAN_ACCESS_TOKEN") OTEL_TRACES_ENABLED=$(printf %q "$OTEL_TRACES_ENABLED") OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=$(printf %q "$OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") OTEL_SERVICE_NAME=$(printf %q "$OTEL_SERVICE_NAME") OTEL_EXPORTER_OTLP_HEADERS=$(printf %q "$OTEL_EXPORTER_OTLP_HEADERS")"
 
         # Connect to the production server and deploy
-        ssh root@"$PRODUCTION_SERVER_IP" "export ${SSH_ENV_VARS}; bash -s" << 'EOF'
+        ssh root@"$PRODUCTION_SERVER_HOST" "export ${SSH_ENV_VARS}; bash -s" << 'EOF'
 
           set -e  # Exit immediately if a command exits with a non-zero status
 

@@ -51,12 +51,12 @@
         <h2 class="accordion-header" id="economyHealthGuideHeadingHours">
           <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideHours" aria-expanded="false" aria-controls="economyHealthGuideHours">
             <span class="material-symbols-outlined icon-section me-2">schedule</span>
-            <strong>Update Expected Hours</strong>
+            <strong>Manage Payroll Inputs</strong>
           </button>
         </h2>
         <div id="economyHealthGuideHours" class="accordion-collapse collapse mt-2" aria-labelledby="economyHealthGuideHeadingHours" data-bs-parent="#economyHealthGuideAccordion">
           <div class="accordion-body">
-            <p>Adjust expected hours to match your class schedule and update per class or across all classes.</p>
+            <p>Update pay rate and expected weekly hours in Payroll, then return here to review the resulting CWI and recommendations.</p>
           </div>
         </div>
       </div>
@@ -71,11 +71,11 @@
           <div class="accordion-body">
             <ul class="mb-0">
               <li><strong>Class selector:</strong> choose which class period you are reviewing. Each class has its own CWI based on its payroll settings.</li>
-              <li><strong>Expected weekly hours:</strong> updates the CWI and balance calculations for the selected class.</li>
+              <li><strong>Payroll inputs:</strong> pay rate and weekly hours are managed in Payroll and feed the CWI shown here.</li>
               <li><strong>Balance snapshot:</strong> flags mismatches between CWI and costs so you can adjust settings.</li>
             </ul>
             <div class="alert alert-info mt-3 mb-0">
-              <strong>Side effects:</strong> Adjusting hours changes CWI immediately for the selected class.
+              <strong>Side effects:</strong> Saving Payroll changes updates the CWI and downstream balance guidance for the selected class.
             </div>
           </div>
         </div>
@@ -100,16 +100,16 @@
   </div>
 </div>
 
-<div class="container-fluid py-3">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3">
+<div class="container-fluid py-1 economy-health-page">
+  <div class="d-flex flex-wrap  align-items-center mb-3 gap-3">
     <div class="d-flex align-items-center gap-2">
       <p class="text-muted mb-0">Review your current CWI and see how payroll, rent, banking, insurance, and the store fit together.</p>
       {{ help.help_icon("user-guides/diagnostics/teacher/attendance-payroll", "Economy health help") }}
     </div>
-    {% if blocks|length > 1 %}
+    {% if blocks|length >= 1 %}
     <div class="d-flex align-items-center gap-2">
-      <label for="classSelector" class="text-muted mb-0">Class:</label>
-      <select id="classSelector" class="form-select" style="width: auto;" onchange="window.location.href='{{ url_for('admin.economy_health') }}?block=' + encodeURIComponent(this.value)">
+      <label for="classSelector" class="fw-semibold mb-0">Class:</label>
+      <select id="classSelector" class="form-select col-auto"  onchange="window.location.href='{{ url_for('admin.economy_health') }}?block=' + encodeURIComponent(this.value)">
         {% for block in blocks %}
         <option value="{{ block }}" {% if selected_block == block %}selected{% endif %}>{{ block }}</option>
         {% endfor %}
@@ -128,371 +128,441 @@
   </div>
   {% endif %}
 
-  <div class="card shadow-sm mb-3">
-    <div class="card-body">
-      <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
-        <div>
-          <h5 class="mb-1"><span class="material-symbols-outlined me-2">tune</span>Economy Policy</h5>
-          <p class="text-muted mb-0">Pick the classroom pressure profile, then optionally realign current settings.</p>
-          {% if selected_class_label %}
-          <div class="small text-muted mt-2">
-            This policy mode applies to <strong>{{ selected_class_label }}</strong>{% if blocks|length > 1 %} only{% endif %}.
-          </div>
-          {% endif %}
-        </div>
-        <div class="text-end">
-          <div class="small text-muted">Alignment</div>
-          {% if policy_summary.overall_status == 'aligned' %}
-          <span class="badge bg-success">Aligned</span>
-          {% elif policy_summary.overall_status == 'slightly_off' %}
-          <span class="badge bg-warning text-dark">Slightly Off</span>
-          {% else %}
-          <span class="badge bg-danger">Significantly Off</span>
-          {% endif %}
-          {% if policy_summary.updated_at %}
-          <div class="small text-muted mt-1">Last updated: {{ policy_summary.updated_at.strftime('%B %-d, %Y') if policy_summary.updated_at else '' }}</div>
-          {% endif %}
-        </div>
-      </div>
-
-      <form method="post" action="{{ url_for('admin.update_economy_policy') }}" class="row g-3 align-items-stretch">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="block" value="{{ selected_block or '' }}">
-        {% for mode_key, mode in policy_modes.items() %}
-        <div class="col-lg-4">
-          <label class="border rounded p-3 h-100 d-block {% if policy_summary.mode == mode_key %}border-primary bg-light{% endif %}">
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="policy_mode" value="{{ mode_key }}" {% if policy_summary.mode == mode_key %}checked{% endif %}>
-              <span class="form-check-label fw-semibold">{{ mode.label }}</span>
-            </div>
-            <div class="small text-muted mt-2">{{ mode.summary }}</div>
-            <div class="small mt-2">{{ mode.description }}</div>
-          </label>
-        </div>
-        {% endfor %}
-        <div class="col-12 d-flex flex-wrap gap-2 align-items-center">
-          <button class="btn btn-primary" type="submit">Save Policy Mode</button>
-          {% if payroll_settings %}
-          <a class="btn btn-outline-secondary" href="{{ url_for('admin.economy_health', block=selected_block, review_rebalance=1) }}">Review Recommended Rebalance</a>
-          {% endif %}
-          {% if policy_summary.pending_rebalance_json %}
-          <span class="badge bg-info text-dark">Economy Update Scheduled</span>
-          {% endif %}
-        </div>
-      </form>
-
-      {% if policy_summary.categories %}
-      <div class="row g-2 mt-3">
-        {% for category in policy_summary.categories %}
-        <div class="col-md-4">
-          <div class="border rounded p-3 h-100">
-            <div class="d-flex justify-content-between align-items-center">
-              <strong>{{ category.label }}</strong>
-              {% if category.status == 'aligned' %}
-              <span class="badge bg-success-subtle text-success">Aligned</span>
-              {% elif category.status == 'slightly_off' %}
-              <span class="badge bg-warning text-dark">Slightly Off</span>
-              {% else %}
-              <span class="badge bg-danger">Significantly Off</span>
-              {% endif %}
-            </div>
-            <div class="small text-muted mt-2">{{ category.warning_count }} checker note(s) under the current policy.</div>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
-
-      {% if show_rebalance_review and rebalance_preview %}
-      <form method="post" action="{{ url_for('admin.apply_economy_rebalance') }}" class="mt-4">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="block" value="{{ selected_block or '' }}">
-        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
-          <div>
-            <h6 class="mb-1">Rebalance Preview</h6>
-            <p class="text-muted mb-0">Choose which recommended changes to apply for the {{ policy_summary.profile.label }} policy.</p>
-          </div>
-        </div>
-        <div class="table-responsive">
-          <table class="table align-middle">
-            <thead>
-              <tr>
-                <th>Apply</th>
-                <th>Feature</th>
-                <th>Current</th>
-                <th>Recommended</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for item in rebalance_preview %}
-              <tr>
-                <td><input class="form-check-input" type="checkbox" name="selected_changes" value="{{ item.key }}" {% if item.apply_by_default %}checked{% endif %}></td>
-                <td>{{ item.label }}</td>
-                <td>{{ item.current }}</td>
-                <td>{{ item.recommended }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        <div class="row g-3 mt-1">
-          <div class="col-lg-6">
-            <label class="form-label">Activation Timing</label>
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="activation_mode" id="activationNextRenewal" value="next_renewal" checked>
-              <label class="form-check-label" for="activationNextRenewal">Apply After The Upcoming Bill (Recommended)</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="activation_mode" id="activationImmediate" value="immediate">
-              <label class="form-check-label" for="activationImmediate">Apply Immediately (Advanced)</label>
-            </div>
-          </div>
-          <div class="col-lg-6">
-            <div class="alert alert-warning mb-2">
-              Scheduled changes skip the next bill and start on the following renewal cycle. Immediate changes can affect students during the current cycle.
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="confirm_immediate" id="confirmImmediate" value="yes">
-              <label class="form-check-label" for="confirmImmediate">I understand the immediate-change warning.</label>
-            </div>
-          </div>
-        </div>
-        <div class="d-flex flex-wrap gap-2 mt-3">
-          <button class="btn btn-primary" type="submit">Apply Selected Rebalance</button>
-          <a class="btn btn-outline-secondary" href="{{ url_for('admin.economy_health', block=selected_block) }}">Cancel</a>
-        </div>
-      </form>
-      {% elif show_rebalance_review and payroll_settings %}
-      <div class="alert alert-success mt-3 mb-0">Current settings already match the active policy closely enough. No rebalance changes are recommended.</div>
-      {% endif %}
-    </div>
-  </div>
+  {% set balance_warning_count = warnings_by_level['critical']|length + warnings_by_level['warning']|length %}
+  {% set non_banking_summary = health_warning_summary | rejectattr('label', 'equalto', 'Banking') | list %}
 
   <div class="row g-3 mb-3">
-    <div class="col-lg-6">
+    <div class="col-12 col-xl-6">
       <div class="card shadow-sm h-100">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-start mb-2">
-            <div>
-              <h5 class="mb-1"><span class="material-symbols-outlined me-2">trending_up</span>Classroom Wage Index</h5>
-              <p class="text-muted mb-0">Based on payroll rate and expected hours per week</p>
-            </div>
-            {% if cwi_calc %}
-            <span class="badge bg-success-subtle text-success">Active</span>
-            {% else %}
-            <span class="badge bg-warning text-dark">Needs setup</span>
-            {% endif %}
+        <div class="card-header bg-white py-3">
+      <div class="economy-health-card-heading">
+        <div>
+          <h5 class="mb-1"><span class="material-symbols-outlined me-2">trending_up</span>Classroom Wage Index (CWI)</h5>
+          <p class="text-muted mb-0">CWI represents the weekly earning potential of students who have perfect attendance.<br> 
+             {% if analysis_schedule %}
+        Last updated on <span class="local-timestamp" data-timestamp="{{ analysis_schedule.last_updated_at }}"></span>.
+      {% endif %}
+      Update pay rate and hours/week in Payroll settings.
+          </p>
+        </div>
+        {% if cwi_calc %}
+        <span class="economy-health-status-chip economy-health-status-chip-success" aria-label="Active" title="Active">
+          <span class="material-symbols-outlined">check_circle</span>
+        </span>
+        {% else %}
+        <span class="economy-health-status-chip economy-health-status-chip-danger" aria-label="Needs setup" title="Needs setup">
+          <span class="material-symbols-outlined">sync_problem</span>
+        </span>
+        {% endif %}
+      </div>
+        </div>
+        <div class="card-body {% if not cwi_calc %}economy-health-empty-card-body{% endif %}">
+      {% if cwi_calc %}
+      <div class="row g-4">
+        <!--CWI Value-->
+        
+        
+        <!--Pay rate-->
+        <div class="col-lg-4">
+          <div class="p-3 bg-light rounded h-100">
+            <div class="fw-semibold small text-primary">Pay Rate</div>
+            <div class="h4 mb-0">${{ "%.2f"|format(pay_rate_per_minute or 0) }} / min</div>
+            <div class="small text-muted">${{ "%.2f"|format((pay_rate_per_minute or 0) * 60) }} per hour</div>
           </div>
+        </div>
 
-          {% if cwi_calc %}
-          <div class="row g-3">
-            <div class="col-6 col-md-4">
-              <div class="p-3 bg-light rounded h-100">
-                <div class="text-muted small">Weekly CWI</div>
-                <div class="h3 mb-0">${{ "%.2f"|format(cwi_calc.cwi) }}</div>
-                <div class="small text-muted">Perfect-attendance earnings per week</div>
-              </div>
-            </div>
-            <div class="col-6 col-md-4">
-              <div class="p-3 bg-light rounded h-100">
-                <div class="text-muted small">Pay Rate</div>
-                <div class="h4 mb-0">${{ "%.2f"|format(pay_rate_per_minute or 0) }} / min</div>
-                <div class="small text-muted">${{ "%.2f"|format((pay_rate_per_minute or 0) * 60) }} per hour</div>
-              </div>
-            </div>
-            <div class="col-12 col-md-4">
-              <div class="p-3 bg-light rounded h-100">
-                <div class="text-muted small">Expected Hours/Week</div>
-                <form method="post" action="{{ url_for('admin.update_expected_weekly_hours') }}">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <input type="hidden" name="cwi_block" value="{{ selected_block }}">
-                  <input type="hidden" name="next" value="{{ url_for('admin.economy_health', block=selected_block) }}">
-                  <div class="input-group">
-                    <input type="number" step="0.25" min="0.25" max="80" name="expected_weekly_hours" class="form-control" value="{{ expected_hours }}">
-                    <button class="btn btn-primary" type="submit">Update</button>
-                  </div>
-                  <div class="form-check mt-2">
-                    <input class="form-check-input" type="checkbox" name="apply_to_all" value="true" id="applyAllHours">
-                    <label class="form-check-label" for="applyAllHours">Apply to all classes</label>
-                  </div>
-                </form>
-              </div>
-            </div>
+        <!--Expected hours-->
+        <div class="col-lg-4">
+          <div class="p-3 bg-light rounded h-100">
+            <div class="fw-semibold small text-primary">Weekly Work Time</div>
+            <div class="h4 mb-0">{{ "%.2f"|format(expected_hours or 0) }} hours</div>
+            <div class="small text-muted">per week</div>
+            
           </div>
-          {% if analysis_schedule %}
-          <div class="alert alert-secondary mt-3 mb-0 small">
-            <strong>{{ 'Frozen analytics snapshot' if analysis_schedule.frozen else 'Preview analysis' }}.</strong>
-            Last updated on <span class="local-timestamp" data-timestamp="{{ analysis_schedule.last_updated_at }}"></span>.
-            Analytics updates once a week on {{ analysis_schedule.weekly_refresh_label }} {{ analysis_schedule.refresh_timezone }}.
-            Monthly rollups refresh on {{ analysis_schedule.monthly_refresh_label }} {{ analysis_schedule.refresh_timezone }}.
+        </div>
+        <div class="col-lg-4">
+          <div class="p-3 bg-light rounded h-100">
+            <div class="fw-semibold small text-primary">Calculated CWI
+
+        <button
+          type="button"
+          class="btn btn-link  p-0 text-decoration-none d-inline-flex align-items-center gap-1"
+          data-bs-toggle="tooltip"
+          data-bs-placement="top"
+          data-bs-html="true"
+          data-bs-title="{% for note in cwi_calc.notes %}{{ ('• ' ~ note)|e }}{% if not loop.last %}<br>{% endif %}{% endfor %}">
+        
+          <span class="material-symbols-outlined small">info</span>
+        </button>
+      </div>
+
+            <div class="h3 mb-0">${{ "%.2f"|format(cwi_calc.cwi) }}</div>
+            <div class="small text-muted">per week</div>
           </div>
-          {% endif %}
-          <div class="mt-3">
-            <div class="small text-muted">Calculation notes:</div>
-            <ul class="small mb-0">
-              {% for note in cwi_calc.notes %}
-              <li>{{ note }}</li>
-              {% endfor %}
-            </ul>
-          </div>
-          {% else %}
-          <p class="mb-0">Configure payroll first to see your CWI.</p>
-          {% endif %}
+        </div>
+      </div>
+      
+
+      {% else %}
+      <div class="mb-0 text-center fw-semibold text-muted">
+      <span class="material-symbols-outlined">help</span>
+      <p>Configure payroll first to see your CWI.</p>
+      </div>
+      {% endif %}
         </div>
       </div>
     </div>
 
-    <div class="col-lg-6">
+    <div class="col-12 col-xl-6">
       <div class="card shadow-sm h-100">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="card-header bg-white py-3">
+      <div class="economy-health-card-heading">
+        <div>
+          <h5 class="mb-1"><span class="material-symbols-outlined me-2">tune</span>Economy Policy</h5>
+          <p class="text-muted mb-0">Pick the classroom pressure profile, then optionally realign current settings.
+             {% if policy_summary.updated_at %}
+          Last updated: {% if policy_summary.updated_at %}{{ policy_summary.updated_at.strftime('%B') }} {{ policy_summary.updated_at.day }}, {{ policy_summary.updated_at.year }}{% endif %}
+          {% endif %}
+          {% if selected_class_label %}
+            <span class="fw-semibold">Currently viewing class: {{ selected_class_label }}</span>
+          {% endif %}
+          </p>
+        </div>
+        <div class="economy-health-card-meta">
+          {% if cwi_calc %}
+          {% if policy_summary.pending_rebalance_json %}
+          <span class="economy-health-status-chip economy-health-status-chip-scheduled" aria-label="Rebalance scheduled" title="Rebalance scheduled">
+            <span class="material-symbols-outlined">event_available</span>
+          </span>
+          {% elif policy_summary.overall_status == 'aligned' %}
+          <span class="economy-health-status-chip economy-health-status-chip-success" aria-label="Aligned" title="Aligned">
+            <span class="material-symbols-outlined">check_circle</span>
+          </span>
+          {% elif policy_summary.overall_status == 'slightly_off' %}
+          <span class="economy-health-status-chip economy-health-status-chip-warning" aria-label="Slightly off" title="Slightly off">
+            <span class="material-symbols-outlined">error</span>
+          </span>
+          {% else %}
+          <span class="economy-health-status-chip economy-health-status-chip-danger" aria-label="Significantly off" title="Significantly off">
+            <span class="material-symbols-outlined">warning</span>
+          </span>
+          {% endif %}
+          {% else %}
+          <span class="economy-health-status-chip economy-health-status-chip-danger" aria-label="Needs payroll setup" title="Needs payroll setup">
+            <span class="material-symbols-outlined">sync_problem</span>
+          </span>
+          {% endif %}
+        </div>
+      </div>
+        </div>
+        <div class="card-body {% if not cwi_calc %}economy-health-empty-card-body{% endif %}">
+          {% if cwi_calc %}
+      <form method="post" action="{{ url_for('admin.update_economy_policy') }}" class="economy-policy-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="block" value="{{ selected_block or '' }}">
+        <div class="mb-3">
+          <label for="policyModeSelect" class="form-label text-primary fw-semibold">Policy Mode</label>
+          <select id="policyModeSelect" name="policy_mode" class="form-select">
+            {% for mode_key, mode in policy_modes.items() %}
+            <option
+              value="{{ mode_key }}"
+              data-label="{{ mode.label }}"
+              data-summary="{{ mode.summary }}"
+              data-description="{{ mode.description }}"
+              {% if policy_summary.mode == mode_key %}selected{% endif %}>
+              {{ mode.label }}
+            </option>
+            {% endfor %}
+          </select>
+          <div id="policyModeDescription" class="small mt-1"></div>
+        </div>
+          
+  
+
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <button class="btn btn-primary" type="submit">Save Policy Mode</button>
+          {% if scheduled_rebalance %}
+          <button class="btn btn-info" type="button" data-bs-toggle="modal" data-bs-target="#rebalanceReviewModal">Economy Update Scheduled</button>
+          {% elif rebalance_preview %}
+          <button class="btn btn-secondary" type="button" data-bs-toggle="modal" data-bs-target="#rebalanceReviewModal">Review Recommended Rebalance</button>
+          {% endif %}
+        </div>
+      </form>
+      {% else %}
+      <div class="mb-0 text-center fw-semibold text-muted">
+      <span class="material-symbols-outlined">help</span>
+      <p>Economy Policy Mode Requires CWI to be Configured.</p>
+      </div>
+      {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-white py-3">
+          <div class="economy-health-card-heading">
             <div>
               <h5 class="mb-1"><span class="material-symbols-outlined me-2">ecg_heart</span>Balance Snapshot</h5>
-              <p class="text-muted mb-0">How well rent, insurance, fines, and store align to your CWI</p>
+              <p class="text-muted mb-0">Determines whether your current pricings align with your CWI</p>
             </div>
-            {% if analysis and actionable_warning_count == 0 and banking_summary.level == 'success' %}
-            <span class="badge bg-success">Balanced</span>
+            {% if analysis and balance_warning_count == 0 %}
+            <span class="economy-health-status-chip economy-health-status-chip-success" aria-label="Balanced" title="Balanced">
+              <span class="material-symbols-outlined">check_circle</span>
+            </span>
             {% elif analysis %}
-            <span class="badge bg-warning text-dark">Needs attention</span>
+            <span class="economy-health-status-chip economy-health-status-chip-warning" aria-label="Needs attention" title="Needs attention">
+              <span class="material-symbols-outlined">error</span>
+            </span>
             {% else %}
-            <span class="badge bg-secondary">Awaiting payroll setup</span>
+            <span class="economy-health-status-chip economy-health-status-chip-danger" aria-label="Awaiting payroll setup" title="Awaiting payroll setup">
+              <span class="material-symbols-outlined">sync_problem</span>
+            </span>
             {% endif %}
           </div>
+        </div>
+        <div class="card-body {% if not cwi_calc %}economy-health-empty-card-body {% endif %}">
+        
 
-          <div class="row text-center g-2">
+          {% if analysis %}
+          <div class=" small">
+            {% if non_banking_summary %}
+              <div class="row text-center g-2 mb-2">
             <div class="col-6">
               <div class="p-3 border rounded">
-                <div class="text-muted small">Needs Attention</div>
+                <div class="text-muted small">Prices Requiring Update</div>
                 <div class="h4 mb-0 text-danger">{{ warnings_by_level['critical']|length }}</div>
               </div>
             </div>
             <div class="col-6">
               <div class="p-3 border rounded">
-                <div class="text-muted small">Review</div>
+                <div class="text-muted small">Prices Needing Review</div>
                 <div class="h4 mb-0 text-warning">{{ warnings_by_level['warning']|length }}</div>
               </div>
             </div>
           </div>
-
-          {% if analysis %}
-          <div class="mt-3 small">
-            {% if health_warning_summary %}
-              {% for row in health_warning_summary %}
-              <div class="d-flex align-items-center mb-2">
-                <span class="badge bg-light text-dark me-2">{{ row.label }}</span>
-                {{ row.count }} action item(s)
+              {% for row in non_banking_summary %}
+              <div class="d-flex align-items-center mb-2 ">
+                <p class="mt-2 economy-health-item"><span class=" bg-light text-primary me-2 ">{{ row.label }}</span>
+                {{ row.count }} pricing(s) might need adjustments.
                 {% if row.link_href %}
-                • <a href="{{ row.link_href }}" class="ms-1">{{ row.link_label }}</a>
+                • <a href="{{ row.link_href }}" class="ms-1">{{ row.link_label }} <span class="material-symbols-outlined economy-health-inline-icon">arrow_circle_right</span></a>
                 {% endif %}
+                </p>
               </div>
               {% endfor %}
-            {% else %}
-              <div class="d-flex align-items-center mb-2">
-                <span class="badge bg-light text-dark me-2">Economy</span>
-                No CWI action items right now.
-              </div>
-            {% endif %}
-            {% if banking_summary.level != 'success' %}
-            <div class="d-flex align-items-center">
-              <span class="badge bg-light text-dark me-2">Banking</span>
-              {{ banking_summary.message }} <a href="{{ banking_link }}" class="ms-1">Open banking</a>
+            {% elif balance_warning_count == 0 %}
+            <div class="economy-health-empty-state economy-health-empty-state-centered">
+              <p class="text-muted mb-0">All pricings are balanced within this economy</p>
             </div>
+
             {% endif %}
           </div>
+          {% endif %}
+          {% if not cwi_calc %}
+          <div class="mb-0 text-center fw-semibold text-muted">
+      <span class="material-symbols-outlined">help</span>
+      <p>Economy Balance Recommendation Requires CWI to be Configured</p>
+      </div>
           {% endif %}
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="row g-3 mb-3">
-    <div class="col-lg-6">
+    <div class="col-12 col-xl-6">
       <div class="card h-100 shadow-sm">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <div><span class="material-symbols-outlined me-2">savings</span>Banking & Interest</div>
-          {% if banking_summary.level == 'success' %}
-            <span class="badge bg-success">Healthy</span>
-          {% else %}
-            <span class="badge bg-warning text-dark">Action needed</span>
-          {% endif %}
+        <div class="card-header bg-white py-3">
+          <div class="economy-health-card-heading">
+            <div>
+              <h5 class="mb-1"><span class="material-symbols-outlined me-2">savings</span>Banking & Interest</h5>
+              <p class="text-muted mb-0">Savings growth settings for APY and payout timing</p>
+            </div>
+            {% if banking_summary.level == 'success' %}
+            <span class="economy-health-status-chip economy-health-status-chip-success" aria-label="Healthy" title="Healthy">
+              <span class="material-symbols-outlined">check_circle</span>
+            </span>
+            {% else %}
+            <span class="economy-health-status-chip economy-health-status-chip-danger" aria-label="Action needed" title="Action needed">
+              <span class="material-symbols-outlined">sync_problem</span>
+            </span>
+            {% endif %}
+          </div>
         </div>
         <div class="card-body">
-          <p class="mb-2">{{ banking_summary.message }}</p>
-          {% if banking_summary.apy is not none %}
-          <p class="mb-1 small text-muted">APY: {{ "%.2f"|format(banking_summary.apy) }}% • Payout schedule: {{ banking_summary.payout|title }}</p>
-          {% endif %}
+          <div class="row g-4 mb-3">
+            <div class="col-md-6">
+              <div class="p-3 bg-light rounded h-100">
+                <div class="fw-semibold small text-primary">APY</div>
+                <div class="h4 mb-0">
+                  {% if banking_summary.apy is not none %}
+                  {{ "%.2f"|format(banking_summary.apy) }}%
+                  {% else %}
+                  Not Set
+                  {% endif %}
+                </div>
+                <div class="small text-muted">annual percentage yield</div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="p-3 bg-light rounded h-100">
+                <div class="fw-semibold small text-primary">Payout Frequency</div>
+                <div class="h4 mb-0">
+                  {% if banking_summary.payout %}
+                  {{ banking_summary.payout|replace('_', ' ')|title }}
+                  {% else %}
+                  Not Set
+                  {% endif %}
+                </div>
+                <div class="small text-muted">interest credit schedule</div>
+              </div>
+            </div>
+          </div>
+
           <a href="{{ banking_link }}" class="btn btn-outline-primary btn-sm">Go to banking settings</a>
         </div>
       </div>
     </div>
-    <div class="col-lg-6">
-      <div class="card h-100 shadow-sm">
-        <div class="card-header"><span class="material-symbols-outlined me-2">lightbulb</span>Quick recommendations</div>
-        <div class="card-body">
-          {% if recommendations %}
-          <ul class="mb-2">
-            <li>Rent: ${{ recommendations.rent.min }} - ${{ recommendations.rent.max }} per week (ideal ${{ recommendations.rent.recommended }})</li>
-            <li>Insurance (weekly): ${{ recommendations.insurance_premium_weekly.min }} - ${{ recommendations.insurance_premium_weekly.max }}</li>
-            <li>Fines: ${{ recommendations.fine.min }} - ${{ recommendations.fine.max }} per incident</li>
-            <li>Store pricing tiers scale with CWI. Basic items between ${{ recommendations.store_tiers.basic.min }} and ${{ recommendations.store_tiers.basic.max }}.</li>
-            <li>Students should be able to save at least ${{ recommendations.min_weekly_savings }} weekly.</li>
-          </ul>
-          <div class="d-flex flex-wrap gap-2">
-            <a class="btn btn-outline-primary btn-sm" href="{{ payroll_link }}">Review payroll</a>
-            <a class="btn btn-outline-primary btn-sm" href="{{ rent_link }}">Tune rent</a>
-            <a class="btn btn-outline-primary btn-sm" href="{{ insurance_link }}">Adjust insurance</a>
-            <a class="btn btn-outline-primary btn-sm" href="{{ store_link }}">Update store</a>
+  </div>
+
+  {% if scheduled_rebalance or rebalance_preview %}
+  <div class="modal fade" id="rebalanceReviewModal" tabindex="-1" aria-labelledby="rebalanceReviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="rebalanceReviewModalLabel">{% if scheduled_rebalance %}Scheduled Rebalance{% else %}Rebalance Preview{% endif %}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          {% if scheduled_rebalance %}
+          <p class="text-muted mb-3">These changes are scheduled for the renewal after the upcoming bill.</p>
+          {% if scheduled_rebalance.changes %}
+          <div class="table-responsive">
+            <table class="table align-middle">
+              <thead>
+                <tr>
+                  <th>Feature</th>
+                  <th>Current</th>
+                  <th>Scheduled</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for change in scheduled_rebalance.changes %}
+                <tr>
+                  <td>{{ change.type|replace('_', ' ')|title }}</td>
+                  <td>{{ change.current_value }}</td>
+                  <td>{{ change.new_value }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
           {% else %}
-          <p class="mb-0">Configure payroll to unlock tailored recommendations.</p>
+          <div class="alert alert-warning">No scheduled change details are currently available.</div>
+          {% endif %}
+          {% if scheduled_rebalance.scheduled_at %}
+          <div class="small text-muted">Scheduled on <span class="local-timestamp" data-timestamp="{{ scheduled_rebalance.scheduled_at }}"></span>.</div>
+          {% endif %}
+          <form method="post" action="{{ url_for('admin.apply_scheduled_economy_rebalance_now') }}" class="mt-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="block" value="{{ selected_block or '' }}">
+            <div class="d-flex flex-wrap gap-2">
+              <button class="btn btn-primary" type="submit">Apply Update Now</button>
+              <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Close</button>
+            </div>
+          </form>
+          {% else %}
+          <form method="post" action="{{ url_for('admin.apply_economy_rebalance') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="block" value="{{ selected_block or '' }}">
+            <p class="text-muted mb-3">Choose which recommended changes to apply for the {{ policy_summary.profile.label }} policy.</p>
+            <div class="table-responsive">
+              <table class="table align-middle">
+                <thead>
+                  <tr>
+                    <th>Apply</th>
+                    <th>Feature</th>
+                    <th>Current</th>
+                    <th>Recommended</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in rebalance_preview %}
+                  <tr>
+                    <td><input class="form-check-input" type="checkbox" name="selected_changes" value="{{ item.key }}" {% if item.apply_by_default %}checked{% endif %}></td>
+                    <td>{{ item.label }}</td>
+                    <td>{{ item.current }}</td>
+                    <td>{{ item.recommended }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <div class="row g-3 mt-1">
+              <div class="col-lg-6">
+                <label class="form-label">Activation Timing</label>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="activation_mode" id="activationNextRenewal" value="next_renewal" checked>
+                  <label class="form-check-label" for="activationNextRenewal">Apply After The Upcoming Bill (Recommended)</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="activation_mode" id="activationImmediate" value="immediate">
+                  <label class="form-check-label" for="activationImmediate">Apply Immediately (Advanced)</label>
+                </div>
+              </div>
+              <div class="col-lg-6">
+                <div class="alert alert-warning mb-2">
+                  Scheduled changes skip the next bill and start on the following renewal cycle. Immediate changes can affect students during the current cycle.
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="confirm_immediate" id="confirmImmediate" value="yes">
+                  <label class="form-check-label" for="confirmImmediate">I understand the immediate-change warning.</label>
+                </div>
+              </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-3">
+              <button class="btn btn-primary" type="submit">Apply Selected Rebalance</button>
+              <a class="btn btn-outline-secondary" href="{{ url_for('admin.economy_health', block=selected_block) }}">Cancel</a>
+            </div>
+          </form>
           {% endif %}
         </div>
       </div>
     </div>
   </div>
+  {% endif %}
 
-  <div class="card shadow-sm">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <div><span class="material-symbols-outlined me-2">monitor_heart</span>Action Items</div>
-      <small class="text-muted">Only settings that need review are shown</small>
-    </div>
-    <div class="card-body">
-      {% if analysis %}
-        {% if warnings_by_level['critical'] or warnings_by_level['warning'] %}
-          {% set severity_map = {'critical': 'danger', 'warning': 'warning'} %}
-          {% set label_map = {'critical': 'Needs Attention', 'warning': 'Review'} %}
-          {% for level in ['critical','warning'] %}
-            {% set bucket = warnings_by_level[level] %}
-            {% if bucket %}
-              <div class="alert alert-{{ severity_map[level] }}">
-                <strong>{{ label_map[level] }}</strong>
-                <ul class="mb-0 mt-2">
-                  {% for warning in bucket %}
-                    {% set feature_lower = warning.feature.lower() %}
-                    {% set link = None %}
-                    {% for prefix, destination in feature_links.items() %}
-                      {% if feature_lower.startswith(prefix) %}
-                        {% set link = destination %}
-                      {% endif %}
-                    {% endfor %}
-                    <li>
-                      {{ warning.message }}
-                      {% if link %}
-                        <a href="{{ link }}" class="ms-2">Open settings</a>
-                      {% endif %}
-                    </li>
-                  {% endfor %}
-                </ul>
-              </div>
-            {% endif %}
-          {% endfor %}
-        {% else %}
-          <p class="mb-0">No CWI action items detected. Balanced settings and bypassed items are hidden here.</p>
-        {% endif %}
-      {% else %}
-        <p class="mb-0">Configure payroll first to run the economy health check.</p>
-      {% endif %}
-    </div>
-  </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => {
+      new bootstrap.Tooltip(el);
+    });
+
+    const policyModeSelect = document.getElementById('policyModeSelect');
+    
+    const policyModeDescription = document.getElementById('policyModeDescription');
+
+    if (policyModeSelect && policyModeDescription) {
+      const syncPolicyModeDetails = () => {
+        const selectedOption = policyModeSelect.options[policyModeSelect.selectedIndex];
+        
+        policyModeDescription.textContent = selectedOption.dataset.description || '';
+      };
+
+      syncPolicyModeDetails();
+      policyModeSelect.addEventListener('change', syncPolicyModeDetails);
+    }
+
+    {% if rebalance_modal in ['recommended', 'scheduled'] and (scheduled_rebalance or rebalance_preview) %}
+    const rebalanceReviewModal = document.getElementById('rebalanceReviewModal');
+    if (rebalanceReviewModal) {
+      const modal = new bootstrap.Modal(rebalanceReviewModal);
+      modal.show();
+    }
+    {% endif %}
+  });
+</script>
 {% endblock %}
