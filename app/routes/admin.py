@@ -6694,7 +6694,7 @@ def add_rent_waiver():
             try:
                 dt = datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
                 if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
+                    dt = ensure_utc(dt)
                 waiver_windows.append((dt, dt, 1))
                 past_due_window_count += 1
             except (ValueError, AttributeError):
@@ -6788,7 +6788,7 @@ def remove_rent_waiver(waiver_id):
         try:
             coverage_due_date = datetime.fromisoformat(coverage_due_date_raw.replace('Z', '+00:00'))
             if coverage_due_date.tzinfo is None:
-                coverage_due_date = coverage_due_date.replace(tzinfo=timezone.utc)
+                coverage_due_date = ensure_utc(coverage_due_date)
             coverage_due_date = ensure_utc(coverage_due_date)
         except ValueError:
             flash("Invalid waiver period selected.", "danger")

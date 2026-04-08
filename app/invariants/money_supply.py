@@ -70,6 +70,8 @@ def run():
             SELECT COALESCE(SUM(amount_cents), 0)
             FROM transaction
             WHERE status = 'POSTED'
+              AND join_code IS NOT NULL
+              AND account_type IN ('checking', 'savings')
               AND NOT is_void
         """)).scalar() or 0
 
@@ -92,6 +94,8 @@ def run():
                 MAX(amount_cents)   AS max_cents
             FROM transaction
             WHERE status = 'POSTED'
+              AND join_code IS NOT NULL
+              AND account_type IN ('checking', 'savings')
               AND NOT is_void
               AND transfer_correlation_id IS NOT NULL
             GROUP BY transfer_correlation_id
@@ -114,6 +118,8 @@ def run():
             SELECT student_id, join_code, SUM(amount_cents) AS net_cents
             FROM transaction
             WHERE status = 'POSTED'
+              AND join_code IS NOT NULL
+              AND account_type IN ('checking', 'savings')
               AND NOT is_void
               AND transfer_correlation_id IS NULL
               AND description ILIKE 'Transfer%'

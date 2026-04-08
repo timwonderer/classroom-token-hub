@@ -23,12 +23,14 @@ def run():
                 COALESCE(SUM(
                     CASE WHEN t.account_type = 'checking'
                          AND t.status = 'POSTED'
+                         AND t.join_code IS NOT NULL
                          AND NOT t.is_void
                     THEN t.amount_cents ELSE 0 END
                 ), 0) AS computed_checking_cents,
                 COALESCE(SUM(
                     CASE WHEN t.account_type = 'savings'
                          AND t.status = 'POSTED'
+                         AND t.join_code IS NOT NULL
                          AND NOT t.is_void
                     THEN t.amount_cents ELSE 0 END
                 ), 0) AS computed_savings_cents,
@@ -47,6 +49,7 @@ def run():
                 COALESCE(SUM(
                     CASE WHEN t.account_type = 'checking'
                          AND t.status = 'POSTED'
+                         AND t.join_code IS NOT NULL
                          AND NOT t.is_void
                     THEN t.amount_cents ELSE 0 END
                 ), 0) != bc.posted_checking_balance_cents
@@ -54,6 +57,7 @@ def run():
                 COALESCE(SUM(
                     CASE WHEN t.account_type = 'savings'
                          AND t.status = 'POSTED'
+                         AND t.join_code IS NOT NULL
                          AND NOT t.is_void
                     THEN t.amount_cents ELSE 0 END
                 ), 0) != bc.posted_savings_balance_cents
