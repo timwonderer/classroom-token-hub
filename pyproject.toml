@@ -16,6 +16,7 @@ exclude_links = [
   "https://github.com/YOUR_USERNAME/*",
   "https://github.com/YOUR_REPO/*",
   "https://github.com/timwonderer/classroom-economy/security/*",
+  "https://www.aikido.dev/blog/promptpwnd-ai-prompt-injection-in-github-actions",
 ]
 force_get_requests_for_links = [
   "https://app.classroomtokenhub.com/*",
