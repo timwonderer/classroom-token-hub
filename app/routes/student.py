@@ -8,6 +8,7 @@ financial transactions, shopping, insurance, and rent payment.
 import json
 import random
 import secrets
+import uuid
 import re
 from calendar import monthrange
 from datetime import datetime, timedelta, timezone
@@ -1713,6 +1714,7 @@ def transfer():
             return redirect(url_for("student.transfer"))
         else:
             # CRITICAL FIX v2: Add BOTH teacher_id AND join_code for proper isolation
+            _transfer_cid = str(uuid.uuid4())
             # Record the withdrawal side of the transfer
             db.session.add(Transaction(
                 student_id=student.id,
@@ -1722,7 +1724,8 @@ def transfer():
                 account_type=from_account,
                 status=TransactionStatus.PENDING,
                 type='Withdrawal',
-                description=f'Transfer to {to_account}'
+                description=f'Transfer to {to_account}',
+                transfer_correlation_id=_transfer_cid,
             ))
             # Record the deposit side of the transfer
             db.session.add(Transaction(
@@ -1733,7 +1736,8 @@ def transfer():
                 account_type=to_account,
                 status=TransactionStatus.PENDING,
                 type='Deposit',
-                description=f'Transfer from {from_account}'
+                description=f'Transfer from {from_account}',
+                transfer_correlation_id=_transfer_cid,
             ))
             try:
                 db.session.commit()
@@ -2229,6 +2233,7 @@ def purchase_insurance(policy_id):
 
     # Handle overdraft protection transfer if savings covers a shortfall
     if banking_settings and banking_settings.overdraft_protection_enabled and overdraft_shortfall > 0:
+        _transfer_cid = str(uuid.uuid4())
         transfer_tx_withdraw = Transaction(
             student_id=student.id,
             teacher_id=teacher_id,
@@ -2237,7 +2242,8 @@ def purchase_insurance(policy_id):
             account_type='savings',
             status=TransactionStatus.PENDING,
             type='Withdrawal',
-            description='Overdraft protection transfer to checking'
+            description='Overdraft protection transfer to checking',
+            transfer_correlation_id=_transfer_cid,
         )
         transfer_tx_deposit = Transaction(
             student_id=student.id,
@@ -2247,7 +2253,8 @@ def purchase_insurance(policy_id):
             account_type='checking',
             status=TransactionStatus.PENDING,
             type='Deposit',
-            description='Overdraft protection transfer from savings'
+            description='Overdraft protection transfer from savings',
+            transfer_correlation_id=_transfer_cid,
         )
         db.session.add(transfer_tx_withdraw)
         db.session.add(transfer_tx_deposit)
@@ -3984,6 +3991,7 @@ def rent_pay(period):
 
     # Handle overdraft protection transfer if savings covers a shortfall
     if banking_settings and banking_settings.overdraft_protection_enabled and overdraft_shortfall > 0:
+        _transfer_cid = str(uuid.uuid4())
         transfer_tx_withdraw = Transaction(
             student_id=student.id,
             teacher_id=teacher_id,
@@ -3992,7 +4000,8 @@ def rent_pay(period):
             account_type='savings',
             status=TransactionStatus.PENDING,
             type='Withdrawal',
-            description='Overdraft protection transfer to checking'
+            description='Overdraft protection transfer to checking',
+            transfer_correlation_id=_transfer_cid,
         )
         transfer_tx_deposit = Transaction(
             student_id=student.id,
@@ -4002,7 +4011,8 @@ def rent_pay(period):
             account_type='checking',
             status=TransactionStatus.PENDING,
             type='Deposit',
-            description='Overdraft protection transfer from savings'
+            description='Overdraft protection transfer from savings',
+            transfer_correlation_id=_transfer_cid,
         )
         db.session.add(transfer_tx_withdraw)
         db.session.add(transfer_tx_deposit)

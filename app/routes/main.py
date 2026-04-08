@@ -57,6 +57,27 @@ def health_check():
         return jsonify(error='Database error'), 500
 
 
+@main_bp.route('/health/invariants')
+def health_invariants():
+    """
+    Runtime invariant health check.
+
+    Executes all registered economic/ledger invariants and returns a
+    machine-readable JSON report.
+
+    Returns:
+        200 — all invariants PASS
+        500 — at least one invariant FAIL
+
+    Integrates with Pulsetic (HTTP status polling) and Grafana/Loki
+    (structured log lines emitted by invariant_runner).
+    """
+    from app.services.invariant_runner import run_invariants
+    result = run_invariants()
+    status_code = 200 if result["status"] == "PASS" else 500
+    return jsonify(result), status_code
+
+
 @main_bp.route('/health/deep')
 def health_check_deep():
     """

@@ -808,6 +808,7 @@ class Transaction(db.Model):
     reversal_transaction_id = db.Column(db.Integer, nullable=True, index=True)
     policy_id = db.Column(db.Integer, db.ForeignKey('insurance_policies.id'), nullable=True, index=True)
     idempotency_key = db.Column(db.String(128), nullable=True, unique=True, index=True)
+    transfer_correlation_id = db.Column(db.String(36), nullable=True, index=True)  # shared UUID linking the two legs of a transfer pair
     type = db.Column(db.String(50))  # optional field to describe the transaction type
     # All times stored as UTC
     date_funds_available = db.Column(db.DateTime(timezone=True), default=utc_now)

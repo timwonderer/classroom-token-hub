@@ -287,12 +287,16 @@ Always include:
 # ✅ GOOD EXAMPLE
 # In app/routes/student.py
 
-from app.models import Student, StudentBlock
+from app.auth import get_admin_student_query
+from app.models import ClassMembership, Student
 
 # Get students for current class period
-students = Student.query.join(StudentBlock).filter(
-    StudentBlock.join_code == current_join_code
-).all()
+students = (
+    get_admin_student_query()
+    .join(ClassMembership, ClassMembership.student_id == Student.id)
+    .filter(ClassMembership.join_code == current_join_code)
+    .all()
+)
 
 # Returns: List of Student objects scoped to join_code
 ```

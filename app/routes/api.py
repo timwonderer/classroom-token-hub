@@ -6,6 +6,7 @@ and other interactive features. Most routes require authentication.
 """
 
 import re
+import uuid
 import pytz
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -683,6 +684,7 @@ def purchase_item():
                 shortfall = abs(student.checking_balance)
                 if student.savings_balance >= shortfall:
                     # CRITICAL FIX v2: Transfer from savings to checking with join_code
+                    _transfer_cid = str(uuid.uuid4())
                     transfer_tx_withdraw = Transaction(
                         student_id=student.id,
                         teacher_id=teacher_id,
@@ -691,7 +693,8 @@ def purchase_item():
                         account_type='savings',
                         status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
                         type='Withdrawal',
-                        description='Overdraft protection transfer to checking'
+                        description='Overdraft protection transfer to checking',
+                        transfer_correlation_id=_transfer_cid,
                     )
                     transfer_tx_deposit = Transaction(
                         student_id=student.id,
@@ -701,7 +704,8 @@ def purchase_item():
                         account_type='checking',
                         status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
                         type='Deposit',
-                        description='Overdraft protection transfer from savings'
+                        description='Overdraft protection transfer from savings',
+                        transfer_correlation_id=_transfer_cid,
                     )
                     db.session.add(transfer_tx_withdraw)
                     db.session.add(transfer_tx_deposit)
@@ -817,6 +821,7 @@ def purchase_item():
             shortfall = abs(student.checking_balance)
             if student.savings_balance >= shortfall:
                 # CRITICAL FIX v2: Transfer from savings to checking with join_code
+                _transfer_cid = str(uuid.uuid4())
                 transfer_tx_withdraw = Transaction(
                     student_id=student.id,
                     teacher_id=teacher_id,
@@ -824,7 +829,8 @@ def purchase_item():
                     amount=-shortfall,
                     account_type='savings',
                     type='Withdrawal',
-                    description='Overdraft protection transfer to checking'
+                    description='Overdraft protection transfer to checking',
+                    transfer_correlation_id=_transfer_cid,
                 )
                 transfer_tx_deposit = Transaction(
                     student_id=student.id,
@@ -833,7 +839,8 @@ def purchase_item():
                     amount=shortfall,
                     account_type='checking',
                     type='Deposit',
-                    description='Overdraft protection transfer from savings'
+                    description='Overdraft protection transfer from savings',
+                    transfer_correlation_id=_transfer_cid,
                 )
                 db.session.add(transfer_tx_withdraw)
                 db.session.add(transfer_tx_deposit)
