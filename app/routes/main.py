@@ -75,17 +75,7 @@ def health_invariants():
     from app.services.invariant_runner import run_invariants
     result = run_invariants()
     status_code = 200 if result["status"] == "PASS" else 500
-
-    # Strip internal details (exception messages, stack traces) from the HTTP
-    # response. Full details are emitted to the structured log by the runner.
-    safe_checks = [
-        {k: v for k, v in c.items() if k != "details"}
-        for c in result.get("checks", [])
-    ]
-    safe_result = {k: v for k, v in result.items() if k != "checks"}
-    safe_result["checks"] = safe_checks
-
-    return jsonify(safe_result), status_code
+    return jsonify(result), status_code
 
 
 @main_bp.route('/health/deep')

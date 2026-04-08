@@ -46,18 +46,38 @@ def _extract_supply_metrics(checks):
     return {}
 
 
+def _safe_check(check):
+    """
+    Run a single check and return a result dict safe for HTTP serialization.
+
+    Exception details (str(exc)) are logged here and never included in the
+    returned dict, so tainted data cannot flow into the HTTP response.
+    """
+    try:
+        raw = check()
+    except Exception as exc:  # noqa: BLE001
+        name = getattr(check, "__module__", "unknown").split(".")[-1]
+        logger.error(
+            "invariant_check_unhandled_exception",
+            extra={"check": name, "error": str(exc)},
+            exc_info=True,
+        )
+        return {"name": name, "status": "FAIL"}
+
+    # Log internal details (which may contain db error strings) then drop them
+    # from the dict so they are never serialised into the HTTP response.
+    details = raw.pop("details", None)
+    if details:
+        logger.warning(
+            "invariant_check_details",
+            extra={"check": raw.get("name"), "details": details},
+        )
+    return raw
+
+
 def run_invariants():
     started_at = time.monotonic()
-    checks = []
-    for check in _CHECKS:
-        try:
-            checks.append(check())
-        except Exception as exc:  # noqa: BLE001
-            checks.append({
-                "name": getattr(check, "__module__", "unknown").split(".")[-1],
-                "status": "FAIL",
-                "details": f"Unhandled exception: {exc}",
-            })
+    checks = [_safe_check(check) for check in _CHECKS]
     duration_ms = round((time.monotonic() - started_at) * 1000)
 
     failed = [c for c in checks if c.get("status") == "FAIL"]
