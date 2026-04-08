@@ -1,7 +1,7 @@
 """Add transfer_correlation_id to transactions
 
-Revision ID: a1b2c3d4e5f6
-Revises: z2a3b4c5d6e7
+Revision ID: 9845e9a9baca
+Revises: b5c6d7e8f9g0
 Create Date: 2026-04-07 00:00:00.000000
 
 Adds transfer_correlation_id (String(36)) to the transactions table.
@@ -25,8 +25,8 @@ from alembic import op
 
 
 # revision identifiers, used by Alembic
-revision = 'a1b2c3d4e5f6'
-down_revision = 'z2a3b4c5d6e7'
+revision = '9845e9a9baca'
+down_revision = 'b5c6d7e8f9g0'
 branch_labels = None
 depends_on = None
 
