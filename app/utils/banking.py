@@ -1,4 +1,3 @@
-from decimal import Decimal
 import logging
 from flask import g
 from sqlalchemy.exc import IntegrityError
@@ -7,6 +6,38 @@ from app.models import Transaction, TransactionStatus, BalanceCache, AccountType
 from app.utils.time import utc_now
 
 logger = logging.getLogger(__name__)
+
+
+def _authoritative_posted_totals(student_id: int, join_code: str) -> tuple[int, int]:
+    """Return authoritative posted balance totals for one student/class context."""
+    rows = (
+        db.session.query(
+            Transaction.account_type,
+            db.func.coalesce(db.func.sum(Transaction.amount_cents), 0),
+        )
+        .filter(
+            Transaction.student_id == student_id,
+            Transaction.join_code == join_code,
+            Transaction.status == TransactionStatus.POSTED,
+            Transaction.is_void == False,
+            Transaction.account_type.in_(
+                [AccountType.CHECKING.value, AccountType.SAVINGS.value]
+            ),
+        )
+        .group_by(Transaction.account_type)
+        .all()
+    )
+
+    totals = {
+        AccountType.CHECKING.value: 0,
+        AccountType.SAVINGS.value: 0,
+    }
+    for account_type, total_cents in rows:
+        acct_type = str(account_type).lower()
+        if acct_type in totals:
+            totals[acct_type] = int(total_cents or 0)
+
+    return totals[AccountType.CHECKING.value], totals[AccountType.SAVINGS.value]
 
 
 def settle_pending_transaction_contexts(limit: int | None = None) -> dict[str, int]:
@@ -147,70 +178,12 @@ def settle_balances(student_id: int, join_code: str) -> None:
                 .all()
             )
 
-        # Seed a newly created cache from existing posted/non-pending ledger rows.
-        # This preserves legacy balances when cache rows are introduced lazily at read time.
-        if cache_was_created:
-            seed_time = utc_now()
-            all_checking = db.session.query(db.func.sum(Transaction.amount)).filter(
-                Transaction.student_id == student_id,
-                Transaction.join_code == join_code,
-                Transaction.account_type == 'checking',
-                Transaction.is_void == False,
-            ).scalar() or Decimal('0.00')
-            pending_checking = db.session.query(db.func.sum(Transaction.amount)).filter(
-                Transaction.student_id == student_id,
-                Transaction.join_code == join_code,
-                Transaction.status == TransactionStatus.PENDING,
-                Transaction.account_type == 'checking',
-                Transaction.is_void == False,
-            ).scalar() or Decimal('0.00')
-
-            all_savings = db.session.query(db.func.sum(Transaction.amount)).filter(
-                Transaction.student_id == student_id,
-                Transaction.join_code == join_code,
-                Transaction.account_type == 'savings',
-                Transaction.is_void == False,
-            ).scalar() or Decimal('0.00')
-            pending_savings = db.session.query(db.func.sum(Transaction.amount)).filter(
-                Transaction.student_id == student_id,
-                Transaction.join_code == join_code,
-                Transaction.status == TransactionStatus.PENDING,
-                Transaction.account_type == 'savings',
-                Transaction.is_void == False,
-            ).scalar() or Decimal('0.00')
-
-            cache.posted_checking_balance_cents = int((all_checking - pending_checking) * 100)
-            cache.posted_savings_balance_cents = int((all_savings - pending_savings) * 100)
-            cache.last_settlement_at = seed_time
-
-            seeded_posted_txs = (
-                Transaction.query
-                .filter_by(
-                    student_id=student_id,
-                    join_code=join_code,
-                    status=TransactionStatus.POSTED,
-                )
-                .filter(
-                    Transaction.is_void == False,
-                    Transaction.posted_at.is_(None),
-                )
-                .with_for_update()
-                .all()
-            )
-            for tx in seeded_posted_txs:
-                tx.posted_at = seed_time
-
-        if not pending_txs and not unsettled_posted_txs:
-            # Nothing to settle
-            return
-
-        checking_delta_cents = 0
-        savings_delta_cents = 0
         now = utc_now()
-        
+        previous_checking_cents = cache.posted_checking_balance_cents
+        previous_savings_cents = cache.posted_savings_balance_cents
         cnt_posted = 0
         cnt_voided = 0
-        
+
         for tx in pending_txs:
             # Fill missing data if needed (defensive)
             if not tx.posted_at:
@@ -233,19 +206,6 @@ def settle_balances(student_id: int, join_code: str) -> None:
             
             # Process Valid Transaction
             tx.status = TransactionStatus.POSTED
-            
-            # Account Type Check (handle string or Enum)
-            # Database stores string 'checking'/'savings'
-            acct_type = str(tx.account_type).lower()
-            if acct_type == 'checking' or acct_type == AccountType.CHECKING.value:
-                checking_delta_cents += tx.amount_cents
-            elif acct_type == 'savings' or acct_type == AccountType.SAVINGS.value:
-                savings_delta_cents += tx.amount_cents
-            else:
-                raise ValueError(
-                    f"Unknown account type '{tx.account_type}' for transaction {tx.id}"
-                )
-
             cnt_posted += 1
 
         for tx in unsettled_posted_txs:
@@ -253,27 +213,34 @@ def settle_balances(student_id: int, join_code: str) -> None:
                 tx.posted_at = now
             if tx.amount_cents is None:
                 tx.amount_cents = int(tx.amount * 100)
-
-            acct_type = str(tx.account_type).lower()
-            if acct_type == 'checking' or acct_type == AccountType.CHECKING.value:
-                checking_delta_cents += tx.amount_cents
-            elif acct_type == 'savings' or acct_type == AccountType.SAVINGS.value:
-                savings_delta_cents += tx.amount_cents
-            else:
-                raise ValueError(
-                    f"Unknown account type '{tx.account_type}' for transaction {tx.id}"
-                )
             cnt_posted += 1
-            
-        # 3. Update Cache
-        # ---------------------------------------------------------
-        cache.posted_checking_balance_cents += checking_delta_cents
-        cache.posted_savings_balance_cents += savings_delta_cents
-        cache.last_settlement_at = now
-        
-        logger.info(f"Settled balances for Student {student_id} (Join: {join_code}): "
-                    f"Posted {cnt_posted}, Voided {cnt_voided}. "
-                    f"Checking Net: {checking_delta_cents}, Savings Net: {savings_delta_cents}")
+
+        authoritative_checking_cents, authoritative_savings_cents = _authoritative_posted_totals(
+            student_id,
+            join_code,
+        )
+
+        balances_changed = (
+            previous_checking_cents != authoritative_checking_cents
+            or previous_savings_cents != authoritative_savings_cents
+        )
+        if cache_was_created or pending_txs or unsettled_posted_txs or balances_changed:
+            cache.posted_checking_balance_cents = authoritative_checking_cents
+            cache.posted_savings_balance_cents = authoritative_savings_cents
+            cache.last_settlement_at = now
+
+        logger.info(
+            "Settled balances for Student %s (Join: %s): Posted %s, Voided %s. "
+            "Checking %s -> %s, Savings %s -> %s",
+            student_id,
+            join_code,
+            cnt_posted,
+            cnt_voided,
+            previous_checking_cents,
+            authoritative_checking_cents,
+            previous_savings_cents,
+            authoritative_savings_cents,
+        )
         
     except Exception as e:
         logger.error(f"Error settling balances for Student {student_id} in {join_code}: {e}")
