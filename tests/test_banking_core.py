@@ -172,8 +172,8 @@ def test_void_posted_with_reversal(client):
     assert reversal.status == TransactionStatus.POSTED
     
     cache = BalanceCache.query.filter_by(student_id=student.id, join_code=join_code).first()
-    # Cache should be updated: 100 + (-100) = 0
-    assert cache.posted_checking_balance_cents == 0
+    # Ledger semantics exclude the voided original and keep the posted reversal.
+    assert cache.posted_checking_balance_cents == -10000
 
 
 def test_settlement_sweep_processes_each_pending_context_once(client):
@@ -234,6 +234,43 @@ def test_settlement_sweep_processes_each_pending_context_once(client):
     assert cache_one.posted_checking_balance_cents == 1234
     assert cache_one.posted_savings_balance_cents == 166
     assert cache_two.posted_checking_balance_cents == 999
+
+
+def test_settle_balances_reconciles_existing_stale_cache_without_pending(client):
+    teacher = Admin(username="teacher-reconcile", totp_secret="secret")
+    student = Student(first_name="Recon", last_initial="C", block="C", salt=b'333', first_half_hash="hashc", dob_sum=333)
+    db.session.add_all([teacher, student])
+    db.session.commit()
+
+    join_code = "RECON-1"
+    tx = Transaction(
+        student_id=student.id,
+        teacher_id=teacher.id,
+        join_code=join_code,
+        amount=Decimal('20.00'),
+        account_type='checking',
+        status=TransactionStatus.POSTED,
+        description="Historical posted transaction",
+    )
+    cache = BalanceCache(
+        student_id=student.id,
+        join_code=join_code,
+        posted_checking_balance_cents=0,
+        posted_savings_balance_cents=0,
+    )
+    db.session.add_all([tx, cache])
+    db.session.commit()
+
+    settle_balances(student.id, join_code)
+    db.session.commit()
+
+    db.session.expire_all()
+    refreshed_cache = BalanceCache.query.filter_by(student_id=student.id, join_code=join_code).first()
+    refreshed_tx = db.session.get(Transaction, tx.id)
+    assert refreshed_cache.posted_checking_balance_cents == 2000
+    assert refreshed_cache.posted_savings_balance_cents == 0
+    assert refreshed_cache.last_settlement_at is not None
+    assert refreshed_tx.posted_at is not None
 
 
 def test_settlement_script_returns_nonzero_when_failures(monkeypatch):

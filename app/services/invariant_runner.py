@@ -11,7 +11,6 @@ Design constraints:
 
 import logging
 import time
-from datetime import datetime, timezone
 
 from app.invariants import (
     balance_rules,
@@ -21,6 +20,7 @@ from app.invariants import (
     temporal_integrity,
     transaction_state,
 )
+from app.utils.time import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ def run_invariants():
         "failed_count": len(failed),
         "checks": checks,
         "duration_ms": duration_ms,
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "timestamp": utc_now().isoformat().replace("+00:00", "Z"),
     }
 
     log_extra = {
