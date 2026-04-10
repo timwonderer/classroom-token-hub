@@ -6,6 +6,7 @@ from app.models import (
     Issue,
     IssueCategory,
     IssueResolutionAction,
+    IssueStatusHistory,
     Student,
     SystemAdmin,
     Transaction,
@@ -85,3 +86,63 @@ def test_sysadmin_resolve_issue_issues_bug_reward_transaction(client):
     ).first()
     assert reward_action is not None
     assert reward_action.related_transaction_id == reward_tx.id
+
+
+def test_sysadmin_can_update_escalated_issue_status_to_in_review(client):
+    teacher = Admin(username="teacher_issue_status", totp_secret="secret")
+    sysadmin = SystemAdmin(username="sysadmin_issue_status", totp_secret="secret")
+    student = Student(first_name="Review", last_initial="Q", block="A", salt=b"salt")
+    category = IssueCategory(
+        name="Status Category",
+        category_type="general",
+        is_active=True,
+    )
+    db.session.add_all([teacher, sysadmin, student, category])
+    db.session.flush()
+
+    issue = Issue(
+        student_id=student.id,
+        student_first_name=student.first_name,
+        student_last_initial=student.last_initial,
+        opaque_student_reference="opaque-ref-status",
+        teacher_id=teacher.id,
+        join_code="JOINSTATUS1",
+        class_label="Block A",
+        category_id=category.id,
+        issue_type="general",
+        student_explanation="This needs investigation.",
+        student_expected_outcome="Review the issue.",
+        status=Issue.STATUS_ESCALATED_TO_DEV,
+    )
+    db.session.add(issue)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["is_system_admin"] = True
+        sess["sysadmin_id"] = sysadmin.id
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    issue_ref = make_opaque_ref("issue", issue.id)
+
+    detail_resp = client.get(f"/sysadmin/issues/{issue_ref}")
+    assert detail_resp.status_code == 200
+    assert b'Update Status' in detail_resp.data
+    assert b'In Review' in detail_resp.data
+
+    resp = client.post(
+        f"/sysadmin/issues/{issue_ref}/status",
+        data={"status": "developer_review"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+
+    db.session.refresh(issue)
+    assert issue.status == "developer_review"
+    assert issue.sysadmin_id == sysadmin.id
+    assert issue.sysadmin_reviewed_at is not None
+
+    history_entry = IssueStatusHistory.query.filter_by(
+        issue_id=issue.id,
+        new_status="developer_review",
+    ).first()
+    assert history_entry is not None

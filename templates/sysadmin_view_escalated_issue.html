@@ -287,6 +287,33 @@
 
         <!-- Sidebar -->
         <div class="col-lg-4">
+            {% if issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <span class="material-symbols-outlined icon-inline me-2">edit_square</span>Update Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('sysadmin.update_escalated_issue_status', issue_ref=issue_ref) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="mb-3">
+                            <label for="status" class="form-label">Status</label>
+                            <select class="form-select" id="status" name="status" required>
+                                <option value="ESCALATED_TO_DEV" {% if issue.status in ['ESCALATED_TO_DEV', 'elevated'] %}selected{% endif %}>Escalated to Developer</option>
+                                <option value="developer_review" {% if issue.status == 'developer_review' %}selected{% endif %}>In Review</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">
+                            <span class="material-symbols-outlined icon-inline me-2">save</span>Update Status
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Actions Card -->
             {% if issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}
             <div class="card shadow-sm mb-4">
