@@ -537,6 +537,7 @@ def dashboard():
     open_issues_count = Issue.query.filter(
         Issue.status.in_([
             Issue.STATUS_ESCALATED_TO_DEV,
+            Issue.STATUS_DEV_IN_REVIEW,
             'elevated',
             'developer_review',
         ])
@@ -1273,6 +1274,7 @@ def support_tickets():
     all_issues = Issue.query.filter(
         Issue.status.in_([
             Issue.STATUS_ESCALATED_TO_DEV,
+            Issue.STATUS_DEV_IN_REVIEW,
             Issue.STATUS_DEV_RESOLVED,
             'elevated',
             'developer_review',
@@ -1283,7 +1285,7 @@ def support_tickets():
         i for i in all_issues
         if i.status in [Issue.STATUS_ESCALATED_TO_DEV, 'elevated']
     ]
-    issues_in_review = [i for i in all_issues if i.status == 'developer_review']
+    issues_in_review = [i for i in all_issues if i.status in [Issue.STATUS_DEV_IN_REVIEW, 'developer_review']]
     issues_resolved = [i for i in all_issues if i.status in [Issue.STATUS_DEV_RESOLVED, 'developer_resolved']]
 
     return render_template(
@@ -1867,6 +1869,7 @@ def escalated_issues():
     issues = Issue.query.filter(
         Issue.status.in_([
             Issue.STATUS_ESCALATED_TO_DEV,
+            Issue.STATUS_DEV_IN_REVIEW,
             Issue.STATUS_DEV_RESOLVED,
             'elevated',
             'developer_review',
@@ -1876,7 +1879,7 @@ def escalated_issues():
 
     # Separate by status
     pending_issues = [i for i in issues if i.status in [Issue.STATUS_ESCALATED_TO_DEV, 'elevated']]
-    in_review_issues = [i for i in issues if i.status == 'developer_review']
+    in_review_issues = [i for i in issues if i.status in [Issue.STATUS_DEV_IN_REVIEW, 'developer_review']]
     resolved_issues = [i for i in issues if i.status in [Issue.STATUS_DEV_RESOLVED, 'developer_resolved']]
 
     return render_template('sysadmin_escalated_issues.html',
@@ -1924,6 +1927,64 @@ def view_escalated_issue(issue_ref):
         format_utc_iso=format_utc_iso)
 
 
+@sysadmin_bp.route('/issues/<issue_ref>/status', methods=['POST'])
+@system_admin_required
+def update_escalated_issue_status(issue_ref):
+    """Update developer-side workflow status for an escalated issue."""
+    issue_id = _resolve_issue_id_from_ref(issue_ref)
+    if issue_id is None:
+        raise NotFound("Issue not found")
+
+    open_escalated_statuses = [
+        Issue.STATUS_ESCALATED_TO_DEV,
+        Issue.STATUS_DEV_IN_REVIEW,
+        'elevated',
+        'developer_review',
+    ]
+    issue = Issue.query.filter(
+        Issue.id == issue_id,
+        Issue.status.in_(open_escalated_statuses)
+    ).first_or_404()
+
+    requested_status = (request.form.get('status') or '').strip()
+    allowed_statuses = {
+        Issue.STATUS_ESCALATED_TO_DEV: "Escalated to Developer",
+        Issue.STATUS_DEV_IN_REVIEW: "In Review",
+    }
+
+    if requested_status not in allowed_statuses:
+        flash("Invalid escalated issue status.", "error")
+        return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
+
+    old_status = issue.status
+    if old_status == requested_status:
+        flash(f"Status remains {allowed_statuses[requested_status]}.", "info")
+        return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
+
+    sysadmin_id = session.get('sysadmin_id')
+    if not sysadmin_id:
+        flash("System admin session is invalid. Please log in again.", "error")
+        return redirect(url_for('sysadmin.login', next=request.path))
+
+    from app.utils.issue_helpers import update_issue_status
+
+    issue.sysadmin_id = sysadmin_id
+    if issue.sysadmin_reviewed_at is None:
+        issue.sysadmin_reviewed_at = utc_now()
+
+    update_issue_status(
+        issue,
+        requested_status,
+        'sysadmin',
+        sysadmin_id,
+        notes=f"Sysadmin status updated to {allowed_statuses[requested_status]}",
+    )
+    db.session.commit()
+
+    flash(f"Issue status updated to {allowed_statuses[requested_status]}.", "success")
+    return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
+
+
 @sysadmin_bp.route('/issues/<issue_ref>/start-review', methods=['POST'])
 @system_admin_required
 def start_review_escalated_issue(issue_ref):
@@ -1933,10 +1994,21 @@ def start_review_escalated_issue(issue_ref):
         raise NotFound("Issue not found")
     issue = Issue.query.filter(
         Issue.id == issue_id,
-        Issue.status.in_([Issue.STATUS_ESCALATED_TO_DEV, 'elevated', 'developer_review'])
+        Issue.status.in_([Issue.STATUS_ESCALATED_TO_DEV, Issue.STATUS_DEV_IN_REVIEW, 'elevated', 'developer_review'])
     ).first_or_404()
-
-    flash("Status remains Escalated to Developer until technical resolution is recorded.", "info")
+    from app.utils.issue_helpers import update_issue_status
+    sysadmin_id = session.get('sysadmin_id')
+    if not sysadmin_id:
+        flash("System admin session is invalid. Please log in again.", "error")
+        return redirect(url_for('sysadmin.login', next=request.path))
+    if issue.status != Issue.STATUS_DEV_IN_REVIEW:
+        issue.sysadmin_id = sysadmin_id
+        issue.sysadmin_reviewed_at = utc_now()
+        update_issue_status(issue, Issue.STATUS_DEV_IN_REVIEW, 'sysadmin', sysadmin_id, notes="Sysadmin started review")
+        db.session.commit()
+        flash("Issue moved to In Review.", "success")
+    else:
+        flash("Issue is already in review.", "info")
     return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
 
@@ -1949,7 +2021,7 @@ def resolve_escalated_issue(issue_ref):
         raise NotFound("Issue not found")
     issue = Issue.query.filter(
         Issue.id == issue_id,
-        Issue.status.in_([Issue.STATUS_ESCALATED_TO_DEV, 'elevated', 'developer_review'])
+        Issue.status.in_([Issue.STATUS_ESCALATED_TO_DEV, Issue.STATUS_DEV_IN_REVIEW, 'elevated', 'developer_review'])
     ).first_or_404()
 
     resolution_note = request.form.get('resolution_note', '').strip()

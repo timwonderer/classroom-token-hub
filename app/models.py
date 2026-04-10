@@ -1875,6 +1875,7 @@ class Issue(db.Model):
     STATUS_OPEN = 'OPEN'
     STATUS_TEACHER_REVIEW = 'TEACHER_REVIEW'
     STATUS_ESCALATED_TO_DEV = 'ESCALATED_TO_DEV'
+    STATUS_DEV_IN_REVIEW = 'DEV_IN_REVIEW'
     STATUS_DEV_RESOLVED = 'DEV_RESOLVED'
     STATUS_TEACHER_FINAL_REVIEW = 'TEACHER_FINAL_REVIEW'
     STATUS_CLOSED = 'CLOSED'
@@ -1885,7 +1886,7 @@ class Issue(db.Model):
         'teacher_review': STATUS_TEACHER_REVIEW,
         'teacher_resolved': STATUS_TEACHER_FINAL_REVIEW,
         'elevated': STATUS_ESCALATED_TO_DEV,
-        'developer_review': STATUS_ESCALATED_TO_DEV,
+        'developer_review': STATUS_DEV_IN_REVIEW,
         'developer_resolved': STATUS_DEV_RESOLVED,
     }
 
@@ -1896,6 +1897,7 @@ class Issue(db.Model):
             self.STATUS_OPEN: 'Submitted',
             self.STATUS_TEACHER_REVIEW: 'Teacher Review',
             self.STATUS_ESCALATED_TO_DEV: 'Escalated to Developer',
+            self.STATUS_DEV_IN_REVIEW: 'Developer Review In Progress',
             self.STATUS_DEV_RESOLVED: 'Developer Fix Applied - Teacher Review Required',
             self.STATUS_TEACHER_FINAL_REVIEW: 'Teacher Final Review',
             self.STATUS_CLOSED: 'Closed',
@@ -1910,6 +1912,7 @@ class Issue(db.Model):
             self.STATUS_TEACHER_REVIEW: 'bg-info',
             self.STATUS_TEACHER_FINAL_REVIEW: 'bg-primary',
             self.STATUS_ESCALATED_TO_DEV: 'bg-warning text-dark',
+            self.STATUS_DEV_IN_REVIEW: 'bg-warning text-dark',
             self.STATUS_DEV_RESOLVED: 'bg-info',
             self.STATUS_CLOSED: 'bg-success',
         }

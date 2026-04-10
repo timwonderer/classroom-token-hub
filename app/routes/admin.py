@@ -12130,6 +12130,7 @@ def issues_queue():
     escalated_issues = issues_query.filter(
         Issue.status.in_([
             Issue.STATUS_ESCALATED_TO_DEV,
+            Issue.STATUS_DEV_IN_REVIEW,
             'elevated',
             'developer_review',
         ])

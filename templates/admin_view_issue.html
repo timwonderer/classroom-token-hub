@@ -23,7 +23,7 @@
                         <span class="badge
                             {% if issue.status in ['OPEN', 'TEACHER_REVIEW', 'submitted', 'teacher_review'] %}bg-warning text-dark
                             {% elif issue.status in ['TEACHER_FINAL_REVIEW', 'teacher_resolved'] %}bg-primary
-                            {% elif issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}bg-warning
+                            {% elif issue.status in ['ESCALATED_TO_DEV', 'DEV_IN_REVIEW', 'elevated', 'developer_review'] %}bg-warning
                             {% elif issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}bg-info
                             {% elif issue.status == 'CLOSED' %}bg-success
                             {% else %}bg-dark{% endif %}">
@@ -353,7 +353,7 @@
                     </p>
                 </div>
             </div>
-            {% elif issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}
+            {% elif issue.status in ['ESCALATED_TO_DEV', 'DEV_IN_REVIEW', 'elevated', 'developer_review'] %}
             <div class="card shadow-sm mb-4 border-warning">
                 <div class="card-header bg-warning">
                     <h5 class="mb-0 text-black">
