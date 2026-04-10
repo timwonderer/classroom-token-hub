@@ -191,6 +191,12 @@ def settle_balances(student_id: int, join_code: str) -> None:
             
             if tx.amount_cents is None:
                 # Fallback if validation missed this (should be prevented by strict creation)
+                if tx.amount is None:
+                    logger.error(
+                        "Refusing to derive amount_cents for transaction %s with null amount",
+                        tx.id,
+                    )
+                    raise ValueError(f"Transaction {tx.id} has null amount during settlement")
                 tx.amount_cents = int(_quantize_currency(tx.amount) * 100)
 
             # Handle Void Logic for Pending
@@ -212,6 +218,12 @@ def settle_balances(student_id: int, join_code: str) -> None:
             if not tx.posted_at:
                 tx.posted_at = now
             if tx.amount_cents is None:
+                if tx.amount is None:
+                    logger.error(
+                        "Refusing to derive amount_cents for posted transaction %s with null amount",
+                        tx.id,
+                    )
+                    raise ValueError(f"Transaction {tx.id} has null amount during settlement")
                 tx.amount_cents = int(_quantize_currency(tx.amount) * 100)
             cnt_posted += 1
 

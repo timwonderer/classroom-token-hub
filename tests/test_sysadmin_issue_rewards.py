@@ -131,18 +131,18 @@ def test_sysadmin_can_update_escalated_issue_status_to_in_review(client):
 
     resp = client.post(
         f"/sysadmin/issues/{issue_ref}/status",
-        data={"status": "developer_review"},
+        data={"status": Issue.STATUS_DEV_IN_REVIEW},
         follow_redirects=False,
     )
     assert resp.status_code == 302
 
     db.session.refresh(issue)
-    assert issue.status == "developer_review"
+    assert issue.status == Issue.STATUS_DEV_IN_REVIEW
     assert issue.sysadmin_id == sysadmin.id
     assert issue.sysadmin_reviewed_at is not None
 
     history_entry = IssueStatusHistory.query.filter_by(
         issue_id=issue.id,
-        new_status="developer_review",
+        new_status=Issue.STATUS_DEV_IN_REVIEW,
     ).first()
     assert history_entry is not None

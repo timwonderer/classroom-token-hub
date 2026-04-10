@@ -19,7 +19,7 @@
                             <span class="material-symbols-outlined icon-inline me-2">flag</span>Issue {{ issue_ref[:12] }}...
                         </h4>
                         <span class="badge
-                            {% if issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}bg-warning text-dark
+                            {% if issue.status in ['ESCALATED_TO_DEV', 'DEV_IN_REVIEW', 'elevated', 'developer_review'] %}bg-warning text-dark
                             {% elif issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}bg-success
                             {% else %}bg-secondary{% endif %}">
                             {{ issue.status|replace('_', ' ')|title }}
@@ -287,7 +287,7 @@
 
         <!-- Sidebar -->
         <div class="col-lg-4">
-            {% if issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}
+            {% if issue.status in ['ESCALATED_TO_DEV', 'DEV_IN_REVIEW', 'elevated', 'developer_review'] %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
@@ -302,7 +302,7 @@
                             <label for="status" class="form-label">Status</label>
                             <select class="form-select" id="status" name="status" required>
                                 <option value="ESCALATED_TO_DEV" {% if issue.status in ['ESCALATED_TO_DEV', 'elevated'] %}selected{% endif %}>Escalated to Developer</option>
-                                <option value="developer_review" {% if issue.status == 'developer_review' %}selected{% endif %}>In Review</option>
+                                <option value="DEV_IN_REVIEW" {% if issue.status in ['DEV_IN_REVIEW', 'developer_review'] %}selected{% endif %}>In Review</option>
                             </select>
                         </div>
 
@@ -315,7 +315,7 @@
             {% endif %}
 
             <!-- Actions Card -->
-            {% if issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}
+            {% if issue.status in ['ESCALATED_TO_DEV', 'DEV_IN_REVIEW', 'elevated', 'developer_review'] %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-success text-white">
                     <h5 class="mb-0">
