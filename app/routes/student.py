@@ -3878,14 +3878,19 @@ def rent_pay(period):
         flash(f"You have already paid rent for Period {period} this month!", "info")
         return redirect(url_for('student.rent'))
 
-    # Get payment amount from form (supports incremental payments)
+    payment_mode = (request.form.get('payment_mode') or 'full').strip().lower()
     payment_amount_input = request.form.get('amount', '').strip()
 
-    # Determine payment amount based on incremental setting
-    if settings.allow_incremental_payment and payment_amount_input:
+    # Full payment is the safe default. Only treat a request as partial when the
+    # client explicitly opts into partial mode. This prevents browser autofill or
+    # stale form state from silently converting a "Pay Rent" click into a
+    # one-cent-short partial payment.
+    if settings.allow_incremental_payment and payment_mode == 'partial':
+        if not payment_amount_input:
+            flash("Enter an amount to make a partial payment.", "error")
+            return redirect(url_for('student.rent'))
         try:
             payment_amount = _quantize_currency(payment_amount_input)
-            # Validate payment amount
             if payment_amount <= Decimal('0'):
                 flash("Payment amount must be greater than 0.", "error")
                 return redirect(url_for('student.rent'))
@@ -3896,7 +3901,6 @@ def rent_pay(period):
             flash("Invalid payment amount.", "error")
             return redirect(url_for('student.rent'))
     else:
-        # Full payment required (or no amount specified with incremental disabled)
         payment_amount = remaining_amount
 
     # Get banking settings for overdraft handling (reuse teacher_id from above)
@@ -3940,7 +3944,7 @@ def rent_pay(period):
 
     # FIX: Process payment with teacher_id
     # Deduct from checking account
-    is_partial = payment_amount < remaining_amount
+    is_partial = settings.allow_incremental_payment and payment_mode == 'partial' and payment_amount < remaining_amount
     billed_period_date = payment_due_date or now
     payment_description = f'Rent for Period {period} - {billed_period_date.strftime("%B %Y")}'
     if is_partial and settings.allow_incremental_payment:

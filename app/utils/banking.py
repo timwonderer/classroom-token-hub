@@ -2,7 +2,7 @@ import logging
 from flask import g
 from sqlalchemy.exc import IntegrityError
 from app import db
-from app.models import Transaction, TransactionStatus, BalanceCache, AccountType
+from app.models import Transaction, TransactionStatus, BalanceCache, AccountType, _quantize_currency
 from app.utils.time import utc_now
 
 logger = logging.getLogger(__name__)
@@ -191,7 +191,7 @@ def settle_balances(student_id: int, join_code: str) -> None:
             
             if tx.amount_cents is None:
                 # Fallback if validation missed this (should be prevented by strict creation)
-                tx.amount_cents = int(tx.amount * 100)
+                tx.amount_cents = int(_quantize_currency(tx.amount) * 100)
 
             # Handle Void Logic for Pending
             if tx.is_void:
@@ -212,7 +212,7 @@ def settle_balances(student_id: int, join_code: str) -> None:
             if not tx.posted_at:
                 tx.posted_at = now
             if tx.amount_cents is None:
-                tx.amount_cents = int(tx.amount * 100)
+                tx.amount_cents = int(_quantize_currency(tx.amount) * 100)
             cnt_posted += 1
 
         authoritative_checking_cents, authoritative_savings_cents = _authoritative_posted_totals(

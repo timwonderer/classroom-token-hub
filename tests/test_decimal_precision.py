@@ -593,7 +593,7 @@ class TestDecimalPrecision:
 
         response = client.post(
             '/student/rent/pay/A',
-            data={'amount': '285.00'},
+            data={'payment_mode': 'partial', 'amount': '285.00'},
             follow_redirects=False,
         )
 
@@ -605,3 +605,96 @@ class TestDecimalPrecision:
         ).order_by(RentPayment.id.desc()).first()
         assert rent_payment is not None
         assert rent_payment.late_fee_charged == Decimal('0.00')
+
+    def test_full_rent_payment_mode_ignores_stale_partial_amount(self, client):
+        teacher = Admin(
+            username='teacher_full_payment_mode',
+            totp_secret='test_secret'
+        )
+        db.session.add(teacher)
+        db.session.flush()
+
+        join_code = 'FULL_PAY_Q'
+        student = Student(
+            first_name='Full',
+            last_initial='P',
+            block='A',
+            salt=b'test_salt',
+            passphrase_hash='test_hash'
+        )
+        db.session.add(student)
+        db.session.flush()
+
+        db.session.add(TeacherBlock(
+            teacher_id=teacher.id,
+            join_code=join_code,
+            block='A',
+            student_id=student.id,
+            is_claimed=True,
+            first_name='Full',
+            last_initial='P',
+            last_name_hash_by_part=['hash1'],
+            dob_sum=1234,
+            salt=b'test_salt_123456',
+            first_half_hash='test_hash'
+        ))
+
+        db.session.add(RentSettings(
+            teacher_id=teacher.id,
+            block='A',
+            is_enabled=True,
+            rent_amount=Decimal('570.00'),
+            allow_incremental_payment=True,
+            frequency_type='monthly',
+            first_rent_due_date=datetime(2020, 1, 1, tzinfo=timezone.utc),
+            grace_period_days=5,
+            late_penalty_amount=Decimal('0.00'),
+            late_penalty_type='once',
+        ))
+
+        db.session.add(StudentBlock(
+            student_id=student.id,
+            period='A',
+            join_code=join_code
+        ))
+        db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+        db.session.add(Transaction(
+            student_id=student.id,
+            teacher_id=teacher.id,
+            join_code=join_code,
+            amount=Decimal('600.00'),
+            account_type='checking',
+            type='Initial Deposit',
+            description='Starting balance'
+        ))
+        db.session.commit()
+
+        with client.session_transaction() as sess:
+            sess['student_id'] = student.id
+            sess['current_join_code'] = join_code
+            sess['login_time'] = datetime.now(timezone.utc).isoformat()
+            sess['last_activity'] = datetime.now(timezone.utc).isoformat()
+
+        response = client.post(
+            '/student/rent/pay/A',
+            data={'payment_mode': 'full', 'amount': '569.99'},
+            follow_redirects=False,
+        )
+
+        assert response.status_code in (302, 303)
+
+        rent_payment = RentPayment.query.filter_by(
+            student_id=student.id,
+            join_code=join_code,
+        ).order_by(RentPayment.id.desc()).first()
+        assert rent_payment is not None
+        assert rent_payment.amount_paid == Decimal('570.00')
+
+        rent_tx = Transaction.query.filter_by(
+            student_id=student.id,
+            join_code=join_code,
+            type='Rent Payment',
+        ).order_by(Transaction.id.desc()).first()
+        assert rent_tx is not None
+        assert rent_tx.amount == Decimal('-570.00')
+        assert 'Partial' not in (rent_tx.description or '')

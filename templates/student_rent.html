@@ -201,26 +201,30 @@
 
         {% if not status.is_paid %}
             {% if settings.allow_incremental_payment or checking_balance >= status.remaining_amount %}
-            <form action="{{ url_for('student.rent_pay', period=current_block) }}" method="POST">
+            <form action="{{ url_for('student.rent_pay', period=current_block) }}" method="POST" class="mb-3">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                {% if settings.allow_incremental_payment %}
-                <div class="mb-2">
-                    <label for="amount_{{ current_block }}" class="form-label"><small>Payment Amount (optional - leave
-                            blank for full payment)</small></label>
-                    <input type="number" step="0.01" min="0.01" max="{{ status.remaining_amount }}" class="form-control"
-                        id="amount_{{ current_block }}" name="amount"
-                        placeholder="Max: ${{ '%.2f'|format(status.remaining_amount) }}">
-                </div>
-                {% endif %}
+                <input type="hidden" name="payment_mode" value="full" />
                 <button type="submit" class="btn btn-primary w-100"
                     onclick="return confirm('Pay rent for Period {{ current_block|upper }}?');">
-                    {% if settings.allow_incremental_payment %}
-                    Pay Rent (Remaining: ${{ "%.2f"|format(status.remaining_amount) }})
-                    {% else %}
-                    Pay Rent (${{ "%.2f"|format(status.remaining_amount) }})
-                    {% endif %}
+                    Pay Full Remaining Balance (${{ "%.2f"|format(status.remaining_amount) }})
                 </button>
             </form>
+            {% if settings.allow_incremental_payment %}
+            <form action="{{ url_for('student.rent_pay', period=current_block) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <input type="hidden" name="payment_mode" value="partial" />
+                <div class="mb-2">
+                    <label for="amount_{{ current_block }}" class="form-label"><small>Custom Partial Payment</small></label>
+                    <input type="number" step="0.01" min="0.01" max="{{ status.remaining_amount }}" class="form-control"
+                        id="amount_{{ current_block }}" name="amount"
+                        placeholder="Up to ${{ '%.2f'|format(status.remaining_amount) }}">
+                </div>
+                <button type="submit" class="btn btn-outline-primary w-100"
+                    onclick="return confirm('Make a partial rent payment for Period {{ current_block|upper }}?');">
+                    Pay Custom Amount
+                </button>
+            </form>
+            {% endif %}
             {% else %}
             <button class="btn btn-secondary w-100" disabled>
                 Insufficient Funds

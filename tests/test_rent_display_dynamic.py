@@ -444,5 +444,6 @@ def test_incremental_rent_form_shows_even_when_full_balance_is_short(client, set
 
     response = client.get('/student/rent')
     assert response.status_code == 200
-    assert b'Payment Amount' in response.data
+    assert b'Pay Full Remaining Balance' in response.data
+    assert b'Custom Partial Payment' in response.data
     assert b'Insufficient Funds' not in response.data
