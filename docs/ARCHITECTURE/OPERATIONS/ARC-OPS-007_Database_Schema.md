@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-007      | 1.2     | 2026-03-08     | 1.1        | Constitutional  |
+| ARC-OPS-007      | 1.3     | 2026-04-11     | 1.2        | Constitutional  |
 
 ## I. Purpose
 
