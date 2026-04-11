@@ -1227,6 +1227,7 @@ class StoreItem(db.Model):
     collective_goal_type = db.Column(db.String(20), nullable=True)  # 'fixed' or 'whole_class'
     collective_goal_target = db.Column(db.Integer, nullable=True)  # Fixed number of purchases needed (used when type='fixed')
     collective_goal_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)  # Optional deadline; unmet goals are auto-refunded on expiration
+    collective_goal_instance_code = db.Column(db.String(36), nullable=True, index=True)
 
     # Redemption prompt (for delayed use items)
     redemption_prompt = db.Column(db.Text, nullable=True)  # Optional prompt shown to students when redeeming delayed items
@@ -1305,6 +1306,7 @@ class StudentItem(db.Model):
 
     # Relationships
     student = db.relationship('Student', backref=db.backref('items', lazy='dynamic'))
+    collective_goal_instance_code = db.Column(db.String(36), nullable=True, index=True)
 
 
 class RedemptionAuditAction(enum.Enum):

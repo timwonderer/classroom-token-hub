@@ -864,7 +864,8 @@ def purchase_item():
                 is_from_bundle=True,
                 bundle_remaining=item.bundle_quantity * quantity,  # Total uses = bundle_quantity * number of bundles purchased
                 quantity_purchased=quantity,
-                uses_remaining=uses_remaining
+                uses_remaining=uses_remaining,
+                collective_goal_instance_code=item.collective_goal_instance_code if item.item_type == 'collective' else None
             )
             db.session.add(new_student_item)
         elif item.is_bundle and item.bundle_quantity is None:
@@ -880,7 +881,8 @@ def purchase_item():
                 purchase_transaction_id=purchase_tx.id,
                 is_from_bundle=False,
                 quantity_purchased=quantity,
-                uses_remaining=uses_remaining
+                uses_remaining=uses_remaining,
+                collective_goal_instance_code=item.collective_goal_instance_code if item.item_type == 'collective' else None
             )
             db.session.add(new_student_item)
         else:
@@ -896,7 +898,8 @@ def purchase_item():
                     purchase_transaction_id=purchase_tx.id,
                     is_from_bundle=False,
                     quantity_purchased=1,
-                    uses_remaining=uses_remaining
+                    uses_remaining=uses_remaining,
+                    collective_goal_instance_code=item.collective_goal_instance_code if item.item_type == 'collective' else None
                 )
                 db.session.add(new_student_item)
 
@@ -948,6 +951,7 @@ def purchase_item():
                 StudentItem.store_item_id == item.id,
                 StudentItem.join_code == join_code,
                 StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
+                StudentItem.collective_goal_instance_code == item.collective_goal_instance_code,
             ).scalar() or 0
 
             if item.collective_goal_type == 'fixed':
@@ -960,7 +964,8 @@ def purchase_item():
                 StudentItem.query.filter(
                     StudentItem.store_item_id == item.id,
                     StudentItem.join_code == join_code,
-                    StudentItem.status == 'pending'
+                    StudentItem.status == 'pending',
+                    StudentItem.collective_goal_instance_code == item.collective_goal_instance_code,
                 ).update({"status": "processing"})
                 current_app.logger.info(
                     "Collective goal '%s' reached for join_code=%s (%s/%s)",

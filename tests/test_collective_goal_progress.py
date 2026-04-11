@@ -3,6 +3,8 @@ from decimal import Decimal
 
 from werkzeug.security import generate_password_hash
 
+import uuid
+
 from app.extensions import db
 from app.models import Admin, ClassMembership, StoreItem, StoreItemBlock, Student, StudentItem, StudentTeacher, TeacherBlock, Transaction
 from tests.helpers.class_scope import create_class_scope
@@ -94,14 +96,15 @@ def test_student_shop_collective_progress_counts_current_class_only(client):
         collective_goal_type='fixed',
         collective_goal_target=2,
         is_active=True,
+        collective_goal_instance_code=str(uuid.uuid4())
     )
     db.session.add(item)
     db.session.flush()
 
     # One purchaser in class A and one purchaser in class B.
     db.session.add_all([
-        StudentItem(student_id=student_a1.id, store_item_id=item.id, join_code='JOINA123', status='pending'),
-        StudentItem(student_id=student_b1.id, store_item_id=item.id, join_code='JOINB456', status='pending'),
+        StudentItem(student_id=student_a1.id, store_item_id=item.id, join_code='JOINA123', status='pending', collective_goal_instance_code=item.collective_goal_instance_code),
+        StudentItem(student_id=student_b1.id, store_item_id=item.id, join_code='JOINB456', status='pending', collective_goal_instance_code=item.collective_goal_instance_code),
     ])
     db.session.commit()
 
@@ -247,14 +250,15 @@ def test_collective_unlock_scoped_to_join_code_and_goal_type(client):
         collective_goal_type='fixed',
         collective_goal_target=2,
         is_active=True,
+        collective_goal_instance_code=str(uuid.uuid4())
     )
     db.session.add(item)
     db.session.flush()
 
     # Existing purchase in class A and class B.
     db.session.add_all([
-        StudentItem(student_id=student_a1.id, store_item_id=item.id, join_code='JOINA777', status='pending'),
-        StudentItem(student_id=student_b1.id, store_item_id=item.id, join_code='JOINB999', status='pending'),
+        StudentItem(student_id=student_a1.id, store_item_id=item.id, join_code='JOINA777', status='pending', collective_goal_instance_code=item.collective_goal_instance_code),
+        StudentItem(student_id=student_b1.id, store_item_id=item.id, join_code='JOINB999', status='pending', collective_goal_instance_code=item.collective_goal_instance_code),
     ])
     db.session.commit()
 
@@ -297,10 +301,11 @@ def test_admin_store_shows_collective_progress(client):
         collective_goal_type='fixed',
         collective_goal_target=2,
         is_active=True,
+        collective_goal_instance_code=str(uuid.uuid4())
     )
     db.session.add(item)
     db.session.flush()
-    db.session.add(StudentItem(student_id=student_a1.id, store_item_id=item.id, join_code='JOINADMINA', status='pending'))
+    db.session.add(StudentItem(student_id=student_a1.id, store_item_id=item.id, join_code='JOINADMINA', status='pending', collective_goal_instance_code=item.collective_goal_instance_code))
     db.session.commit()
 
     _login_admin(client, teacher.id)
@@ -328,6 +333,7 @@ def test_whole_class_collective_prevents_duplicate_purchase(client):
         item_type='collective',
         collective_goal_type='whole_class',
         is_active=True,
+        collective_goal_instance_code=str(uuid.uuid4())
     )
     db.session.add(item)
     db.session.commit()
@@ -372,6 +378,7 @@ def test_whole_class_collective_goal_uses_correct_class_size(client):
         item_type='collective',
         collective_goal_type='whole_class',
         is_active=True,
+        collective_goal_instance_code=str(uuid.uuid4())
     )
     db.session.add(item)
     db.session.commit()
@@ -424,12 +431,13 @@ def test_collective_progress_with_correct_roster_count_admin(client):
         item_type='collective',
         collective_goal_type='whole_class',
         is_active=True,
+        collective_goal_instance_code=str(uuid.uuid4())
     )
     db.session.add(item)
     db.session.flush()
     
     # One student purchases
-    db.session.add(StudentItem(student_id=student_a1.id, store_item_id=item.id, join_code='JOINADMIN', status='pending'))
+    db.session.add(StudentItem(student_id=student_a1.id, store_item_id=item.id, join_code='JOINADMIN', status='pending', collective_goal_instance_code=item.collective_goal_instance_code))
     db.session.commit()
 
     _login_admin(client, teacher.id)
@@ -457,6 +465,7 @@ def test_fixed_collective_allows_multiple_purchases(client):
         collective_goal_type='fixed',
         collective_goal_target=3,
         is_active=True,
+        collective_goal_instance_code=str(uuid.uuid4())
     )
     db.session.add(item)
     db.session.commit()
@@ -519,6 +528,7 @@ def test_whole_class_goal_with_duplicate_seats_shows_correct_roster(client):
         item_type='collective',
         collective_goal_type='whole_class',
         is_active=True,
+        collective_goal_instance_code=str(uuid.uuid4())
     )
     db.session.add(item)
     db.session.commit()
@@ -554,6 +564,7 @@ def test_whole_class_collective_allows_purchase_per_class_for_same_teacher(clien
         item_type='collective',
         collective_goal_type='whole_class',
         is_active=True,
+        collective_goal_instance_code=str(uuid.uuid4())
     )
     item_class2 = StoreItem(
         teacher_id=teacher.id,
@@ -563,6 +574,7 @@ def test_whole_class_collective_allows_purchase_per_class_for_same_teacher(clien
         item_type='collective',
         collective_goal_type='whole_class',
         is_active=True,
+        collective_goal_instance_code=str(uuid.uuid4())
     )
     db.session.add_all([item_class1, item_class2])
     db.session.commit()

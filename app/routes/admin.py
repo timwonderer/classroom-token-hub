@@ -2370,7 +2370,7 @@ def dashboard():
     system_announcements = Announcement.query.filter(
         Announcement.is_active == True,
         sa.or_(Announcement.expires_at == None, Announcement.expires_at > now),
-        Announcement.audience.in_(['system_wide', 'all_teachers'])
+        Announcement.audience_type.in_(['system_wide', 'all_teachers'])
     ).order_by(Announcement.created_at.desc()).all()
 
     # Check if any students have transactions missing join_code scoping.
@@ -5359,6 +5359,10 @@ def _end_of_day_utc(date_obj):
         return None
     return local_date_end_utc(date_obj)
 
+import uuid
+
+def generate_collective_goal_instance_code():
+    return str(uuid.uuid4())
 
 @admin_bp.route('/store', methods=['GET', 'POST'])
 @admin_required
@@ -5420,6 +5424,11 @@ def store_management():
             collective_goal_expires_at=(
                 _end_of_day_utc(form.collective_goal_expires_at.data)
                 if form.item_type.data == 'collective'
+                else None
+            ),
+            collective_goal_instance_code=(
+                generate_collective_goal_instance_code()
+                if form.item_type.data == 'collective' and form.is_active.data
                 else None
             ),
             # Redemption prompt
@@ -5516,12 +5525,14 @@ def store_management():
                 db.func.count(db.distinct(StudentItem.student_id)).label('student_count'),
             )
             .join(Student, StudentItem.student_id == Student.id)
+            .join(StoreItem, StudentItem.store_item_id == StoreItem.id)
             .filter(
                 Student.id.in_(sa.select(student_ids_subq)),
                 StudentItem.join_code == selected_join_code,
                 StudentItem.store_item_id.in_(collective_item_ids),
                 StudentItem.join_code.isnot(None),
                 StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
+                StudentItem.collective_goal_instance_code == StoreItem.collective_goal_instance_code,
             )
             .group_by(StudentItem.store_item_id, StudentItem.join_code)
             .all()
@@ -5770,15 +5781,26 @@ def edit_store_item(item_id):
         enabled_blocks = {block for block in blocks if block}
         if submitted_blocks and not submitted_blocks.issubset(enabled_blocks):
             abort(404)
+        
+        was_active = item.is_active
+        
         # Populate other fields first
         form.populate_obj(item)
         # Set blocks using many-to-many relationship
         item.set_blocks(form.blocks.data if form.blocks.data else [])
+        
         item.collective_goal_expires_at = (
             _end_of_day_utc(form.collective_goal_expires_at.data)
             if item.item_type == 'collective'
             else None
         )
+
+        # Rotate instance code if reviving an inactive collective goal or changing to collective
+        if item.item_type == 'collective' and form.is_active.data:
+            if not was_active or not item.collective_goal_instance_code:
+                # Issue new instance code
+                item.collective_goal_instance_code = generate_collective_goal_instance_code()
+
         db.session.commit()
         flash(f"'{item.name}' has been updated.", "success")
         return redirect(url_for('admin.store_management', join_code=selected_scope['join_code']))

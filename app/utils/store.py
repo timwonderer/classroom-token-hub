@@ -27,6 +27,7 @@ def refund_pending_collective_purchases(item, description_suffix="Goal Expired")
     pending_items = StudentItem.query.filter(
         StudentItem.store_item_id == item.id,
         StudentItem.status == 'pending',
+        StudentItem.collective_goal_instance_code == item.collective_goal_instance_code,
     ).all()
 
     refunded = 0
@@ -107,6 +108,7 @@ def process_expired_collective_goals(teacher_id):
     pending_exists = db.session.query(StudentItem.id).filter(
         StudentItem.store_item_id == StoreItem.id,
         StudentItem.status == 'pending',
+        StudentItem.collective_goal_instance_code == StoreItem.collective_goal_instance_code,
     ).exists()
 
     expired_items = StoreItem.query.filter(

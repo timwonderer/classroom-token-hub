@@ -9,6 +9,7 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Changed
+- **Collective goal reactivation strict scoping** — Added deterministic UUID-based instance mapping for collective goals using `collective_goal_instance_code` across `StoreItem` and `StudentItem` ensuring robust reactivation progress tracking preventing bleed across past purchase states. Replaced lazy overlaps with direct DB inner join references.
 - **v1 end-of-service transition page refreshed for the v2 handoff** — Added and then refined the v1 transition page, updated its supporting styles and theme colors, and wired the latest v2 transition messaging into the docs-facing experience.
 - **v2 launch-readiness checklist reconciled with current docs state** — Updated the readiness matrix, launch project checklist, reconciliation tracker, README, and documentation SOP references so branch-local launch planning stays aligned with the latest branch status.
 - **v2.0 launch-readiness and rehearsal documentation finalized** — Refreshed the v2 tracking artifacts, rehearsal checklist, and final live-test report so `codex/v2.0` reflects the current branch state, readiness blockers, and production transition guidance.

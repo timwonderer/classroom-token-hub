@@ -230,6 +230,7 @@ Many of these tables also carry transitional fields such as `teacher_id`, `seat_
 
 ## V. Migration Notes
 
+- `c5a7dedeca47_add_collective_goal_instance_code.py` adds `collective_goal_instance_code` to `store_items` and `student_items` to scope collective goal tracking natively avoiding progress bleed upon reactivation.
 - `a11213ca4afb_harden_class_economy_membership_checks.py` hardens `ClassEconomy` / `ClassMembership` enum and check-constraint behavior.
 - `e8f1a2b3c4d5_merge_remaining_v2_heads.py` resolves the remaining active v2 migration heads in repo.
 

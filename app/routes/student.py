@@ -2958,11 +2958,13 @@ def shop():
                 db.func.count(db.distinct(StudentItem.student_id)).label('student_count'),
             )
             .join(Student, StudentItem.student_id == Student.id)
+            .join(StoreItem, StudentItem.store_item_id == StoreItem.id)
             .filter(
                 StudentItem.store_item_id.in_(collective_item_ids),
                 StudentItem.join_code == join_code,
                 StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
                 Student.is_teacher == False,  # Exclude teacher purchases from progress
+                StudentItem.collective_goal_instance_code == StoreItem.collective_goal_instance_code,
             )
             .group_by(StudentItem.store_item_id)
             .all()
