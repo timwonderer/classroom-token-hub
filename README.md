@@ -21,7 +21,8 @@ An interactive banking and classroom management platform for teaching students a
 ### Core Features
 
 - **System Admin Portal** — Manage teachers, review error logs, and adjust student ownership
-- **Teacher Dashboard** — Manage students, run payroll, configure rent/insurance/banking settings
+- **Teacher Dashboard** — Manage students, run payroll, configure settings, and receive system announcements
+- **System Announcements** — Broadcast critical updates to all teachers or specific classes
 - **Analytics Dashboard** — System health metrics, CWI analysis, participation tracking, and trend monitoring
 - **Student Portal** — View balances, redeem store items, track attendance, and manage hall passes
 - **Join-Code Rosters** — Upload rosters and let students self-claim seats securely

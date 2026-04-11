@@ -131,13 +131,15 @@ def test_transfer_post_blocked_when_banking_disabled(client, setup_student_with_
         sess['current_join_code'] = join_code
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
         sess['current_period'] = 'Period1'
+        sess['transfer_token'] = 'test-token-blocked'
     
     # Try to submit a transfer (POST)
     response = client.post('/student/transfer', data={
         'from_account': 'checking',
         'to_account': 'savings',
         'amount': '50.00',
-        'passphrase': 'bob_pass'
+        'passphrase': 'bob_pass',
+        'transfer_token': 'test-token-blocked'
     }, follow_redirects=False)
     
     assert response.status_code == 404
@@ -262,6 +264,7 @@ def test_transfer_allowed_when_banking_enabled(client, setup_student_with_enable
         sess['current_join_code'] = join_code
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
         sess['current_period'] = 'Period2'
+        sess['transfer_token'] = 'test-token-allowed'
     
     # Access transfer page (GET) should work
     response = client.get('/student/transfer', follow_redirects=False)
@@ -273,7 +276,8 @@ def test_transfer_allowed_when_banking_enabled(client, setup_student_with_enable
         'from_account': 'checking',
         'to_account': 'savings',
         'amount': '50.00',
-        'passphrase': 'carol_pass'
+        'passphrase': 'carol_pass',
+        'transfer_token': 'test-token-allowed'
     }, follow_redirects=False)
 
     assert response.status_code == 302

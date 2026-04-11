@@ -2365,6 +2365,14 @@ def dashboard():
         return onboarding_redirect
     current_admin_id = session.get('admin_id')
 
+    # Fetch active system announcements for teachers
+    now = utc_now()
+    system_announcements = Announcement.query.filter(
+        Announcement.is_active == True,
+        sa.or_(Announcement.expires_at == None, Announcement.expires_at > now),
+        Announcement.audience.in_(['system_wide', 'all_teachers'])
+    ).order_by(Announcement.created_at.desc()).all()
+
     # Check if any students have transactions missing join_code scoping.
     # If so, redirect to the backfill page so the teacher can associate
     # those orphaned transactions with the correct class period before
@@ -2556,6 +2564,7 @@ def dashboard():
 
     return render_template(
         'admin_dashboard.html',
+        system_announcements=system_announcements,
         show_recovery_setup=show_recovery_setup,
         # Quick stats
         total_students=total_students,

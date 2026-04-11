@@ -131,6 +131,7 @@ def test_transfer_with_legacy_transactions(client, setup_student_with_legacy_tra
         sess['student_id'] = student.id
         sess['current_join_code'] = join_code
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
+        sess['transfer_token'] = 'test-token-123'
     
     # Student has only $50 available in this class economy.
     # Legacy NULL join_code balance must not be used.
@@ -138,7 +139,8 @@ def test_transfer_with_legacy_transactions(client, setup_student_with_legacy_tra
         'from_account': 'checking',
         'to_account': 'savings',
         'amount': '25.00',
-        'passphrase': 'alice_pass'
+        'passphrase': 'alice_pass',
+        'transfer_token': 'test-token-123'
     }, follow_redirects=False)
     
     # Should succeed (redirect to dashboard)
@@ -178,6 +180,7 @@ def test_insufficient_funds_with_only_new_transactions(client, setup_student_wit
         sess['student_id'] = student.id
         sess['current_join_code'] = join_code
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
+        sess['transfer_token'] = 'test-token-123'
     
     # Student has only $50 join_code-scoped checking.
     # Try to transfer $200 (more than available)
@@ -185,7 +188,8 @@ def test_insufficient_funds_with_only_new_transactions(client, setup_student_wit
         'from_account': 'checking',
         'to_account': 'savings',
         'amount': '200.00',
-        'passphrase': 'alice_pass'
+        'passphrase': 'alice_pass',
+        'transfer_token': 'test-token-123'
     }, follow_redirects=True)
     
     # Should fail with insufficient funds error
@@ -204,13 +208,15 @@ def test_transfer_excludes_legacy_balance_without_join_code(client, setup_studen
         sess['student_id'] = student.id
         sess['current_join_code'] = join_code
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
+        sess['transfer_token'] = 'test-token-123'
     
     # Transfer exceeds join_code-scoped $50 balance, so it must be rejected.
     response = client.post('/student/transfer', data={
         'from_account': 'checking',
         'to_account': 'savings',
         'amount': '150.00',
-        'passphrase': 'alice_pass'
+        'passphrase': 'alice_pass',
+        'transfer_token': 'test-token-123'
     }, follow_redirects=True)
 
     assert response.status_code == 200

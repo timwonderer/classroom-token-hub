@@ -1858,6 +1858,17 @@ def transfer():
 
     if request.method == 'POST':
         is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        
+        # Enforce single-use transfer token to prevent form replay
+        submitted_token = request.form.get("transfer_token")
+        expected_token = session.pop('transfer_token', None)
+        if not expected_token or submitted_token != expected_token:
+            message = "This transfer has already been processed or the session is invalid. Please refresh the page and try again."
+            if is_json:
+                return jsonify(status="error", message=message), 400
+            flash(message, "transfer_error")
+            return redirect(url_for("student.transfer"))
+
         passphrase = request.form.get("passphrase")
         if not check_password_hash(student.passphrase_hash or '', passphrase):
             if is_json:
@@ -2016,6 +2027,10 @@ def transfer():
                 interest = _quantize_currency(savings_balance * (annual_rate / Decimal('12')))  # Simple interest on original principal
                 current_balance = _quantize_currency(current_balance + interest)
 
+    import secrets
+    transfer_token = secrets.token_hex(16)
+    session['transfer_token'] = transfer_token
+
     return render_template('student_transfer.html',
                          student=student,
                          transactions=transactions,
@@ -2029,7 +2044,8 @@ def transfer():
                          calculation_type=calculation_type,
                          compound_frequency=compound_frequency,
                          projection_months=projection_months,
-                         projection_balances=projection_balances)
+                         projection_balances=projection_balances,
+                         transfer_token=transfer_token)
 
 
 def apply_savings_interest(student, annual_rate=Decimal('0.045')):

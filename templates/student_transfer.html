@@ -385,6 +385,7 @@
         <div class="modal-content">
             <form id="passphraseForm" method="POST" action="{{ url_for('student.transfer') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="transfer_token" value="{{ transfer_token }}">
                 <div class="modal-header">
                     <h5 class="modal-title" id="passphraseModalLabel">Confirm Transfer</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -456,6 +457,12 @@
         document.getElementById('passphraseModal').addEventListener('shown.bs.modal', function () {
             document.getElementById('passphrase').focus();
         });
+    });
+
+    document.getElementById("passphraseForm").addEventListener("submit", function (e) {
+        const submitBtn = this.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
     });
 
     // Savings Projection Chart
