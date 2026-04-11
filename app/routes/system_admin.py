@@ -1904,6 +1904,7 @@ def view_escalated_issue(issue_ref):
         Issue.id == issue_id,
         Issue.status.in_([
             Issue.STATUS_ESCALATED_TO_DEV,
+            Issue.STATUS_DEV_IN_REVIEW,
             Issue.STATUS_DEV_RESOLVED,
             'elevated',
             'developer_review',

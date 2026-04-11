@@ -135,6 +135,11 @@ def test_sysadmin_can_update_escalated_issue_status_to_in_review(client):
         follow_redirects=False,
     )
     assert resp.status_code == 302
+    assert "/sysadmin/issues/" in resp.headers["Location"]
+
+    follow_resp = client.get(resp.headers["Location"])
+    assert follow_resp.status_code == 200
+    assert b"In Review" in follow_resp.data
 
     db.session.refresh(issue)
     assert issue.status == Issue.STATUS_DEV_IN_REVIEW
