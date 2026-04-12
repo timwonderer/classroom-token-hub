@@ -45,21 +45,23 @@ This checklist is derived from the active and supporting development docs below.
 - [ ] Project 6: Admin route structural refactor
 - [ ] Project 7: Class scope normalization and class-identity cleanup
 - [x] Project 8: Backwards compatibility and schema cleanup
+  - [x] Task 8.1: Physical identity column purge (Admin.username, is_teacher_shadow)
+  - [ ] Task 8.2: Remaining shim/validator cleanup
 - [ ] Project 9: Long-term identity-model convergence
 
 ## Global Launch Invariants
 
 These rules appear repeatedly across the source docs and should be treated as non-negotiable when evaluating any project below.
 
-- [ ] `codex/v2.0` remains the active v2 branch until launch strategy changes.
-- [ ] Admin and teacher writes must originate from explicit canonical session class context.
-- [ ] `current_join_code` is the current enforced runtime boundary for admin writes.
-- [ ] Request-level scope can assist reads, but does not replace canonical session scope for writes.
-- [ ] `ClassEconomy` and `ClassMembership` remain the active authority model during launch work.
-- [ ] New launch-critical changes must not deepen `teacher_id`-only scoping where class scope already exists.
-- [ ] Live-test work must not silently turn deferred architecture targets into in-scope rewrites.
-- [ ] Any schema work must use v2-native migrations rather than replaying divergent `main` migration history verbatim.
-- [ ] Historical docs stay historical unless they are explicitly promoted back into active guidance.
+- [x] `codex/v2.0` remains the active v2 branch until launch strategy changes.
+- [x] Admin and teacher writes must originate from explicit canonical session class context.
+- [x] `current_join_code` is the current enforced runtime boundary for admin writes.
+- [x] Request-level scope can assist reads, but does not replace canonical session scope for writes.
+- [x] `ClassEconomy` and `ClassMembership` remain the active authority model during launch work.
+- [x] New launch-critical changes must not deepen `teacher_id`-only scoping where class scope already exists.
+- [x] Live-test work must not silently turn deferred architecture targets into in-scope rewrites.
+- [x] Any schema work must use v2-native migrations rather than replaying divergent `main` migration history verbatim.
+- [x] Historical docs stay historical unless they are explicitly promoted back into active guidance.
 
 ## Project 1: Launch Evidence And Active-Doc Alignment
 
@@ -248,25 +250,25 @@ These rules appear repeatedly across the source docs and should be treated as no
 
 ### Target Files
 
-- [ ] `app/forms.py`
-- [ ] `app/models.py`
-- [ ] `app/routes/admin.py`
-- [ ] `app/routes/student.py`
-- [ ] `app/utils/economy_balance.py`
-- [ ] `app/utils/economy_policy.py`
-- [ ] `templates/admin_insurance.html`
-- [ ] `templates/admin_edit_insurance_policy.html`
-- [ ] `templates/admin_process_claim.html`
-- [ ] `templates/student_file_claim.html`
-- [ ] `templates/student_insurance_marketplace.html`
+- [x] `app/forms.py`
+- [x] `app/models.py`
+- [x] `app/routes/admin.py`
+- [x] `app/routes/student.py`
+- [x] `app/utils/economy_balance.py`
+- [x] `app/utils/economy_policy.py`
+- [x] `templates/admin_insurance.html`
+- [x] `templates/admin_edit_insurance_policy.html`
+- [x] `templates/admin_process_claim.html`
+- [x] `templates/student_file_claim.html`
+- [x] `templates/student_insurance_marketplace.html`
 
 ### Migration Checklist
 
-- [ ] Diff `g9h0i1j2k3l4_modularize_insurance_products.py` against current v2 schema
-- [ ] Diff `h0i1j2k3l4m_add_economy_snapshot_table.py` against the already-landed v2 snapshot path
-- [ ] Diff `k1l2m3n4o5p6_add_time_limit_override_to_claims.py` against current v2 claims schema
-- [ ] Consolidate all required schema changes into a coherent v2-native migration path
-- [ ] Do not cherry-pick the `main` insurance commits independently
+- [x] Diff `g9h0i1j2k3l4_modularize_insurance_products.py` against current v2 schema
+- [x] Diff `h0i1j2k3l4m_add_economy_snapshot_table.py` against the already-landed v2 snapshot path
+- [x] Diff `k1l2m3n4o5p6_add_time_limit_override_to_claims.py` against current v2 claims schema
+- [x] Consolidate all required schema changes into a coherent v2-native migration path
+- [x] Do not cherry-pick the `main` insurance commits independently
 
 ### Invariants To Preserve
 
