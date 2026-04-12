@@ -40,9 +40,9 @@
       <h3>If you are a student user</h3>
       <p>When your teacher created your account, they have given us these information:</p>
       <ul>
-        <li><strong>Date of Birth</strong>: Used to verify your identity during account setup and recovery. We immediately convert your date of birth into a derived integer value (`dob_sum`) and cryptographic hashes. The raw date of birth is never written to disk. Once you finish setting up your account, the derived `dob_sum` value is deleted, leaving only irreversible cryptographic hashes to support secure account matching and recovery.</li>
+        <li><strong>Date of Birth</strong>: Used to verify your identity during account setup. We immediately convert your date of birth into a derived integer value (`dob_sum`) and cryptographic hashes. The raw date of birth is never written to disk. Once you finish setting up your account, the derived `dob_sum` value is deleted, leaving only irreversible cryptographic hashes to support secure account matching.</li>
         <li><strong>First Name and Last Initial</strong>: We use this to say hello to you and for your teacher to find you.</li>
-        <li><strong>Full Last Name</strong>: We convert this into a long string of letters and numbers that cannot be turned back into your last name before saving it. We use this to help us find you when you claim your account. After you claim your account, we delete this information.</li>
+        <li><strong>Full Last Name</strong>: We convert this into a long string of letters and numbers that cannot be turned back into your last name before saving it. We use this to help us find you when you setup your account. After you complete initial account setup, we delete this information.</li>
         <li><strong>Class Block</strong>: We use this to help your teacher organize their classes.</li>
         <li><strong>Class Identifier</strong>: We use this to show you the name of the class.</li>
       </ul>
@@ -144,7 +144,7 @@
           <td><strong>Error log table</strong></td>
           <td>Error type, timestamp, request path, request method, IP address, browser user agent, stack trace, and the most recent application log excerpt captured for that error.</td>
           <td>Support debugging of HTTP errors and server failures from the system admin console.</td>
-          <td>About 90 days.</td>
+          <td>About 14 days.</td>
           <td>Older rows are automatically purged by the app during ongoing error logging activity.</td>
         </tr>
         <tr>
@@ -162,7 +162,7 @@
       <li><strong>Encryption at Rest</strong>: All sensitive data is encrypted at rest to protect it from unauthorized
         access.</li>
       <li><strong>State-of-the-Art Hashing</strong>: We use industry-leading algorithms to protect your credentials.
-        Passwords and PINs are hashed using <strong>Argon2</strong>, a key derivation function that is highly resistant
+        Passwords and PINs are hashed using strong key derivation functions (such as <strong>Scrypt</strong> or <strong>PBKDF2</strong>) that are highly resistant
         to brute-force and rainbow table attacks. Other sensitive identifiers are hashed using
         <strong>HMAC-SHA256</strong> with a per-record salt and a global pepper, ensuring that each hash is unique and
         secure.
@@ -202,22 +202,20 @@
     <ul>
       <li>Error logs are accessible only to system administrators for debugging and system improvement purposes.</li>
       <li>Error and telemetry records are designed to contain technical diagnostics rather than classroom content such as balances, transaction histories, or full student rosters, but they may include network metadata such as IP address, browser user agent, request path, and opaque account identifiers.</li>
-      <li>Current default retention windows are approximately 7 days for request traces, 14 days for structured error events, 90 days for the database-backed error log table, and rotating size-bounded retention for application log files.</li>
+      <li>Current default retention windows are approximately 7 days for request traces, 14 days for structured error events, 14 days for the database-backed error log table, and rotating size-bounded retention for application log files.</li>
       <li>Deletion is primarily automated: short-lived telemetry is pruned by the application, rotating log files overwrite their oldest backups, and server-level logs expire under operating-system retention settings.</li>
     </ul>
 
     <h2>Student Rights & Access</h2>
     <p>Students have the right to view their own data. If any information is incorrect, please contact your teacher to
       have it corrected. Account access and credential resets must be handled by an administrator.</p>
-    <p><strong>Account Recovery:</strong> If you lose access to your account, your teacher can issue a reset code. The recovery process requires your class join code, the reset code, and verification of your initials and birth month/day to match your cryptographic verification hashes, ensuring only you can reclaim your specific account.</p>
+    <p><strong>Account Recovery:</strong> If you lose access to your account, your teacher can issue a reset code. The recovery process requires your class join code and the reset code to match your cryptographic verification hashes, ensuring only you can reclaim your specific account without providing any personally identifiable information.</p>
 
-    <h2>Data Breach Notification</h2>
-    <p>In the event of a data breach, we will notify affected users and authorities within 72 hours and provide guidance
-      on mitigation steps.</p>
+    <h2>Suspected Data Breach</h2>
+    <p>We do not collect or store direct contact information (such as email addresses or phone numbers) for students or teachers. In the event of a suspected data breach, we will post a notification within the application dashboard. Teachers will be provided with guidance and technical details to share with their affected students.</p>
 
     <h2>Compliance</h2>
-    <p>This application adheres to FERPA (Family Educational Rights and Privacy Act), COPPA (Children's Online Privacy
-      Protection Act), and relevant data privacy policies.</p>
+    <p>This application is designed to support the requirements of FERPA (Family Educational Rights and Privacy Act) and COPPA (Children's Online Privacy Protection Act) through its "PII-free" architectural design. Please note that no formal third-party audits of this application have been performed.</p>
 
     <h2>Contact Information</h2>
     <p>For questions or concerns, you may use the help and support page to open a support ticket.</a>
