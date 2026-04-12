@@ -92,7 +92,7 @@ The platform favors simple, reliable technologies and predictable infrastructure
 
 - **PII Encryption** — All student names encrypted at rest
 - **Post-Setup PII Cleanup** — DOB-derived values and full last-name hash automatically purged after account setup completes; only irreversible credential hashes retained
-- **PII-Free Usernames** — Generated usernames contain no date of birth or personal information; existing students with legacy usernames are migrated on next login
+- **DOB-Free Usernames** — Generated usernames contain no date-of-birth-derived component and may include limited name-derived initials; existing students with legacy usernames are migrated on next login
 - **TOTP for Admins** — Time-based one-time passwords required
 - **Teacher Account Recovery Model** — Teachers recover access through student-assisted recovery, or create a new account; inactive legacy accounts self-delete after 6 months
 - **CSRF Protection** — Protection against cross-site request forgery
