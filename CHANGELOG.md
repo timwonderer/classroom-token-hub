@@ -11,8 +11,8 @@ and this project follows semantic versioning principles.
 ### Security
 - **Student DOB Privacy Remediation (Phase 1)** — Comprehensive privacy hardening in response to school district review (PR #1142):
   - **DOB removed from logs**: `seat_dob_sum` and `provided_dob_sum` stripped from failed-claim warning logs; only the boolean match result (`dob_sum_matches`) is retained for debugging.
-  - **DOB removed from usernames**: `create_username` now uses `random.randint(1000, 9999)` instead of `dob_sum`; new username format is `{adj}{word}{4digits}{initials}` with no PII component.
-  - **One-time username migration flow**: Existing students with DOB-based usernames are redirected to `/migrate-username` on next login, where they select a new theme word and receive a PII-free username. Two new routes (`migrate_username`, `confirm_migrated_username`) and two new templates.
+  - **DOB removed from usernames**: `create_username` now uses `random.randint(1000, 9999)` instead of `dob_sum`; new username format is `{adj}{word}{4digits}{initials}` and no longer includes the DOB-derived component.
+  - **One-time username migration flow**: Existing students with DOB-based usernames are redirected to `/migrate-username` on next login, where they select a new theme word and receive a username without the DOB-derived component. Two new routes (`migrate_username`, `confirm_migrated_username`) and two new templates.
   - **Post-migration PII cleanup**: `dob_sum` and `last_name_hash_by_part` are nulled on the `Student` record after username migration, matching the cleanup behaviour in standard account setup.
   - **New model field**: `username_migrated` boolean on `Student` (migration `b1c2d3e4f5a6`).
   - **DOB privacy audit document**: Added `docs/AUDITS/PRIVACY_AUDIT_DOB_HANDLING_2026-04-12.md` with full data lifecycle analysis, risk inventory, and forward design spec for DOB-free claim flow aligned with v2.0.
