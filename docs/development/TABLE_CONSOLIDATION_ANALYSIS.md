@@ -57,7 +57,6 @@ The system has **5 student-related tables** that may appear redundant but serve 
 - Claiming: first_half_hash, second_half_hash (for claim verification and student-initiated account reuse)
 - Recovery: reset_code, reset_code_expires_at (actual recovery uses code + join_code)
 - Profile: has_completed_setup, has_completed_profile_migration
-- Shadow: is_teacher_shadow, shadow_for_admin_id
 - References: internal_reference, opaque_reference
 - Insurance: insurance_plan, insurance_last_paid
 - Features: second_factor_type, second_factor_enabled
@@ -326,6 +325,12 @@ seat_teachers (replaces student_teachers)
 ---
 
 ## Immediate Actions
+✅ **PHASE 3 PURGE COMPLETE** (2026-04-12)
+
+### ✅ **Executed:**
+1. Dropped `is_teacher_shadow` and `shadow_for_admin_id` from `Students` table.
+2. Dropped `username` from `Teachers` and `SystemAdmins` tables.
+3. Dropped orphaned `actor_membership_id` columns from `UserCredentials` and `WebAuthnCredentials`.
 
 Since database is fresh with no legacy data:
 
@@ -360,6 +365,6 @@ What appears to be "redundant" tables is actually **intentional architectural se
 
 ---
 
-**Last Updated:** 2026-03-08  
-**Status:** Analysis Complete  
-**Next Steps:** Document V2.0 migration strategy in separate document
+**Last Updated:** 2026-04-12  
+**Status:** Phase 3 Hardening Complete  
+**Next Steps:** Plan V2.1 Identity-Model Convergence (Post-Launch)

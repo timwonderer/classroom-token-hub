@@ -138,10 +138,10 @@ class FeatureSettings(db.Model):
 
 **Legacy Columns:**
 ```sql
-username character varying(80) | YES  -- Legacy plaintext username (deprecated)
+username character varying(80) | YES  -- Legacy plaintext username (DELETED)
 ```
 
-**Status:** ⚠️ MIGRATION PATH ACTIVE
+**Status:** ✅ PURGED - MIGRATION COMPLETE
 
 **Current State:**
 - Column exists for backward compatibility
@@ -156,7 +156,7 @@ username character varying(80) | YES  -- Legacy plaintext username (deprecated)
 - Template updated (2026-03-08) to prefer `teacher_public_id`
 
 **Cleanup Recommendation:**
-⏳ **DEFERRED** - Keep for migration compatibility until confirmed all teachers have modern identifiers
+✅ **COMPLETE** - Physical column purge executed via migration `982dca62e8b2` on 2026-04-12.
 
 ---
 
@@ -191,9 +191,7 @@ username character varying(80) | YES  -- Legacy plaintext username (deprecated)
 ### Phase 3: Future Consideration (Requires Data Migration)
 
 1. **Phase out `teachers.username`**
-   - Audit: Confirm all teachers have `teacher_public_id` populated
-   - If confirmed: Create migration to drop column
-   - Timeline: 6+ months after audit
+   - ✅ **COMPLETE**: Physical column purge executed via migration `982dca62e8b2` (2026-04-12).
 
 ---
 
@@ -263,6 +261,6 @@ FROM feature_settings;
 
 ---
 
-**Last Updated:** 2026-03-08  
+**Last Updated:** 2026-04-12  
 **Reviewed By:** Development Team  
-**Status:** Analysis Complete, Awaiting Approval for Phase 1 Cleanup
+**Status:** Hardening Phase 3 Complete - Legacy Username Purge Finalized

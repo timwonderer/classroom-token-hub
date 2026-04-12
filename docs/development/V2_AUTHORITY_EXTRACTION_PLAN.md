@@ -1,6 +1,6 @@
 # V2 Authority Extraction Plan
 
-**Status:** Planned  
+**Status:** Baseline established (Phase 3 Hardening Complete 2026-04-12)
 **Sequence Position:** Immediately after Project 3 low-conflict production fixes  
 **Branch Context:** `codex/v2.0`
 
