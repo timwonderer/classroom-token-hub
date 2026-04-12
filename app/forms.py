@@ -136,6 +136,7 @@ class StudentPinPassphraseForm(FlaskForm):
 
 class StudentConfirmMigratedUsernameForm(FlaskForm):
     """CSRF-protected confirmation that the student has written down their new username."""
+    written_down_username = BooleanField("I have safely written down my new username", validators=[DataRequired()])
     submit = SubmitField("I've saved my new username — continue")
 
 class StudentLoginForm(FlaskForm):

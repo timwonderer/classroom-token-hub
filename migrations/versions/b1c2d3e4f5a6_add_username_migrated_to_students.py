@@ -30,7 +30,7 @@ def column_exists(table_name, column_name):
     try:
         columns = [col['name'] for col in inspector.get_columns(table_name)]
         return column_name in columns
-    except Exception:
+    except sa.exc.NoSuchTableError:
         return False
 
 

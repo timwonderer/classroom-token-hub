@@ -78,8 +78,39 @@ RENT_PAYMENT_MATCH_TOLERANCE_SECONDS = 300
 TRANSFER_SUBMISSION_TOKEN_KEY = 'transfer_submission_token'
 TRANSFER_SUBMISSION_TOKEN_LIMIT = 5
 
+USERNAME_ADJECTIVES = [
+    "brave", "clever", "curious", "daring", "eager", "fancy", "gentle", "honest", "jolly", "kind",
+    "lucky", "mighty", "noble", "quick", "proud", "silly", "witty", "zesty", "sunny", "chill"
+]
+
 
 # -------------------- DATETIME HELPERS --------------------
+
+
+def _generate_unique_student_username(seed_word, first_name, last_initial):
+    """
+    Generate a non-PII username by combining an adjective, a seed word,
+    a random 4-digit number, and the student's initials.
+    Includes a retry loop to ensure uniqueness against existing Student records.
+    """
+    initials = f"{first_name[0].upper()}{last_initial.upper()}"
+    max_retries = 5
+
+    for _ in range(max_retries):
+        adjective = random.choice(USERNAME_ADJECTIVES)
+        uniquifier = random.randint(1000, 9999)
+        username = f"{adjective}{seed_word}{uniquifier}{initials}"
+
+        # Check for collision in DB
+        lookup_hash = hash_username_lookup(username)
+        if not Student.query.filter_by(username_lookup_hash=lookup_hash).first():
+            return username
+
+    # Extremely rare collision limit reached
+    current_app.logger.warning(f"Username collision retry limit reached for seed '{seed_word}'")
+    # Final fallback attempt with higher entropy
+    uniquifier = random.randint(10000, 99999)
+    return f"{random.choice(USERNAME_ADJECTIVES)}{seed_word}{uniquifier}{initials}"
 
 
 def _clear_expired_rent_perk_items(student_id, join_code=None, teacher_id=None, now=None):
@@ -484,7 +515,8 @@ def check_legacy_profile():
     excluded_endpoints = [
         'student.login', 'student.logout', 'student.complete_profile',
         'student.claim_account', 'student.create_username', 'student.setup_pin_passphrase',
-        'student.demo_login', 'student.setup_complete', 'student.add_class'
+        'student.demo_login', 'student.setup_complete', 'student.add_class',
+        'student.migrate_username', 'student.confirm_migrated_username'
     ]
     
     # Skip if endpoint is None or not in student blueprint
@@ -500,15 +532,19 @@ def check_legacy_profile():
     if not student:
         return
     
-    # Check if this is a legacy student needing migration
-    needs_migration = (
+    # Check if this is a legacy student needing profile migration
+    needs_profile_migration = (
         student.has_completed_setup and
         not student.has_completed_profile_migration and
         (not student.last_name_hash_by_part or student.dob_sum is None)
     )
     
-    if needs_migration:
+    if needs_profile_migration:
         return redirect(url_for('student.complete_profile'))
+
+    # Check if this is a legacy student needing username migration
+    if student.has_completed_setup and not student.username_migrated:
+        return redirect(url_for('student.migrate_username'))
 
 
 @student_bp.route('/complete-profile', methods=['GET', 'POST'])
@@ -943,21 +979,22 @@ def create_username():
         if not write_in_word.isalpha() or len(write_in_word) < 3 or len(write_in_word) > 12:
             flash("Please enter a valid word (3-12 letters, no numbers or spaces).", "setup")
             return redirect(url_for('student.create_username'))
-        adjectives = [
-            "brave", "clever", "curious", "daring", "eager", "fancy", "gentle", "honest", "jolly", "kind",
-            "lucky", "mighty", "noble", "quick", "proud", "silly", "witty", "zesty", "sunny", "chill"
-        ]
-        adjective = random.choice(adjectives)
-        uniquifier = random.randint(1000, 9999)
-        initials = f"{student.first_name[0].upper()}{student.last_initial.upper()}"
-        username = f"{adjective}{write_in_word}{uniquifier}{initials}"
+        username = _generate_unique_student_username(write_in_word, student.first_name, student.last_initial)
         # Save username plaintext in session for display
         session['generated_username'] = username
         # Hash and store in DB; mark as using the new PII-free username format
         student.username_hash = hash_username(username, student.salt)
         student.username_lookup_hash = hash_username_lookup(username)
         student.username_migrated = True
-        db.session.commit()
+
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            current_app.logger.error(f"IntegrityError during username creation for student {student_id}")
+            flash("An error occurred while generating your username. Please try again.", "setup")
+            return redirect(url_for('student.create_username'))
+
         # Clear theme prompt from session
         session.pop('theme_prompt', None)
         session.pop('theme_slug', None)
@@ -1047,14 +1084,7 @@ def migrate_username():
             flash("Please enter a valid word (3-12 letters, no numbers or spaces).", "migration")
             return redirect(url_for('student.migrate_username'))
 
-        adjectives = [
-            "brave", "clever", "curious", "daring", "eager", "fancy", "gentle", "honest", "jolly", "kind",
-            "lucky", "mighty", "noble", "quick", "proud", "silly", "witty", "zesty", "sunny", "chill"
-        ]
-        adjective = random.choice(adjectives)
-        uniquifier = random.randint(1000, 9999)
-        initials = f"{student.first_name[0].upper()}{student.last_initial.upper()}"
-        new_username = f"{adjective}{write_in_word}{uniquifier}{initials}"
+        new_username = _generate_unique_student_username(write_in_word, student.first_name, student.last_initial)
 
         session['migration_username'] = new_username
         session.pop('theme_prompt', None)
@@ -1090,7 +1120,16 @@ def confirm_migrated_username():
         student.username_hash = hash_username(new_username, student.salt)
         student.username_lookup_hash = hash_username_lookup(new_username)
         student.username_migrated = True
-        db.session.commit()
+        
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            current_app.logger.error(f"IntegrityError during username migration for student {student_id}")
+            session.pop('migration_username', None)
+            flash("That username is no longer available. Please try the migration again.", "error")
+            return redirect(url_for('student.migrate_username'))
+
         session.pop('migration_username', None)
         flash("Your username has been updated. Use your new username next time you log in.", "success")
         return redirect(url_for('student.dashboard'))
