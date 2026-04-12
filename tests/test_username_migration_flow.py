@@ -81,7 +81,7 @@ def test_complete_migration_flow(client, test_student):
         assert student.dob_sum is None
         assert student.last_name_hash_by_part is None
     
-    # Verify DB state (redundant check but keeping for safety)
+    # Verify DB state
     with client.application.app_context():
         stu = db.session.get(Student, test_student)
         assert stu.username_migrated is True
