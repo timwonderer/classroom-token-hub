@@ -21,6 +21,8 @@
 | Smoke-route checklist ownership | `done` | `SOP-DEP-022`, `LOG-ARC-050_V2_Live_Test_Rehearsal_Report_04032026.md` | Timothy Chang is recorded as primary solo operator; the solo-operator exception and smoke-route outcomes are documented in `LOG-ARC-050` | Re-run only if the solo-operator exception is rejected or new launch-critical route behavior lands before live testing |
 | PostgreSQL validation baseline | `done` | `LOG-ARC-050`, `SOP-DB-009` | Latest recorded live-test rehearsal PostgreSQL validation passed with `720 passed, 1 skipped` on the configured test DB | Re-run only if launch-critical changes land before live testing |
 | Economy/rent launch-critical main deltas | `done` | `docs/development/V2_MAIN_RECONCILIATION_TRACKER.md`, focused regression run | The economy/rent wave has landed on `codex/v2.0`, including the CWI warning-bypass migration and focused economy/rent regression coverage | Re-run focused economy/rent tests only if launch-critical economy changes land before live testing |
+| Insurance modularization and tiered policies | `done` | `app/utils/economy_policy.py`, `templates/admin_insurance.html` | Tiered coverage multipliers, UI accordion, and setup flow landed | Verify setup flow in simple/advanced modes |
+| Insurance pricing snapshots and claim gates | `done` | `app/models.py`, `app/routes/admin.py` | EconomySnapshot model and filing-time claim limit enforcement landed | Verify claim override behavioral correctness |
 | Production transition runbook completeness | `done` | `SOP-DEP-023_V2_Production_Transition_Runbook.md` | Runbook now has named operator roles, current workflow references, launch-critical smoke coverage, and a production transition record template | Revisit only if deployment workflow or maintenance controls change materially |
 | Backup and restore rehearsal | `blocked` | `SOP-DEP-023`, `SOP-DEP-016`, operator process | Required by docs but not evidenced in repo-facing readiness artifacts | Record successful rehearsal on intended topology |
 | Maintenance-mode and deploy workflow safety | `done` | `SOP-DEP-023`, `.github/workflows/*`, reconciliation tracker | Workflow security hardening and host key verification landed | Port workflow fix and verify maintenance toggling path |
@@ -44,8 +46,8 @@ These items must be closed before treating `codex/v2.0` as ready for live testin
 These can follow live testing, but must be complete before a v2 production launch:
 
 1. Port the production-required `origin/main` deltas:
-   - insurance modularization and tiered setup flow
-   - insurance pricing snapshots, approval caps, and claim time-limit gate
+   - [x] insurance modularization and tiered setup flow
+   - [x] insurance pricing snapshots, approval caps, and claim time-limit gate
    - [x] collective goal reactivation instance codes
    - [x] transfer submission hardening
    - [x] maintenance workflow security fix

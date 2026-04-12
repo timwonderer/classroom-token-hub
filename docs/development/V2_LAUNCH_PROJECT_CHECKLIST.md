@@ -37,7 +37,7 @@ This checklist is derived from the active and supporting development docs below.
 ### Phase 2: Pre-Production Required Ports
 
 - [x] Project 3: Low-conflict production fixes
-- [ ] Project 4: Insurance reconciliation wave
+- [x] Project 4: Insurance reconciliation wave
 - [ ] Project 5: Production transition evidence
 
 ### Phase 3: Post-Launch Structural Hardening
@@ -235,16 +235,16 @@ These rules appear repeatedly across the source docs and should be treated as no
 
 ### Scope A: Modularization And Tiered Setup Flow
 
-- [ ] Port teacher-facing modular tiered insurance setup
-- [ ] Finalize tiered guidance flow from `main`
-- [ ] Keep simple/advanced mode transitions stable
+- [x] Port teacher-facing modular tiered insurance setup
+- [x] Finalize tiered guidance flow from `main`
+- [x] Keep simple/advanced mode transitions stable
 
 ### Scope B: Pricing Snapshots, Approval Caps, And Claim Time-Limit Gate
 
-- [ ] Use filing timestamp rather than the wrong event timestamp for claim limits
-- [ ] Add explicit teacher override path
-- [ ] Reconcile variable approval caps
-- [ ] Keep pricing snapshots consistent with the modularized model
+- [x] Use filing timestamp rather than the wrong event timestamp for claim limits
+- [x] Add explicit teacher override path
+- [x] Reconcile variable approval caps
+- [x] Keep pricing snapshots consistent with the modularized model
 
 ### Target Files
 
@@ -292,9 +292,9 @@ These rules appear repeatedly across the source docs and should be treated as no
 
 ### Exit Criteria
 
-- [ ] Both insurance clusters in the reconciliation tracker are landed on v2.
-- [ ] Insurance schema path is clean and v2-native.
-- [ ] Insurance regressions pass on the v2 branch.
+- [x] Both insurance clusters in the reconciliation tracker are landed on v2.
+- [x] Insurance schema path is clean and v2-native.
+- [x] Insurance regressions pass on the v2 branch.
 
 ## Project 5: Production Transition Evidence
 
@@ -480,7 +480,7 @@ These rules appear repeatedly across the source docs and should be treated as no
 ### Must Be Complete Before Production
 
 - [x] Project 3 complete
-- [ ] Project 4 complete
+- [x] Project 4 complete
 - [ ] Project 5 complete
 
 ### Explicitly Deferred Until After Launch
