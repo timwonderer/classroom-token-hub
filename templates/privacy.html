@@ -40,7 +40,7 @@
       <h3>If you are a student user</h3>
       <p>When your teacher created your account, they have given us these information:</p>
       <ul>
-        <li><strong>Date of Birth</strong>: Used only to verify your identity during account setup. We convert it to a numeric value for matching purposes and do not store your date of birth in its original form at any point. This value is permanently deleted from our systems once your account setup is complete.</li>
+        <li><strong>Date of Birth</strong>: Used only to verify your identity during account setup. We immediately convert it into a cryptographic hash — a fixed-length string that cannot be reversed to recover your date of birth — before any values are stored. The raw date is never written to disk. The hash itself is also deleted once your account setup is complete.</li>
         <li><strong>First Name and Last Initial</strong>: We use this to say hello to you and for your teacher to find you.</li>
         <li><strong>Full Last Name</strong>: We convert this into a long string of letters and numbers that cannot be turned back into your last name before saving it. We use this to help us find you when you claim your account. After you claim your account, we delete this information.</li>
         <li><strong>Class Block</strong>: We use this to help your teacher organize their classes.</li>
@@ -107,7 +107,7 @@
       <tbody>
         <tr>
           <td><strong>Student claim verification hashes</strong></td>
-          <td>Student date of birth (held as a numeric sum) and hashed full last name, used to verify identity during account claim.</td>
+          <td>Cryptographic hashes derived from the student's date of birth and full last name, used to verify identity during account claim. The original values are never stored.</td>
           <td>Prevent duplicate claims and match a student to the pre-created class record.</td>
           <td>Until the student completes account setup (username, PIN, and passphrase).</td>
           <td>Deleted automatically when the student finishes the account setup flow.</td>
