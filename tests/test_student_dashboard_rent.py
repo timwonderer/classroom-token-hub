@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import os
 
 from werkzeug.security import generate_password_hash
@@ -11,7 +12,7 @@ from app.hash_utils import get_random_salt, hash_username
 def test_dashboard_handles_rent_with_multi_block_student(client):
     """Dashboard should render when rent is enabled for a multi-block student."""
 
-    teacher = Admin(username="rent_teacher", totp_secret="rentsecret")
+    teacher = make_admin("rent_teacher", "rentsecret")
     db.session.add(teacher)
     db.session.commit()
 

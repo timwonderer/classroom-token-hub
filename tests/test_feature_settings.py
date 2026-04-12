@@ -1,6 +1,7 @@
 """
 Tests for feature settings and teacher onboarding functionality.
 """
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import os
 import pytest
 import pyotp
@@ -36,9 +37,7 @@ def _create_class_scope(admin, block='A', join_code='JOIN_A'):
 def test_admin():
     """Create a test admin for feature settings tests."""
     import pyotp
-    admin = Admin(
-        username='test_teacher',
-        totp_secret=pyotp.random_base32(),
+    admin = make_admin('test_teacher', pyotp.random_base32(),
     )
     db.session.add(admin)
     db.session.commit()
@@ -246,9 +245,7 @@ class TestTeacherDeletionCascade:
     def test_class_features_cascade_on_teacher_delete(self, client_with_fk):
         """Class features are removed when their teacher-owned class is deleted."""
         # Create a teacher
-        admin = Admin(
-            username='cascade_test_teacher',
-            totp_secret=pyotp.random_base32(),
+        admin = make_admin('cascade_test_teacher', pyotp.random_base32(),
         )
         db.session.add(admin)
         db.session.commit()
@@ -273,9 +270,7 @@ class TestTeacherDeletionCascade:
     def test_teacher_onboarding_cascade_on_teacher_delete(self, client_with_fk):
         """Test that TeacherOnboarding is CASCADE deleted when teacher is deleted."""
         # Create a teacher
-        admin = Admin(
-            username='onboarding_cascade_test',
-            totp_secret=pyotp.random_base32(),
+        admin = make_admin('onboarding_cascade_test', pyotp.random_base32(),
         )
         db.session.add(admin)
         db.session.commit()
@@ -301,9 +296,7 @@ class TestTeacherDeletionCascade:
         from app.models import ClassEconomy
 
         # Create a teacher
-        admin = Admin(
-            username='blocks_cascade_test',
-            totp_secret=pyotp.random_base32(),
+        admin = make_admin('blocks_cascade_test', pyotp.random_base32(),
         )
         db.session.add(admin)
         db.session.commit()

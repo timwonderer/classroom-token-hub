@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from werkzeug.security import generate_password_hash
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import uuid
 
 from app.extensions import db
@@ -78,7 +79,7 @@ def _create_student(teacher, first_name, join_code, block='A'):
 
 
 def test_student_shop_collective_progress_counts_current_class_only(client):
-    teacher = Admin(username='teacher_collective_shop', totp_secret='secret')
+    teacher = make_admin('teacher_collective_shop', 'secret')
     db.session.add(teacher)
     db.session.flush()
 
@@ -116,7 +117,7 @@ def test_student_shop_collective_progress_counts_current_class_only(client):
 
 
 def test_student_shop_filters_items_by_store_item_block_visibility(client):
-    teacher = Admin(username='teacher_block_visibility_shop', totp_secret='secret')
+    teacher = make_admin('teacher_block_visibility_shop', 'secret')
     db.session.add(teacher)
     db.session.flush()
 
@@ -164,7 +165,7 @@ def test_student_shop_filters_items_by_store_item_block_visibility(client):
 
 
 def test_purchase_item_rejects_items_not_visible_to_current_block(client):
-    teacher = Admin(username='teacher_block_visibility_purchase', totp_secret='secret')
+    teacher = make_admin('teacher_block_visibility_purchase', 'secret')
     db.session.add(teacher)
     db.session.flush()
 
@@ -199,7 +200,7 @@ def test_purchase_item_rejects_items_not_visible_to_current_block(client):
 def test_purchase_item_allows_unscoped_item_without_block_visibility(client):
     """QUERY INVERSION v2: Items with join_code must be scoped to a class.
     Items that previously had join_code=None are now class-scoped."""
-    teacher = Admin(username='teacher_unscoped_purchase', totp_secret='secret')
+    teacher = make_admin('teacher_unscoped_purchase', 'secret')
     db.session.add(teacher)
     db.session.flush()
 
@@ -232,7 +233,7 @@ def test_purchase_item_allows_unscoped_item_without_block_visibility(client):
 
 
 def test_collective_unlock_scoped_to_join_code_and_goal_type(client):
-    teacher = Admin(username='teacher_collective_unlock', totp_secret='secret')
+    teacher = make_admin('teacher_collective_unlock', 'secret')
     db.session.add(teacher)
     db.session.flush()
 
@@ -284,7 +285,7 @@ def test_collective_unlock_scoped_to_join_code_and_goal_type(client):
 
 
 def test_admin_store_shows_collective_progress(client):
-    teacher = Admin(username='teacher_collective_admin', totp_secret='secret')
+    teacher = make_admin('teacher_collective_admin', 'secret')
     db.session.add(teacher)
     db.session.flush()
 
@@ -317,7 +318,7 @@ def test_admin_store_shows_collective_progress(client):
 
 def test_whole_class_collective_prevents_duplicate_purchase(client):
     """Test that students can only purchase a whole_class collective item once."""
-    teacher = Admin(username='teacher_whole_class', totp_secret='secret')
+    teacher = make_admin('teacher_whole_class', 'secret')
     db.session.add(teacher)
     db.session.flush()
 
@@ -361,7 +362,7 @@ def test_whole_class_collective_prevents_duplicate_purchase(client):
 
 def test_whole_class_collective_goal_uses_correct_class_size(client):
     """Test that whole_class collective goals use actual student count, not seat count."""
-    teacher = Admin(username='teacher_class_size', totp_secret='secret')
+    teacher = make_admin('teacher_class_size', 'secret')
     db.session.add(teacher)
     db.session.flush()
 
@@ -413,7 +414,7 @@ def test_whole_class_collective_goal_uses_correct_class_size(client):
 
 def test_collective_progress_with_correct_roster_count_admin(client):
     """Test that admin view shows correct class size based on actual students."""
-    teacher = Admin(username='teacher_admin_size', totp_secret='secret')
+    teacher = make_admin('teacher_admin_size', 'secret')
     db.session.add(teacher)
     db.session.flush()
 
@@ -449,7 +450,7 @@ def test_collective_progress_with_correct_roster_count_admin(client):
 
 def test_fixed_collective_allows_multiple_purchases(client):
     """Test that fixed collective goals still allow multiple purchases from same student."""
-    teacher = Admin(username='teacher_fixed_multi', totp_secret='secret')
+    teacher = make_admin('teacher_fixed_multi', 'secret')
     db.session.add(teacher)
     db.session.flush()
 
@@ -495,7 +496,7 @@ def test_fixed_collective_allows_multiple_purchases(client):
 
 def test_whole_class_goal_with_duplicate_seats_shows_correct_roster(client):
     """Test that duplicate TeacherBlock entries don't inflate class size."""
-    teacher = Admin(username='teacher_dup_seats', totp_secret='secret')
+    teacher = make_admin('teacher_dup_seats', 'secret')
     db.session.add(teacher)
     db.session.flush()
 
@@ -547,7 +548,7 @@ def test_whole_class_goal_with_duplicate_seats_shows_correct_roster(client):
 
 def test_whole_class_collective_allows_purchase_per_class_for_same_teacher(client):
     """Students in different classes (join_codes) with the same teacher can each purchase once."""
-    teacher = Admin(username='teacher_whole_class_multi', totp_secret='secret')
+    teacher = make_admin('teacher_whole_class_multi', 'secret')
     db.session.add(teacher)
     db.session.flush()
 

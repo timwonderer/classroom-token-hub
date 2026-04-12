@@ -608,16 +608,7 @@ def _find_admin_by_auth_username(username: str):
         return None
 
     lookup_hash = hash_username_lookup(normalized)
-    admin = Admin.query.filter_by(username_lookup_hash=lookup_hash).first()
-    if admin:
-        return admin
-
-    # Migration-only fallback for legacy records that have not been hashed yet.
-    return Admin.query.filter(
-        Admin.username == normalized,
-        Admin.username_lookup_hash.is_(None),
-        Admin.username_hash.is_(None),
-    ).first()
+    return Admin.query.filter_by(username_lookup_hash=lookup_hash).first()
 
 
 def _auth_username_exists(username: str, *, exclude_admin_id: int | None = None) -> bool:
@@ -2940,7 +2931,6 @@ def username_migration():
         admin.salt = salt
         admin.username_hash = username_hash
         admin.username_lookup_hash = username_lookup_hash
-        admin.username = None
         if not admin.teacher_public_id:
             admin.teacher_public_id = _generate_unique_teacher_public_id()
         if not admin.hall_pass_verify_token:
@@ -3189,7 +3179,6 @@ def signup():
 
         salt, username_hash, username_lookup_hash = _build_admin_auth_fields(username, existing_salt=salt)
         new_admin = Admin(
-            username=None,
             username_hash=username_hash,
             username_lookup_hash=username_lookup_hash,
             teacher_public_id=_generate_unique_teacher_public_id(),

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
 from app.models import (
     Admin,
@@ -24,8 +25,8 @@ def _attach_student_to_class(student, teacher, join_code):
 
 
 def test_export_students_uses_only_teacher_owned_join_codes(client):
-    teacher_a = Admin(username="teacher_export_a", totp_secret="secret-a")
-    teacher_b = Admin(username="teacher_export_b", totp_secret="secret-b")
+    teacher_a = make_admin("teacher_export_a", "secret-a")
+    teacher_b = make_admin("teacher_export_b", "secret-b")
     db.session.add_all([teacher_a, teacher_b])
     db.session.flush()
 

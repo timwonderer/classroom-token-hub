@@ -6,6 +6,7 @@ when a transaction has a NULL amount value.
 """
 from decimal import Decimal
 from unittest.mock import PropertyMock, patch
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import db
 from app.models import Student, Transaction, Admin, ClassEconomy
 
@@ -18,10 +19,7 @@ def test_get_total_earnings_defensive_checks(client, app):
     """
     with app.app_context():
         # Create a teacher
-        teacher = Admin(
-            username="test_teacher",
-            totp_secret="test_secret"
-        )
+        teacher = make_admin("test_teacher", "test_secret")
         db.session.add(teacher)
         db.session.commit()
         
@@ -95,10 +93,7 @@ def test_get_total_earnings_with_negative_amounts(client, app):
     """Test that get_total_earnings correctly filters negative amounts (expenses)."""
     with app.app_context():
         # Create a teacher
-        teacher = Admin(
-            username="test_teacher2",
-            totp_secret="test_secret"
-        )
+        teacher = make_admin("test_teacher2", "test_secret")
         db.session.add(teacher)
         db.session.commit()
         
@@ -177,10 +172,7 @@ def test_get_total_earnings_with_zero_amount(client, app):
     """Test that get_total_earnings handles zero amounts correctly."""
     with app.app_context():
         # Create a teacher
-        teacher = Admin(
-            username="test_teacher3",
-            totp_secret="test_secret"
-        )
+        teacher = make_admin("test_teacher3", "test_secret")
         db.session.add(teacher)
         db.session.commit()
         
@@ -246,10 +238,7 @@ def test_get_total_earnings_with_mocked_null_amount(client, app):
     """
     with app.app_context():
         # Create a teacher
-        teacher = Admin(
-            username="test_teacher4",
-            totp_secret="test_secret"
-        )
+        teacher = make_admin("test_teacher4", "test_secret")
         db.session.add(teacher)
         db.session.commit()
         

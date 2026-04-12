@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 
 from app import db
@@ -8,7 +9,7 @@ from app.hash_utils import get_random_salt, hash_username
 
 
 def _create_admin(username: str = "teacher") -> Admin:
-    admin = Admin(username=username, totp_secret="secret")
+    admin = make_admin(username, "secret")
     db.session.add(admin)
     db.session.commit()
     return admin

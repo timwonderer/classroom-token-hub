@@ -1,6 +1,7 @@
 """
 Tests for the /api/attendance/history endpoint to ensure it returns attendance records.
 """
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone, timedelta
 from app import app, db
@@ -13,10 +14,7 @@ from werkzeug.security import generate_password_hash
 def admin_with_students(client):
     """Create an admin with students and tap events for testing."""
     # Create admin
-    admin = Admin(
-        username='testadmin',
-        totp_secret='TESTSECRET123456'
-    )
+    admin = make_admin('testadmin', 'TESTSECRET123456')
     db.session.add(admin)
     db.session.flush()
 
@@ -135,14 +133,8 @@ def test_attendance_history_with_date_filters(client, admin_with_students):
 def test_attendance_history_tenant_scoping(client):
     """Test that admins can only see their own students' attendance records."""
     # Create two admins
-    admin1 = Admin(
-        username='admin1',
-        totp_secret='TESTSECRET1'
-    )
-    admin2 = Admin(
-        username='admin2',
-        totp_secret='TESTSECRET2'
-    )
+    admin1 = make_admin('admin1', 'TESTSECRET1')
+    admin2 = make_admin('admin2', 'TESTSECRET2')
     db.session.add_all([admin1, admin2])
     db.session.flush()
 

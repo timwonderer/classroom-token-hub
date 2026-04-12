@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
 from app.models import (
     Admin,
@@ -16,11 +17,11 @@ from app.utils.opaque_refs import make_opaque_ref
 
 
 def test_sysadmin_resolve_issue_issues_bug_reward_transaction(client):
-    teacher = Admin(username="teacher_issue_reward", totp_secret="secret")
+    teacher = make_admin("teacher_issue_reward", "secret")
     db.session.add(teacher)
     db.session.flush()
 
-    sysadmin = SystemAdmin(username="sysadmin_issue_reward", totp_secret="secret")
+    sysadmin = make_sysadmin("sysadmin_issue_reward", "secret")
     student = Student(first_name="Bug", last_initial="R", block="A", salt=b"salt")
     category = IssueCategory(
         name="Bug Report Category",

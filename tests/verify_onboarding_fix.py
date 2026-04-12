@@ -31,10 +31,8 @@ def test_onboarding_status_no_class_period_fix():
         db.create_all()
         
         # Create a new admin (teacher)
-        # Using correct Admin fields found in models.py
-        admin = Admin(username='new_teacher')
-        # Simulate an encrypted secret (doesn't matter what it is as we bypass login)
-        admin.totp_secret = "encrypted_secret_placeholder"
+        from tests.helpers.v2_fixtures import make_admin
+        admin = make_admin('new_teacher', 'secret')
         
         db.session.add(admin)
         db.session.commit()

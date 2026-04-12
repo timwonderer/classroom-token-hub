@@ -10,6 +10,7 @@ Covers:
 See docs/security/CLASS_DELETION_AUDIT.md for the full audit report.
 """
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pyotp
 from datetime import datetime, timezone
 
@@ -36,13 +37,9 @@ from app.utils.auth_username import build_hashed_username_fields
 
 def _create_teacher(username: str) -> tuple[Admin, str, str]:
     secret = pyotp.random_base32()
-    salt, username_hash, username_lookup_hash = build_hashed_username_fields(username)
-    teacher = Admin(
-        username=None,
-        username_hash=username_hash,
-        username_lookup_hash=username_lookup_hash,
-        salt=salt,
-        totp_secret=secret,
+    teacher = make_admin(
+        username,
+        secret,
     )
     db.session.add(teacher)
     db.session.commit()
@@ -51,13 +48,9 @@ def _create_teacher(username: str) -> tuple[Admin, str, str]:
 
 def _create_sysadmin(username: str = "sysadmin-audit") -> tuple[SystemAdmin, str, str]:
     secret = pyotp.random_base32()
-    salt, username_hash, username_lookup_hash = build_hashed_username_fields(username)
-    sa = SystemAdmin(
-        username=None,
-        username_hash=username_hash,
-        username_lookup_hash=username_lookup_hash,
-        salt=salt,
-        totp_secret=secret,
+    sa = make_sysadmin(
+        username,
+        secret,
     )
     db.session.add(sa)
     db.session.commit()

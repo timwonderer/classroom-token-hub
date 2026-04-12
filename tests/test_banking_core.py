@@ -1,5 +1,6 @@
 
 from decimal import Decimal
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import importlib.util
 from pathlib import Path
 import pytest
@@ -22,7 +23,7 @@ def test_ledger_flow(client):
     # Setup
     student = Student(first_name="Test", last_initial="S", block="A", 
                       salt=b'123', first_half_hash="hash")
-    teacher = Admin(username="teacher", totp_secret="secret")
+    teacher = make_admin("teacher", "secret")
     db.session.add(student)
     db.session.add(teacher)
     db.session.commit()
@@ -71,7 +72,7 @@ def test_void_pending(client):
     """Test voiding a PENDING transaction (no reversal)."""
     student = Student(first_name="Test2", last_initial="B", block="B", 
                       salt=b'456', first_half_hash="hash2")
-    teacher = Admin(username="teacher2", totp_secret="secret")
+    teacher = make_admin("teacher2", "secret")
     db.session.add(student)
     db.session.add(teacher)
     db.session.commit()
@@ -125,7 +126,7 @@ def test_void_posted_with_reversal(client):
     """Test voiding a POSTED transaction (creates reversal)."""
     student = Student(first_name="Test3", last_initial="C", block="C", 
                       salt=b'789', first_half_hash="hash3")
-    teacher = Admin(username="teacher3", totp_secret="secret")
+    teacher = make_admin("teacher3", "secret")
     db.session.add(student)
     db.session.add(teacher)
     db.session.commit()
@@ -190,7 +191,7 @@ def test_void_posted_with_reversal(client):
 
 
 def test_settlement_sweep_processes_each_pending_context_once(client):
-    teacher = Admin(username="teacher-sweep", totp_secret="secret")
+    teacher = make_admin("teacher-sweep", "secret")
     student_one = Student(first_name="Sweep", last_initial="A", block="A", salt=b'111', first_half_hash="hasha")
     student_two = Student(first_name="Sweep", last_initial="B", block="B", salt=b'222', first_half_hash="hashb")
     db.session.add_all([teacher, student_one, student_two])

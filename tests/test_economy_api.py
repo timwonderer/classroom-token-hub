@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 
 pytestmark = [pytest.mark.critical, pytest.mark.regression]
@@ -22,10 +23,7 @@ from tests.helpers.class_scope import create_class_scope
 def admin_with_payroll(client):
     """Create an admin with payroll settings for testing."""
     # Create admin
-    admin = Admin(
-        username="testeconomyadmin",
-        totp_secret="TESTSECRET123456"
-    )
+    admin = make_admin("testeconomyadmin", "TESTSECRET123456")
     db.session.add(admin)
     db.session.flush()
 
@@ -354,10 +352,7 @@ def test_serialize_economy_analysis_payload_coerces_decimal_values(app):
 def test_different_expected_hours_per_block(client):
     """Test that different blocks can have different expected_weekly_hours."""
     # Create admin
-    admin = Admin(
-        username="testmultiblock",
-        totp_secret="TESTSECRET123456"
-    )
+    admin = make_admin("testmultiblock", "TESTSECRET123456")
     db.session.add(admin)
     db.session.flush()
 
@@ -901,10 +896,7 @@ def test_analyze_endpoint_error_does_not_leak_exception_details(client):
     implementation details, exception types, or stack traces.
     """
     # Create admin for testing
-    admin = Admin(
-        username="testadmin_error",
-        totp_secret="TESTSECRET123456"
-    )
+    admin = make_admin("testadmin_error", "TESTSECRET123456")
     db.session.add(admin)
     db.session.commit()
 
@@ -938,7 +930,7 @@ def test_analyze_endpoint_error_does_not_leak_exception_details(client):
 
 def test_analyze_block_ignores_teacher_global_payroll_settings(client):
     """Block-scoped analyze requests must not fall back to teacher-global payroll settings."""
-    admin = Admin(username="globalfallbackanalyze", totp_secret="TESTSECRET123456")
+    admin = make_admin("globalfallbackanalyze", "TESTSECRET123456")
     db.session.add(admin)
     db.session.flush()
 
@@ -982,7 +974,7 @@ def test_analyze_block_ignores_teacher_global_payroll_settings(client):
 
 def test_validate_block_ignores_teacher_global_payroll_settings(client):
     """Block-scoped validate requests must not fall back to teacher-global payroll settings."""
-    admin = Admin(username="globalfallbackvalidate", totp_secret="TESTSECRET123456")
+    admin = make_admin("globalfallbackvalidate", "TESTSECRET123456")
     db.session.add(admin)
     db.session.flush()
 
@@ -1026,7 +1018,7 @@ def test_validate_block_ignores_teacher_global_payroll_settings(client):
 
 def test_analyze_block_prefers_join_code_scoped_payroll_settings(client):
     """Join-code-scoped payroll settings should take precedence over legacy block-only rows."""
-    admin = Admin(username="joincodescopewins", totp_secret="TESTSECRET123456")
+    admin = make_admin("joincodescopewins", "TESTSECRET123456")
     db.session.add(admin)
     db.session.flush()
 

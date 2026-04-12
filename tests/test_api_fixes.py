@@ -3,6 +3,7 @@ Tests for API fixes:
 1. Block tap settings import fix
 2. Timezone sync CSRF token
 """
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone
 from app import db
@@ -14,10 +15,7 @@ from app.hash_utils import hash_username, get_random_salt
 def admin_with_students(client):
     """Create an admin with students for testing."""
     # Create admin
-    admin = Admin(
-        username="testadmin",
-        totp_secret="TESTSECRET123456"
-    )
+    admin = make_admin("testadmin", "TESTSECRET123456")
     db.session.add(admin)
     db.session.flush()
     

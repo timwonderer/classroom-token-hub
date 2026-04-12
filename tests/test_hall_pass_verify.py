@@ -11,6 +11,7 @@ Validates the privacy-respecting single-student verification per spec v1.0:
 - Rate limiting not tested here (requires integration harness)
 """
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 import unicodedata
 from datetime import datetime, timezone, timedelta
@@ -27,7 +28,7 @@ from app.hash_utils import get_random_salt, hash_username
 @pytest.fixture
 def hp_teacher(client):
     """Create a teacher with a hall pass verify token."""
-    teacher = Admin(username="hpteacher", totp_secret="hpsecret1")
+    teacher = make_admin("hpteacher", "hpsecret1")
     teacher.hall_pass_verify_token = Admin.generate_verify_token()
     db.session.add(teacher)
     db.session.commit()
@@ -111,7 +112,7 @@ def test_get_verify_page_invalid_token(client):
 
 def test_get_verify_page_rejects_null_token_teacher(client):
     """Teacher records with null token must not be publicly reachable."""
-    teacher = Admin(username="nulltoken_teacher", totp_secret="hpsecret_null")
+    teacher = make_admin("nulltoken_teacher", "hpsecret_null")
     teacher.hall_pass_verify_token = None
     db.session.add(teacher)
     db.session.commit()

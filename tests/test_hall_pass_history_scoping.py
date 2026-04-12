@@ -5,6 +5,7 @@ Ensures that the /api/hall-pass/history endpoint properly scopes
 hall pass data by teacher to prevent cross-teacher data leakage.
 """
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone, timedelta
 from app.models import (
@@ -19,14 +20,8 @@ from app.models import ClassEconomy, ClassMembership
 def setup_multi_teacher_hall_pass_history(client):
     """Create two teachers with students and hall pass history for testing scoping."""
     # Create two teachers
-    teacher1 = Admin(
-        username="teacher1",
-        totp_secret="secret1"
-    )
-    teacher2 = Admin(
-        username="teacher2",
-        totp_secret="secret2"
-    )
+    teacher1 = make_admin("teacher1", "secret1")
+    teacher2 = make_admin("teacher2", "secret2")
     db.session.add(teacher1)
     db.session.add(teacher2)
     db.session.commit()

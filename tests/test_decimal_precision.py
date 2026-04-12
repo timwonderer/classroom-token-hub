@@ -5,6 +5,7 @@ These tests verify that the fixes for floating-point rounding bugs work correctl
 1. Transfers that zero out checking account don't trigger -0.00 overdraft fees
 2. Partial rent payments with problematic float values can be fully paid off
 """
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from decimal import Decimal
 from datetime import datetime, timezone
@@ -44,10 +45,7 @@ class TestDecimalPrecision:
         """
         # client fixture creates db tables
         # Create teacher with overdraft fees enabled
-        teacher = Admin(
-            username='teacher_overdraft_test',
-            totp_secret='test_secret'
-        )
+        teacher = make_admin('teacher_overdraft_test', 'test_secret')
         db.session.add(teacher)
         db.session.flush()
 
@@ -181,10 +179,7 @@ class TestDecimalPrecision:
         """
         # client fixture creates db tables
         # Create teacher
-        teacher = Admin(
-            username='teacher_rent_test',
-            totp_secret='test_secret'
-        )
+        teacher = make_admin('teacher_rent_test', 'test_secret')
         db.session.add(teacher)
         db.session.flush()
 
@@ -334,10 +329,7 @@ class TestDecimalPrecision:
         """Test that near-zero balances are normalized to exactly zero."""
         # client fixture creates db tables
         # Create teacher
-        teacher = Admin(
-            username='teacher_zero_test',
-            totp_secret='test_secret'
-        )
+        teacher = make_admin('teacher_zero_test', 'test_secret')
         db.session.add(teacher)
         db.session.flush()
 
@@ -430,10 +422,7 @@ class TestDecimalPrecision:
         """Test that genuinely negative balances still trigger overdraft fees correctly."""
         # client fixture creates db tables
         # Create teacher
-        teacher = Admin(
-            username='teacher_negative_test',
-            totp_secret='test_secret'
-        )
+        teacher = make_admin('teacher_negative_test', 'test_secret')
         db.session.add(teacher)
         db.session.flush()
 
@@ -523,10 +512,7 @@ class TestDecimalPrecision:
         assert final_balance == Decimal('-45.00')
 
     def test_partial_late_rent_payment_quantizes_allocated_late_fee_before_storage(self, client):
-        teacher = Admin(
-            username='teacher_late_fee_quantize',
-            totp_secret='test_secret'
-        )
+        teacher = make_admin('teacher_late_fee_quantize', 'test_secret')
         db.session.add(teacher)
         db.session.flush()
 

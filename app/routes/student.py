@@ -1549,8 +1549,7 @@ def payroll():
     """Student payroll page with attendance record, productivity stats, and projected pay."""
     # Check if payroll feature is enabled
     if not is_feature_enabled('payroll'):
-        flash("The payroll feature is currently disabled for your class.", "warning")
-        return redirect(url_for('student.dashboard'))
+        abort(404)
 
     student = get_logged_in_student()
 
@@ -1631,8 +1630,7 @@ def transfer():
     """Transfer funds between checking and savings accounts."""
     # Check if banking feature is enabled
     if not is_feature_enabled('banking'):
-        flash("The banking feature is currently disabled for your class.", "warning")
-        return redirect(url_for('student.dashboard'))
+        abort(404)
 
     student = get_logged_in_student()
 
@@ -1954,8 +1952,7 @@ def insurance_marketplace():
 
     # Check if insurance feature is enabled
     if not is_feature_enabled('insurance'):
-        flash("The insurance feature is currently disabled for your class.", "warning")
-        return redirect(url_for('student.dashboard'))
+        abort(404)
 
     student = get_logged_in_student()
 
@@ -2574,8 +2571,7 @@ def shop():
     """Student shop - browse and purchase items."""
     # Check if store feature is enabled
     if not is_feature_enabled('store'):
-        flash("The store feature is currently disabled for your class.", "warning")
-        return redirect(url_for('student.dashboard'))
+        abort(404)
 
     student = get_logged_in_student()
 
@@ -3440,8 +3436,7 @@ def rent():
     """View rent status and payment history (per period)."""
     # Check if rent feature is enabled
     if not is_feature_enabled('rent'):
-        flash("The rent feature is currently disabled for your class.", "warning")
-        return redirect(url_for('student.dashboard'))
+        abort(404)
 
     student = get_logged_in_student()
     context = get_current_class_context()

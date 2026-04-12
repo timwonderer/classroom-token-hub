@@ -458,6 +458,10 @@ def purchase_item():
             None
         )
 
+        # Fallback for legacy/stale linkage where StoreItem.is_rent_linked is True but mapping row is missing.
+        if not per_use_rent_item and item.is_rent_linked:
+            has_per_use_link = True
+
     # Privilege-only rent items are already included when rent is paid and
     # should not be purchasable.
     if has_paid_rent and has_privilege_link and not has_per_use_link:
@@ -550,9 +554,10 @@ def purchase_item():
             )
         ).first()
 
-        if not active_rent_item and not existing_grant_row and has_paid_rent and per_use_rent_item:
+        if not active_rent_item and not existing_grant_row and has_paid_rent and (per_use_rent_item or item.is_rent_linked):
             # Missing grant edge case: create current-period grant on demand.
             # This prevents paid-rent students from being charged due to stale data.
+            uses_limit = per_use_rent_item.use_limit if (per_use_rent_item and per_use_rent_item.use_limit) else -1
             active_rent_item = StudentItem(
                 student_id=student.id,
                 store_item_id=item.id,
@@ -562,7 +567,7 @@ def purchase_item():
                 status='purchased',
                 is_from_bundle=False,
                 quantity_purchased=1,
-                uses_remaining=per_use_rent_item.use_limit if per_use_rent_item.use_limit else -1
+                uses_remaining=uses_limit
             )
             db.session.add(active_rent_item)
 
@@ -1001,6 +1006,17 @@ def use_item():
 
     if not student_item or student_item.student_id != student.id:
         return jsonify({"status": "error", "message": "Invalid item."}), 404
+
+    # Special handling for hall_pass items in inventory (legacy or bundle)
+    if student_item.store_item.item_type == 'hall_pass':
+        # Grant balance immediately
+        qty = student_item.quantity_purchased or 1
+        student.hall_passes = (student.hall_passes or 0) + qty
+        student_item.status = 'redeemed'
+        student_item.redemption_date = utc_now()
+        student_item.redemption_details = f"Hall pass grant processed immediately ({qty} pass(es) added)."
+        db.session.commit()
+        return jsonify({"status": "success", "message": f"Added {qty} hall pass(es) to your balance!"})
 
     # Validate the item can be used
     if student_item.is_from_bundle:

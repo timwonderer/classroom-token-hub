@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
 from app.models import (
     Admin,
@@ -23,8 +24,8 @@ def _login_admin(client, admin_id):
 
 
 def test_set_current_class_requires_membership_even_if_teacherblock_exists(client):
-    admin_a = Admin(username="gate_admin_a", totp_secret="secret-a")
-    admin_b = Admin(username="gate_admin_b", totp_secret="secret-b")
+    admin_a = make_admin("gate_admin_a", "secret-a")
+    admin_b = make_admin("gate_admin_b", "secret-b")
     db.session.add_all([admin_a, admin_b])
     db.session.flush()
 
@@ -44,8 +45,8 @@ def test_set_current_class_requires_membership_even_if_teacherblock_exists(clien
 
 
 def test_delete_join_code_requires_membership_even_if_teacherblock_exists(client):
-    admin_a = Admin(username="delete_gate_a", totp_secret="secret-a")
-    admin_b = Admin(username="delete_gate_b", totp_secret="secret-b")
+    admin_a = make_admin("delete_gate_a", "secret-a")
+    admin_b = make_admin("delete_gate_b", "secret-b")
     db.session.add_all([admin_a, admin_b])
     db.session.flush()
 
@@ -64,7 +65,7 @@ def test_delete_join_code_requires_membership_even_if_teacherblock_exists(client
 
 
 def test_delete_join_code_requires_confirmation(client):
-    admin = Admin(username="confirm_admin", totp_secret="secret")
+    admin = make_admin("confirm_admin", "secret")
     db.session.add(admin)
     db.session.flush()
 
@@ -89,7 +90,7 @@ def test_delete_join_code_requires_confirmation(client):
 
 
 def test_issues_queue_respects_current_join_code_membership_scope(client):
-    admin = Admin(username="issues_gate_admin", totp_secret="secret")
+    admin = make_admin("issues_gate_admin", "secret")
     db.session.add(admin)
     db.session.flush()
 
@@ -145,7 +146,7 @@ def test_issues_queue_respects_current_join_code_membership_scope(client):
 
 
 def test_add_individual_student_requires_current_class_context(client):
-    admin = Admin(username="student_guard_admin", totp_secret="secret")
+    admin = make_admin("student_guard_admin", "secret")
     db.session.add(admin)
     db.session.flush()
 
@@ -172,7 +173,7 @@ def test_add_individual_student_requires_current_class_context(client):
 
 
 def test_add_individual_student_creates_single_teacher_block_for_new_student(client):
-    admin = Admin(username="student_single_tb_admin", totp_secret="secret")
+    admin = make_admin("student_single_tb_admin", "secret")
     db.session.add(admin)
     db.session.flush()
 
@@ -218,7 +219,7 @@ def test_add_individual_student_creates_single_teacher_block_for_new_student(cli
 
 
 def test_add_manual_student_creates_single_teacher_block_for_new_student(client):
-    admin = Admin(username="manual_single_tb_admin", totp_secret="secret")
+    admin = make_admin("manual_single_tb_admin", "secret")
     db.session.add(admin)
     db.session.flush()
 
@@ -268,7 +269,7 @@ def test_add_manual_student_creates_single_teacher_block_for_new_student(client)
 
 
 def test_add_individual_student_uses_selected_class_join_code_when_block_has_other_scope(client):
-    admin = Admin(username="student_scope_admin", totp_secret="secret")
+    admin = make_admin("student_scope_admin", "secret")
     db.session.add(admin)
     db.session.flush()
 
@@ -317,7 +318,7 @@ def test_add_individual_student_uses_selected_class_join_code_when_block_has_oth
 
 
 def test_add_individual_student_create_new_class_section_mints_new_join_code(client):
-    admin = Admin(username="student_new_class_admin", totp_secret="secret")
+    admin = make_admin("student_new_class_admin", "secret")
     db.session.add(admin)
     db.session.flush()
 
@@ -375,7 +376,7 @@ def test_add_individual_student_create_new_class_section_mints_new_join_code(cli
 
 
 def test_admin_students_surfaces_teacher_shadow_claim_dob(client):
-    admin = Admin(username="teacher_shadow_info_admin", totp_secret="secret")
+    admin = make_admin("teacher_shadow_info_admin", "secret")
     db.session.add(admin)
     db.session.flush()
 
@@ -405,7 +406,7 @@ def test_admin_students_surfaces_teacher_shadow_claim_dob(client):
 
 
 def test_store_create_requires_current_class_context(client):
-    admin = Admin(username="store_guard_admin", totp_secret="secret")
+    admin = make_admin("store_guard_admin", "secret")
     db.session.add(admin)
     db.session.flush()
 
@@ -427,7 +428,7 @@ def test_store_create_requires_current_class_context(client):
 
 
 def test_payroll_settings_requires_current_class_context(client):
-    admin = Admin(username="payroll_guard_admin", totp_secret="secret")
+    admin = make_admin("payroll_guard_admin", "secret")
     db.session.add(admin)
     db.session.flush()
 
@@ -449,7 +450,7 @@ def test_payroll_settings_requires_current_class_context(client):
 
 
 def test_class_scoped_write_rejects_stale_session_join_code(client):
-    admin = Admin(username="stale_guard_admin", totp_secret="secret")
+    admin = make_admin("stale_guard_admin", "secret")
     db.session.add(admin)
     db.session.flush()
 
@@ -478,7 +479,7 @@ def test_class_scoped_write_rejects_stale_session_join_code(client):
 
 
 def test_store_query_scope_does_not_implicitly_switch_session_context(client):
-    admin = Admin(username="query_scope_admin", totp_secret="secret")
+    admin = make_admin("query_scope_admin", "secret")
     db.session.add(admin)
     db.session.flush()
 
@@ -498,7 +499,7 @@ def test_store_query_scope_does_not_implicitly_switch_session_context(client):
 
 
 def test_class_scoped_post_rejects_request_join_code_mismatch(client):
-    admin = Admin(username="mismatch_guard_admin", totp_secret="secret")
+    admin = make_admin("mismatch_guard_admin", "secret")
     db.session.add(admin)
     db.session.flush()
 

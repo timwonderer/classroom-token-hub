@@ -11,6 +11,7 @@ The simplified recovery flow:
 No PII re-entry is required. Identity (first_name, last_initial) is preserved
 from the teacher-managed roster and is not editable by the student.
 """
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import re
 import pytest
 from datetime import timedelta
@@ -27,7 +28,7 @@ from app.utils.time import ensure_utc, utc_now
 @pytest.fixture
 def recovery_data(client):
     """Setup a teacher, student, and class for recovery tests."""
-    teacher = Admin(username="teacher_rec", totp_secret="base32secret3232")
+    teacher = make_admin("teacher_rec", "base32secret3232")
     db.session.add(teacher)
     db.session.commit()
 

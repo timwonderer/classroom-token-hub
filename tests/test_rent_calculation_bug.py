@@ -20,6 +20,7 @@ class/block) instead of the correct block's settings.
 Fix: Updated economy-balance.js to always include the block parameter when validating
 any feature (rent, insurance, fines, store items).
 """
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone
 from app import db
@@ -30,10 +31,7 @@ from app.utils.economy_balance import EconomyBalanceChecker
 @pytest.fixture
 def admin_with_exact_payroll(client):
     """Create admin with exact user payroll settings."""
-    admin = Admin(
-        username="testrentcalc",
-        totp_secret="TESTSECRET123456"
-    )
+    admin = make_admin("testrentcalc", "TESTSECRET123456")
     db.session.add(admin)
     db.session.flush()
 
@@ -195,10 +193,7 @@ def test_multi_block_validation_uses_correct_cwi(client):
     This test creates two blocks with very different CWI values to make the bug obvious.
     """
     # Create admin with two blocks
-    admin = Admin(
-        username="multiblockteacher",
-        totp_secret="TESTSECRET789"
-    )
+    admin = make_admin("multiblockteacher", "TESTSECRET789")
     db.session.add(admin)
     db.session.flush()
 

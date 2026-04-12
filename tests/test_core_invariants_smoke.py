@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from werkzeug.security import generate_password_hash
 
@@ -31,7 +32,7 @@ pytestmark = pytest.mark.critical
 
 
 def _create_admin(username: str) -> Admin:
-    admin = Admin(username=username, totp_secret="test-secret")
+    admin = make_admin(username, "test-secret")
     db.session.add(admin)
     db.session.flush()
     return admin

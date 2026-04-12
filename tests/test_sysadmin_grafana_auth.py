@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pyotp
 
 from app import db
@@ -11,7 +12,7 @@ from app.utils.time import utc_now
 
 def _create_sysadmin(username: str = "grafana_sysadmin"):
     secret = pyotp.random_base32()
-    sysadmin = SystemAdmin(username=username, totp_secret=encrypt_totp(secret))
+    sysadmin = make_sysadmin(username, encrypt_totp(secret))
     db.session.add(sysadmin)
     db.session.commit()
     return sysadmin, secret

@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from sqlalchemy.exc import IntegrityError
 
@@ -19,7 +20,7 @@ def test_idempotent_transaction_types_are_explicit():
 
 
 def test_create_idempotent_transaction_reuses_existing_row_on_retry(client):
-    teacher = Admin(username="idempotent-teacher", totp_secret="secret")
+    teacher = make_admin("idempotent-teacher", "secret")
     student = Student(first_name="Retry", last_initial="R", block="A", salt=b"salt")
     db.session.add_all([teacher, student])
     db.session.commit()
@@ -53,7 +54,7 @@ def test_create_idempotent_transaction_reuses_existing_row_on_retry(client):
 
 
 def test_create_idempotent_transaction_recovers_from_integrity_race(client, monkeypatch):
-    teacher = Admin(username="idempotent-race-teacher", totp_secret="secret")
+    teacher = make_admin("idempotent-race-teacher", "secret")
     student = Student(first_name="Race", last_initial="R", block="A", salt=b"salt")
     db.session.add_all([teacher, student])
     db.session.commit()
@@ -105,7 +106,7 @@ def test_create_idempotent_transaction_recovers_from_integrity_race(client, monk
 
 
 def test_create_idempotent_transaction_rejects_non_idempotent_types(client):
-    teacher = Admin(username="idempotent-invalid-teacher", totp_secret="secret")
+    teacher = make_admin("idempotent-invalid-teacher", "secret")
     student = Student(first_name="Nope", last_initial="N", block="A", salt=b"salt")
     db.session.add_all([teacher, student])
     db.session.commit()
@@ -125,7 +126,7 @@ def test_create_idempotent_transaction_rejects_non_idempotent_types(client):
 
 @pytest.mark.parametrize("bad_key", [None, "", "   "])
 def test_create_idempotent_transaction_rejects_empty_keys(client, bad_key):
-    teacher = Admin(username="idempotent-empty-key-teacher", totp_secret="secret")
+    teacher = make_admin("idempotent-empty-key-teacher", "secret")
     student = Student(first_name="Empty", last_initial="E", block="A", salt=b"salt")
     db.session.add_all([teacher, student])
     db.session.commit()
@@ -144,7 +145,7 @@ def test_create_idempotent_transaction_rejects_empty_keys(client, bad_key):
 
 
 def test_create_idempotent_transaction_rejects_oversize_keys(client):
-    teacher = Admin(username="idempotent-long-key-teacher", totp_secret="secret")
+    teacher = make_admin("idempotent-long-key-teacher", "secret")
     student = Student(first_name="Long", last_initial="L", block="A", salt=b"salt")
     db.session.add_all([teacher, student])
     db.session.commit()

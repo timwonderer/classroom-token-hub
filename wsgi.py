@@ -93,7 +93,7 @@ from app.utils.helpers import format_utc_iso, is_safe_url
 from app.utils.encryption import PIIEncryptedType
 from app.utils.constants import THEME_PROMPTS
 from app.hash_utils import hash_username_lookup
-from app.utils.username_migration import build_hashed_username_fields, normalize_auth_username
+from app.utils.auth_username import build_hashed_username_fields, normalize_auth_username
 
 
 # -------------------- FLASK CLI COMMANDS --------------------
@@ -191,8 +191,6 @@ def create_sysadmin():
 
     lookup_hash = hash_username_lookup(username)
     existing = SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
-    if not existing:
-        existing = SystemAdmin.query.filter_by(username=username).first()
     if existing:
         print(f"System admin '{username}' already exists.")
         return

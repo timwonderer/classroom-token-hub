@@ -1,4 +1,5 @@
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import uuid
 from datetime import datetime, timedelta, timezone
 from app import db
@@ -14,8 +15,8 @@ def test_shared_student_diff_teacher_diff_period(client):
     Verify T2 payroll only pays for Period 2 attendance.
     """
     # 1. Setup
-    t1 = Admin(username=f"t1_{uuid.uuid4().hex[:8]}", totp_secret='s')
-    t2 = Admin(username=f"t2_{uuid.uuid4().hex[:8]}", totp_secret='s')
+    t1 = make_admin(f"t1_{uuid.uuid4().hex[:8]}", 's')
+    t2 = make_admin(f"t2_{uuid.uuid4().hex[:8]}", 's')
     db.session.add_all([t1, t2])
     db.session.commit()
 
@@ -77,7 +78,7 @@ def test_same_teacher_same_block_diff_context(client):
     Verify attendance in JC1 is NOT counted for JC2.
     """
     # 1. Setup
-    t1 = Admin(username=f"t1_{uuid.uuid4().hex[:8]}", totp_secret='s')
+    t1 = make_admin(f"t1_{uuid.uuid4().hex[:8]}", 's')
     db.session.add(t1)
     db.session.commit()
 
@@ -159,7 +160,7 @@ def test_balance_separation_by_join_code(client):
     from app.routes.student import calculate_scoped_balances
 
     # 1. Setup Student & Teacher
-    t1 = Admin(username=f"t1_{uuid.uuid4().hex[:8]}", totp_secret='secret')
+    t1 = make_admin(f"t1_{uuid.uuid4().hex[:8]}", 'secret')
     db.session.add(t1)
     db.session.commit()
 

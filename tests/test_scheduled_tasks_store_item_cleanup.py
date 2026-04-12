@@ -1,10 +1,11 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
 from app.models import Admin, StoreItem, StoreItemBlock, TeacherBlock
 from app.scheduled_tasks import database_maintenance_job
 
 
 def _admin(username="teacher"):
-    admin = Admin(username=username, totp_secret="test-secret")
+    admin = make_admin(username, "test-secret")
     db.session.add(admin)
     db.session.flush()
     return admin

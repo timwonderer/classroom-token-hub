@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import db
 from app.models import (
     Admin,
@@ -16,7 +17,7 @@ from app.utils.time import utc_now
 
 
 def _create_student_issue_context():
-    admin = Admin(username="teacher", totp_secret="base32secret3232")
+    admin = make_admin("teacher", "base32secret3232")
     db.session.add(admin)
     db.session.flush()
 

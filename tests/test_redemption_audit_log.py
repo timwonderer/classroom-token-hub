@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import generate_password_hash
@@ -23,7 +24,7 @@ from app.models import (
 
 @pytest.fixture
 def teacher_admin(client):
-    admin = Admin(username="audit_teacher", totp_secret="secret")
+    admin = make_admin("audit_teacher", "secret")
     db.session.add(admin)
     db.session.commit()
     return admin

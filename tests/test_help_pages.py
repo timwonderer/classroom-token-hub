@@ -1,10 +1,11 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import db
 from app.models import Admin
 from datetime import datetime, timezone
 
 def test_admin_help_page(client):
     # Create admin
-    admin = Admin(username='admin', totp_secret='base32secret3232')
+    admin = make_admin('admin', 'base32secret3232')
     db.session.add(admin)
     db.session.commit()
 

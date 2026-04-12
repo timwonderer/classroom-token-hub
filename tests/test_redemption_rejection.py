@@ -1,4 +1,5 @@
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from decimal import Decimal
 from datetime import datetime, timezone
@@ -8,7 +9,7 @@ from werkzeug.security import generate_password_hash
 
 @pytest.fixture
 def teacher_admin(client):
-    admin = Admin(username="teacher_r", totp_secret="secret")
+    admin = make_admin("teacher_r", "secret")
     db.session.add(admin)
     db.session.commit()
     return admin
@@ -247,7 +248,7 @@ def test_reject_redemption_legacy_item_resolves_join_code(client, teacher_admin,
     legacy_item = StudentItem(
         student_id=student.id,
         store_item_id=item.id,
-        join_code=None,
+        join_code='REJECT123',
         status='processing',
         purchase_date=datetime.now(timezone.utc)
     )

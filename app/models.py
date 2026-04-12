@@ -835,7 +835,8 @@ class ClassMembership(db.Model):
 class SystemAdmin(db.Model):
     __tablename__ = 'system_admins'
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=True)  # Legacy plaintext username (deprecated)
+    # V2: username column REMOVED from ORM. DB column drop is in migration drop_plaintext_username_columns.
+    # Any access to .username will now raise AttributeError — intentional.
     username_hash = db.Column(db.String(64), unique=True, nullable=True)
     username_lookup_hash = db.Column(db.String(64), unique=True, nullable=True, index=True)
     salt = db.Column(db.LargeBinary(16), nullable=True)
@@ -845,18 +846,6 @@ class SystemAdmin(db.Model):
     def _validate_totp_secret(self, key, value):
         return normalize_totp_for_storage(value)
 
-    @validates('username')
-    def _normalize_legacy_username(self, key, value):
-        """Normalize legacy plaintext usernames on assignment.
-
-        Hash fields must only be set through the explicit migration process
-        (build_hashed_username_fields) so that needs_hashed_username_migration
-        correctly identifies accounts that still require migration.
-        """
-        if value is None:
-            return None
-        normalized = value.strip()
-        return normalized if normalized else None
 
     def get_display_username(self):
         return f"sysadmin_{self.id}"
@@ -2128,7 +2117,8 @@ class IssueResolutionAction(db.Model):
 class Admin(db.Model):
     __tablename__ = 'teachers'
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=True)  # Legacy plaintext username (deprecated)
+    # V2: username column REMOVED from ORM. DB column drop is in migration drop_plaintext_username_columns.
+    # Any access to .username will now raise AttributeError — intentional.
     username_hash = db.Column(db.String(64), unique=True, nullable=True)
     username_lookup_hash = db.Column(db.String(64), unique=True, nullable=True, index=True)
     teacher_public_id = db.Column(db.String(120), unique=True, nullable=True, index=True)
@@ -2166,23 +2156,6 @@ class Admin(db.Model):
     def _validate_totp_secret(self, key, value):
         return normalize_totp_for_storage(value)
 
-    @validates('username')
-    def _normalize_legacy_username(self, key, value):
-        """Backfill hashed auth fields when legacy plaintext usernames are assigned."""
-        if value is None:
-            return None
-        normalized = value.strip()
-        if not normalized:
-            return None
-        if not self.salt:
-            self.salt = get_random_salt()
-        if not self.username_hash:
-            self.username_hash = hash_username(normalized, self.salt)
-        if not self.username_lookup_hash:
-            self.username_lookup_hash = hash_username_lookup(normalized)
-        if not self.teacher_public_id:
-            self.teacher_public_id = normalized
-        return normalized
 
     def get_display_name(self):
         """Return display_name if set, otherwise fall back to public teacher ID."""

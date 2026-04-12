@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from app import db
 from app.models import Admin, Student, StudentTeacher
@@ -13,7 +14,7 @@ def test_new_admin_cannot_see_unassigned_students(client):
     """
     app = client.application
     # Create Teacher B
-    teacher_b = Admin(username="teacher_b_leak", totp_secret=pyotp.random_base32())
+    teacher_b = make_admin("teacher_b_leak", pyotp.random_base32())
     db.session.add(teacher_b)
     db.session.commit()
 
@@ -36,7 +37,7 @@ def test_new_admin_cannot_see_unassigned_students(client):
     db.session.commit()
 
     # Create Teacher A (New teacher)
-    teacher_a = Admin(username="teacher_a_leak", totp_secret=pyotp.random_base32())
+    teacher_a = make_admin("teacher_a_leak", pyotp.random_base32())
     db.session.add(teacher_a)
     db.session.commit()
 
@@ -59,7 +60,7 @@ def test_owner_can_see_unassigned_students_if_linked(client):
     """
     app = client.application
     # Setup fresh data for this test to avoid collision if run out of order
-    teacher_b = Admin(username="teacher_b_owner", totp_secret=pyotp.random_base32())
+    teacher_b = make_admin("teacher_b_owner", pyotp.random_base32())
     db.session.add(teacher_b)
     db.session.commit()
 

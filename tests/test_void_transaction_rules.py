@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from werkzeug.security import generate_password_hash
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
 from app.models import (
     Admin,
@@ -33,7 +34,7 @@ def _login_student(client, student_id, join_code):
 
 
 def _build_teacher_student(join_code='VOID123'):
-    teacher = Admin(username=f"teacher_{join_code}", totp_secret="secret")
+    teacher = make_admin(f"teacher_{join_code}", "secret")
     db.session.add(teacher)
     db.session.flush()
 

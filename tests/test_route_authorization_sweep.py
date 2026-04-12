@@ -1,5 +1,6 @@
 
 from datetime import datetime, timezone, timedelta
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from app.extensions import db
 from app.models import Admin, ClassEconomy, ClassMembership, Student, Transaction, TransactionStatus, StoreItem, StudentItem, IssueCategory, Issue, TeacherBlock, Seat
@@ -18,8 +19,8 @@ def _login_student(client, student_id):
 
 def test_hall_pass_active_requires_teacher_public_id_and_scopes_to_teacher_classes(client):
     """Verification display should require random teacher public ID and be join-code scoped."""
-    admin = Admin(username="hall_pass_admin", totp_secret="secret")
-    other_admin = Admin(username="hall_pass_other", totp_secret="secret")
+    admin = make_admin("hall_pass_admin", "secret")
+    other_admin = make_admin("hall_pass_other", "secret")
     db.session.add(admin)
     db.session.add(other_admin)
     db.session.flush()
@@ -93,8 +94,8 @@ def test_hall_pass_active_requires_teacher_public_id_and_scopes_to_teacher_class
 
 def test_approve_redemption_requires_membership(client):
     """Test that redemption approval requires admin membership in the class."""
-    admin_owner = Admin(username="owner_admin", totp_secret="secret")
-    admin_intruder = Admin(username="intruder_admin", totp_secret="secret")
+    admin_owner = make_admin("owner_admin", "secret")
+    admin_intruder = make_admin("intruder_admin", "secret")
     db.session.add_all([admin_owner, admin_intruder])
     db.session.flush()
 
@@ -135,7 +136,7 @@ def test_approve_redemption_requires_membership(client):
 def test_file_claim_scoped_to_class(client):
     """Test that insurance claims are scoped to the class of the policy."""
     # Setup: Admin with 2 classes, Student in both.
-    admin = Admin(username="claim_admin", totp_secret="secret")
+    admin = make_admin("claim_admin", "secret")
     db.session.add(admin)
     db.session.flush()
     

@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from app.models import Student, TeacherBlock, Transaction, StoreItem, StudentItem, Admin, Seat, User, ClassMembership, StudentTeacher
 from app.utils.analytics_engine import AnalyticsEngine
@@ -17,9 +18,7 @@ def teacher(app):
         salt = get_random_salt()
         dob_sum_hash = hash_hmac(str(2003).encode(), salt) # 1+1+2001
 
-        t = Admin(
-            username="teacher_test",
-            totp_secret=encrypt_totp(pyotp.random_base32()),
+        t = make_admin("teacher_test", encrypt_totp(pyotp.random_base32()),
             salt=salt,
             dob_sum_hash=dob_sum_hash
         )
@@ -44,7 +43,7 @@ def test_teacher_student_lifecycle(client, teacher, app):
         from app.routes.admin import _ensure_teacher_student_seat
 
         # Login as teacher
-        client.post('/admin/login', data={'username': teacher.username, 'totp_code': '000000'})
+        client.post('/admin/login', data={'username': "teacher_test", 'totp_code': '000000'})
 
         join_code = "TEACHER_TEST_CODE"
         block = "Z"

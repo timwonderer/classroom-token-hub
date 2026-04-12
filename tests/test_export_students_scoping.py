@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import csv
 from io import StringIO
 
@@ -8,7 +9,7 @@ from tests.helpers.class_scope import create_class_scope
 
 
 def _create_admin(username: str) -> Admin:
-    admin = Admin(username=username, totp_secret="TESTSECRET123456")
+    admin = make_admin(username, "TESTSECRET123456")
     db.session.add(admin)
     db.session.commit()
     return admin

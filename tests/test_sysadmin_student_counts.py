@@ -5,6 +5,7 @@ Validates that system admins see accurate per-teacher student counts
 and that counts properly account for multi-teacher relationships.
 """
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pyotp
 
 from app import app, db
@@ -15,7 +16,7 @@ from app.hash_utils import get_random_salt, hash_username
 def _create_sysadmin(username: str = "sysadmin"):
     """Create a system admin for testing."""
     secret = pyotp.random_base32()
-    sys_admin = SystemAdmin(username=username, totp_secret=secret)
+    sys_admin = make_sysadmin(username, secret)
     db.session.add(sys_admin)
     db.session.commit()
     return sys_admin, secret
@@ -24,7 +25,7 @@ def _create_sysadmin(username: str = "sysadmin"):
 def _create_admin(username: str) -> tuple[Admin, str]:
     """Create a teacher admin for testing."""
     secret = pyotp.random_base32()
-    admin = Admin(username=username, totp_secret=secret)
+    admin = make_admin(username, secret)
     db.session.add(admin)
     db.session.commit()
     return admin, secret
@@ -67,7 +68,7 @@ def _login_sysadmin(client, sys_admin: SystemAdmin, secret: str):
     """Login as system admin."""
     return client.post(
         "/sysadmin/login",
-        data={"username": sys_admin.username, "totp_code": pyotp.TOTP(secret).now()},
+        data={"username": "sysadmin", "totp_code": pyotp.TOTP(secret).now()},
         follow_redirects=True,
     )
 

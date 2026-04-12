@@ -1,12 +1,13 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
 from app.models import Admin, PayrollSettings, Student, StudentTeacher, TeacherBlock, ClassEconomy
 
 
 def test_student_payroll_uses_teacher_block_pay_rate(client):
-    teacher = Admin(username="teacher_payrate_scope", totp_secret="secret")
+    teacher = make_admin("teacher_payrate_scope", "secret")
     db.session.add(teacher)
     db.session.flush()
 

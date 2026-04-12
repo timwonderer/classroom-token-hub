@@ -6,6 +6,7 @@ These tests ensure:
 2. Block deletion properly cleans up StudentTeacher associations
 """
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pyotp
 from datetime import datetime, timezone
 
@@ -17,7 +18,7 @@ from app.hash_utils import get_random_salt, hash_hmac
 def _create_admin(username: str) -> tuple[Admin, str]:
     """Create an admin/teacher with TOTP authentication."""
     secret = pyotp.random_base32()
-    admin = Admin(username=username, totp_secret=secret)
+    admin = make_admin(username, secret)
     db.session.add(admin)
     db.session.commit()
     return admin, secret
@@ -109,7 +110,7 @@ def _login_admin(client, admin: Admin, secret: str):
     """Log in as admin."""
     response = client.post(
         "/admin/login",
-        data={"username": admin.username, "totp_code": pyotp.TOTP(secret).now()},
+        data={"username": "teacher1", "totp_code": pyotp.TOTP(secret).now()},
         follow_redirects=True,
     )
     with client.session_transaction() as sess:

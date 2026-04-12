@@ -4,6 +4,7 @@ Tests for rent penalty reversal and cycle rate locking.
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import db
 from app.hash_utils import get_random_salt, hash_username
 from app.models import Admin, ClassEconomy, ClassMembership, IdentityProfile, RentPayment, RentSettings, RentWaiver, Student, TeacherBlock, Transaction
@@ -25,7 +26,7 @@ def _login_admin(client, admin_id, join_code):
 
 
 def _make_admin_with_block(join_code="LOCKA1", block="A", suffix="rv"):
-    admin = Admin(username=f"rent_admin_{suffix}_{join_code.lower()}", totp_secret="TESTSECRET123456")
+    admin = make_admin(f"rent_admin_{suffix}_{join_code.lower()}", "TESTSECRET123456")
     db.session.add(admin)
     db.session.flush()
 

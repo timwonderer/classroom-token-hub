@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timedelta, timezone
 
@@ -21,7 +22,7 @@ from tests.helpers.class_scope import create_class_scope
 
 @pytest.fixture
 def admin_user():
-    admin = Admin(username="teacher-insurance", totp_secret="totp-secret")
+    admin = make_admin("teacher-insurance", "totp-secret")
     db.session.add(admin)
     db.session.commit()
     return admin

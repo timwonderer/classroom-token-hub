@@ -1,10 +1,11 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import db
 from app.hash_utils import get_random_salt, hash_username
 from app.models import Admin, IdentityProfile, Student, TeacherBlock
 
 
 def _create_admin(username: str) -> Admin:
-    admin = Admin(username=username, totp_secret="TESTSECRET123456")
+    admin = make_admin(username, "TESTSECRET123456")
     db.session.add(admin)
     db.session.commit()
     return admin

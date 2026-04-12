@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from werkzeug.security import generate_password_hash
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import db
 from app.hash_utils import get_random_salt, hash_username
 from app.models import (
@@ -52,7 +53,7 @@ def _ensure_class_scope(teacher: Admin, student: Student, join_code: str, block:
 
 
 def test_overdue_rent_payment_restores_privileges(client):
-    teacher = Admin(username="rent_teacher_overdue", totp_secret="secret123")
+    teacher = make_admin("rent_teacher_overdue", "secret123")
     db.session.add(teacher)
     db.session.commit()
 
@@ -166,7 +167,7 @@ def test_overdue_rent_payment_restores_privileges(client):
 
 
 def test_voided_payment_does_not_restore_privileges(client):
-    teacher = Admin(username="rent_teacher_voided", totp_secret="secret123")
+    teacher = make_admin("rent_teacher_voided", "secret123")
     db.session.add(teacher)
     db.session.commit()
 
@@ -311,7 +312,7 @@ def test_voided_payment_does_not_restore_privileges(client):
 
 def test_overdue_rent_payment_with_timestamp_drift_restores_privileges(client):
     """A modest transaction/payment timestamp drift should still count as valid payment."""
-    teacher = Admin(username="rent_teacher_drift", totp_secret="secret123")
+    teacher = make_admin("rent_teacher_drift", "secret123")
     db.session.add(teacher)
     db.session.commit()
 

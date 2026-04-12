@@ -1,7 +1,7 @@
 # SOP-DOC-002: Documentation Index
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|SOP-DOC-002| 2.3 | 2026-04-08 | 2.2 |Normative|
+|SOP-DOC-002| 2.4 | 2026-04-12 | 2.3 |Normative|
 
 ## I. Purpose
 
@@ -36,9 +36,11 @@ None specified.
 - [ARC-OPS-007_Database_Schema.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)
 - [ARC-OPS-012_Datetime_Handling_Specification.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-012_Datetime_Handling_Specification.md)
 - [ARC-OPS-013_Money_Handling.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-013_Money_Handling.md)
+- [ARC-OPS-015_Multi_tenancy_and_Join_Code_Interface.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-015_Multi_tenancy_and_Join_Code_Interface.md)
 ### ARCHITECTURE/SYSADMIN
 
 - [ARC-SYS-001_Sysadmin_Interface.md](../../ARCHITECTURE/SYSADMIN/ARC-SYS-001_Sysadmin_Interface.md)
+- [ARC-SYS-002_Deterministic_Analytics_Alerting_Pipeline.md](../../ARCHITECTURE/SYSADMIN/ARC-SYS-002_Deterministic_Analytics_Alerting_Pipeline.md)
 ### DOMAINS
 
 - [DOM-CORE-000_Domain_Foundation.md](../../DOMAINS/DOM-CORE-000_Domain_Foundation.md)
@@ -46,6 +48,8 @@ None specified.
 
 - [DOM-ECON-001_Economy_Balance_Checker.md](../../DOMAINS/ECONOMY_DESIGN/DOM-ECON-001_Economy_Balance_Checker.md)
 - [DOM-ECON-002_Economy_Specification.md](../../DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification.md)
+- [DOM-ECON-003_Ledger_Integrity_and_Determinism.md](../../DOMAINS/ECONOMY_DESIGN/DOM-ECON-003_Ledger_Integrity_and_Determinism.md)
+- [DOM-ECON-004_Automated_Rent_Linked_Benefit_Resolution.md](../../DOMAINS/ECONOMY_DESIGN/DOM-ECON-004_Automated_Rent_Linked_Benefit_Resolution.md)
 ### DEVELOPMENT
 
 - [V2_DOCUMENTATION_COMPLIANCE_SWEEP.md](../../development/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md)

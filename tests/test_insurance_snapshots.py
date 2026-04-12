@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import db
 from app.models import Admin, InsurancePolicy, InsuranceClaim, StudentInsurance, StudentTeacher, Transaction, TransactionStatus
 from tests.helpers.admin_context import login_admin
@@ -27,7 +28,7 @@ def _create_policy(admin_id: int, *, title: str = "Snapshot Coverage", max_claim
 
 
 def test_insurance_policy_version_increments_on_edit(client):
-    admin = Admin(username="policy-version-admin", totp_secret="secret")
+    admin = make_admin("policy-version-admin", "secret")
     db.session.add(admin)
     db.session.commit()
 
@@ -42,7 +43,7 @@ def test_insurance_policy_version_increments_on_edit(client):
 
 
 def test_student_insurance_keeps_frozen_snapshot_after_policy_edit(client, test_student):
-    admin = Admin(username="snapshot-admin", totp_secret="secret")
+    admin = make_admin("snapshot-admin", "secret")
     db.session.add(admin)
     db.session.commit()
 
@@ -77,7 +78,7 @@ def test_student_insurance_keeps_frozen_snapshot_after_policy_edit(client, test_
 
 
 def test_admin_claim_approval_uses_frozen_claim_cap(client, test_student):
-    admin = Admin(username="snapshot-claim-admin", totp_secret="secret")
+    admin = make_admin("snapshot-claim-admin", "secret")
     db.session.add(admin)
     db.session.flush()
 

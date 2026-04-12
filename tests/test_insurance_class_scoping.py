@@ -9,6 +9,7 @@ Related issue: Insurance class selector was not filtering data properly,
 showing all classes' data regardless of selection.
 """
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timedelta, timezone
 
@@ -24,7 +25,7 @@ from app.hash_utils import hash_username, get_random_salt
 def teacher_with_two_classes(client):
     """Create a teacher with two class periods, each with a different join_code."""
     # Create teacher
-    teacher = Admin(username="multi-class-teacher", totp_secret="test-secret")
+    teacher = make_admin("multi-class-teacher", "test-secret")
     db.session.add(teacher)
     db.session.flush()
 

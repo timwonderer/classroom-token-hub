@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pyotp
 import re
 from datetime import datetime, timezone, timedelta
@@ -10,7 +11,7 @@ from tests.helpers.class_scope import create_class_scope
 
 def _create_admin(username: str) -> tuple[Admin, str]:
     secret = pyotp.random_base32()
-    admin = Admin(username=username, totp_secret=secret)
+    admin = make_admin(username, secret)
     db.session.add(admin)
     db.session.commit()
     return admin, secret
@@ -36,7 +37,7 @@ def _create_student(first_name: str, teacher: Admin) -> Student:
 def _login_admin(client, admin: Admin, secret: str):
     response = client.post(
         "/admin/login",
-        data={"username": admin.username, "totp_code": pyotp.TOTP(secret).now()},
+        data={"username": "teacher1", "totp_code": pyotp.TOTP(secret).now()},
         follow_redirects=True,
     )
     with client.session_transaction() as sess:

@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 
 pytestmark = [pytest.mark.critical, pytest.mark.regression]
@@ -7,12 +8,12 @@ from app import db
 from app.models import Admin, TeacherOnboarding
 
 def login_admin(client, username='admin'):
-    # Create admin if not exists
-    admin = Admin.query.filter_by(username=username).first()
+    from app.utils.auth_username import hash_username_lookup
+    admin = Admin.query.filter_by(username_lookup_hash=hash_username_lookup(username)).first()
     if not admin:
         import pyotp
         totp_secret = pyotp.random_base32()
-        admin = Admin(username=username, totp_secret=totp_secret)
+        admin = make_admin(username, totp_secret)
         db.session.add(admin)
         db.session.commit()
 

@@ -7,6 +7,7 @@ Tests the analytics computation engine to ensure:
 - Multi-tenancy scoping is enforced
 - Snapshots are cached properly
 """
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import event
@@ -24,10 +25,7 @@ from app.hash_utils import get_random_salt, hash_username
 def setup_analytics_test(client):
     """Create test data for analytics testing."""
     # Create admin/teacher
-    admin = Admin(
-        username="analyticstest",
-        totp_secret="TESTSECRET123456"
-    )
+    admin = make_admin("analyticstest", "TESTSECRET123456")
     db.session.add(admin)
     db.session.flush()
     

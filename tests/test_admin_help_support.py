@@ -10,7 +10,6 @@ def _login_admin(client):
     auth_username = "teacher_help"
     salt, username_hash, username_lookup_hash = build_hashed_username_fields(auth_username)
     admin = Admin(
-        username=None,
         username_hash=username_hash,
         username_lookup_hash=username_lookup_hash,
         salt=salt,

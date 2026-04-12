@@ -5,6 +5,7 @@ This ensures that when a teacher disables a feature (banking, payroll, etc.),
 students cannot access those routes even via direct URL.
 """
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
@@ -18,10 +19,7 @@ from tests.helpers.admin_context import login_admin
 def setup_student_with_disabled_banking(client):
     """Create a student with banking feature disabled."""
     # Create teacher
-    teacher = Admin(
-        username="teacher1",
-        totp_secret="secret123"
-    )
+    teacher = make_admin("teacher1", "secret123")
     db.session.add(teacher)
     db.session.commit()
 
@@ -175,10 +173,7 @@ def test_payroll_blocked_when_payroll_disabled(client, setup_student_with_disabl
 def setup_student_with_enabled_banking(client):
     """Create a student with banking feature enabled."""
     # Create teacher
-    teacher = Admin(
-        username="teacher2",
-        totp_secret="secret456"
-    )
+    teacher = make_admin("teacher2", "secret456")
     db.session.add(teacher)
     db.session.commit()
 
@@ -304,7 +299,7 @@ def test_payroll_allowed_when_payroll_enabled(client, setup_student_with_enabled
 
 
 def test_admin_banking_rejects_disabled_class_scope(client):
-    teacher = Admin(username="teacher_admin_feature_scope", totp_secret="secret789")
+    teacher = make_admin("teacher_admin_feature_scope", "secret789")
     db.session.add(teacher)
     db.session.commit()
 
@@ -373,7 +368,7 @@ def _create_admin_feature_scope(teacher, *, join_code, block, feature_name, enab
 
 
 def test_admin_store_rejects_disabled_class_scope(client):
-    teacher = Admin(username="teacher_admin_store_scope", totp_secret="secret_store_scope")
+    teacher = make_admin("teacher_admin_store_scope", "secret_store_scope")
     db.session.add(teacher)
     db.session.commit()
 
@@ -390,7 +385,7 @@ def test_admin_store_rejects_disabled_class_scope(client):
 
 
 def test_admin_hall_pass_rejects_disabled_class_scope(client):
-    teacher = Admin(username="teacher_admin_hall_scope", totp_secret="secret_hall_scope")
+    teacher = make_admin("teacher_admin_hall_scope", "secret_hall_scope")
     db.session.add(teacher)
     db.session.commit()
 
@@ -407,7 +402,7 @@ def test_admin_hall_pass_rejects_disabled_class_scope(client):
 
 
 def test_admin_payroll_rejects_disabled_class_scope(client):
-    teacher = Admin(username="teacher_admin_payroll_scope", totp_secret="secret_payroll_scope")
+    teacher = make_admin("teacher_admin_payroll_scope", "secret_payroll_scope")
     db.session.add(teacher)
     db.session.commit()
 
@@ -424,7 +419,7 @@ def test_admin_payroll_rejects_disabled_class_scope(client):
 
 
 def test_admin_payroll_reward_delete_rejects_disabled_class_scope(client):
-    teacher = Admin(username="teacher_admin_payroll_reward_scope", totp_secret="secret_payroll_reward_scope")
+    teacher = make_admin("teacher_admin_payroll_reward_scope", "secret_payroll_reward_scope")
     db.session.add(teacher)
     db.session.commit()
 
@@ -454,7 +449,7 @@ def test_admin_payroll_reward_delete_rejects_disabled_class_scope(client):
 
 
 def test_admin_store_delete_rejects_disabled_class_scope(client):
-    teacher = Admin(username="teacher_admin_store_delete_scope", totp_secret="secret_store_delete_scope")
+    teacher = make_admin("teacher_admin_store_delete_scope", "secret_store_delete_scope")
     db.session.add(teacher)
     db.session.commit()
 
@@ -487,7 +482,7 @@ def test_admin_store_delete_rejects_disabled_class_scope(client):
 
 
 def test_student_rent_rejects_disabled_feature_scope(client):
-    teacher = Admin(username="teacher_rent_disabled", totp_secret="secret999")
+    teacher = make_admin("teacher_rent_disabled", "secret999")
     db.session.add(teacher)
     db.session.commit()
 

@@ -4,6 +4,7 @@ Tests for teacher announcement feature.
 Tests the Announcement model, admin routes, and student display.
 Ensures proper multi-tenancy scoping by join_code.
 """
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 import pyotp
 from datetime import datetime, timedelta, timezone
@@ -14,9 +15,7 @@ from app.models import Admin, Announcement, TeacherBlock, ClassEconomy
 @pytest.fixture
 def test_teacher():
     """Create a test teacher with TOTP."""
-    admin = Admin(
-        username='test_teacher_announcements',
-        totp_secret=pyotp.random_base32(),
+    admin = make_admin('test_teacher_announcements', pyotp.random_base32(),
     )
     db.session.add(admin)
     db.session.commit()

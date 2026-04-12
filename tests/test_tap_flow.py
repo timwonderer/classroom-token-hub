@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import db, Student
 from werkzeug.security import generate_password_hash
 from app.hash_utils import hash_username, get_random_salt
@@ -54,7 +55,7 @@ def test_dynamic_blocks_and_tap_flow(client):
     import pyotp
 
     # Create a teacher and link the student
-    teacher = Admin(username="tapflow-teacher", totp_secret=pyotp.random_base32())
+    teacher = make_admin("tapflow-teacher", pyotp.random_base32())
     db.session.add(teacher)
     db.session.flush()
 
@@ -113,7 +114,7 @@ def test_invalid_period_and_action(client):
     import pyotp
 
     # Create dummy teacher
-    teacher = Admin(username="t2_teacher", totp_secret=pyotp.random_base32())
+    teacher = make_admin("t2_teacher", pyotp.random_base32())
     db.session.add(teacher)
     db.session.flush()
 
@@ -150,7 +151,7 @@ def test_server_state_json(client):
     import pyotp
 
     # Create a teacher and link the student
-    teacher = Admin(username="serverstate-teacher", totp_secret=pyotp.random_base32())
+    teacher = make_admin("serverstate-teacher", pyotp.random_base32())
     db.session.add(teacher)
     db.session.flush()
 
@@ -207,7 +208,7 @@ def test_auto_tapout_skips_when_join_code_missing(client, caplog):
     import pyotp
 
     # Create teacher and payroll settings with low limit
-    teacher = Admin(username="legacy_teacher", totp_secret=pyotp.random_base32())
+    teacher = make_admin("legacy_teacher", pyotp.random_base32())
     db.session.add(teacher)
     db.session.flush()
 

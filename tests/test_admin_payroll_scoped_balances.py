@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
 from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TransactionStatus
 from tests.helpers.class_scope import create_class_scope
@@ -14,8 +15,8 @@ def _login_admin(client, admin_id):
 
 
 def test_admin_payroll_displays_scoped_balances_only(client):
-    teacher_a = Admin(username="payroll_scope_a", totp_secret="secret-a")
-    teacher_b = Admin(username="payroll_scope_b", totp_secret="secret-b")
+    teacher_a = make_admin("payroll_scope_a", "secret-a")
+    teacher_b = make_admin("payroll_scope_b", "secret-b")
     db.session.add_all([teacher_a, teacher_b])
     db.session.flush()
 

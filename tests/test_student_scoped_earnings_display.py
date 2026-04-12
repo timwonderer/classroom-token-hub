@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
 from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TransactionStatus
 from tests.helpers.class_scope import create_class_scope
@@ -15,7 +16,7 @@ def _login_student(client, student_id, join_code):
 
 def _build_multi_class_student():
     unique_suffix = datetime.now(timezone.utc).strftime("%H%M%S%f")
-    teacher = Admin(username=f"student_scope_teacher_{unique_suffix}", totp_secret="secret")
+    teacher = make_admin(f"student_scope_teacher_{unique_suffix}", "secret")
     db.session.add(teacher)
     db.session.flush()
 

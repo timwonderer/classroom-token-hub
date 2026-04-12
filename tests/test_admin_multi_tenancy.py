@@ -5,6 +5,7 @@ Ensures that teachers can only see their own students and not students
 belonging to other teachers.
 """
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 import sqlalchemy as sa
 from app import app as flask_app
@@ -18,8 +19,8 @@ from app.hash_utils import get_random_salt
 def multi_teacher_data(client):
     """Create test data with multiple teachers and students."""
     # Create two teachers
-    teacher1 = Admin(username="teacher1", totp_secret="SECRET1")
-    teacher2 = Admin(username="teacher2", totp_secret="SECRET2")
+    teacher1 = make_admin("teacher1", "SECRET1")
+    teacher2 = make_admin("teacher2", "SECRET2")
     db.session.add(teacher1)
     db.session.add(teacher2)
     db.session.flush()
@@ -96,7 +97,7 @@ def test_brand_new_teacher_sees_no_students(client, multi_teacher_data):
     # multi_teacher_data fixture creates test data but we don't need the teacher objects here
     
     # Create a brand new teacher with no students
-    new_teacher = Admin(username="new_teacher", totp_secret="SECRET3")
+    new_teacher = make_admin("new_teacher", "SECRET3")
     db.session.add(new_teacher)
     db.session.commit()
     
@@ -143,7 +144,7 @@ def test_teacher2_sees_only_their_students(client, multi_teacher_data):
 def test_students_with_null_teacher_id_not_visible_to_teachers(client):
     """Test that students with NULL teacher_id are not visible to any regular teacher."""
     # Create a teacher
-    teacher1 = Admin(username="teacher1", totp_secret="SECRET1")
+    teacher1 = make_admin("teacher1", "SECRET1")
     db.session.add(teacher1)
     db.session.flush()
     
@@ -191,12 +192,12 @@ def test_system_admin_flag_not_set_accidentally(client):
     for a regular teacher, they will see ALL students in the system.
     """
     # Create a regular teacher
-    teacher1 = Admin(username="teacher1", totp_secret="SECRET1")
+    teacher1 = make_admin("teacher1", "SECRET1")
     db.session.add(teacher1)
     db.session.flush()
     
     # Create students for another teacher to ensure there's data
-    teacher2 = Admin(username="teacher2", totp_secret="SECRET2")
+    teacher2 = make_admin("teacher2", "SECRET2")
     db.session.add(teacher2)
     db.session.flush()
     
@@ -265,7 +266,7 @@ def test_orphaned_students_from_deleted_teacher(client):
     # Simulate the historical scenario
     
     # Step 1: Create teacher 1 and their students
-    teacher1 = Admin(username="teacher1", totp_secret="SECRET1")
+    teacher1 = make_admin("teacher1", "SECRET1")
     db.session.add(teacher1)
     db.session.flush()
     teacher1_id = teacher1.id
@@ -301,7 +302,7 @@ def test_orphaned_students_from_deleted_teacher(client):
     db.session.commit()
     
     # Step 3: Create a NEW teacher that gets the SAME ID
-    teacher2 = Admin(username="teacher2", totp_secret="SECRET2")
+    teacher2 = make_admin("teacher2", "SECRET2")
     db.session.add(teacher2)
     db.session.flush()
     
@@ -315,7 +316,8 @@ def test_orphaned_students_from_deleted_teacher(client):
     db.session.commit()
     
     # Verify teacher2 now has the same ID as teacher1 had
-    teacher2_reloaded = Admin.query.filter_by(username="teacher2").first()
+    from app.utils.auth_username import hash_username_lookup
+    teacher2_reloaded = Admin.query.filter_by(username_lookup_hash=hash_username_lookup("teacher2")).first()
     assert teacher2_reloaded.id == teacher1_id, "Teacher2 should have same ID as deleted teacher1"
 
     # Verify orphaned students still exist in the database (they're just not linked to anyone)

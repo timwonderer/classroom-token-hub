@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from app.models import Admin, Student, StudentTeacher, TeacherBlock, RentSettings, TeacherOnboarding, InsurancePolicy
 from app.extensions import db
@@ -7,7 +8,7 @@ import os
 
 def test_admin_dashboard_rendering(client):
     """Admin dashboard should render successfully with new layout."""
-    admin = Admin(username="render_admin", totp_secret="secret")
+    admin = make_admin("render_admin", "secret")
     db.session.add(admin)
     db.session.commit()
 
@@ -33,7 +34,7 @@ def test_admin_dashboard_rendering(client):
 
 def test_insurance_upgrade_prompt_for_legacy_policies(client):
     """Dashboard shows insurance tier prompt when legacy policies are flagged."""
-    admin = Admin(username="legacy_insurance_admin", totp_secret="secret")
+    admin = make_admin("legacy_insurance_admin", "secret")
     db.session.add(admin)
     db.session.commit()
 
@@ -67,7 +68,7 @@ def test_insurance_upgrade_prompt_for_legacy_policies(client):
 
 def test_student_dashboard_rendering(client):
     """Student dashboard should render successfully with new layout."""
-    teacher = Admin(username="render_teacher", totp_secret="secret")
+    teacher = make_admin("render_teacher", "secret")
     db.session.add(teacher)
     db.session.commit()
 

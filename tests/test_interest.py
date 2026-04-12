@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import Transaction, apply_savings_interest, db
 
 
@@ -50,7 +51,7 @@ def test_dashboard_renders_recent_deposit(client, test_student):
     from app.models import Admin, StudentTeacher, TeacherBlock
 
     # Create a teacher and link the student
-    teacher = Admin(username="testteacher", totp_secret="SECRET123")
+    teacher = make_admin("testteacher", "SECRET123")
     db.session.add(teacher)
     db.session.flush()
 

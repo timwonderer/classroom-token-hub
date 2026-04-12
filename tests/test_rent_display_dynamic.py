@@ -6,6 +6,7 @@ Tests the following features:
 2. Dynamic color coding based on days until rent is due
 3. Status text changes based on payment status and due date proximity
 """
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone, timedelta
 import os
@@ -20,7 +21,7 @@ from app.hash_utils import get_random_salt, hash_username
 @pytest.fixture
 def setup_rent_with_items(client):
     """Create teacher, student, rent settings, and rent items."""
-    teacher = Admin(username="test_teacher", totp_secret="secret123")
+    teacher = make_admin("test_teacher", "secret123")
     db.session.add(teacher)
     db.session.commit()
 

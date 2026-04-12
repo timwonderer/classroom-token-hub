@@ -6,6 +6,7 @@ After the settings fallback hardening, all settings helpers must:
 """
 from datetime import datetime, timezone
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 
 from app.extensions import db
@@ -31,7 +32,7 @@ from app.routes.student import (
 @pytest.fixture
 def teacher_with_legacy_and_scoped_settings(client):
     """Create a teacher with no scoped settings rows for the active class."""
-    teacher = Admin(username="fallback_test_teacher", totp_secret="secret")
+    teacher = make_admin("fallback_test_teacher", "secret")
     db.session.add(teacher)
     db.session.flush()
 

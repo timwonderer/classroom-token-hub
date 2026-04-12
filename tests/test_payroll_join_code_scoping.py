@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from decimal import Decimal
 from app.extensions import db
@@ -10,7 +11,7 @@ def test_pay_rate_scoping_strictness(client):
     Legacy teacher_id fallback should NOT occur in student context.
     """
     # Setup: Teacher with two classes (join codes)
-    teacher = Admin(username='teacher_strict', totp_secret='dummy_secret')
+    teacher = make_admin('teacher_strict', 'dummy_secret')
     # teacher.set_password('password') # Admin model doesn't have set_password or it's not needed here
     db.session.add(teacher)
     db.session.commit()
@@ -78,7 +79,7 @@ def test_daily_limit_scoping_strictness(client):
     """
     Verify daily limit strict scoping.
     """
-    teacher = Admin(username='teacher_limit_strict', totp_secret='dummy_secret')
+    teacher = make_admin('teacher_limit_strict', 'dummy_secret')
     # teacher.set_password('password')
     db.session.add(teacher)
     db.session.commit()

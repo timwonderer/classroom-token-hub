@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
 from app.models import Admin, ClassEconomy, Issue, IssueCategory, Student, StudentTeacher, Transaction, TransactionStatus
 
@@ -13,7 +14,7 @@ def _login_admin(client, admin_id):
 
 
 def _build_issue_context():
-    teacher = Admin(username="teacher_issue_reverse", totp_secret="secret")
+    teacher = make_admin("teacher_issue_reverse", "secret")
     db.session.add(teacher)
     db.session.flush()
 

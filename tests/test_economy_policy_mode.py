@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import json
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -66,7 +67,7 @@ def _create_teacher_block(admin_id, block='A', join_code='JOINPOLA'):
 
 
 def _create_admin_with_block(block='A', join_code='JOINPOLA'):
-    admin = Admin(username=f"policyadmin_{block.lower()}_{join_code.lower()}", totp_secret="TESTSECRET123456")
+    admin = make_admin(f"policyadmin_{block.lower()}_{join_code.lower()}", "TESTSECRET123456")
     db.session.add(admin)
     db.session.flush()
 

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import db
 from app.hash_utils import get_random_salt, hash_username
 from app.models import (
@@ -19,7 +20,7 @@ from tests.helpers.admin_context import login_admin
 
 
 def _make_admin(suffix):
-    admin = Admin(username=f"admin_arw_{suffix}", totp_secret="TESTSECRET123456")
+    admin = make_admin(f"admin_arw_{suffix}", "TESTSECRET123456")
     db.session.add(admin)
     db.session.flush()
     return admin

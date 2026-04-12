@@ -7,6 +7,7 @@ Ensures that:
 3. Multi-class support works as expected
 """
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import os
 import pytest
 from flask import session
@@ -28,9 +29,9 @@ def _get_inject_class_context_processor(client):
 def setup_multi_class_student(client):
     """Create a student with multiple class enrollments for testing."""
     # Create three teachers
-    teacher1 = Admin(username="teacher1", totp_secret="secret1")
-    teacher2 = Admin(username="teacher2", totp_secret="secret2")
-    teacher3 = Admin(username="teacher3", totp_secret="secret3")
+    teacher1 = make_admin("teacher1", "secret1")
+    teacher2 = make_admin("teacher2", "secret2")
+    teacher3 = make_admin("teacher3", "secret3")
     db.session.add_all([teacher1, teacher2, teacher3])
     db.session.commit()
 
@@ -125,7 +126,7 @@ def setup_multi_class_student(client):
 @pytest.fixture
 def setup_single_class_student(client):
     """Create a student with only one class for testing."""
-    teacher = Admin(username="single_teacher", totp_secret="secret")
+    teacher = make_admin("single_teacher", "secret")
     db.session.add(teacher)
     db.session.commit()
 

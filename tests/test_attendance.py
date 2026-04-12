@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from app import db, Student, TapEvent, Transaction
 from app.attendance import (
@@ -14,7 +15,7 @@ def _attach_student_to_class(student, join_code="ATTEND1", block="A"):
     from app.models import Admin, TeacherBlock, StudentTeacher, User, Seat
     from tests.helpers.class_scope import create_class_scope
 
-    teacher = Admin(username=f"teacher_{join_code}_{student.id or 'new'}", totp_secret="s")
+    teacher = make_admin(f"teacher_{join_code}_{student.id or 'new'}", "s")
     db.session.add(teacher)
     db.session.flush()
 

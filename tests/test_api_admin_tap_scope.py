@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
 from app.models import Admin, ClassEconomy, ClassMembership, Student, StudentTeacher, TapEvent
 
@@ -13,8 +14,8 @@ def _login_admin(client, admin_id, join_code):
 
 
 def _setup_shared_student_with_split_membership():
-    admin_a = Admin(username="tap_scope_admin_a", totp_secret="secret-a")
-    admin_b = Admin(username="tap_scope_admin_b", totp_secret="secret-b")
+    admin_a = make_admin("tap_scope_admin_a", "secret-a")
+    admin_b = make_admin("tap_scope_admin_b", "secret-b")
     db.session.add_all([admin_a, admin_b])
     db.session.flush()
 

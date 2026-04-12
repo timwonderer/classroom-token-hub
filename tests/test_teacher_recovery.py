@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 import pyotp
 import bcrypt
@@ -13,9 +14,7 @@ def create_teacher(username="teacher1", dob_sum=2028):
     if dob_sum:
         dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
 
-    teacher = Admin(
-        username=username,
-        totp_secret=pyotp.random_base32(),
+    teacher = make_admin(username, pyotp.random_base32(),
         dob_sum_hash=dob_sum_hash,
         salt=salt,
         has_assigned_students=True

@@ -10,6 +10,7 @@ These tests verify fixes for the following errors:
 Root cause: Mixing Decimal (from database Numeric columns) with float literals (0.0).
 Fix: Use Decimal('0.00') consistently for all currency values.
 """
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
@@ -33,10 +34,7 @@ class TestDecimalTypeErrors:
         TypeError when rent_settings.rent_amount (Decimal) is added to late_fee (float 0.0).
         """
         # Create teacher
-        teacher = Admin(
-            username='teacher_rent_decimal',
-            totp_secret='test_secret'
-        )
+        teacher = make_admin('teacher_rent_decimal', 'test_secret')
         db.session.add(teacher)
         db.session.flush()
 
@@ -86,10 +84,7 @@ class TestDecimalTypeErrors:
         decimal.InvalidOperation when comparing Decimal to integer 0 in certain contexts.
         """
         # Create teacher
-        teacher = Admin(
-            username='teacher_earnings_decimal',
-            totp_secret='test_secret'
-        )
+        teacher = make_admin('teacher_earnings_decimal', 'test_secret')
         db.session.add(teacher)
         db.session.flush()
 
@@ -217,10 +212,7 @@ class TestDecimalTypeErrors:
         at student.py line 1107
         """
         # Create teacher
-        teacher = Admin(
-            username='teacher_regression',
-            totp_secret='test_secret'
-        )
+        teacher = make_admin('teacher_regression', 'test_secret')
         db.session.add(teacher)
         db.session.flush()
 
@@ -271,10 +263,7 @@ class TestDecimalTypeErrors:
         from unittest.mock import patch
         
         # Create teacher
-        teacher = Admin(
-            username='teacher_interest_test',
-            totp_secret='test_secret'
-        )
+        teacher = make_admin('teacher_interest_test', 'test_secret')
         db.session.add(teacher)
         db.session.flush()
 
@@ -363,7 +352,7 @@ class TestDecimalTypeErrors:
         from tests.helpers.class_scope import create_class_scope
 
         # Create teacher
-        teacher = Admin(username='teacher_claim_cap', totp_secret='test_secret')
+        teacher = make_admin('teacher_claim_cap', 'test_secret')
         db.session.add(teacher)
         db.session.flush()
 

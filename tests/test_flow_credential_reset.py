@@ -6,6 +6,7 @@ End-to-end test for the account recovery flow:
   4. Existing teacher-managed identity is preserved
   5. Economic data is preserved
 """
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from werkzeug.security import generate_password_hash
 from app import db
@@ -19,7 +20,7 @@ from app.utils.claim_credentials import compute_primary_claim_hash
 def test_data(app):
     """Setup: Admin, Class, Student with completed setup and a balance."""
     with app.app_context():
-        admin = Admin(username='admin_flow2', totp_secret='dummy_secret')
+        admin = make_admin('admin_flow2', 'dummy_secret')
         db.session.add(admin)
         db.session.commit()
 

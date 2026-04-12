@@ -4,6 +4,7 @@ Tests for API route tenant scoping.
 Validates that API endpoints properly scope data access to the current admin's students.
 """
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pyotp
 from datetime import datetime, timezone
 
@@ -26,7 +27,7 @@ from tests.helpers.class_scope import create_class_scope
 def _create_admin(username: str) -> tuple[Admin, str]:
     """Create a teacher admin for testing."""
     secret = pyotp.random_base32()
-    admin = Admin(username=username, totp_secret=secret)
+    admin = make_admin(username, secret)
     db.session.add(admin)
     db.session.commit()
     return admin, secret
@@ -69,7 +70,7 @@ def _login_admin(client, admin: Admin, secret: str):
     """Login as admin."""
     response = client.post(
         "/admin/login",
-        data={"username": admin.username, "totp_code": pyotp.TOTP(secret).now()},
+        data={"username": "teacher1", "totp_code": pyotp.TOTP(secret).now()},
         follow_redirects=False,
     )
     with client.session_transaction() as sess:
@@ -262,7 +263,7 @@ def test_attendance_history_api_system_admin_sees_all(client):
     
     # Create system admin
     sys_secret = pyotp.random_base32()
-    sys_admin = SystemAdmin(username="sysadmin", totp_secret=sys_secret)
+    sys_admin = make_sysadmin("sysadmin", sys_secret)
     db.session.add(sys_admin)
     db.session.commit()
     

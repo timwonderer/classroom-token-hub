@@ -1,6 +1,7 @@
 """
 Tests for the attendance log page to ensure it renders with proper context.
 """
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone
 from app import db
@@ -11,10 +12,7 @@ from app.hash_utils import hash_username, get_random_salt
 def admin_with_data(client):
     """Create an admin with students and tap events."""
     # Create admin
-    admin = Admin(
-        username='testadmin',
-        totp_secret='TESTSECRET123456'
-    )
+    admin = make_admin('testadmin', 'TESTSECRET123456')
     db.session.add(admin)
     db.session.flush()
     
@@ -106,10 +104,7 @@ def test_attendance_log_page_renders_with_periods_and_blocks(client, admin_with_
 def test_attendance_log_page_with_no_data(client):
     """Test that the attendance log page renders even with no data."""
     # Create admin with no students
-    admin = Admin(
-        username='testadmin2',
-        totp_secret='TESTSECRET789'
-    )
+    admin = make_admin('testadmin2', 'TESTSECRET789')
     db.session.add(admin)
     db.session.commit()
     
@@ -133,8 +128,8 @@ def test_attendance_log_page_with_no_data(client):
 def test_attendance_log_tenant_scoping(client):
     """Test that admins only see periods/blocks from their own students."""
     # Create two admins
-    admin1 = Admin(username='admin1', totp_secret='SECRET1')
-    admin2 = Admin(username='admin2', totp_secret='SECRET2')
+    admin1 = make_admin('admin1', 'SECRET1')
+    admin2 = make_admin('admin2', 'SECRET2')
     db.session.add_all([admin1, admin2])
     db.session.flush()
     

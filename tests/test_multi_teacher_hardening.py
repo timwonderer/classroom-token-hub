@@ -1,4 +1,5 @@
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 import pyotp
 import uuid
@@ -13,7 +14,7 @@ def test_student_count_relies_only_on_link_table(client):
     # Use random usernames to avoid collision in persistent DB
     t_username = f"harden_prof_{uuid.uuid4().hex[:8]}"
     secret = pyotp.random_base32()
-    teacher = Admin(username=t_username, totp_secret=secret)
+    teacher = make_admin(t_username, secret)
     db.session.add(teacher)
     db.session.commit()
 
@@ -48,14 +49,14 @@ def test_delete_teacher_cleans_up_links(client):
     """
     # Create Teacher to delete
     t1_username = f"del_target_{uuid.uuid4().hex[:8]}"
-    teacher = Admin(username=t1_username, totp_secret='s')
+    teacher = make_admin(t1_username, 's')
     db.session.add(teacher)
     db.session.commit()
     teacher_id = teacher.id
 
     # Create Survivor Teacher
     t2_username = f"survivor_{uuid.uuid4().hex[:8]}"
-    survivor_teacher = Admin(username=t2_username, totp_secret='s2')
+    survivor_teacher = make_admin(t2_username, 's2')
     db.session.add(survivor_teacher)
     db.session.commit()
     survivor_teacher_id = survivor_teacher.id
@@ -105,7 +106,7 @@ def test_student_teacher_unique_constraint(client):
     from sqlalchemy.exc import IntegrityError
     
     # Setup
-    t = Admin(username=f"unique_t_{uuid.uuid4().hex}", totp_secret='s')
+    t = make_admin(f"unique_t_{uuid.uuid4().hex}", 's')
     s = Student(first_name="Unique", last_initial="S", block="B", salt=b's')
     db.session.add_all([t, s])
     db.session.commit()
@@ -131,8 +132,8 @@ def test_remove_student_from_teacher_scope_preserves_shared_student(client):
     Removing a student from one teacher should not delete the student when another
     teacher link still exists.
     """
-    t1 = Admin(username=f"t1_{uuid.uuid4().hex[:8]}", totp_secret='s')
-    t2 = Admin(username=f"t2_{uuid.uuid4().hex[:8]}", totp_secret='s2')
+    t1 = make_admin(f"t1_{uuid.uuid4().hex[:8]}", 's')
+    t2 = make_admin(f"t2_{uuid.uuid4().hex[:8]}", 's2')
     s = Student(first_name="Shared", last_initial="S", block="B", salt=get_random_salt())
     db.session.add_all([t1, t2, s])
     db.session.commit()

@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 
 pytestmark = [pytest.mark.critical, pytest.mark.regression]
@@ -20,10 +21,7 @@ from app.hash_utils import get_random_salt, hash_username
 def setup_student_with_legacy_transactions(client):
     """Create a student with both legacy (NULL join_code) and new transactions."""
     # Create teacher
-    teacher = Admin(
-        username="teacher1",
-        totp_secret="secret123"
-    )
+    teacher = make_admin("teacher1", "secret123")
     db.session.add(teacher)
     db.session.commit()
 

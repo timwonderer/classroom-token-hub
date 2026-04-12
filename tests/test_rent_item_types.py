@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 import re
 from decimal import Decimal
@@ -9,7 +10,7 @@ from datetime import datetime, timezone, timedelta
 def teacher_admin(client):
     """Create a teacher admin user."""
     # client fixture already pushes app context and creates DB
-    admin = Admin(username="teacher", totp_secret="secret")
+    admin = make_admin("teacher", "secret")
     db.session.add(admin)
     db.session.commit()
     # Refresh to ensure it's bound or just return ID if that's safer,
@@ -1462,7 +1463,7 @@ def test_api_allows_zero_cost_rent_linked_purchase_when_paid_without_per_use_map
 
     resp = client.post('/api/purchase-item', json={'item_id': store_item.id, 'passphrase': 'password', 'quantity': 1})
     assert resp.status_code == 200
-    assert '$0' in resp.json['message'] or 'rent perk' in resp.json['message'].lower()
+    assert 'purchased' in resp.json['message'].lower()
 
     db.session.refresh(student)
     assert student.checking_balance == starting_balance
@@ -1604,7 +1605,7 @@ def test_use_item_converts_legacy_hall_pass_inventory_row(client, teacher_admin,
     assert student.hall_passes == starting_hall_passes + 2
     assert legacy_row.status == 'redeemed'
     assert legacy_row.redemption_date is not None
-    assert 'Converted to 2 hall pass(es).' in (legacy_row.redemption_details or '')
+    assert 'Hall pass grant processed' in (legacy_row.redemption_details or '')
 
 
 def test_shop_displays_rent_perk_price_as_free(client, teacher_admin, student_in_class):

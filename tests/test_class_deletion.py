@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone
 
@@ -14,7 +15,7 @@ from app.utils.deletion import collapse_universe
 from tests.helpers.class_scope import create_class_scope
 
 def test_collapse_universe_cascades_and_cleans_up(client):
-    admin = Admin(username="collapse_admin", totp_secret="secret")
+    admin = make_admin("collapse_admin", "secret")
     db.session.add(admin)
     db.session.flush()
 
@@ -130,7 +131,7 @@ def test_collapse_universe_cascades_and_cleans_up(client):
 
 
 def test_admin_join_code_delete_route(client):
-    admin = Admin(username="route_admin", totp_secret="secret")
+    admin = make_admin("route_admin", "secret")
     db.session.add(admin)
     db.session.flush()
 

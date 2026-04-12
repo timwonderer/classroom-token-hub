@@ -12,6 +12,7 @@ Covers:
 - Bulk update writes correct join_code to all orphaned transactions
 """
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone
 
@@ -37,7 +38,7 @@ pytestmark = [pytest.mark.regression]
 # ---------------------------------------------------------------------------
 
 def _make_admin(username: str = "bf_teacher") -> Admin:
-    admin = Admin(username=username, totp_secret="secret")
+    admin = make_admin(username, "secret")
     db.session.add(admin)
     db.session.commit()
     return admin

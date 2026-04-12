@@ -1,12 +1,13 @@
 from datetime import datetime, timezone
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
 from app.models import Admin, Issue, IssueCategory, Student
 from app.utils.opaque_refs import make_opaque_ref
 
 
 def test_teacher_must_close_issue_after_final_review(client):
-    teacher = Admin(username="teacher_issue_lifecycle", totp_secret="secret")
+    teacher = make_admin("teacher_issue_lifecycle", "secret")
     student = Student(first_name="Casey", last_initial="L", block="A", salt=b"salt")
     category = IssueCategory(
         name="Lifecycle Category",

@@ -5,6 +5,7 @@ These tests ensure that TeacherBlock entries are properly cleaned up
 when students, periods, or teachers are deleted.
 """
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pyotp
 from datetime import datetime, timezone
 
@@ -17,7 +18,7 @@ from tests.helpers.class_scope import create_class_scope
 def _create_admin(username: str) -> tuple[Admin, str]:
     """Create an admin/teacher with TOTP authentication."""
     secret = pyotp.random_base32()
-    admin = Admin(username=username, totp_secret=secret)
+    admin = make_admin(username, secret)
     db.session.add(admin)
     db.session.commit()
     return admin, secret
@@ -26,7 +27,7 @@ def _create_admin(username: str) -> tuple[Admin, str]:
 def _create_sysadmin() -> tuple[SystemAdmin, str]:
     """Create a system admin with TOTP authentication."""
     secret = pyotp.random_base32()
-    sysadmin = SystemAdmin(username="sysadmin", totp_secret=secret)
+    sysadmin = make_sysadmin("sysadmin", secret)
     db.session.add(sysadmin)
     db.session.commit()
     return sysadmin, secret
@@ -84,11 +85,11 @@ def _create_student_with_teacher_block(first_name: str, teacher: Admin, block: s
     return student, teacher_block
 
 
-def _login_admin(client, admin: Admin, secret: str):
+def _login_admin(client, admin: Admin, secret: str, username: str = "teacher"):
     """Log in as admin."""
     response = client.post(
         "/admin/login",
-        data={"username": admin.username, "totp_code": pyotp.TOTP(secret).now()},
+        data={"username": username, "totp_code": pyotp.TOTP(secret).now()},
         follow_redirects=True,
     )
     with client.session_transaction() as sess:
@@ -98,11 +99,11 @@ def _login_admin(client, admin: Admin, secret: str):
     return response
 
 
-def _login_sysadmin(client, sysadmin: SystemAdmin, secret: str):
+def _login_sysadmin(client, sysadmin: SystemAdmin, secret: str, username: str = "sysadmin"):
     """Log in as system admin."""
     return client.post(
         "/sysadmin/login",
-        data={"username": sysadmin.username, "totp_code": pyotp.TOTP(secret).now()},
+        data={"username": username, "totp_code": pyotp.TOTP(secret).now()},
         follow_redirects=True,
     )
 
@@ -200,7 +201,8 @@ def test_delete_block_removes_teacher_blocks(client):
     )
     db.session.add(unclaimed_tb)
     db.session.commit()
-    _login_admin(client, teacher, secret)
+    # 1. Login as teacher
+    _login_admin(client, teacher, secret, username="teacher-block-del")
     
     # Delete the block
     response = client.post(

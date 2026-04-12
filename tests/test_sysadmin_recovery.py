@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from app import db
 from app.models import Admin, SystemAdmin
@@ -5,12 +6,12 @@ import pyotp
 
 def test_sysadmin_reset_totp(client):
     # Create system admin
-    sysadmin = SystemAdmin(username="sysadmin_test", totp_secret=pyotp.random_base32())
+    sysadmin = make_sysadmin("sysadmin_test", pyotp.random_base32())
     db.session.add(sysadmin)
 
     # Create teacher
     old_secret = pyotp.random_base32()
-    teacher = Admin(username="teacher_to_reset", totp_secret=old_secret)
+    teacher = make_admin("teacher_to_reset", old_secret)
     db.session.add(teacher)
     db.session.commit()
 
@@ -34,7 +35,7 @@ def test_sysadmin_reset_totp(client):
 
 def test_sysadmin_reset_totp_unauthorized(client):
     # Create teacher
-    teacher = Admin(username="teacher_fail", totp_secret=pyotp.random_base32())
+    teacher = make_admin("teacher_fail", pyotp.random_base32())
     db.session.add(teacher)
     db.session.commit()
 

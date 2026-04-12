@@ -5,6 +5,7 @@ Ensures that students can check out and check in directly from the dashboard
 without using the terminal, with proper limit enforcement.
 """
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone, timedelta
 from app.models import (
@@ -18,10 +19,7 @@ from app.hash_utils import get_random_salt, hash_username
 def setup_hall_pass_checkout_test(client):
     """Create teacher, student, and approved hall pass for testing checkout."""
     # Create teacher
-    teacher = Admin(
-        username="teacher1",
-        totp_secret="secret1"
-    )
+    teacher = make_admin("teacher1", "secret1")
     db.session.add(teacher)
     db.session.commit()
 

@@ -1,3 +1,4 @@
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from app import db, Student, TapEvent, Transaction
 from app.payroll import calculate_payroll
@@ -11,7 +12,7 @@ FLOAT_TOLERANCE = 0.0001
 def test_teacher(client):
     """Fixture to create a test teacher for payroll tests."""
     from app.models import Admin
-    teacher = Admin(username="test_teacher", totp_secret="s")
+    teacher = make_admin("test_teacher", "s")
     db.session.add(teacher)
     db.session.commit()
     return teacher
@@ -20,7 +21,7 @@ def test_calculate_payroll(client):
     from app.models import Admin, TeacherBlock, Student
     
     # Create Teacher
-    teacher = Admin(username="prof_payroll", totp_secret="s")
+    teacher = make_admin("prof_payroll", "s")
     db.session.add(teacher)
     db.session.commit()
 
@@ -108,7 +109,7 @@ def test_calculate_payroll_ignores_other_class_manual_payment_anchor(client):
     from app.models import Admin, TeacherBlock, Student
     from tests.helpers.class_scope import create_class_scope
 
-    teacher = Admin(username="prof_multiclass", totp_secret="s")
+    teacher = make_admin("prof_multiclass", "s")
     db.session.add(teacher)
     db.session.commit()
 
@@ -376,7 +377,7 @@ def test_get_cached_payroll_with_meta(client):
     from datetime import datetime, timedelta, timezone
     
     # Setup Teacher
-    teacher = Admin(username="prof_cache", totp_secret="s")
+    teacher = make_admin("prof_cache", "s")
     db.session.add(teacher)
     db.session.commit()
     

@@ -1,4 +1,5 @@
 
+from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import uuid
 from datetime import datetime, timezone
 from app import db
@@ -12,8 +13,8 @@ def test_attendance_status_isolation(client):
     even if they share the same block name.
     """
     # 1. Setup Teachers
-    t1 = Admin(username=f"t1_{uuid.uuid4().hex[:8]}", totp_secret='secret')
-    t2 = Admin(username=f"t2_{uuid.uuid4().hex[:8]}", totp_secret='secret')
+    t1 = make_admin(f"t1_{uuid.uuid4().hex[:8]}", 'secret')
+    t2 = make_admin(f"t2_{uuid.uuid4().hex[:8]}", 'secret')
     db.session.add_all([t1, t2])
     db.session.commit()
 
