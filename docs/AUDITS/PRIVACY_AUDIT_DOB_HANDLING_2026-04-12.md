@@ -2,7 +2,9 @@
 
 | Document Type | Audit Date | Triggered By | Status |
 |---------------|------------|--------------|--------|
-| Privacy Audit | 2026-04-12 | School District Review | In Progress — Brainstorm Phase |
+| Privacy Audit | 2026-04-12 | School District Review | Phase 1 Complete — Awaiting District Feedback |
+
+**Remediation summary (2026-04-12):** P0 and P1 items completed on branch `claude/review-privacy-concerns-d4IKD`. P2 design decisions finalized in Section XII pending district feedback before implementation.
 
 ---
 
@@ -241,88 +243,267 @@ The right remediation depends on what the district actually objects to:
 
 ### P0 — Fix Before District Review
 
-**1. Remove DOB_SUM from failed-claim warning logs**
+**1. Remove DOB_SUM from failed-claim warning logs** ✅ COMPLETED 2026-04-12
 
 `app/routes/student.py` ~line 759–775
 
-Replace the match_attempts dict to log only non-PII diagnostics:
+The `match_attempts` dict no longer includes `seat_dob_sum` or `provided_dob_sum`. The diagnostic value (did DOB match or not?) is preserved via the boolean `dob_sum_matches` flag; the actual values are not logged.
+
 ```python
-# Instead of logging seat_dob_sum and provided_dob_sum, log:
+# Implemented — logs only:
 {
     'seat_id': seat.id,
     'credential_matches': credential_matches,
     'last_name_matches': last_name_matches,
     'dob_sum_matches': dob_sum_matches
-    # Remove: seat_dob_sum, provided_dob_sum
 }
 ```
-This is a one-line change per field. The diagnostic value (did DOB match or not?) is preserved; the actual values are not logged.
 
-**2. Audit and purge existing log files**
+**2. Audit and purge existing log files** ⚠️ PENDING — Manual Action Required
 
-If the app has been running in production, existing log files may contain DOB_SUM values from past failed claim attempts. These should be reviewed and purged or rotated.
+If the app has been running in production, existing log files may contain DOB_SUM values from past failed claim attempts. These files exist outside the application code and cannot be purged by a code change. Log files should be reviewed and rotated/purged manually on the production server before or immediately after deploying the branch.
 
 ### P1 — Fix Soon
 
-**3. Replace DOB_SUM in username generation with a random number**
+**3. Replace DOB_SUM in username generation with a random number** ✅ COMPLETED 2026-04-12
 
-`app/routes/student.py` line 953
+`app/routes/student.py` — `create_username` route
 
 ```python
-# Current
-username = f"{adjective}{write_in_word}{dob_sum}{initials}"
-
-# Proposed
-import random
+# Implemented
 uniquifier = random.randint(1000, 9999)
 username = f"{adjective}{write_in_word}{uniquifier}{initials}"
+student.username_migrated = True
 ```
 
-This removes the embedded PII from all future usernames. Existing usernames are not affected (and would require a migration to change, which may not be worth the disruption).
+All new accounts now receive usernames with a random 4-digit suffix. No PII is embedded.
 
-**4. Update the privacy policy**
+**3a. One-time migration for existing accounts** ✅ COMPLETED 2026-04-12
 
-Two specific corrections needed:
-- Change "cannot be turned back into your date of birth" to language that accurately describes DOB_SUM as obfuscated but not cryptographically irreversible
-- Add a disclosure that a numeric component of the student's username is derived from their birth date at account creation
+Existing students whose usernames were created with the old DOB_SUM format are flagged via a new `Student.username_migrated` boolean column (`server_default = false`). On their next login, they are intercepted before reaching the dashboard and taken through a one-time username update flow:
+
+1. `GET /migrate-username` — prompts for a new theme word
+2. `POST /migrate-username` → validates word, generates new username with random suffix, stores in session
+3. `GET /confirm-username-migration` — shows new username once, requires "written down" checkbox
+4. `POST /confirm-username-migration` — commits new username hashes, sets `username_migrated = True`
+
+Migration file: `migrations/versions/b1c2d3e4f5a6_add_username_migrated_to_students.py`
+
+**4. Update the privacy policy** ✅ COMPLETED 2026-04-12
+
+Five corrections made to `templates/privacy.html`:
+
+- **Student DOB bullet (line 43):** Restored accurate irreversibility language — "We immediately convert it into a cryptographic hash — a fixed-length string that cannot be reversed to recover your date of birth — before any values are stored. The raw date is never written to disk."
+- **Theme word bullet:** Added explicit disclosure — "combined with a randomly generated number and your initials to create your login username. Your username does not contain your date of birth or any other personal information."
+- **PIN description:** Corrected "four- to six-digit" → "four- to eight-digit" (matches actual JS validation)
+- **Post-Setup PII Cleanup section:** Clarified timing (cleanup is at setup completion, not claim); added "Application logs do not retain date of birth information"
+- **Retention table:** Updated "Hashed student date of birth" row to accurately describe what is stored (credential hashes, not raw dates) and when deletion occurs (after account setup, not after claim)
 
 ### P2 — Longer-Term Design Decisions
 
-**5. Evaluate claim flow redesign**
+**5. Claim flow redesign: replace DOB with name-only + dedupe code** — Design finalized; implementation deferred pending district feedback
 
-Decide on the replacement for DOB at claim time (see Section VIII, Q1). This is the largest change and requires teacher-facing UX work (new roster upload format, code distribution, etc.).
+See Section XII for the complete design spec and v2.0 compatibility analysis.
 
-**6. Add log retention policy**
+**6. Add log retention policy** — Deferred
 
-Set a maximum retention window for application log files (e.g., 30 days) and implement automated deletion. Currently logs rotate by size with no time-based TTL.
+Set a maximum time-based retention window for application log files (e.g., 30 days) and implement automated deletion. Currently logs rotate by size with no TTL. Not urgent; depends on whether the district's concern extends to log data.
 
-**7. Teacher DOB deletion path**
+**7. Teacher DOB deletion path** — Deferred
 
-Implement a mechanism to delete `Admin.dob_sum_hash` and `salt` if a teacher requests full account deletion. Currently the hash persists even after account removal.
+Implement a mechanism to delete `Admin.dob_sum_hash` and `salt` if a teacher requests full account deletion. Currently the hash persists even after account removal. Not in scope for current review; teacher DOB is adult-consented and FERPA does not govern teacher records.
 
 ---
 
 ## X. Summary Table
 
-| Entity | What Is Stored | Format | Lifecycle | Risk |
-|--------|---------------|--------|-----------|------|
-| Student (TeacherBlock seat) | DOB_SUM | Plaintext integer | Upload → Nulled at claim | Low (short-lived) |
-| Student (Student record) | DOB_SUM | Plaintext integer | Claim → Nulled post-setup | Low (minutes) |
-| Student (username) | DOB_SUM | Embedded in username string | Created at setup → Permanent in username | Medium (permanent artifact in hashed form) |
-| Teacher (Admin record) | DOB_SUM hash | HMAC-SHA256 hex | Signup → Permanent | Low (cryptographically protected) |
-| Application logs | DOB_SUM | Plaintext integer in log string | On failed claim → File rotation (no TTL) | High (persists after DB cleanup) |
-| Session (teacher signup) | DOB date string + sum | Plaintext in session | Duration of signup flow → Cleared after | Low (transient) |
+| Entity | What Is Stored | Format | Lifecycle | Risk | Status |
+|--------|---------------|--------|-----------|------|--------|
+| Student (TeacherBlock seat) | DOB_SUM | Plaintext integer | Upload → Nulled at claim | Low (short-lived) | No change needed |
+| Student (Student record) | DOB_SUM | Plaintext integer | Claim → Nulled post-setup | Low (minutes) | No change needed |
+| Student (username) — new accounts | Random 4-digit number | Embedded in username string | Created at setup → Permanent | None | ✅ Fixed |
+| Student (username) — legacy accounts | DOB_SUM | Embedded in username string | One-time migration on next login | Medium | ✅ Fixed (migration flow) |
+| Teacher (Admin record) | DOB_SUM hash | HMAC-SHA256 hex | Signup → Permanent | Low (cryptographically protected) | No change needed |
+| Application logs | No PII | Boolean match flags only | On failed claim → File rotation | None | ✅ Fixed (existing log files: manual purge needed) |
+| Session (teacher signup) | DOB date string + sum | Plaintext in session | Duration of signup flow → Cleared after | Low (transient) | No change needed |
 
 ---
 
-## XI. Audit Participants and Method
+---
+
+## XI. Forward Design: DOB-Free Claim Flow (v2.0-Aligned)
+
+> **Status:** Design finalized. Implementation deferred until district provides specific feedback — making large structural changes during active review would slow the process and may address the wrong concern.
+
+This section documents the agreed-upon design for replacing DOB in the student claim flow with a name-only + dedupe-code system, validated against the `codex/v2.0` architecture.
+
+---
+
+### 11.1 The Core Problem DOB Solves Today
+
+DOB serves two distinct roles at claim time. The replacement design must address both:
+
+| Role | Current mechanism | Proposed replacement |
+|------|-------------------|----------------------|
+| **Identity proof** — confirm the student is on this roster | DOB_SUM hash (credential hashes) | Full last name (collected, then purged post-setup) |
+| **Disambiguation** — distinguish two students with same name pattern | DOB_SUM as tiebreaker | Teacher-generated 4-character dedupe code, issued only when a collision actually exists |
+
+---
+
+### 11.2 The v2.0 Branch Review Findings
+
+The `codex/v2.0` branch was reviewed (2026-04-12) before finalizing this design. Key relevant architecture already in v2.0:
+
+| v2.0 construct | What it does | Maps to our design concept |
+|----------------|-------------|---------------------------|
+| `IdentityProfile` model | Canonical identity anchor: `first_name` (PIIEncryptedType) + `last_initial`. Both `TeacherBlock` and `Student` hold an `identity_id` FK. | Our proposed "full name" storage for lookup; `IdentityProfile` needs a `last_name` field extension |
+| `Seat.roster_fingerprint` | String(128), indexed — deterministic hash of a student's identifying information for lookup without scanning all seats | Exactly our proposed `name_lookup_hash` — HMAC of (first_initial + full_last_name) with global pepper |
+| `Seat.dedupe_code` | String(8) — already on the Seat model | Our proposed 4-character dedupe code (design uses 4; v2.0 reserved 8 — compatible) |
+| `Seat.public_id` | UUID — stable, opaque, class-local identifier | Our proposed `seat_code` used in the updated upload CSV template |
+| `TeacherBlock.dedupe_key` | String(64) — already on TeacherBlock (current-architecture seat) | Dedupe mechanism for transitional period before full v2.0 migration |
+| `TeacherBlock.dob_sum_hash` | v2.0 already replaced plaintext `dob_sum` with an HMAC hash | Shows v2.0 is already moving away from raw DOB — aligns with our direction |
+
+**Critical finding:** The v2.0 architecture is already designed to support DOB-free claiming. Our implementation work targets the current architecture (`TeacherBlock`-based) but must be designed so that it extends cleanly to v2.0's `Seat`/`IdentityProfile` model.
+
+---
+
+### 11.3 Name-Only Claim Flow: New Student Experience
+
+```
+Student visits app → enters join code
+↓
+"Enter your first name and last name"
+↓
+Backend: compute name_lookup_hash = HMAC(first_initial + full_last_name, global_pepper)
+         query TeacherBlock WHERE join_code = ? AND name_lookup_hash = ?
+↓
+One match found → proceed to username/PIN/passphrase setup
+                  purge full last name from DB after setup completes
+↓
+No match → "Name not found — check with your teacher"
+↓
+Multiple matches → additional prompt: "Your teacher gave you a 4-letter code. Enter it now."
+                   matches on name_lookup_hash AND dedupe_code
+```
+
+**What is collected vs. what is stored:**
+
+| Data | Collected | Stored | Purged |
+|------|-----------|--------|--------|
+| First name | Yes (form input) | Encrypted (`PIIEncryptedType`) on `IdentityProfile`/`TeacherBlock` | After setup: first initial kept, full first name purged |
+| Full last name | Yes (form input) | As `name_lookup_hash` (HMAC, irreversible) | Immediately — raw last name never written to disk |
+| Last initial | Derived from last name | Stored plaintext (low sensitivity, display only) | Never purged — used for teacher's roster display |
+| DOB | Not collected | Not stored | N/A |
+| Dedupe code | Only when collision | Stored plaintext on seat (4 chars, not PII) | After claim |
+
+---
+
+### 11.4 Collision Detection and Dedupe Code Generation
+
+A collision occurs when two students in the same class period share the same `name_lookup_hash` — i.e., same first initial and same full last name. This is rarer than same first initial + same last initial (the current collision surface) but can still occur (e.g., two students both named "James Martinez" in a class).
+
+**Collision detection at roster upload:**
+
+```
+For each student in upload:
+  compute name_lookup_hash
+  if another seat in same join_code already has this hash:
+    generate random 4-character alphanumeric dedupe_code
+    assign to BOTH the existing seat AND the new seat
+    (teacher sees code displayed in roster, distributes to affected students only)
+  else:
+    dedupe_code = None
+```
+
+**Implementation notes:**
+- Dedupe codes are assigned only to colliding students — the teacher does not need to distribute codes to the entire class
+- A dedupe code for an unclaimed seat is visible to the teacher in the roster UI
+- After the student claims their account, the dedupe code is no longer needed for login (credential hashes serve that purpose); it can be nulled or retained for roster display
+
+---
+
+### 11.5 Roster Upload Redesign: Two-Mode Upload
+
+The current upload is insert-with-skip-on-duplicate, using a five-field key that includes `dob_sum`. With DOB removed, a new upload strategy is needed.
+
+**Two upload modes (teacher chooses at upload time):**
+
+**Mode A — "Add to New Class / Fresh Roster"**
+
+- Use case: first upload for a class period, or replacing entire roster
+- CSV template: columns for `first_name`, `last_name`, `block` only
+- Backend: creates new `TeacherBlock` seats; detects and assigns dedupe codes on collision
+- No seat codes in CSV — seats are created fresh
+
+**Mode B — "Add or Update Existing Class"**
+
+- Use case: adding a few new students mid-year, or correcting a name
+- Backend: generates a pre-populated CSV containing all current seats with their `seat_code` (UUID), `first_name`, `last_initial`, and `dedupe_code` (if any)
+- Teacher downloads the template → adds new rows (no seat code, empty code column) or edits existing rows by name
+- On re-upload:
+  - Rows with a `seat_code` → treated as updates to the named seat (name correction only)
+  - Rows without a `seat_code` → treated as new additions; collision check runs on these only
+- Rows with a `seat_code` for a seat that is **already claimed** → name updates are applied to `IdentityProfile`; dedupe code cannot be regenerated (claimed student's credential hashes are finalized)
+
+**Why this avoids the "claimed/unclaimed flag manipulation" risk** the design review identified: the system's source of truth for whether a student has claimed their account is the presence of credential hashes (`pin_hash`, `passphrase_hash`), not any mutable boolean flag. The upload flow cannot create a "claimed student with no credentials" scenario because new rows in Mode B always generate unclaimed seats.
+
+---
+
+### 11.6 What Gets Dropped When DOB Is Removed
+
+When the claim flow no longer uses DOB, the following database columns become removable:
+
+| Column | Table | Can drop? | Notes |
+|--------|-------|-----------|-------|
+| `dob_sum` | `teacher_blocks` | Yes | Replace with `name_lookup_hash` |
+| `dob_sum` | `students` | Yes | No longer needed post-claim |
+| `first_half_hash` | `teacher_blocks` | Yes | Was HMAC(first_initial + dob_sum, salt) |
+| `second_half_hash` | `teacher_blocks` | Yes | Was HMAC(dob_sum, salt) |
+| `salt` | `teacher_blocks` (student claim salt) | Yes | Per-seat salt used for credential hashes |
+
+**v2.0 alignment:** `TeacherBlock.dob_sum_hash` (already migrated in v2.0) would also be removed. v2.0's `Seat.roster_fingerprint` is the direct replacement for the lookup hash mechanism.
+
+**Columns that stay:**
+
+| Column | Table | Reason |
+|--------|-------|--------|
+| `dob_sum_hash` | `admins` | Teacher DOB for account recovery — separate use case, adult-consented |
+| `salt` | `admins` | Per-teacher salt for teacher recovery hash |
+
+---
+
+### 11.7 v2.0 Implementation Path
+
+When the v2.0 architecture is adopted, this design maps as follows:
+
+| Our design concept (current arch) | v2.0 equivalent |
+|-----------------------------------|-----------------|
+| `TeacherBlock.name_lookup_hash` | `Seat.roster_fingerprint` |
+| `TeacherBlock.dedupe_code` (via `dedupe_key`) | `Seat.dedupe_code` |
+| `TeacherBlock.full_last_name` (temporary, encrypted) | `IdentityProfile.last_name` (new field needed in v2.0) |
+| `seat_code` in CSV template | `Seat.public_id` (UUID, already in v2.0) |
+
+**One gap to address in v2.0:** `IdentityProfile` currently has `first_name` (encrypted) and `last_initial` but no `last_name` field. The v2.0 migration for the DOB-free claim flow would need to add `IdentityProfile.last_name` as a temporary, encrypted field — set at roster upload, purged after the student completes account setup (same pattern as current `Student.dob_sum`).
+
+---
+
+## XII. Audit Participants and Method
 
 - **Method:** Static code analysis via automated codebase exploration + manual review
-- **Scope:** Full application — models, routes, forms, templates, migrations, tests, documentation
-- **Files examined:** `app/models.py`, `app/routes/student.py`, `app/routes/admin.py`, `app/forms.py`, `app/hash_utils.py`, `app/__init__.py`, `app/services/tlcp.py`, all templates referencing DOB/username, all migrations referencing dob columns, `templates/privacy.html`
+- **Scope:** Full application — models, routes, forms, templates, migrations, tests, documentation; `codex/v2.0` branch reviewed for forward compatibility
+- **Files examined:** `app/models.py`, `app/routes/student.py`, `app/routes/admin.py`, `app/forms.py`, `app/hash_utils.py`, `app/__init__.py`, `app/services/tlcp.py`, all templates referencing DOB/username, all migrations referencing dob columns, `templates/privacy.html`; v2.0 branch: `app/models.py`, all v2.0 migrations
 - **Audit date:** 2026-04-12
-- **Status:** Brainstorm/findings phase — remediation not yet implemented
+- **Phase 1 remediation date:** 2026-04-12 (branch `claude/review-privacy-concerns-d4IKD`)
+- **Status:** Phase 1 complete. Phase 2 (claim flow redesign) awaiting district feedback.
 
 ---
 
-*This document should be updated as remediation items are completed. Mark each item in Section IX with the completion date and commit reference.*
+### Change Log
+
+| Date | Section | Change | Commit |
+|------|---------|--------|--------|
+| 2026-04-12 | New document | Initial audit findings | — |
+| 2026-04-12 | IX, X | Marked P0/P1 items complete; updated summary table | `claude/review-privacy-concerns-d4IKD` |
+| 2026-04-12 | XI (new) | Added v2.0-aligned forward design spec for DOB-free claim flow | `claude/review-privacy-concerns-d4IKD` |
+
+*Continue marking remediation items with completion dates and commit references as work progresses.*
