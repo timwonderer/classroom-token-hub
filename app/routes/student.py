@@ -1120,6 +1120,12 @@ def confirm_migrated_username():
         student.username_hash = hash_username(new_username, student.salt)
         student.username_lookup_hash = hash_username_lookup(new_username)
         student.username_migrated = True
+
+        # Post-migration PII cleanup: dob_sum and last_name_hash_by_part are no longer
+        # needed for account recovery or matching once the student has a new secure username.
+        # This matches the cleanup behavior in standard account setup.
+        student.dob_sum = None
+        student.last_name_hash_by_part = None
         
         try:
             db.session.commit()

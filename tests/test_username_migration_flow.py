@@ -73,7 +73,15 @@ def test_complete_migration_flow(client, test_student):
     assert b"Dashboard" in resp.data
     assert b"Your username has been updated" in resp.data
     
-    # Verify DB state
+    # Verify PII was cleaned up
+    from app.models import Student
+    with client.application.app_context():
+        student = db.session.get(Student, test_student)
+        assert student.username_migrated is True
+        assert student.dob_sum is None
+        assert student.last_name_hash_by_part is None
+    
+    # Verify DB state (redundant check but keeping for safety)
     with client.application.app_context():
         stu = db.session.get(Student, test_student)
         assert stu.username_migrated is True

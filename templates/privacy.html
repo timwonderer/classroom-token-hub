@@ -40,7 +40,7 @@
       <h3>If you are a student user</h3>
       <p>When your teacher created your account, they have given us these information:</p>
       <ul>
-        <li><strong>Date of Birth</strong>: Used to verify your identity during account setup and recovery. We convert your date of birth into a derived integer value (`dob_sum`) and cryptographic hashes before storage. The raw date of birth is never written to disk. These derived values are retained to support secure account matching, migration, and identity verification.</li>
+        <li><strong>Date of Birth</strong>: Used to verify your identity during account setup and recovery. We immediately convert your date of birth into a derived integer value (`dob_sum`) and cryptographic hashes. The raw date of birth is never written to disk. Once you finish setting up your account, the derived `dob_sum` value is deleted, leaving only irreversible cryptographic hashes to support secure account matching and recovery.</li>
         <li><strong>First Name and Last Initial</strong>: We use this to say hello to you and for your teacher to find you.</li>
         <li><strong>Full Last Name</strong>: We convert this into a long string of letters and numbers that cannot be turned back into your last name before saving it. We use this to help us find you when you claim your account. After you claim your account, we delete this information.</li>
         <li><strong>Class Block</strong>: We use this to help your teacher organize their classes.</li>
@@ -86,7 +86,7 @@
 
     <h2>Data Minimization & Retention</h2>
     <p>Classroom Token Hub rejects the practice of requesting and storing personally identifiable information (PII) beyond what is needed and longer than necessary. Because of this, we have designed our app to operate with very few PII elements. The list below represents our most recent policy in requesting, using, and retaining your data:</p>
-    <p><strong>Post-Setup PII Cleanup:</strong> During the account claiming process, we use a student's first initial, last name, and date of birth to match them to their pre-created class record. Once the student completes initial account setup — choosing a username and setting their PIN and passphrase — the full last name hash is deleted. Derived values related to your date of birth (`dob_sum`) and other cryptographic verification hashes are retained to ensure the ongoing security and integrity of your account credentials.</p>
+    <p><strong>Post-Setup PII Cleanup:</strong> During the account claiming process, we use a student's first initial, last name, and date of birth to match them to their pre-created class record. Once the student completes initial account setup — choosing a username and setting their PIN and passphrase — the full last name hash and derived date of birth integer (`dob_sum`) are deleted. One-way cryptographic hashes are retained to ensure the ongoing security and integrity of your account credentials without storing your identifiable data.</p>
      <p><strong>Class Deletion:</strong> When a class is deleted by the teacher, all data associated with that class (connected by join code) immediately gets deleted off our database. Any student account that is not connected to another class will also be deleted. </p>
     <p><strong>No Classroom-State Backup:</strong> We do not maintain a restorable backup feature for individual classroom economies. If a class is deleted by teacher action or by system inactivity rules, that classroom state is not designed to be restored later.</p>
     <p><strong>Opaque identity</strong>: Both teacher and student identities are opaque to system administrators in normal operations. We can identify accounts primarily by opaque usernames, class labels, and technical identifiers rather than by student roster data.</p>
@@ -107,8 +107,8 @@
       <tbody>
         <tr>
           <td><strong>Student claim verification hashes</strong></td>
-          <td>Cryptographic hashes and derived values (like `dob_sum`) used to verify identity during account claim and recovery. The original raw values are never stored.</td>
-          <td>Prevent duplicate claims, match students to roster seats, and support secure credential updates.</td>
+          <td>One-way cryptographic hashes used to verify identity during account claim and recovery. These hashes cannot be reversed to reveal your date of birth or last name.</td>
+          <td>Prevent duplicate claims, match students to roster seats, and support secure recovery.</td>
           <td>Retained while the account is active.</td>
           <td>Deleted automatically when the student account or class is deleted.</td>
         </tr>
@@ -209,9 +209,7 @@
     <h2>Student Rights & Access</h2>
     <p>Students have the right to view their own data. If any information is incorrect, please contact your teacher to
       have it corrected. Account access and credential resets must be handled by an administrator.</p>
-    <p><strong>Account Recovery:</strong> If you lose access to your account, your teacher can issue a reset code. The
-      recovery process requires your class join code, the reset code, and verification of your derived identity data
-      (like initials and `dob_sum`) to ensure only you can reclaim your specific account.</p>
+    <p><strong>Account Recovery:</strong> If you lose access to your account, your teacher can issue a reset code. The recovery process requires your class join code, the reset code, and verification of your initials and birth month/day to match your cryptographic verification hashes, ensuring only you can reclaim your specific account.</p>
 
     <h2>Data Breach Notification</h2>
     <p>In the event of a data breach, we will notify affected users and authorities within 72 hours and provide guidance
