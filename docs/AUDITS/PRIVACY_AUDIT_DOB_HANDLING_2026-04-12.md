@@ -345,8 +345,10 @@ DOB serves two distinct roles at claim time. The replacement design must address
 
 | Role | Current mechanism | Proposed replacement |
 |------|-------------------|----------------------|
-| **Identity proof** — confirm the student is on this roster | DOB_SUM hash (credential hashes) | Full last name (collected, then purged post-setup) |
-| **Disambiguation** — distinguish two students with same name pattern | DOB_SUM as tiebreaker | Teacher-generated 4-character dedupe code, issued only when a collision actually exists |
+| **Identity proof** — confirm the student is on this roster | DOB_SUM hash (credential hashes using HMAC of DOB + initials) | `name_lookup_hash`: HMAC(first_initial + full_last_name, global_pepper) — student enters their name at claim time; the hash is compared against the stored seat hash |
+| **Disambiguation** — distinguish two students with the same name pattern | DOB_SUM as tiebreaker | Teacher-generated 4-character dedupe code, issued only when a hash collision actually exists within the join code |
+
+The full last name is stored **encrypted at rest** (`PIIEncryptedType`) on the seat record — making it readable by the teacher in the roster view before the student claims, and by the claim flow for verification. A `name_lookup_hash` (HMAC) is also stored for efficient indexed querying without decrypting every row. Both are purged after the student completes setup; only `last_initial` is retained for display.
 
 ---
 
@@ -396,8 +398,8 @@ Backend:
       AND student_id IS NULL           ← unclaimed only
 ↓
 One match → proceed to username / PIN / passphrase setup
-            on completion: new Student record created, attached to seat
-            purge full last name data; credential hashes finalize the claim
+            on completion: new Student record created, linked to seat via student_id FK
+            encrypted full_last_name on seat is purged; name_lookup_hash + last_initial retained
 ↓
 No match → "Name not found — check with your teacher"
 ↓
@@ -429,10 +431,10 @@ Backend:
       AND student_id IS NULL
 ↓
 One match (or match + dedupe code if collision) →
-  attach existing Student.id to the seat
-  create ClassMembership for (student_id, join_code)
+  seat.student_id = existing Student.id       ← same mechanism as Path A
+  existing ClassMembership created for (student_id, join_code)
   NO new Student record created
-  purge full last name data
+  encrypted full_last_name on seat purged
 ↓
 No match → "No unclaimed seat found for that name in this class"
 ```
@@ -467,11 +469,11 @@ The source of truth for whether a seat is claimed is the presence of credential 
 
 | Data | Collected | Stored | Purged |
 |------|-----------|--------|--------|
-| First name | Yes (form input) | Encrypted on seat/`IdentityProfile` | After setup: only first initial retained |
-| Full last name | Yes (form input) | As `name_lookup_hash` only (HMAC, irreversible) | Raw value never written to disk |
-| Last initial | Derived from last name | Plaintext (display in teacher roster) | Never — used for roster display |
+| First name | Yes (roster upload) | Encrypted (`PIIEncryptedType`) on seat; retained encrypted on Student record after claim | After setup: full first name retained encrypted — teacher sees it in roster |
+| Full last name | Yes (roster upload) | Encrypted (`PIIEncryptedType`) on seat (temporary); `name_lookup_hash` (HMAC, irreversible) stored separately for indexed lookup | Encrypted value purged after student completes setup; `name_lookup_hash` and `last_initial` retained |
+| Last initial | Derived from last name at upload | Plaintext on seat and Student record | Never — used for teacher roster display throughout account lifetime |
 | DOB | Not collected | Not stored | N/A |
-| Dedupe code | Only when collision | Plaintext on seat (4 chars, not PII) | Optionally nulled after claim |
+| Dedupe code | Only when collision exists within join_code | Plaintext on seat (4 chars, not PII) | Can be nulled after claim; may be retained for roster disambiguation display |
 
 ---
 
@@ -520,7 +522,7 @@ The current upload is insert-with-skip-on-duplicate, using a five-field key that
 - On re-upload:
   - Rows with a `seat_code` → treated as updates to the named seat (name correction only)
   - Rows without a `seat_code` → treated as new additions; collision check runs on these only
-- Rows with a `seat_code` for a seat that is **already claimed** → name updates are applied to `IdentityProfile`; dedupe code cannot be regenerated (claimed student's credential hashes are finalized)
+- Rows with a `seat_code` for a seat that is **already claimed** → name updates are applied to the seat's encrypted name fields; dedupe code cannot be regenerated (claimed student's credential hashes are finalized; changing the name_lookup_hash would break their login)
 
 **Why this avoids the "claimed/unclaimed flag manipulation" risk** the design review identified: the system's source of truth for whether a student has claimed their account is the presence of credential hashes (`pin_hash`, `passphrase_hash`), not any mutable boolean flag. The upload flow cannot create a "claimed student with no credentials" scenario because new rows in Mode B always generate unclaimed seats.
 
