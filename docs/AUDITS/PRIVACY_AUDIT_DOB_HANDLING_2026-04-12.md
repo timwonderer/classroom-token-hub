@@ -356,45 +356,122 @@ The `codex/v2.0` branch was reviewed (2026-04-12) before finalizing this design.
 
 | v2.0 construct | What it does | Maps to our design concept |
 |----------------|-------------|---------------------------|
-| `IdentityProfile` model | Canonical identity anchor: `first_name` (PIIEncryptedType) + `last_initial`. Both `TeacherBlock` and `Student` hold an `identity_id` FK. | Our proposed "full name" storage for lookup; `IdentityProfile` needs a `last_name` field extension |
-| `Seat.roster_fingerprint` | String(128), indexed — deterministic hash of a student's identifying information for lookup without scanning all seats | Exactly our proposed `name_lookup_hash` — HMAC of (first_initial + full_last_name) with global pepper |
-| `Seat.dedupe_code` | String(8) — already on the Seat model | Our proposed 4-character dedupe code (design uses 4; v2.0 reserved 8 — compatible) |
-| `Seat.public_id` | UUID — stable, opaque, class-local identifier | Our proposed `seat_code` used in the updated upload CSV template |
-| `TeacherBlock.dedupe_key` | String(64) — already on TeacherBlock (current-architecture seat) | Dedupe mechanism for transitional period before full v2.0 migration |
-| `TeacherBlock.dob_sum_hash` | v2.0 already replaced plaintext `dob_sum` with an HMAC hash | Shows v2.0 is already moving away from raw DOB — aligns with our direction |
+| `IdentityProfile` model | Canonical identity anchor: `first_name` (PIIEncryptedType) + `last_initial`. Both `TeacherBlock` and `Student` hold an `identity_id` FK. | Temporary storage for full last name during claim; needs a `last_name` field extension (see 11.7) |
+| `Seat.roster_fingerprint` | String(128), indexed — deterministic hash of a student's identifying information, scoped per seat/class | Exactly our `name_lookup_hash` — HMAC(first_initial + full_last_name, global_pepper), scoped to join_code in queries |
+| `Seat.dedupe_code` | String(8) — already on the Seat model | Our 4-character dedupe code (design uses 4; v2.0 reserved 8 — compatible) |
+| `Seat.public_id` | UUID — stable, opaque, class-local identifier | `seat_code` in the Mode B CSV download template |
+| `TeacherBlock.dedupe_key` | String(64) — already on TeacherBlock (current-architecture seat) | Transitional dedupe mechanism; aligns with `Seat.dedupe_code` in v2.0 |
+| `TeacherBlock.dob_sum_hash` | v2.0 already replaced plaintext `dob_sum` with an HMAC hash | v2.0 is already moving away from raw DOB; this column is itself a candidate for removal once name-lookup replaces it |
 
-**Critical finding:** The v2.0 architecture is already designed to support DOB-free claiming. Our implementation work targets the current architecture (`TeacherBlock`-based) but must be designed so that it extends cleanly to v2.0's `Seat`/`IdentityProfile` model.
+**Critical finding:** The v2.0 architecture is already designed around join_code-scoped seat lookup. `Seat.roster_fingerprint` is explicitly the lookup hash for a seat within its class. The design in 11.3 (join_code-first, no global identity check) is directly aligned with how v2.0 models identity.
 
 ---
 
-### 11.3 Name-Only Claim Flow: New Student Experience
+### 11.3 Claim Flow Architecture: Two Paths
+
+**The invariant that governs both paths:**
+
+> Identity lookup is always and only scoped to the submitted `join_code`. The system never queries across join codes to check whether a student "already exists" globally. A student's global account state is irrelevant to finding their seat — seat lookup and credential attachment are separate operations.
+
+This design choice is correct for two reasons:
+1. **Privacy by scope** — a student's presence in one class is not the business of any other class's claim flow.
+2. **Collision arithmetic** — a class of ~35 students is the correct collision domain. Querying globally inflates the collision surface to the entire student population, making name uniqueness impossible to guarantee and requiring more aggressive disambiguation than the problem actually needs.
+
+---
+
+#### Path A — Unauthenticated Claim (student has no existing account)
 
 ```
-Student visits app → enters join code
+Student visits app
+↓
+Enters join code → scopes ALL subsequent lookups to this join_code
 ↓
 "Enter your first name and last name"
 ↓
-Backend: compute name_lookup_hash = HMAC(first_initial + full_last_name, global_pepper)
-         query TeacherBlock WHERE join_code = ? AND name_lookup_hash = ?
+Backend:
+  compute name_lookup_hash = HMAC(first_initial + full_last_name, global_pepper)
+  SELECT seat FROM teacher_blocks
+    WHERE join_code = :join_code
+      AND name_lookup_hash = :hash
+      AND student_id IS NULL           ← unclaimed only
 ↓
-One match found → proceed to username/PIN/passphrase setup
-                  purge full last name from DB after setup completes
+One match → proceed to username / PIN / passphrase setup
+            on completion: new Student record created, attached to seat
+            purge full last name data; credential hashes finalize the claim
 ↓
 No match → "Name not found — check with your teacher"
 ↓
-Multiple matches → additional prompt: "Your teacher gave you a 4-letter code. Enter it now."
-                   matches on name_lookup_hash AND dedupe_code
+Multiple matches (collision within this join_code) →
+  "Your teacher gave you a 4-letter code. Enter it now."
+  SELECT ... WHERE join_code = :join_code AND name_lookup_hash = :hash AND dedupe_code = :code
 ```
 
-**What is collected vs. what is stored:**
+**Known edge case:** If the student already has a Student record in another class (from a previous year or another teacher) and uses the unauthenticated path, they will receive a second Student record. This is acceptable. The resolution path is documented in 11.3c below.
+
+---
+
+#### Path B — Authenticated Claim (student already has credentials, joining a new class)
+
+```
+Student is logged in as existing Student
+↓
+Navigates to "Join a New Class"
+↓
+Enters join code → scopes the seat lookup to this join_code
+↓
+"Enter your first name and last name for this class"
+↓
+Backend:
+  compute name_lookup_hash (same as Path A)
+  SELECT seat FROM teacher_blocks
+    WHERE join_code = :join_code
+      AND name_lookup_hash = :hash
+      AND student_id IS NULL
+↓
+One match (or match + dedupe code if collision) →
+  attach existing Student.id to the seat
+  create ClassMembership for (student_id, join_code)
+  NO new Student record created
+  purge full last name data
+↓
+No match → "No unclaimed seat found for that name in this class"
+```
+
+This path is the correct approach when a student is already enrolled in one class and joins another. No account duplication occurs.
+
+---
+
+#### 11.3c Duplicate Account Resolution (edge case from Path A)
+
+If a student ends up with two Student records (e.g., they used Path A for a new class while already having credentials from a previous class), the resolution flow is:
+
+```
+Student logs in to either account
+↓
+Navigates to account settings → "I already have an account in another class"
+↓
+Enters the join_code of the class they want to rebind
+↓
+Backend:
+  finds their seat in that join_code (must be claimed by their other account)
+  verifies student can authenticate with that seat's credentials (or teacher issues a rebind code)
+  repoints the seat's student_id to the currently authenticated Student.id
+  old Student record is deleted (or archived) if it no longer belongs to any class
+```
+
+The source of truth for whether a seat is claimed is the presence of credential hashes, not any boolean flag. Rebinding replaces the credential link without creating an inconsistent state.
+
+---
+
+**What is collected vs. what is stored (both paths):**
 
 | Data | Collected | Stored | Purged |
 |------|-----------|--------|--------|
-| First name | Yes (form input) | Encrypted (`PIIEncryptedType`) on `IdentityProfile`/`TeacherBlock` | After setup: first initial kept, full first name purged |
-| Full last name | Yes (form input) | As `name_lookup_hash` (HMAC, irreversible) | Immediately — raw last name never written to disk |
-| Last initial | Derived from last name | Stored plaintext (low sensitivity, display only) | Never purged — used for teacher's roster display |
+| First name | Yes (form input) | Encrypted on seat/`IdentityProfile` | After setup: only first initial retained |
+| Full last name | Yes (form input) | As `name_lookup_hash` only (HMAC, irreversible) | Raw value never written to disk |
+| Last initial | Derived from last name | Plaintext (display in teacher roster) | Never — used for roster display |
 | DOB | Not collected | Not stored | N/A |
-| Dedupe code | Only when collision | Stored plaintext on seat (4 chars, not PII) | After claim |
+| Dedupe code | Only when collision | Plaintext on seat (4 chars, not PII) | Optionally nulled after claim |
 
 ---
 
