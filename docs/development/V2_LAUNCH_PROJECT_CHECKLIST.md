@@ -44,7 +44,7 @@ This checklist is derived from the active and supporting development docs below.
 
 - [ ] Project 6: Admin route structural refactor
 - [ ] Project 7: Class scope normalization and class-identity cleanup
-- [ ] Project 8: Backwards compatibility and schema cleanup
+- [x] Project 8: Backwards compatibility and schema cleanup
 - [ ] Project 9: Long-term identity-model convergence
 
 ## Global Launch Invariants
@@ -404,7 +404,7 @@ These rules appear repeatedly across the source docs and should be treated as no
 
 ### Scope
 
-- [ ] Remove `Admin.username` legacy plaintext username column once modern identifier audit supports it
+- [x] Remove `Admin.username` legacy plaintext username column once modern identifier audit supports it
 - [ ] Remove legacy username validator and lookup fallback
 - [ ] Remove `TeacherBlock.dob_sum` compatibility shim
 - [ ] Remove `StudentTeacher.admin_id` synonym
@@ -487,7 +487,7 @@ These rules appear repeatedly across the source docs and should be treated as no
 
 - [ ] Project 6
 - [ ] Project 7
-- [ ] Project 8
+- [x] Project 8
 - [ ] Project 9
 
 ## Notes For Execution

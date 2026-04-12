@@ -1,6 +1,6 @@
 # V2 Main Reconciliation Tracker
 
-**Last Updated:** 2026-04-08
+**Last Updated:** 2026-04-12
 **Source Branches:** `codex/v2.0` vs `origin/main`
 **Diff Snapshot:** `git rev-list --left-right --count codex/v2.0...origin/main` -> `143 51`
 **Purpose:** Current source of truth for features present on `origin/main` that have not yet been intentionally reconciled into `codex/v2.0`.

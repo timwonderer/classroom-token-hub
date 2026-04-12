@@ -1,6 +1,6 @@
 # V2 Launch Readiness Matrix
 
-**Last Updated:** 2026-04-08
+**Last Updated:** 2026-04-12
 **Scope:** `codex/v2.0` live-test candidate readiness, informed by the active v2 runbooks, migration review, historical checklist, and the main-reconciliation tracker.
 
 ## Status Vocabulary
@@ -27,7 +27,7 @@
 | Announcement visibility fix | `needs refresh` | reconciliation tracker | Teacher-facing announcement fix exists on `main`, not yet reconciled | Port and verify dashboard rendering |
 | Sysadmin tenancy audit | `defer until post-live-test` | `LOG-ARC-049` | Still tracked as unfinished historical follow-up | Convert to active audit if live testing exposes a concrete gap |
 | Archived-economy read-only policy | `defer until post-live-test` | `LOG-ARC-049` | Still undocumented as a final runtime contract | Publish policy before production only if the feature remains active scope |
-| Active-doc v2 compliance sweep | `done` | `docs/development/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`, `SOP-DOC-002` | Active v2 development docs are registered in the documentation index, and the focused active-doc link pass is clean after fixing the stale README support link | Re-run only if later production-required doc or workflow ports change active documentation links |
+| Active-doc v2 compliance sweep | `done` | `docs/development/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`, `SOP-DOC-002` | Constitutional documentation overhaul completed 2026-04-12; gaps in multi-tenancy, alerting, and ledger integrity resolved. Focused link pass verified. | Re-run only if later production-required doc or workflow ports change active documentation links |
 | Operations doc restructuring | `defer until post-live-test` | `DEVELOPMENT.md`, `SOP-DEP-022`, `SOP-DEP-023`, `SOP-DB-009` | Launch-critical runbook fixes are in scope now; broader SOP taxonomy and architecture-driven rewrite work is intentionally deferred until the admin-route and class-scope refactors land | Re-open after `V2_ADMIN_ROUTE_REFACTOR` and `V2_Class_Scope_Normalization_Target` are validated |
 
 ## Pre-Live-Test Blockers

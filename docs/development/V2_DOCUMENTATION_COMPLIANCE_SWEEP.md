@@ -1,6 +1,6 @@
 # V2 Documentation Compliance Sweep
 
-**Last Updated:** 2026-04-08
+**Last Updated:** 2026-04-12
 **Purpose:** Track active-document updates required so repository documentation matches current v2 runtime truth and launch framing.
 
 ## Active v2 Truth
@@ -22,6 +22,7 @@
 | Active v2 authority wording | `reviewed` | Searched active architecture/SOP/dev/user docs for `TeacherBlock`, `teacher_id`, numeric teacher ID, and fallback wording | No new blocking contradiction found in the actively referenced v2 docs beyond the already-known stale checklist path |
 | Documentation index coverage | `fixed` | The central documentation index did not list the active v2 tracker/readiness/compliance docs | Added the active v2 development docs to `SOP-DOC-002_Documentation_Index.md` |
 | Focused active-doc link validation | `fixed` | A focused active-doc link pass found a stale README support link to `docs/GITHUB_SITE/README.md` | Repointed the support link to `docs/README.md` and reran the focused link pass |
+| V2 Hardening Blueprint Coverage | `fixed` | Major gaps identified in multi-tenancy, join-code isolation, ledger integrity, and analytics alerting specs | Created 4 new constitutional documents (ARC-OPS-015, ARC-SYS-002, DOM-ECON-003, DOM-ECON-004) and updated identity spec ARC-IDEN-001 |
 | Historical development analyses | `defer` | Several development/historical docs still discuss legacy compatibility, `teacher_id`, or transition-only behavior | Preserve as historical unless they are promoted back into active guidance |
 
 ## Interpretation Rules
