@@ -49,11 +49,7 @@ from app.utils.passwordless_client import (
     verify_signin_token,
     get_public_api_key
 )
-from app.utils.username_migration import (
-    normalize_auth_username,
-    needs_hashed_username_migration,
-    build_hashed_username_fields,
-)
+from app.utils.auth_username import normalize_auth_username
 from app.utils.opaque_refs import make_opaque_ref, resolve_opaque_ref
 
 # Create blueprint
@@ -64,22 +60,13 @@ INACTIVITY_THRESHOLD_DAYS = 180  # Number of days of inactivity before highlight
 
 
 def _find_sysadmin_by_auth_username(username: str):
-    """Lookup sysadmin by hash, with migration-only legacy fallback."""
+    """Lookup sysadmin by lookup hash."""
     normalized = normalize_auth_username(username)
     if not normalized:
         return None
 
     lookup_hash = hash_username_lookup(normalized)
-    admin = SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
-    if admin:
-        return admin
-
-    # Migration-only fallback for legacy records that have not been hashed yet.
-    return SystemAdmin.query.filter(
-        SystemAdmin.username == normalized,
-        SystemAdmin.username_lookup_hash.is_(None),
-        SystemAdmin.username_hash.is_(None),
-    ).first()
+    return SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
 
 
 def _sysadmin_auth_username_exists(username: str, *, exclude_sysadmin_id: int | None = None) -> bool:
@@ -151,7 +138,7 @@ def login():
     session.pop("is_system_admin", None)
     session.pop("sysadmin_id", None)
     session.pop("last_activity", None)
-    session.pop("force_sysadmin_username_migration", None)
+    session.pop("force_sysadmin_username_migration", None)  # noqa: safety — no-op if key absent
     form = SystemAdminLoginForm()
     if form.validate_on_submit():
         username = normalize_auth_username(form.username.data)
@@ -175,7 +162,7 @@ def login():
                     )
                     totp_valid = False
                 if totp_valid:
-                    # Lazily encrypt any legacy plaintext TOTP secret.
+                    # Encrypt any plaintext TOTP secret on successful auth.
                     if not is_totp_encrypted(admin.totp_secret):
                         admin.totp_secret = encrypt_totp(decrypted_secret)
                         db.session.commit()
@@ -185,9 +172,6 @@ def login():
                     session['last_activity'] = utc_now().isoformat()
                     # Establish global maintenance bypass for subsequent role testing.
                     session['maintenance_global_bypass'] = True
-                    if needs_hashed_username_migration(admin):
-                        session["force_sysadmin_username_migration"] = True
-                        return redirect(url_for("sysadmin.username_migration"))
                     flash("System admin login successful.")
                     next_url = request.args.get("next")
                     redirect_target = None
@@ -207,55 +191,6 @@ def login():
     return render_template("system_admin_login.html", form=form)
 
 
-@sysadmin_bp.route('/username-migration', methods=['GET', 'POST'])
-@system_admin_required
-def username_migration():
-    """One-time migration screen for legacy plaintext sysadmin usernames."""
-    admin = db.session.get(SystemAdmin, session.get("sysadmin_id"))
-    if not admin:
-        flash("Account not found.", "error")
-        return redirect(url_for("sysadmin.login"))
-
-    if not needs_hashed_username_migration(admin):
-        session.pop("force_sysadmin_username_migration", None)
-        return redirect(url_for("sysadmin.dashboard"))
-
-    legacy_username = session.get("sysadmin_auth_username")
-    if not legacy_username:
-        flash("Could not determine your current username.", "error")
-        return redirect(url_for("sysadmin.logout"))
-
-    if request.method == "POST":
-        action = request.form.get("action", "continue")
-        chosen_username = legacy_username
-
-        if action == "update":
-            chosen_username = normalize_auth_username(request.form.get("new_username", ""))
-            if not chosen_username:
-                flash("Please enter a username.", "error")
-                return render_template("system_admin_username_migration.html", legacy_username=legacy_username)
-            if _sysadmin_auth_username_exists(chosen_username, exclude_sysadmin_id=admin.id):
-                flash("Username already exists. Choose a different username.", "error")
-                return render_template("system_admin_username_migration.html", legacy_username=legacy_username)
-
-        salt, username_hash, username_lookup_hash = build_hashed_username_fields(
-            chosen_username,
-            existing_salt=admin.salt,
-        )
-        admin.salt = salt
-        admin.username_hash = username_hash
-        admin.username_lookup_hash = username_lookup_hash
-        admin.username = None
-        db.session.commit()
-
-        session["sysadmin_auth_username"] = chosen_username
-        session.pop("force_sysadmin_username_migration", None)
-        flash("Username migration completed.", "success")
-        return redirect(url_for("sysadmin.dashboard"))
-
-    return render_template("system_admin_username_migration.html", legacy_username=legacy_username)
-
-
 @sysadmin_bp.route('/logout')
 def logout():
     """System admin logout."""
@@ -264,7 +199,7 @@ def logout():
     session.pop("last_activity", None)
     session.pop("sysadmin_auth_username", None)
     session.pop("passkey_sysadmin_auth_username", None)
-    session.pop("force_sysadmin_username_migration", None)
+    session.pop("force_sysadmin_username_migration", None)  # noqa: safety — no-op if key absent
     # Intentionally DO NOT remove maintenance_global_bypass so admin can test other roles.
     flash("Logged out.")
     return redirect(url_for("sysadmin.login"))

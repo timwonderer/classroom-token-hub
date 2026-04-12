@@ -105,7 +105,7 @@ from app.utils.display_name_session import (
     clear_admin_display_name_cache,
 )
 from app.utils.opaque_refs import make_opaque_ref, resolve_opaque_ref
-from app.utils.username_migration import (
+from app.utils.auth_username import (
     normalize_auth_username,
     needs_hashed_username_migration,
     build_hashed_username_fields,

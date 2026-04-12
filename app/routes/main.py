@@ -162,26 +162,6 @@ def service_worker():
     return current_app.send_static_file('sw.js')
 
 
-# -------------------- HALL PASS LEGACY TERMINAL/QUEUE (DEPRECATED) --------------------
-
-@main_bp.route('/hall-pass/terminal')
-def hall_pass_terminal():
-    """Deprecated legacy route kept for compatibility."""
-    return jsonify({
-        "status": "error",
-        "message": "Hall pass terminal is deprecated. Students must check out/check in from their dashboard."
-    }), 410
-
-
-@main_bp.route('/hall-pass/queue')
-def hall_pass_queue():
-    """Deprecated legacy route kept for compatibility."""
-    return jsonify({
-        "status": "error",
-        "message": "Hall pass queue display is deprecated. Use student self-service hall pass flow."
-    }), 410
-
-
 # -------------------- HALL PASS PUBLIC VERIFICATION (NO AUTH REQUIRED) --------------------
 
 def _get_school_timezone():

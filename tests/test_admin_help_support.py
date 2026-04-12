@@ -2,7 +2,7 @@ import pyotp
 
 from app import db
 from app.models import Admin, TeacherBlock, UserReport
-from app.utils.username_migration import build_hashed_username_fields
+from app.utils.auth_username import build_hashed_username_fields
 
 
 def _login_admin(client):

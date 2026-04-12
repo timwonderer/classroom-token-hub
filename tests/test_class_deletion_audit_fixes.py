@@ -27,7 +27,7 @@ from app.models import (
 )
 from app.hash_utils import get_random_salt, hash_hmac
 from tests.helpers.class_scope import create_class_scope
-from app.utils.username_migration import build_hashed_username_fields
+from app.utils.auth_username import build_hashed_username_fields
 
 
 # ---------------------------------------------------------------------------

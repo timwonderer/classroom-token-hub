@@ -1,4 +1,4 @@
-"""Helpers for migrating legacy plaintext usernames to hashed storage."""
+"""Auth username normalization and hashing utilities."""
 
 from __future__ import annotations
 

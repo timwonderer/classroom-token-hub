@@ -251,20 +251,12 @@ def _admin_has_join_code_scope(admin_id, join_code):
 
 
 def _apply_admin_join_code_scope(query, model, admin_id, accessible_student_ids_query):
-    """Apply join_code tenant scoping with legacy student_id fallback."""
+    """Apply join_code tenant scoping. In V2, join_code is always present."""
     join_code_scope, has_join_code_scope = _get_teacher_join_code_scope(admin_id)
     if has_join_code_scope:
         return query.filter(
-            sa.or_(
-                sa.and_(
-                    model.join_code.isnot(None),
-                    model.join_code.in_(sa.select(join_code_scope)),
-                ),
-                sa.and_(
-                    model.join_code.is_(None),
-                    model.student_id.in_(accessible_student_ids_query),
-                ),
-            )
+            model.join_code.isnot(None),
+            model.join_code.in_(sa.select(join_code_scope)),
         )
     return query.filter(model.student_id.in_(accessible_student_ids_query))
 
@@ -435,7 +427,6 @@ def purchase_item():
     per_use_rent_item = None
     has_privilege_link = False
     has_per_use_link = False
-    legacy_rent_perk_free_fallback = False
 
     if rent_settings and rent_settings.is_enabled:
         coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
@@ -465,9 +456,6 @@ def purchase_item():
             (ri for ri in rent_item_links
              if ri.rent_item_type == 'per_use' or (ri.rent_item_type == 'privilege' and ri.purchase_duration == 'per_use')),
             None
-        )
-        legacy_rent_perk_free_fallback = bool(
-            has_paid_rent and item.is_rent_linked and not has_privilege_link and not has_per_use_link
         )
 
     # Privilege-only rent items are already included when rent is paid and
@@ -529,7 +517,7 @@ def purchase_item():
     if (
         quantity == 1
         and item.item_type != 'hall_pass'
-        and (item.is_rent_linked or per_use_rent_item or legacy_rent_perk_free_fallback)
+        and (item.is_rent_linked or per_use_rent_item)
     ):
         # Look for an active StudentItem with uses_remaining for this store item
         rent_item_query = StudentItem.query.filter(
@@ -577,13 +565,8 @@ def purchase_item():
                 uses_remaining=per_use_rent_item.use_limit if per_use_rent_item.use_limit else -1
             )
             db.session.add(active_rent_item)
-        elif not active_rent_item and legacy_rent_perk_free_fallback:
-            # Legacy fallback: item is rent-linked and rent is paid, but there is no
-            # per-use grant row or explicit per-use rent linkage in this period.
-            # Allow $0 purchase without mutating uses_remaining grants.
-            active_rent_item = None
 
-        if active_rent_item or legacy_rent_perk_free_fallback:
+        if active_rent_item:
             purchase_message = f"You purchased {item.name} for $0 (rent perk)."
             if purchase_idempotency_key:
                 existing_purchase_tx = get_idempotent_transaction(purchase_idempotency_key)
@@ -633,9 +616,6 @@ def purchase_item():
                 uses_remaining=None,
             ))
             db.session.commit()
-
-            if legacy_rent_perk_free_fallback and not active_rent_item:
-                return jsonify({"status": "success", "message": purchase_message})
 
             remaining = active_rent_item.uses_remaining
             if remaining == -1:
@@ -1046,27 +1026,6 @@ def use_item():
     )
     fallback_block = context.get('block') if context else student.block
 
-    # Legacy compatibility: convert stale hall-pass inventory rows into actual pass balance.
-    # Hall-pass store purchases should not require redemption workflow.
-    if student_item.store_item and student_item.store_item.item_type == 'hall_pass':
-        try:
-            granted = max(1, int(student_item.quantity_purchased or 1))
-            student.hall_passes = (student.hall_passes or 0) + granted
-            student_item.status = 'redeemed'
-            student_item.redemption_date = utc_now()
-            student_item.redemption_details = (
-                f"{details}\n---\nConverted to {granted} hall pass(es).".strip()
-                if details else f"Converted to {granted} hall pass(es)."
-            )
-            db.session.commit()
-            return jsonify({
-                "status": "success",
-                "message": f"Added {granted} hall pass(es). Your new balance is {student.hall_passes}."
-            })
-        except (SQLAlchemyError, ValueError, TypeError) as e:
-            db.session.rollback()
-            current_app.logger.error(f"Hall pass conversion failed for student item {student_item.id}: {e}", exc_info=True)
-            return jsonify({"status": "error", "message": "An error occurred. Please try again."}), 500
 
     # Request action happens when item transitions into admin approval workflow.
     will_create_request = (
@@ -1300,38 +1259,13 @@ def reject_redemption():
             # Fallback to current store price if purchase transaction not found
             refund_amount = student_item.store_item.price
 
-        # 2. Refund the student
-        # Create refund transaction
-        # CRITICAL: Use join_code from student_item for proper scoping
-        # CRITICAL FIX: Handle legacy StudentItems without join_code
+        # 2. Refund the student — join_code must always be present in V2.
         refund_join_code = student_item.join_code
-        if not refund_join_code and purchase_tx and purchase_tx.join_code:
-            refund_join_code = purchase_tx.join_code
-
-        if not refund_join_code:
-            # Legacy StudentItem without join_code - resolve from student blocks
-            student = db.session.get(Student, student_item.student_id)
-            teacher_id = student_item.store_item.teacher_id
-
-            if student and student.block:
-                student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
-                if student_blocks:
-                    refund_join_code = get_join_code_for_student_period(
-                        student.id, student_blocks[0], teacher_id
-                    )
-
         if not refund_join_code:
             current_app.logger.error(
-                f"Unable to resolve join_code for legacy StudentItem {student_item.id} "
-                "during refund. Aborting to avoid unscoped transaction."
+                f"StudentItem {student_item.id} missing join_code during refund. Aborting to avoid unscoped transaction."
             )
             return jsonify({"status": "error", "message": "Unable to resolve class for refund."}), 400
-
-        if refund_join_code != student_item.join_code:
-            current_app.logger.warning(
-                f"Legacy StudentItem {student_item.id} missing join_code. "
-                f"Resolved to: {refund_join_code} for refund transaction."
-            )
 
         refund_tx, _created = create_idempotent_transaction(
             idempotency_key=student_item_refund_key(student_item.id, 'redemption-rejected'),
@@ -1459,15 +1393,6 @@ def handle_hall_pass_action(pass_id, action):
     return jsonify({"status": "error", "message": "Invalid action."}), 400
 
 
-@api_bp.route('/hall-pass/lookup/<string:pass_number>', methods=['GET'])
-def lookup_hall_pass(pass_number):
-    """Deprecated legacy route kept for compatibility."""
-    _ = pass_number
-    return jsonify({
-        "status": "error",
-        "message": "Hall pass terminal lookup is deprecated. Use student self-service hall pass flow."
-    }), 410
-
 
 def _get_default_timezone():
     """Return the configured default timezone or fall back to Pacific Time."""
@@ -1533,7 +1458,7 @@ def _enforce_hall_pass_student_context(student, log_entry):
     """
     Enforce active student class context for hall-pass state mutations.
 
-    If context cannot be resolved (legacy/test data), allow legacy ownership-only behavior.
+    If no class context is active, the check is skipped (student has not selected a class yet).
     """
     context = get_current_class_context()
     if not context:
@@ -1549,22 +1474,6 @@ def _enforce_hall_pass_student_context(student, log_entry):
     return None
 
 
-@api_bp.route('/hall-pass/terminal/use', methods=['POST'])
-def hall_pass_terminal_use():
-    """Deprecated legacy route kept for compatibility."""
-    return jsonify({
-        "status": "error",
-        "message": "Hall pass terminal checkout is deprecated. Students must check out from their dashboard."
-    }), 410
-
-
-@api_bp.route('/hall-pass/terminal/return', methods=['POST'])
-def hall_pass_terminal_return():
-    """Deprecated legacy route kept for compatibility."""
-    return jsonify({
-        "status": "error",
-        "message": "Hall pass terminal checkin is deprecated. Students must check in from their dashboard."
-    }), 410
 
 
 @api_bp.route('/hall-pass/cancel/<int:pass_id>', methods=['POST'])
@@ -1704,13 +1613,6 @@ def checkin_hall_pass():
         return jsonify({"status": "error", "message": "Database error."}), 500
 
 
-@api_bp.route('/hall-pass/queue', methods=['GET'])
-def get_hall_pass_queue():
-    """Deprecated legacy route kept for compatibility."""
-    return jsonify({
-        "status": "error",
-        "message": "Hall pass queue endpoint is deprecated. Use student self-service hall pass flow."
-    }), 410
 
 
 @api_bp.route('/hall-pass/settings', methods=['GET', 'POST'])
