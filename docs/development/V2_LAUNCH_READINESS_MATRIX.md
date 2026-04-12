@@ -23,8 +23,8 @@
 | Economy/rent launch-critical main deltas | `done` | `docs/development/V2_MAIN_RECONCILIATION_TRACKER.md`, focused regression run | The economy/rent wave has landed on `codex/v2.0`, including the CWI warning-bypass migration and focused economy/rent regression coverage | Re-run focused economy/rent tests only if launch-critical economy changes land before live testing |
 | Production transition runbook completeness | `done` | `SOP-DEP-023_V2_Production_Transition_Runbook.md` | Runbook now has named operator roles, current workflow references, launch-critical smoke coverage, and a production transition record template | Revisit only if deployment workflow or maintenance controls change materially |
 | Backup and restore rehearsal | `blocked` | `SOP-DEP-023`, `SOP-DEP-016`, operator process | Required by docs but not evidenced in repo-facing readiness artifacts | Record successful rehearsal on intended topology |
-| Maintenance-mode and deploy workflow safety | `needs refresh` | `SOP-DEP-023`, `.github/workflows/*`, reconciliation tracker | Workflow fix exists on `main` and is still pending on v2 | Port workflow fix and verify maintenance toggling path |
-| Announcement visibility fix | `needs refresh` | reconciliation tracker | Teacher-facing announcement fix exists on `main`, not yet reconciled | Port and verify dashboard rendering |
+| Maintenance-mode and deploy workflow safety | `done` | `SOP-DEP-023`, `.github/workflows/*`, reconciliation tracker | Workflow security hardening and host key verification landed | Port workflow fix and verify maintenance toggling path |
+| Announcement visibility fix | `done` | reconciliation tracker | Teacher-facing system announcement visibility query landed in admin.py | Port and verify dashboard rendering |
 | Sysadmin tenancy audit | `defer until post-live-test` | `LOG-ARC-049` | Still tracked as unfinished historical follow-up | Convert to active audit if live testing exposes a concrete gap |
 | Archived-economy read-only policy | `defer until post-live-test` | `LOG-ARC-049` | Still undocumented as a final runtime contract | Publish policy before production only if the feature remains active scope |
 | Active-doc v2 compliance sweep | `done` | `docs/development/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`, `SOP-DOC-002` | Constitutional documentation overhaul completed 2026-04-12; gaps in multi-tenancy, alerting, and ledger integrity resolved. Focused link pass verified. | Re-run only if later production-required doc or workflow ports change active documentation links |
@@ -46,10 +46,10 @@ These can follow live testing, but must be complete before a v2 production launc
 1. Port the production-required `origin/main` deltas:
    - insurance modularization and tiered setup flow
    - insurance pricing snapshots, approval caps, and claim time-limit gate
-   - collective goal reactivation instance codes
-   - transfer submission hardening
-   - maintenance workflow security fix
-   - teacher announcement visibility fix
+   - [x] collective goal reactivation instance codes
+   - [x] transfer submission hardening
+   - [x] maintenance workflow security fix
+   - [x] teacher announcement visibility fix
 2. Execute backup/restore rehearsal on the intended production topology.
 3. Record operator sign-off flow and reopen criteria in the production transition record.
 4. Resolve any live-test findings that touch authorization, migration safety, or financial correctness.

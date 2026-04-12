@@ -36,7 +36,7 @@ This checklist is derived from the active and supporting development docs below.
 
 ### Phase 2: Pre-Production Required Ports
 
-- [ ] Project 3: Low-conflict production fixes
+- [x] Project 3: Low-conflict production fixes
 - [ ] Project 4: Insurance reconciliation wave
 - [ ] Project 5: Production transition evidence
 
@@ -224,8 +224,8 @@ These rules appear repeatedly across the source docs and should be treated as no
 
 ### Exit Criteria
 
-- [ ] All production-required non-insurance `main` deltas in the tracker are landed or explicitly deferred by decision.
-- [ ] Workflow, announcement, transfer, and collective-goal checks pass.
+- [x] All production-required non-insurance `main` deltas in the tracker are landed or explicitly deferred by decision.
+- [x] Workflow, announcement, transfer, and collective-goal checks pass.
 
 ## Project 4: Insurance Reconciliation Wave
 
@@ -479,7 +479,7 @@ These rules appear repeatedly across the source docs and should be treated as no
 
 ### Must Be Complete Before Production
 
-- [ ] Project 3 complete
+- [x] Project 3 complete
 - [ ] Project 4 complete
 - [ ] Project 5 complete
 
