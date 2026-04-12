@@ -91,7 +91,8 @@ The platform favors simple, reliable technologies and predictable infrastructure
 ### Security Features
 
 - **PII Encryption** — All student names encrypted at rest
-- **Post-Claim PII Deletion** — DOB and name verification hashes automatically purged after account setup completes
+- **Post-Setup PII Cleanup** — DOB-derived values and last-name-part hashes automatically purged after account setup completes; only irreversible credential hashes retained
+- **DOB-Free Usernames** — Generated usernames contain no date-of-birth-derived component and may include limited name-derived initials; existing students with legacy usernames are migrated on next login
 - **TOTP for Admins** — Time-based one-time passwords required
 - **Teacher Account Recovery Model** — Teachers recover access through student-assisted recovery, or create a new account; inactive legacy accounts self-delete after 6 months
 - **CSRF Protection** — Protection against cross-site request forgery
