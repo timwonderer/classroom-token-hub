@@ -12,7 +12,7 @@
 <body class="legal-page">
   <div class="legal-container">
     <h1 class="legal-title">Classroom Token Hub Data Handling and Privacy Policy</h1>
-    <p class="legal-last-updated">Last Updated: March 13, 2026</p>
+    <p class="legal-last-updated">Last Updated: April 12, 2026</p>
 
     <h2>Purpose</h2>
     <p>This document explains the type of data you will provide in order to use this application, ways we handle and
@@ -40,7 +40,7 @@
       <h3>If you are a student user</h3>
       <p>When your teacher created your account, they have given us these information:</p>
       <ul>
-        <li><strong>Date of Birth</strong>: This is used to help us find you when you claim your account. We converted it into a long string of letters and numbers that cannot be turned back into your date of birth before saving it. After you claim your account, we delete this information.</li>
+        <li><strong>Date of Birth</strong>: Used only to verify your identity during account setup. We convert it to a numeric value for matching purposes and do not store your date of birth in its original form at any point. This value is permanently deleted from our systems once your account setup is complete.</li>
         <li><strong>First Name and Last Initial</strong>: We use this to say hello to you and for your teacher to find you.</li>
         <li><strong>Full Last Name</strong>: We convert this into a long string of letters and numbers that cannot be turned back into your last name before saving it. We use this to help us find you when you claim your account. After you claim your account, we delete this information.</li>
         <li><strong>Class Block</strong>: We use this to help your teacher organize their classes.</li>
@@ -50,9 +50,10 @@
       <div class="legal-additional-info">
         <p><strong>In addition, you will need to provide</strong></p>
         <ul>
-          <li><strong>Theme Word</strong>: A unique word that you associate with yourself; used to generate your login
-            username.</li>
-          <li><strong>PIN</strong>: A four- to six-digit code for logging into your account.</li>
+          <li><strong>Theme Word</strong>: A word you choose yourself, combined with a randomly generated number and
+            your initials to create your login username. Your username does not contain your date of birth or any
+            other personal information.</li>
+          <li><strong>PIN</strong>: A four- to eight-digit code for logging into your account.</li>
           <li><strong>Passphrase</strong>: A secret phrase used for multi-factor authentication and high-stakes actions.
           </li>
         </ul>
@@ -85,7 +86,7 @@
 
     <h2>Data Minimization & Retention</h2>
     <p>Classroom Token Hub rejects the practice of requesting and storing personally identifiable information (PII) beyond what is needed and longer than necessary. Because of this, we have designed our app to operate with very few PII elements. The list below represents our most recent policy in requesting, using, and retaining your data:</p>
-    <p><strong>Post-Claim PII Cleanup:</strong> During the account claiming process, we use student's first initial, last name by parts, and their date of birth to match the account you created when uploading roster or manualy entered. These information were needed to avoid duplication. After the student has claimed their account, their full last name and date of birth is fully removed from the database.</p>
+    <p><strong>Post-Setup PII Cleanup:</strong> During the account claiming process, we use a student's first initial, last name, and date of birth to match them to their pre-created class record. Once the student completes account setup — choosing a username and setting their PIN and passphrase — their date of birth and full last name are permanently deleted from the database. Application logs do not retain date of birth information.</p>
      <p><strong>Class Deletion:</strong> When a class is deleted by the teacher, all data associated with that class (connected by join code) immediately gets deleted off our database. Any student account that is not connected to another class will also be deleted. </p>
     <p><strong>No Classroom-State Backup:</strong> We do not maintain a restorable backup feature for individual classroom economies. If a class is deleted by teacher action or by system inactivity rules, that classroom state is not designed to be restored later.</p>
     <p><strong>Opaque identity</strong>: Both teacher and student identities are opaque to system administrators in normal operations. We can identify accounts primarily by opaque usernames, class labels, and technical identifiers rather than by student roster data.</p>
@@ -106,10 +107,10 @@
       <tbody>
         <tr>
           <td><strong>Student claim verification hashes</strong></td>
-          <td>Hashed student date of birth and hashed full last name used during account claim.</td>
+          <td>Student date of birth (held as a numeric sum) and hashed full last name, used to verify identity during account claim.</td>
           <td>Prevent duplicate claims and match a student to the pre-created class record.</td>
-          <td>Until the student successfully claims the account.</td>
-          <td>Removed as part of the account-claim completion flow.</td>
+          <td>Until the student completes account setup (username, PIN, and passphrase).</td>
+          <td>Deleted automatically when the student finishes the account setup flow.</td>
         </tr>
         <tr>
           <td><strong>Classroom economy data</strong></td>
