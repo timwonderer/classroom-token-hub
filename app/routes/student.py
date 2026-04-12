@@ -38,7 +38,8 @@ from app.auth import (
 )
 from app.forms import (
     StudentClaimAccountForm, StudentCreateUsernameForm, StudentPinPassphraseForm,
-    StudentLoginForm, InsuranceClaimForm, StudentCompleteProfileForm
+    StudentLoginForm, InsuranceClaimForm, StudentCompleteProfileForm,
+    StudentConfirmMigratedUsernameForm,
 )
 
 # Import utility functions
@@ -749,15 +750,14 @@ def claim_account():
                 seat.salt
             )
 
-            # Track match details for debugging
+            # Track match details for debugging — deliberately omit raw dob_sum
+            # values to prevent PII from persisting in application logs.
             dob_sum_matches = seat.dob_sum == dob_sum
             match_attempts.append({
                 'seat_id': seat.id,
                 'credential_matches': credential_matches,
                 'last_name_matches': last_name_matches,
                 'dob_sum_matches': dob_sum_matches,
-                'seat_dob_sum': seat.dob_sum,
-                'provided_dob_sum': dob_sum
             })
 
             if credential_matches and last_name_matches and dob_sum_matches:
@@ -948,14 +948,15 @@ def create_username():
             "lucky", "mighty", "noble", "quick", "proud", "silly", "witty", "zesty", "sunny", "chill"
         ]
         adjective = random.choice(adjectives)
-        dob_sum = student.dob_sum if student.dob_sum is not None else 0
+        uniquifier = random.randint(1000, 9999)
         initials = f"{student.first_name[0].upper()}{student.last_initial.upper()}"
-        username = f"{adjective}{write_in_word}{dob_sum}{initials}"
+        username = f"{adjective}{write_in_word}{uniquifier}{initials}"
         # Save username plaintext in session for display
         session['generated_username'] = username
-        # Hash and store in DB
+        # Hash and store in DB; mark as using the new PII-free username format
         student.username_hash = hash_username(username, student.salt)
         student.username_lookup_hash = hash_username_lookup(username)
+        student.username_migrated = True
         db.session.commit()
         # Clear theme prompt from session
         session.pop('theme_prompt', None)
@@ -1009,6 +1010,96 @@ def setup_pin_passphrase():
         flash("Setup completed successfully!", "setup")
         return redirect(url_for('student.setup_complete'))
     return render_template('student_pin_setup.html', username=username, form=form)
+
+
+# -------------------- USERNAME MIGRATION --------------------
+
+@student_bp.route('/migrate-username', methods=['GET', 'POST'])
+def migrate_username():
+    """One-time migration: let students with legacy DOB-embedded usernames pick a
+    new theme word and receive a fresh username that uses a random 4-digit suffix
+    instead of their date-of-birth sum.
+
+    Accessible only to logged-in students whose username_migrated flag is False.
+    """
+    student_id = session.get('student_id')
+    if not student_id:
+        return redirect(url_for('student.login'))
+
+    student = db.session.get(Student, student_id)
+    if not student or not student.has_completed_setup:
+        return redirect(url_for('student.login'))
+
+    # Already migrated — nothing to do
+    if student.username_migrated:
+        return redirect(url_for('student.dashboard'))
+
+    form = StudentCreateUsernameForm()
+
+    if 'theme_prompt' not in session:
+        selected_theme = random.choice(THEME_PROMPTS)
+        session['theme_slug'] = selected_theme['slug']
+        session['theme_prompt'] = selected_theme['prompt']
+
+    if form.validate_on_submit():
+        write_in_word = form.write_in_word.data.strip().lower()
+        if not write_in_word.isalpha() or len(write_in_word) < 3 or len(write_in_word) > 12:
+            flash("Please enter a valid word (3-12 letters, no numbers or spaces).", "migration")
+            return redirect(url_for('student.migrate_username'))
+
+        adjectives = [
+            "brave", "clever", "curious", "daring", "eager", "fancy", "gentle", "honest", "jolly", "kind",
+            "lucky", "mighty", "noble", "quick", "proud", "silly", "witty", "zesty", "sunny", "chill"
+        ]
+        adjective = random.choice(adjectives)
+        uniquifier = random.randint(1000, 9999)
+        initials = f"{student.first_name[0].upper()}{student.last_initial.upper()}"
+        new_username = f"{adjective}{write_in_word}{uniquifier}{initials}"
+
+        session['migration_username'] = new_username
+        session.pop('theme_prompt', None)
+        session.pop('theme_slug', None)
+        return redirect(url_for('student.confirm_migrated_username'))
+
+    return render_template(
+        'student_migrate_username.html',
+        theme_prompt=session['theme_prompt'],
+        form=form,
+    )
+
+
+@student_bp.route('/confirm-username-migration', methods=['GET', 'POST'])
+def confirm_migrated_username():
+    """Show the newly generated username to the student and, after they confirm
+    they have written it down, commit the new hashes and mark migration complete.
+    """
+    student_id = session.get('student_id')
+    new_username = session.get('migration_username')
+
+    if not student_id or not new_username:
+        return redirect(url_for('student.migrate_username'))
+
+    student = db.session.get(Student, student_id)
+    if not student or student.username_migrated:
+        session.pop('migration_username', None)
+        return redirect(url_for('student.dashboard'))
+
+    form = StudentConfirmMigratedUsernameForm()
+
+    if form.validate_on_submit():
+        student.username_hash = hash_username(new_username, student.salt)
+        student.username_lookup_hash = hash_username_lookup(new_username)
+        student.username_migrated = True
+        db.session.commit()
+        session.pop('migration_username', None)
+        flash("Your username has been updated. Use your new username next time you log in.", "success")
+        return redirect(url_for('student.dashboard'))
+
+    return render_template(
+        'student_confirm_migrated_username.html',
+        username=new_username,
+        form=form,
+    )
 
 
 # -------------------- ADD NEW CLASS --------------------
@@ -4210,6 +4301,17 @@ def login():
 
 
         # Removed redirect to student_setup for has_completed_setup; new onboarding flow uses claim → username → pin/passphrase.
+
+        # One-time username migration: redirect students whose usernames were
+        # generated with the old dob_sum format to pick a new theme word.
+        if not student.username_migrated:
+            if is_json:
+                return jsonify(
+                    status="success",
+                    message="Login successful",
+                    redirect=url_for('student.migrate_username'),
+                )
+            return redirect(url_for('student.migrate_username'))
 
         if is_json:
             return jsonify(status="success", message="Login successful")

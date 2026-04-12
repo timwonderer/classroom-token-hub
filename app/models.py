@@ -343,6 +343,10 @@ class Student(db.Model):
     dob_sum = db.Column(db.Integer, nullable=True)
     # Track if student has completed the legacy profile migration
     has_completed_profile_migration = db.Column(db.Boolean, default=False)
+    # True once the student's username uses a random suffix instead of dob_sum.
+    # False for all accounts created before this change — triggers the one-time
+    # username migration flow on next login.
+    username_migrated = db.Column(db.Boolean, default=False, nullable=False, server_default='false')
     # Legacy field retained for backward compatibility. New deletion flow removes
     # student records instead of using inactive/archived student state.
     is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
