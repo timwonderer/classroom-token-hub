@@ -14,6 +14,7 @@ def test_student_login_next_redirect(client):
         username_hash=hash_username(username, salt),
         pin_hash=generate_password_hash("1234"),
         has_completed_setup=True,
+        username_migrated=True,
     )
     db.session.add(stu)
     db.session.commit()

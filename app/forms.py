@@ -134,6 +134,11 @@ class StudentPinPassphraseForm(FlaskForm):
     passphrase = PasswordField('Passphrase', validators=[DataRequired()])
     submit = SubmitField('Finish Setup')
 
+class StudentConfirmMigratedUsernameForm(FlaskForm):
+    """CSRF-protected confirmation that the student has written down their new username."""
+    written_down_username = BooleanField("I have safely written down my new username", validators=[DataRequired()])
+    submit = SubmitField("I've saved my new username — continue")
+
 class StudentLoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
     pin = PasswordField('PIN', validators=[DataRequired()])

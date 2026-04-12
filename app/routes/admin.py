@@ -5103,6 +5103,7 @@ def add_individual_student():
             dob_sum=dob_sum,
             last_name_hash_by_part=last_name_parts,
             has_completed_setup=False,
+            username_migrated=True,
         )
 
         db.session.add(new_student)
@@ -5258,6 +5259,7 @@ def add_manual_student():
             hall_passes=hall_passes,
             is_rent_enabled=rent_enabled,
             has_completed_setup=setup_complete,
+            username_migrated=True,
         )
 
         # Set username if provided
