@@ -8,10 +8,30 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Security
+- **Student DOB Privacy Remediation (Phase 1)** — Comprehensive privacy hardening in response to school district review (PR #1142):
+  - **DOB removed from logs**: `seat_dob_sum` and `provided_dob_sum` stripped from failed-claim warning logs; only the boolean match result (`dob_sum_matches`) is retained for debugging.
+  - **DOB removed from usernames**: `create_username` now uses `random.randint(1000, 9999)` instead of `dob_sum`; new username format is `{adj}{word}{4digits}{initials}` with no PII component.
+  - **One-time username migration flow**: Existing students with DOB-based usernames are redirected to `/migrate-username` on next login, where they select a new theme word and receive a PII-free username. Two new routes (`migrate_username`, `confirm_migrated_username`) and two new templates.
+  - **Post-migration PII cleanup**: `dob_sum` and `last_name_hash_by_part` are nulled on the `Student` record after username migration, matching the cleanup behaviour in standard account setup.
+  - **New model field**: `username_migrated` boolean on `Student` (migration `b1c2d3e4f5a6`).
+  - **DOB privacy audit document**: Added `docs/AUDITS/PRIVACY_AUDIT_DOB_HANDLING_2026-04-12.md` with full data lifecycle analysis, risk inventory, and forward design spec for DOB-free claim flow aligned with v2.0.
+
 ### Added
 - **Admin: Reverse misapplied rent late fees** — New `POST /admin/rent/reverse-cycle-penalties` route lets teachers fix the current coverage cycle after a mid-cycle rate increase wrongly triggered late fees. For each student who paid the (now-locked) base rate on time but was charged a late fee, the route creates a `Rent Late Fee Reversal` transaction and zeroes out `late_fee_charged` / `was_late` on the affected `RentPayment` rows. Students who were genuinely late keep their fees. The action is available in a new **Corrections** tab on the Rent Settings page.
 
 ### Changed
+- **Privacy policy accuracy updates** — Comprehensive revision of `templates/privacy.html` for accuracy and school district review:
+  - Corrected DOB description: derived `dob_sum` value is deleted after account setup, not retained indefinitely.
+  - Corrected last name description: full last name hash deleted after initial account setup, not after claim.
+  - Renamed "Post-Claim PII Cleanup" to "Post-Setup PII Cleanup" throughout (cleanup happens at setup completion, not claim).
+  - Updated hashing description: Scrypt/PBKDF2 (via Werkzeug) instead of Argon2.
+  - Corrected PIN length range: "four- to eight-digit" (was "four- to six-digit").
+  - Reduced error log table retention: 90 days → 14 days.
+  - Simplified account recovery description: no longer requires students to re-enter PII; only join code and reset code are needed.
+  - Updated data breach notification section: in-app dashboard notification instead of direct contact (no email/phone collected).
+  - Added disclaimer to compliance section: designed to support FERPA/COPPA but no formal third-party audits performed.
+  - Consolidated error/telemetry retention windows to 14 days across all categories.
 - **OpenTelemetry tracing rollout and deploy configuration** — Added OpenTelemetry tracing support and corresponding deploy-time environment wiring, while trimming unnecessary global-context database work from the implementation path. (PR #1122)
 - **Documentation route validation hardening** — Added layered documentation link checks and repaired broken documentation routes so docs navigation and link validation stay aligned in CI and production. (PR #1117)
 - **Economy policy mode and rebalance workflow** — Added policy-aware economy profiles (`Tight`, `Default`, `Comfortable`) that drive CWI recommendations for rent, utilities, store pricing tiers, fines, savings targets, and insurance settings. Teachers can review economy health by class, preview rent and insurance rebalances, apply changes immediately or schedule them for the next payroll run, and receive live CWI guidance in rent, store, and insurance settings. Rebalance application now regenerates its change plan from current server-side state instead of trusting client-submitted preview JSON.
