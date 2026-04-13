@@ -3320,13 +3320,16 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
             valid_payments.append(payment)
             matched = True
             break
-        if not matched and has_app_context():
-            current_app.logger.warning(
-                "RentPayment id=%s (student=%s join_code=%s amount=%s) has no matching "
-                "non-void Transaction within %ss — treating as invalid.",
-                getattr(payment, 'id', '?'), student_id, join_code,
-                payment.amount_paid, RENT_PAYMENT_MATCH_TOLERANCE_SECONDS,
-            )
+        if not matched:
+            try:
+                current_app.logger.warning(
+                    "RentPayment id=%s (student=%s join_code=%s amount=%s) has no matching "
+                    "non-void Transaction within %ss — treating as invalid.",
+                    getattr(payment, 'id', '?'), student_id, join_code,
+                    payment.amount_paid, RENT_PAYMENT_MATCH_TOLERANCE_SECONDS,
+                )
+            except RuntimeError:
+                pass  # No app context — suppress logging outside request context.
 
     return valid_payments
 
@@ -4090,6 +4093,16 @@ def rent_pay(period):
 
     projected_balance = Decimal(str(checking_balance)) - payment_amount
 
+    # Pre-insert guard: abort if amount resolved to zero or less before touching the DB.
+    if payment_amount <= Decimal('0'):
+        current_app.logger.warning(
+            "Pre-insert guard triggered: payment_amount=%.2f <= 0 for student=%s period=%s "
+            "coverage=%s/%s — aborting without DB write.",
+            payment_amount, student.id, period, coverage_month, coverage_year,
+        )
+        flash("Payment amount resolved to zero; no payment was created.", "error")
+        return redirect(url_for('student.rent'))
+
     try:
         transaction = Transaction(
             student_id=student.id,
@@ -4112,17 +4125,6 @@ def rent_pay(period):
                 late_fee_for_this_payment = _quantize_currency((payment_amount / total_due) * late_fee)
             else:
                 late_fee_for_this_payment = _quantize_currency(late_fee)
-
-        # Pre-insert guard: abort if amount resolved to zero or less before writing.
-        if payment_amount <= Decimal('0'):
-            current_app.logger.warning(
-                "Pre-insert guard triggered: payment_amount=%.2f <= 0 for student=%s period=%s "
-                "coverage=%s/%s — rolling back.",
-                payment_amount, student.id, period, coverage_month, coverage_year,
-            )
-            db.session.rollback()
-            flash("Payment amount resolved to zero; no payment was created.", "error")
-            return redirect(url_for('student.rent'))
 
         # Record rent payment with coverage period (pre-paid system)
         payment = RentPayment(
