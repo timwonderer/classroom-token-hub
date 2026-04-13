@@ -3308,7 +3308,6 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
     valid_payments = []
     for payment in payments:
         candidates = txns_by_amount.get(-payment.amount_paid, [])
-        matched = False
         for txn in candidates:
             if txn.id in used_txn_ids or txn.is_void:
                 continue
@@ -3318,9 +3317,9 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
                 continue
             used_txn_ids.add(txn.id)
             valid_payments.append(payment)
-            matched = True
             break
-        if not matched:
+        else:
+            # No matching non-void Transaction found for this payment — log anomaly.
             try:
                 current_app.logger.warning(
                     "RentPayment id=%s (student=%s join_code=%s amount=%s) has no matching "
