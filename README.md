@@ -2,7 +2,7 @@
 
 An interactive banking and classroom management platform for teaching students about money while tracking classroom participation.
 
-**Version:** 1.9.0 (current public release)
+**Version:** 2.0.0 (live-test candidate)
 
 ---
 
@@ -12,7 +12,7 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
-**Project Status:** Version 1.9.0 is the current public release. Internal engineering work is currently centered on a **v2.0 live-test candidate** on `codex/v2.0`, where class scope is defined by `ClassEconomy` and `ClassMembership`, session class context is driven by `current_join_code`, and public teacher references use `teacher_public_id` / `public_id` instead of numeric teacher IDs. The current validated v2 branch state passed the PostgreSQL suite with `664 passed, 1 skipped`. See [DEVELOPMENT.md](DEVELOPMENT.md) for current readiness status, [LOG-REL-016_Release_Notes_V1.9.0.md](docs/LOGS/RELEASES/LOG-REL-016_Release_Notes_V1.9.0.md) for the public release, and [CHANGELOG.md](CHANGELOG.md) for ongoing changes.
+**Project Status:** Version 2.0.0 is the current live-test candidate. Class scope is defined by `ClassEconomy` and `ClassMembership`, session class context is driven by `current_join_code`, and public teacher references use `teacher_public_id` / `public_id` instead of numeric teacher IDs. The validated v2 branch state passed the PostgreSQL suite with `708 passed, 1 skipped`. See [DEVELOPMENT.md](DEVELOPMENT.md) for current readiness status and [CHANGELOG.md](CHANGELOG.md) for ongoing changes.
 
 ---
 
@@ -171,7 +171,7 @@ After cloning, configure git to use the versioned `hooks/` directory:
 This enables:
 
 - `post-checkout`: branch-aware `DATABASE_URL` switching
-  - `codex/v2.0` -> the protected v2 dev database
+  - `main` / `codex/v2.0` -> the v2 database
   - other branches -> `production_dev`
 - `pre-push`: migration-head safety checks
 
@@ -296,9 +296,9 @@ python scripts/seed_dummy_students.py # Seed test data
 
 ## Roadmap
 
-Active development priorities and the path to version 1.0 are tracked in [DEVELOPMENT.md](DEVELOPMENT.md).
+Active development priorities and v2.0 launch readiness are tracked in [DEVELOPMENT.md](DEVELOPMENT.md).
 
-**Version 1.0 Status:** All critical blockers (P0 and P1) have been resolved! The platform is ready for staging deployment and final validation before production release.
+**Version 2.0 Status:** The v2.0 live-test candidate is feature-complete and undergoing operational readiness validation. See the [v2 Launch Readiness Matrix](docs/development/V2_LAUNCH_READINESS_MATRIX.md) for current blockers and the [v2 Live-Test Runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md) for the operator workflow.
 
 ---
 
@@ -364,4 +364,4 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 Built for educators and students to make learning about finance engaging and practical.
 
-**Last Updated:** 2026-02-25
+**Last Updated:** 2026-04-12
