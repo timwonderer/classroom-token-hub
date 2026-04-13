@@ -6843,6 +6843,7 @@ def reverse_cycle_penalties():
         _get_locked_rent_amount_for_join_code_cycle,
         _calculate_rent_coverage_due_date,
         _calculate_rent_timeline,
+        _filter_valid_rent_payments,
         RENT_PAYMENT_MATCH_TOLERANCE_SECONDS,
     )
 
@@ -6895,18 +6896,14 @@ def reverse_cycle_penalties():
     # Group payments by student so we can evaluate per-student totals.
     from collections import defaultdict
     payments_by_student = defaultdict(list)
+    # Group cycle_payments by student first, then validate all at once per student.
+    by_student_raw = defaultdict(list)
     for pmt in cycle_payments:
-        # Validate payment against a non-void transaction (timestamp-based).
-        txn = Transaction.query.filter(
-            Transaction.student_id == pmt.student_id,
-            Transaction.type == 'Rent Payment',
-            Transaction.join_code == join_code,
-            Transaction.timestamp >= pmt.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
-            Transaction.timestamp <= pmt.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
-            Transaction.amount == -pmt.amount_paid,
-        ).first()
-        if txn and not txn.is_void:
-            payments_by_student[pmt.student_id].append(pmt)
+        by_student_raw[pmt.student_id].append(pmt)
+    for sid, pmts in by_student_raw.items():
+        valid = _filter_valid_rent_payments(pmts, sid, join_code)
+        if valid:
+            payments_by_student[sid].extend(valid)
 
     students_fixed = 0
     total_refunded = Decimal('0.00')

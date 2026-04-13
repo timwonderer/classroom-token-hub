@@ -1497,19 +1497,7 @@ def dashboard():
                 RentPayment.join_code == join_code
             ).all()
 
-            payments = []
-            for payment in all_payments_for_period:
-                txn = Transaction.query.filter(
-                    Transaction.student_id == student.id,
-                    Transaction.type == 'Rent Payment',
-                    Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
-                    Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
-                    Transaction.amount == -payment.amount_paid,
-                    Transaction.join_code == join_code
-                ).first()
-
-                if txn and not txn.is_void:
-                    payments.append(payment)
+            payments = _filter_valid_rent_payments(all_payments_for_period, student.id, join_code)
 
             total_paid = sum(p.amount_paid for p in payments) if payments else Decimal('0.00')
             paid_by_grace = _total_paid_by_grace(payments, grace_end_date_for_status)
@@ -3320,6 +3308,7 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
     valid_payments = []
     for payment in payments:
         candidates = txns_by_amount.get(-payment.amount_paid, [])
+        matched = False
         for txn in candidates:
             if txn.id in used_txn_ids or txn.is_void:
                 continue
@@ -3329,7 +3318,15 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
                 continue
             used_txn_ids.add(txn.id)
             valid_payments.append(payment)
+            matched = True
             break
+        if not matched and has_app_context():
+            current_app.logger.warning(
+                "RentPayment id=%s (student=%s join_code=%s amount=%s) has no matching "
+                "non-void Transaction within %ss — treating as invalid.",
+                getattr(payment, 'id', '?'), student_id, join_code,
+                payment.amount_paid, RENT_PAYMENT_MATCH_TOLERANCE_SECONDS,
+            )
 
     return valid_payments
 
@@ -3726,19 +3723,7 @@ def rent():
     ).all()
 
     # Filter out payments where the corresponding transaction was voided
-    payments = []
-    for payment in all_payments_for_period:
-        txn = Transaction.query.filter(
-            Transaction.student_id == student.id,
-            Transaction.type == 'Rent Payment',
-            Transaction.join_code == join_code,
-            Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
-            Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
-            Transaction.amount == -payment.amount_paid
-        ).first()
-
-        if txn and not txn.is_void:
-            payments.append(payment)
+    payments = _filter_valid_rent_payments(all_payments_for_period, student.id, join_code)
 
     total_paid = sum(p.amount_paid for p in payments) if payments else Decimal('0.00')
 
@@ -3965,21 +3950,7 @@ def rent_pay(period):
     ).all()
 
     # Filter out payments where the corresponding transaction was voided
-    existing_payments = []
-    for payment in all_payments:
-        # Find the transaction for this payment
-        txn = Transaction.query.filter(
-            Transaction.student_id == student.id,
-            Transaction.type == 'Rent Payment',
-            Transaction.join_code == join_code,
-            Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
-            Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
-            Transaction.amount == -payment.amount_paid
-        ).first()
-
-        # Only include if transaction exists and is not voided
-        if txn and not txn.is_void:
-            existing_payments.append(payment)
+    existing_payments = _filter_valid_rent_payments(all_payments, student.id, join_code)
 
     total_paid_so_far = sum(p.amount_paid for p in existing_payments) if existing_payments else Decimal('0.00')
 
@@ -4007,6 +3978,15 @@ def rent_pay(period):
 
     # Calculate remaining amount to pay
     remaining_amount = _quantize_currency(total_due - total_paid_so_far)
+
+    # Log anomaly: negative remaining balance indicates accounting inconsistency.
+    if remaining_amount < Decimal('0'):
+        current_app.logger.warning(
+            "Negative remaining_amount (%.2f) for student=%s period=%s coverage=%s/%s join_code=%s — "
+            "total_due=%.2f total_paid=%.2f. Continuing.",
+            remaining_amount, student.id, period, coverage_month, coverage_year, join_code,
+            total_due, total_paid_so_far,
+        )
 
     # Check if already fully paid
     if remaining_amount <= 0:
@@ -4077,6 +4057,27 @@ def rent_pay(period):
     if shortfall > 0:
         overdraft_shortfall = shortfall
 
+    # Duplicate submission guard: reject if the same student submitted a payment
+    # for the same coverage period within the last 5 seconds (soft guard only).
+    _dup_cutoff = utc_now() - timedelta(seconds=5)
+    _dup_check = RentPayment.query.filter(
+        RentPayment.student_id == student.id,
+        RentPayment.period == period,
+        RentPayment.coverage_month == coverage_month,
+        RentPayment.coverage_year == coverage_year,
+        RentPayment.join_code == join_code,
+        RentPayment.payment_date >= _dup_cutoff,
+    ).first()
+    if _dup_check:
+        current_app.logger.warning(
+            "Rapid-succession rent submission rejected: student=%s period=%s "
+            "coverage=%s/%s join_code=%s — prior payment id=%s submitted within 5s.",
+            student.id, period, coverage_month, coverage_year, join_code,
+            getattr(_dup_check, 'id', '?'),
+        )
+        flash("Payment already submitted. Please wait a moment before trying again.", "info")
+        return redirect(url_for('student.rent'))
+
     # FIX: Process payment with teacher_id
     # Deduct from checking account
     is_partial = settings.allow_incremental_payment and payment_mode == 'partial' and payment_amount < remaining_amount
@@ -4089,150 +4090,172 @@ def rent_pay(period):
 
     projected_balance = Decimal(str(checking_balance)) - payment_amount
 
-    transaction = Transaction(
-        student_id=student.id,
-        teacher_id=teacher_id,
-        join_code=join_code,  # CRITICAL: Add join_code for period isolation
-        amount=-payment_amount,
-        account_type='checking',
-        status=TransactionStatus.PENDING,
-        type='Rent Payment',
-        description=payment_description
-    )
-    student.transactions.append(transaction)
-    db.session.add(transaction)
-
-    # Calculate late fee portion for this payment (proportional if partial payment)
-    late_fee_for_this_payment = Decimal('0.00')
-    if is_late and late_fee > Decimal('0.00'):
-        # If this is a partial payment, allocate late fee proportionally
-        if is_partial:
-            late_fee_for_this_payment = _quantize_currency((payment_amount / total_due) * late_fee)
-        else:
-            late_fee_for_this_payment = _quantize_currency(late_fee)
-
-    # Record rent payment with coverage period (pre-paid system)
-    payment = RentPayment(
-        student_id=student.id,
-        period=period,
-        join_code=join_code,
-        amount_paid=payment_amount,
-        period_month=current_month,
-        period_year=current_year,
-        coverage_month=coverage_month,
-        coverage_year=coverage_year,
-        was_late=is_late,
-        late_fee_charged=late_fee_for_this_payment
-    )
-    db.session.add(payment)
-
-    db.session.flush()  # Flush to update balances without committing yet
-
-    # Handle overdraft protection transfer if savings covers a shortfall
-    if banking_settings and banking_settings.overdraft_protection_enabled and overdraft_shortfall > 0:
-        _transfer_cid = str(uuid.uuid4())
-        transfer_tx_withdraw = Transaction(
+    try:
+        transaction = Transaction(
             student_id=student.id,
             teacher_id=teacher_id,
             join_code=join_code,  # CRITICAL: Add join_code for period isolation
-            amount=-overdraft_shortfall,
-            account_type='savings',
-            status=TransactionStatus.PENDING,
-            type='Withdrawal',
-            description='Overdraft protection transfer to checking',
-            transfer_correlation_id=_transfer_cid,
-        )
-        transfer_tx_deposit = Transaction(
-            student_id=student.id,
-            teacher_id=teacher_id,
-            join_code=join_code,  # CRITICAL: Add join_code for period isolation
-            amount=overdraft_shortfall,
+            amount=-payment_amount,
             account_type='checking',
             status=TransactionStatus.PENDING,
-            type='Deposit',
-            description='Overdraft protection transfer from savings',
-            transfer_correlation_id=_transfer_cid,
+            type='Rent Payment',
+            description=payment_description
         )
-        db.session.add(transfer_tx_withdraw)
-        db.session.add(transfer_tx_deposit)
-        db.session.flush()  # Flush to update balances
+        student.transactions.append(transaction)
+        db.session.add(transaction)
 
-    # Check if overdraft fee should be charged (after overdraft protection)
-    fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=teacher_id, join_code=join_code)
+        # Calculate late fee portion for this payment (proportional if partial payment)
+        late_fee_for_this_payment = Decimal('0.00')
+        if is_late and late_fee > Decimal('0.00'):
+            # If this is a partial payment, allocate late fee proportionally
+            if is_partial:
+                late_fee_for_this_payment = _quantize_currency((payment_amount / total_due) * late_fee)
+            else:
+                late_fee_for_this_payment = _quantize_currency(late_fee)
 
-    # Award Hall Passes if rent is fully paid (top-off model)
-    passes_awarded = 0
-    # Only award if this payment completes full rent (not already fully paid)
-    if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
-        passes_awarded, _, _ = _ensure_rent_hall_pass_top_off(
-            student,
-            context,
-            settings=settings,
-            now=now,
-        )
-
-    # Grant per-use free uses if rent is fully paid
-    per_use_items_granted = 0
-    if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
-        from app.models import RentItem
-        per_use_items = RentItem.query.filter_by(
-            rent_setting_id=settings.id,
-            rent_item_type='per_use'
-        ).all()
-
-        for pu_item in per_use_items:
-            if not pu_item.store_item_id:
-                continue
-
-            # Check if student already has an active (non-expired) StudentItem with uses_remaining for this store item
-            existing = StudentItem.query.filter(
-                StudentItem.student_id == student.id,
-                StudentItem.store_item_id == pu_item.store_item_id,
-                db.or_(
-                    StudentItem.uses_remaining > 0,
-                    StudentItem.uses_remaining == -1
-                ),
-                StudentItem.join_code == join_code,
-                db.or_(
-                    StudentItem.expiry_date.is_(None),
-                    StudentItem.expiry_date > utc_now()
-                )
-            ).first()
-
-            if existing:
-                # Top-off: reset uses_remaining to the granted amount (or unlimited)
-                if pu_item.use_limit:
-                    existing.uses_remaining = pu_item.use_limit
-                else:
-                    existing.uses_remaining = -1
-                continue
-
-            # Calculate expiry (next rent due date)
-            expiry_date = None
-            if settings.first_rent_due_date:
-                from app.routes.api import _calculate_due_dates
-                now_ts = utc_now()
-                current_due, next_due = _calculate_due_dates(settings, now_ts)
-                if next_due:
-                    expiry_date = next_due
-
-            # Grant a free StudentItem with uses_remaining
-            granted_item = StudentItem(
-                student_id=student.id,
-                store_item_id=pu_item.store_item_id,
-                join_code=join_code,
-                purchase_date=utc_now(),
-                expiry_date=expiry_date,
-                status='purchased',
-                is_from_bundle=False,
-                quantity_purchased=1,
-                uses_remaining=pu_item.use_limit if pu_item.use_limit else -1
+        # Pre-insert guard: abort if amount resolved to zero or less before writing.
+        if payment_amount <= Decimal('0'):
+            current_app.logger.warning(
+                "Pre-insert guard triggered: payment_amount=%.2f <= 0 for student=%s period=%s "
+                "coverage=%s/%s — rolling back.",
+                payment_amount, student.id, period, coverage_month, coverage_year,
             )
-            db.session.add(granted_item)
-            per_use_items_granted += 1
+            db.session.rollback()
+            flash("Payment amount resolved to zero; no payment was created.", "error")
+            return redirect(url_for('student.rent'))
 
-    # Commit all transactions together
-    db.session.commit()
+        # Record rent payment with coverage period (pre-paid system)
+        payment = RentPayment(
+            student_id=student.id,
+            period=period,
+            join_code=join_code,
+            amount_paid=payment_amount,
+            period_month=current_month,
+            period_year=current_year,
+            coverage_month=coverage_month,
+            coverage_year=coverage_year,
+            was_late=is_late,
+            late_fee_charged=late_fee_for_this_payment
+        )
+        db.session.add(payment)
+
+        db.session.flush()  # Flush to update balances without committing yet
+
+        # Handle overdraft protection transfer if savings covers a shortfall
+        if banking_settings and banking_settings.overdraft_protection_enabled and overdraft_shortfall > 0:
+            _transfer_cid = str(uuid.uuid4())
+            transfer_tx_withdraw = Transaction(
+                student_id=student.id,
+                teacher_id=teacher_id,
+                join_code=join_code,  # CRITICAL: Add join_code for period isolation
+                amount=-overdraft_shortfall,
+                account_type='savings',
+                status=TransactionStatus.PENDING,
+                type='Withdrawal',
+                description='Overdraft protection transfer to checking',
+                transfer_correlation_id=_transfer_cid,
+            )
+            transfer_tx_deposit = Transaction(
+                student_id=student.id,
+                teacher_id=teacher_id,
+                join_code=join_code,  # CRITICAL: Add join_code for period isolation
+                amount=overdraft_shortfall,
+                account_type='checking',
+                status=TransactionStatus.PENDING,
+                type='Deposit',
+                description='Overdraft protection transfer from savings',
+                transfer_correlation_id=_transfer_cid,
+            )
+            db.session.add(transfer_tx_withdraw)
+            db.session.add(transfer_tx_deposit)
+            db.session.flush()  # Flush to update balances
+
+        # Check if overdraft fee should be charged (after overdraft protection)
+        fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=teacher_id, join_code=join_code)
+
+        # Award Hall Passes if rent is fully paid (top-off model)
+        passes_awarded = 0
+        # Only award if this payment completes full rent (not already fully paid)
+        if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
+            passes_awarded, _, _ = _ensure_rent_hall_pass_top_off(
+                student,
+                context,
+                settings=settings,
+                now=now,
+            )
+
+        # Grant per-use free uses if rent is fully paid
+        per_use_items_granted = 0
+        if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
+            from app.models import RentItem
+            per_use_items = RentItem.query.filter_by(
+                rent_setting_id=settings.id,
+                rent_item_type='per_use'
+            ).all()
+
+            for pu_item in per_use_items:
+                if not pu_item.store_item_id:
+                    continue
+
+                # Check if student already has an active (non-expired) StudentItem with uses_remaining for this store item
+                existing = StudentItem.query.filter(
+                    StudentItem.student_id == student.id,
+                    StudentItem.store_item_id == pu_item.store_item_id,
+                    db.or_(
+                        StudentItem.uses_remaining > 0,
+                        StudentItem.uses_remaining == -1
+                    ),
+                    StudentItem.join_code == join_code,
+                    db.or_(
+                        StudentItem.expiry_date.is_(None),
+                        StudentItem.expiry_date > utc_now()
+                    )
+                ).first()
+
+                if existing:
+                    # Top-off: reset uses_remaining to the granted amount (or unlimited)
+                    if pu_item.use_limit:
+                        existing.uses_remaining = pu_item.use_limit
+                    else:
+                        existing.uses_remaining = -1
+                    continue
+
+                # Calculate expiry (next rent due date)
+                expiry_date = None
+                if settings.first_rent_due_date:
+                    from app.routes.api import _calculate_due_dates
+                    now_ts = utc_now()
+                    current_due, next_due = _calculate_due_dates(settings, now_ts)
+                    if next_due:
+                        expiry_date = next_due
+
+                # Grant a free StudentItem with uses_remaining
+                granted_item = StudentItem(
+                    student_id=student.id,
+                    store_item_id=pu_item.store_item_id,
+                    join_code=join_code,
+                    purchase_date=utc_now(),
+                    expiry_date=expiry_date,
+                    status='purchased',
+                    is_from_bundle=False,
+                    quantity_purchased=1,
+                    uses_remaining=pu_item.use_limit if pu_item.use_limit else -1
+                )
+                db.session.add(granted_item)
+                per_use_items_granted += 1
+
+        # Commit all transactions together
+        db.session.commit()
+
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "rent_pay: unhandled error during payment commit for student=%s period=%s "
+            "coverage=%s/%s join_code=%s — rolled back.",
+            student.id, period, coverage_month, coverage_year, join_code,
+        )
+        flash("An unexpected error occurred while processing your payment. No charges were made. Please try again.", "error")
+        return redirect(url_for('student.rent'))
 
     # Calculate new totals after this payment
     new_total_paid = total_paid_so_far + payment_amount
