@@ -43,7 +43,7 @@ Werkzeug==3.1.8
 zope.event==5.0
 # TODO: [DEPENDABOT PR #848] zope.interface 8.x is a major version change. Review for
 # breaking changes (transitive dep for gevent) before upgrading from 7.2 to 8.2
-zope.interface==7.2
+zope.interface==8.3
 python-dateutil==2.9.0.post0
 cryptography==46.0.7
 Flask-WTF==1.2.2
