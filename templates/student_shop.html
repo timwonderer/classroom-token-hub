@@ -915,6 +915,10 @@
         document.getElementById('usePassphrase').focus();
     });
 
+    document.getElementById('useItemForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+    });
+
     document.getElementById('confirmUseBtn').addEventListener('click', () => {
         const form = document.getElementById('useItemForm');
         const itemId = form.querySelector('#useModalItemId').value;
@@ -929,7 +933,7 @@
 
         const requestBody = {
             student_item_id: itemId,
-            passphrase: passphrase,
+            passphrase,
         };
 
         // Include redemption details if provided
