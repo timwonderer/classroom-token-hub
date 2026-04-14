@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "disable_existing_loggers": false,
+  "formatters": {
+    "json": {
+      "()": "gunicorn_json_logging.GunicornJsonFormatter"
+    }
+  },
+  "handlers": {
+    "stdout": {
+      "class": "logging.StreamHandler",
+      "formatter": "json",
+      "stream": "ext://sys.stdout"
+    },
+    "stderr": {
+      "class": "logging.StreamHandler",
+      "formatter": "json",
+      "stream": "ext://sys.stderr"
+    }
+  },
+  "root": {
+    "handlers": ["stderr"],
+    "level": "CRITICAL"
+  },
+  "loggers": {
+    "gunicorn.access": {
+      "handlers": ["stdout"],
+      "level": "INFO",
+      "propagate": false
+    },
+    "gunicorn.error": {
+      "handlers": ["stderr"],
+      "level": "INFO",
+      "propagate": false
+    }
+  }
+}
