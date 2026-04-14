@@ -1,0 +1,37 @@
+# INV-ARC-006 — Command Boundary for Mutation
+
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| INV-ARC-006      | 1.0     | 2026-04-13     | N/A        | Foundational    |
+
+## I. Purpose
+
+Define the mutation boundary for all runtime behavior.
+
+## II. Scope
+
+Applies to all state mutation.
+
+## III. Authority Level
+
+Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-000`.
+
+## IV. Dependencies
+
+- `INV-ARC-003_Scoped_Capability_Evaluation.md`
+
+## V. Core Rule
+
+All state mutation MUST occur inside explicit domain commands.
+
+Mutation during:
+
+- capability evaluation
+- query execution
+- request rendering
+
+is forbidden.
+
+## VI. Amendment
+
+Revisions must preserve explicit command-only mutation.
