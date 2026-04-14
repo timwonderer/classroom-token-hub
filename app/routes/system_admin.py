@@ -967,6 +967,34 @@ def delete_admin(admin_id):
             TeacherBlock.query.filter(TeacherBlock.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
             Student.query.filter(Student.id.in_(exclusive_student_ids)).delete(synchronize_session=False)
 
+        # Teacher-specific Cleanup
+        # Explicit delete to ensure no orphans and to clear PII (like RecoveryRequest.dob_sum_hash)
+        from app.models import (
+            RecoveryRequest, DeletionRequest, AdminCredential, RentWaiver, InsurancePolicy,
+            StoreItem, HallPassSettings, PayrollSettings, PayrollFine, PayrollReward, BankingSettings,
+            RedemptionAuditLog, Issue, RentSettings, AdminInviteCode, TeacherBlock, StudentBlock
+        )
+        RecoveryRequest.query.filter_by(admin_id=admin.id).delete(synchronize_session=False)
+        DeletionRequest.query.filter_by(admin_id=admin.id).delete(synchronize_session=False)
+        AdminCredential.query.filter_by(admin_id=admin.id).delete(synchronize_session=False)
+        RentWaiver.query.filter_by(created_by_admin_id=admin.id).delete(synchronize_session=False)
+        InsurancePolicy.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        StoreItem.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        HallPassSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        PayrollSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        PayrollFine.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        PayrollReward.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        BankingSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        RedemptionAuditLog.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        Issue.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        RentSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        AdminInviteCode.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        
+        # Finally, delete any remaining teacher blocks or student blocks linked to the teacher directly
+        TeacherBlock.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        StudentBlock.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        StudentTeacher.query.filter_by(admin_id=admin.id).delete(synchronize_session=False)
+
         admin_username = admin.get_sysadmin_display_name()
         db.session.delete(admin)
         db.session.commit()
