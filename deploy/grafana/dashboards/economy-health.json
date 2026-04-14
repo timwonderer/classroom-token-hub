@@ -89,7 +89,7 @@
             "uid": "af7twgenf3d34e"
           },
           "editorMode": "code",
-          "expr": "last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_failed\" | unwrap failure_total)[$__range])",
+          "expr": "max(last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_failed\" | unwrap failure_total)[$__range]))",
           "queryType": "range",
           "refId": "A"
         }
@@ -153,7 +153,7 @@
             "uid": "af7twgenf3d34e"
           },
           "editorMode": "code",
-          "expr": "last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"ledger_balance_consistency\" | unwrap failure_count)[$__range])",
+          "expr": "max(last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"ledger_balance_consistency\" | unwrap failure_count)[$__range]))",
           "legendFormat": "Ledger",
           "queryType": "range",
           "refId": "A"
@@ -164,7 +164,7 @@
             "uid": "af7twgenf3d34e"
           },
           "editorMode": "code",
-          "expr": "last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"idempotency_key_uniqueness\" | unwrap failure_count)[$__range])",
+          "expr": "max(last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"idempotency_key_uniqueness\" | unwrap failure_count)[$__range]))",
           "legendFormat": "Idempotency",
           "queryType": "range",
           "refId": "B"
@@ -175,7 +175,7 @@
             "uid": "af7twgenf3d34e"
           },
           "editorMode": "code",
-          "expr": "last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"balance_rules\" | unwrap failure_count)[$__range])",
+          "expr": "max(last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"balance_rules\" | unwrap failure_count)[$__range]))",
           "legendFormat": "Balance Rules",
           "queryType": "range",
           "refId": "C"
@@ -240,7 +240,7 @@
             "uid": "af7twgenf3d34e"
           },
           "editorMode": "code",
-          "expr": "last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"transaction_state_validity\" | unwrap failure_count)[$__range])",
+          "expr": "max(last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"transaction_state_validity\" | unwrap failure_count)[$__range]))",
           "legendFormat": "State",
           "queryType": "range",
           "refId": "A"
@@ -251,7 +251,7 @@
             "uid": "af7twgenf3d34e"
           },
           "editorMode": "code",
-          "expr": "last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"temporal_integrity\" | unwrap failure_count)[$__range])",
+          "expr": "max(last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"temporal_integrity\" | unwrap failure_count)[$__range]))",
           "legendFormat": "Temporal",
           "queryType": "range",
           "refId": "B"
@@ -262,7 +262,7 @@
             "uid": "af7twgenf3d34e"
           },
           "editorMode": "code",
-          "expr": "last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"money_supply_integrity\" | unwrap failure_count)[$__range])",
+          "expr": "max(last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"money_supply_integrity\" | unwrap failure_count)[$__range]))",
           "legendFormat": "Money Supply",
           "queryType": "range",
           "refId": "C"
@@ -300,7 +300,7 @@
             "uid": "af7twgenf3d34e"
           },
           "editorMode": "code",
-          "expr": "{service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | failure_count > 0",
+          "expr": "{service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | endpoint=\"/health/invariants\" | failure_count > 0",
           "queryType": "range",
           "refId": "A"
         }
