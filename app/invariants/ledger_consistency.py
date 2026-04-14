@@ -64,6 +64,7 @@ def run():
                 "name": "ledger_balance_consistency",
                 "status": "FAIL",
                 "details": f"{len(rows)} balance cache mismatch(es) detected",
+                "failure_count": len(rows),
                 "mismatch_count": len(rows),
             }
 
@@ -73,5 +74,6 @@ def run():
         return {
             "name": "ledger_balance_consistency",
             "status": "FAIL",
-            "details": str(e),
+            "details": "Invariant query failed",
+            "failure_count": 1,
         }

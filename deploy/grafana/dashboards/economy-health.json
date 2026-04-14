@@ -1,0 +1,333 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "panels": [],
+      "title": "Economy Invariants",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "af7twgenf3d34e"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "af7twgenf3d34e"
+          },
+          "editorMode": "code",
+          "expr": "last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_failed\" | unwrap failure_total)[$__range])",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Invariant Failures",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "af7twgenf3d34e"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 10,
+        "x": 4,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "af7twgenf3d34e"
+          },
+          "editorMode": "code",
+          "expr": "last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"ledger_balance_consistency\" | unwrap failure_count)[$__range])",
+          "legendFormat": "Ledger",
+          "queryType": "range",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "af7twgenf3d34e"
+          },
+          "editorMode": "code",
+          "expr": "last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"idempotency_key_uniqueness\" | unwrap failure_count)[$__range])",
+          "legendFormat": "Idempotency",
+          "queryType": "range",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "af7twgenf3d34e"
+          },
+          "editorMode": "code",
+          "expr": "last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"balance_rules\" | unwrap failure_count)[$__range])",
+          "legendFormat": "Balance Rules",
+          "queryType": "range",
+          "refId": "C"
+        }
+      ],
+      "title": "Invariant Failure Counts",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "af7twgenf3d34e"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 10,
+        "x": 14,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "af7twgenf3d34e"
+          },
+          "editorMode": "code",
+          "expr": "last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"transaction_state_validity\" | unwrap failure_count)[$__range])",
+          "legendFormat": "State",
+          "queryType": "range",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "af7twgenf3d34e"
+          },
+          "editorMode": "code",
+          "expr": "last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"temporal_integrity\" | unwrap failure_count)[$__range])",
+          "legendFormat": "Temporal",
+          "queryType": "range",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "af7twgenf3d34e"
+          },
+          "editorMode": "code",
+          "expr": "last_over_time(({service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | check=\"money_supply_integrity\" | unwrap failure_count)[$__range])",
+          "legendFormat": "Money Supply",
+          "queryType": "range",
+          "refId": "C"
+        }
+      ],
+      "title": "Invariant Failure Counts",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "af7twgenf3d34e"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 5,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "af7twgenf3d34e"
+          },
+          "editorMode": "code",
+          "expr": "{service=\"classroom-economy\"} | json | logger=\"app.services.invariant_runner\" | message=\"invariant_check_summary\" | failure_count > 0",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Invariant Failure Details",
+      "type": "logs"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "economy",
+    "health",
+    "invariants"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Economy Health",
+  "uid": "economy-health",
+  "version": 1,
+  "weekStart": ""
+}

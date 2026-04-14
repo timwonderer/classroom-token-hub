@@ -101,6 +101,32 @@ def test_default_log_formatter_emits_json_with_request_context():
     assert "timestamp" in payload
 
 
+def test_default_log_formatter_preserves_custom_extra_fields():
+    app = create_app()
+    handler = app.logger.handlers[0]
+
+    record = app.logger.makeRecord(
+        app.logger.name,
+        logging.INFO,
+        __file__,
+        0,
+        "Structured extra probe",
+        args=(),
+        exc_info=None,
+        extra={
+            "failure_total": 3,
+            "failed_checks": [{"name": "money_supply_integrity", "failure_count": 3}],
+            "details": "Money supply drift",
+        },
+    )
+
+    payload = json.loads(handler.format(record))
+
+    assert payload["failure_total"] == 3
+    assert payload["failed_checks"] == [{"name": "money_supply_integrity", "failure_count": 3}]
+    assert payload["details"] == "Money supply drift"
+
+
 def test_handled_http_error_creates_structured_error_event(client):
     app = client.application
 

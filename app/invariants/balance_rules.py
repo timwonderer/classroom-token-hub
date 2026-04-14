@@ -33,9 +33,10 @@ def run():
             WHERE posted_savings_balance_cents < 0
         """)).fetchall()
 
+        savings_count = len(savings_violations)
         if savings_violations:
             violations.append(
-                f"{len(savings_violations)} student(s) with negative savings balance"
+                f"{savings_count} student(s) with negative savings balance"
             )
 
         # Rule 2: Checking balance may only be negative if overdraft protection
@@ -49,9 +50,10 @@ def run():
               AND bs.overdraft_protection_enabled = FALSE
         """)).fetchall()
 
+        checking_count = len(checking_violations)
         if checking_violations:
             violations.append(
-                f"{len(checking_violations)} student(s) with negative checking balance"
+                f"{checking_count} student(s) with negative checking balance"
                 " and overdraft protection explicitly disabled"
             )
 
@@ -60,6 +62,7 @@ def run():
                 "name": "balance_rules",
                 "status": "FAIL",
                 "details": "; ".join(violations),
+                "failure_count": savings_count + checking_count,
             }
 
         return {"name": "balance_rules", "status": "PASS"}
@@ -68,5 +71,6 @@ def run():
         return {
             "name": "balance_rules",
             "status": "FAIL",
-            "details": str(e),
+            "details": "Invariant query failed",
+            "failure_count": 1,
         }

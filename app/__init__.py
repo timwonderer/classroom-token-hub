@@ -102,6 +102,17 @@ def format_datetime(value, fmt='%Y-%m-%d %I:%M %p'):
 # -------------------- APPLICATION FACTORY --------------------
 
 REQUEST_ID_HEADERS = ("X-Request-Id", "X-Correlation-Id")
+_STANDARD_LOG_RECORD_FIELDS = frozenset(logging.makeLogRecord({}).__dict__.keys()) | {"message", "asctime"}
+
+
+def _serialize_log_value(value):
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, dict):
+        return {str(key): _serialize_log_value(val) for key, val in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_serialize_log_value(item) for item in value]
+    return str(value)
 
 
 class RequestIdFilter(logging.Filter):
@@ -168,6 +179,11 @@ class JsonLogFormatter(logging.Formatter):
         route = getattr(record, "route", None)
         if route is not None:
             payload["route"] = route
+
+        for key, value in record.__dict__.items():
+            if key in _STANDARD_LOG_RECORD_FIELDS or key in payload or key.startswith("_"):
+                continue
+            payload[key] = _serialize_log_value(value)
 
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
