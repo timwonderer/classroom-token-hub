@@ -992,6 +992,19 @@ def delete_admin(admin_id):
             db.session.query(RentSettings.id).filter_by(teacher_id=admin.id)
         )).delete(synchronize_session=False)
 
+        # Fix: Delete RedemptionAuditLog rows that reference StudentItems about to be deleted.
+        # redemption_audit_logs.student_item_id has no ON DELETE CASCADE, so FK violation
+        # would occur if any audit log (including those with teacher_id=NULL) references
+        # a StudentItem we are about to delete.
+        student_item_ids_to_delete = db.session.query(StudentItem.id).filter(
+            StudentItem.store_item_id.in_(
+                db.session.query(StoreItem.id).filter_by(teacher_id=admin.id)
+            )
+        )
+        RedemptionAuditLog.query.filter(
+            RedemptionAuditLog.student_item_id.in_(student_item_ids_to_delete)
+        ).delete(synchronize_session=False)
+
         # Fix: StudentItem doesn't have teacher_id, must filter by store_item_id
         StudentItem.query.filter(StudentItem.store_item_id.in_(
             db.session.query(StoreItem.id).filter_by(teacher_id=admin.id)

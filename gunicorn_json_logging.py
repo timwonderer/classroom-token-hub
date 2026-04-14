@@ -6,14 +6,34 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 DEFAULT_ACCESS_LOG_TIMEZONE = "America/Los_Angeles"
+_access_log_timezone_warning_emitted = False
 
 
 def _resolve_access_log_timezone():
+    global _access_log_timezone_warning_emitted
+
     tz_name = os.getenv("GUNICORN_ACCESS_LOG_TIMEZONE", DEFAULT_ACCESS_LOG_TIMEZONE).strip() or DEFAULT_ACCESS_LOG_TIMEZONE
     try:
         return tz_name, ZoneInfo(tz_name)
     except ZoneInfoNotFoundError:
+        if not _access_log_timezone_warning_emitted:
+            logging.getLogger(__name__).warning(
+                "Unable to resolve access log timezone %r; falling back to %r",
+                tz_name,
+                DEFAULT_ACCESS_LOG_TIMEZONE,
+            )
+            _access_log_timezone_warning_emitted = True
+
+    try:
         return DEFAULT_ACCESS_LOG_TIMEZONE, ZoneInfo(DEFAULT_ACCESS_LOG_TIMEZONE)
+    except ZoneInfoNotFoundError:
+        if not _access_log_timezone_warning_emitted:
+            logging.getLogger(__name__).warning(
+                "Unable to resolve default access log timezone %r; falling back to UTC",
+                DEFAULT_ACCESS_LOG_TIMEZONE,
+            )
+            _access_log_timezone_warning_emitted = True
+        return "UTC", timezone.utc
 
 
 def _format_local_access_timestamp(created):
@@ -22,9 +42,8 @@ def _format_local_access_timestamp(created):
     return local_dt.strftime("[%d/%b/%Y:%H:%M:%S %z]")
 
 
-def _format_access_message(atoms, timestamp_local):
-    remote_addr = atoms.get("h", "-")
-    user = atoms.get("u", "-")
+def _resolve_request_line(atoms):
+    """Return the request line string, synthesizing it from method/path/protocol if 'r' is absent."""
     request_line = atoms.get("r")
     if not request_line:
         method = atoms.get("m", "-")
@@ -33,6 +52,13 @@ def _format_access_message(atoms, timestamp_local):
         target = f"{path}{query_string}" if query_string and query_string != "-" else path
         protocol = atoms.get("H", "-")
         request_line = f"{method} {target} {protocol}"
+    return request_line
+
+
+def _format_access_message(atoms, timestamp_local):
+    remote_addr = atoms.get("h", "-")
+    user = atoms.get("u", "-")
+    request_line = _resolve_request_line(atoms)
     status = atoms.get("s", "-")
     response_bytes = atoms.get("B", "-")
     referer = atoms.get("f", "-")
@@ -66,7 +92,7 @@ class GunicornJsonFormatter(logging.Formatter):
                 "timestamp_local": timestamp_local,
                 "remote_addr": atoms.get("h"),
                 "user": atoms.get("u"),
-                "request_line": atoms.get("r"),
+                "request_line": _resolve_request_line(atoms),
                 "method": atoms.get("m"),
                 "path": atoms.get("U"),
                 "query_string": query_string,

@@ -84,6 +84,9 @@ def _safe_check(check):
             "failure_count": 1,
         }
 
+    # Pop details so it stays in logs but never flows into the HTTP response.
+    # Raw check results may include DB error strings or other internal data in
+    # "details" that must not be exposed to callers of /health/invariants.
     details = raw.get("details")
     if details:
         logger.warning(
@@ -107,8 +110,8 @@ def run_invariants():
         logger.info(
             "invariant_check_summary",
             extra={
-                "check": check["name"],
-                "check_status": check["status"],
+                "check": check.get("name", "unknown"),
+                "check_status": check.get("status", "UNKNOWN"),
                 "failure_count": check.get("failure_count", 0),
                 "details": check.get("details"),
             },
@@ -121,7 +124,10 @@ def run_invariants():
         "status": "FAIL" if failed else "PASS",
         "failed_count": len(failed),
         "failure_total": sum(check.get("failure_count", 0) for check in failed),
-        "checks": checks,
+        # Strip "details" from each check before returning in the HTTP response:
+        # raw check dicts may carry DB error strings or other internal info that
+        # must not be exposed to external callers of /health/invariants.
+        "checks": [{k: v for k, v in c.items() if k != "details"} for c in checks],
         "duration_ms": duration_ms,
         "timestamp": utc_now().isoformat().replace("+00:00", "Z"),
     }
@@ -138,7 +144,7 @@ def run_invariants():
     if failed:
         log_extra["failed_checks"] = [
             {
-                "name": c["name"],
+                "name": c.get("name", "unknown"),
                 "failure_count": c.get("failure_count", 0),
                 "details": c.get("details"),
             }
