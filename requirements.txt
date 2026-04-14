@@ -11,7 +11,7 @@ Flask-Migrate==4.1.0
 Flask-SQLAlchemy==3.1.1
 # TODO: [DEPENDABOT PR #647] gevent 25.x is a major version change. Review for
 # breaking changes in greenlet/async behavior before upgrading from 24.11.1 to 25.9.1
-gevent==24.11.1
+gevent==26.4.0
 greenlet==3.4.0
 gunicorn==25.3.0
 iniconfig==2.3.0
