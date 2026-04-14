@@ -28,6 +28,16 @@ Deleted scope MUST NOT be referenced by:
 - background jobs
 - domain operations
 
-## VI. Amendment
+## VI. Rebuild Intent
+
+This rule exists so deletion in the rebuilt app is real at runtime, not merely hidden
+behind soft lifecycle semantics or leftover access paths.
+
+## VII. Downstream Consequence
+
+`DOM` and `FEAT` must not preserve deleted scope through convenience reads, jobs,
+support flows, or cache-based survivorship.
+
+## VIII. Amendment
 
 Revisions must preserve hard deletion semantics.

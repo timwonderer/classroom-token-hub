@@ -29,6 +29,16 @@ A single request MUST NOT:
 
 All execution is constrained to a single tenant boundary.
 
-## VI. Amendment
+## VI. Rebuild Intent
+
+This rule exists to prevent fan-out reads, cross-tenant writes, and mixed-scope
+capability decisions from reappearing in the rebuild.
+
+## VII. Downstream Consequence
+
+Any `DOM` or `FEAT` design that requires more than one tenant boundary inside one
+request is invalid at this level.
+
+## VIII. Amendment
 
 Revisions must preserve one-tenant-per-request execution.

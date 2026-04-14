@@ -32,6 +32,16 @@ Mutation during:
 
 is forbidden.
 
-## VI. Amendment
+## VI. Rebuild Intent
+
+This rule exists to eliminate hidden writes in reads, feature-layer mutation shortcuts,
+and cross-domain side effects disguised as helper behavior.
+
+## VII. Downstream Consequence
+
+`DOM` must own explicit mutation commands, and `FEAT` must never mutate state outside
+those commands.
+
+## VIII. Amendment
 
 Revisions must preserve explicit command-only mutation.

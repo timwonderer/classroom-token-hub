@@ -34,6 +34,16 @@ All requests MUST construct explicit request context containing:
 
 Requests missing required scope MUST fail immediately.
 
-## VI. Amendment
+## VI. Rebuild Intent
+
+This rule exists to prevent the rebuild from falling back to route-local assumptions,
+implicit session carryover, or actor-only access patterns that bypass tenant scope.
+
+## VII. Downstream Consequence
+
+`DOM` and `FEAT` must assume that missing request context is a hard failure, not a cue to
+infer or repair scope implicitly.
+
+## VIII. Amendment
 
 Revisions must preserve explicit scope requirements and alignment with `INV-ARC-000`.

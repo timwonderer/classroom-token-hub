@@ -30,6 +30,16 @@ GET requests MUST NOT:
 - flush
 - trigger domain mutations
 
-## VI. Amendment
+## VI. Rebuild Intent
+
+This rule exists to remove the specific class of bugs where viewing a page changes
+financial state, expires goals, settles balances, or repairs runtime data.
+
+## VII. Downstream Consequence
+
+Any rebuild design that requires mutation during `GET` is invalid and must be moved to a
+command or job path instead.
+
+## VIII. Amendment
 
 Revisions must preserve read purity.

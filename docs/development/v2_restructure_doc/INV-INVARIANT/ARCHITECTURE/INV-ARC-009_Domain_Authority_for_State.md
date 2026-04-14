@@ -26,6 +26,16 @@ Only domain queries may define authoritative state.
 
 Feature logic MUST NOT recompute domain values as execution truth.
 
-## VI. Amendment
+## VI. Rebuild Intent
+
+This rule exists to stop the rebuild from preserving route-level recalculation of
+balances, status, or eligibility when the underlying truth belongs to a domain.
+
+## VII. Downstream Consequence
+
+`DOM` must expose authoritative reads, and `FEAT` must consume them rather than
+rebuilding execution truth ad hoc.
+
+## VIII. Amendment
 
 Revisions must preserve domain-owned state authority.

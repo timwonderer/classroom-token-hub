@@ -25,6 +25,16 @@ Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-000`.
 Request context and logs MUST NOT contain sensitive personal information beyond allowed
 invariant-defined fields.
 
-## VI. Amendment
+## VI. Rebuild Intent
+
+This rule exists so the rebuild does not solve observability or support gaps by pushing
+more PII into request context, logs, or platform tooling.
+
+## VII. Downstream Consequence
+
+`DOM` and `FEAT` must treat execution-layer observability as compatibility with minimal
+PII, not an excuse to widen data exposure.
+
+## VIII. Amendment
 
 Revisions must preserve minimal PII exposure in execution paths.

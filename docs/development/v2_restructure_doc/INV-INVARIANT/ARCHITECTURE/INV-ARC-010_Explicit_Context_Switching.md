@@ -26,6 +26,16 @@ All context changes MUST be explicit.
 
 Implicit reuse of prior request state is forbidden.
 
-## VI. Amendment
+## VI. Rebuild Intent
+
+This rule exists to prevent convenience reuse of prior class, actor, or session state
+from becoming hidden authority.
+
+## VII. Downstream Consequence
+
+`FEAT` flows must represent context changes explicitly, and `DOM` must not assume that a
+previous request established valid scope for the current one.
+
+## VIII. Amendment
 
 Revisions must preserve explicit context switching.

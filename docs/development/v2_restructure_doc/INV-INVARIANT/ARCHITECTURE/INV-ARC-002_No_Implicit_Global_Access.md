@@ -26,6 +26,16 @@ No domain or feature logic may access global or unscoped data.
 
 All data access MUST be explicitly scoped using `join_code` or `class_id`.
 
-## VI. Amendment
+## VI. Rebuild Intent
+
+This rule exists to eliminate teacher-global shortcuts, unscoped balance use, and other
+mixed-scope execution paths identified in the v2 rebuild audit.
+
+## VII. Downstream Consequence
+
+`DOM` and `FEAT` must treat any unscoped read used for runtime truth as invalid, even if
+the underlying field or helper still exists in the repository.
+
+## VIII. Amendment
 
 Revisions must preserve explicit scoping requirements.

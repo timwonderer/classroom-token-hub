@@ -26,6 +26,15 @@ Membership MUST be determined by existence of valid class association.
 
 State-based membership flags are forbidden as runtime authority.
 
-## VI. Amendment
+## VI. Rebuild Intent
+
+This rule exists to eliminate lifecycle-state membership logic and to force access
+control to rest on actual surviving class association.
+
+## VII. Downstream Consequence
+
+`DOM` and `FEAT` must not branch on active/inactive-style membership flags as authority.
+
+## VIII. Amendment
 
 Revisions must preserve existence-based membership.

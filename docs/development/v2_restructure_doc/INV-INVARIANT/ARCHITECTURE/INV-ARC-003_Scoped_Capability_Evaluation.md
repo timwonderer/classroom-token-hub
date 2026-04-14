@@ -32,6 +32,16 @@ Capability evaluation without explicit class scope is invalid.
 - capability checks use explicit request-scoped context only
 - capability checks are evaluated at request time
 
-## VII. Amendment
+## VII. Rebuild Intent
+
+This rule exists to turn capability checks into first-class architecture rather than
+route-local conditionals embedded in controllers.
+
+## VIII. Downstream Consequence
+
+`DOM` must expose side-effect-free capability evaluation, and `FEAT` must not replace it
+with inline authorization logic.
+
+## IX. Amendment
 
 Revisions must preserve request-scoped capability evaluation.

@@ -65,26 +65,48 @@ This execution model is elaborated by the following `INV-ARC` documents:
 - `INV-ARC-013_Membership_by_Existence.md`
 - `INV-ARC-014_No_Label_Based_Logic.md`
 
-## VII. Execution Constraints
+## VII. Rebuild Intent
 
-### VII.1 Capability Evaluation
+This execution model exists to force the v2 rebuild away from the failure modes already
+identified in the architecture audit:
+
+- write-on-read behavior
+- unscoped capability decisions
+- route-local authorization logic
+- recomputed state in features
+- cross-domain mutation shortcuts
+
+The rebuild intent is not merely cleaner wording. It is to make those patterns
+architecturally invalid so `DOM` and `FEAT` cannot normalize them again.
+
+## VIII. Execution Constraints
+
+### VIII.1 Capability Evaluation
 
 - capability checks must be side-effect free
 - capability checks must use explicit context only
 - capability checks must be evaluated at request time
 
-### VII.2 Command Execution
+### VIII.2 Command Execution
 
 - exactly one command path must execute per request
 - commands must be idempotent where applicable
 - commands must own all mutation logic
 
-### VII.3 Cross-Domain Interaction
+### VIII.3 Cross-Domain Interaction
 
 - domains must not directly mutate other domains
 - cross-domain effects must be expressed through approved domain contracts
 
-## VIII. Observability Requirements
+## IX. Downstream Consequence
+
+`DOM` specifications must expose truth, capability checks, and commands in a way that
+fits this request model.
+
+`FEAT` specifications must describe action flow only as orchestration of this model, not
+as exceptions to it.
+
+## X. Observability Requirements
 
 All decisions MUST be logged with:
 
@@ -97,7 +119,7 @@ All decisions MUST be logged with:
 - `join_code`
 - `actor_id`
 
-## IX. Enforcement
+## XI. Enforcement
 
 The following MUST be enforced through CI and runtime guards:
 
@@ -106,12 +128,12 @@ The following MUST be enforced through CI and runtime guards:
 - capability checks precede command execution
 - no cross-domain mutation
 
-## X. Final Statement
+## XII. Final Statement
 
 > Domains declare truth. Invariants govern interaction. Capabilities evaluate authority.
 > Features execute decisions.
 
-## XI. Amendment
+## XIII. Amendment
 
 Revisions to this document must:
 

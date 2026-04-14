@@ -26,6 +26,15 @@ Requests referencing non-existent `join_code` MUST fail.
 
 No fallback or recovery logic is permitted.
 
-## VI. Amendment
+## VI. Rebuild Intent
+
+This rule exists to prevent the rebuild from papering over missing or deleted tenant
+state with fallback lookups, alternate scope, or “best effort” recovery logic.
+
+## VII. Downstream Consequence
+
+`DOM` and `FEAT` must treat non-existent scope as terminal for that request path.
+
+## VIII. Amendment
 
 Revisions must preserve hard failure for phantom scope.

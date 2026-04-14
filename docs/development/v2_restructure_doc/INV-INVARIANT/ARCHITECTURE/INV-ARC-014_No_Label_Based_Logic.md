@@ -30,6 +30,16 @@ Execution MUST NOT depend on:
 
 Only canonical identifiers such as `class_id` and `join_code` may be used.
 
-## VI. Amendment
+## VI. Rebuild Intent
+
+This rule exists to prevent labels, sections, periods, and similar metadata from
+re-entering the rebuilt app as identity, grouping, or authority shortcuts.
+
+## VII. Downstream Consequence
+
+`DOM` and `FEAT` must treat labels as metadata only, never as canonical routing,
+ownership, lifecycle, or execution keys.
+
+## VIII. Amendment
 
 Revisions must preserve canonical-identifier-only execution.
