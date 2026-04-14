@@ -31,7 +31,9 @@ from app.models import (
     StudentInsurance, InsuranceClaim, StudentTeacher, TeacherBlock, StudentBlock, UserReport,
     FeatureSettings, TeacherOnboarding, RentSettings, BankingSettings,
     DemoStudent, HallPassSettings, PayrollFine, PayrollReward,
-    PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory, IssueResolutionAction
+    PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory, IssueResolutionAction,
+    RecoveryRequest, DeletionRequest, AdminCredential, RentWaiver, RentItem,
+    StudentRecoveryCode, RedemptionAuditLog, InsurancePolicy, JoinCode
 )
 from app.auth import (
     system_admin_required,
@@ -966,6 +968,70 @@ def delete_admin(admin_id):
             StudentBlock.query.filter(StudentBlock.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
             TeacherBlock.query.filter(TeacherBlock.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
             Student.query.filter(Student.id.in_(exclusive_student_ids)).delete(synchronize_session=False)
+
+        # Teacher-specific Cleanup
+        # Identify all join codes for the teacher's classes
+        teacher_join_codes = [jc for (jc,) in db.session.query(JoinCode.join_code_token).filter_by(teacher_id=admin.id).all()]
+        
+        # Explicit delete to ensure no orphans and to clear PII (like RecoveryRequest.dob_sum_hash)
+        
+        # Layer 1: Delete children/grandchild records to avoid ForeignKeyViolations
+        StudentRecoveryCode.query.filter(StudentRecoveryCode.recovery_request_id.in_(
+            db.session.query(RecoveryRequest.id).filter_by(admin_id=admin.id)
+        )).delete(synchronize_session=False)
+
+        InsuranceClaim.query.filter(InsuranceClaim.policy_id.in_(
+            db.session.query(InsurancePolicy.id).filter_by(teacher_id=admin.id)
+        )).delete(synchronize_session=False)
+
+        StudentInsurance.query.filter(StudentInsurance.policy_id.in_(
+            db.session.query(InsurancePolicy.id).filter_by(teacher_id=admin.id)
+        )).delete(synchronize_session=False)
+
+        RentItem.query.filter(RentItem.rent_setting_id.in_(
+            db.session.query(RentSettings.id).filter_by(teacher_id=admin.id)
+        )).delete(synchronize_session=False)
+
+        # Fix: Delete RedemptionAuditLog rows that reference StudentItems about to be deleted.
+        # redemption_audit_logs.student_item_id has no ON DELETE CASCADE, so FK violation
+        # would occur if any audit log (including those with teacher_id=NULL) references
+        # a StudentItem we are about to delete.
+        student_item_ids_to_delete = db.session.query(StudentItem.id).filter(
+            StudentItem.store_item_id.in_(
+                db.session.query(StoreItem.id).filter_by(teacher_id=admin.id)
+            )
+        )
+        RedemptionAuditLog.query.filter(
+            RedemptionAuditLog.student_item_id.in_(student_item_ids_to_delete)
+        ).delete(synchronize_session=False)
+
+        # Fix: StudentItem doesn't have teacher_id, must filter by store_item_id
+        StudentItem.query.filter(StudentItem.store_item_id.in_(
+            db.session.query(StoreItem.id).filter_by(teacher_id=admin.id)
+        )).delete(synchronize_session=False)
+
+        # Layer 2: Delete teacher-owned entities
+        RecoveryRequest.query.filter_by(admin_id=admin.id).delete(synchronize_session=False)
+        DeletionRequest.query.filter_by(admin_id=admin.id).delete(synchronize_session=False)
+        AdminCredential.query.filter_by(admin_id=admin.id).delete(synchronize_session=False)
+        RentWaiver.query.filter_by(created_by_admin_id=admin.id).delete(synchronize_session=False)
+        InsurancePolicy.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        StoreItem.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        HallPassSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        PayrollSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        PayrollFine.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        PayrollReward.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        BankingSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        RedemptionAuditLog.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        Issue.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        # Note: IssueStatusHistory and IssueResolutionAction have ON DELETE CASCADE in model definition (line 1862-1863)
+
+        RentSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        
+        # Finally, delete any remaining teacher blocks or student blocks linked to the teacher indirectly
+        StudentBlock.query.filter(StudentBlock.join_code.in_(teacher_join_codes)).delete(synchronize_session=False)
+        TeacherBlock.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
+        StudentTeacher.query.filter_by(admin_id=admin.id).delete(synchronize_session=False)
 
         admin_username = admin.get_sysadmin_display_name()
         db.session.delete(admin)

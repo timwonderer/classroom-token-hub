@@ -29,6 +29,7 @@ def run():
                 "name": "transaction_state_validity",
                 "status": "FAIL",
                 "details": f"Invalid status value(s) found: {invalid}",
+                "failure_count": len(invalid),
                 "invalid_statuses": invalid,
             }
 
@@ -38,5 +39,6 @@ def run():
         return {
             "name": "transaction_state_validity",
             "status": "FAIL",
-            "details": str(e),
+            "details": "Invariant query failed",
+            "failure_count": 1,
         }

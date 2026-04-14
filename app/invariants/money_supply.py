@@ -163,6 +163,7 @@ def run():
                 "name": "money_supply_integrity",
                 "status": "FAIL",
                 "details": "; ".join(violations),
+                "failure_count": len(violations),
                 **base,
             }
 
@@ -176,7 +177,8 @@ def run():
         return {
             "name": "money_supply_integrity",
             "status": "FAIL",
-            "details": str(e),
+            "details": "Invariant query failed",
+            "failure_count": 1,
             "total_supply_cents": total_cache_cents,
             "total_posted_ledger_cents": total_ledger_cents,
             "delta_cents": total_cache_cents - total_ledger_cents,

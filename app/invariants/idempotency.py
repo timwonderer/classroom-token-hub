@@ -27,6 +27,7 @@ def run():
                 "name": "idempotency_key_uniqueness",
                 "status": "FAIL",
                 "details": f"{len(rows)} duplicate idempotency key(s) detected",
+                "failure_count": len(rows),
                 "duplicate_count": len(rows),
             }
 
@@ -36,5 +37,6 @@ def run():
         return {
             "name": "idempotency_key_uniqueness",
             "status": "FAIL",
-            "details": str(e),
+            "details": "Invariant query failed",
+            "failure_count": 1,
         }

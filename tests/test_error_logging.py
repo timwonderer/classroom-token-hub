@@ -1,10 +1,12 @@
 import logging
 import json
+from datetime import datetime
 
 from app import create_app
 from app.extensions import db
 from app.models import ErrorEvent
 from flask import g, session
+from gunicorn_json_logging import GunicornJsonFormatter
 from werkzeug.exceptions import BadRequest
 from wsgi import log_error_to_db
 
@@ -99,6 +101,32 @@ def test_default_log_formatter_emits_json_with_request_context():
     assert "timestamp" in payload
 
 
+def test_default_log_formatter_preserves_custom_extra_fields():
+    app = create_app()
+    handler = app.logger.handlers[0]
+
+    record = app.logger.makeRecord(
+        app.logger.name,
+        logging.INFO,
+        __file__,
+        0,
+        "Structured extra probe",
+        args=(),
+        exc_info=None,
+        extra={
+            "failure_total": 3,
+            "failed_checks": [{"name": "money_supply_integrity", "failure_count": 3}],
+            "details": "Money supply drift",
+        },
+    )
+
+    payload = json.loads(handler.format(record))
+
+    assert payload["failure_total"] == 3
+    assert payload["failed_checks"] == [{"name": "money_supply_integrity", "failure_count": 3}]
+    assert payload["details"] == "Money supply drift"
+
+
 def test_handled_http_error_creates_structured_error_event(client):
     app = client.application
 
@@ -127,3 +155,42 @@ def test_handled_http_error_creates_structured_error_event(client):
         assert row.method == "GET"
         assert row.error_class == "400 Bad Request"
         assert "probe bad request" in (row.error_message or "")
+
+
+def test_gunicorn_access_formatter_uses_pacific_timestamp(monkeypatch):
+    monkeypatch.setenv("GUNICORN_ACCESS_LOG_TIMEZONE", "America/Los_Angeles")
+    formatter = GunicornJsonFormatter()
+    record = logging.LogRecord(
+        name="gunicorn.access",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=0,
+        msg="%(h)s %(l)s %(u)s %(t)s \"%(r)s\" %(s)s %(B)s \"%(f)s\" \"%(a)s\"",
+        args={
+            "h": "127.0.0.1",
+            "l": "-",
+            "u": "-",
+            "t": "[14/Apr/2026:04:38:49 +0000]",
+            "r": "GET /sw.js HTTP/1.0",
+            "m": "GET",
+            "U": "/sw.js",
+            "q": "",
+            "H": "HTTP/1.0",
+            "s": "304",
+            "B": "0",
+            "f": "https://app.classroomtokenhub.com/sw.js",
+            "a": "Mozilla/5.0",
+            "L": "0.001634",
+            "D": "1634",
+            "p": "<96018>",
+        },
+        exc_info=None,
+    )
+    record.created = datetime.fromisoformat("2026-04-14T04:38:50.001634+00:00").timestamp()
+
+    payload = json.loads(formatter.format(record))
+
+    assert payload["timestamp"] == "2026-04-14T04:38:50.001634+00:00"
+    assert payload["timestamp_local"] == "[13/Apr/2026:21:38:50 -0700]"
+    assert "[13/Apr/2026:21:38:50 -0700]" in payload["message"]
+    assert "[14/Apr/2026:04:38:49 +0000]" not in payload["message"]

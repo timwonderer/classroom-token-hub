@@ -31,6 +31,7 @@ def run():
                 "name": "temporal_integrity",
                 "status": "FAIL",
                 "details": f"{len(rows)} transaction(s) where posted_at < created timestamp",
+                "failure_count": len(rows),
                 "violation_count": len(rows),
             }
 
@@ -40,5 +41,6 @@ def run():
         return {
             "name": "temporal_integrity",
             "status": "FAIL",
-            "details": str(e),
+            "details": "Invariant query failed",
+            "failure_count": 1,
         }
