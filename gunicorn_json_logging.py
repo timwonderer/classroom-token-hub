@@ -6,33 +6,34 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 DEFAULT_ACCESS_LOG_TIMEZONE = "America/Los_Angeles"
-_access_log_timezone_warning_emitted = False
+_access_log_tz_env_warned = False
+_access_log_tz_default_warned = False
 
 
 def _resolve_access_log_timezone():
-    global _access_log_timezone_warning_emitted
+    global _access_log_tz_env_warned, _access_log_tz_default_warned
 
     tz_name = os.getenv("GUNICORN_ACCESS_LOG_TIMEZONE", DEFAULT_ACCESS_LOG_TIMEZONE).strip() or DEFAULT_ACCESS_LOG_TIMEZONE
     try:
         return tz_name, ZoneInfo(tz_name)
     except ZoneInfoNotFoundError:
-        if not _access_log_timezone_warning_emitted:
+        if not _access_log_tz_env_warned:
             logging.getLogger(__name__).warning(
                 "Unable to resolve access log timezone %r; falling back to %r",
                 tz_name,
                 DEFAULT_ACCESS_LOG_TIMEZONE,
             )
-            _access_log_timezone_warning_emitted = True
+            _access_log_tz_env_warned = True
 
     try:
         return DEFAULT_ACCESS_LOG_TIMEZONE, ZoneInfo(DEFAULT_ACCESS_LOG_TIMEZONE)
     except ZoneInfoNotFoundError:
-        if not _access_log_timezone_warning_emitted:
+        if not _access_log_tz_default_warned:
             logging.getLogger(__name__).warning(
                 "Unable to resolve default access log timezone %r; falling back to UTC",
                 DEFAULT_ACCESS_LOG_TIMEZONE,
             )
-            _access_log_timezone_warning_emitted = True
+            _access_log_tz_default_warned = True
         return "UTC", timezone.utc
 
 
