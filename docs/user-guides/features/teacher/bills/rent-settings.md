@@ -30,3 +30,6 @@ Rent settings determine the baseline amounts, schedules, and privileges associat
 
 > [!NOTE]
 > **Dynamic Purchase Blocking:** If you enable purchase restrictions for late rent and utilize Itemized Rent, students can still buy "Rent Alternative" items from the store (like a premium desk pass) but are blocked from buying purely fun items until their debt is cleared.
+
+> [!NOTE]
+> **Rate Lock:** Once the first valid payment for a coverage cycle has been recorded, the base rent rate is locked for that cycle. If you adjust the rent amount mid-cycle (e.g. via an economy rebalance), the change applies to the *next* cycle only. Students who paid at the previous rate are not retroactively marked late. Use the **Corrections** tab to reverse any late fees that were incorrectly charged after a mid-cycle rate change.

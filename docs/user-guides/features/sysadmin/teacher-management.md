@@ -16,7 +16,17 @@ This feature allows you to administer and oversee the teachers utilizing the pla
 
 ### Viewing Teacher Details
 1. Navigate to **Teacher Management** in the sysadmin sidebar.
-2. Click **View Details** next to a teacher to see specific setup information for that account.
+2. Click **View Details** next to a teacher to see specific setup information for that account, including class badges, student counts, and last login.
+
+### Generating Invite Codes
+1. Navigate to **Teacher Management**.
+2. Use the **Generate Invite Code** form to create a new single-use registration code.
+3. Use the copy button to share the code with the prospective teacher.
+
+### Voiding an Unused Invite Code
+1. Navigate to **Teacher Management**.
+2. In the **Pending Invites** section, click **Void** next to the code you want to revoke.
+3. Confirm — the code is immediately invalidated and cannot be used for registration.
 
 ### Deleting Class Periods
 1. Navigate to **Teacher Management**.
@@ -26,7 +36,7 @@ This feature allows you to administer and oversee the teachers utilizing the pla
 ### Deleting a Teacher Account
 1. Navigate to **Teacher Management**.
 2. Locate the teacher and select **Delete Account**.
-3. Confirm the deletion.
+3. Confirm the deletion. All associated data, students, economy states, and class periods are removed.
 
 ## Important Notes
 > [!CAUTION]

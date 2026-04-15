@@ -32,6 +32,9 @@ Use this guide if you are new to the classroom economy and need to claim your st
 > [!IMPORTANT]
 > **Cannot claim?:** If the system cannot find you, ask your teacher to verify the spelling of your name and your date of birth on their Class Roster.
 
+> [!NOTE]
+> **Username migration prompt:** If you created your account before April 2026, you may be redirected to a **Choose a New Username** page on your next login. Follow the prompts to pick a new theme word — your balance, history, and class memberships are unaffected. This is a one-time step and takes less than a minute.
+
 ## Related guides
 - [Reset or Recover Your Account](reset-recovery.md)
 - [Join or Add a Class](join-class.md)

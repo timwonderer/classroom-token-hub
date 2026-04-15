@@ -352,6 +352,16 @@ period_value = weekly_value * weeks_in_period
 
 ---
 
+## Claim Time-Limit Gate
+
+When a policy has a `claim_time_limit_days` value set, the gate is evaluated against the **filing timestamp** — the moment the student submitted the claim — not the current wall-clock time at which a teacher reviews it.
+
+This prevents clock drift or slow review queues from retroactively invalidating claims that were submitted on time.
+
+Teachers may override the deadline on a per-claim basis from the claim processing view. An override is recorded in the claim's audit trail.
+
+---
+
 ## System Guarantees
 
 The insurance system must preserve the following guarantees:
@@ -361,6 +371,7 @@ The insurance system must preserve the following guarantees:
 - join-code financial isolation
 - single claim per transaction
 - reimbursement deduplication
+- claim time-limit evaluation against filing timestamp, not review time
 
 These guarantees protect accounting correctness and prevent cross-class or duplicate reimbursement exploits.
 

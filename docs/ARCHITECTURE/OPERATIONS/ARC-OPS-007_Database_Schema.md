@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-007      | 1.0     | 2026-03-01     | N/A        | Constitutional  |
+| ARC-OPS-007      | 1.1     | 2026-04-14     | 1.0        | Constitutional  |
 
 ## I. Purpose
 
@@ -46,7 +46,8 @@ Stores student records and credentials.
 | `second_factor_type` | String | Second factor type. |
 | `second_factor_enabled` | Boolean | Whether second factor is enabled. |
 | `has_completed_setup` | Boolean | Whether first-time setup is complete. |
-| `dob_sum` | Integer | Non-reversible DOB sum used for username generation. |
+| `dob_sum` | Integer, nullable | Non-reversible DOB sum used only during initial claim verification. Nulled immediately after account setup completes (post-setup PII cleanup). |
+| `username_migrated` | Boolean | `True` once the student's username has been regenerated without a DOB-derived suffix. Students with legacy DOB-based usernames are redirected to `/migrate-username` on next login; this flag is set after migration. Default `False`. |
 
 **Relationships**
 
@@ -102,8 +103,8 @@ Roster seats created during CSV uploads so students can self-claim via join code
 | `class_label` | String(50), nullable | Teacher-customizable display name for this class (e.g., "AP Biology"). |
 | `first_name` | PIIEncryptedType | Encrypted first name from roster. |
 | `last_initial` | String(1) | Last initial from roster. |
-| `last_name_hash_by_part` | JSON | Hashes for fuzzy last-name matching. |
-| `dob_sum` | Integer | Non-reversible DOB sum for matching. |
+| `last_name_hash_by_part` | JSON, nullable | Hashes for fuzzy last-name matching. Nulled after claim is completed (post-claim PII cleanup). |
+| `dob_sum` | Integer, nullable | Non-reversible DOB sum for seat matching. Nulled after the seat is claimed (post-claim PII cleanup). |
 | `salt` / `first_half_hash` | | Matching hashes. |
 | `join_code` | String(20) | Shared join code for the block. |
 | `student_id` | Integer | Claimed student FK. |
@@ -130,6 +131,7 @@ Ledger entries for checking/savings accounts, scoped by join code (class economy
 | `is_void` | Boolean | Soft-void flag. |
 | `type` | String(50) | Optional transaction type label. |
 | `date_funds_available` | DateTime | Availability date. |
+| `transfer_correlation_id` | String(36), nullable, indexed | Shared UUID linking the debit and credit legs of a transfer pair. Used by the money-supply invariant to verify that each pair sums to zero with correct sign symmetry. NULL for legacy transactions; the invariant falls back to a per-(student, join_code) check in that case. |
 
 ---
 
@@ -198,7 +200,7 @@ Global hall pass configuration.
 ### `store_items`
 Available items in the classroom store.
 
-Key fields: `name`, `description`, `price`, `item_type` (`immediate`, `delayed`, `collective`), `inventory`, `limit_per_student`, `auto_delist_date`, `auto_expiry_days`, `is_active`, `is_rent_linked`, bundle flags (`is_bundle`, `bundle_size`, `bundle_discount_amount`, `bundle_discount_percent`, `bundle_item_limit`), and `requires_approval`.
+Key fields: `name`, `description`, `price`, `item_type` (`immediate`, `delayed`, `collective`), `inventory`, `limit_per_student`, `auto_delist_date`, `auto_expiry_days`, `is_active`, `is_rent_linked`, bundle flags (`is_bundle`, `bundle_size`, `bundle_discount_amount`, `bundle_discount_percent`, `bundle_item_limit`), `requires_approval`, `collective_goal_type`, `collective_goal_target`, and `collective_goal_expires_at` (optional deadline; unmet collective goals are auto-refunded and deactivated on expiration; progress resets to zero on reactivation).
 
 ### `student_items`
 Items purchased by students.
@@ -222,7 +224,7 @@ Key fields: `student_id`, `period`, `amount_paid`, `period_month`, `period_year`
 ### `rent_waivers`
 Tracks rent waivers.
 
-Key fields: `student_id`, `waiver_start_date`, `waiver_end_date`, `periods_count`, `reason`, `created_by_admin_id`, `created_at`.
+Key fields: `student_id`, `join_code` (class-period scope; required for correct multi-period isolation), `waiver_start_date`, `waiver_end_date`, `periods_count`, `reason`, `created_by_admin_id`, `created_at`.
 
 ---
 
@@ -436,11 +438,31 @@ Key fields: `student_id`, `created_at`, `expires_at`.
 
 ---
 
+---
+
+## Runtime Invariant Health Check (V2-INV-001)
+
+Added in v1.9.x. The invariant runner (`app/services/invariant_runner.py`) evaluates the following checks on demand via `GET /health/invariants`:
+
+| Invariant | Module | Description |
+|---|---|---|
+| Ledger ↔ BalanceCache consistency | `ledger_consistency.py` | Each student's `BalanceCache` totals must match non-voided ledger sums within the same `join_code`. |
+| Idempotency key uniqueness | `idempotency.py` | No two transactions may share a duplicate idempotency key within a class economy. |
+| Balance rules | `balance_rules.py` | Savings never negative; checking negative only when overdraft protection is enabled. |
+| Transaction state validity | `transaction_state.py` | No unknown `status` values in the ledger. |
+| Temporal integrity | `temporal_integrity.py` | `posted_at` is never before the transaction creation timestamp. |
+| Money supply integrity | `money_supply.py` | Aggregate cache equals aggregate ledger; transfer pairs sum to zero with correct sign symmetry; per-class supply breakdown; `delta_cents` metric for Grafana. |
+
+**Response:** `200 OK` (all pass) or `500` with a sanitised JSON failure summary (exception details scrubbed per CodeQL #156).
+
+---
+
 ## VI. Notes
 - Prefer `student_teachers` for ownership; `students.teacher_id` is scheduled for removal once all data is migrated.
 - Monetary values must be stored using `Numeric(12,2)` (e.g., `Transaction.amount`) to ensure exact decimal precision and prevent floating-point drift.
 - Indices are defined on frequent lookup fields (e.g., join codes, student/teacher IDs, timestamps) to support pagination and scoped queries.
 - **v1.7.0** added analytics models (`analytics_snapshots`, `analytics_events`, `analytics_alerts`) for system health monitoring and rent itemization (`rent_items`) for transparent rent breakdown.
+- **v1.9.x** added `transfer_correlation_id` to `transactions`, `username_migrated` to `students`, `collective_goal_expires_at` to `store_items`, and `join_code` to `rent_waivers`. All `dob_sum` and `last_name_hash_by_part` fields on `students` and `teacher_blocks` are now nullable and purged post-setup/post-claim.
 - All new models properly scoped by `join_code` for multi-tenancy compliance.
 
 ## VII. Amendment
