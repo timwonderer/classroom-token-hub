@@ -7872,6 +7872,28 @@ def void_transaction(transaction_id):
             if selected_units < quantity:
                 return _void_error("Unable to map this transaction to purchasable student items.")
 
+            existing_refund = None
+            if tx.reversal_transaction_id:
+                existing_refund = db.session.get(Transaction, tx.reversal_transaction_id)
+            if existing_refund is None:
+                existing_refund = (
+                    Transaction.query
+                    .filter(
+                        Transaction.original_transaction_id == tx.id,
+                        Transaction.type == 'refund',
+                    )
+                    .order_by(Transaction.id.desc())
+                    .first()
+                )
+
+            if existing_refund is not None:
+                current_app.logger.warning(
+                    "VOID_BLOCKED transaction_id=%s reason=purchase_already_refunded refund_transaction_id=%s",
+                    tx.id,
+                    existing_refund.id,
+                )
+                return _void_error("Cannot void: purchase already refunded.")
+
             used_statuses = {'processing', 'completed', 'redeemed'}
             if any((student_item.status or '').lower() in used_statuses for student_item in selected_items):
                 return _void_error("Delayed-use item has already been used (redemption requested or completed) and cannot be voided.")

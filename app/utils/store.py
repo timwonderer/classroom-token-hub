@@ -9,7 +9,7 @@ import secrets
 import sqlalchemy as sa
 
 from app.extensions import db
-from app.models import StoreItem, StudentItem, Transaction
+from app.models import StoreItem, StudentItem, Transaction, TransactionStatus
 from app.utils.transaction_idempotency import create_idempotent_transaction, student_item_refund_key
 from app.utils.time import utc_now
 
@@ -139,6 +139,7 @@ def refund_pending_collective_purchases(item, description_suffix="Goal Expired")
             join_code=si.join_code,
             amount=refund_amount,
             account_type='checking',
+            status=TransactionStatus.PENDING,
             type='refund',
             original_transaction_id=purchase_tx.id if purchase_tx else None,
             description=f"Refund: {item.name} ({description_suffix})",

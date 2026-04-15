@@ -23,7 +23,7 @@ from app.extensions import db, limiter
 from app.models import (
     Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
     TapEventReasonCode, HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
-    StudentTeacher, TeacherBlock, StudentBlock, DemoStudent, StoreItemBlock,
+    StudentTeacher, TeacherBlock, StudentBlock, StoreItemBlock,
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource, _quantize_currency
 )
 from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
@@ -36,8 +36,6 @@ from app.routes.student import (
     _ensure_rent_hall_pass_top_off,
     _clear_expired_rent_perk_items,
 )
-from app.utils.join_code import generate_join_code
-from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
 from app.utils.transaction_idempotency import (
     MAX_IDEMPOTENCY_KEY_LENGTH,
@@ -828,6 +826,7 @@ def purchase_item():
                     join_code=join_code,  # CRITICAL: Add join_code for period isolation
                     amount=-shortfall,
                     account_type='savings',
+                    status=TransactionStatus.PENDING,
                     type='Withdrawal',
                     description='Overdraft protection transfer to checking',
                     transfer_correlation_id=_transfer_cid,
@@ -838,6 +837,7 @@ def purchase_item():
                     join_code=join_code,  # CRITICAL: Add join_code for period isolation
                     amount=shortfall,
                     account_type='checking',
+                    status=TransactionStatus.PENDING,
                     type='Deposit',
                     description='Overdraft protection transfer from savings',
                     transfer_correlation_id=_transfer_cid,
@@ -1257,6 +1257,7 @@ def reject_redemption():
             join_code=refund_join_code,  # Now guaranteed to have a value
             amount=refund_amount,
             account_type='checking',
+            status=TransactionStatus.PENDING,
             type='refund',
             original_transaction_id=purchase_tx.id if purchase_tx else None,
             description=f"Refund: {student_item.store_item.name} (Redemption Rejected)"
@@ -2889,139 +2890,6 @@ def set_timezone():
     current_app.logger.info(f"Timezone set to {timezone_name} for session")
 
     return jsonify({"status": "success", "message": f"Timezone set to {timezone_name}."})
-
-
-# -------------------- VIEW AS STUDENT API --------------------
-
-@api_bp.route('/admin/create-demo-student', methods=['POST'])
-@admin_required
-def create_demo_student():
-    """Create a demo student session with custom configuration"""
-    from app.models import DemoStudent
-    from werkzeug.security import generate_password_hash
-    import secrets
-
-    try:
-        from app.models import _quantize_currency
-        admin_id = session.get('admin_id')
-        data = request.get_json()
-
-        # Extract configuration
-        checking_balance = _quantize_currency(data.get('checking_balance', '0'))
-        savings_balance = _quantize_currency(data.get('savings_balance', '0'))
-        hall_passes = int(data.get('hall_passes', 3))
-        insurance_plan = data.get('insurance_plan', 'none')
-        period = data.get('period', 'A')
-        rent_enabled = bool(data.get('rent_enabled', True))
-        join_code = generate_join_code()
-
-        # Generate a unique session ID for this demo
-        demo_session_id = secrets.token_urlsafe(32)
-
-        # Create a temporary demo student record
-        # Use encrypted first name for demo student
-        demo_student = Student(
-            first_name='Demo',
-            last_initial='S',
-            block=period,
-            salt=secrets.token_bytes(16),
-            pin_hash=generate_password_hash('1234'),  # Default PIN for demo
-            passphrase_hash=generate_password_hash('demo'),  # Default passphrase for demo
-            hall_passes=hall_passes,
-            is_rent_enabled=rent_enabled,
-            insurance_plan=insurance_plan,
-            has_completed_setup=True,
-            teacher_id=admin_id
-        )
-        demo_student.first_half_hash = secrets.token_hex(32)
-        demo_student.second_half_hash = secrets.token_hex(32)
-
-        db.session.add(demo_student)
-        db.session.flush()  # Get the student ID
-
-        # Link demo student to admin for scoped queries
-        demo_link = StudentTeacher(student_id=demo_student.id, admin_id=admin_id)
-        db.session.add(demo_link)
-
-        # Create a claimed seat for this demo student so student routes have class context
-        demo_seat = TeacherBlock(
-            teacher_id=admin_id,
-            block=period,
-            class_label=f"Demo {period}",
-            first_name='Demo',
-            last_initial='S',
-            last_name_hash_by_part=hash_last_name_parts('S', demo_student.salt),
-            dob_sum=0,
-            salt=demo_student.salt,
-            first_half_hash=secrets.token_hex(32),
-            join_code=join_code,
-            student_id=demo_student.id,
-            is_claimed=True,
-            claimed_at=utc_now()
-        )
-        db.session.add(demo_seat)
-
-        # Ensure tap settings exist for the demo block
-        db.session.add(StudentBlock(student_id=demo_student.id, period=period, tap_enabled=True))
-
-        # Create initial balance transactions
-        if checking_balance > 0:
-            checking_tx = Transaction(
-                student_id=demo_student.id,
-                teacher_id=admin_id,
-                join_code=join_code,
-                amount=checking_balance,
-                account_type='checking',
-                type='admin_adjustment',
-                description='Demo student initial balance'
-            )
-            db.session.add(checking_tx)
-
-        if savings_balance > 0:
-            savings_tx = Transaction(
-                student_id=demo_student.id,
-                teacher_id=admin_id,
-                join_code=join_code,
-                amount=savings_balance,
-                account_type='savings',
-                type='admin_adjustment',
-                description='Demo student initial balance'
-            )
-            db.session.add(savings_tx)
-
-        # Create demo session record
-        demo_session = DemoStudent(
-            admin_id=admin_id,
-            student_id=demo_student.id,
-            session_id=demo_session_id,
-            expires_at=utc_now() + timedelta(minutes=10),
-            config_checking_balance=checking_balance,
-            config_savings_balance=savings_balance,
-            config_hall_passes=hall_passes,
-            config_insurance_plan=insurance_plan,
-            config_is_rent_enabled=rent_enabled,
-            config_period=period
-        )
-        db.session.add(demo_session)
-        db.session.commit()
-
-        current_app.logger.info(f"Admin {admin_id} created demo student session {demo_session_id} with student_id={demo_student.id}")
-
-        # Return success with the session ID
-        return jsonify({
-            "status": "success",
-            "message": "Demo student session created successfully",
-            "session_id": demo_session_id,
-            "redirect_url": f"/student/demo-login/{demo_session_id}"
-        })
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Failed to create demo student: {e}", exc_info=True)
-        return jsonify({
-            "status": "error",
-            "message": "Failed to create demo student session. Please try again."
-        }), 500
 
 
 @api_bp.route('/admin/block-tap-settings', methods=['GET'])

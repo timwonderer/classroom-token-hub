@@ -2,8 +2,9 @@
 import pytest
 from decimal import Decimal
 from datetime import datetime, timezone
-from app.models import Admin, Student, Transaction, StoreItem, StudentItem, TeacherBlock, StudentTeacher
+from app.models import Admin, Student, Transaction, TransactionStatus, BalanceCache, StoreItem, StudentItem, TeacherBlock, StudentTeacher
 from app.extensions import db
+from app.utils.banking import settle_balances
 from werkzeug.security import generate_password_hash
 
 @pytest.fixture
@@ -212,6 +213,108 @@ def test_reject_redemption_refunds_single_unit_from_multi_quantity_purchase(clie
     ).first()
     assert refund_tx is not None
     assert refund_tx.idempotency_key == f"txn:refund:student-item:{student_item.id}:redemption-rejected"
+
+
+def test_reject_redemption_refund_stays_pending_until_settlement(client, teacher_admin, student_in_class):
+    student = student_in_class
+
+    item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Invariant Safe Item',
+        price=Decimal('50.00'),
+        item_type='delayed',
+        is_active=True
+    )
+    db.session.add(item)
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='REJECT123',
+        amount=Decimal('100.00'),
+        account_type='checking',
+        type='deposit',
+        description='Initial funds',
+        status=TransactionStatus.PENDING,
+    ))
+    db.session.commit()
+
+    settle_balances(student.id, 'REJECT123')
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'REJECT123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    purchase_resp = client.post('/api/purchase-item', json={
+        'item_id': item.id,
+        'passphrase': 'password',
+        'quantity': 1
+    })
+    assert purchase_resp.status_code == 200
+
+    settle_balances(student.id, 'REJECT123')
+    db.session.commit()
+
+    student_item = StudentItem.query.filter_by(student_id=student.id, store_item_id=item.id).first()
+    assert student_item is not None
+
+    use_resp = client.post('/api/use-item', json={
+        'student_item_id': student_item.id,
+        'passphrase': 'password',
+        'details': 'bug test'
+    })
+    assert use_resp.status_code == 200
+
+    with client.session_transaction() as sess:
+        sess['admin_id'] = teacher_admin.id
+        sess['is_admin'] = True
+
+    resp = client.post('/api/reject-redemption', json={'student_item_id': student_item.id})
+    assert resp.status_code == 200
+
+    refund_tx = Transaction.query.filter_by(
+        student_id=student.id,
+        type='refund',
+        original_transaction_id=Transaction.query.filter_by(
+            student_id=student.id,
+            type='purchase',
+        ).filter(Transaction.description.like('Purchase: Invariant Safe Item%')).first().id,
+    ).first()
+    assert refund_tx is not None
+    assert refund_tx.status == TransactionStatus.PENDING
+
+    cache = BalanceCache.query.filter_by(student_id=student.id, join_code='REJECT123').first()
+    assert cache is not None
+    assert cache.posted_checking_balance_cents == 5000
+    posted_cents_before = db.session.query(
+        db.func.coalesce(db.func.sum(Transaction.amount_cents), 0)
+    ).filter(
+        Transaction.student_id == student.id,
+        Transaction.join_code == 'REJECT123',
+        Transaction.account_type == 'checking',
+        Transaction.status == TransactionStatus.POSTED,
+        Transaction.is_void == False,
+    ).scalar()
+    assert posted_cents_before == 5000
+
+    settle_balances(student.id, 'REJECT123')
+    db.session.commit()
+
+    db.session.refresh(refund_tx)
+    assert refund_tx.status == TransactionStatus.POSTED
+    db.session.refresh(cache)
+    assert cache.posted_checking_balance_cents == 10000
+    posted_cents_after = db.session.query(
+        db.func.coalesce(db.func.sum(Transaction.amount_cents), 0)
+    ).filter(
+        Transaction.student_id == student.id,
+        Transaction.join_code == 'REJECT123',
+        Transaction.account_type == 'checking',
+        Transaction.status == TransactionStatus.POSTED,
+        Transaction.is_void == False,
+    ).scalar()
+    assert posted_cents_after == 10000
 
 
 def test_reject_redemption_legacy_item_resolves_join_code(client, teacher_admin, student_in_class):
