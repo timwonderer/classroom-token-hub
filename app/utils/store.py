@@ -9,7 +9,7 @@ import secrets
 import sqlalchemy as sa
 
 from app.extensions import db
-from app.models import StoreItem, StudentItem, Transaction
+from app.models import StoreItem, StudentItem, Transaction, TransactionStatus
 from app.utils.transaction_idempotency import create_idempotent_transaction, student_item_refund_key
 from app.utils.time import utc_now
 
