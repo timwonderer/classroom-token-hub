@@ -58,7 +58,7 @@ tests/
 ├── test_models.py              # Model tests
 ├── test_teacher_recovery.py    # Account recovery tests
 ├── test_multi_tenancy.py       # Multi-tenancy scoping tests
-└── ... (55 test files total)
+└── ... (110+ test files total)
 ```
 
 ### Test Naming Convention
@@ -565,7 +565,7 @@ def test_transfer_updates_balances(client, app):
 
 ### Current Status
 
-- **55 test files**
+- **110+ test files**
 - Coverage target: 80%+ for core features
 - All routes should have at least one test
 
@@ -617,7 +617,7 @@ pytest -s
 
 ---
 
-**Last Updated:** 2025-12-13
-**Test Count:** 55 files
+**Last Updated:** 2026-04-14
+**Test Count:** 110+ files
 **Framework:** pytest with Flask test client
 **Coverage Tool:** pytest-cov

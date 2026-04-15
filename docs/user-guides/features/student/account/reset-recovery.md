@@ -18,10 +18,13 @@ If you forget your username, forget your PIN, or simply cannot log in, your teac
 ## Step-by-Step Instructions
 
 ### Recovering Your Account
-1. Contact your teacher directly and ask them to "reset" your account.
-2. Once your teacher confirms they have reset it, go to the student login page and select **Claim Account**.
-3. You will need to claim your account as if it were your first time, using your join code, name, and date of birth.
-4. You will then be prompted to create a new username and PIN. (Your money and transaction history are automatically saved and restored).
+1. Contact your teacher directly and ask them to reset your account. Your teacher will generate a one-time **reset code** and share it with you.
+2. Go to the student login page and select **I can't log into my account** to open the recovery flow (or follow the link your teacher provides).
+3. Enter your **join code** and the **reset code** your teacher gave you.
+4. You will be prompted to create a new username and set a new PIN and passphrase. Your name and last initial are preserved automatically — you do not need to re-enter any personal information.
+
+> [!NOTE]
+> Your token balance and transaction history are automatically saved and restored after recovery.
 
 ## Important Notes
 > [!TIP]

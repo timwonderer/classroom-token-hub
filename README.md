@@ -100,6 +100,7 @@ The platform favors simple, reliable technologies and predictable infrastructure
 - **Deletion Confirmation Gates** — Timed in-app confirmation dialogs for destructive operations (class/period deletion, account removal)
 - **Hall Pass & Admin Identity Boundaries** — Hardened authorization checks prevent cross-admin data access in hall pass flows
 - **Class Deletion Audit** — Audited and patched all deletion paths; fixed BalanceCache orphaning (P1), scoping bugs (P2), and orphaned settings cleanup (P3)
+- **Runtime Invariant Health Checks** — Continuous deterministic verification of economic and ledger correctness across six invariant categories (ledger↔BalanceCache consistency, idempotency uniqueness, balance rules, transaction state validity, temporal integrity, money supply). Exposed via `GET /health/invariants` for uptime monitoring and Grafana alerting
 - **Cloudflare Turnstile** — Bot protection on login forms
 - **Database Error Logging** — Automatic error tracking and monitoring
 - **Custom Error Pages** — User-friendly error handling (400, 401, 403, 404, 500, 503)
@@ -326,10 +327,16 @@ v2.0 is under active development with brand new join-code centric schema design,
 
 ## Monitoring
 
-Deploy behind a production web server (e.g., NGINX). The `/health` endpoint returns a 200 status when the database is reachable.
+Deploy behind a production web server (e.g., NGINX).
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Returns `200` when the database is reachable. Use for basic uptime checks. |
+| `GET /health/invariants` | Returns `200` when all economic invariants pass; `500` with a sanitized failure report on any violation. Use for Pulsetic / Grafana alerting. |
 
 ```bash
 curl http://your-domain/health
+curl http://your-domain/health/invariants
 ```
 
 ---
