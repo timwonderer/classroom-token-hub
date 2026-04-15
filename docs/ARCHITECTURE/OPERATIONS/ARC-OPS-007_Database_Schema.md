@@ -224,7 +224,7 @@ Key fields: `student_id`, `period`, `amount_paid`, `period_month`, `period_year`
 ### `rent_waivers`
 Tracks rent waivers.
 
-Key fields: `student_id`, `join_code` (class-period scope; required for correct multi-period isolation), `waiver_start_date`, `waiver_end_date`, `periods_count`, `reason`, `created_by_admin_id`, `created_at`.
+Key fields: `student_id`, `join_code` (nullable; when present, the waiver is scoped to that class period; when `NULL`, it is a student-level global waiver that applies across join codes), `waiver_start_date`, `waiver_end_date`, `periods_count`, `reason`, `created_by_admin_id`, `created_at`.
 
 ---
 
@@ -453,7 +453,7 @@ Added in v1.9.x. The invariant runner (`app/services/invariant_runner.py`) evalu
 | Temporal integrity | `temporal_integrity.py` | `posted_at` is never before the transaction creation timestamp. |
 | Money supply integrity | `money_supply.py` | Aggregate cache equals aggregate ledger; transfer pairs sum to zero with correct sign symmetry; per-class supply breakdown; `delta_cents` metric for Grafana. |
 
-**Response:** `200 OK` (all pass) or `500` with a sanitised JSON failure summary (exception details scrubbed per CodeQL #156).
+**Response:** `200 OK` (all pass) or `500` with a sanitized JSON failure summary (exception details scrubbed per CodeQL #156).
 
 ---
 
@@ -462,7 +462,7 @@ Added in v1.9.x. The invariant runner (`app/services/invariant_runner.py`) evalu
 - Monetary values must be stored using `Numeric(12,2)` (e.g., `Transaction.amount`) to ensure exact decimal precision and prevent floating-point drift.
 - Indices are defined on frequent lookup fields (e.g., join codes, student/teacher IDs, timestamps) to support pagination and scoped queries.
 - **v1.7.0** added analytics models (`analytics_snapshots`, `analytics_events`, `analytics_alerts`) for system health monitoring and rent itemization (`rent_items`) for transparent rent breakdown.
-- **v1.9.x** added `transfer_correlation_id` to `transactions`, `username_migrated` to `students`, `collective_goal_expires_at` to `store_items`, and `join_code` to `rent_waivers`. All `dob_sum` and `last_name_hash_by_part` fields on `students` and `teacher_blocks` are now nullable and purged post-setup/post-claim.
+- **v1.9.x** added `transfer_correlation_id` to `transaction`, `username_migrated` to `students`, `collective_goal_expires_at` to `store_items`, and `join_code` to `rent_waivers`. All `dob_sum` and `last_name_hash_by_part` fields on `students` and `teacher_blocks` are now nullable and purged post-setup/post-claim.
 - All new models properly scoped by `join_code` for multi-tenancy compliance.
 
 ## VII. Amendment

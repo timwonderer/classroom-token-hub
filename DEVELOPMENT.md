@@ -38,9 +38,9 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 
 The following have shipped to `main` but are not yet tagged in a release:
 
-- **Runtime Invariant Health Check System** (V2-INV-001) — `GET /health/invariants` endpoint validates six economic and ledger invariants continuously. `transfer_correlation_id` added to `transactions` to link transfer pairs. See `docs/INV-CORE-000_Core_Invariants.md`.
+- **Runtime Invariant Health Check System** (V2-INV-001) — `GET /health/invariants` endpoint validates six economic and ledger invariants continuously. `transfer_correlation_id` added to `transaction` to link transfer pairs. See `docs/INV-CORE-000_Core_Invariants.md`.
 - **Student DOB Privacy Remediation (Phase 1)** — DOB removed from usernames and logs; one-time migration flow at `/migrate-username`; `username_migrated` boolean on `Student`; `dob_sum` and `last_name_hash_by_part` nulled post-migration.
-- **V1 Rent Stabilization** — Centralised payment validation, atomic transaction boundary, pre-insert guard, duplicate submission soft guard, anomaly logging. See `docs/FEATURES/RENT/FEAT-RENT-004_V1_Stabilization_Plan.md`.
+- **V1 Rent Stabilization** — Centralized payment validation, atomic transaction boundary, pre-insert guard, duplicate submission soft guard, anomaly logging. See `docs/FEATURES/RENT/FEAT-RENT-004_V1_Stabilization_Plan.md`.
 - **Tiered Insurance Setup** — Modular preset/advanced/custom configuration modes; lock-in workflow; economy snapshot pricing; variable approval cap fix.
 - **Economy Policy Mode and Rebalancer** — `Tight` / `Default` / `Comfortable` profiles drive CWI-guided rebalance for rent, store, insurance, and payroll settings.
 - **Teacher PII Deletion Cascade** — Explicit FK-ordered cascade cleanup on teacher account deletion prevents `ForeignKeyViolation` errors.
@@ -435,7 +435,7 @@ See [RELEASE_NOTES_v1.2.0.md](docs/LOGS/RELEASES/LOG-REL-007_Release_Notes_V1.2.
 
 ### April 2026
 - ✅ Student DOB Privacy Remediation Phase 1 (2026-04-12) — DOB removed from usernames and logs; one-time `/migrate-username` flow; `username_migrated` flag; `dob_sum` nulled post-migration
-- ✅ V1 Rent Stabilization — centralised payment validation, atomic transaction boundary, pre-insert guard, duplicate submission soft guard, anomaly logging (PR #1156)
+- ✅ V1 Rent Stabilization — centralized payment validation, atomic transaction boundary, pre-insert guard, duplicate submission soft guard, anomaly logging (PR #1156)
 - ✅ Runtime Invariant Health Check System (V2-INV-001) — `GET /health/invariants` with 6 invariant categories; `transfer_correlation_id` on transactions (PR #1138, #1139)
 - ✅ Teacher account deletion explicit cascade — FK-safe multi-table cleanup prevents ForeignKeyViolation (PR #1157)
 - ✅ Gunicorn structured JSON access logging (PR #1157)
@@ -445,7 +445,7 @@ See [RELEASE_NOTES_v1.2.0.md](docs/LOGS/RELEASES/LOG-REL-007_Release_Notes_V1.2.
 - ✅ Collective goal expiration deadline and progress reset on reactivation (PR #1110, v1.9.0)
 - ✅ Economy policy mode and rebalancer — `Tight`/`Default`/`Comfortable` profiles (v1.9.x)
 - ✅ Tiered insurance setup with lock-in workflow (PR #1090–#1096, v1.9.x)
-- ✅ Rent waivers properly scoped to `join_code` and honoured in payment validation (v1.9.x)
+- ✅ Rent waivers properly scoped to `join_code` and honored in payment validation (v1.9.x)
 - ✅ Rent cycle rate lock per `join_code` — mid-cycle changes roll to next cycle (PR #1103, #1104)
 
 ### December 2025

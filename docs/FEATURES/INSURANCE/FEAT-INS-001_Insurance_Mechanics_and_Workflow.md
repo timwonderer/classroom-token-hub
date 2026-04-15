@@ -358,7 +358,7 @@ When a policy has a `claim_time_limit_days` value set, the gate is evaluated aga
 
 This prevents clock drift or slow review queues from retroactively invalidating claims that were submitted on time.
 
-Teachers may override the deadline on a per-claim basis from the claim processing view. An override is recorded in the claim's audit trail.
+Teachers may override the deadline on a per-claim basis from the claim processing view. The override reason is stored on the claim record (`InsuranceClaim.time_limit_override_reason`) and is visible from the claim.
 
 ---
 

@@ -332,7 +332,7 @@ Deploy behind a production web server (e.g., NGINX).
 | Endpoint | Purpose |
 |---|---|
 | `GET /health` | Returns `200` when the database is reachable. Use for basic uptime checks. |
-| `GET /health/invariants` | Returns `200` when all economic invariants pass; `500` with a sanitised failure report on any violation. Use for Pulsetic / Grafana alerting. |
+| `GET /health/invariants` | Returns `200` when all economic invariants pass; `500` with a sanitized failure report on any violation. Use for Pulsetic / Grafana alerting. |
 
 ```bash
 curl http://your-domain/health
