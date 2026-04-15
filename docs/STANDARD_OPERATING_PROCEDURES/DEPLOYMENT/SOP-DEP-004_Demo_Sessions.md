@@ -4,8 +4,11 @@
 |------------------|---------|----------------|------------|-----------------|
 | SOP-DEP-004      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
+> [!WARNING]
+> Deprecated for V1 stabilization. Demo session creation and demo login routes have been removed from the application, so this SOP is now historical reference for cleanup of legacy records only.
+
 ## Overview
-Demo sessions let admins temporarily experience the student portal without impacting real data. They are intentionally short-lived and isolated:
+Demo sessions previously let admins temporarily experience the student portal without impacting real data. For V1, only legacy cleanup behavior remains relevant:
 
 - Sessions are hard-limited to **10 minutes** (`SESSION_TIMEOUT_MINUTES`), even when an admin is viewing as the demo student.
 - Demo login links now require the **same admin** to be authenticated before use.

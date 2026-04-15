@@ -8,6 +8,11 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+- **V1 store lifecycle stabilization** — Rejected delayed-use redemptions now issue refunds as `PENDING` ledger entries so balance-cache settlement remains authoritative and `/health/invariants` does not fail from posted-ledger drift before settlement. Refunded purchases are also blocked from later admin voids to prevent double-compensation paths after redemption rejection.
+- **Regular item overdraft transfer settlement** — Savings-to-checking overdraft protection legs created during standard item purchases now enter the ledger as `PENDING`, matching the rest of the settlement-based balance flow instead of bypassing `balance_cache`.
+- **Deprecated demo session creation/login routes removed** — Removed the admin API used to mint demo student sessions and the student demo-login route so V1 no longer exposes an application path for creating new demo-session state.
+
 ### Security
 - **Student DOB Privacy Remediation (Phase 1)** — Comprehensive privacy hardening in response to school district review (PR #1142):
   - **DOB removed from logs**: `seat_dob_sum` and `provided_dob_sum` stripped from failed-claim warning logs; only the boolean match result (`dob_sum_matches`) is retained for debugging.

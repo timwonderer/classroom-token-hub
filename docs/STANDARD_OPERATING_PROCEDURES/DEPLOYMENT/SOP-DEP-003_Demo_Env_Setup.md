@@ -4,10 +4,13 @@
 |------------------|---------|----------------|------------|-----------------|
 | SOP-DEP-003      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
-This guide describes how to stand up the read-only style demo endpoints that power the landing page iframes and buttons in `docs/index.html`. It uses the built-in demo student lifecycle (10-minute TTL, auto-cleanup) and a dedicated demo teacher with seeded data.
+> [!WARNING]
+> Deprecated for V1 stabilization. The application routes that created and launched demo student sessions have been removed, so this SOP is retained only as historical reference and should not be used for current deployment work.
 
-## What already exists in the codebase
-- Demo student lifecycle: `app/routes/api.py:create_demo_student`, `app/routes/student.py:demo_login`, and `app/utils/demo_sessions.py:cleanup_demo_student_data`
+This guide describes the former demo-session flow that powered the landing page iframes and buttons in `docs/index.html`. Those route-based demo session entrypoints are no longer available in V1.
+
+## Historical Reference
+- Demo student lifecycle support code still exists in cleanup and model layers, but the route entrypoints `app/routes/api.py:create_demo_student` and `app/routes/student.py:demo_login` have been removed.
 - Timeouts: `SESSION_TIMEOUT_MINUTES` (10 minutes) enforced in `app/auth.py` (`login_required`)
 - Automatic cleanup: scheduler job `cleanup_expired_demo_sessions_job` in `app/scheduled_tasks.py` and logout hook in `student.logout` (documented in `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-004_Demo_Sessions.md`)
 - Schema: `demo_students` table (see `docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md`)

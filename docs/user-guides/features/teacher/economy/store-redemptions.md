@@ -27,6 +27,9 @@ The Store Redemptions feature allows you to review pending "Delayed" purchases a
 > [!NOTE]
 > Immediate items skip the pending queue entirely and show up directly in Purchase History.
 
+> [!IMPORTANT]
+> Denying a delayed-use redemption is now a terminal path for that purchase in V1. Once the refund is created, that purchase should be treated as resolved and should not be voided later as a second correction path.
+
 ## Related guides
 - [Store Items](store-items.md)
 - [Teacher Store Diagnostics](../../../diagnostics/teacher/store.md)
