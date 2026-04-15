@@ -481,7 +481,7 @@
                     </div>
                     <div class="mb-3">
                         <label for="usePassphrase" class="form-label">Enter your Passphrase to confirm:</label>
-                        <input type="password" class="form-control" id="usePassphrase" name="pin" inputmode="numeric" pattern="[0-9]*" required>
+                        <input type="password" class="form-control" id="usePassphrase" name="passphrase" required>
                     </div>
                 </form>
             </div>
@@ -915,21 +915,25 @@
         document.getElementById('usePassphrase').focus();
     });
 
+    document.getElementById('useItemForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+    });
+
     document.getElementById('confirmUseBtn').addEventListener('click', () => {
         const form = document.getElementById('useItemForm');
         const itemId = form.querySelector('#useModalItemId').value;
-        const pin = form.querySelector('#usePassphrase').value;
+        const passphrase = form.querySelector('#usePassphrase').value;
         const redemptionDetails = form.querySelector('#redemptionDetails').value;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-        if (!pin) {
-            alert('Please enter your PIN.');
+        if (!passphrase) {
+            alert('Please enter your Passphrase.');
             return;
         }
 
         const requestBody = {
             student_item_id: itemId,
-            passphrase: pin
+            passphrase,
         };
 
         // Include redemption details if provided
