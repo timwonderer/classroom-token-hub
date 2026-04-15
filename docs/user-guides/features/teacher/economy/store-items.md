@@ -30,7 +30,8 @@ The Store allows you to add, edit, and organize items or privileges that student
    - **Inventory caps** limit the total number of times the item can be purchased globally.
    - **Per-student limits** cap repeat redemptions by a single user.
    - **Expiry or auto delist** automatically removes the item from the store after a specific date.
-5. Save the item to publish it to the student store.
+5. For **Collective Goal** items, optionally set an **Expiration Deadline**. If the class does not meet the goal before the deadline, all pending purchases are automatically refunded and the item is deactivated. Progress always resets to zero when you reactivate a collective goal item.
+6. Save the item to publish it to the student store.
 
 ## Important Notes
 > [!TIP]

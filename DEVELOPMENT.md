@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-03-19
-**Current Version:** 1.9.0
+**Last Updated:** 2026-04-14
+**Current Version:** 1.9.x (active maintenance)
 **Target:** 1.10.0 Future Enhancements
 
 ---
@@ -34,19 +34,35 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 
 ---
 
-## In Progress (Unreleased)
+## In Progress (Unreleased — targeting 1.10.0)
 
-- Fixed intermittent teacher student-detail scoping where stale class context could hide balances/transactions; detail view now resolves a valid join code for the selected student and roster links pass join code explicitly.
-- Fixed student recovery identity updates to preserve claimed class seats, preventing post-claim "No class selected" errors on next login.
-- Updated teacher reset flow to redirect to Student Detail after generating a reset code, where the active code remains visible until expiration.
-- Improved mobile responsiveness for student recovery pages by tightening spacing and collapsing the right panel on small screens.
-- Fixed economy rebalance rent updates so each join code locks a cycle's base rent rate once the first valid payment is recorded; mid-cycle changes now roll forward to the next cycle (late fees still apply when overdue).
+The following have shipped to `main` but are not yet tagged in a release:
+
+- **Runtime Invariant Health Check System** (V2-INV-001) — `GET /health/invariants` endpoint validates six economic and ledger invariants continuously. `transfer_correlation_id` added to `transaction` to link transfer pairs. See `docs/INV-CORE-000_Core_Invariants.md`.
+- **Student DOB Privacy Remediation (Phase 1)** — DOB removed from usernames and logs; one-time migration flow at `/migrate-username`; `username_migrated` boolean on `Student`; `dob_sum` and `last_name_hash_by_part` nulled post-migration.
+- **V1 Rent Stabilization** — Centralized payment validation, atomic transaction boundary, pre-insert guard, duplicate submission soft guard, anomaly logging. See `docs/FEATURES/RENT/FEAT-RENT-004_V1_Stabilization_Plan.md`.
+- **Tiered Insurance Setup** — Modular preset/advanced/custom configuration modes; lock-in workflow; economy snapshot pricing; variable approval cap fix.
+- **Economy Policy Mode and Rebalancer** — `Tight` / `Default` / `Comfortable` profiles drive CWI-guided rebalance for rent, store, insurance, and payroll settings.
+- **Teacher PII Deletion Cascade** — Explicit FK-ordered cascade cleanup on teacher account deletion prevents `ForeignKeyViolation` errors.
+- **Gunicorn Structured JSON Logging** — Machine-readable access logs with configurable local-timezone timestamps; Grafana economy-health dashboard added.
+- **Sysadmin escalated issue "In Review" status** — New status for active-investigation state before resolution.
+- **Collective goal progress reset on reactivation** — Reactivating a deactivated collective goal now starts progress at zero.
+- **Rent waiver UI class switching fix** — Waiver form reloads correctly when the teacher switches the active class.
+- **Rent full-payment mode fix** — Corrected blocking of already-paid students in full-payment mode.
+- **Insurance claim time-limit gate** — Uses filing timestamp; teacher override available.
+- **Privacy policy accuracy revision** — Hashing description, retention windows, and recovery flow description corrected.
 
 ---
 
 ## Recent Releases
 
-### ✅ Version 1.9.0 - March 1, 2026
+### 🔄 Version 1.9.x - Active Maintenance (post 2026-03-04)
+
+Unreleased patches shipping on `main` since v1.9.0. See [CHANGELOG.md — Unreleased](CHANGELOG.md) for full details.
+
+Key areas: runtime invariant health checks, student DOB privacy remediation, V1 rent stabilization, tiered insurance setup, economy policy mode and rebalancer, teacher PII deletion cascade, Gunicorn JSON logging.
+
+### ✅ Version 1.9.0 - March 4, 2026
 
 **Documentation taxonomy and navigation integrity release:**
 
@@ -325,38 +341,17 @@ See [RELEASE_NOTES_v1.2.0.md](docs/LOGS/RELEASES/LOG-REL-007_Release_Notes_V1.2.
 
 **Estimated Effort:** 12-18 weeks for full implementation
 
-#### 3. Collective Goals Store Items (Partially Complete)
-**Status:** Database and partial UI implemented, needs completion
-**Implementation Date:** November 2025 (migration o2p3q4r5s6t7)
+#### 3. Collective Goals Store Items ✅ **COMPLETED in v1.9.0**
+**Status:** Fully implemented
+**Documentation:** See store-items user guide and CHANGELOG [1.9.0]
 
-**Description:** Store items that require collective class participation, teaching teamwork and group achievement.
-
-**Two Collective Goal Types:**
-
-1. **Fixed** - Requires a specific number of purchases (e.g., "10 students must purchase")
-2. **Whole Class** - Requires all enrolled students to purchase
-
-**Currently Implemented:**
-- Database model: `StoreItem.collective_goal_type` and `StoreItem.collective_goal_target` columns
-- Migration: `o2p3q4r5s6t7_add_collective_goal_settings.py`
-- Forms: `StoreItemForm` includes collective goal fields with validation
-- API logic: `/api/store/purchase` handles collective item purchases with threshold checking
-- Student UI: `student_shop.html` displays collective goal progress
-
-**Needs Completion:**
-- Teacher UI for creating/editing collective goal items in store management
-- Visual progress indicators on teacher dashboard
-- Notification system when collective goals are met
-- Redemption workflow for collective items
-- Documentation in user guides
-
-**Use Cases:**
-- "Class Pizza Party" - Requires all students to contribute
-- "Outdoor Learning Day" - Needs 20 students to purchase
-- Team building and collaborative financial goals
-
-**Estimated Effort to Complete:** 2-3 weeks
-**Priority:** Medium (feature is functional but needs polish and documentation)
+**Implemented:**
+- Teacher UI for creating/editing collective goal items (store management)
+- Optional expiration deadline: unmet goals auto-refund and deactivate on deadline
+- Progress resets to zero on reactivation (voided `StudentItem` records excluded)
+- `collective_goal_expires_at` column on `StoreItem` (migration `e3f4g5h6i7j8`)
+- `app/utils/store.py`: `refund_pending_collective_purchases()` and `process_expired_collective_goals()` helpers
+- 71+ tests in `tests/test_collective_goal_expiration.py`
 
 #### 4. Jobs Feature (v1.7+)
 **Status:** Partially implemented, then removed; awaiting completion
@@ -437,6 +432,21 @@ See [RELEASE_NOTES_v1.2.0.md](docs/LOGS/RELEASES/LOG-REL-007_Release_Notes_V1.2.
 ---
 
 ## Recently Completed Features
+
+### April 2026
+- ✅ Student DOB Privacy Remediation Phase 1 (2026-04-12) — DOB removed from usernames and logs; one-time `/migrate-username` flow; `username_migrated` flag; `dob_sum` nulled post-migration
+- ✅ V1 Rent Stabilization — centralized payment validation, atomic transaction boundary, pre-insert guard, duplicate submission soft guard, anomaly logging (PR #1156)
+- ✅ Runtime Invariant Health Check System (V2-INV-001) — `GET /health/invariants` with 6 invariant categories; `transfer_correlation_id` on transactions (PR #1138, #1139)
+- ✅ Teacher account deletion explicit cascade — FK-safe multi-table cleanup prevents ForeignKeyViolation (PR #1157)
+- ✅ Gunicorn structured JSON access logging (PR #1157)
+- ✅ Sysadmin "In Review" escalated issue status
+
+### March 2026
+- ✅ Collective goal expiration deadline and progress reset on reactivation (PR #1110, v1.9.0)
+- ✅ Economy policy mode and rebalancer — `Tight`/`Default`/`Comfortable` profiles (v1.9.x)
+- ✅ Tiered insurance setup with lock-in workflow (PR #1090–#1096, v1.9.x)
+- ✅ Rent waivers properly scoped to `join_code` and honored in payment validation (v1.9.x)
+- ✅ Rent cycle rate lock per `join_code` — mid-cycle changes roll to next cycle (PR #1103, #1104)
 
 ### December 2025
 - ✅ Teacher display names and custom class labels (2025-12-06)
@@ -683,12 +693,13 @@ Version 1.0 has been successfully released with the following criteria met:
 5. Continue admin experience polish and export capabilities
 
 **Recent Releases:**
-- **v1.9.0** (2026-03-01) - Docs Taxonomy Consolidation and Navigation Integrity
+- **v1.9.x** (2026-03-04+) - Active maintenance; see CHANGELOG [Unreleased]
+- **v1.9.0** (2026-03-04) - Docs Taxonomy Consolidation and Navigation Integrity
 - **v1.8.0** (2026-02-09) - Rent Item Types, Coverage Tracking, Stability Fixes
 - **v1.7.0** (2026-01-09) - Analytics, Rent Itemization, Mobile Navigation
 - **v1.6.0** (2026-01-01) - Repository Organization
 - **v1.5.0** (2025-12-29) - Issue Resolution System
 
 ---
-**Last Updated:** 2026-03-04
+**Last Updated:** 2026-04-14
 **Maintained by:** Project maintainers and contributors

@@ -25,7 +25,7 @@ This document provides essential guidance for Claude (or any AI assistant) worki
 - **Students** can be enrolled in multiple periods with different teachers
 - **System Admins** oversee the entire platform
 
-**Version:** 1.4.1 - Documentation alignment release
+**Version:** 1.9.x - Active maintenance (see CHANGELOG.md)
 **License:** PolyForm Noncommercial 1.0.0
 **Python:** 3.10+
 **Database:** PostgreSQL with Alembic migrations
@@ -109,9 +109,13 @@ app/
 - Identity and access: `Admin`, `SystemAdmin`, `User`, `IdentityProfile`, `Seat`
 - Class scope: `ClassEconomy`, `ClassMembership`, `TeacherBlock`, `StudentTeacher`, `JoinCode`
 - Student runtime: `Student`, `StudentBlock`, `Announcement`, `FeatureSettings`, `TeacherOnboarding`
-- Financial and attendance: `Transaction`, `BalanceCache`, `PayrollSettings`, `PayrollCache`, `BankingSettings`, `TapEvent`, `HallPassLog`
+- Financial and attendance: `Transaction` (with `transfer_correlation_id`), `BalanceCache`, `PayrollSettings`, `PayrollCache`, `BankingSettings`, `TapEvent`, `HallPassLog`
+- Rent and insurance: `RentSettings`, `RentPayment`, `RentWaiver` (with `join_code`), `RentItem`, `InsurancePolicy`, `StudentInsurance`, `InsuranceClaim`
+- Store: `StoreItem` (with `collective_goal_expires_at`), `StudentItem`, `StoreItemBlock`
 - Support and observability: `Issue`, `IssueCategory`, `IssueStatusHistory`, `IssueResolutionAction`, `ErrorLog`, `ErrorEvent`, `ActorRequestTrace`, `UserReport`
 - Analytics: `AnalyticsAlert`, `AnalyticsSnapshot`, `AnalyticsEvent`
+
+See `docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md` for full schema reference.
 
 ---
 
@@ -170,41 +174,47 @@ pytest tests/
 2. **DEVELOPMENT.md** - Add to roadmap or mark as completed
 3. **README.md** - Update if it affects installation/quick start
 4. **User guides** in `docs/user-guides/` - If user-facing
-5. **Technical reference** in `docs/technical-reference/` - For architecture changes
+5. **Technical reference** in `docs/ARCHITECTURE/` - For architecture changes
 
 ### Documentation Organization
 
 ```
 docs/
-├── README.md                  # Documentation index
-├── user-guides/               # Teachers and students
+├── README.md                          # Documentation index
+├── INV-CORE-000_Core_Invariants.md    # Foundational invariants (top-level authority)
+├── INV-CORE-001_Authority_Model.md    # Authority hierarchy
+├── user-guides/                       # Teachers, students, sysadmins
 │   ├── README.md
 │   ├── teacher_manual.md
 │   ├── student_guide.md
-│   ├── economy_guide.md
+│   ├── sysadmin_manual.md
 │   ├── diagnostics/
 │   ├── features/
 │   └── legal/
-├── technical-reference/       # Architecture, database, API
-│   ├── architecture.md
-│   ├── database_schema.md
-│   ├── api_reference.md
-│   ├── analytics-specification.md
-│   └── economy-specification.md
-├── operations/                # Deployment and maintenance
-│   ├── README.md
-│   ├── Deployment_Guide.md
-│   ├── README_GITHUB_PAGES.md
-│   └── GITHUB_PAGES_SETUP.md
-├── security/                  # Security audits
-│   ├── CRITICAL_SAME_TEACHER_LEAK.md
-│   └── MULTI_TENANCY_AUDIT.md
-├── development/               # Dev guides and policies
-│   ├── codebase_organization_documentation_hygiene_playbook.md
-│   ├── SCHEMA_CHANGE_MD.md
-│   ├── migration-specifications.md
-│   └── TESTING_SUMMARY.md
-└── archive/                   # Historical docs
+├── ARCHITECTURE/                      # System design and data models
+│   ├── ARC-CORE-000_Architecture_Foundation.md
+│   ├── IDENTITY/                      # Identity and account-recovery specs
+│   ├── OPERATIONS/                    # Database schema, API, migration specs
+│   └── SYSADMIN/                      # Sysadmin interface design
+├── FEATURES/                          # Feature specifications
+│   ├── INSURANCE/
+│   ├── RENT/
+│   ├── HALL_PASS/
+│   ├── ANALYTICS/
+│   ├── ECONOMY/
+│   └── SUPPORT/
+├── SECURITY/                          # Security audits and controls
+│   ├── AUDITS/
+│   ├── CONTROLS/
+│   ├── INCIDENTS/
+│   └── THREATS/
+├── STANDARD_OPERATING_PROCEDURES/     # Deployment, database, doc procedures
+│   ├── DEPLOYMENT/
+│   └── DATABASE/
+├── LOGS/                              # Audit logs and release notes
+│   ├── AUDITS/
+│   └── RELEASES/
+└── AUDITS/                            # Privacy and compliance audits
 ```
 
 ---
@@ -419,7 +429,7 @@ students = get_admin_student_query().all()
 - [ ] Test downgrade: `flask db downgrade`
 - [ ] Re-upgrade: `flask db upgrade`
 - [ ] Run tests: `pytest`
-- [ ] Update docs/technical-reference/database_schema.md if needed
+- [ ] Update docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md if needed
 - [ ] Update CHANGELOG.md
 - [ ] Commit migration with model changes
 
@@ -428,24 +438,25 @@ students = get_admin_student_query().all()
 ## Additional Resources
 
 - **Detailed Rules:** See `.claude/rules/` directory for in-depth guidance
-- **Project History:** `PROJECT_HISTORY.md` for context and philosophy
+- **Project History:** `docs/LOGS/AUDITS/LOG-ARC-031_Project_History.md` for context and philosophy
 - **Development Priorities:** `DEVELOPMENT.md` for roadmap and planned features
-- **Security Audits:** `docs/security/` for past security reviews
-- **Architecture:** `docs/technical-reference/architecture.md`
+- **Security Audits:** `docs/SECURITY/` for past security reviews
+- **Architecture:** `docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md`
 
 ---
 
 ## Questions or Clarifications?
 
 When uncertain about:
-- **Architecture decisions** → Review `docs/technical-reference/architecture.md`
-- **Database design** → Review `docs/technical-reference/database_schema.md`
-- **Multi-tenancy** → Review `docs/security/MULTI_TENANCY_AUDIT.md`
-- **Deployment** → Review `docs/operations/DEPLOYMENT.md`
+- **Architecture decisions** → Review `docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md`
+- **Database design** → Review `docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md`
+- **Multi-tenancy** → Review `docs/SECURITY/AUDITS/SEC-AUD-015_Multi_Tenancy_Audit.md`
+- **Deployment** → Review `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md`
+- **Invariants** → Review `docs/INV-CORE-000_Core_Invariants.md`
 
 Always prefer reading existing code and documentation before making assumptions.
 
 ---
 
-**Last Updated:** 2025-12-27
+**Last Updated:** 2026-04-14
 **For:** Claude Code and AI assistants working on Classroom Token Hub

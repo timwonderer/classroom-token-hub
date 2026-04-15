@@ -1,39 +1,34 @@
 ---
-title: Teacher and Class Management
+title: Teacher Management — Invite Codes
 category: features
 subcategory: sysadmin
 roles: [sysadmin]
-description: Guide to managing teacher accounts, periods, and class setups globally.
-keywords: [sysadmin, teachers, classes, periods, manage, delete, overview]
+description: Guide to generating and voiding teacher invite codes.
+keywords: [sysadmin, teachers, invite codes, generate, void]
 ---
 
-# Teacher and Class Management
+# Teacher Management — Invite Codes
 
 ## Overview
-This feature allows you to administer and oversee the teachers utilizing the platform. The Teacher Overview provides a bird's-eye view of all registered educators, their active classes, total students, and general economy health.
+The **Teacher Management** page is the sysadmin's tool for controlling who can register as a teacher. It does not modify class data, students, or economy settings — those remain entirely within each teacher's own account. The page has two functions: generating new invite codes and voiding unused ones.
 
 ## Step-by-Step Instructions
 
-### Viewing Teacher Details
+### Generating an Invite Code
 1. Navigate to **Teacher Management** in the sysadmin sidebar.
-2. Click **View Details** next to a teacher to see specific setup information for that account.
+2. In the **Generate New Code** form, optionally enter a custom code value and set an expiry in days. Leave the code field blank to auto-generate.
+3. Click **Generate Invite Code**.
+4. The new code appears in the **Existing Codes** section. Use the copy button to share it with the prospective teacher.
 
-### Deleting Class Periods
+### Voiding an Unused Invite Code
 1. Navigate to **Teacher Management**.
-2. Locate the teacher and select **Delete Periods**.
-3. Confirm the deletion of the specific duplicate or erroneous class period.
-
-### Deleting a Teacher Account
-1. Navigate to **Teacher Management**.
-2. Locate the teacher and select **Delete Account**.
-3. Confirm the deletion.
+2. In the **Existing Codes** section, find the active code you want to revoke under **Active Codes**.
+3. Click the **Void** (block) icon next to the code and confirm the prompt.
+4. The code is immediately invalidated and cannot be used for registration.
 
 ## Important Notes
-> [!CAUTION]
-> Deleting an account is a destructive action that removes all associated data, students, and economy states permanently.
-
-> [!WARNING]
-> Always communicate with the teacher before deleting any periods or accounts to prevent accidental data loss.
+> [!NOTE]
+> Invite codes are single-use. Once a teacher registers with a code it is automatically marked as used and will not appear in **Active Codes**.
 
 > [!TIP]
-> Monitor abandoned classes by using the overview to spot accounts that haven't been active in months, and consider reaching out or pruning them.
+> Void codes that were shared with the wrong person or that have been outstanding too long without being used.
