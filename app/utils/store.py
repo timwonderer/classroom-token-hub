@@ -139,6 +139,7 @@ def refund_pending_collective_purchases(item, description_suffix="Goal Expired")
             join_code=si.join_code,
             amount=refund_amount,
             account_type='checking',
+            status=TransactionStatus.PENDING,
             type='refund',
             original_transaction_id=purchase_tx.id if purchase_tx else None,
             description=f"Refund: {item.name} ({description_suffix})",

@@ -351,6 +351,91 @@ def test_void_delayed_purchase_after_redemption_request_is_not_allowed(client):
     assert purchase_tx.is_void is False
 
 
+def test_void_rejected_redemption_purchase_is_not_allowed(client):
+    teacher, student = _build_teacher_student('VOIDREJ1')
+
+    delayed_item = StoreItem(
+        teacher_id=teacher.id,
+        name='Rejected Reward',
+        price=Decimal('20.00'),
+        item_type='delayed',
+        is_active=True,
+    )
+    db.session.add(delayed_item)
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher.id,
+        join_code='VOIDREJ1',
+        amount=Decimal('100.00'),
+        account_type='checking',
+        type='deposit',
+        description='Initial funds',
+    ))
+    db.session.commit()
+
+    _login_student(client, student.id, 'VOIDREJ1')
+    purchase_resp = client.post('/api/purchase-item', json={
+        'item_id': delayed_item.id,
+        'passphrase': 'password',
+        'quantity': 1,
+    })
+    assert purchase_resp.status_code == 200
+
+    student_item = StudentItem.query.filter_by(
+        student_id=student.id,
+        store_item_id=delayed_item.id,
+    ).first()
+    assert student_item is not None
+
+    use_resp = client.post('/api/use-item', json={
+        'student_item_id': student_item.id,
+        'passphrase': 'password',
+        'details': 'Reject this redemption',
+    })
+    assert use_resp.status_code == 200
+
+    purchase_tx = Transaction.query.filter_by(
+        student_id=student.id,
+        type='purchase',
+    ).filter(Transaction.description.like("Purchase: Rejected Reward%")).first()
+    assert purchase_tx is not None
+
+    _login_admin(client, teacher.id)
+
+    reject_resp = client.post('/api/reject-redemption', json={'student_item_id': student_item.id})
+    assert reject_resp.status_code == 200
+    assert reject_resp.get_json()['status'] == 'success'
+
+    db.session.refresh(student_item)
+    db.session.refresh(purchase_tx)
+    assert student_item.status == 'rejected'
+    assert purchase_tx.reversal_transaction_id is not None
+
+    refund_count_before = Transaction.query.filter_by(
+        student_id=student.id,
+        type='refund',
+        original_transaction_id=purchase_tx.id,
+    ).count()
+    assert refund_count_before == 1
+
+    void_resp = client.post(
+        f'/admin/void-transaction/{purchase_tx.id}',
+        headers={'X-Requested-With': 'XMLHttpRequest'},
+    )
+    assert void_resp.status_code == 400
+    assert void_resp.get_json()['message'] == 'Cannot void: purchase already refunded.'
+
+    db.session.refresh(purchase_tx)
+    assert purchase_tx.is_void is False
+
+    refund_count_after = Transaction.query.filter_by(
+        student_id=student.id,
+        type='refund',
+        original_transaction_id=purchase_tx.id,
+    ).count()
+    assert refund_count_after == refund_count_before
+
+
 def test_void_already_voided_transaction_is_rejected(client):
     teacher, student = _build_teacher_student('VOIDDBL1')
 
