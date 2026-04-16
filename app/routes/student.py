@@ -1590,29 +1590,18 @@ def transfer():
             flash("Insufficient savings funds.", "transfer_error")
             return redirect(url_for("student.transfer"))
         else:
-            # CRITICAL FIX v2: Add BOTH teacher_id AND join_code for proper isolation
-            # Record the withdrawal side of the transfer
-            db.session.add(Transaction(
+            # Route transfer writes through ledger_service (canonical write path)
+            from app.services import ledger_service as _ledger_svc
+            _ledger_svc.create_transfer_pair(
                 student_id=student.id,
                 teacher_id=teacher_id,
-                join_code=join_code,  # CRITICAL: Add join_code for period isolation
-                amount=-amount,
-                account_type=from_account,
-                status=TransactionStatus.PENDING,
-                type='Withdrawal',
-                description=f'Transfer to {to_account}'
-            ))
-            # Record the deposit side of the transfer
-            db.session.add(Transaction(
-                student_id=student.id,
-                teacher_id=teacher_id,
-                join_code=join_code,  # CRITICAL: Add join_code for period isolation
+                join_code=join_code,
                 amount=amount,
-                account_type=to_account,
-                status=TransactionStatus.PENDING,
-                type='Deposit',
-                description=f'Transfer from {from_account}'
-            ))
+                from_account=from_account,
+                to_account=to_account,
+                withdraw_description=f'Transfer to {to_account}',
+                deposit_description=f'Transfer from {from_account}',
+            )
             try:
                 db.session.commit()
                 current_app.logger.info(
@@ -1974,43 +1963,30 @@ def purchase_insurance(policy_id):
     enrollment.freeze_policy_snapshot(policy)
     db.session.add(enrollment)
 
-    # CRITICAL FIX v2: Create transaction with join_code
-    transaction = Transaction(
+    # Route insurance premium debit through ledger_service (canonical write path)
+    from app.services import ledger_service as _ledger_svc
+    _ledger_svc.create_pending_transaction(
         student_id=student.id,
         teacher_id=teacher_id,
-        join_code=join_code,  # CRITICAL: Add join_code for period isolation
+        join_code=join_code,
         amount=-policy.premium,
         account_type='checking',
-        status=TransactionStatus.PENDING,
         type='insurance_premium',
-        description=f"Insurance premium: {policy.title}"
+        description=f"Insurance premium: {policy.title}",
     )
-    db.session.add(transaction)
 
     # Handle overdraft protection transfer if savings covers a shortfall
     if banking_settings and banking_settings.overdraft_protection_enabled and overdraft_shortfall > 0:
-        transfer_tx_withdraw = Transaction(
-            student_id=student.id,
-            teacher_id=teacher_id,
-            join_code=join_code,
-            amount=-overdraft_shortfall,
-            account_type='savings',
-            status=TransactionStatus.PENDING,
-            type='Withdrawal',
-            description='Overdraft protection transfer to checking'
-        )
-        transfer_tx_deposit = Transaction(
+        _ledger_svc.create_transfer_pair(
             student_id=student.id,
             teacher_id=teacher_id,
             join_code=join_code,
             amount=overdraft_shortfall,
-            account_type='checking',
-            status=TransactionStatus.PENDING,
-            type='Deposit',
-            description='Overdraft protection transfer from savings'
+            from_account='savings',
+            to_account='checking',
+            withdraw_description='Overdraft protection transfer to checking',
+            deposit_description='Overdraft protection transfer from savings',
         )
-        db.session.add(transfer_tx_withdraw)
-        db.session.add(transfer_tx_deposit)
 
     db.session.commit()
     flash(f"Successfully purchased {policy.title}! Coverage starts after {policy.waiting_period_days} day waiting period.", "success")
@@ -3632,172 +3608,42 @@ def rent_pay(period):
     # FIX: Process payment with teacher_id
     # Deduct from checking account
     is_partial = payment_amount < remaining_amount
-    billed_period_date = payment_due_date or now
-    payment_description = f'Rent for Period {period} - {billed_period_date.strftime("%B %Y")}'
-    if is_partial and settings.allow_incremental_payment:
-        payment_description += f' (Partial: ${payment_amount:.2f} of ${remaining_amount:.2f})'
-    elif late_fee > Decimal('0'):
-        payment_description += f' (includes ${late_fee:.2f} late fee)'
 
-    projected_balance = Decimal(str(checking_balance)) - payment_amount
-
-    transaction = Transaction(
-        student_id=student.id,
-        teacher_id=teacher_id,
-        join_code=join_code,  # CRITICAL: Add join_code for period isolation
-        amount=-payment_amount,
-        account_type='checking',
-        status=TransactionStatus.PENDING,
-        type='Rent Payment',
-        description=payment_description
-    )
-    student.transactions.append(transaction)
-    db.session.add(transaction)
-
-    # Calculate late fee portion for this payment (proportional if partial payment)
-    late_fee_for_this_payment = Decimal('0.00')
-    if is_late and late_fee > Decimal('0.00'):
-        # If this is a partial payment, allocate late fee proportionally
-        if is_partial:
-            late_fee_for_this_payment = _quantize_currency((payment_amount / total_due) * late_fee)
-        else:
-            late_fee_for_this_payment = _quantize_currency(late_fee)
-
-    # Record rent payment with coverage period (pre-paid system)
-    payment = RentPayment(
-        student_id=student.id,
+    from app.feats.rent_payment_feat import execute_rent_payment
+    result = execute_rent_payment(
+        student=student,
+        context=context,
+        payment_amount=payment_amount,
         period=period,
-        join_code=join_code,
-        amount_paid=payment_amount,
-        period_month=current_month,
-        period_year=current_year,
+        settings=settings,
+        is_late=is_late,
+        late_fee=late_fee,
+        total_paid_so_far=total_paid_so_far,
+        total_due=total_due,
+        remaining_amount=remaining_amount,
         coverage_month=coverage_month,
         coverage_year=coverage_year,
-        was_late=is_late,
-        late_fee_charged=late_fee_for_this_payment
+        current_month=current_month,
+        current_year=current_year,
+        payment_due_date=payment_due_date,
+        banking_settings=banking_settings,
+        overdraft_shortfall=overdraft_shortfall,
+        now=now,
     )
-    db.session.add(payment)
-
-    db.session.flush()  # Flush to update balances without committing yet
-
-    # Handle overdraft protection transfer if savings covers a shortfall
-    if banking_settings and banking_settings.overdraft_protection_enabled and overdraft_shortfall > 0:
-        transfer_tx_withdraw = Transaction(
-            student_id=student.id,
-            teacher_id=teacher_id,
-            join_code=join_code,  # CRITICAL: Add join_code for period isolation
-            amount=-overdraft_shortfall,
-            account_type='savings',
-            status=TransactionStatus.PENDING,
-            type='Withdrawal',
-            description='Overdraft protection transfer to checking'
-        )
-        transfer_tx_deposit = Transaction(
-            student_id=student.id,
-            teacher_id=teacher_id,
-            join_code=join_code,  # CRITICAL: Add join_code for period isolation
-            amount=overdraft_shortfall,
-            account_type='checking',
-            status=TransactionStatus.PENDING,
-            type='Deposit',
-            description='Overdraft protection transfer from savings'
-        )
-        db.session.add(transfer_tx_withdraw)
-        db.session.add(transfer_tx_deposit)
-        db.session.flush()  # Flush to update balances
-
-    # Check if overdraft fee should be charged (after overdraft protection)
-    fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=teacher_id, join_code=join_code)
-
-    # Award Hall Passes if rent is fully paid (top-off model)
-    passes_awarded = 0
-    # Only award if this payment completes full rent (not already fully paid)
-    if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
-        passes_awarded, _, _ = _ensure_rent_hall_pass_top_off(
-            student,
-            context,
-            settings=settings,
-            now=now,
-        )
-
-    # Grant per-use free uses if rent is fully paid
-    per_use_items_granted = 0
-    if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
-        from app.models import RentItem
-        per_use_items = RentItem.query.filter_by(
-            rent_setting_id=settings.id,
-            rent_item_type='per_use'
-        ).all()
-
-        for pu_item in per_use_items:
-            if not pu_item.store_item_id:
-                continue
-
-            # Check if student already has an active (non-expired) StudentItem with uses_remaining for this store item
-            existing = StudentItem.query.filter(
-                StudentItem.student_id == student.id,
-                StudentItem.store_item_id == pu_item.store_item_id,
-                db.or_(
-                    StudentItem.uses_remaining > 0,
-                    StudentItem.uses_remaining == -1
-                ),
-                StudentItem.join_code == join_code,
-                db.or_(
-                    StudentItem.expiry_date.is_(None),
-                    StudentItem.expiry_date > utc_now()
-                )
-            ).first()
-
-            if existing:
-                # Top-off: reset uses_remaining to the granted amount (or unlimited)
-                if pu_item.use_limit:
-                    existing.uses_remaining = pu_item.use_limit
-                else:
-                    existing.uses_remaining = -1
-                continue
-
-            # Calculate expiry (next rent due date)
-            expiry_date = None
-            if settings.first_rent_due_date:
-                from app.routes.api import _calculate_due_dates
-                now_ts = utc_now()
-                current_due, next_due = _calculate_due_dates(settings, now_ts)
-                if next_due:
-                    expiry_date = next_due
-
-            # Grant a free StudentItem with uses_remaining
-            granted_item = StudentItem(
-                student_id=student.id,
-                store_item_id=pu_item.store_item_id,
-                join_code=join_code,
-                purchase_date=utc_now(),
-                expiry_date=expiry_date,
-                status='purchased',
-                is_from_bundle=False,
-                quantity_purchased=1,
-                uses_remaining=pu_item.use_limit if pu_item.use_limit else -1
-            )
-            db.session.add(granted_item)
-            per_use_items_granted += 1
-
-    # Commit all transactions together
-    db.session.commit()
-
-    # Calculate new totals after this payment
-    new_total_paid = total_paid_so_far + payment_amount
-    new_remaining = total_due - new_total_paid
+    passes_awarded = result.passes_awarded
+    is_partial = result.is_partial
 
     # Success message
     if is_partial and settings.allow_incremental_payment:
-        if new_remaining > 0:
-            flash(f"Partial payment of ${payment_amount:.2f} successful! Remaining balance: ${new_remaining:.2f}", "success")
+        if result.new_remaining > 0:
+            flash(f"Partial payment of ${result.amount_paid:.2f} successful! Remaining balance: ${result.new_remaining:.2f}", "success")
         else:
-            msg = f"Final payment of ${payment_amount:.2f} successful! Rent for Period {period} is now fully paid."
+            msg = f"Final payment of ${result.amount_paid:.2f} successful! Rent for Period {period} is now fully paid."
             if passes_awarded > 0:
                 msg += f" You received {passes_awarded} hall passes!"
             flash(msg, "success")
     else:
-        msg = f"Rent payment for Period {period} (${payment_amount:.2f}) successful!"
+        msg = f"Rent payment for Period {period} (${result.amount_paid:.2f}) successful!"
         if passes_awarded > 0:
             msg += f" You received {passes_awarded} hall passes!"
         flash(msg, "success")

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import ast
 import inspect
 from pathlib import Path
 
@@ -6,6 +7,7 @@ from app.extensions import db
 from app.models import Student, StudentTeacher, Transaction
 from app.routes import student as student_routes
 from app.services import attendance_service
+from app import attendance as attendance_module
 from tests.helpers.class_scope import create_class_scope
 from tests.helpers.v2_fixtures import make_admin
 
@@ -94,3 +96,98 @@ def test_dashboard_read_is_interest_mutation_free(client):
         description="Monthly Savings Interest",
         account_type="savings",
     ).first() is None
+
+
+# ---------------------------------------------------------------------------
+# Wave2 guardrails (item 8)
+# ---------------------------------------------------------------------------
+
+def _get_function_bodies_with_direct_transaction(source_text: str) -> list[str]:
+    """
+    Parse source and return names of functions that call Transaction(
+    directly (as opposed to via ledger_service or create_idempotent_transaction).
+    """
+    violations = []
+    lines = source_text.splitlines()
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        # Direct Transaction( construction that is NOT inside ledger_service itself
+        if "Transaction(" in stripped and not stripped.startswith("#"):
+            # Allow: inside ledger_service, inside overdraft.py utility, inside create_idempotent_transaction
+            violations.append(f"line {i + 1}: {stripped[:100]}")
+    return violations
+
+
+def test_rent_pay_route_does_not_create_transaction_directly():
+    """rent_pay must delegate all writes to rent_payment_feat.execute_rent_payment."""
+    source = inspect.getsource(student_routes.rent_pay)
+    assert "Transaction(" not in source, (
+        "rent_pay() creates Transaction() directly. Route must delegate to "
+        "rent_payment_feat.execute_rent_payment()."
+    )
+
+
+def test_student_transfer_route_does_not_create_transaction_directly():
+    """transfer route must use ledger_service.create_transfer_pair, not Transaction()."""
+    source = inspect.getsource(student_routes.transfer)
+    assert "Transaction(" not in source, (
+        "transfer() creates Transaction() directly. Use ledger_service.create_transfer_pair()."
+    )
+
+
+def test_student_purchase_insurance_does_not_create_transaction_directly():
+    """Insurance purchase must use ledger_service, not Transaction()."""
+    source = inspect.getsource(student_routes.purchase_insurance)
+    assert "Transaction(" not in source, (
+        "purchase_insurance() creates Transaction() directly. Use ledger_service."
+    )
+
+
+def test_attendance_module_is_zero_logic():
+    """
+    attendance.py must be a pure compatibility shim – every public function
+    must be a single-line delegation.  No raw DB queries, no local variables
+    beyond what is needed to forward arguments, no conditional logic beyond
+    what is required to compose function arguments.
+
+    We verify this by checking the source does NOT contain model queries,
+    sqlalchemy func calls, or business logic constructs.
+    """
+    source = Path("app/attendance.py").read_text()
+    forbidden = [
+        "TapEvent.query",
+        "StudentBlock.query",
+        "db.session.add(",
+        "db.session.commit(",
+        "func.date(",
+        "func.max(",
+    ]
+    for pattern in forbidden:
+        assert pattern not in source, (
+            f"attendance.py contains '{pattern}' – it must be a zero-logic shim. "
+            f"Move the implementation to attendance_service.py."
+        )
+
+
+def test_feats_directory_exists_with_required_feats():
+    """Wave2 FEATs must exist and be importable."""
+    from app.feats import rent_payment_feat, store_purchase_feat  # noqa: F401
+    assert callable(rent_payment_feat.execute_rent_payment)
+    assert callable(store_purchase_feat.execute_store_purchase)
+
+
+def test_rent_payment_feat_creates_transaction_via_ledger_service():
+    """rent_payment_feat must not call Transaction() directly."""
+    source = Path("app/feats/rent_payment_feat.py").read_text()
+    assert "Transaction(" not in source, (
+        "rent_payment_feat creates Transaction() directly. Use ledger_service.create_pending_transaction()."
+    )
+
+
+def test_store_purchase_feat_creates_transaction_via_ledger_service():
+    """store_purchase_feat must not call Transaction() directly."""
+    source = Path("app/feats/store_purchase_feat.py").read_text()
+    assert "Transaction(" not in source, (
+        "store_purchase_feat creates Transaction() directly. Use ledger_service.create_pending_transaction()."
+    )
+

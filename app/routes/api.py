@@ -596,8 +596,16 @@ def purchase_item():
                     db.session.rollback()
                     return jsonify({"status": "success", "message": f"{purchase_message} Purchase already recorded."})
             else:
-                purchase_tx = Transaction(**purchase_kwargs)
-                db.session.add(purchase_tx)
+                from app.services import ledger_service as _ledger_svc
+                purchase_tx = _ledger_svc.create_pending_transaction(
+                    student_id=student.id,
+                    teacher_id=teacher_id,
+                    join_code=join_code,
+                    amount=Decimal('0.00'),
+                    account_type='checking',
+                    type='purchase',
+                    description=f"Purchase: {item.name} [Rent Perk $0]",
+                )
 
             expiry_date = None
             if item.item_type == 'delayed' and item.auto_expiry_days:
@@ -739,8 +747,16 @@ def purchase_item():
                 db.session.rollback()
                 return jsonify({"status": "success", "message": f"{item.name} purchase already recorded."})
         else:
-            purchase_tx = Transaction(**purchase_kwargs)
-            db.session.add(purchase_tx)
+            from app.services import ledger_service as _ledger_svc
+            purchase_tx = _ledger_svc.create_pending_transaction(
+                student_id=student.id,
+                teacher_id=teacher_id,
+                join_code=join_code,
+                amount=-total_price,
+                account_type='checking',
+                type='purchase',
+                description=purchase_description,
+            )
         # Ensure purchase_tx.id is available so each StudentItem can carry a stable refund link.
         db.session.flush()
 
@@ -758,30 +774,17 @@ def purchase_item():
             if banking_settings and banking_settings.overdraft_protection_enabled and checking_balance < 0:
                 shortfall = abs(checking_balance)
                 if savings_balance >= shortfall:
-                    # CRITICAL FIX v2: Transfer from savings to checking with join_code
-                    transfer_tx_withdraw = Transaction(
+                    _ledger_svc.create_transfer_pair(
                         student_id=student.id,
                         teacher_id=teacher_id,
-                        join_code=join_code,  # CRITICAL: Add join_code for period isolation
-                        amount=-shortfall,
-                        account_type='savings',
-                        status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
-                        type='Withdrawal',
-                        description='Overdraft protection transfer to checking'
-                    )
-                    transfer_tx_deposit = Transaction(
-                        student_id=student.id,
-                        teacher_id=teacher_id,
-                        join_code=join_code,  # CRITICAL: Add join_code for period isolation
+                        join_code=join_code,
                         amount=shortfall,
-                        account_type='checking',
-                        status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
-                        type='Deposit',
-                        description='Overdraft protection transfer from savings'
+                        from_account='savings',
+                        to_account='checking',
+                        withdraw_description='Overdraft protection transfer to checking',
+                        deposit_description='Overdraft protection transfer from savings',
                     )
-                    db.session.add(transfer_tx_withdraw)
-                    db.session.add(transfer_tx_deposit)
-                    db.session.flush()  # Flush to update balances
+                    db.session.flush()
 
             # Check if overdraft fee should be charged (after overdraft protection)
             fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_code)
@@ -892,28 +895,18 @@ def purchase_item():
         if banking_settings and banking_settings.overdraft_protection_enabled and checking_balance < 0:
             shortfall = abs(checking_balance)
             if savings_balance >= shortfall:
-                # CRITICAL FIX v2: Transfer from savings to checking with join_code
-                transfer_tx_withdraw = Transaction(
+                from app.services import ledger_service as _ledger_svc
+                _ledger_svc.create_transfer_pair(
                     student_id=student.id,
                     teacher_id=teacher_id,
-                    join_code=join_code,  # CRITICAL: Add join_code for period isolation
-                    amount=-shortfall,
-                    account_type='savings',
-                    type='Withdrawal',
-                    description='Overdraft protection transfer to checking'
-                )
-                transfer_tx_deposit = Transaction(
-                    student_id=student.id,
-                    teacher_id=teacher_id,
-                    join_code=join_code,  # CRITICAL: Add join_code for period isolation
+                    join_code=join_code,
                     amount=shortfall,
-                    account_type='checking',
-                    type='Deposit',
-                    description='Overdraft protection transfer from savings'
+                    from_account='savings',
+                    to_account='checking',
+                    withdraw_description='Overdraft protection transfer to checking',
+                    deposit_description='Overdraft protection transfer from savings',
                 )
-                db.session.add(transfer_tx_withdraw)
-                db.session.add(transfer_tx_deposit)
-                db.session.flush()  # Flush to update balances
+                db.session.flush()
 
         # Check if overdraft fee should be charged (after overdraft protection)
         fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_code)
