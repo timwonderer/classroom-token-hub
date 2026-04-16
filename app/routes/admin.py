@@ -127,6 +127,7 @@ from app.attendance import (
     calculate_seconds_in_memory,
 )
 from app.services.balance_service import get_batch_balances
+from app.services.ledger_service import get_available_balances
 from app.utils.insurance_eligibility import (
     collect_reimbursed_source_tx_ids,
     evaluate_claim_transaction_eligibility,
@@ -10678,13 +10679,17 @@ def banking():
     # Get all students for stats
     students = _scoped_students().all()
 
-    # Calculate banking stats
-    total_checking = sum(s.checking_balance for s in students)
-    total_savings = sum(s.savings_balance for s in students)
-    total_deposits = sum(s.checking_balance + s.savings_balance for s in students)
-
-    # Count students with savings
-    students_with_savings = sum(1 for s in students if s.savings_balance > 0)
+    # Calculate banking stats through the ledger authority for the selected class only.
+    total_checking = Decimal('0.00')
+    total_savings = Decimal('0.00')
+    students_with_savings = 0
+    for student in students:
+        checking_balance, savings_balance = get_available_balances(student.id, selected_scope['join_code'])
+        total_checking += checking_balance
+        total_savings += savings_balance
+        if savings_balance > 0:
+            students_with_savings += 1
+    total_deposits = total_checking + total_savings
 
     # Calculate average savings balance (across all students, including those with 0)
     average_savings_balance = total_savings / len(students) if len(students) > 0 else 0

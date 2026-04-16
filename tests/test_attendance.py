@@ -179,5 +179,5 @@ def test_get_all_block_statuses(client):
     assert "B" in statuses
     assert statuses["A"]["active"] is True
     assert statuses["B"]["active"] is False
-    assert statuses["A"]["projected_pay"] > 0
-    assert statuses["B"]["projected_pay"] == 0
+    assert statuses["A"]["projected_pay"] is None
+    assert statuses["B"]["projected_pay"] is None

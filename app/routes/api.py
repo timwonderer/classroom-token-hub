@@ -46,16 +46,12 @@ from app.utils.transaction_idempotency import (
     purchase_transaction_key,
     student_item_refund_key,
 )
-from app.utils.store import process_expired_collective_goals
 from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone, local_date_bounds_utc, UTC_MIN
 
 # Import external modules
-from app.attendance import (
-    get_last_payroll_time,
-    calculate_unpaid_attendance_seconds,
-    get_all_block_statuses,
-    get_join_code_for_student_period
-)
+from app.attendance import get_join_code_for_student_period
+from app.services.attendance_service import calculate_unpaid_attendance_seconds, get_all_block_statuses
+from app.services.ledger_service import get_available_balances, get_last_payroll_time
 from app.payroll import get_pay_rate_for_block
 
 # Create blueprint
@@ -399,11 +395,9 @@ def purchase_item():
         return jsonify({"status": "error", "message": "This item is not available."}), 404
 
     # Check if a collective goal has passed its expiration deadline.
-    # If so, trigger lazy expiration processing (refunds + deactivation) and block the purchase.
-    # Use ensure_utc() so the comparison works for both PostgreSQL (aware) and SQLite (naive UTC).
+    # Do not reconcile or refund in a read path; reject expired goals using current truth only.
     if item.item_type == 'collective' and item.collective_goal_expires_at:
         if ensure_utc(item.collective_goal_expires_at) <= utc_now():
-            process_expired_collective_goals(item.teacher_id)
             return jsonify({"status": "error", "message": "This collective goal has expired and is no longer available."}), 400
 
     # For collective items with whole_class goal, enforce one purchase per student per class
@@ -643,13 +637,14 @@ def purchase_item():
 
     # Get banking settings for overdraft handling (reuse teacher_id from above)
     banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first()
+    checking_balance, savings_balance = get_available_balances(student.id, join_code)
 
     # Check if student has sufficient funds
-    if student.checking_balance < total_price:
-        shortfall = total_price - student.checking_balance
+    if checking_balance < total_price:
+        shortfall = total_price - checking_balance
         # Check if overdraft protection is enabled (savings can cover the difference)
         if (banking_settings and banking_settings.overdraft_protection_enabled and
-                student.savings_balance >= shortfall):
+                savings_balance >= shortfall):
             # Allow transaction - overdraft protection will transfer from savings
             pass
         else:
@@ -666,10 +661,10 @@ def purchase_item():
             if banking_settings and banking_settings.overdraft_protection_enabled:
                 message = (f"Insufficient funds in both checking and savings. You need "
                            f"${total_price:.2f} total but have "
-                           f"${student.checking_balance + student.savings_balance:.2f}.")
+                           f"${checking_balance + savings_balance:.2f}.")
             else:
                 message = (f"Insufficient funds. You need ${total_price:.2f} but have "
-                           f"${student.checking_balance:.2f}.")
+                           f"${checking_balance:.2f}.")
 
             if fee_charged:
                 message += f" Overdraft fee of ${fee_amount:.2f} charged."
@@ -759,9 +754,10 @@ def purchase_item():
             db.session.flush()  # Flush to update balances without committing yet
 
             # Check if overdraft protection should transfer funds from savings
-            if banking_settings and banking_settings.overdraft_protection_enabled and student.checking_balance < 0:
-                shortfall = abs(student.checking_balance)
-                if student.savings_balance >= shortfall:
+            checking_balance, savings_balance = get_available_balances(student.id, join_code)
+            if banking_settings and banking_settings.overdraft_protection_enabled and checking_balance < 0:
+                shortfall = abs(checking_balance)
+                if savings_balance >= shortfall:
                     # CRITICAL FIX v2: Transfer from savings to checking with join_code
                     transfer_tx_withdraw = Transaction(
                         student_id=student.id,
@@ -892,9 +888,10 @@ def purchase_item():
 
         # Handle overdraft protection and fees for regular items
         # Check if overdraft protection should transfer funds from savings
-        if banking_settings and banking_settings.overdraft_protection_enabled and student.checking_balance < 0:
-            shortfall = abs(student.checking_balance)
-            if student.savings_balance >= shortfall:
+        checking_balance, savings_balance = get_available_balances(student.id, join_code)
+        if banking_settings and banking_settings.overdraft_protection_enabled and checking_balance < 0:
+            shortfall = abs(checking_balance)
+            if savings_balance >= shortfall:
                 # CRITICAL FIX v2: Transfer from savings to checking with join_code
                 transfer_tx_withdraw = Transaction(
                     student_id=student.id,

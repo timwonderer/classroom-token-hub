@@ -7,107 +7,26 @@ import pytz
 # Import from shared utilities to avoid circular dependency with payroll.py
 from app.utils.attendance_helpers import get_join_code_for_student_period
 from app.utils.seat_scope import get_seat_ids_for_student_join, seat_scoped_filter
+from app.services.attendance_service import (
+    calculate_unpaid_attendance_seconds as _calculate_unpaid_attendance_seconds,
+    get_all_block_statuses as _get_all_block_statuses,
+)
+from app.services.ledger_service import get_last_payroll_time as _get_last_payroll_time
 
 def get_last_payroll_time(student_id=None, join_code=None):
-    """
-    Fetch the timestamp of the most recent payroll anchor.
-
-    If a student_id is provided, include manual payments so ad-hoc payrolls
-    reset that student's projected pay without impacting other students.
-    When a join_code is provided, scope the anchor to that class.
-    """
-    from app.models import Transaction  # Local import to avoid circular dependency
-
-    if student_id:
-        query = Transaction.query.filter(
-            Transaction.student_id == student_id,
-            Transaction.type.in_(["payroll", "manual_payment"])
-        )
-    else:
-        query = Transaction.query.filter_by(type="payroll")
-
-    if join_code:
-        query = query.filter(Transaction.join_code == join_code)
-
-    last_payroll_tx = query.order_by(Transaction.timestamp.desc()).first()
-    return ensure_utc(last_payroll_tx.timestamp) if last_payroll_tx else None
+    """Compatibility wrapper around the ledger-owned payroll anchor query."""
+    return _get_last_payroll_time(student_id=student_id, join_code=join_code)
 
 
 
 def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, join_code=None):
-    """
-    Calculates total attendance seconds for a student in a specific period
-    since the last payroll run. This version is corrected to prevent double-counting
-    and only calculates completed sessions to ensure correctness.
-    """
-    from app.models import TapEvent
-    from datetime import datetime, timezone
-
-    last_payroll_time = ensure_utc(last_payroll_time)
-    seat_ids = get_seat_ids_for_student_join(student_id, join_code) if join_code else []
-    tap_scope = seat_scoped_filter(TapEvent, student_id, seat_ids)
-
-    base_query = TapEvent.query.filter(
-        tap_scope,
-        TapEvent.period == period,
-        TapEvent.is_deleted == False  # Exclude deleted events
+    """Compatibility wrapper around the attendance-owned time calculation."""
+    return _calculate_unpaid_attendance_seconds(
+        student_id,
+        period,
+        last_payroll_time,
+        join_code=join_code,
     )
-
-    if join_code:
-        base_query = base_query.filter(TapEvent.join_code == join_code)
-
-    base_query = base_query.order_by(TapEvent.timestamp.asc())
-
-    # If there's no payroll history for the system, calculate from all events.
-    if not last_payroll_time:
-        events = base_query.all()
-        in_time = None
-        total_seconds = 0
-        for event in events:
-            event_time = ensure_utc(event.timestamp)
-            if event.status == "active":
-                in_time = event_time
-            elif event.status == "inactive" and in_time:
-                total_seconds += (event_time - in_time).total_seconds()
-                in_time = None
-        if in_time:
-            # Student is still clocked in; count time up to now.
-            now = utc_now()
-            total_seconds += (now - in_time).total_seconds()
-        return int(total_seconds)
-
-    # --- If payroll history exists ---
-    last_event_before_payroll = TapEvent.query.filter(
-        tap_scope,
-        TapEvent.period == period,
-        TapEvent.timestamp <= last_payroll_time,
-        TapEvent.is_deleted == False  # Exclude deleted events
-    ).order_by(TapEvent.timestamp.desc()).first()
-
-    events_after_payroll = base_query.filter(TapEvent.timestamp > last_payroll_time).all()
-
-    total_seconds = 0
-    in_time = None
-
-    # If the student was active during payroll, start counting from the payroll time.
-    if last_event_before_payroll and last_event_before_payroll.status == 'active':
-        in_time = last_payroll_time
-
-    # Process events that occurred strictly after the last payroll.
-    for event in events_after_payroll:
-        event_time = ensure_utc(event.timestamp)
-        if event.status == "active":
-            if in_time is None:
-                in_time = event_time
-        elif event.status == "inactive" and in_time:
-            total_seconds += (event_time - in_time).total_seconds()
-            in_time = None
-
-    if in_time:
-        # Student remained clocked in past the last recorded event; count up to now.
-        now = utc_now()
-        total_seconds += (now - in_time).total_seconds()
-    return int(total_seconds)
 
 
 def calculate_period_attendance(student_id, period, date):
@@ -241,133 +160,8 @@ def get_session_status(student_id, period):
 
 
 def get_all_block_statuses(student, join_code=None):
-    """
-    Gets the status for all blocks assigned to a student for the /api/student-status endpoint.
-    """
-    from app.models import TapEvent, HallPassLog, TeacherBlock, StudentTeacher
-    from sqlalchemy import func
-    from datetime import datetime, timezone
-    from app.payroll import get_pay_rate_for_block
-
-    # Use Pacific day boundaries converted to UTC for consistent date filtering
-    # regardless of the PostgreSQL session timezone setting.
-    pacific = pytz.timezone('America/Los_Angeles')
-    now_pacific = utc_now().astimezone(pacific)
-    today_pacific = now_pacific.date()
-    today_start_pacific = pacific.localize(datetime.combine(today_pacific, datetime.min.time()))
-    today_start_utc = today_start_pacific.astimezone(timezone.utc)
-    today_end_utc = (today_start_pacific + timedelta(days=1)).astimezone(timezone.utc)
-    if join_code:
-        # Scope to claimed seats for the selected class
-        claimed_seats = TeacherBlock.query.filter_by(
-            student_id=student.id,
-            join_code=join_code,
-            is_claimed=True
-        ).all()
-        student_blocks = [seat.block.strip() for seat in claimed_seats if seat.block]
-        teacher_ids = {seat.teacher_id for seat in claimed_seats if seat.teacher_id is not None}
-        teacher_id = next(iter(teacher_ids)) if len(teacher_ids) == 1 else None
-        join_scope_seat_ids = get_seat_ids_for_student_join(student.id, join_code)
-    else:
-        student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
-        mapped_teacher_ids = {
-            row.teacher_id
-            for row in StudentTeacher.query.with_entities(StudentTeacher.teacher_id)
-            .filter(StudentTeacher.student_id == student.id)
-            .distinct()
-            .all()
-            if row.teacher_id is not None
-        }
-        teacher_id = next(iter(mapped_teacher_ids)) if len(mapped_teacher_ids) == 1 else None
-        join_scope_seat_ids = []
-    period_states = {}
-
-    last_payroll_time = get_last_payroll_time(student_id=student.id)
-
-    for block_original in student_blocks:
-        blk = block_original.upper()
-
-        block_join_code = join_code or get_join_code_for_student_period(
-            student.id,
-            block_original,
-            teacher_id=teacher_id,
-        )
-        block_seat_ids = get_seat_ids_for_student_join(student.id, block_join_code) if block_join_code else []
-
-        latest_event_query = TapEvent.query.filter_by(
-            period=blk,
-            is_deleted=False
-        )
-        if block_join_code:
-            latest_event_query = latest_event_query.filter(
-                seat_scoped_filter(TapEvent, student.id, block_seat_ids),
-                TapEvent.join_code == block_join_code,
-            )
-        else:
-            latest_event_query = latest_event_query.filter(TapEvent.student_id == student.id)
-
-        latest_event = latest_event_query.order_by(TapEvent.timestamp.desc()).first()
-        is_active = latest_event.status == "active" if latest_event else False
-
-        done_query = TapEvent.query.filter(
-            TapEvent.period == blk,
-            TapEvent.timestamp >= today_start_utc,
-            TapEvent.timestamp < today_end_utc,
-            TapEvent.reason != None,
-            TapEvent.is_deleted == False  # Exclude deleted events
-        )
-        if block_join_code:
-            done_query = done_query.filter(
-                seat_scoped_filter(TapEvent, student.id, block_seat_ids),
-                TapEvent.join_code == block_join_code,
-            )
-        else:
-            done_query = done_query.filter(TapEvent.student_id == student.id)
-
-        done = done_query.filter(
-            func.lower(TapEvent.reason).in_(['done', 'done for the day'])
-        ).first() is not None
-
-        duration = calculate_unpaid_attendance_seconds(
-            student.id,
-            blk,
-            get_last_payroll_time(student_id=student.id, join_code=block_join_code),
-            join_code=block_join_code,
-        )
-
-        # Use block-specific payroll settings (fallback handled in helper)
-        rate_per_second = get_pay_rate_for_block(block_original, teacher_id=teacher_id, join_code=block_join_code)
-        projected_pay = duration * rate_per_second
-
-        # Get latest relevant hall pass for this period
-        hall_pass = None
-        active_pass_query = HallPassLog.query.filter_by(
-            student_id=student.id,
-            period=blk
-        )
-
-        if block_join_code:
-            active_pass_query = active_pass_query.filter_by(join_code=block_join_code)
-
-        active_pass = active_pass_query.filter(
-            HallPassLog.status.in_(['pending', 'approved', 'left', 'rejected'])
-        ).order_by(HallPassLog.request_time.desc()).first()
-
-        if active_pass:
-            hall_pass = {
-                'id': active_pass.id,
-                'status': active_pass.status,
-                'reason': active_pass.reason
-            }
-
-        period_states[blk] = {
-            "active": is_active,
-            "done": done,
-            "duration": duration,
-            "projected_pay": projected_pay,
-            "hall_pass": hall_pass
-        }
-    return period_states
+    """Compatibility wrapper around the attendance-owned block status query."""
+    return _get_all_block_statuses(student, join_code=join_code)
 
 # -------------------------------------------------------------------
 # BATCH OPTIMIZATION HELPERS

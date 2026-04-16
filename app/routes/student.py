@@ -51,10 +51,13 @@ from app.utils.claim_credentials import compute_primary_claim_hash, match_claim_
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed, evaluate_overdraft_allowance
 from app.utils.help_content import HELP_ARTICLES
-from app.utils.store import process_expired_collective_goals
 from app.utils.economy_policy import get_class_feature_settings, resolve_feature_class
 from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
-from app.attendance import get_all_block_statuses
+from app.services.attendance_service import get_all_block_statuses
+from app.services.ledger_service import (
+    apply_monthly_savings_interest as post_monthly_savings_interest,
+    get_available_balances,
+)
 from app.payroll import get_pay_rate_for_block
 from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone
 from app.utils.seat_scope import get_seat_ids_for_student_join, transaction_scope_filter, seat_scoped_filter
@@ -485,112 +488,11 @@ def is_feature_enabled(feature_name):
 
 
 def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: int) -> tuple[Decimal, Decimal]:
-    """Calculate checking and savings balances using the Ledger + Settlement model.
-    
-    This function:
-    1. Triggers an eager settlement (if lock available) to ensure BalanceCache is up-to-date.
-    2. Reads the posted balance from BalanceCache (O(1)).
-    3. Adds any remaining pending transactions.
-    
-    Args:
-        student (Student): Student object
-        join_code (str): The join code for the current class context
-        teacher_id (int): The teacher ID (kept for signature compatibility)
-    
-    Returns:
-        tuple[Decimal, Decimal]: (checking_balance, savings_balance)
-    """
-    from app.models import BalanceCache, Transaction, TransactionStatus, _quantize_currency
-    from app.utils.banking import settle_balances
-    import logging
-    
-    logger = logging.getLogger(__name__)
-
-    # Default to 0.00
-    checking_balance = Decimal('0.00')
-    savings_balance = Decimal('0.00')
-
-    if not join_code:
-        # Fallback for legacy calls without join_code (should be rare/non-existent)
-        logger.warning(f"calculate_scoped_balances called without join_code for student {student.id}")
-        return checking_balance, savings_balance
-
-    seat_ids = get_seat_ids_for_student_join(student.id, join_code)
-    tx_scope = transaction_scope_filter(Transaction, student.id, seat_ids)
-
-    # 1. Eager Settlement (Best Effort)
-    try:
-        settle_balances(student.id, join_code)
-    except Exception as e:
-        logger.warning(f"Eager settlement failed during read for student {student.id}: {e}")
-
-    # 2. Read Posted Balance from Cache
-    cache = None
-    if seat_ids:
-        cache = BalanceCache.query.filter(
-            BalanceCache.join_code == join_code,
-            BalanceCache.seat_id.in_(seat_ids),
-        ).first()
-    if not cache:
-        cache = BalanceCache.query.filter_by(student_id=student.id, join_code=join_code).first()
-    if cache:
-        checking_balance += Decimal(cache.posted_checking_balance_cents) / 100
-        savings_balance += Decimal(cache.posted_savings_balance_cents) / 100
-    else:
-        # Legacy fallback for contexts not yet represented in BalanceCache.
-        # Derive posted as (all non-void) - (pending) to avoid enum-label assumptions.
-        all_checking = db.session.query(func.sum(Transaction.amount)).filter(
-            tx_scope,
-            Transaction.join_code == join_code,
-            Transaction.account_type == 'checking',
-            Transaction.is_void == False,
-        ).scalar() or Decimal('0.00')
-        pending_checking_fallback = db.session.query(func.sum(Transaction.amount)).filter(
-            tx_scope,
-            Transaction.join_code == join_code,
-            Transaction.status == TransactionStatus.PENDING,
-            Transaction.account_type == 'checking',
-            Transaction.is_void == False,
-        ).scalar() or Decimal('0.00')
-        all_savings = db.session.query(func.sum(Transaction.amount)).filter(
-            tx_scope,
-            Transaction.join_code == join_code,
-            Transaction.account_type == 'savings',
-            Transaction.is_void == False,
-        ).scalar() or Decimal('0.00')
-        pending_savings_fallback = db.session.query(func.sum(Transaction.amount)).filter(
-            tx_scope,
-            Transaction.join_code == join_code,
-            Transaction.status == TransactionStatus.PENDING,
-            Transaction.account_type == 'savings',
-            Transaction.is_void == False,
-        ).scalar() or Decimal('0.00')
-        posted_checking = all_checking - pending_checking_fallback
-        posted_savings = all_savings - pending_savings_fallback
-        checking_balance += posted_checking
-        savings_balance += posted_savings
-
-    # 3. Add Pending Transactions (aggregate in DB to avoid loading all rows)
-    pending_checking = db.session.query(func.sum(Transaction.amount)).filter(
-        tx_scope,
-        Transaction.join_code == join_code,
-        Transaction.status == TransactionStatus.PENDING,
-        Transaction.account_type == 'checking',
-        Transaction.is_void == False,
-    ).scalar() or Decimal('0.00')
-
-    pending_savings = db.session.query(func.sum(Transaction.amount)).filter(
-        tx_scope,
-        Transaction.join_code == join_code,
-        Transaction.status == TransactionStatus.PENDING,
-        Transaction.account_type == 'savings',
-        Transaction.is_void == False,
-    ).scalar() or Decimal('0.00')
-
-    checking_balance += pending_checking
-    savings_balance += pending_savings
-
-    return _quantize_currency(checking_balance), _quantize_currency(savings_balance)
+    """Compatibility wrapper around the ledger-owned balance query."""
+    del teacher_id
+    if not student or not join_code:
+        return Decimal('0.00'), Decimal('0.00')
+    return get_available_balances(student.id, join_code)
 
 
 
@@ -1219,12 +1121,6 @@ def dashboard():
     join_code = context['join_code']
     current_block = context['block']  # Get current class block
 
-    _, _, hall_pass_reconciled = _ensure_rent_hall_pass_top_off(student, context)
-    if hall_pass_reconciled:
-        db.session.commit()
-
-    apply_savings_interest(student)  # Apply savings interest if not already applied
-
     # CRITICAL FIX: Filter transactions by join_code (not just teacher_id)
     # This ensures Period A and Period B with same teacher are isolated
     transactions = Transaction.query.filter_by(
@@ -1243,20 +1139,7 @@ def dashboard():
     checking_transactions = [tx for tx in transactions if tx.account_type == 'checking']
     savings_transactions = [tx for tx in transactions if tx.account_type == 'savings']
 
-    # CRITICAL FIX: Calculate balances using join_code scoping
-    # Sum only transactions for THIS specific class (join_code)
-    from app.models import _quantize_currency
-    
-    checking_balance = _quantize_currency(sum(
-        (tx.amount for tx in student.transactions
-        if tx.account_type == 'checking' and not tx.is_void and tx.join_code == join_code),
-        Decimal('0.00')
-    ))
-    savings_balance = _quantize_currency(sum(
-        (tx.amount for tx in student.transactions
-        if tx.account_type == 'savings' and not tx.is_void and tx.join_code == join_code),
-        Decimal('0.00')
-    ))
+    checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
     # Calculate forecast interest using Decimal
     forecast_interest = _quantize_currency(savings_balance * Decimal('0.045') / Decimal('12'))
 
@@ -1280,7 +1163,7 @@ def dashboard():
     }
 
     projected_pay_per_block = {
-        blk: state.get("projected_pay", 0)
+        blk: (state.get("projected_pay") or 0)
         for blk, state in period_states.items()
     }
 
@@ -1577,7 +1460,7 @@ def payroll():
     }
 
     projected_pay_per_block = {
-        blk: round(state.get("projected_pay", 0), 2)
+        blk: round((state.get("projected_pay") or 0), 2)
         for blk, state in period_states.items()
     }
 
@@ -1836,110 +1719,19 @@ def transfer():
 
 
 def apply_savings_interest(student, annual_rate=Decimal('0.045')):
-    """
-    Apply savings interest for a student based on banking settings.
-    Supports both simple and compound interest with configurable frequency.
-    All time calculations are in UTC.
-    """
-    from app.models import _quantize_currency
-
-    now = utc_now()
-    this_month = now.month
-    this_year = now.year
-
-
-
+    """Compatibility command wrapper that forwards savings-interest writes into the ledger service."""
     context = get_current_class_context()
     if not context:
-        return
-    teacher_id = context.get('teacher_id')
-    join_code = context.get('join_code')
-
-    # Get banking settings for current class context
-    settings = get_banking_settings_for_context(context)
-    if not settings:
-        # Use default simple interest if no settings
-        calculation_type = 'simple'
-        compound_frequency = 'monthly'
-    else:
-        calculation_type = settings.interest_calculation_type or 'simple'
-        compound_frequency = settings.compound_frequency or 'monthly'
-
-    # Check if interest was already applied this month
-    for tx in student.transactions:
-        tx_timestamp = ensure_utc(tx.timestamp)
-        if (
-            tx.account_type == 'savings'
-            and tx.description == "Monthly Savings Interest"
-            and tx_timestamp
-            and tx_timestamp.month == this_month
-            and tx_timestamp.year == this_year
-        ):
-            return  # Interest already applied this month
-
-    for tx in student.transactions:
-        if tx.account_type != 'savings' or "Transfer" not in (tx.description or ""):
-            continue
-        tx_timestamp = ensure_utc(tx.timestamp)
-        if tx_timestamp and tx_timestamp.date() == now.date():
-            return
-
-    # Calculate interest based on type
-    if calculation_type == 'compound':
-        # For compound interest, use current total balance (including previous interest)
-        # Convert float balance to Decimal for arithmetic compatibility with Decimal rates
-        balance = _quantize_currency(student.savings_balance)
-
-        # Determine the rate based on compound frequency
-        if compound_frequency == 'daily':
-            # Daily compounding: rate = (1 + annual_rate/365)^365 - 1 ≈ annual_rate for small rates
-            # For monthly payout with daily compounding: (1 + annual_rate/365)^30
-            periods_per_month = Decimal('30')
-            rate_per_period = annual_rate / Decimal('365')
-            interest = _quantize_currency(balance * ((Decimal('1') + rate_per_period) ** periods_per_month - Decimal('1')))
-        elif compound_frequency == 'weekly':
-            # Weekly compounding: (1 + annual_rate/52)^4.33 (approx weeks per month)
-            periods_per_month = Decimal('4.33')
-            rate_per_period = annual_rate / Decimal('52')
-            interest = _quantize_currency(balance * ((Decimal('1') + rate_per_period) ** periods_per_month - Decimal('1')))
-        else:  # monthly
-            # Monthly compounding
-            monthly_rate = annual_rate / Decimal('12')
-            interest = _quantize_currency(balance * monthly_rate)
-    else:
-        # Simple interest: only calculate on original deposits (not including previous interest)
-        eligible_balance = Decimal('0')
-        for tx in student.transactions:
-            # FIX: Add null check to prevent decimal.InvalidOperation on corrupted data
-            if tx.account_type != 'savings' or tx.is_void or tx.amount is None or tx.amount <= Decimal('0'):
-                continue
-            # Exclude interest transactions from principal calculation
-            if tx.type == 'Interest' or 'Interest' in (tx.description or ''):
-                continue
-            available_at = ensure_utc(tx.date_funds_available)
-            if available_at and (now - available_at).days >= 30:
-                eligible_balance += _quantize_currency(tx.amount)
-
-        monthly_rate = annual_rate / Decimal('12')
-        interest = _quantize_currency((eligible_balance or Decimal('0')) * monthly_rate)
-
-    if interest > Decimal('0'):
-        # CRITICAL FIX v2: Add join_code to interest transactions
-        # Interest must be scoped to specific class, not just teacher
-        context = get_current_class_context()
-        if context:
-            interest_tx = Transaction(
-                student_id=student.id,
-                teacher_id=teacher_id,
-                join_code=join_code,  # CRITICAL: Add join_code for period isolation
-                amount=interest,
-                account_type='savings',
-                status=TransactionStatus.PENDING,
-                type='Interest',
-                description="Monthly Savings Interest"
-            )
-            db.session.add(interest_tx)
-            db.session.commit()
+        return None
+    interest_tx = post_monthly_savings_interest(
+        student,
+        teacher_id=context.get('teacher_id'),
+        join_code=context.get('join_code'),
+        annual_rate=annual_rate,
+    )
+    if interest_tx is not None:
+        db.session.commit()
+    return interest_tx
 
 
 # -------------------- INSURANCE --------------------
@@ -2583,9 +2375,6 @@ def shop():
 
     teacher_id = context['teacher_id']
     join_code = context['join_code']
-
-    # Lazily expire collective goals whose deadline has passed, refunding pending purchases.
-    process_expired_collective_goals(teacher_id)
 
     current_block = (context.get('block') or '').strip().upper()
 

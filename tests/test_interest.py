@@ -12,6 +12,7 @@ def test_apply_savings_interest_with_naive_datetimes(client, test_student):
     past_date = datetime.now(timezone.utc) - timedelta(days=31)
     savings_tx = Transaction(
         student_id=test_student.id,
+        join_code='TEST',
         amount=100.0,
         account_type='savings',
         description='Initial savings deposit',
@@ -86,6 +87,7 @@ def test_dashboard_renders_recent_deposit(client, test_student):
 
     recent_deposit = Transaction(
         student_id=test_student.id,
+        join_code=join_code,
         amount=50.0,
         account_type='checking',
         description='Payroll Deposit',
@@ -94,6 +96,7 @@ def test_dashboard_renders_recent_deposit(client, test_student):
     )
     mature_savings = Transaction(
         student_id=test_student.id,
+        join_code=join_code,
         amount=200.0,
         account_type='savings',
         description='Savings Seed',
@@ -121,4 +124,4 @@ def test_dashboard_renders_recent_deposit(client, test_student):
         account_type='savings',
     ).first()
 
-    assert interest_tx is not None
+    assert interest_tx is None
