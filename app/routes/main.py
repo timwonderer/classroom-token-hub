@@ -145,6 +145,12 @@ def terms():
     return render_template('tos.html')
 
 
+@main_bp.route('/district')
+def district():
+    """Render the district assurance brief page."""
+    return render_template('district.html')
+
+
 @main_bp.route('/offline')
 def offline():
     """Render the offline fallback page."""
