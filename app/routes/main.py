@@ -160,6 +160,12 @@ def privacy():
     return render_template('privacy.html')
 
 
+@main_bp.route('/district')
+def district():
+    """Render the district assurance page."""
+    return render_template('district.html')
+
+
 @main_bp.route('/terms')
 def terms():
     """Render the Terms of Service page."""

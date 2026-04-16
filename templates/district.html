@@ -152,95 +152,103 @@
 
     <div class="summary-box">
       <h3>Overview</h3>
-      <p>Thank you for your interest in Classroom Token Hub (CTH). </p>
-      <p>Classroom Token Hub is a teacher-developed classroom management system with a simulated economic model, designed with a data-minimization and isolation-first architecture.</p>
-      <p>As a 100% teacher-designed, developed, hosted, and maintained platform, we look forward to working with district partners to bring CTH to teachers and students.</p>
-      <p>This document is designed to provide an overview of the system's architecture and data protection measures for district review. The content of this document represents the most up-to-date information regarding the system's design and implementation. For more details, please visit our official GitHub repository.</p>
+      <p>Thank you for your interest in Classroom Token Hub (CTH).</p>
+      <p>Classroom Token Hub is a teacher-developed classroom economy platform designed around data minimization, class-scoped isolation, and limited retention of student-identifying information.</p>
+      <p>This document summarizes the current v1 architecture for district review. It is intended to describe how the live application handles classroom, student, and operational data at a high level.</p>
+      <p>For implementation details and source review, please refer to the official GitHub repository.</p>
      
     </div>
 
     <h2>1. Data Collection, Processing, and Storage</h2>
-    <p>Classroom Token Hub strives to collect only the minimum data necessary to operate effectively while maintaining a strong teacher and student user experience. Sensitive user-provided information is never stored as plaintext. Where storage in readable form is required for functionality (such as display labels like class sections), the data is treated as non-sensitive, remains strictly scoped to the class, and is not used for identification or cross-system linkage.</p>
-    <h3>When a teacher creates a class, they will provide the following information on the roster template:</h3>
+    <p>Classroom Token Hub is designed to collect only the data needed to create classroom rosters, let students claim the correct account, and operate the classroom economy. Sensitive fields are hashed or encrypted before storage, and student-identifying claim data is reduced after setup.</p>
+    <h3>When a teacher creates student roster seats, the system stores the following classroom-scoped information:</h3>
     <ul>
-      <li>Student First Name: Used for teacher roster display, greetings, and account claiming process</li>
-      <li>Student Last Name: Used for teacher roster display, greetings, and account claiming process</li>
-      <li>Student Class Section: Used for creating class sections within the roster page</li>
-      <li>Additional Notes: Used for internal teacher notes</li>
+      <li>Student first name: Used for teacher roster display and in-app greeting</li>
+      <li>Student last initial: Used for roster display</li>
+      <li>Student last name matching hashes: Used only during claim and recovery matching</li>
+      <li>Date-of-birth derived integer (`dob_sum`): Used only during initial claim matching</li>
+      <li>Class block / class label: Used to organize the teacher's roster and class context</li>
+      <li>Join code: Used to bind a student to the correct class context during claim and recovery</li>
     </ul>
-    <h3>Our server processes the information from the roster template using the following approach:</h3>
+    <h3>The v1 claim flow processes that information as follows:</h3>
    <ul>
-      <li>Student First Name and Last Name (temporary): Normalized to remove whitespace, special characters, and accent marks. Hashed using HMAC-SHA256 with a per-record salt and a global pepper before storage. Use as account look up during claim. Removed upon successful claim and account creation.</li>
-      <li>Student First Name and Last Name (persistent): Encrypted individually with whitespace, special character, and accent marks preserved before storage. Use as in-app greeting and roster display for teachers.</li>
-      <li>Student Class Section: Stored unchanged as a non-sensitive, teacher-defined label and not interpreted, parsed, or used for inference by the system.</li>
-      <li>Additional Notes: Encrypted unchanged and stored. Used for teacher internal records</li>
+      <li>First name is stored encrypted for roster display and student greeting</li>
+      <li>Last initial is stored in readable form for display because it is part of the student-facing and teacher-facing roster UI</li>
+      <li>Last name is not retained in readable form for normal operation; the system stores one-way matching hashes for claim and recovery checks</li>
+      <li>Date of birth is not stored as a raw date; the app derives a non-reversible integer value used during initial claim, then removes that claim-specific value after setup</li>
+      <li>Students claim accounts using join code + first initial + last name + date of birth, after which they create a username, PIN, and passphrase for ongoing access</li>
     </ul>
 
    <div class="highlight-box mb-0 mt-0">
     <h3 class="text-secondary fw-bold mt-0">NOTE</h3>
-      <p>Student Class Section and Additional Notes are treated as unstructured text within the application and are used for display only.</p>
-      <p>These fields are not interpreted, parsed, or used for identification, inference, or external context derivation by the system.</p>
+      <p>In v1, the core student setup flow does not rely on permanent storage of full last names or raw birth dates.</p>
+      <p>Claim-specific identifiers are reduced after account setup so ongoing authentication depends on the student's chosen credentials rather than retained roster PII.</p>
     </div>
 
     <h2>2. Class-Level Data Isolation</h2>
-    <p>Each class operates as an independent system defined by a unique class identifier.</p>
+    <p>Each class operates within a class-scoped context anchored by a join code and teacher ownership.</p>
     <ul>
-      <li>No cross-class visibility or aggregation</li>
-      <li>Teachers can only access classes they create</li>
-      <li>Identical names across classes are treated as unrelated</li>
-      <li>The system does not maintain a global student identity across classes</li>
+      <li>Teachers can access only the classes they own</li>
+      <li>Roster seats, transactions, attendance, settings, and balances are scoped to class context</li>
+      <li>System design avoids a district-wide student directory for normal application use</li>
+      <li>Identical student names in different classes are not treated as a shared global identity by default</li>
     </ul>
 
-    <h2>3. Name Collision Handling</h2>
-    <p>When duplicate names exist within a class, a random deduplication code is used during claim.</p>
+    <h2>3. Student Claim and Recovery Model</h2>
+    <p>Students do not sign in with teacher names, email addresses, or district-wide accounts.</p>
     <ul>
-      <li>Temporary and class-scoped</li>
-      <li>No persistent identifiers introduced</li>
+      <li>Initial claim is class-scoped through the class join code</li>
+      <li>After claim, students use a username, PIN, and passphrase</li>
+      <li>Teacher-issued recovery uses class-scoped recovery controls rather than persistent storage of full roster PII</li>
     </ul>
 
-    <h2>4. Optional Teacher Notes</h2>
-    <p>Teachers may add notes for internal use.</p>
+    <h2>4. Teacher and Student Data Retention</h2>
+    <p>The application distinguishes between classroom-state data needed to operate the economy and temporary claim data that is reduced after setup.</p>
     <ul>
-      <li>Stored as encrypted, unstructured text</li>
-      <li>Not parsed or analyzed by the system</li>
+      <li>Claim-only matching data is removed or reduced after successful account setup</li>
+      <li>Classroom-state data remains while the class is active</li>
+      <li>Deleting a class removes data associated with that class context</li>
+      <li>If a student no longer belongs to any remaining class, the student account is also deleted</li>
+      <li>The app does not provide a restorable classroom-state backup feature for deleted classes</li>
     </ul>
 
-    <h2>5. Data Lifecycle & Deletion</h2>
+    <h2>5. Operational Logging and Technical Retention</h2>
+    <p>To operate and debug the service, the app keeps limited technical records separate from classroom content.</p>
     <ul>
-      <li>Class deletion removes all associated data</li>
-      <li>Teacher deletion removes all classes and student data</li>
-      <li>180-day inactivity triggers automatic deletion</li>
-      <li>No archival or soft-delete exists</li>
+      <li>Request traces are retained for about 7 days</li>
+      <li>Structured error events are retained for about 14 days</li>
+      <li>Database-backed error log entries are retained for about 14 days</li>
+      <li>Application log files are rotation-based and size-bounded</li>
+      <li>These records are intended for debugging, support correlation, and service reliability rather than classroom monitoring</li>
     </ul>
 
     <h2>6. Administrative Access Model</h2>
-    <p>CTH does not provide administrators with a general interface to browse or query data.</p>
+    <p>CTH does not provide a broad district-style console for browsing student roster data across all classes.</p>
     <ul>
-      <li>Access is teacher-initiated and class-scoped</li>
-      <li>Users are represented by pseudonymous identifiers</li>
-      <li>No cross-class inspection or bulk access tools exist</li>
+      <li>Teachers manage only their own classes</li>
+      <li>System administrators operate with a limited technical support scope</li>
+      <li>Normal administrator workflows emphasize usernames, class labels, counts, and technical identifiers rather than full student roster identity data</li>
     </ul>
 
     <h2>7. Application vs Infrastructure Access</h2>
-    <p>Application-level tools do not expose identifiable data. Infrastructure access is restricted to system maintenance and not used for monitoring user activity.</p>
+    <p>Application-level interfaces are intentionally narrower than raw infrastructure access. Production infrastructure access is reserved for system maintenance, debugging, and incident response, and is not designed as a classroom-observation tool.</p>
 
     <h2>8. Security</h2>
     <ul>
-      <li>HTTPS encryption in transit</li>
-      <li>Encrypted sensitive data at rest</li>
-      <li>Strict class-scoped access controls enforced at the application level</li>
-      <li>No administrative interface for browsing or querying student data</li>
-      <li>Pseudonymous identifiers used in place of direct identity references</li>
-      <li>System architecture prevents cross-class data access by design</li>
-      <li>Restricted and audited infrastructure access for maintenance purposes only</li>
-      <li>No global admin identity or privileges or superuser capabilties by design</li>
+      <li>HTTPS/TLS encryption in transit</li>
+      <li>Encryption at rest for sensitive stored fields</li>
+      <li>Strong one-way hashing for credentials and claim-verification values</li>
+      <li>Class-scoped access controls enforced at the application layer</li>
+      <li>Timed confirmation gates for destructive actions such as deleting class data</li>
+      <li>Reduced retention of claim-specific student identity data after setup</li>
+      <li>Restricted operational access for maintenance and incident handling</li>
     </ul>
 
     <h2>9. Compliance and Standards</h2>
     <h3>FERPA</h3>
-    <p>Classroom Token Hub is designed to operate in alignment with FERPA principles. The system minimizes the collection of personally identifiable information, restricts access to authorized educators within a class context, and does not share student data with third parties.</p>
+    <p>Classroom Token Hub is designed to align with FERPA-oriented data minimization principles by limiting stored student identity data, restricting classroom access to authorized educators, and avoiding third-party advertising or analytics use.</p>
     <h3>Accessibility (WCAG)</h3>
-    <p>Classroom Token Hub is designed with accessibility in mind and follows WCAG 2.1 Level AA guidelines where feasible. The platform is continuously improved to support a wide range of users, including those using assistive technologies.</p>
+    <p>Classroom Token Hub is developed with accessibility in mind and aims toward WCAG 2.1 Level AA practices where feasible. The interface is continuously improved to support a wide range of users, including those using assistive technologies.</p>
     <p>While formal accessibility audits have not yet been conducted, the system is developed with accessibility best practices as a core consideration. Districts with specific compliance requirements may choose to conduct independent evaluations.</p>
 
     <h2>10. What CTH Does Not Do</h2>
@@ -249,14 +257,19 @@
       <li>No third-party analytics</li>
       <li>No behavioral profiling</li>
       <li>No cross-class tracking</li>
-      <li>No integration with external identity systems (e.g., SSO)</li>
-      <li>No archival or long-term data retention beyond active class lifecycle</li>
+      <li>No required integration with external identity systems such as SSO or LTI in the hosted v1 app</li>
+      <li>No restorable deleted-class archive in normal operation</li>
     </ul>
     <div class="tip-box mb-0 mt-0">
       <h3 class="text-success fw-bold mt-0">NOTE</h3>
       <p>Classroom Token Hub is designed to operate as a complete, self-contained system without external integrations such as SSO or LTI.</p>
       <p>District partners may choose to create a self-hosted fork of the project to meet specific infrastructure or compliance requirements. In such cases, the forked system operates independently, may be renamed, and is no longer governed by, nor representative of, the original system’s design, guarantees, or invariants.</p>
       <p>This project is licensed under the PolyForm Noncommercial License 1.0.0, which permits copying, modification, and distribution for noncommercial use.</p>
+    </div>
+
+    <div class="mt-4 d-flex gap-3 flex-wrap align-items-center">
+      <a href="{{ url_for('main.privacy') }}">Privacy</a>
+      <a href="{{ url_for('main.terms') }}">Terms</a>
     </div>
 
     <a href="{{ url_for('student.login') }}" class="btn btn-secondary mt-4">← Back to Login</a>
