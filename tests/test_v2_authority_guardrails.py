@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-import ast
 import inspect
 from pathlib import Path
 
@@ -7,7 +6,6 @@ from app.extensions import db
 from app.models import Student, StudentTeacher, Transaction
 from app.routes import student as student_routes
 from app.services import attendance_service
-from app import attendance as attendance_module
 from tests.helpers.class_scope import create_class_scope
 from tests.helpers.v2_fixtures import make_admin
 
@@ -101,22 +99,6 @@ def test_dashboard_read_is_interest_mutation_free(client):
 # ---------------------------------------------------------------------------
 # Wave2 guardrails (item 8)
 # ---------------------------------------------------------------------------
-
-def _get_function_bodies_with_direct_transaction(source_text: str) -> list[str]:
-    """
-    Parse source and return names of functions that call Transaction(
-    directly (as opposed to via ledger_service or create_idempotent_transaction).
-    """
-    violations = []
-    lines = source_text.splitlines()
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        # Direct Transaction( construction that is NOT inside ledger_service itself
-        if "Transaction(" in stripped and not stripped.startswith("#"):
-            # Allow: inside ledger_service, inside overdraft.py utility, inside create_idempotent_transaction
-            violations.append(f"line {i + 1}: {stripped[:100]}")
-    return violations
-
 
 def test_rent_pay_route_does_not_create_transaction_directly():
     """rent_pay must delegate all writes to rent_payment_feat.execute_rent_payment."""

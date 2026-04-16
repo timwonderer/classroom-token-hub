@@ -597,6 +597,9 @@ def purchase_item():
                     return jsonify({"status": "success", "message": f"{purchase_message} Purchase already recorded."})
             else:
                 from app.services import ledger_service as _ledger_svc
+                # Zero-amount transaction: rent perk items are free to the student.
+                # We still create a ledger row so the purchase appears in the student's
+                # transaction history and can be linked to the StudentItem via its ID.
                 purchase_tx = _ledger_svc.create_pending_transaction(
                     student_id=student.id,
                     teacher_id=teacher_id,
