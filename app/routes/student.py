@@ -3280,9 +3280,11 @@ def _get_effective_rent_amount_for_coverage_period(settings, payments, coverage_
                     earliest_payment = min(
                         (p for p in payments if p.payment_date),
                         key=lambda p: ensure_utc(p.payment_date),
+                        default=None,
                     )
                     if (
-                        getattr(earliest_payment, 'rent_amount_snapshot', None) is not None
+                        earliest_payment is not None
+                        and getattr(earliest_payment, 'rent_amount_snapshot', None) is not None
                         and earliest_payment.rent_amount_snapshot > Decimal('0.00')
                     ):
                         return _quantize_currency(earliest_payment.rent_amount_snapshot)
