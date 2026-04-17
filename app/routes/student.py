@@ -681,7 +681,7 @@ def complete_profile():
                 
                 # Mark migration as completed
                 student.has_completed_profile_migration = True
-                
+
                 # Update all TeacherBlock entries for this student with new hashes
                 from app.models import TeacherBlock
                 teacher_blocks = TeacherBlock.query.filter_by(student_id=student.id).all()
@@ -689,6 +689,12 @@ def complete_profile():
                     block.last_name_hash_by_part = student.last_name_hash_by_part
                     block.first_half_hash = student.first_half_hash
                     block.last_initial = student.last_initial
+
+                # Post-migration PII cleanup: dob_sum and last_name_hash_by_part are no
+                # longer needed on the student record now that hashes are propagated to
+                # TeacherBlock. Mirrors the cleanup done in setup_pin_passphrase.
+                student.dob_sum = None
+                student.last_name_hash_by_part = None
                 
                 db.session.commit()
                 
