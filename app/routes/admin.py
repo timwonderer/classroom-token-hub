@@ -4490,9 +4490,13 @@ def edit_student():
     # If name changed, refresh last name hashes and claim hash
     if name_changed:
         student.last_name_hash_by_part = hash_last_name_parts(last_name_input, student.salt)
-        claim_hash = compute_primary_claim_hash(new_first_name[:1], student.dob_sum, student.salt)
-        if claim_hash:
-            student.first_half_hash = claim_hash
+        # Only regenerate first_half_hash for unclaimed students whose dob_sum is still
+        # set. For claimed students dob_sum is null (cleared post-setup) and the hash
+        # cannot be recomputed; recovery uses reset codes, not DOB-based claim matching.
+        if student.dob_sum is not None:
+            claim_hash = compute_primary_claim_hash(new_first_name[:1], student.dob_sum, student.salt)
+            if claim_hash:
+                student.first_half_hash = claim_hash
 
     # Handle account reset — generate recovery code per recovery spec
     reset_login = request.form.get('reset_login') == 'on'
