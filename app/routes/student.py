@@ -3229,6 +3229,16 @@ def _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date):
         if txn is None or txn.is_void:
             continue
 
+        # Prefer the snapshotted rent amount (recorded at payment creation time).
+        # This distinguishes a partial installment from a full payment made when
+        # the rent rate was lower, preventing partial payments from corrupting the
+        # class-wide rate lock.
+        if payment.rent_amount_snapshot is not None:
+            snapshot = _quantize_currency(payment.rent_amount_snapshot)
+            if snapshot > Decimal('0.00'):
+                return snapshot
+
+        # Legacy fallback for rows without a snapshot: derive from amount paid.
         late_fee = _quantize_currency(payment.late_fee_charged or Decimal('0.00'))
         base_amount = _quantize_currency((payment.amount_paid or Decimal('0.00')) - late_fee)
         if base_amount > Decimal('0.00'):
@@ -3253,8 +3263,9 @@ def _get_effective_rent_amount_for_coverage_period(settings, payments, coverage_
         return locked_amount
 
     # Fallback: if settings were updated AFTER the student's earliest payment
-    # for this period, the rate was raised mid-cycle. Use the total base amount
-    # the student paid (their rate at payment time) as the effective threshold.
+    # for this period, the rate was raised mid-cycle. Use the snapshotted rent
+    # amount from the earliest payment as the effective threshold so students
+    # are not retroactively marked late.
     if payments:
         updated_at = getattr(settings, 'updated_at', None)
         if updated_at:
@@ -3264,6 +3275,18 @@ def _get_effective_rent_amount_for_coverage_period(settings, payments, coverage_
             if payment_dates:
                 earliest = min(payment_dates)
                 if ensure_utc(updated_at) > earliest:
+                    # Use snapshotted rent amount from earliest payment when available.
+                    # Fallback to sum of base payments (legacy rows without snapshot).
+                    earliest_payment = min(
+                        (p for p in payments if p.payment_date),
+                        key=lambda p: ensure_utc(p.payment_date),
+                    )
+                    if (
+                        getattr(earliest_payment, 'rent_amount_snapshot', None) is not None
+                        and earliest_payment.rent_amount_snapshot > Decimal('0.00')
+                    ):
+                        return _quantize_currency(earliest_payment.rent_amount_snapshot)
+
                     base_paid = sum(
                         (p.amount_paid or Decimal('0.00')) - (p.late_fee_charged or Decimal('0.00'))
                         for p in payments
@@ -4136,7 +4159,8 @@ def rent_pay(period):
             coverage_month=coverage_month,
             coverage_year=coverage_year,
             was_late=is_late,
-            late_fee_charged=late_fee_for_this_payment
+            late_fee_charged=late_fee_for_this_payment,
+            rent_amount_snapshot=_quantize_currency(settings.rent_amount) if settings.rent_amount else None,
         )
         db.session.add(payment)
 
