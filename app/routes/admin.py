@@ -5020,58 +5020,6 @@ def add_individual_student():
         # Compute last_name_hash_by_part for fuzzy matching
         last_name_parts = hash_last_name_parts(last_name, salt)
 
-        # Check for duplicates - need to check ALL students GLOBALLY (not scoped to teacher)
-        # This prevents creating duplicate accounts when multiple teachers have the same student
-        potential_duplicates = Student.query.filter_by(
-            last_initial=last_initial,
-            dob_sum=dob_sum
-        ).all()
-
-        # Check if any existing student matches (using new credential system)
-        for existing_student in potential_duplicates:
-            if existing_student.first_name == first_name:
-                # Verify credential matches
-                credential_matches, is_primary, canonical_hash = match_claim_hash(
-                    existing_student.first_half_hash,
-                    first_initial,
-                    last_initial,
-                    dob_sum,
-                    existing_student.salt,
-                )
-
-                # Also check fuzzy last name matching
-                fuzzy_match = False
-                if existing_student.last_name_hash_by_part:
-                    fuzzy_match = verify_last_name_parts(
-                        last_name,
-                        existing_student.last_name_hash_by_part,
-                        existing_student.salt
-                    )
-
-                # Match if BOTH credential AND last name match
-                if credential_matches and fuzzy_match:
-                    if canonical_hash and not is_primary:
-                        existing_student.first_half_hash = canonical_hash
-                    # Student already exists - link to this teacher instead of creating duplicate
-                    current_admin_id = session.get("admin_id")
-
-                    # Check if this teacher is already linked to this student
-                    from app.models import StudentTeacher
-                    existing_link = StudentTeacher.query.filter_by(
-                        student_id=existing_student.id,
-                        admin_id=current_admin_id
-                    ).first()
-
-                    if existing_link:
-                        flash(f"Student {first_name} {last_name} is already in your class.", "info")
-                    else:
-                        # Link this teacher to the existing student
-                        _link_student_to_admin(existing_student, current_admin_id)
-                        db.session.commit()
-                        flash(f"Student {first_name} {last_name} already exists. Added to your class.", "success")
-
-                    return redirect(url_for('admin.students'))
-
         # Create student
         current_admin_id = session.get("admin_id")
         new_student = Student(
@@ -5184,48 +5132,6 @@ def add_manual_student():
 
         # Compute last_name_hash_by_part for fuzzy matching
         last_name_parts = hash_last_name_parts(last_name, salt)
-
-        # Check for duplicates GLOBALLY (not scoped to teacher)
-        potential_duplicates = Student.query.filter_by(
-            last_initial=last_initial,
-            dob_sum=dob_sum
-        ).all()
-
-        for existing_student in potential_duplicates:
-            if existing_student.first_name == first_name:
-                # Verify credential matches (canonical + legacy)
-                credential_matches, is_primary, canonical_hash = match_claim_hash(
-                    existing_student.first_half_hash,
-                    first_initial,
-                    last_initial,
-                    dob_sum,
-                    existing_student.salt,
-                )
-
-                # Also check fuzzy last name matching
-                fuzzy_match = False
-                if existing_student.last_name_hash_by_part:
-                    fuzzy_match = verify_last_name_parts(
-                        last_name,
-                        existing_student.last_name_hash_by_part,
-                        existing_student.salt
-                    )
-
-                if credential_matches and fuzzy_match:
-                    if canonical_hash and not is_primary:
-                        existing_student.first_half_hash = canonical_hash
-                    flash(f"Student {first_name} {last_name} already exists. Linking to your class.", "warning")
-                    # Link to this teacher
-                    from app.models import StudentTeacher
-                    current_admin_id = session.get("admin_id")
-                    existing_link = StudentTeacher.query.filter_by(
-                        student_id=existing_student.id,
-                        admin_id=current_admin_id
-                    ).first()
-                    if not existing_link:
-                        _link_student_to_admin(existing_student, current_admin_id)
-                        db.session.commit()
-                    return redirect(url_for('admin.students'))
 
         # Create student
         new_student = Student(
