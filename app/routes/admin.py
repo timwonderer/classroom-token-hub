@@ -39,6 +39,7 @@ import pytz
 from werkzeug.exceptions import HTTPException
 
 from app.extensions import db, limiter
+from app.access import AccessScopeDenied, resolve_scope
 from app.models import (
     Student, Admin, ClassEconomy, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
@@ -49,7 +50,7 @@ from app.models import (
     RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent, Seat,
     BalanceCache, ClassMembership, ClassEconomy, EconomySnapshot, _quantize_currency,
 )
-from app.auth import admin_required, get_admin_student_query, get_student_for_admin
+from app.auth import admin_required, get_admin_student_query, get_current_admin, get_student_for_admin
 from app.forms import (
     AdminLoginForm, AdminSignupForm, AdminTOTPConfirmForm, AdminRecoveryForm, AdminResetCredentialsForm, StoreItemForm,
     InsurancePolicyForm, AdminClaimProcessForm, PayrollSettingsForm,
@@ -7644,21 +7645,27 @@ def void_transaction(transaction_id):
         flash(message, "error")
         return _safe_referrer_redirect()
 
-    tx = (
-        Transaction.query
-        .join(Student, Transaction.student_id == Student.id)
-        .filter(Transaction.id == transaction_id)
-        .filter(Student.id.in_(sa.select(_student_scope_subquery())))
-        .first_or_404()
-    )
+    tx = db.session.get(Transaction, transaction_id)
+    if tx is None:
+        abort(404)
 
     if tx.is_void:
         return _void_error("Transaction is already voided.")
 
     try:
+        current_admin = get_current_admin()
+        scope = resolve_scope(
+            actor=current_admin,
+            selected_join_code=tx.join_code or session.get("current_join_code"),
+            actor_role="teacher",
+        )
+        access_policy_service.assert_can_void_transaction(scope=scope, transaction=tx)
         execute_void_transaction(tx)
         db.session.commit()
         current_app.logger.info(f"Transaction {transaction_id} voided")
+    except (AccessScopeDenied, access_policy_service.AccessPolicyDenied) as e:
+        db.session.rollback()
+        return _void_error(e.message if hasattr(e, "message") else str(e), status_code=403)
     except ValueError as e:
         db.session.rollback()
         return _void_error(str(e))

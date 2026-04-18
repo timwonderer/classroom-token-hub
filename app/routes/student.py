@@ -53,13 +53,14 @@ from app.utils.overdraft import charge_overdraft_fee_if_needed, evaluate_overdra
 from app.utils.help_content import HELP_ARTICLES
 from app.utils.economy_policy import get_class_feature_settings, resolve_feature_class
 from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
+from app.access import AccessScopeDenied, resolve_scope
 from app.services.attendance_service import get_all_block_statuses
 from app.services.ledger_service import (
     apply_overdraft_fee_if_needed as apply_ledger_overdraft_fee,
     apply_monthly_savings_interest as post_monthly_savings_interest,
     get_available_balances,
 )
-from app.services import identity_service, store_service
+from app.services import access_policy_service, identity_service, store_service
 from app.feats.rent_payment_feat import execute_rent_payment
 from app.feats.transfer_feat import execute_account_transfer
 from app.feats.insurance_purchase_feat import execute_insurance_purchase
@@ -1113,18 +1114,22 @@ def dashboard():
     """Student dashboard with balance, attendance, transactions, and quick actions."""
     student = get_logged_in_student()
 
-    # CRITICAL FIX v2: Use join_code as source of truth (not just teacher_id)
-    # This properly isolates same-teacher, different-period classes
-    context = get_current_class_context()
-    if not context:
-        flash("No class selected. Please select a class to continue.", "error")
+    try:
+        scope = resolve_scope(
+            actor=student,
+            selected_join_code=session.get("current_join_code"),
+        )
+        access_policy_service.assert_can_view_dashboard(scope)
+    except AccessScopeDenied as exc:
+        flash(exc.message, "error")
+        return redirect(url_for('student.login'))
+    except access_policy_service.AccessPolicyDenied as exc:
+        flash(exc.message, "error")
         return redirect(url_for('student.login'))
 
-    join_code = context['join_code']
-    teacher_id = context['teacher_id']
-    join_code = context['join_code']
-    join_code = context['join_code']
-    current_block = context['block']  # Get current class block
+    join_code = scope.join_code
+    teacher_id = scope.teacher_id
+    current_block = scope.block  # Get current class block
 
     # CRITICAL FIX: Filter transactions by join_code (not just teacher_id)
     # This ensures Period A and Period B with same teacher are isolated
@@ -1198,8 +1203,8 @@ def dashboard():
         recent_deposit = None
 
     # Get student's active insurance policies (scoped to current class)
-    context = get_current_class_context()
-    teacher_id = context['teacher_id'] if context else None
+    context = {'join_code': scope.join_code, 'teacher_id': scope.teacher_id, 'block': scope.block, 'seat_id': scope.seat_id}
+    teacher_id = scope.teacher_id
     active_insurance = student.get_active_insurance(teacher_id)
 
     rent_status = None

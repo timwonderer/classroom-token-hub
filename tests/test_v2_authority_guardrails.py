@@ -22,6 +22,9 @@ def test_student_dashboard_does_not_trigger_hidden_mutation_calls():
     source = inspect.getsource(student_routes.dashboard)
     assert "apply_savings_interest(" not in source
     assert "_ensure_rent_hall_pass_top_off(" not in source
+    assert "resolve_scope(" in source
+    assert "assert_can_view_dashboard(" in source
+    assert "get_current_class_context()" not in source
 
 
 def test_student_shop_does_not_trigger_collective_goal_reconciliation():
@@ -77,6 +80,9 @@ def test_admin_void_route_is_not_direct_ledger_authority():
     assert "Transaction(" not in source
     assert "create_idempotent_transaction(" not in source
     assert "execute_void_transaction(" in source
+    assert "resolve_scope(" in source
+    assert "assert_can_void_transaction(" in source
+    assert "_student_scope_subquery()" not in source
 
 
 def test_admin_claim_route_is_not_direct_ledger_authority():
@@ -186,3 +192,42 @@ def test_dashboard_read_is_interest_mutation_free(client):
         description="Monthly Savings Interest",
         account_type="savings",
     ).first() is None
+
+
+def test_dashboard_access_policy_normalizes_invalid_join_code(client):
+    teacher = make_admin("dash_scope_teacher", "secret")
+    db.session.add(teacher)
+    db.session.flush()
+
+    student = Student(first_name="Scope", last_initial="Q", block="A", salt=b"salt", has_completed_setup=True)
+    db.session.add(student)
+    db.session.flush()
+
+    create_class_scope(
+        teacher=teacher,
+        join_code="SCOPEA1",
+        student=student,
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+    )
+    create_class_scope(
+        teacher=teacher,
+        join_code="SCOPEB1",
+        student=student,
+        block="B",
+        display_name="B",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+    )
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
+    db.session.commit()
+
+    _login_student(client, student.id, "MISSING")
+
+    response = client.get("/student/dashboard")
+
+    assert response.status_code == 200
+    with client.session_transaction() as sess:
+        assert sess["current_join_code"] == "SCOPEA1"
