@@ -4481,36 +4481,22 @@ def edit_student():
 
     # Check if name changed (need to recalculate hashes)
     name_changed = (new_first_name != student.first_name or new_last_initial != student.last_initial)
-    dob_changed = False
 
     # Update basic fields
     student.first_name = new_first_name
     student.last_initial = new_last_initial
     student.block = new_blocks
 
-    # If name changed, refresh last name hashes
+    # If name changed, refresh last name hashes and claim hash
     if name_changed:
         student.last_name_hash_by_part = hash_last_name_parts(last_name_input, student.salt)
-
-    # Update DOB sum if provided (and recalculate second_half_hash)
-    dob_sum_str = request.form.get('dob_sum', '').strip()
-    if dob_sum_str:
-        try:
-            new_dob_sum = parse_dob_input(dob_sum_str)
-        except ValueError:
-            flash("Invalid date of birth. Please use the date picker.", "error")
-            return redirect(url_for('admin.students'))
-
-        if new_dob_sum != student.dob_sum:
-            student.dob_sum = new_dob_sum
-            # Regenerate second_half_hash (DOB sum hash)
-            student.second_half_hash = hash_hmac(str(new_dob_sum).encode(), student.salt)
-            dob_changed = True
-
-    if name_changed or dob_changed:
-        claim_hash = compute_primary_claim_hash(new_first_name[:1], student.dob_sum, student.salt)
-        if claim_hash:
-            student.first_half_hash = claim_hash
+        # Only regenerate first_half_hash for unclaimed students whose dob_sum is still
+        # set. For claimed students dob_sum is null (cleared post-setup) and the hash
+        # cannot be recomputed; recovery uses reset codes, not DOB-based claim matching.
+        if student.dob_sum is not None:
+            claim_hash = compute_primary_claim_hash(new_first_name[:1], student.dob_sum, student.salt)
+            if claim_hash:
+                student.first_half_hash = claim_hash
 
     # Handle account reset — generate recovery code per recovery spec
     reset_login = request.form.get('reset_login') == 'on'
@@ -4528,7 +4514,7 @@ def edit_student():
         flash(f"Reset code generated for {student.full_name}: {code} — Expires in 10 minutes. "
               f"Give this code to the student along with their join code.", "warning")
 
-    if name_changed or dob_changed:
+    if name_changed:
         TeacherBlock.query.filter_by(
             student_id=student.id,
             teacher_id=current_admin_id
@@ -4536,7 +4522,6 @@ def edit_student():
             'first_name': student.first_name,
             'last_initial': student.last_initial,
             'last_name_hash_by_part': student.last_name_hash_by_part or [],
-            'dob_sum': student.dob_sum or 0,
             'first_half_hash': student.first_half_hash,
         })
 
@@ -5039,58 +5024,6 @@ def add_individual_student():
         # Compute last_name_hash_by_part for fuzzy matching
         last_name_parts = hash_last_name_parts(last_name, salt)
 
-        # Check for duplicates - need to check ALL students GLOBALLY (not scoped to teacher)
-        # This prevents creating duplicate accounts when multiple teachers have the same student
-        potential_duplicates = Student.query.filter_by(
-            last_initial=last_initial,
-            dob_sum=dob_sum
-        ).all()
-
-        # Check if any existing student matches (using new credential system)
-        for existing_student in potential_duplicates:
-            if existing_student.first_name == first_name:
-                # Verify credential matches
-                credential_matches, is_primary, canonical_hash = match_claim_hash(
-                    existing_student.first_half_hash,
-                    first_initial,
-                    last_initial,
-                    dob_sum,
-                    existing_student.salt,
-                )
-
-                # Also check fuzzy last name matching
-                fuzzy_match = False
-                if existing_student.last_name_hash_by_part:
-                    fuzzy_match = verify_last_name_parts(
-                        last_name,
-                        existing_student.last_name_hash_by_part,
-                        existing_student.salt
-                    )
-
-                # Match if BOTH credential AND last name match
-                if credential_matches and fuzzy_match:
-                    if canonical_hash and not is_primary:
-                        existing_student.first_half_hash = canonical_hash
-                    # Student already exists - link to this teacher instead of creating duplicate
-                    current_admin_id = session.get("admin_id")
-
-                    # Check if this teacher is already linked to this student
-                    from app.models import StudentTeacher
-                    existing_link = StudentTeacher.query.filter_by(
-                        student_id=existing_student.id,
-                        admin_id=current_admin_id
-                    ).first()
-
-                    if existing_link:
-                        flash(f"Student {first_name} {last_name} is already in your class.", "info")
-                    else:
-                        # Link this teacher to the existing student
-                        _link_student_to_admin(existing_student, current_admin_id)
-                        db.session.commit()
-                        flash(f"Student {first_name} {last_name} already exists. Added to your class.", "success")
-
-                    return redirect(url_for('admin.students'))
-
         # Create student
         current_admin_id = session.get("admin_id")
         new_student = Student(
@@ -5203,48 +5136,6 @@ def add_manual_student():
 
         # Compute last_name_hash_by_part for fuzzy matching
         last_name_parts = hash_last_name_parts(last_name, salt)
-
-        # Check for duplicates GLOBALLY (not scoped to teacher)
-        potential_duplicates = Student.query.filter_by(
-            last_initial=last_initial,
-            dob_sum=dob_sum
-        ).all()
-
-        for existing_student in potential_duplicates:
-            if existing_student.first_name == first_name:
-                # Verify credential matches (canonical + legacy)
-                credential_matches, is_primary, canonical_hash = match_claim_hash(
-                    existing_student.first_half_hash,
-                    first_initial,
-                    last_initial,
-                    dob_sum,
-                    existing_student.salt,
-                )
-
-                # Also check fuzzy last name matching
-                fuzzy_match = False
-                if existing_student.last_name_hash_by_part:
-                    fuzzy_match = verify_last_name_parts(
-                        last_name,
-                        existing_student.last_name_hash_by_part,
-                        existing_student.salt
-                    )
-
-                if credential_matches and fuzzy_match:
-                    if canonical_hash and not is_primary:
-                        existing_student.first_half_hash = canonical_hash
-                    flash(f"Student {first_name} {last_name} already exists. Linking to your class.", "warning")
-                    # Link to this teacher
-                    from app.models import StudentTeacher
-                    current_admin_id = session.get("admin_id")
-                    existing_link = StudentTeacher.query.filter_by(
-                        student_id=existing_student.id,
-                        admin_id=current_admin_id
-                    ).first()
-                    if not existing_link:
-                        _link_student_to_admin(existing_student, current_admin_id)
-                        db.session.commit()
-                    return redirect(url_for('admin.students'))
 
         # Create student
         new_student = Student(
