@@ -2687,6 +2687,25 @@ def _add_rent_period(dt, delta):
     return dt + delta
 
 
+def _calculate_due_dates(settings, now):
+    """Return the current and next due dates for rent-linked expiry calculations."""
+    first_due = ensure_utc(settings.first_rent_due_date)
+    if not first_due:
+        return (None, None)
+
+    delta = _get_rent_period_delta(settings)
+    if now < first_due:
+        return (first_due, _add_rent_period(first_due, delta))
+
+    current_due = first_due
+    next_due = _add_rent_period(first_due, delta)
+    while next_due and next_due <= now:
+        current_due = next_due
+        next_due = _add_rent_period(next_due, delta)
+
+    return (current_due, next_due)
+
+
 def _calculate_upcoming_rent_due_date(settings, due_date, coverage_due_date):
     """
     Return the next due date students can preview/pay toward.

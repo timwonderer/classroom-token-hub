@@ -43,7 +43,6 @@ from app.utils.overdraft import charge_overdraft_fee_if_needed
 from app.utils.seat_scope import get_seat_ids_for_student_join
 from app.utils.transaction_idempotency import (
     MAX_IDEMPOTENCY_KEY_LENGTH,
-    create_idempotent_transaction,
     get_idempotent_transaction,
     purchase_transaction_key,
     student_item_refund_key,
@@ -55,6 +54,8 @@ from app.attendance import get_join_code_for_student_period
 from app.services.attendance_service import calculate_unpaid_attendance_seconds, get_all_block_statuses
 from app.services.ledger_service import (
     apply_overdraft_fee_if_needed as apply_ledger_overdraft_fee,
+    create_pending_transaction,
+    create_pending_transaction_idempotent,
     get_available_balances,
     get_last_payroll_time,
 )
@@ -855,10 +856,9 @@ def use_item():
             student_item.redemption_date = utc_now()
             student_item.redemption_details = details
 
-        # CRITICAL FIX v2: Create a redemption transaction with join_code
-        # This is a $0 transaction to log the redemption event
+        # Log the redemption event through Ledger without changing monetary balance.
         if context:
-            redemption_tx = Transaction(
+            create_pending_transaction(
                 student_id=student.id,
                 teacher_id=context['teacher_id'],
                 join_code=context['join_code'],  # CRITICAL: Add join_code for period isolation
@@ -867,7 +867,6 @@ def use_item():
                 type='redemption',
                 description=f"Used: {student_item.store_item.name}" + (f" (bundle: {student_item.bundle_remaining} remaining)" if student_item.is_from_bundle else "")
             )
-            db.session.add(redemption_tx)
         db.session.commit()
 
         if student_item.is_from_bundle:
@@ -1033,7 +1032,7 @@ def reject_redemption():
             )
             return jsonify({"status": "error", "message": "Unable to resolve class for refund."}), 400
 
-        refund_tx, _created = create_idempotent_transaction(
+        refund_tx, _created = create_pending_transaction_idempotent(
             idempotency_key=student_item_refund_key(student_item.id, 'redemption-rejected'),
             student_id=student_item.student_id,
             teacher_id=student_item.store_item.teacher_id,

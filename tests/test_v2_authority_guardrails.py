@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import inspect
 from pathlib import Path
+import re
 
 from app.extensions import db
 from app.models import Student, StudentTeacher, Transaction
@@ -78,6 +79,40 @@ def test_admin_void_route_is_not_direct_ledger_authority():
     assert "execute_void_transaction(" in source
 
 
+def test_admin_claim_route_is_not_direct_ledger_authority():
+    admin_source = Path("app/routes/admin.py").read_text()
+    start = admin_source.index("def process_claim(")
+    end = admin_source.index("return render_template('admin_process_claim.html'")
+    source = admin_source[start:end]
+    assert "Transaction(" not in source
+    assert "execute_insurance_claim_resolution(" in source
+
+
+def test_admin_adjustment_routes_use_adjustment_feat():
+    admin_source = Path("app/routes/admin.py").read_text()
+    for fn_name in [
+        "def give_bonus_all(",
+        "def payroll_apply_reward(",
+        "def payroll_apply_fine(",
+        "def payroll_manual_payment(",
+        "def run_payroll(",
+    ]:
+        start = admin_source.index(fn_name)
+        next_route = admin_source.find("@admin_bp.route(", start + 1)
+        source = admin_source[start: next_route if next_route != -1 else None]
+        assert "execute_admin_adjustments(" in source, f"{fn_name} does not delegate to admin adjustment feat"
+
+
+def test_transaction_constructor_is_only_used_in_ledger_service():
+    allowed = {Path("app/services/ledger_service.py")}
+    hits = []
+    for path in Path("app").rglob("*.py"):
+        source = path.read_text()
+        if re.search(r"(?<!class )Transaction\(", source) and path not in allowed:
+            hits.append(str(path))
+    assert hits == [], f"Transaction constructor leaked outside ledger_service: {hits}"
+
+
 def test_store_purchase_route_is_not_direct_ledger_or_store_authority():
     api_source = Path("app/routes/api.py").read_text()
     purchase_source = inspect.getsource(__import__("app.routes.api", fromlist=["purchase_item"]).purchase_item)
@@ -95,6 +130,8 @@ def test_feat_modules_do_not_construct_transactions_or_write_rows_directly():
         Path("app/feats/transfer_feat.py"),
         Path("app/feats/insurance_purchase_feat.py"),
         Path("app/feats/transaction_void_feat.py"),
+        Path("app/feats/admin_adjustment_feat.py"),
+        Path("app/feats/insurance_claim_feat.py"),
     ]:
         source = path.read_text()
         assert "Transaction(" not in source

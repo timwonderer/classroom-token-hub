@@ -44,6 +44,7 @@ from app.forms import SystemAdminLoginForm, SystemAdminInviteForm
 from app.utils.helpers import is_safe_url, format_utc_iso
 from app.utils.encryption import encrypt_totp, decrypt_totp, is_totp_encrypted
 from app.hash_utils import hash_username_lookup
+from app.services import ledger_service
 from app.utils.passwordless_client import (
     create_register_token,
     verify_signin_token,
@@ -1917,19 +1918,15 @@ def resolve_escalated_issue(issue_ref):
         issue.eligible_for_reward = eligible_for_reward
 
         if reward_amount_value is not None:
-            reward_transaction = Transaction(
+            reward_transaction = ledger_service.create_pending_transaction(
                 student_id=issue.student_id,
                 teacher_id=issue.teacher_id,
                 join_code=issue.join_code,
                 amount=reward_amount_value,
                 account_type='checking',
                 description=f"Bug Reward (Issue #{issue.id})",
-                timestamp=utc_now(),
-                status=TransactionStatus.PENDING,
                 type='bug_reward',
-                is_void=False,
             )
-            db.session.add(reward_transaction)
             db.session.flush()
 
             db.session.add(IssueResolutionAction(

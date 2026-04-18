@@ -75,7 +75,8 @@ def create_idempotent_transaction(*, idempotency_key, **transaction_kwargs):
 
     try:
         with db.session.begin_nested():
-            transaction = Transaction(idempotency_key=idempotency_key, **transaction_kwargs)
+            transaction_model = Transaction
+            transaction = transaction_model(idempotency_key=idempotency_key, **transaction_kwargs)
             db.session.add(transaction)
             db.session.flush()
             return transaction, True

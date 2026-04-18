@@ -155,6 +155,8 @@ def create_pending_transaction_idempotent(
     account_type: str,
     type: str,
     description: str,
+    original_transaction_id: int | None = None,
+    policy_id: int | None = None,
 ):
     """Create a pending transaction through the idempotent ledger path."""
     transaction, created = create_idempotent_transaction(
@@ -167,6 +169,8 @@ def create_pending_transaction_idempotent(
         status=TransactionStatus.PENDING,
         type=type,
         description=description,
+        original_transaction_id=original_transaction_id,
+        policy_id=policy_id,
     )
     return transaction, created
 

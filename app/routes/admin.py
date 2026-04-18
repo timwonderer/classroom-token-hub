@@ -116,6 +116,8 @@ from app.utils.student_deletion import (
 )
 from app.utils.seat_scope import get_seat_ids_for_student_join, seat_scoped_filter, transaction_scope_filter
 from app.utils.transaction_idempotency import create_idempotent_transaction, void_refund_key
+from app.feats.admin_adjustment_feat import execute_admin_adjustments
+from app.feats.insurance_claim_feat import execute_insurance_claim_resolution
 from app.feats.transaction_void_feat import execute_void_transaction
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
@@ -128,6 +130,7 @@ from app.attendance import (
     calculate_seconds_in_memory,
 )
 from app.services.balance_service import get_batch_balances
+from app.services import ledger_service
 from app.services.ledger_service import get_available_balances
 from app.utils.insurance_eligibility import (
     collect_reimbursed_source_tx_ids,
@@ -2614,9 +2617,7 @@ def give_bonus_all():
     join_code_map = {student_id: join_code for student_id, join_code in teacher_blocks}
 
     banking_settings = BankingSettings.query.filter_by(teacher_id=current_admin_id).first()
-    applied_count = 0
-    declined_count = 0
-    fee_count = 0
+    adjustments = []
 
     # Stream students in batches to reduce memory usage
     students = students_query.yield_per(50)
@@ -2631,71 +2632,23 @@ def give_bonus_all():
             f"This should not happen if TeacherBlock records are properly created."
             )
 
-        if amount < 0:
-            allowed, shortfall, _, _ = evaluate_overdraft_allowance(
-                student,
-                abs(amount),
-                banking_settings,
-                teacher_id=current_admin_id,
-                join_code=join_code
-            )
-            if not allowed:
-                fee_charged, _ = charge_overdraft_fee_if_needed(
-                    student,
-                    banking_settings,
-                    teacher_id=current_admin_id,
-                    join_code=join_code,
-                    force=True
-                )
-                if fee_charged:
-                    fee_count += 1
-                declined_count += 1
-                continue
+        adjustments.append({
+            'student': student,
+            'teacher_id': current_admin_id,
+            'join_code': join_code,
+            'amount': amount,
+            'type': tx_type,
+            'description': title,
+            'account_type': 'checking',
+        })
 
-        tx = Transaction(
-            student_id=student.id,
-            teacher_id=current_admin_id,  # CRITICAL: Add teacher_id for multi-tenancy
-            join_code=join_code,  # CRITICAL: Add join_code for period isolation
-            amount=amount,
-            type=tx_type,
-            description=title,
-            status=TransactionStatus.PENDING,
-            account_type='checking'
-        )
-        db.session.add(tx)
-        applied_count += 1
-
-        if amount < 0 and shortfall > 0:
-            transfer_tx_withdraw = Transaction(
-                student_id=student.id,
-                teacher_id=current_admin_id,
-                join_code=join_code,
-                amount=-shortfall,
-                account_type='savings',
-                status=TransactionStatus.PENDING,
-                type='Withdrawal',
-                description='Overdraft protection transfer to checking'
-            )
-            transfer_tx_deposit = Transaction(
-                student_id=student.id,
-                teacher_id=current_admin_id,
-                join_code=join_code,
-                amount=shortfall,
-                account_type='checking',
-                status=TransactionStatus.PENDING,
-                type='Deposit',
-                description='Overdraft protection transfer from savings'
-            )
-            db.session.add(transfer_tx_withdraw)
-            db.session.add(transfer_tx_deposit)
-
-    db.session.commit()
-    message = f"Bonus/Payroll posted to {applied_count} student(s)!"
-    if declined_count:
-        message += f" {declined_count} declined for insufficient funds."
-    if fee_count:
-        message += f" Overdraft fee charged for {fee_count}."
-    flash(message, "warning" if declined_count else "success")
+    result = execute_admin_adjustments(adjustments=adjustments, banking_settings=banking_settings)
+    message = f"Bonus/Payroll posted to {result.applied_count} student(s)!"
+    if result.declined_count:
+        message += f" {result.declined_count} declined for insufficient funds."
+    if result.fee_count:
+        message += f" Overdraft fee charged for {result.fee_count}."
+    flash(message, "warning" if result.declined_count else "success")
     return redirect(url_for('admin.dashboard'))
 
 
@@ -6890,19 +6843,18 @@ def reverse_cycle_penalties():
 
         if paid_by_grace >= locked_rate:
             refund_amount = total_late_fee_charged
-            db.session.add(Transaction(
+            ledger_service.create_pending_transaction(
                 student_id=student_id,
                 teacher_id=admin_id,
                 join_code=join_code,
                 amount=refund_amount,
                 account_type='checking',
-                status=TransactionStatus.PENDING,
                 type='Rent Late Fee Reversal',
                 description=(
                     f'Late fee reversal: rate was raised mid-cycle for '
                     f'{coverage_due_date.strftime("%B %Y")} (locked at ${locked_rate:.2f})'
                 ),
-            ))
+            )
 
             for payment in payments:
                 if payment.late_fee_charged and payment.late_fee_charged > Decimal('0.00'):
@@ -7593,13 +7545,7 @@ def process_claim(claim_id):
             flash("Resolve validation errors before approving or paying out this claim.", "danger")
             return redirect(url_for('admin.process_claim', claim_id=claim_id))
 
-        claim.status = new_status
-        claim.teacher_notes = form.teacher_notes.data
-        claim.rejection_reason = form.rejection_reason.data if new_status == 'rejected' else None
-        claim.processed_date = utc_now()
-        claim.processed_by_teacher_id = session.get('admin_id')
-
-        # Handle monetary claims - auto-deposit when approved/paid
+        approved_amount = None
         if requires_payout:
             approved_claims_count = approved_claims.count()
             if max_claims_count and approved_claims_count >= max_claims_count:
@@ -7624,54 +7570,23 @@ def process_claim(claim_id):
                     db.session.rollback()
                     return redirect(url_for('admin.process_claim', claim_id=claim_id))
                 approved_amount = min(approved_amount, remaining_period_cap)
-
-            claim.approved_amount = approved_amount
-
-            # Auto-deposit to student's checking account via transaction
-            student = claim.student
-
-            transaction_description = f"Insurance reimbursement for claim #{claim.id} ({enrollment.contract_title})"
-            if claim.transaction_id:
-                transaction_description += f" linked to transaction #{claim.transaction_id}"
-
-            existing_reimbursement = Transaction.query.filter(
-                Transaction.type == 'insurance_reimbursement',
-                Transaction.original_transaction_id == claim.transaction_id,
-                Transaction.policy_id == claim.policy_id,
-                Transaction.is_void == False,
-            ).first()
-            if existing_reimbursement:
-                flash("Reimbursement already exists for this source transaction and policy.", "danger")
-                db.session.rollback()
-                return redirect(url_for('admin.process_claim', claim_id=claim_id))
-
-            # CRITICAL FIX: Get join_code from the student's insurance enrollment
-            student_insurance = db.session.get(StudentInsurance, claim.student_insurance_id)
-            join_code = student_insurance.join_code if student_insurance else None
-
-            transaction = Transaction(
-                student_id=student.id,
-                teacher_id=session.get('admin_id'),
-                join_code=join_code,  # CRITICAL: Add join_code for period isolation
-                amount=approved_amount,
-                account_type='checking',
-                status=TransactionStatus.PENDING,
-                type='insurance_reimbursement',
-                original_transaction_id=claim.transaction_id,
-                policy_id=claim.policy_id,
-                description=transaction_description,
-            )
-            db.session.add(transaction)
-
-            flash(f"Monetary claim approved! ${approved_amount:.2f} deposited to {student.full_name}'s checking account.", "success")
         elif claim_type == 'non_monetary' and new_status == 'approved':
-            claim.approved_amount = None
             flash(f"Non-monetary claim approved for {claim.claim_item}. Item/service will be provided offline.", "success")
         elif new_status == 'rejected':
             flash("Claim has been rejected.", "warning")
 
         try:
-            db.session.commit()
+            execute_insurance_claim_resolution(
+                claim=claim,
+                enrollment=enrollment,
+                new_status=new_status,
+                teacher_notes=form.teacher_notes.data,
+                rejection_reason=form.rejection_reason.data,
+                processed_by_teacher_id=session.get('admin_id'),
+                approved_amount=approved_amount,
+            )
+            if requires_payout:
+                flash(f"Monetary claim approved! ${approved_amount:.2f} deposited to {claim.student.full_name}'s checking account.", "success")
         except IntegrityError as exc:
             db.session.rollback()
             if 'uq_insurance_reimbursement_source_policy' in str(exc.orig):
@@ -8245,7 +8160,7 @@ def run_payroll():
     """
     Run payroll by computing earned seconds from TapEvent append-only log.
     For each student, for each block, match active/inactive pairs since last payroll,
-    sum total seconds, and post Transaction(s) of type 'payroll'.
+    sum total seconds, and post ledger payroll entries.
 
     CRITICAL: Creates one transaction per student with join_code for proper scoping.
     If student has multiple blocks with this teacher, uses first block's join_code.
@@ -8292,29 +8207,30 @@ def run_payroll():
             teacher_id=current_admin_id,
         )
 
-        count = 0
+        adjustments = []
         for (student_id, join_code), amount in summary.items():
             if join_code != selected_join_code:
                 continue
-            tx = Transaction(
-                student_id=student_id,
-                teacher_id=current_admin_id,
-                join_code=join_code,  # CRITICAL: Add join_code for proper scoping
-                amount=amount,
-                description=f"Payroll based on attendance",
-                status=TransactionStatus.PENDING,
-                account_type="checking",
-                type="payroll"
-            )
-            db.session.add(tx)
-            count += 1
+            student = db.session.get(Student, student_id)
+            if not student:
+                continue
+            adjustments.append({
+                'student': student,
+                'teacher_id': current_admin_id,
+                'join_code': join_code,
+                'amount': amount,
+                'description': "Payroll based on attendance",
+                'type': 'payroll',
+                'account_type': 'checking',
+            })
+
+        result = execute_admin_adjustments(adjustments=adjustments)
 
         scheduled_rebalances_applied, _scheduled_labels = activate_due_rebalances(current_admin_id)
-
         db.session.commit()
-        current_app.logger.info(f"Payroll complete. Created {count} transactions.")
+        current_app.logger.info(f"Payroll complete. Created {result.applied_count} transactions.")
 
-        success_message = f"Payroll complete. Processed {count} payments."
+        success_message = f"Payroll complete. Processed {result.applied_count} payments."
         if scheduled_rebalances_applied:
             success_message += f" Activated {scheduled_rebalances_applied} scheduled economy update(s)."
         if is_json:
@@ -9100,30 +9016,7 @@ def void_payroll_transaction(transaction_id):
         if transaction.is_void:
             return jsonify({'success': False, 'message': 'Transaction is already voided'}), 400
 
-        is_pending = (transaction.status == TransactionStatus.PENDING)
-
-        transaction.is_void = True
-        
-        if is_pending:
-            transaction.status = TransactionStatus.VOID
-            transaction.voided_at = utc_now()
-        else:
-            # Create reversal for posted transaction
-            reversal_amount = -(transaction.amount or Decimal('0.00'))
-            reversal_tx = Transaction(
-                student_id=transaction.student_id,
-                teacher_id=transaction.teacher_id,
-                join_code=transaction.join_code,
-                amount=reversal_amount,
-                account_type=transaction.account_type or 'checking',
-                status=TransactionStatus.PENDING,
-                type='refund',
-                original_transaction_id=transaction.id,
-                description=f"Void refund for transaction #{transaction.id}: {transaction.description}",
-            )
-            db.session.add(reversal_tx)
-            db.session.flush()
-            transaction.reversal_transaction_id = reversal_tx.id
+        execute_void_transaction(transaction)
 
         db.session.commit()
 
@@ -9160,33 +9053,7 @@ def void_transactions_bulk():
                 .first()
             )
             if transaction and not transaction.is_void:
-                is_pending = (transaction.status == TransactionStatus.PENDING)
-                transaction.is_void = True
-                
-                if is_pending:
-                    transaction.status = TransactionStatus.VOID
-                    transaction.voided_at = utc_now()
-                else:
-                    # Create reversal for posted transaction
-                    reversal_amount = -(transaction.amount or Decimal('0.00'))
-                    reversal_tx = Transaction(
-                        student_id=transaction.student_id,
-                        teacher_id=transaction.teacher_id,
-                        join_code=transaction.join_code,
-                        amount=reversal_amount,
-                        account_type=transaction.account_type or 'checking',
-                        status=TransactionStatus.PENDING,
-                        type='refund',
-                        original_transaction_id=transaction.id,
-                        description=f"Void refund for transaction #{transaction.id}: {transaction.description}",
-                    )
-                    db.session.add(reversal_tx)
-                    # No flush here to avoid performance hit in loop? 
-                    # Actually we need ID for reversal_transaction_id?
-                    # Yes, linking them is good practice.
-                    db.session.flush()
-                    transaction.reversal_transaction_id = reversal_tx.id
-
+                execute_void_transaction(transaction)
                 count += 1
 
         db.session.commit()
@@ -9215,7 +9082,7 @@ def payroll_apply_reward(reward_id):
         selected_scope = _require_payroll_feature_scope_from_request(current_admin_id)
         selected_join_code = selected_scope['join_code']
 
-        count = 0
+        adjustments = []
         for student_id in student_ids:
             student = _get_student_or_404(int(student_id))
             if student:
@@ -9227,22 +9094,18 @@ def payroll_apply_reward(reward_id):
                 if not teacher_block:
                     return jsonify({'success': False, 'message': 'Student is outside the selected class scope'}), 404
 
-                transaction = Transaction(
-                    student_id=student.id,
-                    teacher_id=current_admin_id,  # CRITICAL: Add teacher_id for multi-tenancy
-                    join_code=selected_join_code,  # CRITICAL: Add join_code for period isolation
-                    amount=reward.amount,
-                    description=f"Reward: {reward.name}",
-                    account_type='checking',
-                    status=TransactionStatus.PENDING,
-                    type='reward',
-                    timestamp=utc_now()
-                )
-                db.session.add(transaction)
-                count += 1
+                adjustments.append({
+                    'student': student,
+                    'teacher_id': current_admin_id,
+                    'join_code': selected_join_code,
+                    'amount': reward.amount,
+                    'description': f"Reward: {reward.name}",
+                    'account_type': 'checking',
+                    'type': 'reward',
+                })
 
-        db.session.commit()
-        return jsonify({'success': True, 'message': f'Reward "{reward.name}" applied to {count} student(s)!'})
+        result = execute_admin_adjustments(adjustments=adjustments)
+        return jsonify({'success': True, 'message': f'Reward "{reward.name}" applied to {result.applied_count} student(s)!'})
     except HTTPException:
         raise
     except Exception as e:
@@ -9271,9 +9134,7 @@ def payroll_apply_fine(fine_id):
             block=selected_scope['block'],
         ).first()
 
-        applied_count = 0
-        declined_count = 0
-        fee_count = 0
+        adjustments = []
         for student_id in student_ids:
             student = _get_student_or_404(int(student_id))
             if student:
@@ -9285,70 +9146,22 @@ def payroll_apply_fine(fine_id):
                 if not teacher_block:
                     return jsonify({'success': False, 'message': 'Student is outside the selected class scope'}), 404
 
-                allowed, shortfall, _, _ = evaluate_overdraft_allowance(
-                    student,
-                    abs(fine.amount),
-                    banking_settings,
-                    teacher_id=current_admin_id,
-                    join_code=selected_join_code
-                )
-                if not allowed:
-                    fee_charged, _ = charge_overdraft_fee_if_needed(
-                        student,
-                        banking_settings,
-                        teacher_id=current_admin_id,
-                        join_code=selected_join_code,
-                        force=True
-                    )
-                    if fee_charged:
-                        fee_count += 1
-                    declined_count += 1
-                    continue
+                adjustments.append({
+                    'student': student,
+                    'teacher_id': current_admin_id,
+                    'join_code': selected_join_code,
+                    'amount': -abs(fine.amount),
+                    'description': f"Fine: {fine.name}",
+                    'account_type': 'checking',
+                    'type': 'fine',
+                })
 
-                transaction = Transaction(
-                    student_id=student.id,
-                    teacher_id=current_admin_id,  # CRITICAL: Add teacher_id for multi-tenancy
-                    join_code=selected_join_code,  # CRITICAL: Add join_code for period isolation
-                    amount=-abs(fine.amount),  # Negative for fine
-                    description=f"Fine: {fine.name}",
-                    account_type='checking',
-                    status=TransactionStatus.PENDING,
-                    type='fine',
-                    timestamp=utc_now()
-                )
-                db.session.add(transaction)
-                applied_count += 1
-
-                if shortfall > 0:
-                    transfer_tx_withdraw = Transaction(
-                        student_id=student.id,
-                        teacher_id=current_admin_id,
-                        join_code=selected_join_code,
-                        amount=-shortfall,
-                        account_type='savings',
-                        status=TransactionStatus.PENDING,
-                        type='Withdrawal',
-                        description='Overdraft protection transfer to checking'
-                    )
-                    transfer_tx_deposit = Transaction(
-                        student_id=student.id,
-                        teacher_id=current_admin_id,
-                        join_code=selected_join_code,
-                        amount=shortfall,
-                        account_type='checking',
-                        status=TransactionStatus.PENDING,
-                        type='Deposit',
-                        description='Overdraft protection transfer from savings'
-                    )
-                    db.session.add(transfer_tx_withdraw)
-                    db.session.add(transfer_tx_deposit)
-
-        db.session.commit()
-        message = f'Fine "{fine.name}" applied to {applied_count} student(s)!'
-        if declined_count:
-            message += f" {declined_count} declined for insufficient funds."
-        if fee_count:
-            message += f" Overdraft fee charged for {fee_count}."
+        result = execute_admin_adjustments(adjustments=adjustments, banking_settings=banking_settings)
+        message = f'Fine "{fine.name}" applied to {result.applied_count} student(s)!'
+        if result.declined_count:
+            message += f" {result.declined_count} declined for insufficient funds."
+        if result.fee_count:
+            message += f" Overdraft fee charged for {result.fee_count}."
         return jsonify({'success': True, 'message': message})
     except HTTPException:
         raise
@@ -9385,10 +9198,7 @@ def payroll_manual_payment():
                 block=selected_scope['block'],
             ).first()
 
-            # Create transactions for each selected student
-            applied_count = 0
-            declined_count = 0
-            fee_count = 0
+            adjustments = []
             for student_id in student_ids:
                 student = _get_student_or_404(int(student_id))
                 if student:
@@ -9401,73 +9211,23 @@ def payroll_manual_payment():
                         flash('One or more selected students are outside the selected class scope.', 'error')
                         return redirect(url_for('admin.payroll', join_code=selected_join_code))
 
-                    shortfall = Decimal('0.00')
-                    if account_type == 'checking' and amount < 0:
-                        allowed, shortfall, _, _ = evaluate_overdraft_allowance(
-                            student,
-                            abs(amount),
-                            banking_settings,
-                            teacher_id=current_admin_id,
-                            join_code=selected_join_code
-                        )
-                        if not allowed:
-                            fee_charged, _ = charge_overdraft_fee_if_needed(
-                                student,
-                                banking_settings,
-                                teacher_id=current_admin_id,
-                                join_code=selected_join_code,
-                                force=True
-                            )
-                            if fee_charged:
-                                fee_count += 1
-                            declined_count += 1
-                            continue
+                    adjustments.append({
+                        'student': student,
+                        'teacher_id': current_admin_id,
+                        'join_code': selected_join_code,
+                        'amount': amount,
+                        'description': f"Manual Payment: {description}",
+                        'account_type': account_type,
+                        'type': 'manual_payment',
+                    })
 
-                    transaction = Transaction(
-                        student_id=student.id,
-                        teacher_id=current_admin_id,  # CRITICAL: Add teacher_id for multi-tenancy
-                        join_code=selected_join_code,  # CRITICAL: Add join_code for period isolation
-                        amount=amount,
-                        description=f"Manual Payment: {description}",
-                        account_type=account_type,
-                        status=TransactionStatus.PENDING,
-                        type='manual_payment',
-                        timestamp=utc_now()
-                    )
-                    db.session.add(transaction)
-                    applied_count += 1
-
-                    if account_type == 'checking' and amount < 0 and shortfall > 0:
-                        transfer_tx_withdraw = Transaction(
-                            student_id=student.id,
-                            teacher_id=current_admin_id,
-                            join_code=selected_join_code,
-                            amount=-shortfall,
-                            account_type='savings',
-                            status=TransactionStatus.PENDING,
-                            type='Withdrawal',
-                            description='Overdraft protection transfer to checking'
-                        )
-                        transfer_tx_deposit = Transaction(
-                            student_id=student.id,
-                            teacher_id=current_admin_id,
-                            join_code=selected_join_code,
-                            amount=shortfall,
-                            account_type='checking',
-                            status=TransactionStatus.PENDING,
-                            type='Deposit',
-                            description='Overdraft protection transfer from savings'
-                        )
-                        db.session.add(transfer_tx_withdraw)
-                        db.session.add(transfer_tx_deposit)
-
-            db.session.commit()
-            message = f'Manual payment of ${amount:.2f} sent to {applied_count} student(s)!'
-            if declined_count:
-                message += f" {declined_count} declined for insufficient funds."
-            if fee_count:
-                message += f" Overdraft fee charged for {fee_count}."
-                flash(message, 'warning' if declined_count else 'success')
+            result = execute_admin_adjustments(adjustments=adjustments, banking_settings=banking_settings)
+            message = f'Manual payment of ${amount:.2f} sent to {result.applied_count} student(s)!'
+            if result.declined_count:
+                message += f" {result.declined_count} declined for insufficient funds."
+            if result.fee_count:
+                message += f" Overdraft fee charged for {result.fee_count}."
+            flash(message, 'warning' if result.declined_count else 'success')
         except HTTPException:
             raise
         except Exception as e:
@@ -12238,26 +11998,11 @@ def resolve_issue(issue_ref):
                 flash("The related transaction could not be reversed for this issue.", "error")
                 return redirect(url_for('admin.view_issue', issue_ref=issue_ref))
 
-            reversal_tx = Transaction(
-                student_id=transaction.student_id,
-                teacher_id=transaction.teacher_id,
-                join_code=transaction.join_code,
-                amount=Decimal('0.00') - Decimal(transaction.amount),
-                account_type=transaction.account_type,
+            reversal_tx = ledger_service.compensate_posted_transaction(
+                transaction,
                 description=f"Issue #{issue.id} reversal for transaction #{transaction.id}",
-                status=TransactionStatus.PENDING,
-                type='issue_reversal',
-                original_transaction_id=transaction.id,
-                timestamp=utc_now(),
-                effective_at=utc_now(),
-                posted_at=None,
-                is_void=False,
+                compensation_type='issue_reversal',
             )
-            db.session.add(reversal_tx)
-            db.session.flush()
-
-            transaction.reversal_transaction_id = reversal_tx.id
-            transaction.is_void = True
 
             issue.teacher_resolution = 'Transaction Reversed'
             record_resolution_action(
@@ -12279,23 +12024,11 @@ def resolve_issue(issue_ref):
                 flash("The related transaction could not be found for this issue.", "error")
                 return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
-            compensating_tx = Transaction(
-                student_id=transaction.student_id,
-                teacher_id=transaction.teacher_id,
-                join_code=transaction.join_code,
-                amount=Decimal('0.00') - Decimal(transaction.amount),
-                account_type=transaction.account_type,
+            compensating_tx = ledger_service.compensate_posted_transaction(
+                transaction,
                 description=f"Issue #{issue.id} compensating entry for transaction #{transaction.id}",
-                status=TransactionStatus.PENDING,
-                type='issue_compensation',
-                original_transaction_id=transaction.id,
-                timestamp=utc_now(),
-                effective_at=utc_now(),
-                posted_at=None,
-                is_void=False,
+                compensation_type='issue_compensation',
             )
-            db.session.add(compensating_tx)
-            db.session.flush()
 
             issue.teacher_resolution = 'Compensating Transaction Posted'
             record_resolution_action(

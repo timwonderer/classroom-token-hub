@@ -24,6 +24,7 @@ from app.models import (
     Transaction,
     TransactionStatus,
 )
+from app.services import ledger_service
 from tests.helpers.admin_context import login_admin
 from tests.helpers.class_scope import create_class_scope
 
@@ -353,6 +354,64 @@ def test_store_purchase_deducts_balance_and_records_transaction(client):
     )
     assert purchase_tx is not None
     assert purchase_tx.amount < Decimal("0.00")
+
+
+def test_transfer_pairs_are_zero_sum_within_class_scope(client):
+    admin = _create_admin("transfer-admin")
+    student = _create_student("Transfer")
+    other_student = _create_student("Other", block="B")
+    _link_student_to_teacher(student, admin, "JOIN-XFER", block="A")
+    _link_student_to_teacher(other_student, admin, "JOIN-OTHER", block="B")
+    db.session.commit()
+
+    withdraw_tx, deposit_tx = ledger_service.create_transfer_pair(
+        student_id=student.id,
+        teacher_id=admin.id,
+        join_code="JOIN-XFER",
+        amount=Decimal("12.34"),
+        from_account="checking",
+        to_account="savings",
+        withdraw_description="Transfer to savings",
+        deposit_description="Transfer from checking",
+    )
+    ledger_service.create_transfer_pair(
+        student_id=other_student.id,
+        teacher_id=admin.id,
+        join_code="JOIN-OTHER",
+        amount=Decimal("7.89"),
+        from_account="checking",
+        to_account="savings",
+        withdraw_description="Transfer to savings",
+        deposit_description="Transfer from checking",
+    )
+    db.session.commit()
+
+    join_xfer_total = (
+        db.session.query(db.func.sum(Transaction.amount))
+        .filter(
+            Transaction.teacher_id == admin.id,
+            Transaction.join_code == "JOIN-XFER",
+            Transaction.type.in_(["Withdrawal", "Deposit"]),
+        )
+        .scalar()
+        or Decimal("0.00")
+    )
+    join_other_total = (
+        db.session.query(db.func.sum(Transaction.amount))
+        .filter(
+            Transaction.teacher_id == admin.id,
+            Transaction.join_code == "JOIN-OTHER",
+            Transaction.type.in_(["Withdrawal", "Deposit"]),
+        )
+        .scalar()
+        or Decimal("0.00")
+    )
+
+    assert withdraw_tx.join_code == "JOIN-XFER"
+    assert deposit_tx.join_code == "JOIN-XFER"
+    assert withdraw_tx.amount + deposit_tx.amount == Decimal("0.00")
+    assert join_xfer_total == Decimal("0.00")
+    assert join_other_total == Decimal("0.00")
 
 
 def test_store_purchase_bulk_discount_uses_quantized_total_for_funds_check(client):

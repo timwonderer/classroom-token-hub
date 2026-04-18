@@ -6,6 +6,7 @@ called from both admin and student route handlers.
 """
 from app.extensions import db
 from app.models import StoreItem, StudentItem, Transaction
+from app.services import ledger_service
 from app.utils.time import utc_now
 
 
@@ -66,7 +67,7 @@ def refund_pending_collective_purchases(item, description_suffix="Goal Expired")
         else:
             refund_amount = item.price
 
-        refund_tx = Transaction(
+        refund_tx = ledger_service.create_pending_transaction(
             student_id=si.student_id,
             teacher_id=item.teacher_id,
             join_code=si.join_code,

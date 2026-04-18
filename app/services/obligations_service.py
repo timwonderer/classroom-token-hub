@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.extensions import db
-from app.models import RentPayment, StudentInsurance
+from app.models import InsuranceClaim, RentPayment, StudentInsurance
 
 
 def record_rent_payment(
@@ -58,3 +58,23 @@ def record_insurance_enrollment(
     enrollment.freeze_policy_snapshot(policy)
     db.session.add(enrollment)
     return enrollment
+
+
+def apply_claim_resolution(
+    claim: InsuranceClaim,
+    *,
+    status: str,
+    teacher_notes: str | None,
+    rejection_reason: str | None,
+    processed_by_teacher_id: int | None,
+    processed_at,
+    approved_amount=None,
+):
+    """Obligations-owned mutation for insurance-claim resolution state."""
+    claim.status = status
+    claim.teacher_notes = teacher_notes
+    claim.rejection_reason = rejection_reason if status == 'rejected' else None
+    claim.processed_date = processed_at
+    claim.processed_by_teacher_id = processed_by_teacher_id
+    claim.approved_amount = approved_amount
+    return claim
