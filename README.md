@@ -12,7 +12,7 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
-**Project Status:** Version 2.0.0 is the current live-test candidate. Class scope is defined by `ClassEconomy` and `ClassMembership`, session class context is driven by `current_join_code`, and public teacher references use `teacher_public_id` / `public_id` instead of numeric teacher IDs. The validated v2 branch state passed the PostgreSQL suite with `708 passed, 1 skipped`. See [DEVELOPMENT.md](DEVELOPMENT.md) for current readiness status and [CHANGELOG.md](CHANGELOG.md) for ongoing changes.
+**Project Status:** Version 2.0.0 is the current live-test candidate. Class scope is defined by `ClassEconomy` and `ClassMembership`, session class context is driven by `current_join_code`, and public teacher references use `teacher_public_id` / `public_id` instead of numeric teacher IDs. The v2 authority rewrite now funnels money-affecting behavior through FEAT/domain services into `ledger_service`, with transaction construction structurally restricted to that service. See [DEVELOPMENT.md](DEVELOPMENT.md) for current readiness status and [CHANGELOG.md](CHANGELOG.md) for ongoing changes.
 
 ---
 
@@ -194,13 +194,17 @@ This enables:
 ### For Developers
 
 - **[Architecture Guide](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)** — System design and patterns
-- **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)** — Up-to-date database reference
+- **[Authority Model](docs/INV-CORE-001_Authority_Model.md)** — Foundational documentation and enforcement hierarchy
+- **[V2 Authority Extraction](docs/development/V2_AUTHORITY_EXTRACTION_PLAN.md)** — Current authority-closure state for FEAT, service, and ledger routing
 - **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)** — REST API documentation
 - **[Development Priorities](DEVELOPMENT.md)** — Current priorities, roadmap, and tasks
 - **[v2 Main Reconciliation Tracker](docs/development/V2_MAIN_RECONCILIATION_TRACKER.md)** — Main-only feature clusters and port strategy
 - **[v2 Launch Readiness Matrix](docs/development/V2_LAUNCH_READINESS_MATRIX.md)** — Live-test and production launch blockers
 - **[v2 Live-Test Runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md)** — Operator workflow before live testing
 - **[Changelog](CHANGELOG.md)** — Version history and notable changes
+
+Schema note:
+- V2 does not treat a single monolithic schema document as canonical authority. Schema ownership belongs to the owning domain, and cross-domain data relationships belong in architecture docs.
 
 ### Deployment & Operations
 

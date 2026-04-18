@@ -9,6 +9,12 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Changed
+- **V2 money authority model closed** — Student, admin, sysadmin, and redemption money paths now funnel through FEAT/domain services into `ledger_service`, with `Transaction(` construction restricted to `app/services/ledger_service.py` and enforced by structural guardrails.
+- **Admin-side authority extraction completed for money workflows** — Payroll runs, manual payroll adjustments, bonus/fine flows, insurance claim reimbursement, transaction void, and bug-reward issuance no longer create money rows inline in route handlers.
+- **Transfer zero-sum invariant is now explicit** — Added a class-scoped critical smoke test proving canonical transfer pairs net to zero within a `join_code` boundary and remain isolated from transfer activity in other class scopes.
+- **District assurance brief page and trust-link rollout** — Added the district-facing `/district-assurance` page and linked it from privacy and authentication-related templates so the v2 branch exposes the current data-protection summary across key entry points.
+- **Foundational v2 architecture corpus expanded** — Added execution-model, core-invariant, and capability-architecture foundation documents plus parked realignment drafts so the branch carries a clearer written baseline for the ongoing rebuild.
+- **Architecture invariants now capture rebuild intent and downstream consequences** — Expanded each v2 architecture invariant with explicit "Rebuild Intent" and "Downstream Consequence" sections to formalize which migration constraints future work must preserve.
 - **Collective goal reactivation strict scoping** — Added deterministic UUID-based instance mapping for collective goals using `collective_goal_instance_code` across `StoreItem` and `StudentItem` ensuring robust reactivation progress tracking preventing bleed across past purchase states. Replaced lazy overlaps with direct DB inner join references.
 - **v2 launch-readiness checklist reconciled with current docs state** — Updated the readiness matrix, launch project checklist, reconciliation tracker, README, and documentation SOP references so branch-local launch planning stays aligned with the latest branch status.
 - **v2.0 launch-readiness and rehearsal documentation finalized** — Refreshed the v2 tracking artifacts, rehearsal checklist, and final live-test report so `codex/v2.0` reflects the current branch state, readiness blockers, and production transition guidance.

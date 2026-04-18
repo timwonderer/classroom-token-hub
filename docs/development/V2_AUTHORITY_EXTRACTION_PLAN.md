@@ -1,16 +1,23 @@
 # V2 Authority Extraction Plan
 
-**Status:** Baseline established (Phase 3 Hardening Complete 2026-04-12)
-**Sequence Position:** Immediately after Project 3 low-conflict production fixes  
+**Status:** Implemented on `codex/v2.0` (authority closure landed 2026-04-18)
+**Sequence Position:** Completed immediately after Project 3 low-conflict production fixes  
 **Branch Context:** `codex/v2.0`
 
 ## Summary
 
-This wave lands immediately after Project 3 and is not a compatibility refactor. It is the point where V2 defines and enforces its system laws.
+This wave is no longer a proposal. The money-authority portion of the extraction is implemented and enforced in code.
 
-The objective is to remove policy authority from routes and helpers, and concentrate it into a small set of services that become the only legal path for scope resolution, access decisions, money behavior, CWI policy, and collective-goal lifecycle state.
+The delivered outcome is:
 
-A service may depend on lower-level primitives and repositories, but no route may bypass a service to reach policy-bearing logic directly.
+- GET/read paths that were targeted in this wave are mutation-free
+- student and admin money flows no longer construct ledger rows in route handlers
+- FEAT modules orchestrate cross-domain workflows instead of routes owning them
+- `ledger_service` is the only legal constructor surface for `Transaction`
+- attendance reads no longer own payroll-anchor or projected-pay logic
+- structural tests fail if transaction construction leaks back into routes, helpers, or FEATs
+
+This was not a compatibility refactor. It removed alternate authority paths and replaced them with explicit service and FEAT entrypoints.
 
 ## Why This Exists
 
@@ -26,18 +33,44 @@ This work establishes:
 
 Everything built after this wave must inherit these laws rather than re-implement them.
 
-## V2 Authority Guarantees
+## Delivered Authority Guarantees
 
-After this wave:
+The implemented guarantees in this branch are:
 
-- All class-scoped operations originate from a resolved class scope produced by `class_scope_service`.
-- All authorization and ownership decisions flow through `access_policy_service`.
-- All money-affecting writes originate in `economy_service`.
-- All CWI analysis and policy interpretation flow through `cwi_service`.
-- All collective-goal lifecycle transitions and progress evaluation flow through `collective_goal_service`.
-- Route handlers are orchestration and presentation only. They do not resolve scope, decide permission, compute balances, or evaluate collective-goal state.
+- `ledger_service` is the sole mutation authority for ledger rows.
+- `Transaction(` appears only in `app/services/ledger_service.py`.
+- Student routes use FEAT entrypoints for transfer, rent, store purchase, and insurance purchase.
+- Admin routes use FEAT entrypoints for insurance claim approval, transaction void, payroll/manual adjustments, and related money-affecting flows.
+- FEAT modules do not construct transactions or persist cross-domain rows directly.
+- Attendance returns attendance facts only and no longer computes payroll policy or internal ledger anchors.
+- Transfer creation is centralized and zero-sum behavior is enforced by a critical smoke test scoped by `join_code`.
 
 These are hard rules, not conventions.
+
+## Delivered Modules
+
+This wave introduced or hardened the following implemented authority surfaces:
+
+- `app/services/ledger_service.py`
+- `app/services/attendance_service.py`
+- `app/services/identity_service.py`
+- `app/services/obligations_service.py`
+- `app/services/store_service.py`
+- `app/feats/rent_payment_feat.py`
+- `app/feats/store_purchase_feat.py`
+- `app/feats/transfer_feat.py`
+- `app/feats/insurance_purchase_feat.py`
+- `app/feats/insurance_claim_feat.py`
+- `app/feats/transaction_void_feat.py`
+- `app/feats/admin_adjustment_feat.py`
+
+## Remaining Work
+
+The authority-closing work that remains is secondary to the money model:
+
+- continue shrinking non-money route logic in large route modules
+- formalize domain-owned schema contracts and a thin schema ownership index
+- keep extending structure tests where authority placement still depends on review rather than code constraints
 
 ## Implementation Changes
 
@@ -231,13 +264,15 @@ Run and adapt:
 
 ## Completion Gate
 
-This wave is not complete until:
+The money-authority closure gate for this branch is complete because:
 
-- targeted routes no longer perform inline authority decisions
-- duplicated helper paths are removed or reduced to non-policy plumbing only
-- direct controller use of `EconomyBalanceChecker` is eliminated
-- all money-affecting writes for targeted flows originate in `economy_service`
-- collective-goal state is computed only through `collective_goal_service`
+- targeted student/admin/sysadmin money routes no longer perform inline ledger writes
+- duplicated helper construction paths were removed or redirected through `ledger_service`
+- `Transaction(` construction is structurally constrained to `ledger_service`
+- compensations and pending voids are routed through explicit ledger commands
+- class-scoped transfer zero-sum behavior is enforced in the critical smoke suite
+
+The broader service decomposition described above remains the pattern for future refactors, but the constitutional money-authority objective of this wave is landed.
 - targeted route and service tests pass through service-first paths only
 
 ## Assumptions

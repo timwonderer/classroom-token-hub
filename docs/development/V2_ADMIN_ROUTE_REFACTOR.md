@@ -2,7 +2,7 @@
 
 # V2 Admin Route Refactor Plan
 
-**Status:** Active (Post-Port Structural Refactor)
+**Status:** In progress, with authority-critical money routes extracted (updated 2026-04-18)
 **Scope:** `app/routes/admin.py`
 
 ---
@@ -18,11 +18,22 @@ into a clean separation of:
 - Services (business logic)
 - Models (data layer)
 
-This refactor does NOT change system behavior. It is purely structural.
+This refactor does NOT change intended system behavior. Its purpose is to move authority out of routes and into enforceable service and FEAT layers.
+
+## II. Current Completed State
+
+The highest-risk admin money flows are no longer route-owned:
+
+- transaction void delegates to `transaction_void_feat`
+- insurance claim approval delegates to `insurance_claim_feat`
+- payroll run, manual payment, reward, and fine flows delegate to `admin_adjustment_feat`
+- route handlers no longer construct `Transaction` rows inline for these flows
+
+This means the most dangerous admin exceptions are already closed even though `admin.py` remains large.
 
 ---
 
-## II. Current State
+## III. Current State
 
 `admin.py` currently contains:
 
@@ -43,7 +54,7 @@ This results in:
 
 ---
 
-## III. Target State
+## IV. Target State
 
 ### Architecture
 
@@ -70,7 +81,7 @@ Routes MUST NOT:
 
 ---
 
-## IV. Extraction Plan
+## V. Extraction Plan
 
 Refactoring will be performed incrementally by domain.
 
@@ -162,7 +173,7 @@ Move:
 
 ---
 
-## V. Post-Refactor Route Pattern
+## VI. Post-Refactor Route Pattern
 
 ### Before
 
@@ -187,7 +198,7 @@ def example():
 
 ---
 
-## VI. Naming Conventions
+## VII. Naming Conventions
 
 Service functions MUST follow consistent naming:
 
@@ -199,15 +210,16 @@ Service functions MUST follow consistent naming:
 
 ---
 
-## VII. Guardrails
+## VIII. Guardrails
 
 - No new business logic may be added to `admin.py`
 - All new domain logic MUST be implemented in services
+- No new money-affecting write path may construct `Transaction` outside `ledger_service`
 - Routes exceeding ~50–100 lines SHOULD be refactored
 
 ---
 
-## VIII. Migration Strategy
+## IX. Migration Strategy
 
 Refactor will be performed incrementally:
 
@@ -224,7 +236,7 @@ Each step must:
 
 ---
 
-## IX. Outcome
+## X. Outcome
 
 After completion:
 
@@ -235,7 +247,7 @@ After completion:
 
 ---
 
-## X. Notes
+## XI. Notes
 
 This refactor aligns with:
 

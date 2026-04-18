@@ -3,17 +3,28 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-007      | 1.3     | 2026-04-11     | 1.2        | Constitutional  |
+| ARC-OPS-007      | 1.4     | 2026-04-18     | 1.3        | Constitutional  |
 
 ## I. Purpose
 
 This document summarizes the current database contract for v2.0 live-test work, with emphasis on class-scoping authority, identity infrastructure, and analytics/observability support.
 
+It is not the canonical field-by-field schema authority for every table. Under the V2 authority model, schema contracts belong to the owning domain documentation, and cross-domain relationship semantics belong in architecture documentation. This document is therefore a runtime table index and ownership overview, not a replacement for domain-owned schema contracts.
+
 ## II. Scope
 
 This document covers the runtime-significant models and tables used to enforce class isolation, teacher identity, and core student/admin workflows.
 
-## III. Core Authority Model
+It must not be used to duplicate or redefine a table contract that is already owned by a domain document.
+
+## III. Schema Authority Rule
+
+- Every runtime table must have exactly one owning domain.
+- Field definitions and constraints belong in that owning domain's schema contract.
+- Architecture documents may describe cross-domain reference semantics, but not shared ownership.
+- This document remains useful as a navigation and runtime-orientation layer only.
+
+## IV. Core Authority Model
 
 ### Class Boundary
 
@@ -23,7 +34,7 @@ This document covers the runtime-significant models and tables used to enforce c
 - `student_teachers` remains the teacher-student ownership table, but it is not the class-boundary authority.
 - Session class selection is represented by `current_join_code`.
 
-## IV. Key Tables
+## V. Key Tables
 
 ### `class_economies`
 
