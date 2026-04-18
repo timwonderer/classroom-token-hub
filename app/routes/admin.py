@@ -131,7 +131,7 @@ from app.attendance import (
     calculate_seconds_in_memory,
 )
 from app.services.balance_service import get_batch_balances
-from app.services import ledger_service
+from app.services import access_policy_service, ledger_service
 from app.services.ledger_service import get_available_balances
 from app.utils.insurance_eligibility import (
     collect_reimbursed_source_tx_ids,
@@ -7365,17 +7365,30 @@ def view_student_policy(enrollment_id):
 @admin_required
 def process_claim(claim_id):
     """Process insurance claim with auto-deposit for monetary claims."""
-    claim = (
-        InsuranceClaim.query
-        .join(Student, InsuranceClaim.student_id == Student.id)
-        .filter(InsuranceClaim.id == claim_id)
-        .filter(Student.id.in_(sa.select(_student_scope_subquery())))
-        .first_or_404()
-    )
+    claim = db.session.get(InsuranceClaim, claim_id)
+    if claim is None:
+        abort(404)
+
+    enrollment = db.session.get(StudentInsurance, claim.student_insurance_id)
+    if enrollment is None:
+        abort(404)
+
+    try:
+        scope = resolve_scope(
+            actor=get_current_admin(),
+            selected_join_code=enrollment.join_code or claim.join_code or session.get("current_join_code"),
+            actor_role="teacher",
+        )
+        access_policy_service.assert_can_process_claim(
+            scope=scope,
+            enrollment=enrollment,
+            claim=claim,
+        )
+    except (AccessScopeDenied, access_policy_service.AccessPolicyDenied):
+        abort(403)
+
     form = AdminClaimProcessForm(obj=claim)
 
-    # Get enrollment details
-    enrollment = db.session.get(StudentInsurance, claim.student_insurance_id)
     claim_type = (
         'transaction_monetary'
         if claim.transaction_id
@@ -7578,6 +7591,7 @@ def process_claim(claim_id):
 
         try:
             execute_insurance_claim_resolution(
+                scope=scope,
                 claim=claim,
                 enrollment=enrollment,
                 new_status=new_status,

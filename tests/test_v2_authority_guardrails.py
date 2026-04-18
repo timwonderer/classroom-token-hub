@@ -56,6 +56,7 @@ def test_rent_pay_route_is_not_direct_ledger_or_obligations_authority():
     source = inspect.getsource(student_routes.rent_pay)
     assert "Transaction(" not in source
     assert "RentPayment(" not in source
+    assert "resolve_scope(" in source
     assert "execute_rent_payment(" in source
 
 
@@ -70,6 +71,14 @@ def test_purchase_insurance_route_is_not_direct_ledger_or_obligations_authority(
     assert "Transaction(" not in source
     assert "StudentInsurance(" not in source
     assert "execute_insurance_purchase(" in source
+
+
+def test_file_claim_route_is_not_direct_obligations_authority():
+    source = inspect.getsource(student_routes.file_claim)
+    assert "InsuranceClaim(" not in source
+    assert "db.session.add(claim)" not in source
+    assert "resolve_scope(" in source
+    assert "execute_file_claim(" in source
 
 
 def test_admin_void_route_is_not_direct_ledger_authority():
@@ -91,6 +100,9 @@ def test_admin_claim_route_is_not_direct_ledger_authority():
     end = admin_source.index("return render_template('admin_process_claim.html'")
     source = admin_source[start:end]
     assert "Transaction(" not in source
+    assert "resolve_scope(" in source
+    assert "assert_can_process_claim(" in source
+    assert "_student_scope_subquery()" not in source
     assert "execute_insurance_claim_resolution(" in source
 
 
@@ -120,10 +132,10 @@ def test_transaction_constructor_is_only_used_in_ledger_service():
 
 
 def test_store_purchase_route_is_not_direct_ledger_or_store_authority():
-    api_source = Path("app/routes/api.py").read_text()
     purchase_source = inspect.getsource(__import__("app.routes.api", fromlist=["purchase_item"]).purchase_item)
     assert "Transaction(" not in purchase_source
     assert "StudentItem(" not in purchase_source
+    assert "resolve_scope(" in purchase_source
     assert "execute_store_purchase(" in purchase_source
     assert "execute_rent_perk_purchase(" in purchase_source
     assert "db.session.commit()" not in purchase_source
@@ -135,15 +147,36 @@ def test_feat_modules_do_not_construct_transactions_or_write_rows_directly():
         Path("app/feats/store_purchase_feat.py"),
         Path("app/feats/transfer_feat.py"),
         Path("app/feats/insurance_purchase_feat.py"),
+        Path("app/feats/insurance_claim_feat.py"),
         Path("app/feats/transaction_void_feat.py"),
         Path("app/feats/admin_adjustment_feat.py"),
-        Path("app/feats/insurance_claim_feat.py"),
     ]:
         source = path.read_text()
         assert "Transaction(" not in source
         assert "db.session.add(" not in source
         assert "StudentItem(" not in source
         assert "RentPayment(" not in source
+        assert "db.session.rollback(" not in source
+
+
+def test_rent_payment_feat_enforces_access_policy():
+    source = Path("app/feats/rent_payment_feat.py").read_text()
+    assert "assert_can_pay_rent(" in source
+
+
+def test_store_purchase_feat_enforces_access_policy():
+    source = Path("app/feats/store_purchase_feat.py").read_text()
+    assert "assert_can_purchase_item(" in source
+
+
+def test_file_claim_feat_enforces_access_policy():
+    source = Path("app/feats/insurance_claim_feat.py").read_text()
+    assert "assert_can_file_claim(" in source
+
+
+def test_insurance_claim_feat_enforces_access_policy():
+    source = Path("app/feats/insurance_claim_feat.py").read_text()
+    assert "assert_can_process_claim(" in source
 
 
 def test_dashboard_read_is_interest_mutation_free(client):

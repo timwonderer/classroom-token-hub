@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import session
 
 from app.access.scope import Scope
-from app.auth import get_current_student_seat, sync_student_session_context
+from app.auth import _column_exists, get_current_student_seat, sync_student_session_context
 from app.models import ClassEconomy, ClassMembership, TeacherBlock
 
 
@@ -43,8 +43,9 @@ def _scope_from_runtime_seat(*, actor, selected_join_code: str | None) -> Scope 
 
 def _resolve_teacher_scope(*, actor, selected_join_code: str | None) -> Scope:
     normalized_join_code = (selected_join_code or session.get("current_join_code") or "").strip().upper() or None
+    membership_role_available = _column_exists("class_memberships", "role")
 
-    if normalized_join_code:
+    if normalized_join_code and membership_role_available:
         membership = ClassMembership.query.filter_by(
             admin_id=actor.id,
             join_code=normalized_join_code,
@@ -63,12 +64,14 @@ def _resolve_teacher_scope(*, actor, selected_join_code: str | None) -> Scope:
                 seat_id=None,
             )
 
-    membership = (
-        ClassMembership.query.filter_by(admin_id=actor.id, role="admin")
-        .filter(ClassMembership.join_code.isnot(None))
-        .order_by(ClassMembership.join_code.asc())
-        .first()
-    )
+    membership = None
+    if membership_role_available:
+        membership = (
+            ClassMembership.query.filter_by(admin_id=actor.id, role="admin")
+            .filter(ClassMembership.join_code.isnot(None))
+            .order_by(ClassMembership.join_code.asc())
+            .first()
+        )
     if membership and membership.join_code:
         class_row = ClassEconomy.query.filter_by(join_code=membership.join_code).first()
         session["current_join_code"] = membership.join_code
@@ -79,6 +82,30 @@ def _resolve_teacher_scope(*, actor, selected_join_code: str | None) -> Scope:
             role="teacher",
             teacher_id=actor.id,
             block=class_row.display_name if class_row else None,
+            seat_id=None,
+        )
+
+    teacher_block_query = (
+        TeacherBlock.query
+        .filter_by(teacher_id=actor.id)
+        .filter(TeacherBlock.join_code.isnot(None))
+        .order_by(TeacherBlock.block.asc(), TeacherBlock.join_code.asc())
+    )
+    teacher_block = None
+    if normalized_join_code:
+        teacher_block = teacher_block_query.filter(TeacherBlock.join_code == normalized_join_code).first()
+    if teacher_block is None:
+        teacher_block = teacher_block_query.first()
+    if teacher_block and teacher_block.join_code:
+        class_row = ClassEconomy.query.filter_by(join_code=teacher_block.join_code).first()
+        session["current_join_code"] = teacher_block.join_code
+        return Scope(
+            class_id=class_row.class_id if class_row else teacher_block.class_id,
+            join_code=teacher_block.join_code,
+            actor_id=actor.id,
+            role="teacher",
+            teacher_id=actor.id,
+            block=class_row.display_name if class_row else teacher_block.block,
             seat_id=None,
         )
 

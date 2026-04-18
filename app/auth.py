@@ -27,6 +27,15 @@ def _table_exists(table_name: str) -> bool:
     return table_name in inspector.get_table_names()
 
 
+def _column_exists(table_name: str, column_name: str) -> bool:
+    """Return whether the current database exposes the given column on a table."""
+    if not _table_exists(table_name):
+        return False
+    conn = db.session.connection()
+    inspector = sa.inspect(conn)
+    return any(column.get("name") == column_name for column in inspector.get_columns(table_name))
+
+
 def _get_safe_next_path() -> str:
     """
     Return a safe relative path that can be used as a `next` parameter.
@@ -341,9 +350,10 @@ def ensure_admin_join_code(admin_id):
         return
 
     membership_table_exists = _table_exists('class_memberships')
+    membership_role_exists = _column_exists('class_memberships', 'role')
 
     join_code = session.get('current_join_code')
-    if join_code and membership_table_exists:
+    if join_code and membership_table_exists and membership_role_exists:
         if db.session.query(
             sa.exists().where(
             sa.and_(
@@ -356,7 +366,7 @@ def ensure_admin_join_code(admin_id):
             return
         session.pop('current_join_code', None)
 
-    if membership_table_exists:
+    if membership_table_exists and membership_role_exists:
         owned_join_code = (
             db.session.query(ClassMembership.join_code)
             .filter(

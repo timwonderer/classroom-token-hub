@@ -213,9 +213,11 @@ def unlock_collective_goal_if_ready(*, item, join_code: str, teacher_id: int) ->
 
     target = int(item.collective_goal_target or 0) if item.collective_goal_type == 'fixed' else class_size
     if target > 0 and purchased_students_count >= target:
-        StudentItem.query.filter(
+        pending_items = StudentItem.query.filter(
             StudentItem.store_item_id == item.id,
             StudentItem.join_code == join_code,
             StudentItem.status == 'pending',
             StudentItem.collective_goal_instance_code == item.collective_goal_instance_code,
-        ).update({"status": "processing"})
+        ).all()
+        for pending_item in pending_items:
+            pending_item.status = "processing"

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from app.extensions import db
-from app.services import identity_service, ledger_service, store_service
+from app.services import access_policy_service, identity_service, ledger_service, store_service
 from app.utils.time import utc_now
 
 
@@ -19,15 +19,23 @@ class StorePurchaseResult:
 
 def execute_rent_perk_purchase(
     *,
+    scope,
     student,
     teacher_id: int,
     join_code: str,
     item,
     active_rent_item,
+    ensure_active_grant: bool = False,
+    rent_grant_use_limit: int | None = None,
     banking_settings,
     purchase_idempotency_key: str | None = None,
 ):
     """Store-led FEAT for zero-cost rent-perk purchases."""
+    access_policy_service.assert_can_purchase_item(
+        scope=scope,
+        teacher_id=teacher_id,
+        join_code=join_code,
+    )
     description = f"Purchase: {item.name} [Rent Perk $0]"
     if purchase_idempotency_key:
         purchase_tx, created = ledger_service.create_pending_transaction_idempotent(
@@ -41,7 +49,6 @@ def execute_rent_perk_purchase(
             description=description,
         )
         if not created:
-            db.session.rollback()
             return StorePurchaseResult(
                 transaction_id=purchase_tx.id,
                 student_item_ids=[],
@@ -56,6 +63,16 @@ def execute_rent_perk_purchase(
             account_type='checking',
             type='purchase',
             description=description,
+        )
+
+    if ensure_active_grant and active_rent_item is None:
+        active_rent_item = store_service.ensure_active_rent_per_use_grant(
+            student=student,
+            store_item_id=item.id,
+            join_code=join_code,
+            use_limit=rent_grant_use_limit,
+            now=utc_now(),
+            expiry_date=None,
         )
 
     db.session.flush()
@@ -79,6 +96,7 @@ def execute_rent_perk_purchase(
 
 def execute_store_purchase(
     *,
+    scope,
     student,
     teacher_id: int,
     join_code: str,
@@ -93,6 +111,11 @@ def execute_store_purchase(
     student_item_status: str = 'purchased',
 ):
     """Store-led FEAT for standard purchases."""
+    access_policy_service.assert_can_purchase_item(
+        scope=scope,
+        teacher_id=teacher_id,
+        join_code=join_code,
+    )
     if purchase_idempotency_key:
         purchase_tx, created = ledger_service.create_pending_transaction_idempotent(
             idempotency_key=purchase_idempotency_key,
@@ -105,7 +128,6 @@ def execute_store_purchase(
             description=purchase_description,
         )
         if not created:
-            db.session.rollback()
             return StorePurchaseResult(
                 transaction_id=purchase_tx.id,
                 student_item_ids=[],

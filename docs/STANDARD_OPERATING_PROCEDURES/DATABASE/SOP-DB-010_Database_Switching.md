@@ -70,7 +70,9 @@ If `.env` contains a different `DATABASE_URL`, the tooling refuses to overwrite 
 ## VIII. Operator Truth
 
 - `classroom_economy` is the v2 dev and migration rehearsal database.
-- `classroom_economy_test` is the required PostgreSQL test database.
+- PostgreSQL test databases are branch-scoped through `TEST_DATABASE_URL`.
+- `classroom_economy_v2_test` is the dedicated local PostgreSQL test database for `codex/v2-*` work.
+- `classroom_economy_test` remains available for non-v2 or legacy local testing.
 - `production_dev` is for non-v2 development branches.
 - Any branch matching `codex/v2-*` is treated as v2 work and routes to `classroom_economy`.
 
@@ -79,10 +81,12 @@ If `.env` contains a different `DATABASE_URL`, the tooling refuses to overwrite 
 1. Run `./scripts/setup-hooks.sh`.
 2. Checkout your branch.
 3. Confirm `.env` contains the expected `DATABASE_URL`.
-4. Before running tests on v2 work, export:
+4. Confirm `.env` contains the expected `TEST_DATABASE_URL` for your branch.
+5. Before running tests on v2 work, export:
 
 ```bash
-export DATABASE_URL=<team-test-db-url>
+export TEST_DATABASE_URL=postgresql://postgres:postgres@localhost/classroom_economy_v2_test
+export DATABASE_URL="$TEST_DATABASE_URL"
 ```
 
 ## X. Troubleshooting

@@ -27,6 +27,7 @@ from app.models import (
     ClassEconomy, ClassMembership,
 )
 from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
+from app.access import AccessScopeDenied, resolve_scope
 from app.routes.student import (
     get_current_class_context,
     get_current_teacher_id,
@@ -338,6 +339,13 @@ def purchase_item():
     from app.routes.student import get_current_class_context
 
     student = get_logged_in_student()
+    try:
+        scope = resolve_scope(
+            actor=student,
+            selected_join_code=session.get("current_join_code"),
+        )
+    except AccessScopeDenied as exc:
+        return jsonify({"status": "error", "message": exc.message}), 403
     data = request.get_json(silent=True) or {}
     item_id = data.get('item_id')
     passphrase = data.get('passphrase')
@@ -555,25 +563,27 @@ def purchase_item():
             )
         ).first()
 
-        if not active_rent_item and not existing_grant_row and has_paid_rent and (per_use_rent_item or item.is_rent_linked):
-            # Missing grant edge case: create current-period grant on demand.
-            # This prevents paid-rent students from being charged due to stale data.
-            active_rent_item = store_service.ensure_active_rent_per_use_grant(
-                student=student,
-                store_item_id=item.id,
-                join_code=join_code,
-                use_limit=per_use_rent_item.use_limit if per_use_rent_item else None,
-                now=now,
-                expiry_date=None,
-            )
+        needs_rent_grant = (
+            not active_rent_item
+            and not existing_grant_row
+            and has_paid_rent
+            and (per_use_rent_item or item.is_rent_linked)
+        )
+        if needs_rent_grant:
+            # Missing grant edge case is handled inside the FEAT so the route
+            # does not mutate store truth ahead of the purchase workflow.
+            active_rent_item = None
 
-        if active_rent_item:
+        if active_rent_item or needs_rent_grant:
             result = execute_rent_perk_purchase(
+                scope=scope,
                 student=student,
                 teacher_id=teacher_id,
                 join_code=join_code,
                 item=item,
                 active_rent_item=active_rent_item,
+                ensure_active_grant=needs_rent_grant,
+                rent_grant_use_limit=per_use_rent_item.use_limit if per_use_rent_item else None,
                 banking_settings=None,
                 purchase_idempotency_key=purchase_idempotency_key,
             )
@@ -708,6 +718,7 @@ def purchase_item():
         else: # delayed
             student_item_status = 'purchased'
         result = execute_store_purchase(
+            scope=scope,
             student=student,
             teacher_id=teacher_id,
             join_code=join_code,

@@ -64,6 +64,7 @@ from app.services import access_policy_service, identity_service, store_service
 from app.feats.rent_payment_feat import execute_rent_payment
 from app.feats.transfer_feat import execute_account_transfer
 from app.feats.insurance_purchase_feat import execute_insurance_purchase
+from app.feats.insurance_claim_feat import execute_file_claim
 from app.payroll import get_pay_rate_for_block
 from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone
 from app.utils.seat_scope import get_seat_ids_for_student_join, transaction_scope_filter, seat_scoped_filter
@@ -1996,6 +1997,14 @@ def file_claim(policy_id):
     if not enrollment:
         flash("You are not enrolled in this policy.", "danger")
         return redirect(url_for('student.student_insurance'))
+    try:
+        scope = resolve_scope(
+            actor=student,
+            selected_join_code=enrollment.join_code or session.get("current_join_code"),
+        )
+    except AccessScopeDenied as exc:
+        flash(exc.message, "danger")
+        return redirect(url_for('student.student_insurance'))
 
     policy = enrollment.policy
     claim_type = policy.claim_type
@@ -2216,21 +2225,18 @@ def file_claim(policy_id):
             flash("You have reached the maximum payout limit for this period.", "danger")
             return redirect(url_for('student.file_claim', policy_id=policy_id))
 
-        claim = InsuranceClaim(
-            student_insurance_id=enrollment.id,
-            policy_id=policy.id,
-            student_id=student.id,
-            incident_date=incident_date_value,
-            description=form.description.data,
-            claim_amount=claim_amount_value if claim_type != 'non_monetary' else None,
-            claim_item=claim_item_value if claim_type == 'non_monetary' else None,
-            comments=form.comments.data,
-            status='pending',
-            transaction_id=transaction_id_value,
-        )
-        db.session.add(claim)
         try:
-            db.session.commit()
+            execute_file_claim(
+                scope=scope,
+                enrollment=enrollment,
+                student=student,
+                incident_date=incident_date_value,
+                description=form.description.data,
+                claim_amount=claim_amount_value if claim_type != 'non_monetary' else None,
+                claim_item=claim_item_value if claim_type == 'non_monetary' else None,
+                comments=form.comments.data,
+                transaction_id=transaction_id_value,
+            )
         except IntegrityError:
             db.session.rollback()
             flash("This transaction already has a claim. Each transaction can only be claimed once.", "danger")
@@ -3356,6 +3362,14 @@ def rent():
 def rent_pay(period):
     """Process rent payment for a specific period."""
     student = get_logged_in_student()
+    try:
+        scope = resolve_scope(
+            actor=student,
+            selected_join_code=session.get('current_join_code'),
+        )
+    except AccessScopeDenied as exc:
+        flash(exc.message, "error")
+        return redirect(url_for('student.dashboard'))
     context = get_current_class_context()
     if not context:
         flash("No class selected. Please choose a class to continue.", "error")
@@ -3550,6 +3564,7 @@ def rent_pay(period):
         overdraft_shortfall = shortfall
 
     result = execute_rent_payment(
+        scope=scope,
         student=student,
         context=context,
         payment_amount=payment_amount,

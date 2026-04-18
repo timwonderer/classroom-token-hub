@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from app.extensions import db
 from app.models import _quantize_currency
-from app.services import identity_service, ledger_service, obligations_service, store_service
+from app.services import access_policy_service, identity_service, ledger_service, obligations_service, store_service
 from app.utils.time import utc_now
 
 
@@ -22,6 +22,7 @@ class RentPaymentResult:
 
 def execute_rent_payment(
     *,
+    scope,
     student,
     context: dict,
     payment_amount: Decimal,
@@ -46,6 +47,11 @@ def execute_rent_payment(
     now = now or utc_now()
     teacher_id = context.get("teacher_id")
     join_code = context.get("join_code")
+    access_policy_service.assert_can_pay_rent(
+        scope=scope,
+        teacher_id=teacher_id,
+        join_code=join_code,
+    )
     current_block = (context.get("block") or period or "").strip().upper()
     is_partial = payment_amount < remaining_amount
 

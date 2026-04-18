@@ -78,3 +78,34 @@ def apply_claim_resolution(
     claim.processed_by_teacher_id = processed_by_teacher_id
     claim.approved_amount = approved_amount
     return claim
+
+
+def record_insurance_claim(
+    *,
+    student_insurance_id: int,
+    policy_id: int,
+    student_id: int,
+    join_code: str | None,
+    incident_date,
+    description: str,
+    claim_amount,
+    claim_item: str | None,
+    comments: str | None,
+    transaction_id: int | None,
+):
+    """Obligations-owned mutation for filed insurance claims."""
+    claim = InsuranceClaim(
+        student_insurance_id=student_insurance_id,
+        policy_id=policy_id,
+        student_id=student_id,
+        join_code=join_code,
+        incident_date=incident_date,
+        description=description,
+        claim_amount=claim_amount,
+        claim_item=claim_item,
+        comments=comments,
+        status='pending',
+        transaction_id=transaction_id,
+    )
+    db.session.add(claim)
+    return claim

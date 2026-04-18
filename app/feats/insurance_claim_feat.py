@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from app.extensions import db
-from app.services import ledger_service, obligations_service
+from app.services import access_policy_service, ledger_service, obligations_service
 from app.utils.time import utc_now
 from app.utils.transaction_idempotency import insurance_reimbursement_key
 
@@ -15,8 +15,47 @@ class InsuranceClaimResolutionResult:
     reimbursement_transaction_id: int | None
 
 
+@dataclass
+class InsuranceClaimFileResult:
+    claim_id: int
+
+
+def execute_file_claim(
+    *,
+    scope,
+    enrollment,
+    student,
+    incident_date,
+    description: str,
+    claim_amount,
+    claim_item: str | None,
+    comments: str | None,
+    transaction_id: int | None,
+):
+    """Obligations-led FEAT for student claim filing."""
+    access_policy_service.assert_can_file_claim(
+        scope=scope,
+        enrollment=enrollment,
+    )
+    claim = obligations_service.record_insurance_claim(
+        student_insurance_id=enrollment.id,
+        policy_id=enrollment.policy_id,
+        student_id=student.id,
+        join_code=enrollment.join_code,
+        incident_date=incident_date,
+        description=description,
+        claim_amount=claim_amount,
+        claim_item=claim_item,
+        comments=comments,
+        transaction_id=transaction_id,
+    )
+    db.session.commit()
+    return InsuranceClaimFileResult(claim_id=claim.id)
+
+
 def execute_insurance_claim_resolution(
     *,
+    scope,
     claim,
     enrollment,
     new_status: str,
@@ -26,6 +65,11 @@ def execute_insurance_claim_resolution(
     approved_amount: Decimal | None,
 ):
     """Obligations-led FEAT for insurance claim resolution and reimbursement."""
+    access_policy_service.assert_can_process_claim(
+        scope=scope,
+        enrollment=enrollment,
+        claim=claim,
+    )
     processed_at = utc_now()
     obligations_service.apply_claim_resolution(
         claim,
