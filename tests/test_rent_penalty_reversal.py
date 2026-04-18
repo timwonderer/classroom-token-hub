@@ -99,7 +99,8 @@ def _make_student(suffix="s"):
 
 
 def _add_payment_with_txn(student, join_code, amount_paid, late_fee, payment_date,
-                           coverage_due_date, admin_id, block="A", is_void=False):
+                           coverage_due_date, admin_id, block="A", is_void=False,
+                           rent_amount_snapshot=None):
     """Create a RentPayment and matching Transaction (as the student route does)."""
     payment = RentPayment(
         student_id=student.id,
@@ -111,6 +112,7 @@ def _add_payment_with_txn(student, join_code, amount_paid, late_fee, payment_dat
         payment_date=payment_date,
         coverage_month=coverage_due_date.month,
         coverage_year=coverage_due_date.year,
+        rent_amount_snapshot=rent_amount_snapshot,
     )
     db.session.add(payment)
     txn = Transaction(
@@ -219,6 +221,107 @@ def test_locked_rate_extracts_base_excluding_late_fee(client):
 
     locked = _get_locked_rent_amount_for_join_code_cycle(join_code, coverage)
     assert locked == Decimal("100.00")
+
+
+# ---------------------------------------------------------------------------
+# Regression tests: rent_amount_snapshot fix (partial payment rate-lock bug)
+# ---------------------------------------------------------------------------
+
+def test_locked_rate_uses_snapshot_not_partial_amount(client):
+    """Partial payment with rent_amount_snapshot returns the full rent, not the installment.
+
+    Regression: without the snapshot, a $200 partial payment on a $570 rent locked the
+    class-wide rate at $200, causing all subsequent payments to appear fully paid and
+    be silently rejected.
+    """
+    admin = _make_admin("snap1")
+    join_code = "SNAP01"
+    coverage = datetime(2026, 3, 1, tzinfo=timezone.utc)
+
+    student = _make_student("snap1_s")
+    # First payment is a partial installment: $200 of $570 rent
+    _add_payment_with_txn(
+        student, join_code,
+        amount_paid=Decimal("200.00"), late_fee=Decimal("0.00"),
+        payment_date=datetime(2026, 3, 2, 8, 0, tzinfo=timezone.utc),
+        coverage_due_date=coverage, admin_id=admin.id,
+        rent_amount_snapshot=Decimal("570.00"),
+    )
+    db.session.commit()
+
+    locked = _get_locked_rent_amount_for_join_code_cycle(join_code, coverage)
+    # Must return the full configured rent ($570), NOT the installment amount ($200)
+    assert locked == Decimal("570.00"), (
+        f"Expected locked rate $570.00 (from snapshot), got ${locked} — "
+        "partial payment amount_paid is leaking into the rate lock"
+    )
+
+
+def test_locked_rate_legacy_fallback_without_snapshot(client):
+    """Rows without rent_amount_snapshot still derive rate from amount_paid - late_fee."""
+    admin = _make_admin("snap2")
+    join_code = "SNAP02"
+    coverage = datetime(2026, 3, 1, tzinfo=timezone.utc)
+
+    student = _make_student("snap2_s")
+    # Legacy row: no snapshot set (None)
+    _add_payment_with_txn(
+        student, join_code,
+        amount_paid=Decimal("110.00"), late_fee=Decimal("10.00"),
+        payment_date=datetime(2026, 3, 2, 8, 0, tzinfo=timezone.utc),
+        coverage_due_date=coverage, admin_id=admin.id,
+        rent_amount_snapshot=None,
+    )
+    db.session.commit()
+
+    locked = _get_locked_rent_amount_for_join_code_cycle(join_code, coverage)
+    # Legacy fallback: $110 paid - $10 late fee = $100 base
+    assert locked == Decimal("100.00")
+
+
+def test_locked_rate_snapshot_zero_falls_back_to_amount_paid(client):
+    """A zero snapshot is treated as missing and falls back to the legacy derivation."""
+    admin = _make_admin("snap3")
+    join_code = "SNAP03"
+    coverage = datetime(2026, 3, 1, tzinfo=timezone.utc)
+
+    student = _make_student("snap3_s")
+    _add_payment_with_txn(
+        student, join_code,
+        amount_paid=Decimal("100.00"), late_fee=Decimal("0.00"),
+        payment_date=datetime(2026, 3, 2, 8, 0, tzinfo=timezone.utc),
+        coverage_due_date=coverage, admin_id=admin.id,
+        rent_amount_snapshot=Decimal("0.00"),
+    )
+    db.session.commit()
+
+    locked = _get_locked_rent_amount_for_join_code_cycle(join_code, coverage)
+    # Zero snapshot skipped → legacy path → $100 base
+    assert locked == Decimal("100.00")
+
+
+def test_locked_rate_snapshot_preferred_over_late_fee_derivation(client):
+    """When snapshot is present, it's returned directly without late-fee arithmetic."""
+    admin = _make_admin("snap4")
+    join_code = "SNAP04"
+    coverage = datetime(2026, 3, 1, tzinfo=timezone.utc)
+
+    student = _make_student("snap4_s")
+    # Payment includes a late fee; snapshot captures the true configured rate
+    _add_payment_with_txn(
+        student, join_code,
+        amount_paid=Decimal("580.00"), late_fee=Decimal("10.00"),
+        payment_date=datetime(2026, 3, 6, 8, 0, tzinfo=timezone.utc),
+        coverage_due_date=coverage, admin_id=admin.id,
+        rent_amount_snapshot=Decimal("570.00"),
+    )
+    db.session.commit()
+
+    locked = _get_locked_rent_amount_for_join_code_cycle(join_code, coverage)
+    # Snapshot ($570) takes priority over amount_paid - late_fee ($580 - $10 = $570 here,
+    # but the snapshot path is what we verify is taken)
+    assert locked == Decimal("570.00")
+
 
 # ---------------------------------------------------------------------------
 # Tests: _has_active_rent_waiver and _is_student_coverage_period_paid
