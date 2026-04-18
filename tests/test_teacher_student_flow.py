@@ -356,3 +356,72 @@ def test_teacher_student_unique_identity_per_join_code(client, teacher, app):
         assert student_a.id != student_b.id, (
             "Teacher seats in different classes must create separate Student records"
         )
+
+
+def test_edit_student_ignores_dob_sum_field(client, teacher, app):
+    """POST /admin/student/edit must not modify Student.dob_sum even when dob_sum is sent."""
+    from app.models import TeacherBlock, StudentTeacher
+    from app.hash_utils import get_random_salt
+    from app.utils.claim_credentials import compute_primary_claim_hash
+
+    with app.app_context():
+        teacher = db.session.merge(teacher)
+        teacher_id = teacher.id
+
+        salt = get_random_salt()
+        dob_sum = 2025
+        first_half_hash = compute_primary_claim_hash('T', dob_sum, salt)
+
+        student = Student(
+            first_name='Testname',
+            last_initial='S',
+            block='A',
+            salt=salt,
+            dob_sum=dob_sum,
+            first_half_hash=first_half_hash,
+        )
+        db.session.add(student)
+        db.session.flush()
+
+        join_code = 'DOBEDIT1'
+        tb = TeacherBlock(
+            teacher_id=teacher_id,
+            block='A',
+            first_name='Testname',
+            last_initial='S',
+            last_name_hash_by_part=[],
+            dob_sum=dob_sum,
+            salt=salt,
+            first_half_hash=first_half_hash,
+            join_code=join_code,
+            is_claimed=False,
+            student_id=student.id,
+        )
+        db.session.add(tb)
+        db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher_id))
+        db.session.commit()
+
+        student_id = student.id
+        original_dob_sum = student.dob_sum
+        original_first_half_hash = student.first_half_hash
+
+    with client.session_transaction() as sess:
+        sess['admin_id'] = teacher_id
+        sess['current_join_code'] = join_code
+
+    client.post('/admin/student/edit', data={
+        'student_id': student_id,
+        'first_name': 'Testname',
+        'last_name': 'Student',
+        'blocks': ['A'],
+        'dob_sum': '2000-01-01',  # Attempt to mutate DOB — must be ignored
+    }, follow_redirects=False)
+
+    with app.app_context():
+        updated = db.session.get(Student, student_id)
+        assert updated.dob_sum == original_dob_sum, (
+            "edit_student must not mutate Student.dob_sum"
+        )
+        assert updated.first_half_hash == original_first_half_hash, (
+            "edit_student must not change first_half_hash when dob_sum was not modified"
+        )

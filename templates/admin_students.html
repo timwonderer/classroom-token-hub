@@ -572,7 +572,7 @@
                             data-bs-target="#editStudentModal" data-student-id="{{ student.id }}"
                             data-student-name="{{ student.first_name }}"
                             data-student-last-initial="{{ student.last_initial }}"
-                            data-student-block="{{ student.block }}" data-student-dob-sum="{{ student.dob_sum }}">
+                            data-student-block="{{ student.block }}">
                             <span class="material-symbols-outlined icon-inline">edit</span>
                           </button>
                           <button class="btn btn-sm btn-outline-danger quick-action-btn" data-bs-toggle="modal"
@@ -783,11 +783,7 @@
                   <div class="form-text">First letter will become last initial</div>
                 </div>
               </div>
-              <div class="mb-3">
-                <label for="edit_dob" class="form-label fw-bold">Date of Birth (Optional)</label>
-                <input type="date" class="form-control" id="edit_dob" name="dob_sum">
-                <div class="form-text">Leave blank to keep unchanged.</div>
-              </div>
+
             </div>
           </div>
 
@@ -1000,12 +996,10 @@
         const firstName = button.getAttribute('data-student-name');
         const lastInitial = button.getAttribute('data-student-last-initial');
         const blocksStr = button.getAttribute('data-student-block');
-        const dobSum = button.getAttribute('data-student-dob-sum');
         // Populate basic fields
         editModal.querySelector('#edit_student_id').value = studentId;
         editModal.querySelector('#edit_first_name').value = firstName;
         editModal.querySelector('#edit_last_name').value = lastInitial; // Show just the initial, teacher can expand
-        editModal.querySelector('#edit_dob').value = dobSum || '';
 
         // Uncheck all blocks first
         editModal.querySelectorAll('.block-checkbox').forEach(cb => cb.checked = false);
