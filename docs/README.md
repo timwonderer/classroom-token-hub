@@ -40,6 +40,8 @@ Non-namespace locations:
 ## Quick Links
 
 - **[Core Invariants](INV-CORE-000_Core_Invariants.md)** — Constitutional constraints (Tier 1)
+- **[Schema Ownership Index](ARCHITECTURE/OPERATIONS/ARC-OPS-016_Schema_Ownership_Index.md)** — Thin table-to-domain ownership map
+- **[Cross-Domain Data Relationships](ARCHITECTURE/OPERATIONS/ARC-OPS-017_Cross_Domain_Data_Relationships.md)** — Meaning of shared reference fields across domains
 - **[Documentation Standard](STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-000_Writing_Specification.md)** — Tier classification, taxonomy, naming, authoring rules
 - **[Documentation Index](STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_Documentation_Index.md)** — Complete list of tracked documents
 - **[Teacher Manual](user-guides/teacher_manual.md)** — User-facing teacher guide

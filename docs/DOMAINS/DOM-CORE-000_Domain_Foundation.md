@@ -2,13 +2,13 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-000      | 1.0     | 2026-03-01     | N/A        | Constitutional            |
+| DOM-CORE-000      | 1.1     | 2026-04-18     | 1.0        | Constitutional            |
 
 ## I. Purpose
-To define the structural boundaries, responsibilities, and data access patterns of independent business domains within the system (e.g., Bank, Store, Payroll).
+To define the structural boundaries, mutation authority rules, and schema ownership model of independent business domains within the system.
 
 ## II. Scope
-All internally segregated units of business logic supporting the Classroom Token Hub.
+All internally segregated units of business logic supporting the Classroom Token Hub, including the domain-owned schema contracts for runtime tables.
 
 ## III. Authority Level
 Authoritative. 
@@ -16,14 +16,33 @@ Authoritative.
 ## IV. Domain Rules
 
 ### 1. Logical vs Physical Isolation
-Domains (such as PAY, BANK, RENT, INS, STORE) represent **logical boundaries** for specification and business logic. Physically, the application utilizes a unified, monolithic ORM (`app/models.py`) and persona-driven routing (`student.py`, `admin.py`, `system_admin.py`). 
-Domain logic must be contextually grouped within these routing files and centralized services (like `balance_service.py`) without requiring separate physical micro-databases.
+Domains represent **logical authority boundaries** for specification, mutation, and schema ownership. Physically, the application still uses a unified ORM and large persona-driven route modules, but that does not create shared authority.
 
-### 2. The `join_code` Anchor
-Regardless of the domain, every financial operation, claim, or configuration MUST be firmly anchored to a `join_code` context. Cross-domain logic (e.g., Store purchasing impacting Banking balances) must perform checks against the same `join_code` for the executing user.
+### 2. Mutation Authority
+Each domain service is the sole mutation authority over its owned tables. Cross-domain coordination occurs only through FEAT orchestration or service interfaces, never by directly mutating another domain's tables.
 
-### 3. Shared Ledgers
-Domains do not maintain isolated ledgers. All financial mutations across domains (payroll, rent, store purchases) converge on the unified `Transaction` log to ensure a deterministic financial history. Any domain generating a state mutation must emit a clearly annotated `Transaction` record.
+### 3. Schema Follows Domain Authority
+Every runtime table must have exactly one owning domain.
 
-## V. Amendment
+- Field definitions and constraints are defined exactly once, in the owning domain document.
+- Cross-domain references do not create shared ownership.
+- A global schema document may summarize or index tables, but it may not become an alternate source of truth.
+
+### 4. The `join_code` Anchor
+Regardless of the domain, every class-scoped operation, claim, entitlement, attendance event, or configuration row MUST be anchored to the correct `join_code` or a class identity derived from that scope.
+
+### 5. Shared Ledger, Single Owner
+The runtime uses a unified ledger, but that does not imply shared write authority. All ledger rows are owned by the Ledger domain. Other domains may require money effects only through FEAT or `ledger_service`.
+
+## V. Required Sections for Domain Docs
+
+Every V2 domain document SHALL include:
+
+- `Schema Authority Declaration`
+- `Owned Tables`
+- `Schema Contract`
+- `Constraints`
+- `Derived / Cross-Domain Rules`
+
+## VI. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.
