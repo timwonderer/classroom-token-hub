@@ -1,0 +1,221 @@
+from __future__ import annotations
+
+from datetime import timedelta
+
+from app.extensions import db
+from app.models import RentItem, Student, StudentItem, TeacherBlock
+from app.utils.time import utc_now
+
+
+def get_rent_hall_pass_grant_total(rent_setting_id: int) -> int:
+    total = db.session.query(
+        db.func.coalesce(db.func.sum(RentItem.hall_pass_count), 0)
+    ).filter(
+        RentItem.rent_setting_id == rent_setting_id,
+        RentItem.rent_item_type == 'hall_pass',
+    ).scalar() or 0
+    return int(total)
+
+
+def grant_rent_per_use_items(*, student, join_code: str, settings, calculate_due_dates_fn) -> int:
+    """Store-owned mutation for rent-derived per-use entitlements."""
+    per_use_items = RentItem.query.filter_by(
+        rent_setting_id=settings.id,
+        rent_item_type='per_use',
+    ).all()
+
+    granted = 0
+    now = utc_now()
+
+    for pu_item in per_use_items:
+        if not pu_item.store_item_id:
+            continue
+
+        existing = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.store_item_id == pu_item.store_item_id,
+            db.or_(StudentItem.uses_remaining > 0, StudentItem.uses_remaining == -1),
+            StudentItem.join_code == join_code,
+            db.or_(StudentItem.expiry_date.is_(None), StudentItem.expiry_date > now),
+        ).first()
+
+        if existing:
+            existing.uses_remaining = pu_item.use_limit if pu_item.use_limit else -1
+            continue
+
+        expiry_date = None
+        if settings.first_rent_due_date:
+            _, next_due = calculate_due_dates_fn(settings, now)
+            if next_due:
+                expiry_date = next_due
+
+        db.session.add(StudentItem(
+            student_id=student.id,
+            store_item_id=pu_item.store_item_id,
+            join_code=join_code,
+            purchase_date=now,
+            expiry_date=expiry_date,
+            status='purchased',
+            is_from_bundle=False,
+            quantity_purchased=1,
+            uses_remaining=pu_item.use_limit if pu_item.use_limit else -1,
+        ))
+        granted += 1
+
+    return granted
+
+
+def ensure_active_rent_per_use_grant(
+    *,
+    student,
+    store_item_id: int,
+    join_code: str,
+    use_limit: int | None,
+    now=None,
+    expiry_date=None,
+):
+    """Store-owned mutation for ensuring a current rent grant row exists."""
+    now = now or utc_now()
+    existing = StudentItem.query.filter(
+        StudentItem.student_id == student.id,
+        StudentItem.store_item_id == store_item_id,
+        db.or_(StudentItem.uses_remaining > 0, StudentItem.uses_remaining == -1),
+        StudentItem.join_code == join_code,
+        db.or_(StudentItem.expiry_date.is_(None), StudentItem.expiry_date > now),
+    ).first()
+    if existing:
+        return existing
+
+    granted_item = StudentItem(
+        student_id=student.id,
+        store_item_id=store_item_id,
+        join_code=join_code,
+        purchase_date=now,
+        expiry_date=expiry_date,
+        status='purchased',
+        is_from_bundle=False,
+        quantity_purchased=1,
+        uses_remaining=use_limit if use_limit else -1,
+    )
+    db.session.add(granted_item)
+    return granted_item
+
+
+def record_rent_perk_purchase(
+    *,
+    student,
+    item,
+    join_code: str,
+    purchase_tx_id: int,
+    active_rent_item,
+    now,
+):
+    """Store-owned mutation for a zero-cost rent-perk purchase."""
+    if active_rent_item and active_rent_item.uses_remaining != -1:
+        active_rent_item.uses_remaining -= 1
+
+    expiry_date = None
+    if item.item_type == 'delayed' and item.auto_expiry_days:
+        expiry_date = now + timedelta(days=item.auto_expiry_days)
+
+    student_item = StudentItem(
+        student_id=student.id,
+        store_item_id=item.id,
+        join_code=join_code,
+        purchase_date=now,
+        expiry_date=expiry_date,
+        status='purchased',
+        purchase_transaction_id=purchase_tx_id,
+        is_from_bundle=False,
+        quantity_purchased=1,
+        uses_remaining=None,
+    )
+    db.session.add(student_item)
+    return student_item
+
+
+def record_standard_purchase_items(
+    *,
+    student,
+    item,
+    join_code: str,
+    quantity: int,
+    purchase_tx_id: int,
+    expiry_date,
+    student_item_status: str,
+    uses_remaining,
+):
+    """Store-owned mutation for standard StudentItem issuance."""
+    created_item_ids = []
+
+    if item.is_bundle and item.bundle_quantity is not None:
+        new_student_item = StudentItem(
+            student_id=student.id,
+            store_item_id=item.id,
+            join_code=join_code,
+            purchase_date=utc_now(),
+            expiry_date=expiry_date,
+            status=student_item_status,
+            purchase_transaction_id=purchase_tx_id,
+            is_from_bundle=True,
+            bundle_remaining=item.bundle_quantity * quantity,
+            quantity_purchased=quantity,
+            uses_remaining=uses_remaining,
+            collective_goal_instance_code=item.collective_goal_instance_code if item.item_type == 'collective' else None,
+        )
+        db.session.add(new_student_item)
+        db.session.flush()
+        created_item_ids.append(new_student_item.id)
+        return created_item_ids
+
+    for _ in range(quantity):
+        new_student_item = StudentItem(
+            student_id=student.id,
+            store_item_id=item.id,
+            join_code=join_code,
+            purchase_date=utc_now(),
+            expiry_date=expiry_date,
+            status=student_item_status,
+            purchase_transaction_id=purchase_tx_id,
+            is_from_bundle=False,
+            quantity_purchased=1,
+            uses_remaining=uses_remaining,
+            collective_goal_instance_code=item.collective_goal_instance_code if item.item_type == 'collective' else None,
+        )
+        db.session.add(new_student_item)
+        db.session.flush()
+        created_item_ids.append(new_student_item.id)
+
+    return created_item_ids
+
+
+def decrement_inventory(item, quantity: int) -> None:
+    if item.inventory is not None:
+        item.inventory -= quantity
+
+
+def unlock_collective_goal_if_ready(*, item, join_code: str, teacher_id: int) -> None:
+    """Store-owned mutation for collective-goal unlock state."""
+    class_size = db.session.query(db.func.count(db.func.distinct(Student.id))).join(
+        TeacherBlock, TeacherBlock.student_id == Student.id,
+    ).filter(
+        TeacherBlock.teacher_id == teacher_id,
+        TeacherBlock.join_code == join_code,
+        TeacherBlock.is_claimed == True,
+    ).scalar() or 0
+
+    purchased_students_count = db.session.query(db.func.count(db.func.distinct(StudentItem.student_id))).filter(
+        StudentItem.store_item_id == item.id,
+        StudentItem.join_code == join_code,
+        StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
+        StudentItem.collective_goal_instance_code == item.collective_goal_instance_code,
+    ).scalar() or 0
+
+    target = int(item.collective_goal_target or 0) if item.collective_goal_type == 'fixed' else class_size
+    if target > 0 and purchased_students_count >= target:
+        StudentItem.query.filter(
+            StudentItem.store_item_id == item.id,
+            StudentItem.join_code == join_code,
+            StudentItem.status == 'pending',
+            StudentItem.collective_goal_instance_code == item.collective_goal_instance_code,
+        ).update({"status": "processing"})

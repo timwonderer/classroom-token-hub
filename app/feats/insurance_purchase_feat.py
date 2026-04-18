@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from decimal import Decimal
+from datetime import timedelta
+
+from app.extensions import db
+from app.services import ledger_service, obligations_service
+from app.utils.time import utc_now
+
+
+@dataclass
+class InsurancePurchaseResult:
+    enrollment_id: int
+    premium_transaction_id: int
+    overdraft_transfer_applied: bool
+
+
+def execute_insurance_purchase(
+    *,
+    student,
+    teacher_id: int,
+    join_code: str,
+    policy,
+    banking_settings,
+    overdraft_shortfall: Decimal = Decimal("0.00"),
+) -> InsurancePurchaseResult:
+    """Obligations-led FEAT for insurance enrollment + premium debit."""
+    enrollment = obligations_service.record_insurance_enrollment(
+        student_id=student.id,
+        policy=policy,
+        join_code=join_code,
+        purchase_date=utc_now(),
+        next_payment_due=utc_now() + timedelta(days=30),
+        coverage_start_date=utc_now() + timedelta(days=policy.waiting_period_days),
+    )
+
+    premium_tx = ledger_service.create_pending_transaction(
+        student_id=student.id,
+        teacher_id=teacher_id,
+        join_code=join_code,
+        amount=-policy.premium,
+        account_type="checking",
+        type="insurance_premium",
+        description=f"Insurance premium: {policy.title}",
+        policy_id=policy.id,
+    )
+
+    overdraft_transfer_applied = False
+    if banking_settings and banking_settings.overdraft_protection_enabled and overdraft_shortfall > 0:
+        ledger_service.create_transfer_pair(
+            student_id=student.id,
+            teacher_id=teacher_id,
+            join_code=join_code,
+            amount=overdraft_shortfall,
+            from_account="savings",
+            to_account="checking",
+            withdraw_description="Overdraft protection transfer to checking",
+            deposit_description="Overdraft protection transfer from savings",
+        )
+        overdraft_transfer_applied = True
+
+    db.session.commit()
+    return InsurancePurchaseResult(
+        enrollment_id=enrollment.id,
+        premium_transaction_id=premium_tx.id,
+        overdraft_transfer_applied=overdraft_transfer_applied,
+    )

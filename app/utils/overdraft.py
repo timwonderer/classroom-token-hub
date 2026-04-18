@@ -14,8 +14,9 @@ def evaluate_overdraft_allowance(student, debit_amount, banking_settings, teache
 
     Returns (allowed, shortfall, checking_balance, savings_balance).
     """
-    checking_balance = Decimal(str(student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)))
-    savings_balance = Decimal(str(student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)))
+    from app.services.ledger_service import get_available_balances
+
+    checking_balance, savings_balance = get_available_balances(student.id, join_code) if join_code else (Decimal('0.00'), Decimal('0.00'))
     try:
         debit_amount = Decimal(str(debit_amount))
     except (TypeError, InvalidOperation):
@@ -46,8 +47,11 @@ def charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, j
     if not banking_settings or not banking_settings.overdraft_fee_enabled:
         return False, Decimal('0.00')
 
-    current_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
-    current_balance = _quantize_currency(current_balance)
+    from app.services.ledger_service import create_pending_transaction, get_available_balance
+
+    current_balance = _quantize_currency(
+        get_available_balance(student.id, join_code, 'checking') if join_code else Decimal('0.00')
+    )
 
     # CRITICAL FIX: Normalize near-zero balances to exactly zero
     # This prevents floating-point errors from triggering fees on -0.00 or -0.0001
@@ -113,7 +117,6 @@ def charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, j
             join_code=join_code,
             amount=-fee_amount,
             account_type='checking',
-            status=TransactionStatus.PENDING,
             type='overdraft_fee',
             description=(
                 f'Overdraft fee (declined transaction balance: ${current_balance:.2f})'
@@ -121,11 +124,9 @@ def charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, j
                 f'Overdraft fee (balance: ${current_balance:.2f})'
             ),
         )
-        if hasattr(Transaction, 'actor_membership_id'):
-            tx_kwargs['actor_membership_id'] = actor_membership_id
-
-        overdraft_fee_tx = Transaction(**tx_kwargs)
-        db.session.add(overdraft_fee_tx)
+        overdraft_fee_tx = create_pending_transaction(**tx_kwargs)
+        if hasattr(overdraft_fee_tx, 'actor_membership_id'):
+            overdraft_fee_tx.actor_membership_id = actor_membership_id
         db.session.flush()
         return True, fee_amount
 

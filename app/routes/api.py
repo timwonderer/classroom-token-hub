@@ -36,6 +36,8 @@ from app.routes.student import (
     _is_student_coverage_period_paid,
     _ensure_rent_hall_pass_top_off,
 )
+from app.feats.store_purchase_feat import execute_rent_perk_purchase, execute_store_purchase
+from app.services import store_service
 from app.utils.economy_policy import resolve_class_scope, resolve_feature_class
 from app.utils.overdraft import charge_overdraft_fee_if_needed
 from app.utils.seat_scope import get_seat_ids_for_student_join
@@ -51,7 +53,11 @@ from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone, 
 # Import external modules
 from app.attendance import get_join_code_for_student_period
 from app.services.attendance_service import calculate_unpaid_attendance_seconds, get_all_block_statuses
-from app.services.ledger_service import get_available_balances, get_last_payroll_time
+from app.services.ledger_service import (
+    apply_overdraft_fee_if_needed as apply_ledger_overdraft_fee,
+    get_available_balances,
+    get_last_payroll_time,
+)
 from app.payroll import get_pay_rate_for_block
 
 # Create blueprint
@@ -316,7 +322,7 @@ def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_
         join_code: Join code for multi-tenancy isolation
         force: Charge fee even if balance is non-negative (declined transaction).
     """
-    return charge_overdraft_fee_if_needed(
+    return apply_ledger_overdraft_fee(
         student,
         banking_settings,
         teacher_id=teacher_id,
@@ -551,77 +557,31 @@ def purchase_item():
         if not active_rent_item and not existing_grant_row and has_paid_rent and (per_use_rent_item or item.is_rent_linked):
             # Missing grant edge case: create current-period grant on demand.
             # This prevents paid-rent students from being charged due to stale data.
-            uses_limit = per_use_rent_item.use_limit if (per_use_rent_item and per_use_rent_item.use_limit) else -1
-            active_rent_item = StudentItem(
-                student_id=student.id,
+            active_rent_item = store_service.ensure_active_rent_per_use_grant(
+                student=student,
                 store_item_id=item.id,
                 join_code=join_code,
-                purchase_date=now,
+                use_limit=per_use_rent_item.use_limit if per_use_rent_item else None,
+                now=now,
                 expiry_date=None,
-                status='purchased',
-                is_from_bundle=False,
-                quantity_purchased=1,
-                uses_remaining=uses_limit
             )
-            db.session.add(active_rent_item)
 
         if active_rent_item:
-            purchase_message = f"You purchased {item.name} for $0 (rent perk)."
-            if purchase_idempotency_key:
-                existing_purchase_tx = get_idempotent_transaction(purchase_idempotency_key)
-                if existing_purchase_tx:
-                    return jsonify({"status": "success", "message": f"{purchase_message} Purchase already recorded."})
-
-            # Free purchase from rent perk - decrement available free uses unless unlimited (-1)
-            if active_rent_item and active_rent_item.uses_remaining != -1:
-                active_rent_item.uses_remaining -= 1
-
-            # For rent perks, purchasing is $0 and usage is logged later on /use-item.
-            purchase_kwargs = dict(
-                student_id=student.id,
+            result = execute_rent_perk_purchase(
+                student=student,
                 teacher_id=teacher_id,
                 join_code=join_code,
-                amount=Decimal('0.00'),
-                account_type='checking',
-                status=TransactionStatus.PENDING,
-                type='purchase',
-                description=f"Purchase: {item.name} [Rent Perk $0]",
+                item=item,
+                active_rent_item=active_rent_item,
+                banking_settings=None,
+                purchase_idempotency_key=purchase_idempotency_key,
             )
-            if purchase_idempotency_key:
-                purchase_tx, tx_created = create_idempotent_transaction(
-                    idempotency_key=purchase_idempotency_key,
-                    **purchase_kwargs,
-                )
-                if not tx_created:
-                    db.session.rollback()
-                    return jsonify({"status": "success", "message": f"{purchase_message} Purchase already recorded."})
-            else:
-                purchase_tx = Transaction(**purchase_kwargs)
-                db.session.add(purchase_tx)
-
-            expiry_date = None
-            if item.item_type == 'delayed' and item.auto_expiry_days:
-                expiry_date = now + timedelta(days=item.auto_expiry_days)
-
-            db.session.add(StudentItem(
-                student_id=student.id,
-                store_item_id=item.id,
-                join_code=join_code,
-                purchase_date=now,
-                expiry_date=expiry_date,
-                status='purchased',
-                is_from_bundle=False,
-                quantity_purchased=1,
-                uses_remaining=None,
-            ))
-            db.session.commit()
-
-            remaining = active_rent_item.uses_remaining
+            remaining = result.rent_uses_remaining
             if remaining == -1:
-                return jsonify({"status": "success", "message": f"{purchase_message} Unlimited free purchases remaining this period."})
+                return jsonify({"status": "success", "message": f"{result.success_message} Unlimited free purchases remaining this period."})
             if remaining > 0:
-                return jsonify({"status": "success", "message": f"{purchase_message} {remaining} free purchase(s) remaining this period."})
-            return jsonify({"status": "success", "message": f"{purchase_message} No free purchases remaining this period."})
+                return jsonify({"status": "success", "message": f"{result.success_message} {remaining} free purchase(s) remaining this period."})
+            return jsonify({"status": "success", "message": f"{result.success_message} No free purchases remaining this period."})
 
     # Calculate price (with bulk discount if applicable)
     unit_price = item.price
@@ -655,8 +615,6 @@ def purchase_item():
                 join_code,
                 force=True
             )
-            if fee_charged:
-                db.session.commit()
 
             if banking_settings and banking_settings.overdraft_protection_enabled:
                 message = (f"Insufficient funds in both checking and savings. You need "
@@ -707,95 +665,12 @@ def purchase_item():
 
     # 3. Process the transaction
     try:
-        # Deduct from checking account
         purchase_description = f"Purchase: {item.name}"
         if quantity > 1:
             purchase_description += f" (x{quantity})"
         if item.bulk_discount_enabled and quantity >= item.bulk_discount_quantity:
             purchase_description += f" [{item.bulk_discount_percentage}% bulk discount]"
-
-        existing_purchase_tx = None
-        if purchase_idempotency_key:
-            existing_purchase_tx = get_idempotent_transaction(purchase_idempotency_key)
-            if existing_purchase_tx:
-                return jsonify({"status": "success", "message": f"{item.name} purchase already recorded."})
-
-        purchase_kwargs = dict(
-            student_id=student.id,
-            teacher_id=teacher_id,
-            join_code=join_code,
-            amount=-total_price,
-            account_type='checking',
-            status=TransactionStatus.PENDING,
-            type='purchase',
-            description=purchase_description,
-        )
-        if purchase_idempotency_key:
-            purchase_tx, tx_created = create_idempotent_transaction(
-                idempotency_key=purchase_idempotency_key,
-                **purchase_kwargs,
-            )
-            if not tx_created:
-                db.session.rollback()
-                return jsonify({"status": "success", "message": f"{item.name} purchase already recorded."})
-        else:
-            purchase_tx = Transaction(**purchase_kwargs)
-            db.session.add(purchase_tx)
-        # Ensure purchase_tx.id is available so each StudentItem can carry a stable refund link.
-        db.session.flush()
-
-        # Handle inventory
-        if item.inventory is not None:
-            item.inventory -= quantity
-
-        # --- Handle special item type: Hall Pass ---
-        if item.item_type == 'hall_pass':
-            student.hall_passes += quantity  # Add all purchased hall passes
-            db.session.flush()  # Flush to update balances without committing yet
-
-            # Check if overdraft protection should transfer funds from savings
-            checking_balance, savings_balance = get_available_balances(student.id, join_code)
-            if banking_settings and banking_settings.overdraft_protection_enabled and checking_balance < 0:
-                shortfall = abs(checking_balance)
-                if savings_balance >= shortfall:
-                    # CRITICAL FIX v2: Transfer from savings to checking with join_code
-                    transfer_tx_withdraw = Transaction(
-                        student_id=student.id,
-                        teacher_id=teacher_id,
-                        join_code=join_code,  # CRITICAL: Add join_code for period isolation
-                        amount=-shortfall,
-                        account_type='savings',
-                        status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
-                        type='Withdrawal',
-                        description='Overdraft protection transfer to checking'
-                    )
-                    transfer_tx_deposit = Transaction(
-                        student_id=student.id,
-                        teacher_id=teacher_id,
-                        join_code=join_code,  # CRITICAL: Add join_code for period isolation
-                        amount=shortfall,
-                        account_type='checking',
-                        status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
-                        type='Deposit',
-                        description='Overdraft protection transfer from savings'
-                    )
-                    db.session.add(transfer_tx_withdraw)
-                    db.session.add(transfer_tx_deposit)
-                    db.session.flush()  # Flush to update balances
-
-            # Check if overdraft fee should be charged (after overdraft protection)
-            fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_code)
-
-            # Commit all transactions together
-            db.session.commit()
-
-            return jsonify({"status": "success", "message": f"You purchased {quantity} Hall Pass(es)! Your new balance is {student.hall_passes}."})
-
-        # --- Standard Item Logic ---
-        # Create the student's item(s)
         expiry_date = None
-
-        # Check if this is a rent item
         from app.models import RentItem, RentSettings
         rent_item = RentItem.query.filter_by(store_item_id=item.id).first()
         uses_remaining = None
@@ -831,150 +706,28 @@ def purchase_item():
             student_item_status = 'pending'
         else: # delayed
             student_item_status = 'purchased'
+        result = execute_store_purchase(
+            student=student,
+            teacher_id=teacher_id,
+            join_code=join_code,
+            item=item,
+            quantity=quantity,
+            total_price=total_price,
+            purchase_description=purchase_description,
+            banking_settings=banking_settings,
+            purchase_idempotency_key=purchase_idempotency_key,
+            expiry_date=expiry_date,
+            uses_remaining=uses_remaining,
+            student_item_status=student_item_status,
+        )
 
-        # Handle bundle items - create one StudentItem with bundle tracking
-        if item.is_bundle and item.bundle_quantity is not None:
-            new_student_item = StudentItem(
-                student_id=student.id,
-                store_item_id=item.id,
-                join_code=join_code,
-                purchase_date=utc_now(),
-                expiry_date=expiry_date,
-                status=student_item_status,
-                purchase_transaction_id=purchase_tx.id,
-                is_from_bundle=True,
-                bundle_remaining=item.bundle_quantity * quantity,  # Total uses = bundle_quantity * number of bundles purchased
-                quantity_purchased=quantity,
-                uses_remaining=uses_remaining,
-                collective_goal_instance_code=item.collective_goal_instance_code if item.item_type == 'collective' else None
-            )
-            db.session.add(new_student_item)
-        elif item.is_bundle and item.bundle_quantity is None:
-            # Safety: if bundle is enabled but quantity is missing, treat as regular item
-            current_app.logger.error(f"Bundle item {item.id} has is_bundle=True but bundle_quantity=None. Treating as regular item.")
-            new_student_item = StudentItem(
-                student_id=student.id,
-                store_item_id=item.id,
-                join_code=join_code,
-                purchase_date=utc_now(),
-                expiry_date=expiry_date,
-                status=student_item_status,
-                purchase_transaction_id=purchase_tx.id,
-                is_from_bundle=False,
-                quantity_purchased=quantity,
-                uses_remaining=uses_remaining,
-                collective_goal_instance_code=item.collective_goal_instance_code if item.item_type == 'collective' else None
-            )
-            db.session.add(new_student_item)
-        else:
-            # For non-bundle items, create separate StudentItem records for each quantity
-            for _ in range(quantity):
-                new_student_item = StudentItem(
-                    student_id=student.id,
-                    store_item_id=item.id,
-                    join_code=join_code,
-                    purchase_date=utc_now(),
-                    expiry_date=expiry_date,
-                    status=student_item_status,
-                    purchase_transaction_id=purchase_tx.id,
-                    is_from_bundle=False,
-                    quantity_purchased=1,
-                    uses_remaining=uses_remaining,
-                    collective_goal_instance_code=item.collective_goal_instance_code if item.item_type == 'collective' else None
-                )
-                db.session.add(new_student_item)
+        if item.item_type == 'hall_pass':
+            return jsonify({
+                "status": "success",
+                "message": f"You purchased {quantity} Hall Pass(es)! Your new balance is {result.hall_pass_balance}.",
+            })
 
-        db.session.flush()  # Flush to update balances without committing yet
-
-        # Handle overdraft protection and fees for regular items
-        # Check if overdraft protection should transfer funds from savings
-        checking_balance, savings_balance = get_available_balances(student.id, join_code)
-        if banking_settings and banking_settings.overdraft_protection_enabled and checking_balance < 0:
-            shortfall = abs(checking_balance)
-            if savings_balance >= shortfall:
-                # CRITICAL FIX v2: Transfer from savings to checking with join_code
-                transfer_tx_withdraw = Transaction(
-                    student_id=student.id,
-                    teacher_id=teacher_id,
-                    join_code=join_code,  # CRITICAL: Add join_code for period isolation
-                    amount=-shortfall,
-                    account_type='savings',
-                    type='Withdrawal',
-                    description='Overdraft protection transfer to checking'
-                )
-                transfer_tx_deposit = Transaction(
-                    student_id=student.id,
-                    teacher_id=teacher_id,
-                    join_code=join_code,  # CRITICAL: Add join_code for period isolation
-                    amount=shortfall,
-                    account_type='checking',
-                    type='Deposit',
-                    description='Overdraft protection transfer from savings'
-                )
-                db.session.add(transfer_tx_withdraw)
-                db.session.add(transfer_tx_deposit)
-                db.session.flush()  # Flush to update balances
-
-        # Check if overdraft fee should be charged (after overdraft protection)
-        fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_code)
-
-        # --- Collective Item Logic ---
-        if item.item_type == 'collective':
-            # Count unique students (not TeacherBlock seats) to get actual class size
-            class_size = db.session.query(db.func.count(db.func.distinct(Student.id))).join(
-                TeacherBlock, TeacherBlock.student_id == Student.id
-            ).filter(
-                TeacherBlock.teacher_id == teacher_id,
-                TeacherBlock.join_code == join_code,
-                TeacherBlock.is_claimed == True,
-            ).scalar() or 0
-            
-            purchased_students_count = db.session.query(db.func.count(db.func.distinct(StudentItem.student_id))).filter(
-                StudentItem.store_item_id == item.id,
-                StudentItem.join_code == join_code,
-                StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
-                StudentItem.collective_goal_instance_code == item.collective_goal_instance_code,
-            ).scalar() or 0
-
-            if item.collective_goal_type == 'fixed':
-                target = int(item.collective_goal_target or 0)
-            else:
-                target = class_size
-
-            if target > 0 and purchased_students_count >= target:
-                # Threshold met for this class: unlock only this class period's pending items
-                StudentItem.query.filter(
-                    StudentItem.store_item_id == item.id,
-                    StudentItem.join_code == join_code,
-                    StudentItem.status == 'pending',
-                    StudentItem.collective_goal_instance_code == item.collective_goal_instance_code,
-                ).update({"status": "processing"})
-                current_app.logger.info(
-                    "Collective goal '%s' reached for join_code=%s (%s/%s)",
-                    item.name,
-                    join_code,
-                    purchased_students_count,
-                    target,
-                )
-
-        # Commit purchases for both collective and non-collective items
-        db.session.commit()
-
-        # Build success message
-        success_message = f"You purchased {item.name}!"
-        if item.is_bundle and item.bundle_quantity is not None:
-            total_uses = item.bundle_quantity * quantity
-            success_message = f"You purchased {quantity} bundle(s) of {item.name}! You have {total_uses} uses."
-        elif quantity > 1:
-            success_message = f"You purchased {quantity}x {item.name}!"
-
-        if (item.bulk_discount_enabled and
-            item.bulk_discount_quantity is not None and
-            item.bulk_discount_percentage is not None and
-            quantity >= item.bulk_discount_quantity):
-            success_message += f" (Saved {item.bulk_discount_percentage}% with bulk discount!)"
-
-        return jsonify({"status": "success", "message": success_message})
+        return jsonify({"status": "success", "message": result.success_message})
 
     except SQLAlchemyError as e:
         db.session.rollback()

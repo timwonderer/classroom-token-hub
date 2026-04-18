@@ -6,6 +6,7 @@ from app.extensions import db
 from app.models import BalanceCache, Transaction, TransactionStatus, _quantize_currency
 from app.utils.seat_scope import get_seat_ids_for_student_join, transaction_scope_filter
 from app.utils.time import ensure_utc, utc_now
+from app.utils.transaction_idempotency import create_idempotent_transaction
 
 
 def _non_void_filter():
@@ -144,6 +145,80 @@ def create_pending_transaction(
     return transaction
 
 
+def create_pending_transaction_idempotent(
+    *,
+    idempotency_key: str,
+    student_id: int,
+    teacher_id: int | None,
+    join_code: str | None,
+    amount,
+    account_type: str,
+    type: str,
+    description: str,
+):
+    """Create a pending transaction through the idempotent ledger path."""
+    transaction, created = create_idempotent_transaction(
+        idempotency_key=idempotency_key,
+        student_id=student_id,
+        teacher_id=teacher_id,
+        join_code=join_code,
+        amount=_quantize_currency(amount),
+        account_type=account_type,
+        status=TransactionStatus.PENDING,
+        type=type,
+        description=description,
+    )
+    return transaction, created
+
+
+def void_pending_transaction(transaction, *, voided_at=None) -> None:
+    """Mark a pending transaction as void."""
+    transaction.is_void = True
+    transaction.status = TransactionStatus.VOID
+    transaction.voided_at = voided_at or utc_now()
+
+
+def compensate_posted_transaction(
+    transaction,
+    *,
+    description: str,
+    compensation_type: str = "refund",
+    idempotency_key: str | None = None,
+):
+    """Append a compensating pending transaction for posted truth."""
+    compensation_amount = _quantize_currency(-(transaction.amount or Decimal("0.00")))
+    if idempotency_key:
+        reversal_tx, _created = create_idempotent_transaction(
+            idempotency_key=idempotency_key,
+            student_id=transaction.student_id,
+            teacher_id=transaction.teacher_id,
+            join_code=transaction.join_code,
+            amount=compensation_amount,
+            account_type=transaction.account_type or "checking",
+            status=TransactionStatus.PENDING,
+            type=compensation_type,
+            original_transaction_id=transaction.id,
+            policy_id=transaction.policy_id,
+            description=description,
+        )
+    else:
+        reversal_tx = create_pending_transaction(
+            student_id=transaction.student_id,
+            teacher_id=transaction.teacher_id,
+            join_code=transaction.join_code,
+            amount=compensation_amount,
+            account_type=transaction.account_type or "checking",
+            type=compensation_type,
+            description=description,
+            original_transaction_id=transaction.id,
+            policy_id=transaction.policy_id,
+        )
+    db.session.flush()
+    transaction.reversal_transaction_id = reversal_tx.id
+    transaction.is_void = True
+    return reversal_tx
+
+
 def create_transfer_pair(
     *,
     student_id: int,
@@ -176,6 +251,32 @@ def create_transfer_pair(
         description=deposit_description,
     )
     return withdraw_tx, deposit_tx
+
+
+def apply_overdraft_fee_if_needed(
+    student,
+    banking_settings,
+    *,
+    teacher_id=None,
+    join_code=None,
+    force=False,
+    actor_membership_id=None,
+    commit: bool = False,
+):
+    """Ledger-owned overdraft-fee command wrapper."""
+    from app.utils.overdraft import charge_overdraft_fee_if_needed
+
+    fee_charged, fee_amount = charge_overdraft_fee_if_needed(
+        student,
+        banking_settings,
+        teacher_id=teacher_id,
+        join_code=join_code,
+        force=force,
+        actor_membership_id=actor_membership_id,
+    )
+    if fee_charged and commit:
+        db.session.commit()
+    return fee_charged, fee_amount
 
 
 def apply_monthly_savings_interest(student, *, teacher_id: int | None, join_code: str | None, annual_rate=Decimal("0.045")):

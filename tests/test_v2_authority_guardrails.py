@@ -48,6 +48,61 @@ def test_attendance_service_does_not_compute_pay_or_pull_internal_payroll_anchor
     assert "get_last_payroll_time(" not in source
 
 
+def test_rent_pay_route_is_not_direct_ledger_or_obligations_authority():
+    source = inspect.getsource(student_routes.rent_pay)
+    assert "Transaction(" not in source
+    assert "RentPayment(" not in source
+    assert "execute_rent_payment(" in source
+
+
+def test_transfer_route_is_not_direct_ledger_authority():
+    source = inspect.getsource(student_routes.transfer)
+    assert "Transaction(" not in source
+    assert "execute_account_transfer(" in source
+
+
+def test_purchase_insurance_route_is_not_direct_ledger_or_obligations_authority():
+    source = inspect.getsource(student_routes.purchase_insurance)
+    assert "Transaction(" not in source
+    assert "StudentInsurance(" not in source
+    assert "execute_insurance_purchase(" in source
+
+
+def test_admin_void_route_is_not_direct_ledger_authority():
+    admin_source = Path("app/routes/admin.py").read_text()
+    start = admin_source.index("def void_transaction(")
+    end = admin_source.index("# -------------------- HALL PASS MANAGEMENT --------------------")
+    source = admin_source[start:end]
+    assert "Transaction(" not in source
+    assert "create_idempotent_transaction(" not in source
+    assert "execute_void_transaction(" in source
+
+
+def test_store_purchase_route_is_not_direct_ledger_or_store_authority():
+    api_source = Path("app/routes/api.py").read_text()
+    purchase_source = inspect.getsource(__import__("app.routes.api", fromlist=["purchase_item"]).purchase_item)
+    assert "Transaction(" not in purchase_source
+    assert "StudentItem(" not in purchase_source
+    assert "execute_store_purchase(" in purchase_source
+    assert "execute_rent_perk_purchase(" in purchase_source
+    assert "db.session.commit()" not in purchase_source
+
+
+def test_feat_modules_do_not_construct_transactions_or_write_rows_directly():
+    for path in [
+        Path("app/feats/rent_payment_feat.py"),
+        Path("app/feats/store_purchase_feat.py"),
+        Path("app/feats/transfer_feat.py"),
+        Path("app/feats/insurance_purchase_feat.py"),
+        Path("app/feats/transaction_void_feat.py"),
+    ]:
+        source = path.read_text()
+        assert "Transaction(" not in source
+        assert "db.session.add(" not in source
+        assert "StudentItem(" not in source
+        assert "RentPayment(" not in source
+
+
 def test_dashboard_read_is_interest_mutation_free(client):
     teacher = make_admin("dash_guard_teacher", "secret")
     db.session.add(teacher)
