@@ -21,7 +21,7 @@ This domain owns class anchors, feature enablement, and persisted class-level se
 
 This domain is the sole schema and mutation authority over:
 
-- `class_economies`
+- `class_economies` <!-- Deprecated -->
 - `class_features`
 - `feature_settings`
 - `hall_pass_settings`
