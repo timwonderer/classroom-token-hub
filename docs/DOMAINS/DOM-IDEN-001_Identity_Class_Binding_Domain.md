@@ -2,103 +2,168 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-001 | 1.0 | 2026-04-18 | N/A | Normative |
+| DOM-IDEN-001 | 2.0 | 2026-04-18 | 1.0 | Normative |
 
 ## I. Purpose
 
-Define the Identity domain as the authority for who is bound to what inside a class-scoped universe.
+Define the Identity domain as the authority for:
+
+- who a human is in the system
+- which class-local actor record that human owns
+- which class universe that actor belongs to
 
 ## II. Scope
 
-This domain owns identity binding, class membership truth, seat linkage, teacher-student binding, and roster-seat assignment structures.
+This domain owns:
+
+- global human identity
+- class-local actor binding
+- display identity
+- roster and claim binding
+- active class-actor context resolution
+
+This domain does not own:
+
+- balances
+- entitlements
+- attendance standing
+- affordability
+- feature policy
 
 ## III. Dependencies
 
 - `INV-CORE-000_Core_Invariants.md`
 - `DOM-CORE-000_Domain_Foundation.md`
-- `ARC-IDEN-001_Admin_Identity_Handling.md`
+- `docs/development/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
 
 ## IV. Schema Authority Declaration
 
-This domain is the sole schema and mutation authority over:
+This domain is the sole schema and mutation authority over the target identity model:
 
-- `students`
-- `student_teachers`
+- `users`
 - `seats`
-- `teacher_blocks`
-- `class_memberships`
+- `identity_profiles`
+- `classes`
 
-It owns identity and class binding truth only. It does not own balances, entitlements, attendance standing, or affordability.
+This domain owns identity and class-binding truth only.
 
 ## V. Owned Tables
 
-### `students`
-- Student identity and credential container.
+### `users`
 
-### `student_teachers`
-- Teacher-student ownership binding.
+- Global human identity.
+- Authentication, recovery, and session identity state.
 
 ### `seats`
-- Normalized class seat assignments.
 
-### `teacher_blocks`
-- Roster / claim linkage by teacher block and join-code scope.
+- Class-local actor binding.
+- One participant record inside one class universe.
 
-### `class_memberships`
-- Membership truth for admin/student presence inside a class boundary.
+### `identity_profiles`
+
+- Human-facing display identity for one seat.
+
+### `classes`
+
+- Class universe anchor and lookup/UI record.
 
 ## VI. Schema Contract
 
-### `students`
-- Key fields:
-  - `id`
-  - encrypted identity fields
-  - `identity_id`
-  - `salt`
-  - hashed auth / recovery fields
+### `users`
 
-### `student_teachers`
-- Key fields:
-  - `student_id`
-  - `teacher_id`
-  - `created_at`
+Key fields:
+
+- `id`
+- `public_id`
+- username/auth fields
+- recovery fields
+- session identity fields
+
+Rules:
+
+- one row per human identity
+- not a membership table
+- not a financial or attendance table
 
 ### `seats`
-- Key fields:
-  - `student_id`
-  - `class_id`
-  - `join_code`
-  - `block`
-  - `role`
 
-### `teacher_blocks`
-- Key fields:
-  - `teacher_id`
-  - `student_id`
-  - `join_code`
-  - `block`
-  - `is_claimed`
+Key fields:
 
-### `class_memberships`
-- Key fields:
-  - `join_code`
-  - `admin_id`
-  - `student_id`
-  - `role`
-  - `status`
+- `id`
+- `public_id`
+- `user_id`
+- `class_id`
+- `role`
+- claim/roster fields
+
+Rules:
+
+- one seat belongs to exactly one class universe
+- one seat belongs to at most one user
+- seat existence expresses class participation
+- `seat_id` is the participant identity key
+
+### `identity_profiles`
+
+Key fields:
+
+- `id`
+- `seat_id`
+- display-name fields
+
+Rules:
+
+- exactly one display profile per seat
+- display identity does not replace seat identity
+
+### `classes`
+
+Key fields:
+
+- `class_id`
+- `join_code_token`
+- `section`
+- `display_name`
+
+Rules:
+
+- one row defines one class universe
+- class existence is existence-based, not lifecycle-state based
+- this table is not a membership table
+- `join_code_token` is a public lookup token, not an internal domain foreign key
 
 ## VII. Constraints
 
-- Membership is class-scoped and existence-based.
+- Identity is modeled through `users`, `seats`, `identity_profiles`, and `classes`.
+- Separate `Student` and `Teacher/Admin` identity tables are not part of the target model.
+- Seat existence, not a separate membership lifecycle label, defines whether a participant
+  exists in a class.
 - Identity does not grant financial, entitlement, or attendance authority.
-- Class binding must remain scoped to `join_code` / `class_id` truth.
-- No identity helper may become a cross-domain profile aggregator.
+- No identity helper may become a cross-domain profile aggregator or mutable state sink.
 
-## VIII. Derived / Cross-Domain Rules
+## VIII. Legacy Table Interpretation
 
-- Other domains may reference `student_id`, `teacher_id`, and `join_code`, but that does not transfer identity ownership.
-- Class membership and seat binding determine who participates in a class; they do not determine what that actor can afford or claim.
+The following tables are legacy implementation structures, not target-state identity
+anchors:
 
-## IX. Amendment
+- `students`
+- `teachers` / `admins`
+- `teacher_blocks`
+- `student_teachers`
 
-Revisions require version increment, effective-date update, and continued consistency with higher-order invariants.
+They may exist in current runtime code, but they do not define the target domain model.
+
+## IX. Derived / Cross-Domain Rules
+
+- Other domains may reference `seat_id` and `class_id`, but that does not transfer
+  identity ownership.
+- `user_id` is for authentication, recovery, and global identity only.
+- `seat_id` is for participant and class-local actor identity.
+- `class_id` is for class-universe identity and class-wide configuration scope.
+- Domain tables that describe participant activity should reference `seat_id`.
+- Domain tables that describe class-wide policy should reference `class_id`.
+
+## X. Amendment
+
+Revisions require version increment, effective-date update, and continued consistency
+with higher-order invariants.
