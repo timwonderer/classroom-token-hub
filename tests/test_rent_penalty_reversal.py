@@ -26,6 +26,7 @@ from app.models import (
 )
 from app.hash_utils import get_random_salt, hash_username
 from app.routes.student import (
+    _get_effective_rent_amount_for_coverage_period,
     _get_locked_rent_amount_for_join_code_cycle,
     _has_active_rent_waiver,
     _is_student_coverage_period_paid,
@@ -301,26 +302,79 @@ def test_locked_rate_snapshot_zero_falls_back_to_amount_paid(client):
 
 
 def test_locked_rate_snapshot_preferred_over_late_fee_derivation(client):
-    """When snapshot is present, it's returned directly without late-fee arithmetic."""
+    """When snapshot is present, it is returned even if legacy late-fee arithmetic differs."""
     admin = _make_admin("snap4")
     join_code = "SNAP04"
     coverage = datetime(2026, 3, 1, tzinfo=timezone.utc)
 
     student = _make_student("snap4_s")
-    # Payment includes a late fee; snapshot captures the true configured rate
+    # Intentionally make amount_paid - late_fee differ from the stored snapshot so this
+    # test proves the snapshot branch is authoritative.
     _add_payment_with_txn(
         student, join_code,
         amount_paid=Decimal("580.00"), late_fee=Decimal("10.00"),
         payment_date=datetime(2026, 3, 6, 8, 0, tzinfo=timezone.utc),
         coverage_due_date=coverage, admin_id=admin.id,
-        rent_amount_snapshot=Decimal("570.00"),
+        rent_amount_snapshot=Decimal("560.00"),
     )
     db.session.commit()
 
     locked = _get_locked_rent_amount_for_join_code_cycle(join_code, coverage)
-    # Snapshot ($570) takes priority over amount_paid - late_fee ($580 - $10 = $570 here,
-    # but the snapshot path is what we verify is taken)
-    assert locked == Decimal("570.00")
+    # Legacy derivation would yield $570.00 ($580 - $10), so returning the stored
+    # $560.00 snapshot demonstrates the snapshot path is preferred.
+    assert locked == Decimal("560.00")
+
+
+# ---------------------------------------------------------------------------
+# Regression tests: _get_effective_rent_amount_for_coverage_period fallback
+# ---------------------------------------------------------------------------
+
+def test_effective_rent_amount_uses_snapshot_when_settings_updated_after_payment(client):
+    """Fallback path: snapshot from earliest payment is used when settings were updated
+    after the student's payment and join_code is None (no class-wide cycle lock applies).
+
+    Regression: without the snapshot-aware fallback, a partial payment of $200 on a
+    $560 rent would cause the student to be seen as fully paid after the rate was raised,
+    because the base paid ($200) would become the effective threshold.
+    """
+    admin = _make_admin("eff1")
+    coverage = datetime(2026, 4, 1, tzinfo=timezone.utc)
+    payment_date = datetime(2026, 4, 3, 8, 0, tzinfo=timezone.utc)
+
+    # Settings rent_amount is the NEW (raised) amount; updated_at is after the payment.
+    settings = _make_rent_settings(admin.id, block="A", amount=Decimal("600.00"))
+    # updated_at must be later than the payment date to trigger the fallback path.
+    settings.updated_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+    db.session.flush()
+
+    student = _make_student("eff1_s")
+    # Partial payment: $200 of $560 rent (before the rate was raised to $600).
+    payment = RentPayment(
+        student_id=student.id,
+        period="A",
+        join_code=None,
+        amount_paid=Decimal("200.00"),
+        late_fee_charged=Decimal("0.00"),
+        was_late=False,
+        payment_date=payment_date,
+        coverage_month=coverage.month,
+        coverage_year=coverage.year,
+        rent_amount_snapshot=Decimal("560.00"),
+    )
+    db.session.add(payment)
+    db.session.commit()
+
+    # Pass join_code=None so _get_locked_rent_amount_for_join_code_cycle returns None
+    # immediately, exercising only the per-student fallback branch.
+    effective = _get_effective_rent_amount_for_coverage_period(
+        settings, [payment], coverage, join_code=None
+    )
+    # The snapshot ($560) must be returned, not the partial amount_paid ($200) or the
+    # current settings amount ($600).
+    assert effective == Decimal("560.00"), (
+        f"Expected effective rent $560.00 (from snapshot), got ${effective} — "
+        "snapshot fallback path is not being used"
+    )
 
 
 # ---------------------------------------------------------------------------
