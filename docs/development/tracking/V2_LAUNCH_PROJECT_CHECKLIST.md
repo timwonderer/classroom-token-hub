@@ -8,17 +8,17 @@
 
 This checklist is derived from the active and supporting development docs below. The project sections intentionally preserve the source intent instead of replacing it with a new plan.
 
-- `docs/development/V2_MAIN_RECONCILIATION_TRACKER.md`
-- `docs/development/V2_LAUNCH_READINESS_MATRIX.md`
-- `docs/development/V2_PARALLEL_WORKSTREAMS.md`
-- `docs/development/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`
-- `docs/development/V2_ADMIN_ROUTE_REFACTOR.md`
-- `docs/development/V2_Class_Scope_Normalization_Target.md`
-- `docs/development/V2_CLASS_ID_INVARIANT_BACKLOG.md`
-- `docs/development/V2_BACKWARDS_COMPATIBILITY_CLEANUP.md`
-- `docs/development/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
-- `docs/development/TABLE_CONSOLIDATION_ANALYSIS.md`
-- `docs/development/LEGACY_SCHEMA_ANALYSIS.md`
+- `docs/development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md`
+- `docs/development/tracking/V2_LAUNCH_READINESS_MATRIX.md`
+- `docs/development/tracking/V2_PARALLEL_WORKSTREAMS.md`
+- `docs/development/tracking/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`
+- `docs/development/specs/V2_ADMIN_ROUTE_REFACTOR.md`
+- `docs/development/specs/V2_Class_Scope_Normalization_Target.md`
+- `docs/development/specs/V2_CLASS_ID_INVARIANT_BACKLOG.md`
+- `docs/development/tracking/V2_BACKWARDS_COMPATIBILITY_CLEANUP.md`
+- `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
+- `docs/development/archive/TABLE_CONSOLIDATION_ANALYSIS.md`
+- `docs/development/archive/LEGACY_SCHEMA_ANALYSIS.md`
 - `docs/STANDARD_OPERATING_PROCEDURES/DEVOPS/SOP-DEV-001_REFACTOR_BEST_PRACTICES.md`
 
 ## Build Order Summary

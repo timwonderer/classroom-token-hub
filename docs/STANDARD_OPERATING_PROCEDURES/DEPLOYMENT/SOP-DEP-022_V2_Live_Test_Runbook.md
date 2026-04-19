@@ -197,7 +197,7 @@ Capture and store:
 ## XIV. Deferral Boundary
 
 - This runbook intentionally avoids a broader route-taxonomy rewrite or operations-document restructure.
-- Any deeper cleanup driven by route renames, class-scope normalization, or cross-SOP reorganization is deferred until after `V2_ADMIN_ROUTE_REFACTOR` and `V2_Class_Scope_Normalization_Target`.
+- Any deeper cleanup driven by route renames, class-scope normalization, or cross-SOP reorganization is deferred until after `docs/development/specs/V2_ADMIN_ROUTE_REFACTOR.md` and `docs/development/specs/V2_Class_Scope_Normalization_Target.md`.
 
 ## XV. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.

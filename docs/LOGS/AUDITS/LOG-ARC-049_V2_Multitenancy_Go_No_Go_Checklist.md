@@ -23,9 +23,9 @@ This document is a historical release artifact and does not supersede active SOP
 
 Use these documents for current v2 execution work:
 
-- `docs/development/V2_MAIN_RECONCILIATION_TRACKER.md`
-- `docs/development/V2_LAUNCH_READINESS_MATRIX.md`
-- `docs/development/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`
+- `docs/development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md`
+- `docs/development/tracking/V2_LAUNCH_READINESS_MATRIX.md`
+- `docs/development/tracking/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`
 - `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md`
 - `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md`
 
@@ -101,4 +101,4 @@ Branch: `codex/v2.0`
 
 ## Main-Branch Feature Reconciliation
 
-Main-branch feature reconciliation now lives in `docs/development/V2_MAIN_RECONCILIATION_TRACKER.md`. Keep this historical checklist focused on the 2026-03-08 go/no-go snapshot and use the new tracker for current parity decisions.
+Main-branch feature reconciliation now lives in `docs/development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md`. Keep this historical checklist focused on the 2026-03-08 go/no-go snapshot and use the new tracker for current parity decisions.

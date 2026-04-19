@@ -151,7 +151,7 @@ they are.
 
 ## Relationship To Other Docs
 
-- `V2_STUDENT_IDENTITY_ARCHITECTURE.md` defines who `users`, `seats`, and `classes` are.
-- `V2_AUTHORITY_EXTRACTION_PLAN.md` defines where mutation and authority logic belongs.
+- `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md` defines who `users`, `seats`, and `classes` are.
+- `docs/development/specs/V2_AUTHORITY_EXTRACTION_PLAN.md` defines where mutation and authority logic belongs.
 - This document defines what must happen when session validity and mutation safety meet
   at request time.

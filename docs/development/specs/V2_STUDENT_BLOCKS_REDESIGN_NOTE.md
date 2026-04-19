@@ -130,6 +130,6 @@ Target-state direction:
 
 ## Relationship To Other Docs
 
-- `V2_STUDENT_IDENTITY_ARCHITECTURE.md` defines the target identity model
-- `V2_AUTHORITY_EXTRACTION_PLAN.md` defines service and authority boundaries
+- `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md` defines the target identity model
+- `docs/development/specs/V2_AUTHORITY_EXTRACTION_PLAN.md` defines service and authority boundaries
 - this note records how `student_blocks` should be redistributed to match both

@@ -17,12 +17,12 @@ It answers four questions:
 This is an identity-model document, not a full class-scope normalization plan. For
 class scoping and `class_id` normalization, see:
 
-- `docs/development/V2_Class_Scope_Normalization_Target.md`
-- `docs/development/V2_CLASS_ID_INVARIANT_BACKLOG.md`
+- `docs/development/specs/V2_Class_Scope_Normalization_Target.md`
+- `docs/development/specs/V2_CLASS_ID_INVARIANT_BACKLOG.md`
 
 For request-boundary session expiry and mutation replay rules, see:
 
-- `docs/development/V2_SESSION_MUTATION_SAFETY.md`
+- `docs/development/specs/V2_SESSION_MUTATION_SAFETY.md`
 
 ## Core Design Principle
 

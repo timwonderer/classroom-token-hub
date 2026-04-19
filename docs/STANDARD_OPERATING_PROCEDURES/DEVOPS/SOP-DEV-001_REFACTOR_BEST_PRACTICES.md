@@ -46,9 +46,9 @@ work is being performed on the v2 launch path.
 - INV-CORE-000_Core_Invariants.md
 - INV-CORE-001_Authority_Model.md
 - SOP-DOC-000_Writing_Specification.md
-- docs/development/V2_LAUNCH_PROJECT_CHECKLIST.md
-- docs/development/V2_MAIN_RECONCILIATION_TRACKER.md
-- docs/development/V2_LAUNCH_READINESS_MATRIX.md
+- docs/development/tracking/V2_LAUNCH_PROJECT_CHECKLIST.md
+- docs/development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md
+- docs/development/tracking/V2_LAUNCH_READINESS_MATRIX.md
 
 ---
 

@@ -251,7 +251,7 @@ After completion:
 
 This refactor aligns with:
 
-- V2_Class_Scope_Normalization_Target
+- docs/development/specs/V2_Class_Scope_Normalization_Target.md
 - CI enforcement of join_code boundary
 
 It is a prerequisite for strict enforcement of class-scoped invariants.

@@ -5,9 +5,9 @@
 
 This document is the execution map for running multiple v2 threads at the same time. It complements:
 
-- `docs/development/V2_MAIN_RECONCILIATION_TRACKER.md`
-- `docs/development/V2_LAUNCH_READINESS_MATRIX.md`
-- `docs/development/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`
+- `docs/development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md`
+- `docs/development/tracking/V2_LAUNCH_READINESS_MATRIX.md`
+- `docs/development/tracking/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`
 
 ## Coordination Rules
 
@@ -128,7 +128,7 @@ Close the non-code launch blockers needed for live testing and production transi
 - `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md`
 - `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md`
 - `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-009_Migration_Compliance_Review.md`
-- `docs/development/V2_LAUNCH_READINESS_MATRIX.md`
+- `docs/development/tracking/V2_LAUNCH_READINESS_MATRIX.md`
 
 **Deliverables**
 
@@ -258,8 +258,8 @@ Keep active docs aligned with v2 while other threads are shipping code.
 - `README.md`
 - `docs/LOGS/AUDITS/LOG-ARC-049_V2_Multitenancy_Go_No_Go_Checklist.md`
 - `docs/STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_Documentation_Index.md`
-- `docs/development/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`
-- `docs/development/V2_PARALLEL_WORKSTREAMS.md`
+- `docs/development/tracking/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`
+- `docs/development/tracking/V2_PARALLEL_WORKSTREAMS.md`
 
 **Deliverables**
 

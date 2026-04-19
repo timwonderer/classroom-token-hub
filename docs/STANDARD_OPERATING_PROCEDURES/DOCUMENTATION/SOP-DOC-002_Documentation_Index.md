@@ -52,11 +52,17 @@ None specified.
 - [DOM-ECON-004_Automated_Rent_Linked_Benefit_Resolution.md](../../DOMAINS/ECONOMY_DESIGN/DOM-ECON-004_Automated_Rent_Linked_Benefit_Resolution.md)
 ### DEVELOPMENT
 
-- [V2_DOCUMENTATION_COMPLIANCE_SWEEP.md](../../development/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md)
-- [V2_LAUNCH_PROJECT_CHECKLIST.md](../../development/V2_LAUNCH_PROJECT_CHECKLIST.md)
-- [V2_LAUNCH_READINESS_MATRIX.md](../../development/V2_LAUNCH_READINESS_MATRIX.md)
-- [V2_MAIN_RECONCILIATION_TRACKER.md](../../development/V2_MAIN_RECONCILIATION_TRACKER.md)
-- [V2_PARALLEL_WORKSTREAMS.md](../../development/V2_PARALLEL_WORKSTREAMS.md)
+- [development/README.md](../../development/README.md)
+- [specs/V2_AUTHORITY_EXTRACTION_PLAN.md](../../development/specs/V2_AUTHORITY_EXTRACTION_PLAN.md)
+- [specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md](../../development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md)
+- [specs/V2_Class_Scope_Normalization_Target.md](../../development/specs/V2_Class_Scope_Normalization_Target.md)
+- [specs/V2_BANKING_LEDGER_SETTLEMENT_PLAN.md](../../development/specs/V2_BANKING_LEDGER_SETTLEMENT_PLAN.md)
+- [tracking/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md](../../development/tracking/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md)
+- [tracking/V2_LAUNCH_PROJECT_CHECKLIST.md](../../development/tracking/V2_LAUNCH_PROJECT_CHECKLIST.md)
+- [tracking/V2_LAUNCH_READINESS_MATRIX.md](../../development/tracking/V2_LAUNCH_READINESS_MATRIX.md)
+- [tracking/V2_MAIN_RECONCILIATION_TRACKER.md](../../development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md)
+- [tracking/V2_PARALLEL_WORKSTREAMS.md](../../development/tracking/V2_PARALLEL_WORKSTREAMS.md)
+- [tracking/V1_USER_FACING_FEATURE_PARITY_MATRIX.md](../../development/tracking/V1_USER_FACING_FEATURE_PARITY_MATRIX.md)
 ### FEATURES/ANALYTICS
 
 - [FEAT-MET-001_Analytics_Specification.md](../../FEATURES/ANALYTICS/FEAT-MET-001_Analytics_Specification.md)

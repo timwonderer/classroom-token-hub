@@ -34,7 +34,7 @@ This domain does not own:
 
 - `INV-CORE-000_Core_Invariants.md`
 - `DOM-CORE-000_Domain_Foundation.md`
-- `docs/development/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
+- `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
 
 ## IV. Schema Authority Declaration
 

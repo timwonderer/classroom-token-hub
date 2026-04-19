@@ -47,6 +47,6 @@ That is not the v2 model.
 
 Resume this backlog after launch-critical validation blockers are closed and the post-port refactor lane is open, alongside:
 
-- `docs/development/V2_ADMIN_ROUTE_REFACTOR.md`
-- `docs/development/V2_Class_Scope_Normalization_Target.md`
-- `docs/development/V2_BANKING_LEDGER_SETTLEMENT_PLAN.md`
+- `docs/development/specs/V2_ADMIN_ROUTE_REFACTOR.md`
+- `docs/development/specs/V2_Class_Scope_Normalization_Target.md`
+- `docs/development/specs/V2_BANKING_LEDGER_SETTLEMENT_PLAN.md`
