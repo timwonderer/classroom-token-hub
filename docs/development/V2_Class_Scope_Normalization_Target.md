@@ -42,6 +42,12 @@ In that target state:
 - UI and typed-input flows resolve `join_code` from `class_economies` only when needed
   for display or user entry
 
+The future banking ledger is part of this normalization target:
+
+- account balances should be authoritative on `class_id + seat_id + account_type`
+- transactions should be scoped by `class_id + seat_id`, not `join_code`
+- settlement and invariant checks should anchor to normalized class and seat scope
+
 ## Scope Rules
 
 ### Canonical Keys
@@ -125,6 +131,7 @@ The future project is expected to include:
 - removal of internal `join_code` scoping from queries
 - removal of `teacher_id`-only class-data fan-out
 - session/context migration from `current_join_code` to `current_class_id`
+- banking ledger rewrite to `class_id + seat_id + account_type` authority
 - ORM cleanup so model nullability and database nullability match
 - test updates for single-class and teacher-wide scope behavior
 

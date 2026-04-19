@@ -362,7 +362,7 @@ These rules appear repeatedly across the source docs and should be treated as no
 ## Project 7: Class Scope Normalization And Class-Identity Cleanup
 
 **Status:** Post-launch architecture hardening  
-**Primary source docs:** `V2_Class_Scope_Normalization_Target`, `V2_CLASS_ID_INVARIANT_BACKLOG`  
+**Primary source docs:** `V2_Class_Scope_Normalization_Target`, `V2_CLASS_ID_INVARIANT_BACKLOG`, `V2_BANKING_LEDGER_SETTLEMENT_PLAN`  
 **Why deferred:** The source docs explicitly state this is target-state architecture and should not be folded into live-test port work.
 
 ### Scope
@@ -373,6 +373,12 @@ These rules appear repeatedly across the source docs and should be treated as no
 - [ ] Migrate session/runtime context from `current_join_code` to `current_class_id` when ready
 - [ ] Remove lifecycle semantics that imply `active` / `inactive` / `archived` class worlds
 - [ ] Rework cleanup logic that still keys off labels or teacher-wide groupings instead of surviving class associations
+- [ ] Replace legacy `join_code`-authoritative banking scope with `class_id + seat_id + account_type`
+- [ ] Replace `balance_cache` with per-account `account_balances` checkpoints
+- [ ] Route all money mutations through one canonical ledger service
+- [ ] Make `available_balance` operational and `current_balance` settlement-authoritative
+- [ ] Add hourly settlement with settlement-owned cutoff timestamps
+- [ ] Add post-settlement reconciliation and invariant checks that read settled state only
 
 ### Invariants To Preserve
 
@@ -383,6 +389,9 @@ These rules appear repeatedly across the source docs and should be treated as no
 - [ ] Student-in-class state is limited to unclaimed or claimed.
 - [ ] Deletion from a `class_id` erases the participant from that universe as if they never existed there.
 - [ ] If a student loses the last remaining class association, the student is erased from the system.
+- [ ] Financial authority is keyed by `class_id + seat_id + account_type`, not `join_code`.
+- [ ] `available_balance` is operational only; `current_balance` is authoritative only after completed settlement.
+- [ ] Every balance mutation must correspond to an explicit transaction row.
 
 ### Tests To Write
 
@@ -391,12 +400,18 @@ These rules appear repeatedly across the source docs and should be treated as no
 - [ ] Session-context tests for `current_class_id` enforcement
 - [ ] Deletion/cleanup tests for last-association erasure semantics
 - [ ] Fixtures cleanup to remove impossible lifecycle worlds
+- [ ] Seat-linked per-account ledger tests
+- [ ] Idempotent transaction-creation coverage
+- [ ] Concurrent same-account write serialization tests
+- [ ] Settlement cutoff and next-run carryover tests
+- [ ] Reconciliation drift-detection coverage
 
 ### Exit Criteria
 
 - [ ] `class_id` is the canonical internal scoping key across normalized paths.
 - [ ] `join_code` has been reduced to user-facing/public resolution roles.
 - [ ] Lifecycle-state compatibility shims no longer define runtime behavior.
+- [ ] The ledger is authoritative on `class_id + seat_id + account_type` and no longer relies on legacy `join_code` balance scope.
 
 ## Project 8: Backwards Compatibility And Schema Cleanup
 

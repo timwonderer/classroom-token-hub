@@ -29,6 +29,7 @@ That is not the v2 model.
 - Replace cleanup and lifecycle logic that keys off labels or teacher-wide label groupings instead of surviving class associations.
 - Revisit settings models and cleanup rules that still act like `teacher_id + block` is a durable ownership boundary.
 - Remove stale tests that still construct impossible class worlds through deprecated lifecycle fields.
+- Retire `join_code`-authoritative banking and ledger scope once the V2 ledger rebuild plan lands.
 
 ## Current Guardrail
 
@@ -48,3 +49,4 @@ Resume this backlog after launch-critical validation blockers are closed and the
 
 - `docs/development/V2_ADMIN_ROUTE_REFACTOR.md`
 - `docs/development/V2_Class_Scope_Normalization_Target.md`
+- `docs/development/V2_BANKING_LEDGER_SETTLEMENT_PLAN.md`
