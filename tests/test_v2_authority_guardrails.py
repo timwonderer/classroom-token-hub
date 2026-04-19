@@ -81,6 +81,21 @@ def test_file_claim_route_is_not_direct_obligations_authority():
     assert "execute_file_claim(" in source
 
 
+def test_switch_class_route_uses_access_scope_boundary():
+    source = inspect.getsource(student_routes.switch_class)
+    assert "resolve_student_class_switch_scope(" in source
+    assert "assert_can_switch_class(" in source
+    assert "TeacherBlock.query.filter_by(" not in source
+
+
+def test_switch_teacher_route_uses_access_scope_boundary():
+    source = inspect.getsource(student_routes._switch_to_teacher_scope)
+    assert "resolve_student_teacher_switch_scope(" in source
+    assert "assert_can_switch_teacher(" in source
+    assert "student.get_all_teachers()" not in source
+    assert "TeacherBlock.query.filter_by(" not in source
+
+
 def test_admin_void_route_is_not_direct_ledger_authority():
     admin_source = Path("app/routes/admin.py").read_text()
     start = admin_source.index("def void_transaction(")
@@ -172,6 +187,16 @@ def test_store_purchase_feat_enforces_access_policy():
 def test_file_claim_feat_enforces_access_policy():
     source = Path("app/feats/insurance_claim_feat.py").read_text()
     assert "assert_can_file_claim(" in source
+
+
+def test_switch_class_access_policy_exists():
+    source = Path("app/services/access_policy_service.py").read_text()
+    assert "def assert_can_switch_class(" in source
+
+
+def test_switch_teacher_access_policy_exists():
+    source = Path("app/services/access_policy_service.py").read_text()
+    assert "def assert_can_switch_teacher(" in source
 
 
 def test_insurance_claim_feat_enforces_access_policy():

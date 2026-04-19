@@ -53,7 +53,12 @@ from app.utils.overdraft import charge_overdraft_fee_if_needed, evaluate_overdra
 from app.utils.help_content import HELP_ARTICLES
 from app.utils.economy_policy import get_class_feature_settings, resolve_feature_class
 from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
-from app.access import AccessScopeDenied, resolve_scope
+from app.access import (
+    AccessScopeDenied,
+    resolve_scope,
+    resolve_student_class_switch_scope,
+    resolve_student_teacher_switch_scope,
+)
 from app.services.attendance_service import get_all_block_statuses
 from app.services.ledger_service import (
     apply_overdraft_fee_if_needed as apply_ledger_overdraft_fee,
@@ -3728,15 +3733,13 @@ def switch_class(join_code):
     from app.models import TeacherBlock, Admin
 
     student = get_logged_in_student()
-
-    # Verify student has a claimed seat for this join_code
-    seat = TeacherBlock.query.filter_by(
-        student_id=student.id,
-        join_code=join_code,
-        is_claimed=True
-    ).first()
-
-    if not seat:
+    try:
+        resolved_switch = resolve_student_class_switch_scope(actor=student, join_code=join_code)
+        access_policy_service.assert_can_switch_class(resolved_switch.scope)
+    except (AccessScopeDenied, access_policy_service.AccessPolicyDenied) as exc:
+        return jsonify(status="error", message="You don't have access to that class."), 403
+    seat = db.session.get(TeacherBlock, resolved_switch.teacher_block_id)
+    if seat is None:
         return jsonify(status="error", message="You don't have access to that class."), 403
 
     _ensure_class_anchor_for_teacher_block(seat)
@@ -3749,15 +3752,15 @@ def switch_class(join_code):
     db.session.commit()
 
     # Update session with new join code
-    session['current_join_code'] = join_code
+    session['current_join_code'] = resolved_switch.scope.join_code
     if bridge_seat:
         session['current_seat_id'] = bridge_seat.id
         if bridge_seat.user_id:
             session['student_user_id'] = bridge_seat.user_id
-    sync_student_session_context(student, join_code=join_code)
+    sync_student_session_context(student, join_code=resolved_switch.scope.join_code)
 
     # Get teacher name for response
-    teacher = db.session.get(Admin, seat.teacher_id)
+    teacher = db.session.get(Admin, resolved_switch.scope.teacher_id)
     teacher_cache = get_teacher_display_name_cache()
     teacher_name = teacher_cache.get(str(seat.teacher_id))
     if not teacher_name and teacher:
@@ -3812,30 +3815,21 @@ def _switch_to_teacher_scope(*, teacher_id: int):
         flash("You must be logged in to switch classes.", "error")
         return redirect(url_for('student.login'))
 
-    # Verify student has access to this teacher
-    teacher_ids = [t.id for t in student.get_all_teachers()]
-    if teacher_id not in teacher_ids:
+    try:
+        resolved_switch = resolve_student_teacher_switch_scope(actor=student, teacher_id=teacher_id)
+        access_policy_service.assert_can_switch_teacher(resolved_switch.scope, teacher_id=teacher_id)
+    except (AccessScopeDenied, access_policy_service.AccessPolicyDenied):
+        flash("You don't have access to that class.", "error")
+        return redirect(url_for('student.dashboard'))
+    target_seat = db.session.get(TeacherBlock, resolved_switch.teacher_block_id)
+    if target_seat is None:
         flash("You don't have access to that class.", "error")
         return redirect(url_for('student.dashboard'))
 
-    # Resolve teacher switch to an explicit claimed seat context.
-    seats = (
-        TeacherBlock.query.filter_by(student_id=student.id, teacher_id=teacher_id, is_claimed=True)
-        .order_by(TeacherBlock.block.asc())
-        .all()
-    )
-    if not seats:
-        flash("You don't have access to that class.", "error")
-        return redirect(url_for('student.dashboard'))
-
-    current_join_code = session.get('current_join_code')
-    preferred_seat = next((seat for seat in seats if seat.join_code == current_join_code), None)
-    target_seat = preferred_seat or seats[0]
-
-    session['current_join_code'] = target_seat.join_code
+    session['current_join_code'] = resolved_switch.scope.join_code
     # Kept for compatibility with older templates/routes that still inspect this session key.
     session['current_teacher_id'] = teacher_id
-    sync_student_session_context(student, join_code=target_seat.join_code)
+    sync_student_session_context(student, join_code=resolved_switch.scope.join_code)
 
     # Get teacher name for flash message
     teacher = db.session.get(Admin, teacher_id)

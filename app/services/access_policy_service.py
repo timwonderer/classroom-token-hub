@@ -92,6 +92,29 @@ def assert_can_file_claim(*, scope: Scope, enrollment) -> None:
         )
 
 
+def assert_can_switch_class(scope: Scope) -> None:
+    """Pure access decision for student class switching."""
+    if scope.role != "student":
+        raise AccessPolicyDenied(
+            reason_code="forbidden_role",
+            message="Only students can switch class context from the student surface.",
+        )
+
+
+def assert_can_switch_teacher(scope: Scope, *, teacher_id: int) -> None:
+    """Pure access decision for student teacher switching."""
+    if scope.role != "student":
+        raise AccessPolicyDenied(
+            reason_code="forbidden_role",
+            message="Only students can switch teacher context from the student surface.",
+        )
+    if scope.teacher_id != teacher_id:
+        raise AccessPolicyDenied(
+            reason_code="foreign_teacher_scope",
+            message="You don't have access to that class.",
+        )
+
+
 def assert_can_void_transaction(*, scope: Scope, transaction) -> None:
     """Pure access decision for admin transaction voids."""
     if scope.role != "teacher":

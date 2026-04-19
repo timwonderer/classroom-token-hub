@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from flask import session
 
 from app.access.scope import Scope
@@ -12,6 +14,18 @@ class AccessScopeDenied(Exception):
         super().__init__(message)
         self.reason_code = reason_code
         self.message = message
+
+
+@dataclass(frozen=True)
+class ResolvedStudentClassSwitch:
+    scope: Scope
+    teacher_block_id: int
+
+
+@dataclass(frozen=True)
+class ResolvedStudentTeacherSwitch:
+    scope: Scope
+    teacher_block_id: int
 
 
 def _scope_from_runtime_seat(*, actor, selected_join_code: str | None) -> Scope | None:
@@ -39,6 +53,86 @@ def _scope_from_runtime_seat(*, actor, selected_join_code: str | None) -> Scope 
         block=current_seat.block_identifier or current_seat.block,
         seat_id=current_seat.id,
     )
+
+
+def resolve_student_class_switch_scope(*, actor, join_code: str) -> ResolvedStudentClassSwitch:
+    """Resolve a strict claimed-class target for student class switching."""
+    normalized_join_code = (join_code or "").strip().upper()
+    if not normalized_join_code:
+        raise AccessScopeDenied(
+            reason_code="no_class_scope",
+            message="No class selected. Please select a class to continue.",
+        )
+
+    teacher_block = (
+        TeacherBlock.query.filter_by(
+            student_id=actor.id,
+            join_code=normalized_join_code,
+            is_claimed=True,
+        )
+        .order_by(TeacherBlock.id.asc())
+        .first()
+    )
+    if teacher_block is None:
+        raise AccessScopeDenied(
+            reason_code="foreign_class_scope",
+            message="You don't have access to that class.",
+        )
+
+    class_row = None
+    if teacher_block.class_id:
+        class_row = ClassEconomy.query.filter_by(class_id=teacher_block.class_id).first()
+    if not class_row:
+        class_row = ClassEconomy.query.filter_by(join_code=teacher_block.join_code).first()
+
+    scope = Scope(
+        class_id=class_row.class_id if class_row else teacher_block.class_id,
+        join_code=teacher_block.join_code,
+        actor_id=actor.id,
+        role="student",
+        teacher_id=class_row.teacher_id if class_row else teacher_block.teacher_id,
+        block=teacher_block.block,
+        seat_id=teacher_block.id,
+    )
+    return ResolvedStudentClassSwitch(scope=scope, teacher_block_id=teacher_block.id)
+
+
+def resolve_student_teacher_switch_scope(*, actor, teacher_id: int) -> ResolvedStudentTeacherSwitch:
+    """Resolve a strict claimed-class target for student teacher switching."""
+    teacher_blocks = (
+        TeacherBlock.query.filter_by(
+            student_id=actor.id,
+            teacher_id=teacher_id,
+            is_claimed=True,
+        )
+        .order_by(TeacherBlock.block.asc(), TeacherBlock.id.asc())
+        .all()
+    )
+    if not teacher_blocks:
+        raise AccessScopeDenied(
+            reason_code="foreign_teacher_scope",
+            message="You don't have access to that class.",
+        )
+
+    current_join_code = (session.get("current_join_code") or "").strip().upper()
+    target_block = next((block for block in teacher_blocks if block.join_code == current_join_code), None) or teacher_blocks[0]
+
+    class_row = None
+    if target_block.class_id:
+        class_row = ClassEconomy.query.filter_by(class_id=target_block.class_id).first()
+    if not class_row:
+        class_row = ClassEconomy.query.filter_by(join_code=target_block.join_code).first()
+
+    scope = Scope(
+        class_id=class_row.class_id if class_row else target_block.class_id,
+        join_code=target_block.join_code,
+        actor_id=actor.id,
+        role="student",
+        teacher_id=class_row.teacher_id if class_row else target_block.teacher_id,
+        block=target_block.block,
+        seat_id=target_block.id,
+    )
+    return ResolvedStudentTeacherSwitch(scope=scope, teacher_block_id=target_block.id)
 
 
 def _resolve_teacher_scope(*, actor, selected_join_code: str | None) -> Scope:
