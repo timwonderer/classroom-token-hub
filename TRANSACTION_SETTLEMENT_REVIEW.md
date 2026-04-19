@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-The transaction state handling and balance settlement logic are **fundamentally sound**, but there is a **potential timing window** where the invariant runner could detect a mismatch between the ledger and balance cache during settlement. This is **not a safety issue** but rather an expected transient state that should be documented and handled gracefully.
+The transaction state handling and balance settlement logic are **fundamentally sound and correct**. Earlier drafts of this document identified a potential timing window for the invariant runner and treated negative-balance settlements as expected/intentional outcomes; both assessments were incorrect. This revision corrects those conclusions based on a closer reading of the implementation and database isolation semantics.
 
 ---
 
@@ -18,6 +18,7 @@ The transaction state handling and balance settlement logic are **fundamentally 
       POSTED = 'posted'
       VOID = 'void'
   ```
+  > **Note:** The values above (`'pending'`, `'posted'`, `'void'`) are the Python enum `.value` strings. The persisted database enum labels are uppercase (`PENDING`, `POSTED`, `VOID`) because the DB enum was created with uppercase labels (`migrations/versions/ec84c1f59c15_add_ledger_and_settlement_models.py:84`) and SQLAlchemy stores the enum *name* by default. All raw SQL queries against the `transaction` table (including invariant checks) must use the uppercase forms.
 
 ### 2. Amount Consistency
 - **Dual representation**: `amount` (Decimal) + `amount_cents` (Integer)
@@ -65,17 +66,21 @@ pending_txs = (
     .all()
 )
 
-# Step 3: Transition to POSTED/VOID (banking.py:187-228)
+# Step 3: Populate timestamps, then transition PENDING -> POSTED/VOID (banking.py:187-228)
 for tx in pending_txs:
+    if not tx.posted_at:
+        tx.posted_at = now  # ← Set BEFORE the void check; voided-pending rows also get posted_at
     if tx.is_void:
         tx.status = TransactionStatus.VOID
-        tx.voided_at = now
+        if not tx.voided_at:
+            tx.voided_at = now
+        # Note: tx.posted_at is already populated above even for VOID transitions
     else:
-        tx.status = TransactionStatus.POSTED  # ← Marks as posted
-        tx.posted_at = now
+        tx.status = TransactionStatus.POSTED
 
 # Step 4: Compute authoritative total (banking.py:230-233)
-# Query ALL POSTED transactions (includes ones just marked above)
+# Query ALL POSTED transactions (includes rows just marked POSTED above;
+# VOID rows are excluded from this total even though posted_at was populated)
 authoritative_checking_cents, authoritative_savings_cents = _authoritative_posted_totals(
     student_id,
     join_code,
@@ -113,7 +118,8 @@ HAVING
 **Safety analysis**:
 - ✅ Settlement computes authoritative totals from ledger after marking txs as POSTED
 - ✅ Updates cache atomically with these totals
-- ⚠️ **BUT**: If invariants run during settlement (while txs are POSTED but cache not yet updated), mismatch is detected
+- ✅ **Under Postgres READ COMMITTED** (the default): all status updates *and* the cache write happen inside a single DB transaction. Other sessions operating under READ COMMITTED cannot see uncommitted rows, so the invariant runner will observe either the pre-settlement state (old cache, no new POSTED rows) or the post-settlement state (updated cache + new POSTED rows) — never the mid-flight state where rows are POSTED but the cache is stale.
+- ⚠️ A mismatch **can** legitimately be observed if: (a) settlement is split across two separate commits, (b) the invariant runner shares the *same* SQLAlchemy session as the in-flight settlement (i.e., it reads its own session's dirty state), or (c) the invariant queries run against a streaming replica with replication lag.
 
 ---
 
@@ -136,68 +142,63 @@ WHERE bc.posted_checking_balance_cents < 0
 **Safety analysis**:
 - ✅ Settlement computes correct totals from actual ledger
 - ✅ If ledger contains only valid transactions, cache will reflect that
-- ⚠️ **ISSUE**: If settlement creates a state where balances become temporarily invalid (e.g., settling a large expense that makes savings negative), the invariant would fail even though it's intentional
+- ✅ **By design, the system prevents negative savings balances at the point of transaction creation**, so settlement should never produce a negative savings cache under normal operation (see enforcement paths below).
+- ⚠️ If a negative savings balance *is* observed after settlement, it indicates a pre-existing validation bypass or data corruption — not an expected transient state.
 
 ---
 
 ## The Timing Window Issue
 
-### Scenario: Settlement During Invariant Check
+### When a Mismatch Can Actually Be Observed
+
+The application runs on Postgres, which defaults to **READ COMMITTED** isolation. All settlement writes (transaction status changes + cache update) happen within a **single DB transaction** that is committed atomically after `settle_balances` returns. Under READ COMMITTED, no other session can read uncommitted data, so an external invariant runner will never see a partial state where transactions are POSTED but the cache is not yet updated.
+
+A genuine mismatch would require one of the following:
+
+1. **Split commits**: If settlement were ever refactored to commit the transaction-status updates in one transaction and the cache update in a separate transaction, there would be a window between the two commits.
+2. **Shared session / dirty read**: If the invariant runner runs inside the *same* SQLAlchemy session as an in-progress settlement, it would see session-dirty state before the commit (SQLAlchemy's identity map shows the pending writes). This cannot happen today because invariants are run in separate request contexts.
+3. **Async read replica lag**: If invariant queries are routed to a streaming replica, replication lag could expose the state from a committed but not-yet-replicated partial write.
 
 ```
-Timeline of execution:
+Under current architecture (Postgres READ COMMITTED, single commit):
 
-[Settlement starts]
-  ├─ Lock BalanceCache for student X
-  ├─ Fetch PENDING transactions: [-$100 expense]
-  ├─ Mark as POSTED
-  ├─ Compute authoritative total: -$100
-  │
-  │  [Invariant runner starts mid-settlement]
-  │  ├─ Query ledger: sees +$100 POSTED (from previous settlement) -$100 (just posted)
-  │  ├─ Query cache: still shows +$100 (not yet updated)
-  │  ├─ MISMATCH DETECTED! ❌
-  │
-  ├─ Update cache: -$100 ✅
-  ├─ Commit transaction
-[Settlement ends]
+[Settlement DB transaction]
+  ├─ Mark -$100 PENDING → POSTED       (uncommitted, invisible to other sessions)
+  ├─ Compute authoritative total: -$100 (uncommitted, invisible to other sessions)
+  ├─ Update cache to -$100             (uncommitted, invisible to other sessions)
+  └─ COMMIT ─────────────────────────→ Both POSTED rows and updated cache become
+                                        visible atomically to all other sessions
 ```
 
-### Root Cause
-1. Settlement marks transactions as POSTED before updating cache
-2. Query isolation may not prevent invariant runner from seeing inconsistent state
-3. The mismatch is **transient** and **intentional** (cache is being updated)
-4. If transactions are properly isolated, this shouldn't happen, but timing windows exist
+### Root Cause (Residual Risk)
+1. The theoretical window (residual risk) exists if settlement is split across commits or queries run against a replica.
+2. With the current single-commit design on Postgres, a false-positive mismatch is not expected during normal operation.
 
 ---
 
-## Balance Rules Safety Concern
+## Balance Rules Enforcement
 
-### Scenario: Settlement Creates Temporarily Invalid Balances
+### How the System Prevents Negative Balances
 
-```
-Example: Student has $50 savings, pending -$75 expense
+The negative-balance invariants (`balance_rules.py`) are **not** expected to produce false positives during normal settlement. The system enforces sufficient-funds checks before any transaction reaches the PENDING state:
 
-[Settlement executes]
-  ├─ Mark -$75 as POSTED
-  ├─ Compute authoritative total: -$25 (now negative!)
-  ├─ Update cache to -$25
-  │
-  [Invariant runs]
-  ├─ Check: Savings balance < 0? YES ❌ FAIL
-  │ (Even though this is intentional settlement)
-```
+1. **Student transfers** (`student.py:1827-1837`): Explicitly rejects if `amount > checking_balance` or `amount > savings_balance` — the transaction is never created if it would overdraw.
+2. **Admin fines / charges** (`admin.py`, `student.py`): Uses `evaluate_overdraft_allowance()` to determine whether a charge may proceed; if not allowed, the fine is skipped or an overdraft fee path is taken.
+3. **Savings invariant** (`balance_rules.py:30-34`): "Savings balance must never be negative" — this is an absolute rule, not a transient state.
+4. **Checking overdraft**: Only flagged when `overdraft_protection_enabled = FALSE` is confirmed via INNER JOIN on `banking_settings`.
 
-### Why This Might Be Safe
-- ✅ Settlement is part of the **intended financial flow**
-- ✅ The system explicitly allows transactions that may violate invariants temporarily
-- ✅ Invariants check **cache state**, not **pending transactions**
-- ✅ The cache was just updated with the correct, authoritative total
+### What a Balance Rules Failure Actually Means
 
-### Why This Is A Concern
-- ⚠️ Invariants are supposed to catch **bugs**, not **business logic**
-- ⚠️ If balance rules fail, it indicates corruption, not intentional settlement
-- ⚠️ No way to distinguish "intentional negative balance" from "corrupted balance"
+A `balance_rules` FAIL after settlement means **one of the following**:
+- A transaction was created that bypassed the sufficient-funds guard (validation bug).
+- Data was modified directly in the DB outside the application layer (corruption).
+- A rounding or amount derivation bug accumulated incorrectly across many transactions.
+
+**It does not mean settlement is "working correctly with intentional negative balances."**
+
+### Residual Scenario: Admin-Issued Penalties
+
+There may be specific admin-only write paths (e.g., administrative fines with override capability) where a teacher explicitly authorizes a transaction that results in a negative balance. In those cases, the system is still expected to handle the overdraft logic correctly; the invariant FAIL would indicate the overdraft guard was bypassed rather than operating as intended. Any such path should enforce overdraft rules and update `banking_settings.overdraft_protection_enabled` accordingly so the invariant does not false-flag it.
 
 ---
 
@@ -228,81 +229,67 @@ if getattr(g, "read_only", False):
 ## Potential Issues
 
 ### Issue #1: Invariants Running During Settlement
-**Severity**: Medium  
-**Likelihood**: Low (settlement is fast, well-locked)
+**Severity**: Low (not a real risk under current architecture)
+**Likelihood**: Negligible under Postgres READ COMMITTED
 
-**Mitigation**:
-- Settlement is already locked, so invariants shouldn't see partial state
-- But if using read uncommitted isolation, timing window exists
-- **Recommendation**: Verify isolation level is READ COMMITTED or higher
+**Analysis**:
+- Settlement runs entirely within a single DB transaction; Postgres READ COMMITTED prevents other sessions from seeing uncommitted writes.
+- The only realistic risk scenarios are: (a) invariants share the same SQLAlchemy session as in-flight settlement, (b) settlement is refactored to split across multiple commits, or (c) invariant queries are routed to a streaming replica with lag.
+- **Recommendation**: Maintain the single-commit settlement design. If routing reads to replicas in the future, exclude invariant-runner queries from replica routing or add a configurable replica lag tolerance.
 
 ---
 
-### Issue #2: Balance Rules False Positives
-**Severity**: Low  
-**Likelihood**: Low (settlement correctly computes balances)
+### Issue #2: Balance Rules Flagging a Genuine Violation
+**Severity**: High (if it occurs)
+**Likelihood**: Very low under normal operation
 
-**Scenario**: If a teacher intentionally creates a large expense that makes a student's balance negative, the settlement will correctly reflect this in the cache. The balance_rules invariant will then fail, even though it's not a bug—it's the intended result of settlement.
+**What it means**: A `balance_rules` FAIL is **not** a false positive from settlement. It indicates a real problem: a transaction bypassed the sufficient-funds guard, data was manipulated outside the application, or a rounding bug accumulated. The invariant is correctly identifying corruption or a validation gap.
 
 **Current behavior**:
-- Balance rules checks use `INNER JOIN` to banking_settings
-- Only flags as violation if overdraft is **explicitly disabled**
-- Classes without banking_settings configured won't be checked (by design)
+- Savings violations are flagged unconditionally (savings must never be negative).
+- Checking violations are only flagged when overdraft is explicitly disabled — uses INNER JOIN to banking_settings to avoid false positives where RLS filters rows.
 
 **Recommendation**:
-- Document that negative balances from settlement are **expected** and **intentional**
-- Consider renaming the invariant from "balance_rules" to "balance_corruption_check" to clarify intent
-- Add a flag to mark settlements as "in progress" so invariants can ignore transient states
+- Investigate the write path that produced the negative balance.
+- Do **not** add a "settlement in progress" flag to suppress this invariant — it protects a real invariant and masking it would hide data corruption.
+- If admin-override fine paths can legitimately produce negative savings balances, those paths should be explicitly documented and guarded, with corresponding tests.
 
 ---
 
 ## Recommended Improvements
 
-### 1. Explicitly Mark Settlement Context
+### 1. Guard Against Split-Commit Refactors
+Add an assertion or comment in `settle_balances()` making explicit that the cache write and transaction status updates must remain in the same DB transaction:
 ```python
-# In banking.py::settle_balances()
-def settle_balances(student_id, join_code):
-    # Add flag so invariants know we're in a safe state transition
-    cache.settlement_in_progress = True
-    try:
-        # ... settlement logic ...
-        cache.posted_checking_balance_cents = authoritative_checking_cents
-        cache.posted_savings_balance_cents = authoritative_savings_cents
-    finally:
-        cache.settlement_in_progress = False
+# IMPORTANT: All status updates and cache writes MUST be committed in a single
+# DB transaction. Splitting into two commits creates a window where the
+# ledger_consistency invariant will observe a mismatch (POSTED rows but stale cache).
 ```
 
-### 2. Update Balance Rules Invariant
+### 2. Invariant Runner: Note Replica Routing
+If invariant queries are ever routed to a read replica, add a note to each invariant module:
 ```python
-# In balance_rules.py::run()
-# Skip checks on caches that are currently being settled
-checking_violations = db.session.execute(text("""
-    SELECT bc.student_id, bc.join_code, bc.posted_checking_balance_cents
-    FROM balance_cache bc
-    INNER JOIN banking_settings bs ON bs.join_code = bc.join_code
-    WHERE bc.posted_checking_balance_cents < 0
-      AND bs.overdraft_protection_enabled = FALSE
-      AND (bc.settlement_in_progress IS NULL OR bc.settlement_in_progress = FALSE)
-""")).fetchall()
+# WARNING: Do not run this invariant against a streaming replica. Replication lag
+# can expose a state where transaction rows are POSTED but the cache write has not
+# yet replicated, producing a spurious FAIL.
 ```
 
 ### 3. Add Settlement Timeline to Invariant Output
 ```python
-# Add field to show when last settlement occurred
+# Add last_settlement_at to invariant output for debugging context
 result = {
     "name": "ledger_balance_consistency",
     "status": "PASS",
-    "last_settlement_time_seconds_ago": 0.5,  # Recently settled, transient state expected
+    "last_settlement_at": cache.last_settlement_at.isoformat() if cache else None,
 }
 ```
 
-### 4. Document Invariant Expectations
-Add to invariant runner:
+### 4. Concurrency Tests
 ```python
-"""
-Invariants may show false positives during settlement (typically <100ms).
-This is expected and safe. If violations persist for >1 second, investigation needed.
-"""
+def test_no_partial_state_visible_during_settlement():
+    # In a separate connection, poll ledger_consistency invariant
+    # while settlement is running in the main session.
+    # Assert invariant never returns FAIL during settlement.
 ```
 
 ---
@@ -312,34 +299,35 @@ This is expected and safe. If violations persist for >1 second, investigation ne
 ### Transaction State Handling ✅
 - **Status**: Correct
 - **No issues found**
+- **Note**: DB stores uppercase enum labels (`PENDING`/`POSTED`/`VOID`); Python enum `.value` strings are lowercase.
 
 ### Settlement Logic ✅
 - **Status**: Correct and safe
 - **Locking is proper**
 - **Authoritative recomputation prevents drift**
+- **Correction**: `posted_at` is populated for all pending rows (including voided ones) before the void check — voided-pending rows will have `posted_at` set in addition to `voided_at`.
 
-### Invariant Runner ⚠️
-- **Status**: Works correctly, but may report false positives during settlement
-- **Root cause**: Transient inconsistency between ledger and cache while settlement is in progress
-- **Risk**: Low (mismatch is temporary and intentional)
-- **Recommendation**: Add settlement context flag to skip or downgrade false positive checks
+### Invariant Runner ✅
+- **Status**: Works correctly; does not produce false positives during normal settlement
+- **Why**: Under Postgres READ COMMITTED, all settlement writes are invisible to other sessions until the single DB transaction is committed atomically. The invariant runner operates in a separate session and will never observe a mid-flight state.
+- **Residual risk**: Only if settlement is split across multiple commits, invariants share the same SQLAlchemy session, or queries run against a lagging replica.
 
-### Balance Settlement & Invariants Integration ⚠️
-- **Status**: Safe, but could be more explicit
-- **Issue**: Balance rules may fail if settlement creates negative balances (even if intentional)
-- **Mitigation**: Settlement properly computes balances from ledger; invariant failures indicate correctness, not corruption
-- **Recommendation**: Document that negative balances from settlement are expected and intentional
+### Balance Settlement & Invariants Integration ✅
+- **Status**: Invariants correctly reflect real violations — not false positives
+- **Correction**: Negative savings balances are **not** expected or intentional outcomes of settlement. The system enforces sufficient-funds checks at transaction creation time. A `balance_rules` FAIL after settlement indicates a real bug or data corruption, not a transient state.
+- **Recommendation**: Treat `balance_rules` FAIL as a high-severity alert requiring investigation of the write path that bypassed the guard.
 
 ---
 
 ## Testing Recommendations
 
-### 1. Concurrent Settlement + Invariant Check
+### 1. Verify No Partial State Observed During Settlement
 ```python
-def test_settlement_during_invariant_check():
-    # Start settlement in one thread
-    # Run invariants in another thread
-    # Verify no data corruption occurs
+def test_no_partial_state_visible_during_settlement():
+    # Run settlement in one session; poll ledger_consistency invariant
+    # in a *separate* DB connection concurrently.
+    # Assert: invariant never returns FAIL during settlement.
+    # (Validates single-commit atomicity guarantee under READ COMMITTED)
 ```
 
 ### 2. Large Pending Transaction Batches
@@ -350,14 +338,22 @@ def test_settlement_with_1000_pending_transactions():
     # Verify cache matches ledger exactly
 ```
 
-### 3. Negative Balance Settlements
+### 3. Voided-Pending Timestamp Behavior
 ```python
-def test_settlement_creates_negative_balance():
-    # Create student with +$50
-    # Add PENDING -$75 transaction
-    # Settle
-    # Verify balance is -$25
-    # Verify invariants handle this gracefully
+def test_voided_pending_transaction_has_posted_at():
+    # Create a PENDING transaction, set is_void=True
+    # Run settlement
+    # Verify tx.status == VOID
+    # Verify tx.posted_at is NOT NULL (populated before void check)
+    # Verify tx.voided_at is NOT NULL
+```
+
+### 4. Insufficient Funds Guard Prevents Negative Savings
+```python
+def test_transfer_rejects_amount_exceeding_savings_balance():
+    # Attempt a savings withdrawal larger than current balance
+    # Assert: transaction is rejected, no PENDING row created
+    # Assert: balance_rules invariant still passes after attempt
 ```
 
 ---
@@ -367,23 +363,24 @@ def test_settlement_creates_negative_balance():
 | Component | Status | Issues | Severity |
 |-----------|--------|--------|----------|
 | Transaction creation | ✅ | None | N/A |
-| Transaction state enum | ✅ | None | N/A |
+| Transaction state enum | ✅ | DB stores uppercase labels; Python values lowercase | Note |
 | Settlement locking | ✅ | None | N/A |
-| Settlement POSTED marking | ✅ | None | N/A |
+| Settlement POSTED marking | ✅ | `posted_at` set before void check (voided rows also get `posted_at`) | Note |
 | Cache update atomicity | ✅ | None | N/A |
 | Invariant: transaction_state | ✅ | None | N/A |
-| Invariant: ledger_consistency | ⚠️ | Possible false positive during settlement | Low |
-| Invariant: balance_rules | ⚠️ | May flag intentional negative balances | Low |
+| Invariant: ledger_consistency | ✅ | No false positives under READ COMMITTED single-commit design | N/A |
+| Invariant: balance_rules | ✅ | FAIL = real violation, not expected transient state | N/A |
 | Overall safety | ✅ | No data corruption risk | N/A |
 
 ---
 
 ## Conclusion
 
-The transaction settlement logic is **well-designed and safe**. The invariant runner may report false positives during the brief window when settlement is updating the cache, but this is:
+The transaction settlement logic is **well-designed and safe**. The four original concerns are resolved as follows:
 
-1. **Transient** (typically <100ms)
-2. **Expected** (cache is being updated)
-3. **Intentional** (no corruption risk)
+1. **Enum values**: The Python enum `.value` strings are lowercase, but the persisted DB labels are uppercase (`PENDING`, `POSTED`, `VOID`). Raw SQL must use uppercase.
+2. **`posted_at` ordering**: `posted_at` is populated before the void check, so voided-pending rows also carry a `posted_at` timestamp in addition to `voided_at`. This is harmless but should be noted in documentation.
+3. **Timing window**: Under Postgres READ COMMITTED, the settlement's single DB transaction is invisible to other sessions until committed atomically. No false-positive invariant mismatch is expected during normal settlement. The residual risk (replica lag, shared session, or split commits) is a future-design concern, not a current bug.
+4. **Negative-balance invariants**: `balance_rules` FAILs are real violations, not expected or intentional outcomes of settlement. The system enforces sufficient-funds checks before transactions are created; a FAIL means a guard was bypassed or data was corrupted.
 
-The system is working as designed. The recommendations above are for **transparency** and **explicit handling**, not because there are any bugs.
+The system is working as designed. The recommendations above are for **transparency**, **observability**, and **future-proofing against architectural changes**.
