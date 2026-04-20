@@ -2446,15 +2446,29 @@ def file_claim(policy_id):
 
     # Validation errors
     errors = []
-
-    # Normalize coverage dates for safe comparisons
-    enrollment.coverage_start_date = ensure_utc(enrollment.coverage_start_date)
-    enrollment.cancel_date = ensure_utc(enrollment.cancel_date)
     now_utc = utc_now()
 
+    # Eagerly settle pending transactions before any in-request ORM mutations so the
+    # commit only persists bookkeeping from settle_balances().
+    if claim_type == 'transaction_monetary' and enrollment.join_code:
+        try:
+            from app.utils.banking import settle_balances
+            settle_balances(student.id, enrollment.join_code)
+            db.session.commit()
+        except Exception as _settle_err:
+            db.session.rollback()
+            current_app.logger.warning(
+                "Settlement failed before claim eligibility check for student %s: %s",
+                student.id, _settle_err,
+                exc_info=True,
+            )
+
+    # Normalize coverage dates for safe comparisons without mutating the ORM instance.
+    coverage_start_date_utc = ensure_utc(enrollment.coverage_start_date)
+
     # Check if coverage has started
-    if not enrollment.coverage_start_date or enrollment.coverage_start_date > now_utc:
-        wait_until = enrollment.coverage_start_date.strftime('%B %d, %Y') if enrollment.coverage_start_date else 'coverage starts'
+    if not coverage_start_date_utc or coverage_start_date_utc > now_utc:
+        wait_until = coverage_start_date_utc.strftime('%B %d, %Y') if coverage_start_date_utc else 'coverage starts'
         errors.append(f"Coverage has not started yet. Please wait until {wait_until}.")
 
     # Check if payment is current

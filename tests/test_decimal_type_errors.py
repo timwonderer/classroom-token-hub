@@ -15,7 +15,8 @@ from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from app.models import (
     Admin, Student, Transaction, StudentBlock, TeacherBlock,
-    RentSettings, RentPayment, BankingSettings, _quantize_currency
+    RentSettings, RentPayment, BankingSettings, _quantize_currency,
+    StudentTeacher, InsurancePolicy, StudentInsurance, TransactionStatus,
 )
 from app.extensions import db
 
@@ -426,6 +427,98 @@ class TestDecimalTypeErrors:
             f"Expected 200 but got {response.status_code}; "
             "possible Decimal/float TypeError in period-cap calculation"
         )
+
+    @pytest.mark.regression
+    def test_transaction_claim_page_settles_pending_purchase_before_render(self, client, app):
+        """
+        Regression test for transaction-based claims: a recent PENDING purchase
+        should be settled to POSTED and shown as eligible on the claim page.
+        """
+        teacher = Admin(username='teacher_txn_claim', totp_secret='test_secret')
+        db.session.add(teacher)
+        db.session.flush()
+
+        student = Student(
+            first_name='TxnClaim',
+            last_initial='S',
+            block='A',
+            salt=b'test_salt_txn_claim',
+            passphrase_hash='test_hash',
+        )
+        db.session.add(student)
+        db.session.flush()
+
+        join_code = 'CLAIMTXN1'
+        db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+        db.session.add(TeacherBlock(
+            teacher_id=teacher.id,
+            block='A',
+            first_name='TxnClaim',
+            last_initial='S',
+            last_name_hash_by_part=['txn-claim'],
+            dob_sum=1010,
+            salt=b'test_teacher_block',
+            first_half_hash='txn_claim_hash',
+            join_code=join_code,
+            student_id=student.id,
+            is_claimed=True,
+        ))
+
+        policy = InsurancePolicy(
+            policy_code='TXN-POLICY-001',
+            teacher_id=teacher.id,
+            title='Transaction Claim Policy',
+            description='',
+            premium=Decimal('5.00'),
+            claim_type='transaction_monetary',
+            is_monetary=True,
+            is_active=True,
+            waiting_period_days=0,
+            claim_time_limit_days=30,
+            coverage_percent=Decimal('0.50'),
+        )
+        db.session.add(policy)
+        db.session.flush()
+
+        enrollment = StudentInsurance(
+            student_id=student.id,
+            policy_id=policy.id,
+            status='active',
+            join_code=join_code,
+            coverage_start_date=datetime.now(timezone.utc) - timedelta(days=5),
+            payment_current=True,
+        )
+        db.session.add(enrollment)
+        db.session.flush()
+
+        pending_purchase = Transaction(
+            student_id=student.id,
+            teacher_id=teacher.id,
+            join_code=join_code,
+            amount=Decimal('-25.00'),
+            account_type='checking',
+            status=TransactionStatus.PENDING,
+            type='purchase',
+            description='Claimable notebook purchase',
+        )
+        db.session.add(pending_purchase)
+        db.session.commit()
+
+        with client.session_transaction() as sess:
+            sess['student_id'] = student.id
+            sess['login_time'] = datetime.now(timezone.utc).isoformat()
+            sess['current_join_code'] = join_code
+
+        response = client.get(f'/student/insurance/claim/{policy.id}')
+
+        assert response.status_code == 200
+        assert b'Claimable notebook purchase' in response.data
+        assert b'No eligible transactions available to claim right now.' not in response.data
+
+        db.session.expire_all()
+        settled_purchase = db.session.get(Transaction, pending_purchase.id)
+        assert settled_purchase.status == TransactionStatus.POSTED
+        assert settled_purchase.posted_at is not None
 
     def test_quantize_currency_handles_invalid_inputs(self, app):
         """
