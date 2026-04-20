@@ -5,9 +5,15 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Override env vars for testing
+# Override env vars for testing.
+# Prefer a real PostgreSQL test database when configured; otherwise fall back to
+# in-memory SQLite for isolated environments that do not provide one.
+resolved_test_db_url = os.environ.get("TEST_DATABASE_URL") or os.environ.get("V1_TEST_DATABASE_URL")
+if resolved_test_db_url:
+    os.environ["DATABASE_URL"] = resolved_test_db_url
+else:
+    os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["SECRET_KEY"] = "test-secret"
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["FLASK_ENV"] = "testing"
 os.environ["PEPPER_KEY"] = "test-primary-pepper"
 os.environ["PEPPER_LEGACY_KEYS"] = "legacy-pepper"
@@ -38,7 +44,8 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
 def app():
     """Provide the Flask app instance for tests."""
     # Use a separate test database to avoid clashing with dev data.
-    # Prefer TEST_DATABASE_URL if set, otherwise use DATABASE_URL (sqlite in-memory in tests).
+    # Prefer TEST_DATABASE_URL when present; DATABASE_URL has already been
+    # rewritten above to the resolved test database for import-time safety.
     test_db_url = os.environ.get("TEST_DATABASE_URL", os.environ["DATABASE_URL"])
 
     flask_app.config.update(

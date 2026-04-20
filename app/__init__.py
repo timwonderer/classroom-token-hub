@@ -24,11 +24,12 @@ from pathlib import Path
 # Explicitly specify path to ensure .env is found regardless of working directory
 project_root = Path(__file__).parent.parent
 dotenv_path = project_root / '.env'
-# Force-load .env so CLI commands pick up required settings even if env vars are absent
-# BUT skip if FLASK_ENV is already 'testing' (set by conftest.py or CI) to avoid overwriting test config
-# Also skip in CI environments to prevent unexpected behavior in automated testing
+# Load .env for local development defaults, but never override process-level
+# environment variables. This keeps deployed environments authoritative and lets
+# one-off CLI commands intentionally target a different DATABASE_URL.
+# Skip in explicit testing/CI contexts to preserve test harness isolation.
 if os.environ.get("FLASK_ENV") != "testing" and not os.environ.get("CI"):
-    load_dotenv(dotenv_path=dotenv_path, override=True)
+    load_dotenv(dotenv_path=dotenv_path, override=False)
 
 # Validate required environment variables
 required_env_vars = ["SECRET_KEY", "DATABASE_URL", "FLASK_ENV", "ENCRYPTION_KEY", "PEPPER_KEY"]
