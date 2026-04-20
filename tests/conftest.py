@@ -40,6 +40,29 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
     cursor.close()
 
 
+def _terminate_other_postgres_sessions():
+    """Kill stale sessions against the dedicated Postgres test DB before schema reset."""
+    if db.engine.dialect.name != "postgresql":
+        return
+
+    db_name = db.engine.url.database
+    if not db_name:
+        return
+
+    db.session.execute(
+        text(
+            """
+            SELECT pg_terminate_backend(pid)
+            FROM pg_stat_activity
+            WHERE datname = :db_name
+              AND pid <> pg_backend_pid()
+            """
+        ),
+        {"db_name": db_name},
+    )
+    db.session.commit()
+
+
 @pytest.fixture
 def app():
     """Provide the Flask app instance for tests."""
@@ -59,6 +82,8 @@ def app():
     
     # Ensure strict separation - if connection fails, test fails
     with flask_app.app_context():
+        db.session.remove()
+        _terminate_other_postgres_sessions()
         db.drop_all()
         db.create_all()
 
@@ -84,6 +109,7 @@ def client(app):
     # Teardown: Drop all tables after test
     limiter.reset()
     db.session.remove()
+    _terminate_other_postgres_sessions()
     db.drop_all()
     ctx.pop()
 

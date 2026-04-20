@@ -1,5 +1,4 @@
-import pytest
-from app import app, db, Student, TapEvent, Transaction
+from app import db, Student, TapEvent, Transaction
 from app.attendance import (
     get_last_payroll_time,
     calculate_unpaid_attendance_seconds,
@@ -8,16 +7,6 @@ from app.attendance import (
     get_all_block_statuses
 )
 from datetime import datetime, timedelta, timezone
-
-@pytest.fixture
-def client():
-    app.config['TESTING'] = True
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-    with app.test_client() as client:
-        with app.app_context():
-            db.create_all()
-            yield client
-            db.drop_all()
 
 def test_get_last_payroll_time(client):
     # Test with no payroll transactions
