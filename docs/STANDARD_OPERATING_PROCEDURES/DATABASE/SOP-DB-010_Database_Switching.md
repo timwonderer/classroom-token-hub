@@ -16,11 +16,11 @@ Protected v2.0 branches:
 
 These branches must always use:
 
-- `postgresql://postgres:postgres@localhost/classroom_economy`
+- `postgresql://postgres:postgres@localhost:5432/classroom_economy`
 
 All other branches may use:
 
-- `postgresql://postgres:postgres@localhost/production_dev`
+- `postgresql://postgres:postgres@localhost:5432/production_dev`
 
 ### How It Works
 

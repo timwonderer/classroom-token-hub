@@ -1,35 +1,26 @@
 #!/bin/bash
-# Branch-aware database switching hook.
-# Protected v2 branches always use classroom_economy to avoid migration-chain corruption.
+# Branch-aware database status hook.
+# V2_* branches use V2 dev/test databases; all others use V1 dev/test databases.
 
 set -e
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
+BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+
 # shellcheck source=/dev/null
 source "$REPO_ROOT/scripts/lib/db_branch_config.sh"
+load_db_urls_from_env "$REPO_ROOT/.env"
 
-BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
-ENV_FILE="$REPO_ROOT/.env"
+TARGET_VERSION=$(branch_db_version "$BRANCH_NAME")
 
-if [ ! -f "$ENV_FILE" ]; then
-  echo "Warning: .env file not found"
-  exit 0
-fi
-
-if is_protected_branch "$BRANCH_NAME"; then
-  target_url="$CLASSROOM_ECONOMY_DB_URL"
-  target_name="classroom_economy"
+if [ "$TARGET_VERSION" = "v2" ]; then
+  target_dev_url="$V2_DEV_DATABASE_URL"
+  target_test_url="$V2_TEST_DATABASE_URL"
 else
-  target_url="$PRODUCTION_DEV_DB_URL"
-  target_name="production_dev"
+  target_dev_url="$V1_DEV_DATABASE_URL"
+  target_test_url="$V1_TEST_DATABASE_URL"
 fi
 
-if grep -q "^DATABASE_URL=" "$ENV_FILE"; then
-  escaped_target_url=$(printf '%s' "$target_url" | sed 's/[&/|]/\\&/g')
-  sed -i.bak "s|^DATABASE_URL=.*|DATABASE_URL=$escaped_target_url|" "$ENV_FILE"
-  rm -f "$ENV_FILE.bak"
-else
-  echo "DATABASE_URL=$target_url" >> "$ENV_FILE"
-fi
-
-echo "✓ Switched to $target_name database ($BRANCH_NAME branch)"
+echo "✓ Active branch database selection: $TARGET_VERSION ($BRANCH_NAME branch)"
+echo "  DATABASE_URL=$target_dev_url"
+echo "  TEST_DATABASE_URL=$target_test_url"
