@@ -2317,9 +2317,12 @@ def purchase_insurance(policy_id):
             ).first()
             if has_bundle_policy:
                 if policy.bundle_discount_percent:
-                    bundle_discount_applied = (effective_premium * Decimal(str(policy.bundle_discount_percent)) / 100).quantize(Decimal('0.01'))
+                    # Clamp percent to [0, 100] so a misconfigured negative value can't inflate the premium
+                    pct = max(Decimal('0'), min(Decimal('100'), Decimal(str(policy.bundle_discount_percent))))
+                    bundle_discount_applied = (effective_premium * pct / 100).quantize(Decimal('0.01'))
                 elif policy.bundle_discount_amount:
-                    bundle_discount_applied = Decimal(str(policy.bundle_discount_amount))
+                    # Clamp to >= 0 so a negative amount can't increase the premium
+                    bundle_discount_applied = max(Decimal('0'), Decimal(str(policy.bundle_discount_amount)))
                 effective_premium = max(Decimal('0.00'), effective_premium - bundle_discount_applied)
 
     # CRITICAL FIX v2: Check sufficient funds using join_code scoped balance
@@ -2493,27 +2496,48 @@ def pay_insurance(enrollment_id):
         )
         return redirect(url_for('student.student_insurance'))
 
-    db.session.add(Transaction(
-        student_id=student.id,
-        teacher_id=teacher_id,
-        join_code=join_code,
-        amount=-premium_amount,
-        account_type='checking',
-        status=TransactionStatus.PENDING,
-        type='insurance_premium',
-        description=f"Insurance premium: {enrollment.contract_title}",
-        policy_id=enrollment.policy_id,
-    ))
+    # Idempotency guard: reject if an insurance_premium transaction for this enrollment
+    # was already created within the last 30 seconds (protects against double-clicks).
+    from datetime import timedelta as _td
+    cutoff = now - _td(seconds=30)
+    recent_tx = Transaction.query.filter(
+        Transaction.student_id == student.id,
+        Transaction.join_code == join_code,
+        Transaction.policy_id == enrollment.policy_id,
+        Transaction.type == 'insurance_premium',
+        Transaction.timestamp >= cutoff,
+    ).first()
+    if recent_tx:
+        flash("Payment already submitted — please wait a moment before trying again.", "warning")
+        return redirect(url_for('student.student_insurance'))
 
-    enrollment.last_payment_date = now
-    # Advance from the existing due date (not now) to keep the billing cycle consistent
-    # regardless of whether the student paid early, on time, or late.
-    cycle_base = ensure_utc(enrollment.next_payment_due) or now
-    enrollment.next_payment_due = insurance_next_payment_due(cycle_base, policy.charge_frequency)
-    enrollment.payment_current = True
-    enrollment.days_unpaid = 0
+    try:
+        db.session.add(Transaction(
+            student_id=student.id,
+            teacher_id=teacher_id,
+            join_code=join_code,
+            amount=-premium_amount,
+            account_type='checking',
+            status=TransactionStatus.PENDING,
+            type='insurance_premium',
+            description=f"Insurance premium: {enrollment.contract_title}",
+            policy_id=enrollment.policy_id,
+        ))
 
-    db.session.commit()
+        enrollment.last_payment_date = now
+        # Advance from the existing due date (not now) to keep the billing cycle consistent
+        # regardless of whether the student paid early, on time, or late.
+        cycle_base = ensure_utc(enrollment.next_payment_due) or now
+        enrollment.next_payment_due = insurance_next_payment_due(cycle_base, policy.charge_frequency)
+        enrollment.payment_current = True
+        enrollment.days_unpaid = 0
+
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash("An error occurred processing your payment. Please try again.", "danger")
+        return redirect(url_for('student.student_insurance'))
+
     flash(f"Payment of ${premium_amount:.2f} submitted. Next bill due {enrollment.next_payment_due.strftime('%b %d, %Y')}.", "success")
     return redirect(url_for('student.student_insurance'))
 

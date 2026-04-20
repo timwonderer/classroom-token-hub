@@ -110,7 +110,7 @@
               <div class="col-md-6 mb-3">
                 <div class="form-check form-switch">
                   {{ form.autopay(class="form-check-input", role="switch", id="edit_autopay") }}
-                  {{ form.autopay.label(class="form-check-label fw-bold") }}
+                  <label for="edit_autopay" class="form-check-label fw-bold">{{ form.autopay.label.text }}</label>
                 </div>
                 <small class="text-muted">Auto-deduct premiums from student accounts</small>
                 <div id="edit_bill_preview_wrap" class="mt-2{% if policy.autopay %} d-none{% endif %}">

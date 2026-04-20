@@ -823,7 +823,7 @@
                         <div class="mb-3">
                           <div class="form-check form-switch">
                             {{ form.autopay(class="form-check-input", role="switch", id="create_autopay") }}
-                            {{ form.autopay.label(class="form-check-label fw-bold") }}
+                            <label for="create_autopay" class="form-check-label fw-bold">{{ form.autopay.label.text }}</label>
                           </div>
                           <small class="text-muted">Enable Auto-Pay (premium will be charged directly to student's
                             checking account)</small>

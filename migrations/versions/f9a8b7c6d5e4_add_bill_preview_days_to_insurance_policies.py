@@ -1,7 +1,7 @@
 """Add bill_preview_days to insurance_policies
 
-Revision ID: a1b2c3d4e5f6
-Revises: z2a3b4c5d6e7
+Revision ID: f9a8b7c6d5e4
+Revises: a8b9c0d1e2f3
 Create Date: 2026-04-20 18:00:00.000000
 
 """
@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = 'a1b2c3d4e5f6'
-down_revision = 'z2a3b4c5d6e7'
+revision = 'f9a8b7c6d5e4'
+down_revision = 'a8b9c0d1e2f3'
 branch_labels = None
 depends_on = None
 
