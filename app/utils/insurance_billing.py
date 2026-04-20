@@ -23,7 +23,12 @@ def insurance_next_payment_due(now_utc, charge_frequency):
 
 
 def should_reset_legacy_billing_cycle(enrollment, now_utc):
-    """Return True when an active enrollment predates recurring billing launch."""
+    """Return True when an active enrollment predates recurring billing launch.
+
+    Designed to be a one-time gate: once the cycle is advanced post-launch the
+    enrollment will no longer qualify, preventing repeated free-cycle grants on
+    every subsequent billing run.
+    """
     if not enrollment or enrollment.status != 'active':
         return False
 
@@ -35,4 +40,22 @@ def should_reset_legacy_billing_cycle(enrollment, now_utc):
         return False
 
     next_due = ensure_utc(enrollment.next_payment_due)
-    return next_due is None or next_due <= now_utc
+
+    if next_due is None:
+        return True
+
+    if next_due > now_utc:
+        return False
+
+    # Only reset when the due date itself is pre-launch, OR when the enrollment
+    # has never had a post-launch payment (last_payment_date is still pre-cutoff).
+    # This prevents re-resetting once the billing cycle has been advanced past the
+    # cutoff via a normal payment or prior reset.
+    last_payment_date = ensure_utc(getattr(enrollment, 'last_payment_date', None))
+    return (
+        next_due < INSURANCE_BILLING_LAUNCH_CUTOFF
+        or (
+            last_payment_date is not None
+            and last_payment_date < INSURANCE_BILLING_LAUNCH_CUTOFF
+        )
+    )

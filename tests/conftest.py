@@ -56,6 +56,21 @@ def _terminate_other_postgres_sessions():
     if not db_name:
         return
 
+    # Safety guard: only terminate sessions when we can positively identify a
+    # dedicated test database, preventing accidental impact on local dev sessions.
+    is_test_db = db_name.endswith("_test") or bool(os.environ.get("TEST_DATABASE_URL"))
+    if not is_test_db:
+        import logging
+        logging.getLogger("conftest").warning(
+            "Skipping session termination: %r does not look like a test DB "
+            "(name does not end with '_test' and TEST_DATABASE_URL is not set)",
+            db_name,
+        )
+        return
+
+    import logging
+    logging.getLogger("conftest").info("Terminating stale sessions for test database: %s", db_name)
+
     admin_url = engine_url.set(database="postgres")
     admin_engine = create_engine(
         admin_url,
@@ -135,7 +150,7 @@ def client(app):
         @event.listens_for(test_session(), "after_transaction_end")
         def restart_savepoint(session, transaction):
             nonlocal nested_transaction
-            if transaction.nested and not transaction._parent.nested:
+            if transaction.nested and not transaction.parent.nested:
                 nested_transaction = connection.begin_nested()
 
         client = flask_app.test_client()
