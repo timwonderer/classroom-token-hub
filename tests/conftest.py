@@ -56,20 +56,21 @@ def _terminate_other_postgres_sessions():
     if not db_name:
         return
 
+    import logging
+    _log = logging.getLogger("conftest")
+
     # Safety guard: only terminate sessions when we can positively identify a
     # dedicated test database, preventing accidental impact on local dev sessions.
     is_test_db = db_name.endswith("_test") or bool(os.environ.get("TEST_DATABASE_URL"))
     if not is_test_db:
-        import logging
-        logging.getLogger("conftest").warning(
+        _log.warning(
             "Skipping session termination: %r does not look like a test DB "
             "(name does not end with '_test' and TEST_DATABASE_URL is not set)",
             db_name,
         )
         return
 
-    import logging
-    logging.getLogger("conftest").info("Terminating stale sessions for test database: %s", db_name)
+    _log.info("Terminating stale sessions for test database: %s", db_name)
 
     admin_url = engine_url.set(database="postgres")
     admin_engine = create_engine(
