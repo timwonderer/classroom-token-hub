@@ -188,6 +188,11 @@ class InsurancePolicyForm(FlaskForm):
     enable_repurchase_cooldown = BooleanField('Enforce Cooldown Period', default=False)
     repurchase_wait_days = IntegerField('Mandatory Cooldown Period', default=30)
     auto_cancel_nonpay_days = IntegerField('Non-Payment Cancellation', default=7)
+    bill_preview_days = IntegerField(
+        'Bill Preview Window',
+        default=5,
+        validators=[Optional(), NumberRange(min=1, message='Bill preview window must be at least 1 day.')],
+    )
     claim_time_limit_days = IntegerField('Claim Filing Period', default=30)
 
     # Bundle settings

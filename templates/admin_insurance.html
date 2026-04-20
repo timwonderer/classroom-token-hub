@@ -822,11 +822,31 @@
                         </div>
                         <div class="mb-3">
                           <div class="form-check form-switch">
-                            {{ form.autopay(class="form-check-input", role="switch") }}
+                            {{ form.autopay(class="form-check-input", role="switch", id="create_autopay") }}
                             {{ form.autopay.label(class="form-check-label fw-bold") }}
                           </div>
                           <small class="text-muted">Enable Auto-Pay (premium will be charged directly to student's
                             checking account)</small>
+                          <div id="create_bill_preview_wrap" class="mt-2 d-none">
+                            {{ form.bill_preview_days.label(class="form-label fw-bold mb-1") }}
+                            <div class="input-group input-group-sm">
+                              {{ form.bill_preview_days(class="form-control", placeholder="5") }}
+                              <span class="input-group-text">days before due</span>
+                            </div>
+                            <small class="text-muted">How early students can see and pay the bill when autopay is off</small>
+                          </div>
+                          <script>
+                            (function () {
+                              var cb = document.getElementById('create_autopay');
+                              var wrap = document.getElementById('create_bill_preview_wrap');
+                              if (cb && wrap) {
+                                wrap.classList.toggle('d-none', cb.checked);
+                                cb.addEventListener('change', function () {
+                                  wrap.classList.toggle('d-none', cb.checked);
+                                });
+                              }
+                            })();
+                          </script>
                         </div>
                         <div class="mb-3">
                           {{ form.auto_cancel_nonpay_days.label(class="form-label fw-bold") }}

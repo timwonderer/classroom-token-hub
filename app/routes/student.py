@@ -2183,14 +2183,33 @@ def insurance_marketplace():
         else:
             ungrouped_policies.append(policy)
 
-    # Check which tier the student has already selected from
+    # Check which tier the student has already selected from and build billing status per enrollment
     enrolled_tiers = set()
+    bill_preview_data = {}
     for enrollment in my_policies:
         # Normalize dates for safe comparisons in templates
         enrollment.coverage_start_date = ensure_utc(enrollment.coverage_start_date)
         enrollment.cancel_date = ensure_utc(enrollment.cancel_date)
         if enrollment.policy.effective_product_group_id:
             enrolled_tiers.add(enrollment.policy.effective_product_group_id)
+
+        # Compute billing status for manual-pay display
+        next_due = ensure_utc(enrollment.next_payment_due)
+        preview_days = (enrollment.policy.bill_preview_days or 5) if not enrollment.policy.autopay else 0
+        days_until_due = (next_due.date() - now_utc.date()).days if next_due else None
+        show_pay_now = (
+            not enrollment.policy.autopay
+            and not enrollment.payment_current
+        ) or (
+            not enrollment.policy.autopay
+            and days_until_due is not None
+            and days_until_due <= preview_days
+        )
+        bill_preview_data[enrollment.id] = {
+            'next_due': next_due,
+            'days_until_due': days_until_due,
+            'show_pay_now': show_pay_now,
+        }
 
     return render_template('student_insurance_marketplace.html',
                           student=student,
@@ -2201,6 +2220,7 @@ def insurance_marketplace():
                           can_purchase=can_purchase,
                           repurchase_blocks=repurchase_blocks,
                           my_claims=my_claims,
+                          bill_preview_data=bill_preview_data,
                           now=now_utc)
 
 
@@ -2281,6 +2301,27 @@ def purchase_insurance(policy_id):
             flash(f"You already have a policy from the '{policy.tier_name or 'this'}' tier. You can only have one policy per tier.", "warning")
             return redirect(url_for('student.student_insurance'))
 
+    # Apply bundle discount if the student holds any qualifying bundle policy in this class
+    effective_premium = Decimal(str(policy.premium))
+    bundle_discount_applied = Decimal('0.00')
+    if policy.bundle_with_policy_ids:
+        bundle_ids = [
+            int(x.strip()) for x in policy.bundle_with_policy_ids.split(',') if x.strip().isdigit()
+        ]
+        if bundle_ids:
+            has_bundle_policy = StudentInsurance.query.filter(
+                StudentInsurance.student_id == student.id,
+                StudentInsurance.join_code == join_code,
+                StudentInsurance.policy_id.in_(bundle_ids),
+                StudentInsurance.status == 'active',
+            ).first()
+            if has_bundle_policy:
+                if policy.bundle_discount_percent:
+                    bundle_discount_applied = (effective_premium * Decimal(str(policy.bundle_discount_percent)) / 100).quantize(Decimal('0.01'))
+                elif policy.bundle_discount_amount:
+                    bundle_discount_applied = Decimal(str(policy.bundle_discount_amount))
+                effective_premium = max(Decimal('0.00'), effective_premium - bundle_discount_applied)
+
     # CRITICAL FIX v2: Check sufficient funds using join_code scoped balance
     checking_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
     savings_balance = student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)
@@ -2289,7 +2330,7 @@ def purchase_insurance(policy_id):
 
     allowed, shortfall, _, _ = evaluate_overdraft_allowance(
         student,
-        policy.premium,
+        effective_premium,
         banking_settings,
         teacher_id=teacher_id,
         join_code=join_code
@@ -2307,9 +2348,9 @@ def purchase_insurance(policy_id):
 
         if banking_settings and banking_settings.overdraft_protection_enabled:
             message = (f"Insufficient funds in both checking and savings. You need "
-                       f"${policy.premium:.2f} but have ${checking_balance + savings_balance:.2f}.")
+                       f"${effective_premium:.2f} but have ${checking_balance + savings_balance:.2f}.")
         else:
-            message = (f"Insufficient funds. You need ${policy.premium:.2f} but only "
+            message = (f"Insufficient funds. You need ${effective_premium:.2f} but only "
                        f"have ${checking_balance:.2f}.")
 
         if fee_charged:
@@ -2321,32 +2362,39 @@ def purchase_insurance(policy_id):
     if shortfall > 0:
         overdraft_shortfall = shortfall
 
-    # Create enrollment
+    # Create enrollment — freeze snapshot then overwrite frozen_premium with effective (discounted) rate
+    now_purchase = utc_now()
     enrollment = StudentInsurance(
         student_id=student.id,
         policy_id=policy.id,
         join_code=join_code,
         status='active',
-        purchase_date=utc_now(),
-        last_payment_date=utc_now(),
-        next_payment_due=insurance_next_payment_due(utc_now(), policy.charge_frequency),
-        coverage_start_date=utc_now(),
+        purchase_date=now_purchase,
+        last_payment_date=now_purchase,
+        next_payment_due=insurance_next_payment_due(now_purchase, policy.charge_frequency),
+        coverage_start_date=now_purchase,
         payment_current=True
     )
     enrollment.freeze_policy_snapshot(policy)
-    enrollment.coverage_start_date = utc_now() + timedelta(days=enrollment.contract_waiting_period_days or 0)
+    # Overwrite frozen_premium with the discounted rate so recurring billing charges the right amount
+    enrollment.frozen_premium = effective_premium
+    enrollment.coverage_start_date = now_purchase + timedelta(days=enrollment.contract_waiting_period_days or 0)
     db.session.add(enrollment)
+
+    description = f"Insurance premium: {policy.title}"
+    if bundle_discount_applied:
+        description += f" (bundle discount -${bundle_discount_applied:.2f})"
 
     # CRITICAL FIX v2: Create transaction with join_code
     transaction = Transaction(
         student_id=student.id,
         teacher_id=teacher_id,
         join_code=join_code,  # CRITICAL: Add join_code for period isolation
-        amount=-policy.premium,
+        amount=-effective_premium,
         account_type='checking',
         status=TransactionStatus.PENDING,
         type='insurance_premium',
-        description=f"Insurance premium: {policy.title}"
+        description=description,
     )
     db.session.add(transaction)
 
@@ -2379,7 +2427,89 @@ def purchase_insurance(policy_id):
         db.session.add(transfer_tx_deposit)
 
     db.session.commit()
-    flash(f"Successfully purchased {policy.title}! Coverage starts after {policy.waiting_period_days} day waiting period.", "success")
+    msg = f"Successfully purchased {policy.title}! Coverage starts after {policy.waiting_period_days} day waiting period."
+    if bundle_discount_applied:
+        msg += f" Bundle discount of ${bundle_discount_applied:.2f} applied."
+    flash(msg, "success")
+    return redirect(url_for('student.student_insurance'))
+
+
+@student_bp.route('/insurance/pay/<int:enrollment_id>', methods=['POST'])
+@login_required
+def pay_insurance(enrollment_id):
+    """Manually pay an overdue or upcoming insurance premium."""
+    student = get_logged_in_student()
+
+    context = get_current_class_context()
+    if not context:
+        flash("No class selected.", "danger")
+        return redirect(url_for('student.dashboard'))
+
+    join_code = context['join_code']
+    teacher_id = context['teacher_id']
+    _activate_rebalances_for_context(context)
+
+    enrollment = StudentInsurance.query.filter_by(
+        id=enrollment_id,
+        student_id=student.id,
+        join_code=join_code,
+        status='active',
+    ).first_or_404()
+
+    policy = enrollment.policy
+    if not policy:
+        flash("Policy not found.", "danger")
+        return redirect(url_for('student.student_insurance'))
+
+    if policy.autopay:
+        flash("This policy uses autopay — manual payment is not available.", "warning")
+        return redirect(url_for('student.student_insurance'))
+
+    premium_amount = enrollment.contract_premium
+    if premium_amount is None:
+        flash("Could not determine premium amount.", "danger")
+        return redirect(url_for('student.student_insurance'))
+
+    # Verify the bill is actually within the preview window or already overdue
+    now = utc_now()
+    next_due = ensure_utc(enrollment.next_payment_due)
+    preview_days = policy.bill_preview_days or 5
+    days_until_due = (next_due.date() - now.date()).days if next_due else None
+    is_payable = (
+        not enrollment.payment_current
+        or (days_until_due is not None and days_until_due <= preview_days)
+    )
+    if not is_payable:
+        flash("No payment is due at this time.", "warning")
+        return redirect(url_for('student.student_insurance'))
+
+    checking_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
+    if checking_balance < premium_amount:
+        flash(
+            f"Insufficient funds. Premium is ${premium_amount:.2f} but your checking balance is ${checking_balance:.2f}.",
+            "danger",
+        )
+        return redirect(url_for('student.student_insurance'))
+
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_id,
+        join_code=join_code,
+        amount=-premium_amount,
+        account_type='checking',
+        status=TransactionStatus.PENDING,
+        type='insurance_premium',
+        description=f"Insurance premium: {enrollment.contract_title}",
+        policy_id=enrollment.policy_id,
+    ))
+
+    enrollment.last_payment_date = now
+    enrollment.next_payment_due = insurance_next_payment_due(now, policy.charge_frequency)
+    enrollment.payment_current = True
+    enrollment.days_unpaid = 0
+
+    db.session.commit()
+    flash(f"Payment of ${premium_amount:.2f} submitted. Next bill due {enrollment.next_payment_due.strftime('%b %d, %Y')}.", "success")
     return redirect(url_for('student.student_insurance'))
 
 
