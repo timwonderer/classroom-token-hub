@@ -8,6 +8,7 @@ import logging
 
 from app.utils.time import utc_now
 from app.utils.insurance_billing import (
+    INSURANCE_BILLING_LAUNCH_CUTOFF,
     insurance_next_payment_due,
     should_reset_legacy_billing_cycle,
 )
@@ -209,6 +210,8 @@ def database_maintenance_job():
 
 def reset_insurance_billing_cycles(now=None):
     """Give pre-launch active enrollments one fresh billing cycle before enforcement begins."""
+    from sqlalchemy import or_
+    from sqlalchemy.orm import joinedload
     from app.extensions import db
     from app.models import StudentInsurance
 
@@ -217,7 +220,15 @@ def reset_insurance_billing_cycles(now=None):
 
     active_enrollments = (
         StudentInsurance.query
-        .filter(StudentInsurance.status == 'active')
+        .options(joinedload(StudentInsurance.policy))
+        .filter(
+            StudentInsurance.status == 'active',
+            StudentInsurance.purchase_date < INSURANCE_BILLING_LAUNCH_CUTOFF,
+            or_(
+                StudentInsurance.next_payment_due.is_(None),
+                StudentInsurance.next_payment_due <= now,
+            ),
+        )
         .all()
     )
 
@@ -278,6 +289,7 @@ def _charge_insurance_enrollment(enrollment, now):
 
 def process_insurance_billing_job(now=None):
     """Charge or mark due insurance enrollments once their premium date arrives."""
+    from sqlalchemy.orm import joinedload
     from app.extensions import db
     from app.models import StudentInsurance
 
@@ -291,6 +303,10 @@ def process_insurance_billing_job(now=None):
 
         due_enrollments = (
             StudentInsurance.query
+            .options(
+                joinedload(StudentInsurance.student),
+                joinedload(StudentInsurance.policy),
+            )
             .filter(
                 StudentInsurance.status == 'active',
                 StudentInsurance.next_payment_due.isnot(None),
@@ -304,33 +320,47 @@ def process_insurance_billing_job(now=None):
         cancelled_count = 0
 
         for enrollment in due_enrollments:
-            policy = enrollment.policy
-            if not policy:
-                logger.warning("Skipping insurance enrollment %s with missing policy", enrollment.id)
-                continue
-
-            if policy.autopay:
-                balance = enrollment.student.get_checking_balance(
-                    teacher_id=policy.teacher_id,
-                    join_code=enrollment.join_code,
-                )
-                premium_amount = enrollment.contract_premium
-                if premium_amount is not None and balance >= premium_amount:
-                    _charge_insurance_enrollment(enrollment, now)
-                    charged_count += 1
+            try:
+                policy = enrollment.policy
+                if not policy:
+                    logger.warning("Skipping insurance enrollment %s with missing policy", enrollment.id)
                     continue
 
-            enrollment.days_unpaid = (enrollment.days_unpaid or 0) + 1
-            enrollment.payment_current = False
-            overdue_count += 1
+                if policy.autopay:
+                    balance = enrollment.student.get_checking_balance(
+                        teacher_id=policy.teacher_id,
+                        join_code=enrollment.join_code,
+                    )
+                    premium_amount = enrollment.contract_premium
+                    if premium_amount is not None and balance >= premium_amount:
+                        _charge_insurance_enrollment(enrollment, now)
+                        db.session.commit()
+                        charged_count += 1
+                        continue
 
-            cancel_threshold = policy.auto_cancel_nonpay_days or 0
-            if cancel_threshold > 0 and enrollment.days_unpaid >= cancel_threshold:
-                enrollment.status = 'cancelled'
-                enrollment.cancel_date = now
-                cancelled_count += 1
+                enrollment.days_unpaid = max(
+                    0,
+                    (now.date() - enrollment.next_payment_due.date()).days,
+                )
+                enrollment.payment_current = False
+                overdue_count += 1
 
-        db.session.commit()
+                cancel_threshold = policy.auto_cancel_nonpay_days or 0
+                if cancel_threshold > 0 and enrollment.days_unpaid >= cancel_threshold:
+                    enrollment.status = 'cancelled'
+                    enrollment.cancel_date = now
+                    cancelled_count += 1
+
+                db.session.commit()
+            except Exception as enroll_exc:
+                db.session.rollback()
+                logger.error(
+                    "Error processing insurance enrollment %s: %s",
+                    enrollment.id,
+                    enroll_exc,
+                    exc_info=True,
+                )
+
         logger.info(
             "Insurance billing job completed. Charged %s enrollments, marked %s overdue, cancelled %s",
             charged_count,
