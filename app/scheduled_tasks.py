@@ -5,8 +5,12 @@ Contains periodic tasks that run in the background to maintain system state.
 """
 
 import logging
-from datetime import datetime, timezone
+
 from app.utils.time import utc_now
+from app.utils.insurance_billing import (
+    insurance_next_payment_due,
+    should_reset_legacy_billing_cycle,
+)
 
 
 def enforce_daily_limits_job():
@@ -203,6 +207,141 @@ def database_maintenance_job():
         logger.error(f"Database maintenance job failed: {e}", exc_info=True)
 
 
+def reset_insurance_billing_cycles(now=None):
+    """Give pre-launch active enrollments one fresh billing cycle before enforcement begins."""
+    from app.extensions import db
+    from app.models import StudentInsurance
+
+    logger = logging.getLogger('scheduled_tasks')
+    now = now or utc_now()
+
+    active_enrollments = (
+        StudentInsurance.query
+        .filter(StudentInsurance.status == 'active')
+        .all()
+    )
+
+    reset_count = 0
+    for enrollment in active_enrollments:
+        if not should_reset_legacy_billing_cycle(enrollment, now):
+            continue
+
+        enrollment.last_payment_date = now
+        enrollment.next_payment_due = insurance_next_payment_due(
+            now,
+            enrollment.policy.charge_frequency if enrollment.policy else None,
+        )
+        enrollment.payment_current = True
+        enrollment.days_unpaid = 0
+        reset_count += 1
+
+    if reset_count:
+        db.session.commit()
+        logger.info("Reset %s active insurance enrollments to a fresh billing cycle", reset_count)
+    else:
+        logger.info("No legacy insurance enrollments required billing cycle reset")
+
+    return reset_count
+
+
+def _charge_insurance_enrollment(enrollment, now):
+    """Create the recurring premium transaction and advance billing dates."""
+    from app.extensions import db
+    from app.models import Transaction, TransactionStatus
+
+    premium_amount = enrollment.contract_premium
+    if premium_amount is None:
+        raise ValueError(f"Enrollment {enrollment.id} has no contract premium")
+
+    teacher_id = enrollment.policy.teacher_id if enrollment.policy else None
+
+    db.session.add(Transaction(
+        student_id=enrollment.student_id,
+        teacher_id=teacher_id,
+        join_code=enrollment.join_code,
+        amount=-premium_amount,
+        account_type='checking',
+        status=TransactionStatus.PENDING,
+        type='insurance_premium',
+        description=f"Insurance premium: {enrollment.contract_title}",
+        policy_id=enrollment.policy_id,
+    ))
+
+    enrollment.last_payment_date = now
+    enrollment.next_payment_due = insurance_next_payment_due(
+        now,
+        enrollment.policy.charge_frequency if enrollment.policy else None,
+    )
+    enrollment.payment_current = True
+    enrollment.days_unpaid = 0
+
+
+def process_insurance_billing_job(now=None):
+    """Charge or mark due insurance enrollments once their premium date arrives."""
+    from app.extensions import db
+    from app.models import StudentInsurance
+
+    logger = logging.getLogger('scheduled_tasks')
+    now = now or utc_now()
+
+    logger.info("Starting insurance billing job")
+
+    try:
+        reset_insurance_billing_cycles(now=now)
+
+        due_enrollments = (
+            StudentInsurance.query
+            .filter(
+                StudentInsurance.status == 'active',
+                StudentInsurance.next_payment_due.isnot(None),
+                StudentInsurance.next_payment_due <= now,
+            )
+            .all()
+        )
+
+        charged_count = 0
+        overdue_count = 0
+        cancelled_count = 0
+
+        for enrollment in due_enrollments:
+            policy = enrollment.policy
+            if not policy:
+                logger.warning("Skipping insurance enrollment %s with missing policy", enrollment.id)
+                continue
+
+            if policy.autopay:
+                balance = enrollment.student.get_checking_balance(
+                    teacher_id=policy.teacher_id,
+                    join_code=enrollment.join_code,
+                )
+                premium_amount = enrollment.contract_premium
+                if premium_amount is not None and balance >= premium_amount:
+                    _charge_insurance_enrollment(enrollment, now)
+                    charged_count += 1
+                    continue
+
+            enrollment.days_unpaid = (enrollment.days_unpaid or 0) + 1
+            enrollment.payment_current = False
+            overdue_count += 1
+
+            cancel_threshold = policy.auto_cancel_nonpay_days or 0
+            if cancel_threshold > 0 and enrollment.days_unpaid >= cancel_threshold:
+                enrollment.status = 'cancelled'
+                enrollment.cancel_date = now
+                cancelled_count += 1
+
+        db.session.commit()
+        logger.info(
+            "Insurance billing job completed. Charged %s enrollments, marked %s overdue, cancelled %s",
+            charged_count,
+            overdue_count,
+            cancelled_count,
+        )
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Insurance billing job failed: {e}", exc_info=True)
+
+
 def init_scheduled_tasks(app):
     """
     Initialize and start scheduled tasks.
@@ -228,6 +367,10 @@ def init_scheduled_tasks(app):
     def run_database_maintenance():
         with app.app_context():
             database_maintenance_job()
+
+    def run_insurance_billing():
+        with app.app_context():
+            process_insurance_billing_job()
 
     if not scheduler.running:
         # Add the auto tap-out enforcement job to run every hour
@@ -264,7 +407,21 @@ def init_scheduled_tasks(app):
             max_instances=1  # Prevent overlapping executions
         )
 
+        scheduler.add_job(
+            func=run_insurance_billing,
+            trigger='cron',
+            hour=0,
+            minute=5,
+            id='process_insurance_billing',
+            name='Process insurance billing',
+            replace_existing=True,
+            max_instances=1
+        )
+
         scheduler.start()
-        logger.info("Scheduled tasks initialized: auto tap-out (hourly), demo cleanup (5 min), database maintenance (2 AM UTC daily)")
+        logger.info(
+            "Scheduled tasks initialized: auto tap-out (hourly), demo cleanup (5 min), "
+            "insurance billing (12:05 AM UTC daily), database maintenance (2 AM UTC daily)"
+        )
     else:
         logger.info("Scheduler already running")

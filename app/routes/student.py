@@ -61,6 +61,7 @@ from app.utils.insurance_eligibility import (
     evaluate_claim_transaction_eligibility,
     collect_reimbursed_source_tx_ids,
 )
+from app.utils.insurance_billing import insurance_next_payment_due
 from app.utils.economy_rebalance import activate_due_rebalances
 from app.utils.display_name_session import (
     get_teacher_display_name_cache,
@@ -320,17 +321,6 @@ def get_current_join_code():
     """
     context = get_current_class_context()
     return context['join_code'] if context else None
-
-
-def _insurance_next_payment_due(now_utc, charge_frequency):
-    frequency = (charge_frequency or 'monthly').lower()
-    if frequency == 'weekly':
-        return now_utc + timedelta(days=7)
-    if frequency == 'biweekly':
-        return now_utc + timedelta(days=14)
-    if frequency == 'semester':
-        return now_utc + timedelta(days=7 * 16)
-    return now_utc + timedelta(days=28)
 
 
 def get_feature_settings_for_student():
@@ -2339,7 +2329,7 @@ def purchase_insurance(policy_id):
         status='active',
         purchase_date=utc_now(),
         last_payment_date=utc_now(),
-        next_payment_due=_insurance_next_payment_due(utc_now(), policy.charge_frequency),
+        next_payment_due=insurance_next_payment_due(utc_now(), policy.charge_frequency),
         coverage_start_date=utc_now(),
         payment_current=True
     )

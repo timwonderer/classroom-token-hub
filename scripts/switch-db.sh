@@ -10,11 +10,11 @@ source "$REPO_ROOT/scripts/lib/db_branch_config.sh"
 if [ -z "$1" ]; then
     echo "Usage: ./scripts/switch-db.sh [production_dev|classroom_economy]"
     echo ""
-    if [ -f ".env" ] && grep -q "^DATABASE_URL=" .env; then
+    if [ -f "$REPO_ROOT/.env" ] && grep -q "^DATABASE_URL=" "$REPO_ROOT/.env"; then
         echo "Current DATABASE_URL:"
-        grep "^DATABASE_URL=" .env
+        grep "^DATABASE_URL=" "$REPO_ROOT/.env"
     else
-        echo "No DATABASE_URL found in .env"
+        echo "No DATABASE_URL found in $REPO_ROOT/.env"
     fi
     exit 1
 fi
