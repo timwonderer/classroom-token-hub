@@ -1251,6 +1251,13 @@ class RentPayment(db.Model):
     coverage_month = db.Column(db.Integer, nullable=False, default=_current_utc_month)  # Month covered (1-12)
     coverage_year = db.Column(db.Integer, nullable=False, default=_current_utc_year)  # Year covered (e.g., 2025)
 
+    # Snapshot of settings.rent_amount at the time this payment was created.
+    # Used by _get_locked_rent_amount_for_join_code_cycle to distinguish a
+    # partial installment ($200 of $570) from a full payment at an old rate ($200
+    # when rent was $200), preventing partial payments from corrupting the
+    # class-wide rate lock.  NULL for legacy rows; falls back to amount_paid.
+    rent_amount_snapshot = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
+
     was_late = db.Column(db.Boolean, default=False)
     late_fee_charged = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))
 
