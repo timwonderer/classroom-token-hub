@@ -2446,15 +2446,29 @@ def file_claim(policy_id):
 
     # Validation errors
     errors = []
-
-    # Normalize coverage dates for safe comparisons
-    enrollment.coverage_start_date = ensure_utc(enrollment.coverage_start_date)
-    enrollment.cancel_date = ensure_utc(enrollment.cancel_date)
     now_utc = utc_now()
 
+    # Eagerly settle pending transactions before any in-request ORM mutations so the
+    # commit only persists bookkeeping from settle_balances().
+    if claim_type == 'transaction_monetary' and enrollment.join_code:
+        try:
+            from app.utils.banking import settle_balances
+            settle_balances(student.id, enrollment.join_code)
+            db.session.commit()
+        except Exception as _settle_err:
+            db.session.rollback()
+            current_app.logger.warning(
+                "Settlement failed before claim eligibility check for student %s: %s",
+                student.id, _settle_err,
+                exc_info=True,
+            )
+
+    # Normalize coverage dates for safe comparisons without mutating the ORM instance.
+    coverage_start_date_utc = ensure_utc(enrollment.coverage_start_date)
+
     # Check if coverage has started
-    if not enrollment.coverage_start_date or enrollment.coverage_start_date > now_utc:
-        wait_until = enrollment.coverage_start_date.strftime('%B %d, %Y') if enrollment.coverage_start_date else 'coverage starts'
+    if not coverage_start_date_utc or coverage_start_date_utc > now_utc:
+        wait_until = coverage_start_date_utc.strftime('%B %d, %Y') if coverage_start_date_utc else 'coverage starts'
         errors.append(f"Coverage has not started yet. Please wait until {wait_until}.")
 
     # Check if payment is current
@@ -2488,26 +2502,6 @@ def file_claim(policy_id):
         if period_payouts is None:
             period_payouts = Decimal('0.00')
         remaining_period_cap = max(max_payout_per_period - period_payouts, Decimal('0.00'))
-
-    # Eagerly settle pending transactions so that recent store purchases (created as
-    # PENDING) are promoted to POSTED before the eligibility query runs.  Settlement
-    # is intentionally committed in its own transaction: it is a pure bookkeeping
-    # operation that is idempotent and safe to persist independently of the claim
-    # that follows.  If settlement fails we log and continue; the worst outcome is
-    # that very-recent (still-PENDING) transactions remain invisible for this request
-    # — the same behaviour as before this fix — rather than surfacing a hard error
-    # for an unrelated bookkeeping step.
-    if claim_type == 'transaction_monetary' and enrollment.join_code:
-        try:
-            from app.utils.banking import settle_balances
-            settle_balances(student.id, enrollment.join_code)
-            db.session.commit()
-        except Exception as _settle_err:
-            db.session.rollback()
-            current_app.logger.warning(
-                "Settlement failed before claim eligibility check for student %s: %s",
-                student.id, _settle_err,
-            )
 
     eligible_transactions = []
     eligible_transaction_rows = []
