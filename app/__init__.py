@@ -19,6 +19,7 @@ from flask import Flask, request, render_template, session, g, url_for, has_requ
 from werkzeug.exceptions import HTTPException
 from dotenv import load_dotenv
 from pathlib import Path
+from db_env import resolve_dev_database_url
 
 # Load environment variables from project root
 # Explicitly specify path to ensure .env is found regardless of working directory
@@ -30,6 +31,10 @@ dotenv_path = project_root / '.env'
 # Skip in explicit testing/CI contexts to preserve test harness isolation.
 if os.environ.get("FLASK_ENV") != "testing" and not os.environ.get("CI"):
     load_dotenv(dotenv_path=dotenv_path, override=False)
+
+derived_database_url = resolve_dev_database_url(os.environ, project_root=project_root)
+if derived_database_url and not os.environ.get("DATABASE_URL"):
+    os.environ["DATABASE_URL"] = derived_database_url
 
 # Validate required environment variables
 required_env_vars = ["SECRET_KEY", "DATABASE_URL", "FLASK_ENV", "ENCRYPTION_KEY", "PEPPER_KEY"]

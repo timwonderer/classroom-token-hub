@@ -1,21 +1,15 @@
 #!/bin/bash
-# Branch-aware database switching hook.
+# Branch-aware database status hook.
 # V2_* branches use V2 dev/test databases; all others use V1 dev/test databases.
 
 set -e
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
-ENV_FILE="$REPO_ROOT/.env"
 BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
 
 # shellcheck source=/dev/null
 source "$REPO_ROOT/scripts/lib/db_branch_config.sh"
-load_db_urls_from_env "$ENV_FILE"
-
-if [ ! -f "$ENV_FILE" ]; then
-  echo "Warning: .env file not found"
-  exit 0
-fi
+load_db_urls_from_env "$REPO_ROOT/.env"
 
 TARGET_VERSION=$(branch_db_version "$BRANCH_NAME")
 
@@ -27,21 +21,6 @@ else
   target_test_url="$V1_TEST_DATABASE_URL"
 fi
 
-update_env_var() {
-  local key="$1"
-  local value="$2"
-  local escaped_value
-
-  escaped_value=$(printf '%s' "$value" | sed 's/[&/|]/\\&/g')
-  if grep -q "^${key}=" "$ENV_FILE"; then
-    sed -i.bak "s|^${key}=.*|${key}=${escaped_value}|" "$ENV_FILE"
-  else
-    printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
-  fi
-}
-
-update_env_var "DATABASE_URL" "$target_dev_url"
-update_env_var "TEST_DATABASE_URL" "$target_test_url"
-rm -f "$ENV_FILE.bak"
-
-echo "✓ Switched to $TARGET_VERSION databases ($BRANCH_NAME branch)"
+echo "✓ Active branch database selection: $TARGET_VERSION ($BRANCH_NAME branch)"
+echo "  DATABASE_URL=$target_dev_url"
+echo "  TEST_DATABASE_URL=$target_test_url"

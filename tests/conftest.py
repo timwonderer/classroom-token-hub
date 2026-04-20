@@ -1,6 +1,8 @@
 import os
 import sys
 from dotenv import load_dotenv
+from pathlib import Path
+from db_env import resolve_test_database_url
 
 # Load environment variables from .env file
 load_dotenv()
@@ -8,8 +10,10 @@ load_dotenv()
 # Override env vars for testing.
 # Prefer a real PostgreSQL test database when configured; otherwise fall back to
 # in-memory SQLite for isolated environments that do not provide one.
-resolved_test_db_url = os.environ.get("TEST_DATABASE_URL") or os.environ.get("V1_TEST_DATABASE_URL")
+project_root = Path(__file__).resolve().parent.parent
+resolved_test_db_url = resolve_test_database_url(os.environ, project_root=project_root)
 if resolved_test_db_url:
+    os.environ["TEST_DATABASE_URL"] = resolved_test_db_url
     os.environ["DATABASE_URL"] = resolved_test_db_url
 else:
     os.environ["DATABASE_URL"] = "sqlite:///:memory:"
