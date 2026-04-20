@@ -2376,8 +2376,9 @@ def purchase_insurance(policy_id):
         payment_current=True
     )
     enrollment.freeze_policy_snapshot(policy)
-    # Overwrite frozen_premium with the discounted rate so recurring billing charges the right amount
-    enrollment.frozen_premium = effective_premium
+    # Overwrite frozen_premium with the discounted rate so recurring billing charges the right amount.
+    # frozen_premium is the underlying DB column; contract_premium is a read-only property over it.
+    enrollment.frozen_premium = effective_premium.quantize(Decimal('0.01'))
     enrollment.coverage_start_date = now_purchase + timedelta(days=enrollment.contract_waiting_period_days or 0)
     db.session.add(enrollment)
 
@@ -2390,11 +2391,12 @@ def purchase_insurance(policy_id):
         student_id=student.id,
         teacher_id=teacher_id,
         join_code=join_code,  # CRITICAL: Add join_code for period isolation
-        amount=-effective_premium,
+        amount=-effective_premium.quantize(Decimal('0.01')),
         account_type='checking',
         status=TransactionStatus.PENDING,
         type='insurance_premium',
         description=description,
+        policy_id=policy.id,
     )
     db.session.add(transaction)
 
@@ -2504,7 +2506,10 @@ def pay_insurance(enrollment_id):
     ))
 
     enrollment.last_payment_date = now
-    enrollment.next_payment_due = insurance_next_payment_due(now, policy.charge_frequency)
+    # Advance from the existing due date (not now) to keep the billing cycle consistent
+    # regardless of whether the student paid early, on time, or late.
+    cycle_base = ensure_utc(enrollment.next_payment_due) or now
+    enrollment.next_payment_due = insurance_next_payment_due(cycle_base, policy.charge_frequency)
     enrollment.payment_current = True
     enrollment.days_unpaid = 0
 
