@@ -373,3 +373,64 @@ def test_start_work_after_midnight_closes_previous_day_session(client, monkeypat
     assert events[1].timestamp == datetime(2026, 4, 20, 7, 0, 0, tzinfo=timezone.utc)
     assert events[2].status == "active"
     assert events[2].timestamp == fixed_now
+
+
+def test_cross_date_null_join_code_still_enforced_when_seat_exists(app, monkeypatch):
+    """Legacy TapEvent with join_code=None is still closed at midnight when a claimed seat exists."""
+    from app import TapEvent
+    from app.models import Admin, StudentBlock, StudentTeacher
+    from app.routes.api import check_and_auto_tapout_if_limit_reached
+    import pyotp
+
+    fixed_now = datetime(2026, 4, 20, 7, 0, 5, tzinfo=timezone.utc)  # 12:00:05 AM Pacific
+    monkeypatch.setattr('app.routes.api.utc_now', lambda: fixed_now)
+
+    with app.app_context():
+        teacher = Admin(username="legacy-jc-teacher", totp_secret=pyotp.random_base32())
+        db.session.add(teacher)
+        db.session.flush()
+
+        salt = get_random_salt()
+        username = "legacy_jc_student"
+        stu = Student(
+            first_name="Legacy",
+            last_initial="J",
+            block="A",
+            salt=salt,
+            username_hash=hash_username(username, salt),
+            pin_hash=generate_password_hash("0000"),
+        )
+        db.session.add(stu)
+        db.session.flush()
+
+        db.session.add(StudentTeacher(student_id=stu.id, admin_id=teacher.id))
+        create_claimed_seat(teacher.id, stu.id, "A", "JOIN-LEGACY-NULL", salt)
+
+        # Legacy active TapEvent with join_code=None from the previous Pacific day
+        db.session.add(TapEvent(
+            student_id=stu.id,
+            period="A",
+            status="active",
+            timestamp=datetime(2026, 4, 20, 6, 30, 0, tzinfo=timezone.utc),  # 11:30 PM Pacific previous day
+            join_code=None,
+        ))
+        db.session.commit()
+
+        check_and_auto_tapout_if_limit_reached(stu)
+
+        # Boundary tap-out should be created with the resolved join_code
+        boundary = (
+            TapEvent.query
+            .filter_by(student_id=stu.id, period="A", status="inactive", join_code="JOIN-LEGACY-NULL")
+            .order_by(TapEvent.timestamp.desc())
+            .first()
+        )
+        assert boundary is not None, "Expected midnight boundary tap-out to be created for legacy NULL join_code event"
+        assert boundary.reason == "done for the day"
+        assert boundary.timestamp == datetime(2026, 4, 20, 7, 0, 0, tzinfo=timezone.utc)
+
+        student_block = StudentBlock.query.filter_by(student_id=stu.id, period="A").first()
+        assert student_block is not None
+        assert student_block.done_for_day_date == pytz.timezone('America/Los_Angeles').localize(
+            datetime(2026, 4, 19, 12, 0, 0)
+        ).date()

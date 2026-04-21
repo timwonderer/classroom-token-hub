@@ -194,17 +194,21 @@ def _enforce_cross_date_tapout(student_id, period, join_code, *, student_block=N
     V1 rule: attendance sessions cannot span multiple Pacific calendar days.
     If the latest event is still active after midnight, create a backfilled
     inactive event at 12:00 AM Pacific and mark the previous day as done.
+
+    Queries by (student_id, period, is_deleted) without join_code so legacy
+    rows with join_code=NULL are still caught. The effective join_code is
+    resolved from the event itself first, falling back to the parameter.
     """
     pacific = pytz.timezone(PACIFIC_TZ)
     now_utc = ensure_utc(now_utc) or utc_now()
     today_pacific = now_utc.astimezone(pacific).date()
 
+    # Query without join_code filter to handle legacy rows where join_code=NULL.
     latest_event = (
         TapEvent.query
         .filter_by(
             student_id=student_id,
             period=period,
-            join_code=join_code,
             is_deleted=False,
         )
         .order_by(TapEvent.timestamp.desc())
@@ -212,6 +216,15 @@ def _enforce_cross_date_tapout(student_id, period, join_code, *, student_block=N
     )
 
     if not latest_event or latest_event.status != "active":
+        return latest_event
+
+    # Prefer the join_code recorded on the event; fall back to the parameter.
+    effective_join_code = latest_event.join_code or join_code
+    if not effective_join_code:
+        current_app.logger.warning(
+            f"Cannot enforce date boundary for student {student_id} period {period}: "
+            f"no join_code available on event or parameter"
+        )
         return latest_event
 
     latest_event_pacific_date = ensure_utc(latest_event.timestamp).astimezone(pacific).date()
@@ -222,18 +235,39 @@ def _enforce_cross_date_tapout(student_id, period, join_code, *, student_block=N
     midnight_utc = midnight_pacific.astimezone(timezone.utc)
     previous_day_pacific = today_pacific - timedelta(days=1)
 
+    # Idempotency guard: skip if a boundary tap-out already exists at midnight_utc
+    # (protects against duplicate rows from concurrent requests).
+    existing_boundary = (
+        TapEvent.query
+        .filter_by(
+            student_id=student_id,
+            period=period,
+            join_code=effective_join_code,
+            status="inactive",
+            reason="done for the day",
+            is_deleted=False,
+        )
+        .filter(TapEvent.timestamp == midnight_utc)
+        .first()
+    )
+    if existing_boundary:
+        return existing_boundary
+
     tap_out_event = TapEvent(
         student_id=student_id,
         period=period,
         status="inactive",
         timestamp=midnight_utc,
         reason="done for the day",
-        join_code=join_code,
+        join_code=effective_join_code,
     )
     db.session.add(tap_out_event)
 
     if student_block is None:
-        student_block = _get_or_create_student_block(student_id, period, join_code=join_code)
+        student_block = _get_or_create_student_block(student_id, period, join_code=effective_join_code)
+    elif not student_block.join_code or student_block.join_code != effective_join_code:
+        # Keep StudentBlock join_code in sync with the effective join_code.
+        student_block.join_code = effective_join_code
 
     student_block.done_for_day_date = previous_day_pacific
 
