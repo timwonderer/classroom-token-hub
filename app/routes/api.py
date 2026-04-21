@@ -62,6 +62,8 @@ from app.payroll import get_pay_rate_for_block
 # Create blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
+PACIFIC_TZ = 'America/Los_Angeles'
+
 
 # -------------------- Rent Helpers --------------------
 
@@ -166,6 +168,115 @@ def _append_redemption_audit_log(*, student_item, student, teacher_id, action, n
         source=RedemptionAuditSource.LIVE,
     ))
     guard_state['inserted'] = True
+
+
+def _get_or_create_student_block(student_id, period, join_code=None):
+    """Return the StudentBlock for a student/period, creating one if absent."""
+    student_block = StudentBlock.query.filter_by(
+        student_id=student_id,
+        period=period,
+    ).first()
+    if not student_block:
+        student_block = StudentBlock(
+            student_id=student_id,
+            period=period,
+            join_code=join_code,
+            tap_enabled=True,
+        )
+        db.session.add(student_block)
+    return student_block
+
+
+def _enforce_cross_date_tapout(student_id, period, join_code, *, student_block=None, now_utc=None):
+    """
+    Close an active attendance session at the Pacific midnight boundary.
+
+    V1 rule: attendance sessions cannot span multiple Pacific calendar days.
+    If the latest event is still active after midnight, create a backfilled
+    inactive event at 12:00 AM Pacific and mark the previous day as done.
+
+    Queries by (student_id, period, is_deleted) without join_code so legacy
+    rows with join_code=NULL are still caught. The effective join_code is
+    resolved from the event itself first, falling back to the parameter.
+    """
+    pacific = pytz.timezone(PACIFIC_TZ)
+    now_utc = ensure_utc(now_utc) or utc_now()
+    today_pacific = now_utc.astimezone(pacific).date()
+
+    # Query without join_code filter to handle legacy rows where join_code=NULL.
+    latest_event = (
+        TapEvent.query
+        .filter_by(
+            student_id=student_id,
+            period=period,
+            is_deleted=False,
+        )
+        .order_by(TapEvent.timestamp.desc())
+        .first()
+    )
+
+    if not latest_event or latest_event.status != "active":
+        return latest_event
+
+    # Prefer the join_code recorded on the event; fall back to the parameter.
+    effective_join_code = latest_event.join_code or join_code
+    if not effective_join_code:
+        current_app.logger.warning(
+            f"Cannot enforce date boundary for student {student_id} period {period}: "
+            f"no join_code available on event or parameter"
+        )
+        return latest_event
+
+    latest_event_pacific_date = ensure_utc(latest_event.timestamp).astimezone(pacific).date()
+    if latest_event_pacific_date >= today_pacific:
+        return latest_event
+
+    midnight_pacific = pacific.localize(datetime.combine(today_pacific, datetime.min.time()))
+    midnight_utc = midnight_pacific.astimezone(timezone.utc)
+    previous_day_pacific = today_pacific - timedelta(days=1)
+
+    # Idempotency guard: skip if a boundary tap-out already exists at midnight_utc
+    # (protects against duplicate rows from concurrent requests).
+    existing_boundary = (
+        TapEvent.query
+        .filter_by(
+            student_id=student_id,
+            period=period,
+            join_code=effective_join_code,
+            status="inactive",
+            reason="done for the day",
+            is_deleted=False,
+        )
+        .filter(TapEvent.timestamp == midnight_utc)
+        .first()
+    )
+    if existing_boundary:
+        return existing_boundary
+
+    tap_out_event = TapEvent(
+        student_id=student_id,
+        period=period,
+        status="inactive",
+        timestamp=midnight_utc,
+        reason="done for the day",
+        join_code=effective_join_code,
+    )
+    db.session.add(tap_out_event)
+
+    if student_block is None:
+        student_block = _get_or_create_student_block(student_id, period, join_code=effective_join_code)
+    elif not student_block.join_code or student_block.join_code != effective_join_code:
+        # Keep StudentBlock join_code in sync with the effective join_code.
+        student_block.join_code = effective_join_code
+
+    student_block.done_for_day_date = previous_day_pacific
+
+    current_app.logger.info(
+        f"Hard tap-out at date boundary for student {student_id} in period {period} "
+        f"at {midnight_utc.isoformat()} (session started on {latest_event_pacific_date.isoformat()})"
+    )
+
+    return tap_out_event
 
 
 # -------------------- TIPS API --------------------
@@ -2133,28 +2244,15 @@ def handle_tap():
     now = utc_now()
 
     # --- Check if tap is enabled for this student in this period ---
-    from app.models import StudentBlock
-    student_block = StudentBlock.query.filter_by(
-        student_id=student.id,
-        period=period
-    ).first()
-
-    # If no StudentBlock record exists, create one with default settings (tap_enabled=True)
-    if not student_block:
-        try:
-            student_block = StudentBlock(
-                student_id=student.id,
-                period=period,
-                tap_enabled=True
-            )
-            db.session.add(student_block)
-            db.session.commit()
-        except IntegrityError:
-            db.session.rollback()
-            student_block = StudentBlock.query.filter_by(
-                student_id=student.id,
-                period=period
-            ).first()
+    student_block = _get_or_create_student_block(student.id, period, join_code=join_code)
+    try:
+        db.session.flush()
+    except IntegrityError:
+        db.session.rollback()
+        student_block = StudentBlock.query.filter_by(
+            student_id=student.id,
+            period=period,
+        ).first()
 
     # Check if tap is disabled for this period
     if not student_block.tap_enabled:
@@ -2163,7 +2261,7 @@ def handle_tap():
     # --- Check "done for the day" lock ---
     if normalized_action == "start_work":
         # Use Pacific timezone for "done for the day" check
-        pacific = pytz.timezone('America/Los_Angeles')
+        pacific = pytz.timezone(PACIFIC_TZ)
         now_pacific = now.astimezone(pacific)
         today_pacific = now_pacific.date()
 
@@ -2173,6 +2271,14 @@ def handle_tap():
             db.session.commit()
         if student_block.done_for_day_date == today_pacific:
             return jsonify({"error": "You are done for the day. You cannot Start Work again until tomorrow."}), 403
+
+    _enforce_cross_date_tapout(
+        student.id,
+        period,
+        join_code,
+        student_block=student_block,
+        now_utc=now,
+    )
 
 
     # --- Hall Pass Logic for Stop Work ---
@@ -2229,11 +2335,11 @@ def handle_tap():
             # Check per-destination queue limits
             if pass_type_config and pass_type_config.get('queue_limit') is not None:
                 # Get user's timezone from session for today's count
-                tz_name = session.get('timezone', 'America/Los_Angeles')
+                tz_name = session.get('timezone', PACIFIC_TZ)
                 try:
                     user_tz = pytz.timezone(tz_name)
                 except pytz.UnknownTimeZoneError:
-                    user_tz = pytz.timezone('America/Los_Angeles')
+                    user_tz = pytz.timezone(PACIFIC_TZ)
 
                 now_user_tz = utc_now().astimezone(user_tz)
                 today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -2371,7 +2477,7 @@ def handle_tap():
             daily_limit = get_daily_limit_seconds(period)
             if daily_limit:
                 # Use Pacific timezone for daily reset
-                pacific = pytz.timezone('America/Los_Angeles')
+                pacific = pytz.timezone(PACIFIC_TZ)
                 now_pacific = now.astimezone(pacific)
                 today_pacific = now_pacific.date()
 
@@ -2420,7 +2526,7 @@ def handle_tap():
         db.session.add(event)
 
         # Update "done for the day" status when Stopping Work with reason "done"
-        pacific = pytz.timezone('America/Los_Angeles')
+        pacific = pytz.timezone(PACIFIC_TZ)
         now_pacific = now.astimezone(pacific)
         today_pacific = now_pacific.date()
         # Clear done_for_day_date if it's a new day
@@ -2649,7 +2755,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
     now_utc = utc_now()
 
     # Use Pacific timezone for daily reset
-    pacific = pytz.timezone('America/Los_Angeles')
+    pacific = pytz.timezone(PACIFIC_TZ)
     now_pacific = now_utc.astimezone(pacific)
     today_pacific = now_pacific.date()
 
@@ -2674,6 +2780,27 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
         )
 
         if latest_event and latest_event.status == "active":
+            join_code = latest_event.join_code
+            if not join_code:
+                join_code = get_join_code_for_student_period(student.id, period_upper)
+
+            if not join_code:
+                current_app.logger.warning(
+                    f"Unable to resolve join_code for student {student.id} in period {period_upper} "
+                    f"for date-boundary tap-out. TapEvent ID is {latest_event.id}."
+                )
+                continue
+
+            latest_event = _enforce_cross_date_tapout(
+                student.id,
+                period_upper,
+                join_code,
+                now_utc=now_utc,
+            )
+
+            if not latest_event or latest_event.status != "active":
+                continue
+
             # Get teacher_id for this block (needed for settings lookup)
             teacher_id = None
             # Try to find seat for this block

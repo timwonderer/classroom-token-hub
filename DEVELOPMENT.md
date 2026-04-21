@@ -692,6 +692,9 @@ Version 1.0 has been successfully released with the following criteria met:
 4. Complete migration compliance re-audit and publish runbook updates
 5. Continue admin experience polish and export capabilities
 
+**Codex/v2.0 Follow-Up:**
+- Rebuild attendance tap-in/tap-out enforcement around explicit session ownership and stronger boundary semantics: persist the effective attendance timezone with the session/class, close cross-day sessions deterministically, and unify manual tap, dashboard status refresh, hall-pass transitions, and scheduled auto-tap-out behind one authoritative state machine so cap enforcement and day-boundary enforcement cannot drift apart.
+
 **Recent Releases:**
 - **v1.9.x** (2026-03-04+) - Active maintenance; see CHANGELOG [Unreleased]
 - **v1.9.0** (2026-03-04) - Docs Taxonomy Consolidation and Navigation Integrity
