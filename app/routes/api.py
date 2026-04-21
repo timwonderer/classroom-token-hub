@@ -168,6 +168,76 @@ def _append_redemption_audit_log(*, student_item, student, teacher_id, action, n
     guard_state['inserted'] = True
 
 
+def _enforce_cross_date_tapout(student_id, period, join_code, *, student_block=None, now_utc=None):
+    """
+    Close an active attendance session at the Pacific midnight boundary.
+
+    V1 rule: attendance sessions cannot span multiple Pacific calendar days.
+    If the latest event is still active after midnight, create a backfilled
+    inactive event at 12:00 AM Pacific and mark the previous day as done.
+    """
+    pacific = pytz.timezone('America/Los_Angeles')
+    now_utc = ensure_utc(now_utc) or utc_now()
+    today_pacific = now_utc.astimezone(pacific).date()
+
+    latest_event = (
+        TapEvent.query
+        .filter_by(
+            student_id=student_id,
+            period=period,
+            join_code=join_code,
+            is_deleted=False,
+        )
+        .order_by(TapEvent.timestamp.desc())
+        .first()
+    )
+
+    if not latest_event or latest_event.status != "active":
+        return latest_event
+
+    latest_event_pacific_date = ensure_utc(latest_event.timestamp).astimezone(pacific).date()
+    if latest_event_pacific_date >= today_pacific:
+        return latest_event
+
+    midnight_pacific = pacific.localize(datetime.combine(today_pacific, datetime.min.time()))
+    midnight_utc = midnight_pacific.astimezone(timezone.utc)
+    previous_day_pacific = today_pacific - timedelta(days=1)
+
+    tap_out_event = TapEvent(
+        student_id=student_id,
+        period=period,
+        status="inactive",
+        timestamp=midnight_utc,
+        reason="done for the day",
+        join_code=join_code,
+    )
+    db.session.add(tap_out_event)
+
+    if student_block is None:
+        student_block = StudentBlock.query.filter_by(
+            student_id=student_id,
+            period=period,
+        ).first()
+
+    if not student_block:
+        student_block = StudentBlock(
+            student_id=student_id,
+            period=period,
+            join_code=join_code,
+            tap_enabled=True,
+        )
+        db.session.add(student_block)
+
+    student_block.done_for_day_date = previous_day_pacific
+
+    current_app.logger.info(
+        f"Hard tap-out at date boundary for student {student_id} in period {period} "
+        f"at {midnight_utc.isoformat()} (session started on {latest_event_pacific_date.isoformat()})"
+    )
+
+    return tap_out_event
+
+
 # -------------------- TIPS API --------------------
 
 @api_bp.route('/tips/<user_type>')
@@ -2174,6 +2244,14 @@ def handle_tap():
         if student_block.done_for_day_date == today_pacific:
             return jsonify({"error": "You are done for the day. You cannot Start Work again until tomorrow."}), 403
 
+    _enforce_cross_date_tapout(
+        student.id,
+        period,
+        join_code,
+        student_block=student_block,
+        now_utc=now,
+    )
+
 
     # --- Hall Pass Logic for Stop Work ---
     if normalized_action == 'stop_work':
@@ -2674,6 +2752,39 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
         )
 
         if latest_event and latest_event.status == "active":
+            join_code = latest_event.join_code
+            if not join_code:
+                join_code = get_join_code_for_student_period(student.id, period_upper)
+
+            if not join_code:
+                current_app.logger.warning(
+                    f"Unable to resolve join_code for student {student.id} in period {period_upper} "
+                    f"for date-boundary tap-out. TapEvent ID is {latest_event.id}."
+                )
+                continue
+
+            _enforce_cross_date_tapout(
+                student.id,
+                period_upper,
+                join_code,
+                now_utc=now_utc,
+            )
+
+            latest_event = (
+                TapEvent.query
+                .filter_by(
+                    student_id=student.id,
+                    period=period_upper,
+                    join_code=join_code,
+                    is_deleted=False,
+                )
+                .order_by(TapEvent.timestamp.desc())
+                .first()
+            )
+
+            if not latest_event or latest_event.status != "active":
+                continue
+
             # Get teacher_id for this block (needed for settings lookup)
             teacher_id = None
             # Try to find seat for this block

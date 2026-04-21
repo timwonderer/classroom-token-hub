@@ -2,7 +2,9 @@ from app import db, Student
 from werkzeug.security import generate_password_hash
 from app.hash_utils import hash_username, get_random_salt
 from bs4 import BeautifulSoup
+from datetime import datetime, timezone
 import json
+import pytz
 
 def login(client, username, pin):
     return client.post('/student/login', data={'username': username, 'pin': pin})
@@ -253,3 +255,121 @@ def test_auto_tapout_skips_when_join_code_missing(client, caplog):
         f"TapEvent ID is {legacy_event.id}" in record.message
         for record in caplog.records
     ), f"Expected warning about missing join_code was not logged. Records: {[r.message for r in caplog.records]}"
+
+
+def test_cross_date_active_session_hard_taps_out_on_status_check(client, monkeypatch):
+    from app import TapEvent
+    from app.models import Admin, StudentBlock, StudentTeacher
+    from app.routes.api import check_and_auto_tapout_if_limit_reached
+    import pyotp
+
+    fixed_now = datetime(2026, 4, 20, 7, 0, 5, tzinfo=timezone.utc)  # 12:00:05 AM Pacific
+    monkeypatch.setattr('app.routes.api.utc_now', lambda: fixed_now)
+
+    teacher = Admin(username="boundary-status-teacher", totp_secret=pyotp.random_base32())
+    db.session.add(teacher)
+    db.session.flush()
+
+    salt = get_random_salt()
+    username = "boundary_status"
+    stu = Student(
+        first_name="Boundary",
+        last_initial="S",
+        block="A",
+        salt=salt,
+        username_hash=hash_username(username, salt),
+        pin_hash=generate_password_hash("0000"),
+    )
+    db.session.add(stu)
+    db.session.flush()
+
+    db.session.add(StudentTeacher(student_id=stu.id, admin_id=teacher.id))
+    create_claimed_seat(teacher.id, stu.id, "A", "JOIN-BOUNDARY-STATUS", salt)
+    db.session.commit()
+
+    db.session.add(TapEvent(
+        student_id=stu.id,
+        period="A",
+        status="active",
+        timestamp=datetime(2026, 4, 20, 6, 59, 59, tzinfo=timezone.utc),  # 11:59:59 PM Pacific previous day
+        join_code="JOIN-BOUNDARY-STATUS",
+    ))
+    db.session.commit()
+
+    check_and_auto_tapout_if_limit_reached(stu)
+
+    boundary_tap_out = (
+        TapEvent.query
+        .filter_by(student_id=stu.id, period="A", status="inactive", join_code="JOIN-BOUNDARY-STATUS")
+        .order_by(TapEvent.timestamp.desc())
+        .first()
+    )
+    assert boundary_tap_out is not None
+    assert boundary_tap_out.reason == "done for the day"
+    assert boundary_tap_out.timestamp == datetime(2026, 4, 20, 7, 0, 0, tzinfo=timezone.utc)
+
+    student_block = StudentBlock.query.filter_by(student_id=stu.id, period="A").first()
+    assert student_block is not None
+    assert student_block.done_for_day_date == pytz.timezone('America/Los_Angeles').localize(
+        datetime(2026, 4, 19, 12, 0, 0)
+    ).date()
+
+
+def test_start_work_after_midnight_closes_previous_day_session(client, monkeypatch):
+    from app import TapEvent
+    from app.models import Admin, StudentTeacher
+    import pyotp
+
+    fixed_now = datetime(2026, 4, 20, 7, 0, 5, tzinfo=timezone.utc)  # 12:00:05 AM Pacific
+    monkeypatch.setattr('app.routes.api.utc_now', lambda: fixed_now)
+
+    teacher = Admin(username="boundary-tap-teacher", totp_secret=pyotp.random_base32())
+    db.session.add(teacher)
+    db.session.flush()
+
+    salt = get_random_salt()
+    username = "boundary_tap"
+    stu = Student(
+        first_name="Boundary",
+        last_initial="T",
+        block="A",
+        salt=salt,
+        username_hash=hash_username(username, salt),
+        pin_hash=generate_password_hash("0000"),
+    )
+    db.session.add(stu)
+    db.session.flush()
+
+    db.session.add(StudentTeacher(student_id=stu.id, admin_id=teacher.id))
+    create_claimed_seat(teacher.id, stu.id, "A", "JOIN-BOUNDARY-TAP", salt)
+    db.session.commit()
+
+    db.session.add(TapEvent(
+        student_id=stu.id,
+        period="A",
+        status="active",
+        timestamp=datetime(2026, 4, 20, 6, 50, 0, tzinfo=timezone.utc),  # 11:50 PM Pacific previous day
+        join_code="JOIN-BOUNDARY-TAP",
+    ))
+    db.session.commit()
+
+    login(client, username, "0000")
+    response = client.post('/api/tap', json={'period': 'A', 'action': 'tap_in', 'pin': '0000'})
+
+    assert response.status_code == 200
+    assert response.json["status"] == "ok"
+    assert response.json["active"] is True
+
+    events = (
+        TapEvent.query
+        .filter_by(student_id=stu.id, period="A", join_code="JOIN-BOUNDARY-TAP")
+        .order_by(TapEvent.timestamp.asc())
+        .all()
+    )
+    assert len(events) == 3
+    assert events[0].status == "active"
+    assert events[1].status == "inactive"
+    assert events[1].reason == "done for the day"
+    assert events[1].timestamp == datetime(2026, 4, 20, 7, 0, 0, tzinfo=timezone.utc)
+    assert events[2].status == "active"
+    assert events[2].timestamp == fixed_now
