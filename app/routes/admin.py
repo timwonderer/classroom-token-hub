@@ -597,6 +597,7 @@ def _populate_policy_from_form(policy, form, *, teacher_id=None, block=None, nex
     policy.enable_repurchase_cooldown = form.enable_repurchase_cooldown.data
     policy.repurchase_wait_days = form.repurchase_wait_days.data
     policy.auto_cancel_nonpay_days = form.auto_cancel_nonpay_days.data
+    policy.bill_preview_days = form.bill_preview_days.data if form.bill_preview_days.data is not None else 5
     policy.claim_time_limit_days = form.claim_time_limit_days.data
     policy.bundle_with_policy_ids = form.bundle_with_policy_ids.data
     policy.bundle_discount_percent = form.bundle_discount_percent.data

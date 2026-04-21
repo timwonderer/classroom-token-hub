@@ -1359,6 +1359,7 @@ class InsurancePolicy(db.Model):
     enable_repurchase_cooldown = db.Column(db.Boolean, default=False)  # Enable temporary cooldown period
     repurchase_wait_days = db.Column(db.Integer, default=30)  # Days to wait after cancel (if cooldown enabled)
     auto_cancel_nonpay_days = db.Column(db.Integer, default=7)  # Days of non-payment before cancel
+    bill_preview_days = db.Column(db.Integer, nullable=False, default=5)  # Days before due date to show manual-pay bill
     claim_time_limit_days = db.Column(db.Integer, default=30)  # Days from incident to file claim
 
     # Bundle settings (JSON or separate table in future)

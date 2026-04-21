@@ -110,6 +110,62 @@
                             </div>
                         </div>
 
+                        <!-- Billing Status Banner -->
+                        {% set bpd = bill_preview_data.get(enrollment.id, {}) %}
+                        {% if not enrollment.policy.autopay %}
+                          {% if not enrollment.payment_current %}
+                          <div class="alert alert-danger py-2 px-3 mb-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <div>
+                              <span class="material-symbols-outlined align-middle" style="font-size: 1.1rem;">warning</span>
+                              <strong>Past Due</strong> — {{ enrollment.days_unpaid }} day{{ enrollment.days_unpaid != 1 and 's' or '' }} overdue
+                              {% if enrollment.policy.auto_cancel_nonpay_days %}
+                              · cancels after {{ enrollment.policy.auto_cancel_nonpay_days }} days
+                              {% endif %}
+                            </div>
+                            <form action="{{ url_for('student.pay_insurance', enrollment_id=enrollment.id) }}" method="POST" class="mb-0">
+                              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                              <button type="submit" class="btn btn-sm btn-danger">
+                                <span class="material-symbols-outlined align-middle" style="font-size: 1rem;">payments</span>
+                                Pay ${{ "%.2f"|format(enrollment.contract_premium) }} Now
+                              </button>
+                            </form>
+                          </div>
+                          {% elif bpd.get('show_pay_now') %}
+                          <div class="alert alert-warning py-2 px-3 mb-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <div>
+                              <span class="material-symbols-outlined align-middle" style="font-size: 1.1rem;">schedule</span>
+                              <strong>Bill Due</strong>
+                              {% if bpd.get('next_due') %}{{ bpd.next_due.strftime('%b %d, %Y') }}{% endif %}
+                              — ${{ "%.2f"|format(enrollment.contract_premium) }}
+                            </div>
+                            <form action="{{ url_for('student.pay_insurance', enrollment_id=enrollment.id) }}" method="POST" class="mb-0">
+                              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                              <button type="submit" class="btn btn-sm btn-warning text-dark">
+                                <span class="material-symbols-outlined align-middle" style="font-size: 1rem;">payments</span>
+                                Pay Now
+                              </button>
+                            </form>
+                          </div>
+                          {% elif bpd.get('next_due') %}
+                          <div class="alert alert-success py-2 px-3 mb-2">
+                            <span class="material-symbols-outlined align-middle" style="font-size: 1.1rem;">check_circle</span>
+                            <strong>Paid</strong> — Next bill due {{ bpd.next_due.strftime('%b %d, %Y') }} for ${{ "%.2f"|format(enrollment.contract_premium) }}
+                          </div>
+                          {% endif %}
+                        {% else %}
+                          {% if enrollment.payment_current and bpd.get('next_due') %}
+                          <div class="alert alert-success py-2 px-3 mb-2">
+                            <span class="material-symbols-outlined align-middle" style="font-size: 1.1rem;">check_circle</span>
+                            <strong>Paid</strong> — Next autopay {{ bpd.next_due.strftime('%b %d, %Y') }} for ${{ "%.2f"|format(enrollment.contract_premium) }}
+                          </div>
+                          {% elif not enrollment.payment_current %}
+                          <div class="alert alert-warning py-2 px-3 mb-2">
+                            <span class="material-symbols-outlined align-middle" style="font-size: 1.1rem;">warning</span>
+                            <strong>Autopay failed</strong> — {{ enrollment.days_unpaid }} day{{ enrollment.days_unpaid != 1 and 's' or '' }} unpaid. Ensure sufficient checking balance.
+                          </div>
+                          {% endif %}
+                        {% endif %}
+
                         <!-- Status Badges -->
                         <div class="mb-2">
                             {% if enrollment.policy.claim_type == 'transaction_monetary' %}

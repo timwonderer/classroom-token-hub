@@ -8,6 +8,16 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Added
+- **Insurance recurring billing — Phases 2–4** — Builds on the Phase 1 nightly billing job shipped in PR #1168:
+  - **`bill_preview_days` teacher setting** — Teachers configure how many days before the due date students on manual-pay policies see their upcoming bill. Appears beneath the Autopay toggle in create and edit policy forms (hidden via JS when autopay is on). Migration `f9a8b7c6d5e4` adds `bill_preview_days INTEGER NOT NULL DEFAULT 5` to `insurance_policies`. (#1172)
+  - **Student billing status banners** — "My Policies" tab on `/student/insurance` now shows contextual banners: Paid/upcoming for autopay policies; Pay Now button within `bill_preview_days` of due date or when past due for manual-pay policies.
+  - **Manual pay route** — New `POST /student/insurance/pay/<enrollment_id>` route deducts the frozen premium from checking, advances `next_payment_due` from the existing cycle anchor (prevents billing drift), includes a 30-second idempotency guard against double-submission, and wraps DB writes in `try/except` with rollback.
+  - **Bundle discounts applied at purchase** — `bundle_discount_percent`/`bundle_discount_amount` were stored but never used. Now applied at purchase time; `frozen_premium` is overwritten with the discounted rate so all future billing cycles charge correctly. Percent clamped to [0, 100] and amount clamped to ≥0 to guard against misconfigured values.
+
+### Fixed
+- **Docs link check: exclude GitHub Actions template expressions** — `lychee.toml` now excludes URLs matching `^\$\{\{` so GitHub Actions context variable syntax used in documentation code examples (e.g. `${{ github.run_id }}`) does not generate false-positive broken-link failures in CI.
+
 ### Fixed
 - **Partial rent payments no longer corrupt the class-wide rate lock** — When `allow_incremental_payment` is enabled, the first partial installment (e.g. $200 of a $570 rent) was used as the class-wide locked rate, causing every subsequent partial payment to be silently rejected with an "already paid" flash. Fixed by recording `rent_amount_snapshot = settings.rent_amount` on each new `RentPayment` row and using it in `_get_locked_rent_amount_for_join_code_cycle` / `_get_effective_rent_amount_for_coverage_period` instead of back-calculating from `amount_paid - late_fee`. Legacy rows without a snapshot fall back to the previous derivation. Migration `a8b9c0d1e2f3` adds the nullable `rent_amount_snapshot` column to `rent_payments`. (#1164)
 - **V1 store lifecycle stabilization** — Rejected delayed-use redemptions now issue refunds as `PENDING` ledger entries so balance-cache settlement remains authoritative and `/health/invariants` does not fail from posted-ledger drift before settlement. Refunded purchases are also blocked from later admin voids to prevent double-compensation paths after redemption rejection.

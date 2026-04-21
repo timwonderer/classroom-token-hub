@@ -3,6 +3,8 @@ no_progress = true
 exclude = [
   "^mailto:",
   "^tel:",
+  # GitHub Actions template expressions (e.g. ${{ github.run_id }}) used in doc examples
+  "^\\$\\{\\{",
 ]
 
 exclude_path = [
