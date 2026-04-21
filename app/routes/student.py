@@ -2498,8 +2498,7 @@ def pay_insurance(enrollment_id):
 
     # Idempotency guard: reject if an insurance_premium transaction for this enrollment
     # was already created within the last 30 seconds (protects against double-clicks).
-    from datetime import timedelta as _td
-    cutoff = now - _td(seconds=30)
+    cutoff = now - timedelta(seconds=30)
     recent_tx = Transaction.query.filter(
         Transaction.student_id == student.id,
         Transaction.join_code == join_code,
