@@ -62,6 +62,8 @@ from app.payroll import get_pay_rate_for_block
 # Create blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
+PACIFIC_TZ = 'America/Los_Angeles'
+
 
 # -------------------- Rent Helpers --------------------
 
@@ -168,6 +170,23 @@ def _append_redemption_audit_log(*, student_item, student, teacher_id, action, n
     guard_state['inserted'] = True
 
 
+def _get_or_create_student_block(student_id, period, join_code=None):
+    """Return the StudentBlock for a student/period, creating one if absent."""
+    student_block = StudentBlock.query.filter_by(
+        student_id=student_id,
+        period=period,
+    ).first()
+    if not student_block:
+        student_block = StudentBlock(
+            student_id=student_id,
+            period=period,
+            join_code=join_code,
+            tap_enabled=True,
+        )
+        db.session.add(student_block)
+    return student_block
+
+
 def _enforce_cross_date_tapout(student_id, period, join_code, *, student_block=None, now_utc=None):
     """
     Close an active attendance session at the Pacific midnight boundary.
@@ -176,7 +195,7 @@ def _enforce_cross_date_tapout(student_id, period, join_code, *, student_block=N
     If the latest event is still active after midnight, create a backfilled
     inactive event at 12:00 AM Pacific and mark the previous day as done.
     """
-    pacific = pytz.timezone('America/Los_Angeles')
+    pacific = pytz.timezone(PACIFIC_TZ)
     now_utc = ensure_utc(now_utc) or utc_now()
     today_pacific = now_utc.astimezone(pacific).date()
 
@@ -214,19 +233,7 @@ def _enforce_cross_date_tapout(student_id, period, join_code, *, student_block=N
     db.session.add(tap_out_event)
 
     if student_block is None:
-        student_block = StudentBlock.query.filter_by(
-            student_id=student_id,
-            period=period,
-        ).first()
-
-    if not student_block:
-        student_block = StudentBlock(
-            student_id=student_id,
-            period=period,
-            join_code=join_code,
-            tap_enabled=True,
-        )
-        db.session.add(student_block)
+        student_block = _get_or_create_student_block(student_id, period, join_code=join_code)
 
     student_block.done_for_day_date = previous_day_pacific
 
@@ -2203,28 +2210,15 @@ def handle_tap():
     now = utc_now()
 
     # --- Check if tap is enabled for this student in this period ---
-    from app.models import StudentBlock
-    student_block = StudentBlock.query.filter_by(
-        student_id=student.id,
-        period=period
-    ).first()
-
-    # If no StudentBlock record exists, create one with default settings (tap_enabled=True)
-    if not student_block:
-        try:
-            student_block = StudentBlock(
-                student_id=student.id,
-                period=period,
-                tap_enabled=True
-            )
-            db.session.add(student_block)
-            db.session.commit()
-        except IntegrityError:
-            db.session.rollback()
-            student_block = StudentBlock.query.filter_by(
-                student_id=student.id,
-                period=period
-            ).first()
+    student_block = _get_or_create_student_block(student.id, period, join_code=join_code)
+    try:
+        db.session.flush()
+    except IntegrityError:
+        db.session.rollback()
+        student_block = StudentBlock.query.filter_by(
+            student_id=student.id,
+            period=period,
+        ).first()
 
     # Check if tap is disabled for this period
     if not student_block.tap_enabled:
@@ -2233,7 +2227,7 @@ def handle_tap():
     # --- Check "done for the day" lock ---
     if normalized_action == "start_work":
         # Use Pacific timezone for "done for the day" check
-        pacific = pytz.timezone('America/Los_Angeles')
+        pacific = pytz.timezone(PACIFIC_TZ)
         now_pacific = now.astimezone(pacific)
         today_pacific = now_pacific.date()
 
@@ -2307,11 +2301,11 @@ def handle_tap():
             # Check per-destination queue limits
             if pass_type_config and pass_type_config.get('queue_limit') is not None:
                 # Get user's timezone from session for today's count
-                tz_name = session.get('timezone', 'America/Los_Angeles')
+                tz_name = session.get('timezone', PACIFIC_TZ)
                 try:
                     user_tz = pytz.timezone(tz_name)
                 except pytz.UnknownTimeZoneError:
-                    user_tz = pytz.timezone('America/Los_Angeles')
+                    user_tz = pytz.timezone(PACIFIC_TZ)
 
                 now_user_tz = utc_now().astimezone(user_tz)
                 today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -2449,7 +2443,7 @@ def handle_tap():
             daily_limit = get_daily_limit_seconds(period)
             if daily_limit:
                 # Use Pacific timezone for daily reset
-                pacific = pytz.timezone('America/Los_Angeles')
+                pacific = pytz.timezone(PACIFIC_TZ)
                 now_pacific = now.astimezone(pacific)
                 today_pacific = now_pacific.date()
 
@@ -2498,7 +2492,7 @@ def handle_tap():
         db.session.add(event)
 
         # Update "done for the day" status when Stopping Work with reason "done"
-        pacific = pytz.timezone('America/Los_Angeles')
+        pacific = pytz.timezone(PACIFIC_TZ)
         now_pacific = now.astimezone(pacific)
         today_pacific = now_pacific.date()
         # Clear done_for_day_date if it's a new day
@@ -2727,7 +2721,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
     now_utc = utc_now()
 
     # Use Pacific timezone for daily reset
-    pacific = pytz.timezone('America/Los_Angeles')
+    pacific = pytz.timezone(PACIFIC_TZ)
     now_pacific = now_utc.astimezone(pacific)
     today_pacific = now_pacific.date()
 
@@ -2763,23 +2757,11 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                 )
                 continue
 
-            _enforce_cross_date_tapout(
+            latest_event = _enforce_cross_date_tapout(
                 student.id,
                 period_upper,
                 join_code,
                 now_utc=now_utc,
-            )
-
-            latest_event = (
-                TapEvent.query
-                .filter_by(
-                    student_id=student.id,
-                    period=period_upper,
-                    join_code=join_code,
-                    is_deleted=False,
-                )
-                .order_by(TapEvent.timestamp.desc())
-                .first()
             )
 
             if not latest_event or latest_event.status != "active":
