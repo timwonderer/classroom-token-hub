@@ -80,9 +80,17 @@ Credentials that are NOT touched during recovery:
 
 Recovery state lives on the identity record:
 
-- `reset_code_hash` — hashed reset code (8-char alphanumeric, single-use)
+- `reset_code` — plaintext 8-character alphanumeric reset code; stored as plaintext
+  because the teacher must be able to display it again after a page refresh until the
+  code expires or recovery completes
 - `reset_code_expires_at` — UTC timestamp; hard TTL of 10 minutes from generation
 - `recovery_status` — `active` | `to_be_claimed`
+
+Storage rationale: a reset code is a short-lived (10-minute), teacher-visible,
+disposable code communicated in person. It is not a long-lived credential and does not
+need to be hashed. Hashing it would make teacher redisplay impossible. Long-lived
+credentials (PIN, passphrase, TOTP secret) are always hashed or encrypted; reset codes
+are not.
 
 ### IV.3 Student Recovery Flow
 
@@ -92,14 +100,15 @@ Teacher initiates reset from student details view.
 
 System must:
 - Set `recovery_status → to_be_claimed`
-- Invalidate any existing `reset_code_hash`
+- Invalidate any existing reset code
 - Generate new 8-character random alphanumeric reset code
-- Hash and store as `reset_code_hash`
+- Store the plaintext code in `reset_code`
 - Set `reset_code_expires_at = now + 10 minutes`
 - Log the reset event
 
-Teacher communicates the plaintext code to the student in real time. The plaintext code
-is never stored.
+The plaintext code is displayed to the teacher immediately and remains readable on
+page refresh until the code expires or recovery completes. The teacher communicates
+it verbally to the student in real time.
 
 **Step 2 — Student submits join code + reset code**
 
@@ -108,7 +117,7 @@ Student navigates to the recovery entry point and submits:
 - reset code (plaintext)
 
 Backend must validate:
-- `reset_code_hash` matches the submitted code
+- `reset_code` matches the submitted code (direct comparison)
 - Code has not been used
 - Code has not expired (`now < reset_code_expires_at`)
 - `recovery_status == to_be_claimed`
@@ -138,7 +147,7 @@ Rules:
 **Step 4 — Completion**
 
 On successful credential setup:
-- Clear `reset_code_hash`
+- Clear `reset_code` (set to NULL)
 - Clear `reset_code_expires_at`
 - Set `recovery_status → active`
 - Regenerate `current_session_nonce`
@@ -222,13 +231,17 @@ On successful credential setup:
 ## VII. Security Constraints (Both Roles)
 
 - Reset codes and recovery tokens must be random and non-sequential.
-- All codes/tokens are single-use.
-- All codes/tokens have a hard TTL (student: 10 minutes; teacher: implementation-defined,
-  suggest 24 hours).
+- All codes/tokens are single-use — cleared on use or expiry.
+- All codes/tokens have a hard TTL (student reset code: 10 minutes; teacher recovery
+  token: implementation-defined, suggest 24 hours).
+- **Reset codes are stored as plaintext** to support teacher redisplay after page
+  refresh. This is intentional — reset codes are short-lived, disposable, and
+  communicated in person. They are not long-lived credentials.
+- Long-lived credentials (PIN, passphrase, TOTP secret) are always hashed or encrypted;
+  this rule does not apply to reset codes.
 - Rate-limit all recovery endpoints.
 - Lock recovery flow after repeated failed attempts per identity.
 - Never reveal whether a specific identity exists via recovery error messages.
-- Plaintext codes/tokens are never stored — only their hashes.
 
 ---
 
@@ -255,12 +268,11 @@ The recovery system must NOT:
 | Student identity record | `users` row | `students` row |
 | Teacher identity record | `users` row | `Admin` row |
 | Recovery state fields | On `users` | On `students` / `Admin` |
-| Reset code storage | `reset_code_hash` on `users` | `reset_code` (unhashed) on `students` |
+| Reset code storage | `reset_code` plaintext on `users` | `reset_code` plaintext on `students` — correct |
 
-> [!WARNING]
-> The current `students` table stores `reset_code` as **plaintext**, not as a hash.
-> This must be corrected before or during Project 9 cutover. The v2 model stores
-> only `reset_code_hash`.
+The current runtime `students.reset_code` plaintext storage is correct and intentional.
+No change needed for Project 9 on this field — the field name and plaintext storage
+model carry forward.
 
 ---
 
