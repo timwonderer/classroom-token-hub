@@ -1,34 +1,31 @@
-# Classroom Token Hub (CTH) v2 Teacher Identity Architecture
+# Teacher Identity Domain
 
-## Purpose
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| DOM-IDEN-003     | 1.0     | 2026-04-22     | ARC-IDEN-001 v2.0 | Normative |
+
+## I. Purpose
 
 This document defines the v2 identity model for teacher (admin) participation inside CTH.
 
-It is a companion to `V2_STUDENT_IDENTITY_ARCHITECTURE.md`. Together, they specify the
-full unified identity model. Both roles use the same `users`, `seats`, and `classes`
-tables, differentiated by `user_role` on the `users` row and `role` on the `seat`.
+It is a companion to `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`.
+Both roles use the same `users`, `seats`, and `classes` tables, differentiated by
+`user_role` on the `users` row and `role` on the `seat`.
 
 This document assumes the clean v2 identity redesign. It is not a v1-to-v2 migration
 plan and does not preserve v1 data model constraints.
 
-It answers four questions:
+Supersedes `docs/ARCHITECTURE/IDENTITY/ARC-IDEN-001_Admin_Identity_Handling.md`.
 
-1. How is a teacher credential different from a student credential?
-2. What object represents a teacher inside a class universe?
-3. Where does teacher-specific configuration live?
-4. What authentication mechanisms are available to teachers?
+## II. Dependencies
 
-For student identity, see:
-
+- `INV-CORE-000_Core_Invariants.md`
+- `DOM-CORE-000_Domain_Foundation.md`
+- `DOM-IDEN-001_Identity_Class_Binding_Domain.md`
+- `DOM-IDEN-002_Account_Recovery.md`
 - `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
 
-For class scoping and `class_id` normalization, see:
-
-- `docs/development/specs/V2_Class_Scope_Normalization_Target.md`
-
----
-
-## Core Design Principle
+## III. Core Design Principle
 
 CTH uses a unified identity model. Both teachers and students are represented as `users`
 with one or more `seats`. The role differentiates behavior, not the table.
@@ -88,8 +85,9 @@ Rules:
 
 ### Classes
 
-Same as defined in `V2_STUDENT_IDENTITY_ARCHITECTURE.md`. Teachers and students both
-participate in the same class universe anchored by the `classes` table.
+Same as defined in `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`.
+Teachers and students both participate in the same class universe anchored by the
+`classes` table.
 
 ### Seats
 

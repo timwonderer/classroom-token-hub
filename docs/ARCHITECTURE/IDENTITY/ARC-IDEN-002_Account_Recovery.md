@@ -4,6 +4,15 @@
 |------------------|---------|----------------|------------|-----------------|
 | ARC-IDEN-002     | 1.1     | 2026-03-08     | 1.0        | Normative       |
 
+> [!CAUTION]
+> **SUPERSEDED.** This document describes the v1 account recovery model.
+> **Critical conflict:** Step 3 requires Date of Birth re-entry, which is explicitly
+> prohibited in the v2 identity model. No DOB is stored or used in any form for
+> either students or teachers in v2.
+> For the v2 target model, see:
+> `docs/development/v2_restructure_doc/DOM-DOMAIN/DOM-IDEN-002_Account_Recovery.md`
+> This document is retained for historical reference only. Do not implement from it.
+
 ## I. Purpose
 
 This document defines the architecture, constraints, and invariants for the Account Recovery & Reclaim feature.

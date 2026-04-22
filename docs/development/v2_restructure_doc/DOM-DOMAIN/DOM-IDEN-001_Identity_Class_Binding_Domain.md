@@ -176,8 +176,9 @@ They may exist in current runtime code, but they do not define the target domain
 - `user_role` determines the credential scheme on `users`.
 - `role` on `seats` determines the operational role within a class.
 - Authentication flows are specified per role in:
-  - `V2_STUDENT_IDENTITY_ARCHITECTURE.md` — student credential and claim flow
-  - `V2_TEACHER_IDENTITY_ARCHITECTURE.md` — teacher credential and session flow
+  - `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md` — student credential and claim flow
+  - `DOM-IDEN-003_Teacher_Identity_Architecture.md` — teacher credential and session flow
+- Recovery flows are specified in `DOM-IDEN-002_Account_Recovery.md`.
 
 ## X. Transitional Reality
 

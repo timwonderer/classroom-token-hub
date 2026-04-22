@@ -4,6 +4,13 @@
 |------------------|---------|----------------|------------|-----------------|
 | ARC-IDEN-001     | 2.0     | 2026-04-12     | 1.2        | Constitutional  |
 
+> [!CAUTION]
+> **SUPERSEDED.** This document describes the v1 teacher identity model.
+> For the v2 target model, see:
+> `docs/development/specs/V2_TEACHER_IDENTITY_ARCHITECTURE.md`
+> and `docs/development/v2_restructure_doc/DOM-DOMAIN/DOM-IDEN-001_Identity_Class_Binding_Domain.md`.
+> This document is retained for historical reference only.
+
 ## I. Purpose
 Define the hardened v2 identity model for System Admins and Teachers (Admins), emphasizing the transition to a hash-only, privacy-preserving authentication architecture and the absolute removal of legacy plaintext identifiers.
 
