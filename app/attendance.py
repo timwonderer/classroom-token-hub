@@ -1,5 +1,5 @@
 from datetime import datetime, timezone, timedelta
-from app.utils.time import utc_now, ensure_utc, normalize_for_db
+from app.utils.time import utc_now, ensure_utc, normalize_for_db, day_bounds_utc, class_date
 from sqlalchemy import func
 from flask import current_app
 from app.extensions import db
@@ -33,8 +33,8 @@ def calculate_period_attendance(student_id, period, date):
     """
     Calculates total attendance seconds for a student in a specific period
     on a specific date. Used for daily attendance reporting.
-    NOTE: This uses func.date() which operates on UTC timestamps.
-    For Pacific timezone daily limits, use calculate_period_attendance_utc_range instead.
+    NOTE: This uses UTC day boundaries.
+    For class-timezone daily limits, use calculate_period_attendance_utc_range instead.
     """
     from app.models import TapEvent
 
@@ -118,7 +118,9 @@ def get_session_status(student_id, period):
     from app.models import TapEvent
     from datetime import datetime, timezone
 
-    today = utc_now().date()
+    today_start_utc, today_end_utc = day_bounds_utc()
+    today_start_db = normalize_for_db(today_start_utc)
+    today_end_db = normalize_for_db(today_end_utc)
     join_code = get_join_code_for_student_period(student_id, period)
 
     # Check if student is currently active
@@ -136,7 +138,8 @@ def get_session_status(student_id, period):
     # Check if marked as done today
     done_query = TapEvent.query.filter(
         TapEvent.period == period,
-        func.date(TapEvent.timestamp) == today,
+        TapEvent.timestamp >= today_start_db,
+        TapEvent.timestamp < today_end_db,
         TapEvent.reason != None,
         TapEvent.is_deleted == False  # Exclude deleted events
     )
@@ -315,7 +318,6 @@ def batch_auto_tapout_students(admin_id):
     """
     from app.models import Student, TapEvent, TapEventReasonCode, StudentBlock, PayrollSettings, StudentTeacher, TeacherBlock
     from app.extensions import db
-    import pytz
 
     # 1. Get all students for this admin via StudentTeacher
     student_ids = [
@@ -344,14 +346,9 @@ def batch_auto_tapout_students(admin_id):
     if not admin_join_codes:
         return 0
 
-    # 2. Get today's start in UTC (based on Pacific time)
-    pacific = pytz.timezone('America/Los_Angeles')
     now_utc = utc_now()
-    now_pacific = now_utc.astimezone(pacific)
-    today_pacific = now_pacific.date()
-
-    start_of_day_pacific = pacific.localize(datetime.combine(today_pacific, datetime.min.time()))
-    start_of_day_utc = start_of_day_pacific.astimezone(timezone.utc)
+    start_of_day_utc, _ = day_bounds_utc(timestamp_utc=now_utc)
+    today_local = class_date(timestamp_utc=now_utc)
 
     # 3. Batch fetch events for today, scoped to this admin's join codes only.
     # events_map: (student_id, period, join_code) -> list[TapEvent]
@@ -447,7 +444,7 @@ def batch_auto_tapout_students(admin_id):
                         )
                         db.session.add(sb)
                         student_blocks_lookup[(student.id, period)] = sb
-                    sb.done_for_day_date = today_pacific
+                    sb.done_for_day_date = today_local
 
     if tapped_out_count > 0:
         try:

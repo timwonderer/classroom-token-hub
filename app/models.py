@@ -12,6 +12,7 @@ import logging
 import secrets
 import uuid
 
+import pytz
 import sqlalchemy as sa
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
@@ -740,6 +741,7 @@ class ClassEconomy(db.Model):
         index=True,
     )
     display_name = db.Column(db.String(100), nullable=True)
+    class_timezone = db.Column(db.String(64), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
     created_by_admin_id = db.Column(
@@ -765,6 +767,27 @@ class ClassEconomy(db.Model):
     @status.setter
     def status(self, _value):
         return None
+
+    @validates("class_timezone")
+    def validate_class_timezone(self, _key, value):
+        if value is None:
+            return None
+        normalized = value.strip()
+        if normalized not in pytz.all_timezones_set:
+            raise ValueError("Class timezone must be a valid IANA timezone.")
+        return normalized
+
+
+@event.listens_for(ClassEconomy, "before_update")
+def prevent_class_timezone_mutation(_mapper, _connection, target):
+    state = sa.inspect(target)
+    history = state.attrs.class_timezone.history
+    if not history.has_changes():
+        return
+
+    previous_values = [value for value in history.deleted if value is not None]
+    if previous_values and target.class_timezone != previous_values[0]:
+        raise ValueError("Class timezone is immutable once set.")
 
 
 class EconomySnapshot(db.Model):

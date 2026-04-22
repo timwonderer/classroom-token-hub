@@ -7,7 +7,7 @@ As per docs/development/TIMEZONE_HANDLING_SPECIFICATION.md:
 - No direct calls to datetime.now() or datetime.utcnow() allowed elsewhere.
 """
 
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 import pytz
 from flask import current_app, has_app_context, has_request_context, session
 from app.extensions import db
@@ -88,12 +88,95 @@ def local_date_bounds_utc(local_day: date, timezone_name: str | None = None) -> 
     end_local = tz.localize(datetime.combine(local_day, time.max))
     return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
 
+def local_date_range_utc(local_day: date, timezone_name: str | None = None) -> tuple[datetime, datetime]:
+    """
+    Convert a local calendar day into a UTC [start, end) range for that timezone.
+    """
+    tz = get_timezone(timezone_name)
+    start_local = tz.localize(datetime.combine(local_day, time.min))
+    end_local = start_local + timedelta(days=1)
+    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+
 def local_date_end_utc(local_day: date, timezone_name: str | None = None) -> datetime:
     """
     Convert a local date to the end of that local day, represented in UTC.
     """
     _, end_utc = local_date_bounds_utc(local_day, timezone_name=timezone_name)
     return end_utc
+
+def class_now(timezone_name: str | None = None, timestamp_utc: datetime | None = None) -> datetime:
+    """
+    Return the current effective class-local time.
+    """
+    reference_utc = ensure_utc(timestamp_utc) if timestamp_utc is not None else utc_now()
+    return reference_utc.astimezone(get_timezone(timezone_name))
+
+def class_date(timezone_name: str | None = None, timestamp_utc: datetime | None = None) -> date:
+    """
+    Return the current effective class-local calendar date.
+    """
+    return class_now(timezone_name=timezone_name, timestamp_utc=timestamp_utc).date()
+
+def day_bounds_utc(timezone_name: str | None = None, timestamp_utc: datetime | None = None) -> tuple[datetime, datetime]:
+    """
+    Return the UTC [start, end) range for the effective class-local day.
+    """
+    return local_date_range_utc(
+        class_date(timezone_name=timezone_name, timestamp_utc=timestamp_utc),
+        timezone_name=timezone_name,
+    )
+
+def week_bounds_utc(reference_time: datetime | None = None, timezone_name: str | None = None) -> tuple[datetime, datetime]:
+    """
+    Return the UTC [start, end) range for the class-local week containing reference_time.
+    Weeks start on Monday.
+    """
+    local_now = class_now(timezone_name=timezone_name, timestamp_utc=reference_time)
+    week_start = local_now.date() - timedelta(days=local_now.weekday())
+    start_utc, _ = local_date_range_utc(week_start, timezone_name=timezone_name)
+    return start_utc, start_utc + timedelta(days=7)
+
+def month_bounds_utc(reference_time: datetime | None = None, timezone_name: str | None = None) -> tuple[datetime, datetime]:
+    """
+    Return the UTC [start, end) range for the class-local month containing reference_time.
+    """
+    local_now = class_now(timezone_name=timezone_name, timestamp_utc=reference_time)
+    start_local_day = date(local_now.year, local_now.month, 1)
+    start_utc, _ = local_date_range_utc(start_local_day, timezone_name=timezone_name)
+    if local_now.month == 12:
+        next_month_day = date(local_now.year + 1, 1, 1)
+    else:
+        next_month_day = date(local_now.year, local_now.month + 1, 1)
+    end_utc, _ = local_date_range_utc(next_month_day, timezone_name=timezone_name)
+    return start_utc, end_utc
+
+def semester_bounds_utc(reference_time: datetime | None = None, timezone_name: str | None = None) -> tuple[datetime, datetime]:
+    """
+    Return the UTC [start, end) range for the class-local semester containing reference_time.
+    """
+    local_now = class_now(timezone_name=timezone_name, timestamp_utc=reference_time)
+    if local_now.month <= 6:
+        start_day = date(local_now.year, 1, 1)
+        end_day = date(local_now.year, 7, 1)
+    else:
+        start_day = date(local_now.year, 7, 1)
+        end_day = date(local_now.year + 1, 1, 1)
+    start_utc, _ = local_date_range_utc(start_day, timezone_name=timezone_name)
+    end_utc, _ = local_date_range_utc(end_day, timezone_name=timezone_name)
+    return start_utc, end_utc
+
+def claim_period_bounds_utc(period_key: str, timezone_name: str | None = None, reference_time: datetime | None = None) -> tuple[datetime, datetime]:
+    """
+    Return the UTC [start, end) range for a supported insurance claim period.
+    """
+    normalized_key = (period_key or "month").strip().lower()
+    if normalized_key in {"week", "weekly"}:
+        return week_bounds_utc(reference_time=reference_time, timezone_name=timezone_name)
+    if normalized_key in {"semester", "semiannual"}:
+        return semester_bounds_utc(reference_time=reference_time, timezone_name=timezone_name)
+    if normalized_key in {"month", "monthly"}:
+        return month_bounds_utc(reference_time=reference_time, timezone_name=timezone_name)
+    raise ValueError(f"Unsupported claim period: {period_key}")
 
 def normalize_for_db(dt: datetime) -> datetime | None:
     """

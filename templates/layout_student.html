@@ -78,52 +78,39 @@
 
     <aside class="student-sidebar" id="studentSidebar" role="navigation"
             aria-label="Student navigation">
-                <a class="student-brand" href="{{ url_for('student.dashboard') }}">
-
+                <a class="student-brand nav-brand-block" href="{{ url_for('student.dashboard') }}">
                     <div>
-                        <div> <span class="material-symbols-outlined student-home-icon-bill"
+                        <div><span class="material-symbols-outlined student-home-icon-bill"
                                 style="font-size: 30px; vertical-align: middle; font-weight:200">local_atm</span>Classroom
                         </div>
                         <div><span class="material-symbols-outlined student-home-icon-store"
                                 style="font-size: 30px; vertical-align: middle; font-weight:200">store</span>Token</div>
-                        <div> <span class="material-symbols-outlined student-home-icon-stock"
-                                style="font-size: 30px; vertical-align: middle; font-weight:200"> finance_mode</span>Hub
+                        <div><span class="material-symbols-outlined student-home-icon-stock"
+                                style="font-size: 30px; vertical-align: middle; font-weight:200">finance_mode</span>Hub
                         </div>
                     </div>
                 </a>
-                <hr>
-                {% if student %}
-                <div class="student-identity" style="font-size: 24px;">
-                    {{ student.display_first_name }}
-                    <div class="mt-0" style="font-size:10pt; color:white">
-                        Student
+
+                <div class="sidebar-scope-panel">
+                    <div class="sidebar-scope-time class-scoped-time"
+                        id="student-class-time"
+                        data-timezone="{{ current_class_context.class_timezone if current_class_context else '' }}"
+                        data-empty-message="No classes yet. Official class time will appear after class access is added."
+                        data-unset-message="Official class time zone not set yet.">
                     </div>
+                    {% if current_class_context %}
+                    <div class="sidebar-scope-name">
+                        {{ current_class_context.student_first_name|upper }} {{ current_class_context.student_last_initial }}
+                    </div>
+                    <div class="sidebar-scope-context">{{ current_class_context.class_identifier }}</div>
+                    <div class="sidebar-scope-meta">{{ current_class_context.join_code }}</div>
+                    {% elif student %}
+                    <div class="sidebar-scope-name">{{ student.display_first_name|upper }}</div>
+                    <div class="sidebar-scope-context">No classes available yet</div>
+                    {% endif %}
                 </div>
-                {% endif %}
-                {% if available_classes %}
-                <div class="class-switcher mb-3">
-                    <div class="d-flex align-items-center justify-content-between mb-1">
-                        <label for="class-switcher-select" class="small mb-0 text-white text-uppercase">current
-                            class</label>
 
-                    </div>
-                    <select id="class-switcher-select" class="form-select form-select-sm">
-                        {% for class_option in available_classes %}
-                        <option value="{{ class_option.join_code }}" {% if class_option.is_current %}selected{% endif
-                            %}>
-                            {{ class_option.block_display }} with {{ class_option.teacher_name }}
-                        </option>
-                        {% endfor %}
-                    </select>
-
-                    <div id="class-switch-error" class="alert alert-warning small py-2 px-3 mt-2 d-none">
-                        <span class="material-symbols-outlined align-middle me-1" style="font-size: 18px;">error</span>
-                        <span class="class-switch-error-text"></span>
-                    </div>
-                </div>
-                {% endif %}
-
-                <nav class="student-nav">
+                <nav class="student-nav nav-shell-body">
                     <a href="{{ url_for('student.dashboard') }}"
                         class="{% if request.endpoint == 'student.dashboard' %}active{% endif %}">
                         <span class="material-symbols-outlined">home</span> Dashboard
@@ -132,32 +119,60 @@
                         class="{% if request.endpoint == 'student.transfer' %}active{% endif %}">
                         <span class="material-symbols-outlined">account_balance_wallet</span> Accounts
                     </a>
+                    {% if feature_settings.store_enabled %}
                     <a href="{{ url_for('student.shop') }}"
                         class="{% if request.endpoint == 'student.shop' %}active{% endif %}">
                         <span class="material-symbols-outlined">storefront</span> Store
                     </a>
+                    {% endif %}
+                    {% if feature_settings.payroll_enabled %}
                     <a href="{{ url_for('student.payroll') }}"
                         class="{% if request.endpoint == 'student.payroll' %}active{% endif %}">
                         <span class="material-symbols-outlined">credit_score</span> Work &amp; Pay
                     </a>
+                    {% endif %}
                     {% if feature_settings.rent_enabled or feature_settings.insurance_enabled %}
                     <a href="{% if feature_settings.rent_enabled %}{{ url_for('student.rent') }}{% else %}{{ url_for('student.student_insurance') }}{% endif %}"
                         class="{% if request.endpoint in ['student.rent', 'student.student_insurance'] %}active{% endif %}">
                         <span class="material-symbols-outlined">receipt_long</span> Bills
                     </a>
                     {% endif %}
-                    <a href="{{ url_for('student.add_class') }}"
-                        class="{% if request.endpoint == 'student.add_class' %}active{% endif %}">
-                        <span class="material-symbols-outlined">group_add</span> Add Class
-                    </a>
                     <a href="{{ url_for('student.help_support') }}"
                         class="{% if request.endpoint in ['student.help_support', 'student.submit_general_issue', 'student.report_transaction_issue', 'student.report_tap_event_issue'] %}active{% endif %}">
                         <span class="material-symbols-outlined">support_agent</span> Help &amp; Support
                     </a>
-                    <a href="{{ url_for('student.logout') }}">
-                        <span class="material-symbols-outlined">logout</span> Sign Out
-                    </a>
                 </nav>
+
+                <div class="nav-shell-bottom mt-auto">
+                    {% if available_classes %}
+                    <div class="sidebar-switcher">
+                        <div class="d-flex align-items-center justify-content-between mb-1">
+                            <label for="class-switcher-select" class="sidebar-switcher-label mb-0">Switch Class</label>
+                            <a href="{{ url_for('student.add_class') }}" class="sidebar-switcher-add" aria-label="Add class">
+                                <span class="material-symbols-outlined">add</span>
+                            </a>
+                        </div>
+                        <select id="class-switcher-select" class="form-select form-select-sm">
+                            {% for class_option in available_classes %}
+                            <option value="{{ class_option.class_id }}" {% if class_option.is_current %}selected{% endif %}>
+                                {{ class_option.block_display }} with {{ class_option.teacher_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+
+                        <div id="class-switch-error" class="alert alert-warning small py-2 px-3 mt-2 d-none">
+                            <span class="material-symbols-outlined align-middle me-1" style="font-size: 18px;">error</span>
+                            <span class="class-switch-error-text"></span>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="pt-3">
+                        <a href="{{ url_for('student.logout') }}" class="btn btn-danger w-100 d-flex align-items-center justify-content-center gap-2">
+                            <span class="material-symbols-outlined">logout</span> Sign Out
+                        </a>
+                    </div>
+                </div>
     </aside>
 
     <main id="main-content" class="student-main">
@@ -189,7 +204,6 @@
                                 <span class="material-symbols-outlined">{{ resolved_page_icon }}</span>
                                 {{ resolved_page_title }}
                             </h1>
-                            <div class="meta" id="student-current-time"></div>
                             {% if current_class_context %}
                             <div class="meta text-muted">
                                 {{ current_class_context.teacher_name }} • {{ current_class_context.block_display }}
@@ -253,17 +267,38 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ static_url('js/timezone-utils.js') }}"></script>
     <script>
-        function updateStudentTime() {
-            const timeElement = document.getElementById('student-current-time');
-            if (!timeElement) return;
-            const now = new Date();
-            const optionsDate = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
-            const optionsTime = { hour: 'numeric', minute: 'numeric', hour12: true };
-            timeElement.textContent = now.toLocaleDateString(undefined, optionsDate) + ' ' +
-                now.toLocaleTimeString(undefined, optionsTime);
+        function renderClassScopedTimes() {
+            document.querySelectorAll('.class-scoped-time').forEach((timeElement) => {
+                const timezone = (timeElement.dataset.timezone || '').trim();
+                const emptyMessage = timeElement.dataset.emptyMessage || '';
+                const unsetMessage = timeElement.dataset.unsetMessage || '';
+
+                if (!timezone) {
+                    timeElement.textContent = unsetMessage || emptyMessage;
+                    return;
+                }
+
+                const now = new Date();
+                const optionsDate = {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    timeZone: timezone,
+                };
+                const optionsTime = {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true,
+                    timeZone: timezone,
+                    timeZoneName: 'short',
+                };
+                timeElement.textContent = now.toLocaleDateString('en-US', optionsDate) + ' ' +
+                    now.toLocaleTimeString('en-US', optionsTime);
+            });
         }
-        setInterval(updateStudentTime, 1000);
-        updateStudentTime();
+        setInterval(renderClassScopedTimes, 30000);
+        renderClassScopedTimes();
 
         document.addEventListener('DOMContentLoaded', function () {
             // Initialize toasts
@@ -280,10 +315,10 @@
 
             if (classSwitcher) {
                 classSwitcher.addEventListener('change', function () {
-                    const joinCode = this.value;
-                    if (!joinCode || !csrfToken) return;
+                    const classId = this.value;
+                    if (!classId || !csrfToken) return;
 
-                    fetch(`/student/switch-class/${joinCode}`, {
+                    fetch(`/student/switch-class/${classId}`, {
                         method: 'POST',
                         headers: {
                             'X-CSRFToken': csrfToken,

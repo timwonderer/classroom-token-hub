@@ -5,13 +5,16 @@ This module provides reusable helper functions for:
 - Date/time formatting (ISO-8601 with UTC)
 - URL safety validation for redirects
 - Markdown to HTML conversion with sanitization
+- Documentation URL routing for in-app and external docs surfaces
 """
 
 from datetime import timezone
 from urllib.parse import urlparse, urljoin
 import hashlib
 import hmac
+import json
 import os
+from pathlib import Path
 
 from flask import request, current_app, session, render_template, url_for
 # TODO: [DEPENDABOT PR #463] MarkupSafe 3.x introduces breaking changes:
@@ -21,6 +24,23 @@ from flask import request, current_app, session, render_template, url_for
 from markupsafe import Markup
 import markdown
 import bleach
+
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_DOCS_ROUTE_MAP_PATH = _PROJECT_ROOT / "docs-site" / "route-map.json"
+
+
+def _load_external_docs_route_map():
+    """Load the public-doc migration map shared with the Docusaurus site."""
+    try:
+        return json.loads(_DOCS_ROUTE_MAP_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError:
+        return {}
+
+
+EXTERNAL_DOCS_ROUTE_MAP = _load_external_docs_route_map()
 
 
 def render_template_with_fallback(template_name, **context):
@@ -51,8 +71,77 @@ def render_template_with_fallback(template_name, **context):
         static_url_func = _fallback_static_url
 
     context.setdefault('static_url', static_url_func)
+    context.setdefault('docs_url_for', docs_url_for)
 
     return render_template(template_name, **context)
+
+
+def has_internal_docs_session():
+    """Return True when docs should stay inside the Flask app shell."""
+    return bool(
+        session.get("student_id")
+        or session.get("admin_id")
+        or session.get("is_system_admin")
+    )
+
+
+def get_external_docs_base_url():
+    """Return a normalized external docs origin/path or None if unset/invalid."""
+    base_url = (current_app.config.get("EXTERNAL_DOCS_BASE_URL") or "").strip()
+    if not base_url:
+        return None
+
+    parsed = urlparse(base_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        current_app.logger.warning("Ignoring invalid EXTERNAL_DOCS_BASE_URL: %r", base_url)
+        return None
+
+    return base_url.rstrip("/")
+
+
+def get_external_docs_target(doc_path=None):
+    """Return an external docs target path for a migrated route, or None."""
+    raw_doc_path = (doc_path or "").strip()
+    if not raw_doc_path:
+        return ""
+
+    base_path = raw_doc_path.partition("#")[0].strip("/")
+    return EXTERNAL_DOCS_ROUTE_MAP.get(base_path)
+
+
+def docs_url_for(doc_path=None, prefer_external=None):
+    """
+    Build a docs URL that can target either the in-app Flask docs renderer
+    or the external Docusaurus site during the migration.
+    """
+    raw_doc_path = (doc_path or "").strip()
+    base_path, _, anchor = raw_doc_path.partition("#")
+    normalized_doc_path = base_path.strip("/")
+    normalized_anchor = f"#{anchor}" if anchor else ""
+
+    if prefer_external is None:
+        prefer_external = not has_internal_docs_session()
+
+    external_base = get_external_docs_base_url()
+    external_target = get_external_docs_target(normalized_doc_path)
+    if prefer_external and external_base and external_target is not None:
+        normalized_target = external_target.strip("/")
+        if normalized_target:
+            return f"{external_base}/{normalized_target}{normalized_anchor}"
+        return f"{external_base}/{normalized_anchor}".rstrip("/")
+
+    if normalized_doc_path:
+        return f"{url_for('docs.view_doc', doc_path=normalized_doc_path)}{normalized_anchor}"
+    return url_for("docs.index")
+
+
+def should_redirect_public_docs(doc_path=None):
+    """Return True when unauthenticated docs traffic should use the external site."""
+    return (
+        bool(get_external_docs_base_url())
+        and not has_internal_docs_session()
+        and get_external_docs_target(doc_path) is not None
+    )
 
 
 def format_utc_iso(dt):

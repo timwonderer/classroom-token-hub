@@ -8,7 +8,7 @@
 {% macro doc_url(doc_path) %}
   {% set base_path = doc_path.split('#', 1)[0] %}
   {% set anchor = doc_path.split('#', 1)[1] if '#' in doc_path else '' %}
-  {{ url_for('docs.view_doc', doc_path=base_path) }}{% if anchor %}#{{ anchor }}{% endif %}
+  {{ docs_url_for(base_path) }}{% if anchor %}#{{ anchor }}{% endif %}
 {% endmacro %}
 
 {% macro help_link(doc_path, text=None, tooltip=None, icon_only=False) %}

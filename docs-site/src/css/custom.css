@@ -1,0 +1,19 @@
+:root {
+  --ifm-color-primary: #0f6b6f;
+  --ifm-color-primary-dark: #0b5d61;
+  --ifm-color-primary-darker: #0a575a;
+  --ifm-color-primary-darkest: #08484b;
+  --ifm-color-primary-light: #167d82;
+  --ifm-color-primary-lighter: #19878d;
+  --ifm-color-primary-lightest: #269ca2;
+  --ifm-background-color: #fcfaf5;
+  --ifm-navbar-background-color: #fffaf0;
+  --ifm-font-family-base: "Avenir Next", "Segoe UI", sans-serif;
+  --ifm-heading-font-family: "Georgia", "Times New Roman", serif;
+}
+
+.hero {
+  background:
+    radial-gradient(circle at top left, rgba(15, 107, 111, 0.16), transparent 36%),
+    linear-gradient(180deg, #fffaf0 0%, #fcfaf5 100%);
+}

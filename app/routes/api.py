@@ -48,7 +48,16 @@ from app.utils.transaction_idempotency import (
     purchase_transaction_key,
     student_item_refund_key,
 )
-from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone, local_date_bounds_utc, UTC_MIN
+from app.utils.time import (
+    utc_now,
+    ensure_utc,
+    normalize_for_db,
+    get_timezone,
+    local_date_bounds_utc,
+    UTC_MIN,
+    class_date,
+    day_bounds_utc,
+)
 
 # Import external modules
 from app.attendance import get_join_code_for_student_period
@@ -2020,16 +2029,13 @@ def handle_tap():
 
     # --- Check "done for the day" lock ---
     if normalized_action == "start_work":
-        # Use Pacific timezone for "done for the day" check
-        pacific = pytz.timezone('America/Los_Angeles')
-        now_pacific = now.astimezone(pacific)
-        today_pacific = now_pacific.date()
+        today_local = class_date(timestamp_utc=now)
 
         # Automatically clear "done for the day" lock if it's from a previous day
-        if student_block.done_for_day_date is not None and student_block.done_for_day_date < today_pacific:
+        if student_block.done_for_day_date is not None and student_block.done_for_day_date < today_local:
             student_block.done_for_day_date = None
             db.session.commit()
-        if student_block.done_for_day_date == today_pacific:
+        if student_block.done_for_day_date == today_local:
             return jsonify({"error": "You are done for the day. You cannot Start Work again until tomorrow."}), 403
 
 
@@ -2082,16 +2088,7 @@ def handle_tap():
 
             # Check per-destination queue limits
             if pass_type_config and pass_type_config.get('queue_limit') is not None:
-                # Get user's timezone from session for today's count
-                tz_name = session.get('timezone', 'America/Los_Angeles')
-                try:
-                    user_tz = pytz.timezone(tz_name)
-                except pytz.UnknownTimeZoneError:
-                    user_tz = pytz.timezone('America/Los_Angeles')
-
-                now_user_tz = utc_now().astimezone(user_tz)
-                today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
-                today_start_utc = today_start_user_tz.astimezone(pytz.utc)
+                today_start_utc, _ = day_bounds_utc()
                 today_start_db = normalize_for_db(today_start_utc)
 
                 # Count approved (waiting) passes for THIS destination from today
@@ -2224,16 +2221,7 @@ def handle_tap():
 
             daily_limit = get_daily_limit_seconds(period)
             if daily_limit:
-                # Use Pacific timezone for daily reset
-                pacific = pytz.timezone('America/Los_Angeles')
-                now_pacific = now.astimezone(pacific)
-                today_pacific = now_pacific.date()
-
-                # Calculate UTC boundaries for today in Pacific timezone
-                start_of_day_pacific = pacific.localize(datetime.combine(today_pacific, datetime.min.time()))
-                start_of_day_utc = start_of_day_pacific.astimezone(timezone.utc)
-                end_of_day_pacific = start_of_day_pacific + timedelta(days=1)
-                end_of_day_utc = end_of_day_pacific.astimezone(timezone.utc)
+                start_of_day_utc, end_of_day_utc = day_bounds_utc(timestamp_utc=now)
 
                 # Query using proper UTC boundaries
                 today_attendance = calculate_period_attendance_utc_range(
@@ -2274,17 +2262,15 @@ def handle_tap():
         db.session.add(event)
 
         # Update "done for the day" status when Stopping Work with reason "done"
-        pacific = pytz.timezone('America/Los_Angeles')
-        now_pacific = now.astimezone(pacific)
-        today_pacific = now_pacific.date()
+        today_local = class_date(timestamp_utc=now)
         # Clear done_for_day_date if it's a new day
-        if student_block.done_for_day_date and student_block.done_for_day_date != today_pacific:
+        if student_block.done_for_day_date and student_block.done_for_day_date != today_local:
             student_block.done_for_day_date = None
             current_app.logger.info(f"Cleared done_for_day_date for student {student.id} in period {period} (new day)")
         # Set or clear done_for_day_date based on stop work reason
         if normalized_action == "stop_work":
             if reason and reason.lower() in ['done', 'done for the day']:
-                student_block.done_for_day_date = today_pacific
+                student_block.done_for_day_date = today_local
                 current_app.logger.info(f"Student {student.id} marked as done for the day in period {period}")
             else:
                 if student_block.done_for_day_date is not None:
@@ -2548,7 +2534,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
     """
     Checks if an active student has reached their daily limit and auto-taps them out.
     This function should be called periodically (e.g., during status checks).
-    Daily limits reset at midnight Pacific time.
+    Daily limits reset at midnight in the effective class timezone.
     
     Args:
         student: Student model instance
@@ -2566,19 +2552,8 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
     student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
     now_utc = utc_now()
 
-    # Use Pacific timezone for daily reset
-    pacific = pytz.timezone('America/Los_Angeles')
-    now_pacific = now_utc.astimezone(pacific)
-    today_pacific = now_pacific.date()
-
-    # Calculate UTC boundaries for today in Pacific timezone
-    # Start: midnight Pacific today -> UTC
-    start_of_day_pacific = pacific.localize(datetime.combine(today_pacific, datetime.min.time()))
-    start_of_day_utc = start_of_day_pacific.astimezone(timezone.utc)
-
-    # End: midnight Pacific tomorrow -> UTC
-    end_of_day_pacific = start_of_day_pacific + timedelta(days=1)
-    end_of_day_utc = end_of_day_pacific.astimezone(timezone.utc)
+    start_of_day_utc, end_of_day_utc = day_bounds_utc(timestamp_utc=now_utc)
+    today_local = class_date(timestamp_utc=now_utc)
 
     for block_original in student_blocks:
         period_upper = block_original.upper()
@@ -2607,7 +2582,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
             daily_limit = get_daily_limit_seconds(block_original, teacher_id=teacher_id)
 
             if daily_limit:
-                # Calculate today's completed attendance using proper Pacific day boundaries
+                # Calculate today's completed attendance using canonical class-local day boundaries
                 today_attendance = calculate_period_attendance_utc_range(
                     student.id, period_upper, start_of_day_utc, end_of_day_utc
                 )
@@ -2616,7 +2591,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                 # Convert to UTC-aware datetime to prevent TypeError
                 last_tap_in_utc = ensure_utc(latest_event.timestamp)
 
-                # Only add active session time if tapped in today (within Pacific day boundaries)
+                # Only add active session time if tapped in today (within class-local day boundaries)
                 if start_of_day_utc <= last_tap_in_utc < end_of_day_utc:
                     current_session_seconds = (now_utc - last_tap_in_utc).total_seconds()
                     today_attendance += current_session_seconds
@@ -2688,7 +2663,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                             join_code=join_code
                         )
                         db.session.add(student_block)
-                    student_block.done_for_day_date = today_pacific
+                    student_block.done_for_day_date = today_local
 
     # Commit all auto-tap-outs at once if requested
     if commit:

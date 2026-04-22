@@ -22,7 +22,18 @@ from types import SimpleNamespace
 from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from app.utils.time import utc_now, ensure_utc, local_date_end_utc, local_date_bounds_utc, UTC_MIN, normalize_for_db
+from app.utils.time import (
+    utc_now,
+    ensure_utc,
+    local_date_end_utc,
+    local_date_bounds_utc,
+    UTC_MIN,
+    normalize_for_db,
+    claim_period_bounds_utc,
+    class_date,
+    day_bounds_utc,
+    get_timezone,
+)
 from decimal import Decimal, InvalidOperation
 
 from flask import (
@@ -149,9 +160,6 @@ from app.utils.insurance_eligibility import (
 )
 import time
 
-# Timezone
-PACIFIC = pytz.timezone('America/Los_Angeles')
-
 # Join code generation constants
 MAX_JOIN_CODE_RETRIES = 10  # Maximum attempts to generate a unique join code
 FALLBACK_BLOCK_PREFIX_LENGTH = 1  # Number of characters from block name in fallback code
@@ -265,31 +273,58 @@ def _resolve_admin_class_context(admin_id: int | None) -> dict | None:
     if not admin_id:
         return None
 
+    candidate_class_id = (session.get('current_class_id') or '').strip() or None
     if request.method == 'GET':
         requested_join_code = _get_requested_admin_join_code()
         if requested_join_code:
             if not _admin_owns_join_code(admin_id, requested_join_code):
                 return None
-            candidate_join_code = requested_join_code
-        else:
-            candidate_join_code = _get_current_admin_join_code(admin_id)
+            requested_class = (
+                ClassEconomy.query.with_entities(
+                    ClassEconomy.class_id, ClassEconomy.join_code, ClassEconomy.teacher_id
+                )
+                .filter(
+                    ClassEconomy.teacher_id == admin_id,
+                    ClassEconomy.join_code == requested_join_code,
+                )
+                .first()
+            )
+            if not requested_class:
+                return None
+            candidate_class_id = requested_class.class_id
+
+    if candidate_class_id:
+        class_row = (
+            ClassEconomy.query.with_entities(
+                ClassEconomy.class_id, ClassEconomy.join_code, ClassEconomy.teacher_id
+            )
+            .filter(
+                ClassEconomy.teacher_id == admin_id,
+                ClassEconomy.class_id == candidate_class_id,
+            )
+            .first()
+        )
     else:
-        candidate_join_code = _get_current_admin_join_code(admin_id)
-
-    current_join_code = (candidate_join_code or '').strip()
-    if not current_join_code:
-        return None
-
-    class_row = (
-        ClassEconomy.query.with_entities(ClassEconomy.class_id, ClassEconomy.teacher_id)
-        .filter(ClassEconomy.join_code == current_join_code)
-        .first()
-    )
+        current_join_code = (_get_current_admin_join_code(admin_id) or '').strip()
+        if not current_join_code:
+            return None
+        class_row = (
+            ClassEconomy.query.with_entities(
+                ClassEconomy.class_id, ClassEconomy.join_code, ClassEconomy.teacher_id
+            )
+            .filter(
+                ClassEconomy.teacher_id == admin_id,
+                ClassEconomy.join_code == current_join_code,
+            )
+            .first()
+        )
     if not class_row or class_row.teacher_id != admin_id:
         return None
 
+    session['current_class_id'] = class_row.class_id
+    session['current_join_code'] = class_row.join_code
     return {
-        'join_code': current_join_code,
+        'join_code': class_row.join_code,
         'class_id': class_row.class_id,
     }
 
@@ -431,8 +466,31 @@ def _get_admin_feature_name_for_path(path: str) -> str | None:
 def _get_current_admin_join_code(admin_id: int | None) -> str | None:
     if not admin_id:
         return None
+    current_class_id = (session.get('current_class_id') or '').strip()
+    if current_class_id:
+        class_row = (
+            ClassEconomy.query.with_entities(ClassEconomy.join_code)
+            .filter(
+                ClassEconomy.teacher_id == admin_id,
+                ClassEconomy.class_id == current_class_id,
+            )
+            .first()
+        )
+        if class_row and class_row.join_code:
+            session['current_join_code'] = class_row.join_code
+            return class_row.join_code
     join_code = (session.get('current_join_code') or '').strip()
     if join_code and _admin_owns_join_code(admin_id, join_code):
+        class_row = (
+            ClassEconomy.query.with_entities(ClassEconomy.class_id)
+            .filter(
+                ClassEconomy.teacher_id == admin_id,
+                ClassEconomy.join_code == join_code,
+            )
+            .first()
+        )
+        if class_row and class_row.class_id:
+            session['current_class_id'] = class_row.class_id
         return join_code
     return None
 
@@ -583,20 +641,7 @@ def _normalize_full_name_for_dedupe(first_name: str, last_name: str) -> str:
 
 def _resolve_class_id(teacher_id: int, join_code: str) -> str:
     """Get or create the canonical ClassEconomy row and return class_id."""
-    row = ClassEconomy.query.filter_by(join_code=join_code).first()
-    if row:
-        if row.teacher_id != teacher_id:
-            raise ValueError("Join code belongs to a different teacher.")
-        return row.class_id
-
-    row = ClassEconomy(
-        join_code=join_code,
-        teacher_id=teacher_id,
-        created_by_admin_id=teacher_id,
-    )
-    db.session.add(row)
-    db.session.flush()
-    return row.class_id
+    return _ensure_join_code_anchors(teacher_id, join_code)
 
 
 def _build_teacher_block_dedupe_key(class_id: str, first_name: str, last_name: str, dob_date) -> str:
@@ -1435,12 +1480,79 @@ def _get_table_columns(table_name: str) -> set[str]:
         return _table_columns_cache[cache_key]
 
 
-def _ensure_join_code_anchors(teacher_id, join_code, class_label=None):
+def _build_pending_class_timezone_payload(class_row: ClassEconomy) -> dict:
+    return {
+        "class_id": class_row.class_id,
+        "join_code": class_row.join_code,
+        "class_identifier": class_row.display_name or class_row.join_code,
+        "display_name": class_row.display_name,
+        "class_timezone": class_row.class_timezone,
+    }
+
+
+def _queue_pending_class_timezone_confirmation(class_row: ClassEconomy | None):
+    if class_row is None or class_row.class_timezone:
+        return
+
+    pending = session.get("pending_class_timezone_confirmations", [])
+    if any(item.get("class_id") == class_row.class_id for item in pending):
+        return
+
+    pending.append(_build_pending_class_timezone_payload(class_row))
+    session["pending_class_timezone_confirmations"] = pending
+    session.modified = True
+
+
+def _consume_pending_class_timezone_confirmations(admin_id: int | None) -> list[dict]:
+    pending = session.get("pending_class_timezone_confirmations", [])
+    if not pending or not admin_id:
+        return []
+
+    class_ids = [item.get("class_id") for item in pending if item.get("class_id")]
+    if not class_ids:
+        session.pop("pending_class_timezone_confirmations", None)
+        return []
+
+    class_rows = {
+        row.class_id: row
+        for row in ClassEconomy.query.filter(
+            ClassEconomy.teacher_id == admin_id,
+            ClassEconomy.class_id.in_(class_ids),
+        ).all()
+    }
+
+    refreshed = []
+    for item in pending:
+        class_row = class_rows.get(item.get("class_id"))
+        if class_row is None or class_row.class_timezone:
+            continue
+        refreshed.append(_build_pending_class_timezone_payload(class_row))
+
+    if refreshed:
+        session["pending_class_timezone_confirmations"] = refreshed
+    else:
+        session.pop("pending_class_timezone_confirmations", None)
+    session.modified = True
+    return refreshed
+
+
+def _remove_pending_class_timezone_confirmation(class_id: str):
+    pending = session.get("pending_class_timezone_confirmations", [])
+    filtered = [item for item in pending if item.get("class_id") != class_id]
+    if filtered:
+        session["pending_class_timezone_confirmations"] = filtered
+    else:
+        session.pop("pending_class_timezone_confirmations", None)
+    session.modified = True
+
+
+def _ensure_join_code_anchors(teacher_id, join_code, class_label=None, return_metadata: bool = False):
     """Ensure the canonical class row and membership exist before child inserts."""
     if not teacher_id or not join_code:
-        return None
+        return (None, False, None) if return_metadata else None
 
     economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+    created = False
     if economy is not None:
         if economy.teacher_id != teacher_id:
             raise ValueError("Join code belongs to a different teacher.")
@@ -1456,6 +1568,7 @@ def _ensure_join_code_anchors(teacher_id, join_code, class_label=None):
             display_name=class_label,
         )
         db.session.add(economy)
+        created = True
 
     admin_membership = ClassMembership.query.filter_by(
         join_code=join_code,
@@ -1474,8 +1587,12 @@ def _ensure_join_code_anchors(teacher_id, join_code, class_label=None):
     except IntegrityError:
         existing = ClassEconomy.query.filter_by(join_code=join_code).first()
         if existing:
+            if return_metadata:
+                return existing.class_id, False, existing
             return existing.class_id
         raise
+    if return_metadata:
+        return economy.class_id, created, economy
     return economy.class_id
 
 
@@ -1504,12 +1621,20 @@ def _resolve_student_add_class_context(admin_id: int | None, block: str) -> dict
         return None
 
     join_code = _generate_unique_teacher_join_code(block)
-    class_id = _ensure_join_code_anchors(admin_id, join_code, class_label=block)
+    class_id, class_created, class_row = _ensure_join_code_anchors(
+        admin_id,
+        join_code,
+        class_label=block,
+        return_metadata=True,
+    )
     _ensure_teacher_student_seat(admin_id, join_code, block)
     session['current_join_code'] = join_code
     return {
         'join_code': join_code,
         'class_id': class_id,
+        'block': block,
+        'class_created': class_created,
+        'class_row': class_row,
     }
 
 
@@ -2488,11 +2613,13 @@ def dashboard():
         .limit(5)
         .all()
     )
+    today_start_utc, _ = day_bounds_utc()
+    today_start_db = normalize_for_db(today_start_utc)
     total_transactions_today = (
         Transaction.query
         .filter(Transaction.student_id.in_(sa.select(student_ids_subq)))
         .filter(
-            Transaction.timestamp >= utc_now().replace(hour=0, minute=0, second=0, microsecond=0),
+            Transaction.timestamp >= today_start_db,
             Transaction.is_void == False,
         )
         .count()
@@ -3948,6 +4075,7 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
 def students():
     """View all students with basic information organized by block."""
     current_admin = session.get('admin_id')
+    pending_class_timezone_confirmations = _consume_pending_class_timezone_confirmations(current_admin)
 
     # Backfill any legacy credential hashes to the canonical format for this admin's data
     updated_records = _normalize_claim_credentials_for_admin(current_admin)
@@ -4153,24 +4281,83 @@ def students():
                          unclaimed_seats_list_by_block=unclaimed_seats_list_by_block,
                          student_balances_by_block=student_balances_by_block,
                          student_rent_privileges=student_rent_privileges,
+                         timezone_choices=pytz.common_timezones,
+                         pending_class_timezone_confirmations=pending_class_timezone_confirmations,
                          current_page="students")
 
 
 @admin_bp.route('/current-class', methods=['POST'])
 @admin_required
 def set_current_class():
-    """Set the current class join code for admin-scoped views."""
+    """Set the current class using class_id as the backend session reference."""
     data = request.get_json(silent=True) or {}
-    join_code = (data.get('join_code') or '').strip()
-    if not join_code:
-        return jsonify({'status': 'error', 'message': 'Join code required'}), 400
+    class_id = (data.get('class_id') or '').strip()
+    if not class_id:
+        return jsonify({'status': 'error', 'message': 'Class ID required'}), 400
 
     admin_id = session.get('admin_id')
-    if not _admin_owns_join_code(admin_id, join_code):
+    class_row = (
+        ClassEconomy.query.with_entities(ClassEconomy.class_id, ClassEconomy.join_code)
+        .filter(
+            ClassEconomy.teacher_id == admin_id,
+            ClassEconomy.class_id == class_id,
+        )
+        .first()
+    )
+    if class_row is None:
         return jsonify({'status': 'error', 'message': 'Access denied'}), 403
 
-    session['current_join_code'] = join_code
+    session['current_class_id'] = class_row.class_id
+    session['current_join_code'] = class_row.join_code
     return jsonify({'status': 'success'}), 200
+
+
+@admin_bp.route('/classes/<class_id>/timezone', methods=['POST'])
+@admin_required
+def set_class_timezone(class_id: str):
+    """Set the immutable timezone for a newly created class."""
+    data = request.get_json(silent=True) or {}
+    timezone_name = (data.get('timezone') or '').strip()
+    if not timezone_name:
+        return jsonify({'status': 'error', 'message': 'Timezone is required.'}), 400
+    if timezone_name not in pytz.all_timezones_set:
+        return jsonify({'status': 'error', 'message': 'Invalid timezone.'}), 400
+
+    admin_id = session.get('admin_id')
+    class_row = ClassEconomy.query.filter_by(class_id=class_id, teacher_id=admin_id).first()
+    if class_row is None:
+        return jsonify({'status': 'error', 'message': 'Class not found.'}), 404
+
+    if class_row.class_timezone:
+        if class_row.class_timezone == timezone_name:
+            _remove_pending_class_timezone_confirmation(class_id)
+            return jsonify({
+                'status': 'success',
+                'message': 'Class timezone already set.',
+                'class_timezone': class_row.class_timezone,
+            }), 200
+        return jsonify({
+            'status': 'error',
+            'message': 'Class timezone is already locked and cannot be changed.',
+        }), 409
+
+    try:
+        class_row.class_timezone = timezone_name
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.error(
+            "Failed to set class timezone for class_id=%s", class_id, exc_info=True
+        )
+        return jsonify({'status': 'error', 'message': 'Could not save class timezone.'}), 500
+
+    _remove_pending_class_timezone_confirmation(class_id)
+    return jsonify({
+        'status': 'success',
+        'message': 'Class timezone saved.',
+        'class_timezone': class_row.class_timezone,
+        'class_identifier': class_row.display_name or class_row.join_code,
+    }), 200
 
 
 @admin_bp.route('/students/<int:student_id>')
@@ -4239,16 +4426,21 @@ def student_detail(student_id):
 
     # Compute due dates and overdue status
     from datetime import date
-    today = utc_now().astimezone(PACIFIC).date()
+    effective_tz = get_timezone()
+    today = utc_now().astimezone(effective_tz).date()
     # Rent due on 5th, overdue after 6th
     rent_due = date(today.year, today.month, 5)
     student.rent_due_date = rent_due
-    student.rent_overdue = today > rent_due and (not student.rent_last_paid or student.rent_last_paid.astimezone(PACIFIC).date() <= rent_due)
+    student.rent_overdue = today > rent_due and (
+        not student.rent_last_paid or student.rent_last_paid.astimezone(effective_tz).date() <= rent_due
+    )
 
     # Property tax due on 5th, overdue after 6th
     tax_due = date(today.year, today.month, 5)
     student.property_tax_due_date = tax_due
-    student.property_tax_overdue = today > tax_due and (not student.property_tax_last_paid or student.property_tax_last_paid.astimezone(PACIFIC).date() <= tax_due)
+    student.property_tax_overdue = today > tax_due and (
+        not student.property_tax_last_paid or student.property_tax_last_paid.astimezone(effective_tz).date() <= tax_due
+    )
 
     transactions_query = Transaction.query.filter(tx_scope)
     student_items_query = student.items
@@ -5076,6 +5268,8 @@ def add_individual_student():
                         block=block,
                     )
                     db.session.commit()
+                    if class_context.get('class_created'):
+                        _queue_pending_class_timezone_confirmation(class_context.get('class_row'))
                     flash(f"Student {first_name} {last_name} already exists. Added to your class.", "success")
 
                 return redirect(url_for('admin.students'))
@@ -5118,6 +5312,8 @@ def add_individual_student():
         db.session.add(new_tb)
         
         db.session.commit()
+        if class_context.get('class_created'):
+            _queue_pending_class_timezone_confirmation(class_context.get('class_row'))
 
     except Exception as e:
         db.session.rollback()
@@ -5228,6 +5424,8 @@ def add_manual_student():
                         block=block,
                     )
                     db.session.commit()
+                    if class_context.get('class_created'):
+                        _queue_pending_class_timezone_confirmation(class_context.get('class_row'))
                 return redirect(url_for('admin.students'))
 
         # Create student
@@ -5287,6 +5485,8 @@ def add_manual_student():
         db.session.add(new_tb)
         
         db.session.commit()
+        if class_context.get('class_created'):
+            _queue_pending_class_timezone_confirmation(class_context.get('class_row'))
 
     except Exception as e:
         db.session.rollback()
@@ -7400,29 +7600,9 @@ def process_claim(claim_id):
     max_claims_period = (enrollment.contract_max_claims_period or 'month').lower()
     claim_time_limit_days = enrollment.contract_claim_time_limit_days
 
-    def _get_period_bounds():
-        now = utc_now()
-        period_key = max_claims_period
-        if period_key == 'semester':
-            if now.month <= 6:
-                return (
-                    now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
-                    now.replace(month=6, day=30, hour=23, minute=59, second=59),
-                )
-            return (
-                now.replace(month=7, day=1, hour=0, minute=0, second=0, microsecond=0),
-                now.replace(month=12, day=31, hour=23, minute=59, second=59),
-            )
-        if period_key == 'weekly':
-            period_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-            period_end = period_start + timedelta(days=7) - timedelta(seconds=1)
-            return period_start, period_end
-        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        next_month = period_start.replace(day=28) + timedelta(days=4)
-        period_end = next_month.replace(day=1) - timedelta(seconds=1)
-        return period_start, period_end
-
-    period_start, period_end = _get_period_bounds()
+    period_start, period_end = claim_period_bounds_utc(max_claims_period)
+    period_start_db = normalize_for_db(period_start)
+    period_end_db = normalize_for_db(period_end)
 
     def _claim_base_amount(target_claim):
         if claim_type == 'transaction_monetary' and target_claim.transaction:
@@ -7514,8 +7694,8 @@ def process_claim(claim_id):
     approved_claims = InsuranceClaim.query.filter(
         InsuranceClaim.student_insurance_id == enrollment.id,
         InsuranceClaim.status.in_(['approved', 'paid']),
-        InsuranceClaim.processed_date >= period_start,
-        InsuranceClaim.processed_date <= period_end,
+        InsuranceClaim.processed_date >= period_start_db,
+        InsuranceClaim.processed_date < period_end_db,
         InsuranceClaim.id != claim.id,
     )
     if max_claims_count and approved_claims.count() >= max_claims_count:
@@ -7527,8 +7707,8 @@ def process_claim(claim_id):
         period_payouts = db.session.query(func.sum(InsuranceClaim.approved_amount)).filter(
             InsuranceClaim.student_insurance_id == enrollment.id,
             InsuranceClaim.status.in_(['approved', 'paid']),
-            InsuranceClaim.processed_date >= period_start,
-            InsuranceClaim.processed_date <= period_end,
+            InsuranceClaim.processed_date >= period_start_db,
+            InsuranceClaim.processed_date < period_end_db,
             InsuranceClaim.approved_amount.isnot(None),
             InsuranceClaim.id != claim.id,
         ).scalar() or Decimal('0.00')
@@ -8157,9 +8337,8 @@ def payroll_history():
 
     current_app.logger.info(f"Payroll records prepared: {len(payroll_records)}")
 
-    # Current timestamp for header (Pacific Time)
-    pacific = pytz.timezone('America/Los_Angeles')
-    current_time = utc_now().astimezone(pacific)
+    # Current timestamp for header (effective class timezone)
+    current_time = utc_now().astimezone(get_timezone())
 
     return render_template(
         'admin_payroll_history.html',
@@ -8280,8 +8459,8 @@ def payroll():
     """
     Enhanced payroll page with tabs for settings, students, rewards, fines, and manual payments.
     """
-    pacific = pytz.timezone('America/Los_Angeles')
     now_utc = utc_now()
+    current_time = now_utc.astimezone(get_timezone())
 
     admin_id = session.get("admin_id")
     feature_options = get_admin_feature_join_code_options('payroll', admin_id=admin_id)
@@ -9329,6 +9508,7 @@ def upload_students():
     # Get or generate join codes for each block in this upload
     join_codes_by_block = {}
     class_ids_by_block = {}
+    created_class_rows_by_block = {}
 
     for row in csv_input:
         try:
@@ -9381,7 +9561,15 @@ def upload_students():
                 _ensure_teacher_student_seat(teacher_id, join_codes_by_block[block], block)
 
             if block not in class_ids_by_block:
-                class_ids_by_block[block] = _resolve_class_id(teacher_id, join_codes_by_block[block])
+                class_id, class_created, class_row = _ensure_join_code_anchors(
+                    teacher_id,
+                    join_codes_by_block[block],
+                    class_label=block,
+                    return_metadata=True,
+                )
+                class_ids_by_block[block] = class_id
+                if class_created:
+                    created_class_rows_by_block[block] = class_row
 
             join_code = join_codes_by_block[block]
             class_id = class_ids_by_block[block]
@@ -9451,6 +9639,8 @@ def upload_students():
 
     try:
         db.session.commit()
+        for class_row in created_class_rows_by_block.values():
+            _queue_pending_class_timezone_confirmation(class_row)
 
         # Build success message with join codes
         success_msg = f"{added_count} roster seats created successfully"
@@ -9629,15 +9819,8 @@ def enforce_daily_limits():
     errors = []
     current_admin_id = session.get('admin_id')
 
-    pacific = pytz.timezone('America/Los_Angeles')
     now_utc = utc_now()
-    now_pacific = now_utc.astimezone(pacific)
-    today_pacific = now_pacific.date()
-
-    start_of_day_pacific = pacific.localize(datetime.combine(today_pacific, datetime.min.time()))
-    start_of_day_utc = start_of_day_pacific.astimezone(timezone.utc)
-    end_of_day_pacific = start_of_day_pacific + timedelta(days=1)
-    end_of_day_utc = end_of_day_pacific.astimezone(timezone.utc)
+    start_of_day_utc, end_of_day_utc = day_bounds_utc(timestamp_utc=now_utc)
 
     for student in students:
         period_upper = None
@@ -9864,10 +10047,7 @@ def tap_out_students():
                 db.session.add(student_block)
 
             # Set done_for_day_date to lock them out until midnight
-            pacific = pytz.timezone('America/Los_Angeles')
-            now_pacific = now_utc.astimezone(pacific)
-            today_pacific = now_pacific.date()
-            student_block.done_for_day_date = today_pacific
+            student_block.done_for_day_date = class_date(timestamp_utc=now_utc)
 
             # Create tap-out event
             tap_out_event = TapEvent(

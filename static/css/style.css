@@ -564,6 +564,113 @@ a:hover {
     color: white;
 }
 
+.nav-brand-block {
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.sidebar-scope-panel {
+    padding: 0.95rem 0 1.1rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.sidebar-scope-time {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.72);
+    margin-bottom: 0.8rem;
+    line-height: 1.5;
+}
+
+.sidebar-scope-name {
+    color: #fff;
+    font-size: 1.2rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 1.15;
+}
+
+.sidebar-scope-context {
+    color: rgba(255, 255, 255, 0.96);
+    font-size: 0.92rem;
+    font-weight: 600;
+    margin-top: 0.35rem;
+}
+
+.sidebar-scope-meta {
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.76rem;
+    font-weight: 700;
+    margin-top: 0.18rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.nav-shell-body {
+    flex: 1 1 auto;
+}
+
+.nav-shell-bottom {
+    border-top: 1px solid rgba(255, 255, 255, 0.16);
+    padding-top: 1rem;
+    margin-top: 1rem;
+}
+
+.sidebar-switcher-label {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.sidebar-switcher .form-select {
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #fff;
+    font-weight: 600;
+}
+
+.sidebar-switcher .form-select option {
+    color: #000;
+}
+
+.sidebar-switcher .alert {
+    background: rgba(255, 193, 7, 0.15);
+    border: 1px solid rgba(255, 193, 7, 0.4);
+    color: #fff;
+}
+
+.sidebar-switcher-add {
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    text-decoration: none;
+}
+
+.sidebar-switcher-add:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+}
+
+.sidebar-switcher-add .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.nav-support-link {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
 /* ─── Student Shell Specifics ─── */
 .student-sidebar {
     width: 260px;
@@ -578,6 +685,8 @@ a:hover {
     box-shadow: var(--shadow-lg);
     z-index: 1000;
     transition: transform 0.3s ease;
+    display: flex;
+    flex-direction: column;
 }
 
 .student-brand {
@@ -600,22 +709,6 @@ a:hover {
     font-size: 0.9rem;
     color: rgba(255, 255, 255, 0.85);
     margin-bottom: 1.25rem;
-}
-
-.class-switcher .form-select {
-    background-color: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    color: #fff;
-}
-
-.class-switcher .form-select option {
-    color: #000;
-}
-
-.class-switcher .alert {
-    background: rgba(255, 193, 7, 0.15);
-    border: 1px solid rgba(255, 193, 7, 0.4);
-    color: #fff;
 }
 
 .student-nav {

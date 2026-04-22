@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
-import pytz
 from sqlalchemy import func
 
 from app.models import HallPassLog, StudentTeacher, TapEvent, TeacherBlock
 from app.utils.attendance_helpers import get_join_code_for_student_period
 from app.utils.seat_scope import get_seat_ids_for_student_join, seat_scoped_filter
-from app.utils.time import ensure_utc, utc_now
+from app.utils.time import day_bounds_utc, ensure_utc, normalize_for_db, utc_now
 
 
 def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, join_code=None):
@@ -71,12 +68,9 @@ def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, j
 
 def get_all_block_statuses(student, join_code=None, payroll_anchor_by_join_code=None):
     """Return attendance facts only for the student's active blocks."""
-    pacific = pytz.timezone("America/Los_Angeles")
-    now_pacific = utc_now().astimezone(pacific)
-    today_pacific = now_pacific.date()
-    today_start_pacific = pacific.localize(datetime.combine(today_pacific, datetime.min.time()))
-    today_start_utc = today_start_pacific.astimezone(timezone.utc)
-    today_end_utc = (today_start_pacific + timedelta(days=1)).astimezone(timezone.utc)
+    today_start_utc, today_end_utc = day_bounds_utc()
+    today_start_db = normalize_for_db(today_start_utc)
+    today_end_db = normalize_for_db(today_end_utc)
 
     if join_code:
         claimed_seats = TeacherBlock.query.filter_by(
@@ -112,8 +106,8 @@ def get_all_block_statuses(student, join_code=None, payroll_anchor_by_join_code=
 
         done_query = TapEvent.query.filter(
             TapEvent.period == blk,
-            TapEvent.timestamp >= today_start_utc,
-            TapEvent.timestamp < today_end_utc,
+            TapEvent.timestamp >= today_start_db,
+            TapEvent.timestamp < today_end_db,
             TapEvent.reason != None,
             TapEvent.is_deleted == False,
         )

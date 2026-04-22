@@ -11,8 +11,8 @@ Key Principles:
 - Trends over snapshots
 """
 
-from datetime import datetime, timedelta, timezone
-from app.utils.time import utc_now, ensure_utc
+from datetime import datetime, timedelta
+from app.utils.time import utc_now, ensure_utc, day_bounds_utc
 from flask import Blueprint, session, jsonify, request, flash, redirect, url_for
 from sqlalchemy import desc
 
@@ -29,21 +29,16 @@ ALLOWED_WINDOW_TYPES = {'week', 'month', 'pay_cycle', 'rent_cycle'}
 from app.utils.analytics_engine import AnalyticsEngine
 from app.utils.helpers import render_template_with_fallback as render_template
 
-import pytz
 from jinja2 import TemplateNotFound
-
-# Timezone
-PACIFIC = pytz.timezone('America/Los_Angeles')
 
 # Create blueprint
 analytics_bp = Blueprint('analytics', __name__, url_prefix='/admin/analytics')
 
 
 def _anchor_window_end(now_utc: datetime) -> datetime:
-    """Align window end to the start of the current Pacific day for stable caching."""
-    now_pacific = now_utc.astimezone(PACIFIC)
-    anchor_pacific = now_pacific.replace(hour=0, minute=0, second=0, microsecond=0)
-    return anchor_pacific.astimezone(timezone.utc)
+    """Align window end to the start of the current class-local day for stable caching."""
+    anchor_start_utc, _ = day_bounds_utc(timestamp_utc=now_utc)
+    return anchor_start_utc
 
 def get_teacher_class_options(teacher_id: int):
     if not teacher_id:

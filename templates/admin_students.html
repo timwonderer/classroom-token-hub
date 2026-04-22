@@ -977,11 +977,54 @@
   </div>
 </div>
 
+<div class="modal fade" id="classTimezoneModal" tabindex="-1" aria-labelledby="classTimezoneModalLabel"
+  aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title text-white" id="classTimezoneModalLabel">
+          <span class="material-symbols-outlined me-2 align-middle">schedule</span>
+          Set Official Class Time Zone
+        </h5>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning">
+          Once you set the official class time zone for <strong id="class-timezone-identifier-inline"></strong>, it cannot be changed.
+        </div>
+        <p class="mb-3" id="class-timezone-detected-copy"></p>
+        <p class="mb-3">This means your entire classroom economy will operate based on the time of this time zone.</p>
+
+        <div id="class-timezone-custom-section" class="d-none">
+          <label for="class-timezone-select" class="form-label fw-bold">Choose a different time zone</label>
+          <select class="form-select" id="class-timezone-select">
+            <option value="">Select a time zone...</option>
+            {% for timezone_name in timezone_choices %}
+            <option value="{{ timezone_name }}">{{ timezone_name }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text mt-2" id="class-timezone-preview">Select a time zone to preview the current local time.</div>
+        </div>
+
+        <div id="class-timezone-error" class="alert alert-danger d-none mt-3 mb-0"></div>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <button type="button" class="btn btn-outline-secondary d-none" id="class-timezone-back-btn">Back</button>
+        <div class="ms-auto d-flex gap-2">
+          <button type="button" class="btn btn-outline-primary" id="class-timezone-no-btn">No, I want to choose a different one</button>
+          <button type="button" class="btn btn-primary" id="class-timezone-yes-btn">Yes, use this time zone</button>
+          <button type="button" class="btn btn-primary d-none" id="class-timezone-confirm-btn">Confirm Selected Time Zone</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
   console.log('Student management scripts loading.');
+  const pendingClassTimezoneConfirmations = {{ pending_class_timezone_confirmations|tojson }};
 
   // Join Code Copy Function
   function copyJoinCode(code, btn) {
@@ -1940,6 +1983,187 @@
         }
       });
     }
+  });
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const modalEl = document.getElementById('classTimezoneModal');
+    if (!modalEl || !window.bootstrap || !Array.isArray(pendingClassTimezoneConfirmations) || pendingClassTimezoneConfirmations.length === 0) {
+      return;
+    }
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const identifierInline = document.getElementById('class-timezone-identifier-inline');
+    const detectedCopy = document.getElementById('class-timezone-detected-copy');
+    const customSection = document.getElementById('class-timezone-custom-section');
+    const selectEl = document.getElementById('class-timezone-select');
+    const previewEl = document.getElementById('class-timezone-preview');
+    const errorEl = document.getElementById('class-timezone-error');
+    const yesBtn = document.getElementById('class-timezone-yes-btn');
+    const noBtn = document.getElementById('class-timezone-no-btn');
+    const backBtn = document.getElementById('class-timezone-back-btn');
+    const confirmBtn = document.getElementById('class-timezone-confirm-btn');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    let queueIndex = 0;
+    const detectedTimezone = (window.TimezoneUtils?.detectTimezone?.() || 'America/Los_Angeles');
+
+    function formatCurrentTime(timezoneName) {
+      const now = new Date();
+      try {
+        return now.toLocaleString('en-US', {
+          timeZone: timezoneName,
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZoneName: 'long',
+        });
+      } catch (error) {
+        return now.toLocaleString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        });
+      }
+    }
+
+    function setError(message) {
+      if (!message) {
+        errorEl.textContent = '';
+        errorEl.classList.add('d-none');
+        return;
+      }
+      errorEl.textContent = message;
+      errorEl.classList.remove('d-none');
+    }
+
+    function setSavingState(isSaving) {
+      [yesBtn, noBtn, backBtn, confirmBtn, selectEl].forEach((element) => {
+        if (element) {
+          element.disabled = isSaving;
+        }
+      });
+    }
+
+    function showDetectedState(item) {
+      identifierInline.textContent = item.class_identifier;
+      detectedCopy.textContent = `We have detected your current time zone as ${detectedTimezone} and your local time is ${formatCurrentTime(detectedTimezone)}. Do you want to use this time zone as your official class time zone? This means your entire classroom economy will operate based on the time of this time zone. Once you have set this for ${item.class_identifier}, you cannot change it in the future.`;
+      customSection.classList.add('d-none');
+      backBtn.classList.add('d-none');
+      yesBtn.classList.remove('d-none');
+      noBtn.classList.remove('d-none');
+      confirmBtn.classList.add('d-none');
+      selectEl.value = '';
+      previewEl.textContent = 'Select a time zone to preview the current local time.';
+      setError('');
+    }
+
+    function showCustomState(item) {
+      identifierInline.textContent = item.class_identifier;
+      customSection.classList.remove('d-none');
+      backBtn.classList.remove('d-none');
+      yesBtn.classList.add('d-none');
+      noBtn.classList.add('d-none');
+      confirmBtn.classList.remove('d-none');
+      if (!selectEl.value) {
+        selectEl.value = detectedTimezone;
+      }
+      previewEl.textContent = `Current local time in ${selectEl.value} is ${formatCurrentTime(selectEl.value)}. Confirm to lock this as the official class time zone for ${item.class_identifier}.`;
+      setError('');
+    }
+
+    async function saveTimezone(item, timezoneName) {
+      setSavingState(true);
+      setError('');
+
+      try {
+        const response = await fetch(`/admin/classes/${encodeURIComponent(item.class_id)}/timezone`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+          },
+          body: JSON.stringify({ timezone: timezoneName }),
+        });
+
+        const payload = await response.json();
+        if (!response.ok || payload.status !== 'success') {
+          throw new Error(payload.message || 'Could not save class time zone.');
+        }
+
+        queueIndex += 1;
+        if (queueIndex >= pendingClassTimezoneConfirmations.length) {
+          modal.hide();
+          window.location.reload();
+          return;
+        }
+
+        renderQueueItem();
+      } catch (error) {
+        setError(error.message || 'Could not save class time zone.');
+      } finally {
+        setSavingState(false);
+      }
+    }
+
+    function renderQueueItem() {
+      const item = pendingClassTimezoneConfirmations[queueIndex];
+      if (!item) {
+        modal.hide();
+        return;
+      }
+      showDetectedState(item);
+      modal.show();
+    }
+
+    yesBtn.addEventListener('click', function () {
+      const item = pendingClassTimezoneConfirmations[queueIndex];
+      if (item) {
+        saveTimezone(item, detectedTimezone);
+      }
+    });
+
+    noBtn.addEventListener('click', function () {
+      const item = pendingClassTimezoneConfirmations[queueIndex];
+      if (item) {
+        showCustomState(item);
+      }
+    });
+
+    backBtn.addEventListener('click', function () {
+      const item = pendingClassTimezoneConfirmations[queueIndex];
+      if (item) {
+        showDetectedState(item);
+      }
+    });
+
+    selectEl.addEventListener('change', function () {
+      if (!this.value) {
+        previewEl.textContent = 'Select a time zone to preview the current local time.';
+        return;
+      }
+      const item = pendingClassTimezoneConfirmations[queueIndex];
+      if (item) {
+        previewEl.textContent = `Current local time in ${this.value} is ${formatCurrentTime(this.value)}. Confirm to lock this as the official class time zone for ${item.class_identifier}.`;
+      }
+    });
+
+    confirmBtn.addEventListener('click', function () {
+      const item = pendingClassTimezoneConfirmations[queueIndex];
+      if (!item) return;
+      if (!selectEl.value) {
+        setError('Choose a time zone before confirming.');
+        return;
+      }
+      saveTimezone(item, selectEl.value);
+    });
+
+    renderQueueItem();
   });
 </script>
 {% endblock %}

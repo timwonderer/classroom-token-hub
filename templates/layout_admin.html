@@ -83,20 +83,33 @@
 
     <!-- Sidebar -->
     <aside id="sidebar" class="sidebar d-flex flex-column" role="navigation" aria-label="Navigation menu">
-        <div class="sidebar-brand">
+        <div class="sidebar-brand nav-brand-block">
             <div>
-                <div> <span class="material-symbols-outlined" style="font-size: 30px; vertical-align: middle; font-weight:200">local_atm</span>Classroom</div>
+                <div><span class="material-symbols-outlined" style="font-size: 30px; vertical-align: middle; font-weight:200">local_atm</span>Classroom</div>
                 <div><span class="material-symbols-outlined" style="font-size: 30px; vertical-align: middle; font-weight:200">store</span>Token</div>
-                <div> <span class="material-symbols-outlined" style="font-size: 30px; vertical-align: middle; font-weight:200"> finance_mode</span>Hub</div>
-                <hr>
-                {% if current_admin %}
-                <div class="text-white-55 mb-0" style="font-size: 20px;">{{ current_admin_display_name or current_admin.get_display_name() }}</div>
-                {% endif %}
-                <div class="mt-0" style="font-size: 12px; font-weight:300">Teacher</div>
+                <div><span class="material-symbols-outlined" style="font-size: 30px; vertical-align: middle; font-weight:200">finance_mode</span>Hub</div>
             </div>
         </div>
 
-        <nav class="nav flex-column">
+        <div class="sidebar-scope-panel">
+            <div class="sidebar-scope-time class-scoped-time"
+                id="admin-class-time"
+                data-timezone="{{ admin_current_class_context.class_timezone if admin_current_class_context else '' }}"
+                data-empty-message="No classes yet. Official class time will appear after class creation."
+                data-unset-message="Official class time zone not set yet.">
+            </div>
+            {% if current_admin %}
+            <div class="sidebar-scope-name">{{ (current_admin_display_name or current_admin.get_display_name())|upper }}</div>
+            {% endif %}
+            {% if admin_current_class_context %}
+            <div class="sidebar-scope-context">{{ admin_current_class_context.class_identifier }}</div>
+            <div class="sidebar-scope-meta">{{ admin_current_class_context.join_code }}</div>
+            {% else %}
+            <div class="sidebar-scope-context">No classes created yet</div>
+            {% endif %}
+        </div>
+
+        <nav class="nav flex-column nav-shell-body">
             <!-- Dashboard Link (Always visible) -->
             <a href="{{ url_for('admin.dashboard') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'dashboard' %}active{% endif %}">
                 <span class="material-symbols-outlined">dashboard</span> Dashboard
@@ -180,45 +193,60 @@
                         </a>
                     </div>
                 </div>
-
-                <!-- Settings Section -->
-                <div class="dropdown">
-                    <button class="nav-accordion-btn dropdown-toggle w-100 d-flex align-items-center justify-content-between{% if settings_open %} show{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="{{ 'true' if settings_open else 'false' }}">
-                        <span class="d-flex align-items-center gap-2">
-                            <span class="material-symbols-outlined">settings</span>
-                            Settings
-                        </span>
-                    </button>
-                    <div class="dropdown-menu position-static w-100 p-0 bg-transparent border-0{% if settings_open %} show{% endif %}">
-                        <a href="{{ url_for('admin.settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'settings' %}active{% endif %}">
-                            <span class="material-symbols-outlined">style</span> Personalization
-                        </a>
-                        <a href="{{ url_for('admin.passkey_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'passkey_settings' %}active{% endif %}">
-                            <span class="material-symbols-outlined">fingerprint</span> Passkey
-                        </a>
-                        <a href="{{ url_for('admin.feature_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'feature_settings' %}active{% endif %}">
-                            <span class="material-symbols-outlined">tune</span> Economy Features
-                        </a>
-                        <a href="{{ url_for('admin.account_delete') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'account_delete' %}active{% endif %}">
-                            <span class="material-symbols-outlined">person_cancel</span> Account Deletion
-                        </a>
-                    </div>
-                </div>
-
             </div>
 
-            <!-- Docs & Help Link -->
-            <a href="{{ url_for('admin.help_support') }}" class="nav-link d-flex align-items-center gap-2">
-                <span class="material-symbols-outlined">menu_book</span> Docs &amp; Help
+            <a href="{{ url_for('admin.help_support') }}" class="nav-link nav-support-link d-flex align-items-center gap-2 {% if current_page == 'help' %}active{% endif %}">
+                <span class="material-symbols-outlined">support_agent</span> Support
             </a>
+        </nav>
 
-            <!-- Sign Out Button -->
-            <div class="mt-auto pt-3">
+        <div class="nav-shell-bottom mt-auto">
+            {% if admin_available_classes %}
+            <div class="sidebar-switcher">
+                <div class="sidebar-switcher-label">Switch Class</div>
+                <select id="admin-class-switcher-select" class="form-select form-select-sm">
+                    {% for class_option in admin_available_classes %}
+                    <option value="{{ class_option.class_id }}" {% if class_option.is_current %}selected{% endif %}>
+                        {{ class_option.class_identifier }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <div id="admin-class-switch-error" class="alert alert-warning small py-2 px-3 mt-2 d-none">
+                    <span class="material-symbols-outlined align-middle me-1" style="font-size: 18px;">error</span>
+                    <span class="admin-class-switch-error-text"></span>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="dropdown mt-3">
+                <button class="nav-accordion-btn dropdown-toggle w-100 d-flex align-items-center justify-content-between{% if settings_open %} show{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="{{ 'true' if settings_open else 'false' }}">
+                    <span class="d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined">settings</span>
+                        Settings
+                    </span>
+                </button>
+                <div class="dropdown-menu position-static w-100 p-0 bg-transparent border-0{% if settings_open %} show{% endif %}">
+                    <a href="{{ url_for('admin.settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'settings' %}active{% endif %}">
+                        <span class="material-symbols-outlined">style</span> Personalization
+                    </a>
+                    <a href="{{ url_for('admin.passkey_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'passkey_settings' %}active{% endif %}">
+                        <span class="material-symbols-outlined">fingerprint</span> Passkey
+                    </a>
+                    <a href="{{ url_for('admin.feature_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'feature_settings' %}active{% endif %}">
+                        <span class="material-symbols-outlined">tune</span> Economy Features
+                    </a>
+                    <a href="{{ url_for('admin.account_delete') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'account_delete' %}active{% endif %}">
+                        <span class="material-symbols-outlined">person_cancel</span> Account Deletion
+                    </a>
+                </div>
+            </div>
+
+            <div class="pt-3">
                 <a href="{{ url_for('admin.logout') }}" class="btn btn-danger w-100 d-flex align-items-center justify-content-center gap-2">
                     <span class="material-symbols-outlined">logout</span> Sign Out
                 </a>
             </div>
-        </nav>
+        </div>
     </aside>
 
     <!-- Main Content -->
@@ -282,7 +310,6 @@
                     <span class="material-symbols-outlined" style="font-size:2rem">{% block page_icon %}dashboard{% endblock %}</span>
                     {{ self.page_title() }}
                 </h1>
-                <div class="meta" id="current-time"></div>
             </div>
             <div class="page-header-actions">
                 {% if help_doc_path %}
@@ -293,7 +320,7 @@
                 {% block page_header_actions %}
                 {% endblock %}
                 {% if not custom_full_guide %}
-                    {% set doc_url = url_for('docs.view_doc', doc_path=help_doc_path) if help_doc_path else url_for('docs.index') %}
+                    {% set doc_url = docs_url_for(help_doc_path) if help_doc_path else docs_url_for() %}
                     <a href="{{ doc_url }}" class="btn btn-outline-primary d-flex align-items-center gap-2" target="_blank" rel="noopener">
                         <span class="material-symbols-outlined" aria-hidden="true">menu_book</span> <span>Full Guide</span>
                     </a>
@@ -332,17 +359,79 @@
     <script src="{{ static_url('js/sortable-table.js') }}"></script>
     <script src="{{ static_url('js/mobile-sidebar-toggle.js') }}"></script>
     <script>
-        function updateTime() {
-            const now = new Date();
-            const timeElement = document.getElementById('current-time');
-            if (!timeElement) return;
-            const optionsDate = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
-            const optionsTime = { hour: 'numeric', minute: 'numeric', hour12: true };
-            timeElement.textContent = now.toLocaleDateString(undefined, optionsDate) + ' ' +
-                now.toLocaleTimeString(undefined, optionsTime);
+        function renderClassScopedTimes() {
+            document.querySelectorAll('.class-scoped-time').forEach((timeElement) => {
+                const timezone = (timeElement.dataset.timezone || '').trim();
+                const emptyMessage = timeElement.dataset.emptyMessage || '';
+                const unsetMessage = timeElement.dataset.unsetMessage || '';
+
+                if (!timezone) {
+                    timeElement.textContent = unsetMessage || emptyMessage;
+                    return;
+                }
+
+                const now = new Date();
+                const optionsDate = {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    timeZone: timezone,
+                };
+                const optionsTime = {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true,
+                    timeZone: timezone,
+                    timeZoneName: 'short',
+                };
+                timeElement.textContent = now.toLocaleDateString('en-US', optionsDate) + ' ' +
+                    now.toLocaleTimeString('en-US', optionsTime);
+            });
         }
-        setInterval(updateTime, 1000);
-        updateTime();
+        setInterval(renderClassScopedTimes, 30000);
+        renderClassScopedTimes();
+    </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const classSwitcher = document.getElementById('admin-class-switcher-select');
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            const errorBox = document.getElementById('admin-class-switch-error');
+            const errorText = document.querySelector('.admin-class-switch-error-text');
+
+            if (!classSwitcher || !csrfToken) {
+                return;
+            }
+
+            classSwitcher.addEventListener('change', function () {
+                const classId = this.value;
+                if (!classId) {
+                    return;
+                }
+
+                fetch('{{ url_for("admin.set_current_class") }}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ class_id: classId })
+                }).then(async (response) => {
+                    const payload = await response.json().catch(() => ({}));
+                    if (response.ok) {
+                        window.location.reload();
+                    } else if (errorBox && errorText) {
+                        errorText.textContent = payload.message || 'Unable to switch classes right now.';
+                        errorBox.classList.remove('d-none');
+                    }
+                }).catch(() => {
+                    if (errorBox && errorText) {
+                        errorText.textContent = 'Network error while switching classes.';
+                        errorBox.classList.remove('d-none');
+                    }
+                });
+            });
+        });
     </script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {

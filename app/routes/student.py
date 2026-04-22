@@ -71,7 +71,16 @@ from app.feats.transfer_feat import execute_account_transfer
 from app.feats.insurance_purchase_feat import execute_insurance_purchase
 from app.feats.insurance_claim_feat import execute_file_claim
 from app.payroll import get_pay_rate_for_block
-from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone
+from app.utils.time import (
+    utc_now,
+    ensure_utc,
+    normalize_for_db,
+    get_timezone,
+    class_date,
+    claim_period_bounds_utc,
+    month_bounds_utc,
+    week_bounds_utc,
+)
 from app.utils.seat_scope import get_seat_ids_for_student_join, transaction_scope_filter, seat_scoped_filter
 from app.utils.insurance_eligibility import (
     evaluate_claim_transaction_eligibility,
@@ -295,17 +304,19 @@ def get_current_class_context():
             class_row = ClassEconomy.query.filter_by(join_code=current_seat.join_code).first()
 
         if class_row:
+            session['current_class_id'] = class_row.class_id
             if session.get('current_join_code') != current_seat.join_code:
                 session['current_join_code'] = current_seat.join_code
             return {
+                'class_id': class_row.class_id,
                 'join_code': current_seat.join_code,
                 'teacher_id': class_row.teacher_id,
                 'block': current_seat.block_identifier or current_seat.block,
                 'seat_id': current_seat.id,
             }
 
-    # Check if a join code is already selected in session
-    current_join_code = session.get('current_join_code')
+    # Check if a class is already selected in session
+    current_class_id = session.get('current_class_id')
 
     # Get all claimed seats for this student
     claimed_seats = TeacherBlock.query.filter_by(
@@ -316,28 +327,30 @@ def get_current_class_context():
     if not claimed_seats:
         return None
 
-    # If no join code selected, default to first claimed seat
-    if not current_join_code:
+    # If no class selected, default to first claimed seat
+    if not current_class_id:
         first_seat = claimed_seats[0]
-        current_join_code = first_seat.join_code
-        # Store in session for future requests
-        session['current_join_code'] = current_join_code
+        current_class_id = first_seat.class_id
+        session['current_class_id'] = current_class_id
+        session['current_join_code'] = first_seat.join_code
 
-    # Find the seat matching current join code
+    # Find the seat matching current class id
     current_seat = next(
-        (seat for seat in claimed_seats if seat.join_code == current_join_code),
+        (seat for seat in claimed_seats if seat.class_id == current_class_id),
         None
     )
 
-    # If join code not found in student's seats, reset to first seat
+    # If class id not found in student's seats, reset to first seat
     if not current_seat:
         current_seat = claimed_seats[0]
+        session['current_class_id'] = current_seat.class_id
         session['current_join_code'] = current_seat.join_code
 
     sync_student_session_context(student, join_code=current_seat.join_code)
 
     # Return full class context
     return {
+        'class_id': current_seat.class_id,
         'join_code': current_seat.join_code,
         'teacher_id': current_seat.teacher_id,
         'block': current_seat.block,
@@ -1282,7 +1295,7 @@ def dashboard():
             'is_preview': is_preview_period
         }
 
-    tz = pytz.timezone('America/Los_Angeles')
+    tz = get_timezone()
     local_now = utc_now().astimezone(tz)
     # --- DASHBOARD DEBUG LOGGING ---
     current_app.logger.info(f"DASHBOARD DEBUG: Student {student.id} - Block states:")
@@ -1316,8 +1329,8 @@ def dashboard():
     # --- Calculate weekly/monthly analytics ---
     from app.models import TapEvent
     now_utc = utc_now()
-    week_start = now_utc - timedelta(days=now_utc.weekday())  # Monday of current week
-    month_start = now_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    week_start, week_end = week_bounds_utc(reference_time=now_utc)
+    month_start, _ = month_bounds_utc(reference_time=now_utc)
 
 
 
@@ -1326,11 +1339,18 @@ def dashboard():
         TapEvent.student_id == student.id,
         TapEvent.join_code == join_code,
         TapEvent.timestamp >= week_start,
+        TapEvent.timestamp < week_end,
         TapEvent.is_deleted == False
     ).all()
 
     # Calculate unique days and total minutes
-    unique_days_tapped = len(set(ensure_utc(event.timestamp).date() for event in tap_events_this_week if event.status == 'active'))
+    unique_days_tapped = len(
+        {
+            ensure_utc(event.timestamp).astimezone(tz).date()
+            for event in tap_events_this_week
+            if event.status == 'active'
+        }
+    )
 
     # Calculate total minutes this week
     total_minutes_this_week = 0
@@ -2020,32 +2040,10 @@ def file_claim(policy_id):
     claim_time_limit_days = enrollment.contract_claim_time_limit_days
     form = InsuranceClaimForm()
     if claim_type == 'transaction_monetary' and not form.incident_date.data:
-        form.incident_date.data = utc_now().date()
+        form.incident_date.data = class_date()
 
     # Validation errors
     errors = []
-
-    def _get_period_bounds():
-        now = utc_now()
-        period_key = max_claims_period
-        if period_key == 'semester':
-            if now.month <= 6:
-                return (
-                    now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
-                    now.replace(month=6, day=30, hour=23, minute=59, second=59),
-                )
-            return (
-                now.replace(month=7, day=1, hour=0, minute=0, second=0, microsecond=0),
-                now.replace(month=12, day=31, hour=23, minute=59, second=59),
-            )
-        if period_key == 'weekly':
-            period_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-            period_end = period_start + timedelta(days=7) - timedelta(seconds=1)
-            return period_start, period_end
-        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        next_month = period_start.replace(day=28) + timedelta(days=4)
-        period_end = next_month.replace(day=1) - timedelta(seconds=1)
-        return period_start, period_end
 
     # Normalize coverage dates for safe comparisons
     enrollment.coverage_start_date = ensure_utc(enrollment.coverage_start_date)
@@ -2061,15 +2059,17 @@ def file_claim(policy_id):
     if not enrollment.payment_current:
         errors.append("Your premium payments are not current. Please contact the teacher.")
 
-    period_start, period_end = _get_period_bounds()
+    period_start, period_end = claim_period_bounds_utc(max_claims_period, reference_time=now_utc)
+    period_start_db = normalize_for_db(period_start)
+    period_end_db = normalize_for_db(period_end)
 
     # Check max claims per period
     if max_claims_count:
         claims_count = InsuranceClaim.query.filter(
             InsuranceClaim.student_insurance_id == enrollment.id,
             InsuranceClaim.status.in_(['pending', 'approved', 'paid']),
-            InsuranceClaim.filed_date >= period_start,
-            InsuranceClaim.filed_date <= period_end,
+            InsuranceClaim.filed_date >= period_start_db,
+            InsuranceClaim.filed_date < period_end_db,
         ).count()
 
         if claims_count >= max_claims_count:
@@ -2081,8 +2081,8 @@ def file_claim(policy_id):
         period_payouts = db.session.query(func.sum(InsuranceClaim.approved_amount)).filter(
             InsuranceClaim.student_insurance_id == enrollment.id,
             InsuranceClaim.status.in_(['approved', 'paid']),
-            InsuranceClaim.processed_date >= period_start,
-            InsuranceClaim.processed_date <= period_end,
+            InsuranceClaim.processed_date >= period_start_db,
+            InsuranceClaim.processed_date < period_end_db,
             InsuranceClaim.approved_amount.isnot(None),
         ).scalar()
         if period_payouts is None:
@@ -3726,15 +3726,15 @@ def logout():
     return redirect(url_for('student.login'))
 
 
-@student_bp.route('/switch-class/<join_code>', methods=['POST'])
+@student_bp.route('/switch-class/<class_id>', methods=['POST'])
 @login_required
-def switch_class(join_code):
-    """Switch to a different class using join_code for proper multi-tenancy isolation."""
+def switch_class(class_id):
+    """Switch to a different class using class_id as the stable backend reference."""
     from app.models import TeacherBlock, Admin
 
     student = get_logged_in_student()
     try:
-        resolved_switch = resolve_student_class_switch_scope(actor=student, join_code=join_code)
+        resolved_switch = resolve_student_class_switch_scope(actor=student, class_id=class_id)
         access_policy_service.assert_can_switch_class(resolved_switch.scope)
     except (AccessScopeDenied, access_policy_service.AccessPolicyDenied) as exc:
         return jsonify(status="error", message="You don't have access to that class."), 403
@@ -3751,7 +3751,8 @@ def switch_class(join_code):
     )
     db.session.commit()
 
-    # Update session with new join code
+    # Update session with stable class context.
+    session['current_class_id'] = resolved_switch.scope.class_id
     session['current_join_code'] = resolved_switch.scope.join_code
     if bridge_seat:
         session['current_seat_id'] = bridge_seat.id
@@ -3826,6 +3827,7 @@ def _switch_to_teacher_scope(*, teacher_id: int):
         flash("You don't have access to that class.", "error")
         return redirect(url_for('student.dashboard'))
 
+    session['current_class_id'] = resolved_switch.scope.class_id
     session['current_join_code'] = resolved_switch.scope.join_code
     # Kept for compatibility with older templates/routes that still inspect this session key.
     session['current_teacher_id'] = teacher_id

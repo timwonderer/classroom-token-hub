@@ -19,7 +19,11 @@ from markdown.extensions.fenced_code import FencedCodeExtension
 from markdown.extensions.tables import TableExtension
 from urllib.parse import urlparse
 
-from app.utils.helpers import render_template_with_fallback
+from app.utils.helpers import (
+    docs_url_for,
+    render_template_with_fallback,
+    should_redirect_public_docs,
+)
 
 # Create blueprint
 docs_bp = Blueprint('docs', __name__, url_prefix='/docs')
@@ -378,6 +382,9 @@ def set_audience():
 @docs_bp.route('/')
 def index():
     """Documentation homepage with categories."""
+    if should_redirect_public_docs():
+        return redirect(docs_url_for())
+
     audience = get_docs_audience()
     return render_template_with_fallback('docs/index.html', audience=audience)
 
@@ -385,6 +392,9 @@ def index():
 @docs_bp.route('/timeline')
 def timeline():
     """Interactive project development timeline."""
+    if should_redirect_public_docs('timeline'):
+        return redirect(docs_url_for('timeline'))
+
     return render_template_with_fallback('docs/timeline.html')
 
 
@@ -401,6 +411,9 @@ def view_doc(doc_path):
     Args:
         doc_path: Path to the documentation file (without .md extension)
     """
+    if should_redirect_public_docs(doc_path):
+        return redirect(docs_url_for(doc_path))
+
     # Security: Validate input and prevent directory traversal
     try:
         # Normalize basic string form and reject empty/whitespace-only paths
@@ -562,7 +575,7 @@ def view_doc(doc_path):
                     rel_path = rel_path.lstrip('/')
                     related_articles.append({
                         'title': rel_path.replace('/', ' / ').replace('-', ' ').replace('_', ' ').title(),
-                        'url': url_for('docs.view_doc', doc_path=rel_path)
+                        'url': docs_url_for(rel_path)
                     })
                 except Exception as e:
                     current_app.logger.warning(f"Error processing related article {rel_path}: {e}")
@@ -619,6 +632,9 @@ def search():
     - keywords: [...] - Additional searchable terms for better matching
     - description: "..." - Used for search context and relevance
     """
+    if should_redirect_public_docs('search'):
+        return redirect(docs_url_for('search'))
+
     query = request.args.get('q', '').strip()
     audience = get_docs_audience()
 
@@ -750,7 +766,7 @@ def search():
 
                     results.append({
                         'title': title,
-                        'url': url_for('docs.view_doc', doc_path=str(rel_path_no_ext.as_posix())),
+                        'url': docs_url_for(str(rel_path_no_ext.as_posix())),
                         'context': context,
                         'category': category,
                         'relevance': relevance_score

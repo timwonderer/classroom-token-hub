@@ -40,7 +40,7 @@ if missing_vars:
 
 # -------------------- UTILITIES --------------------
 from app.utils.encryption import PIIEncryptedType
-from app.utils.helpers import format_utc_iso, is_safe_url, render_markdown
+from app.utils.helpers import format_utc_iso, is_safe_url, render_markdown, docs_url_for
 from app.utils.constants import THEME_PROMPTS
 
 
@@ -259,12 +259,14 @@ def create_app():
         TEMPLATES_AUTO_RELOAD=True,
         TURNSTILE_SITE_KEY=os.getenv("TURNSTILE_SITE_KEY"),
         TURNSTILE_SECRET_KEY=os.getenv("TURNSTILE_SECRET_KEY"),
+        EXTERNAL_DOCS_BASE_URL=os.getenv("EXTERNAL_DOCS_BASE_URL", "").strip() or None,
         # Dev ergonomics: disable limiter in local development unless explicitly re-enabled.
         RATELIMIT_ENABLED=(flask_env != "development") or dev_rate_limit_enabled,
     )
 
     # Enable Jinja2 template hot reloading without server restart
     app.jinja_env.auto_reload = True
+    app.jinja_env.globals.setdefault("docs_url_for", docs_url_for)
 
     # -------------------- EXTENSIONS --------------------
     from app.extensions import db, migrate, csrf, limiter
@@ -651,8 +653,9 @@ def create_app():
         """Inject current class context and available classes for student navigation."""
         try:
             from app.auth import get_logged_in_student
-            from app.models import TeacherBlock, Admin
+            from app.models import TeacherBlock, Admin, ClassEconomy
             from flask import session
+            from app.routes.student import get_current_class_context
             from app.utils.display_name_session import (
                 get_teacher_display_name_cache,
                 upsert_teacher_display_name_cache,
@@ -671,14 +674,25 @@ def create_app():
             if not claimed_seats:
                 return {'current_class_context': None, 'available_classes': []}
 
-            # Get current join code from session
-            current_join_code = session.get('current_join_code')
+            resolved_context = get_current_class_context()
+            resolved_class_id = resolved_context.get('class_id') if resolved_context else None
 
-            # Find current seat or default to first
+            # Class context is required whenever the student has at least one claimed seat.
             current_seat = next(
-                (seat for seat in claimed_seats if seat.join_code == current_join_code),
+                (seat for seat in claimed_seats if seat.class_id == resolved_class_id),
                 claimed_seats[0]
             )
+            if current_seat.class_id and session.get('current_class_id') != current_seat.class_id:
+                session['current_class_id'] = current_seat.class_id
+            if session.get('current_join_code') != current_seat.join_code:
+                session['current_join_code'] = current_seat.join_code
+
+            class_rows_by_join_code = {
+                row.join_code: row
+                for row in ClassEconomy.query.filter(
+                    ClassEconomy.join_code.in_([seat.join_code for seat in claimed_seats if seat.join_code])
+                ).all()
+            }
 
             # Build list of available classes with teacher names.
             # Resolve names from session cache first to avoid repeated decryptions.
@@ -696,21 +710,35 @@ def create_app():
             available_classes = []
             for seat in claimed_seats:
                 teacher_name = teacher_name_cache.get(str(seat.teacher_id), 'Unknown')
+                class_row = class_rows_by_join_code.get(seat.join_code)
                 available_classes.append({
                     'join_code': seat.join_code,
+                    'class_id': getattr(class_row, 'class_id', None),
+                    'class_identifier': (class_row.display_name if class_row and class_row.display_name else seat.get_class_label()),
+                    'class_timezone': getattr(class_row, 'class_timezone', None),
                     'teacher_name': teacher_name,
                     'block': seat.block,
                     'block_display': seat.get_class_label(),
-                    'is_current': seat.join_code == current_seat.join_code
+                    'is_current': getattr(class_row, 'class_id', None) == getattr(current_seat, 'class_id', None)
                 })
 
             # Build current class context from cache.
+            current_class_row = class_rows_by_join_code.get(current_seat.join_code)
             current_class_context = {
                 'join_code': current_seat.join_code,
+                'class_id': getattr(current_class_row, 'class_id', None),
+                'class_identifier': (
+                    current_class_row.display_name
+                    if current_class_row and current_class_row.display_name
+                    else current_seat.get_class_label()
+                ),
+                'class_timezone': getattr(current_class_row, 'class_timezone', None),
                 'teacher_name': teacher_name_cache.get(str(current_seat.teacher_id), 'Unknown'),
                 'teacher_id': current_seat.teacher_id,
                 'block': current_seat.block,
-                'block_display': current_seat.get_class_label()
+                'block_display': current_seat.get_class_label(),
+                'student_first_name': current_seat.display_first_name,
+                'student_last_initial': current_seat.display_last_initial,
             }
 
             return {
@@ -721,6 +749,93 @@ def create_app():
         except Exception as e:
             app.logger.warning(f"Could not load class context: {e}")
             return {'current_class_context': None, 'available_classes': []}
+
+    @app.context_processor
+    def inject_admin_class_context():
+        """Inject current class context and available classes for admin navigation."""
+        try:
+            from flask import session
+            from app.models import TeacherBlock, ClassEconomy
+            from app.routes.admin import _resolve_admin_class_context
+
+            admin_id = session.get('admin_id')
+            if not admin_id or not session.get('is_admin'):
+                return {'admin_current_class_context': None, 'admin_available_classes': []}
+
+            class_rows = (
+                ClassEconomy.query
+                .filter(ClassEconomy.teacher_id == admin_id)
+                .order_by(ClassEconomy.display_name.asc(), ClassEconomy.join_code.asc())
+                .all()
+            )
+            if not class_rows:
+                return {'admin_current_class_context': None, 'admin_available_classes': []}
+
+            teacher_blocks = (
+                TeacherBlock.query
+                .filter(
+                    TeacherBlock.teacher_id == admin_id,
+                    TeacherBlock.join_code.isnot(None),
+                )
+                .order_by(TeacherBlock.id.asc())
+                .all()
+            )
+            block_rows_by_join_code = {}
+            for teacher_block in teacher_blocks:
+                if teacher_block.join_code and teacher_block.join_code not in block_rows_by_join_code:
+                    block_rows_by_join_code[teacher_block.join_code] = teacher_block
+
+            admin_available_classes = []
+            for class_row in class_rows:
+                if not class_row.join_code:
+                    continue
+                teacher_block = block_rows_by_join_code.get(class_row.join_code)
+                admin_available_classes.append({
+                    'join_code': class_row.join_code,
+                    'class_id': class_row.class_id,
+                    'class_identifier': (
+                        class_row.display_name
+                        if class_row.display_name
+                        else (teacher_block.get_class_label() if teacher_block else class_row.join_code)
+                    ),
+                    'class_timezone': class_row.class_timezone,
+                    'block': teacher_block.block if teacher_block else None,
+                    'block_display': teacher_block.get_class_label() if teacher_block else (class_row.display_name or class_row.join_code),
+                })
+
+            if not admin_available_classes:
+                return {'admin_current_class_context': None, 'admin_available_classes': []}
+
+            resolved_context = _resolve_admin_class_context(admin_id)
+            resolved_class_id = resolved_context.get('class_id') if resolved_context else None
+            current_class = next(
+                (item for item in admin_available_classes if item['class_id'] == resolved_class_id),
+                admin_available_classes[0],
+            )
+            if current_class['class_id'] and session.get('current_class_id') != current_class['class_id']:
+                session['current_class_id'] = current_class['class_id']
+            if session.get('current_join_code') != current_class['join_code']:
+                session['current_join_code'] = current_class['join_code']
+
+            admin_current_class_context = {
+                'join_code': current_class['join_code'],
+                'class_id': current_class['class_id'],
+                'class_identifier': current_class['class_identifier'],
+                'class_timezone': current_class['class_timezone'],
+                'block': current_class['block'],
+                'block_display': current_class['block_display'],
+            }
+
+            for class_option in admin_available_classes:
+                class_option['is_current'] = class_option['class_id'] == admin_current_class_context['class_id']
+
+            return {
+                'admin_current_class_context': admin_current_class_context,
+                'admin_available_classes': admin_available_classes,
+            }
+        except Exception as e:
+            app.logger.warning(f"Could not load admin class context: {e}")
+            return {'admin_current_class_context': None, 'admin_available_classes': []}
 
     @app.context_processor
     def inject_current_admin():
@@ -763,6 +878,11 @@ def create_app():
         except Exception as e:
             app.logger.warning(f"Could not load current system admin: {e}")
             return {'current_sysadmin': None}
+
+    @app.context_processor
+    def inject_docs_helpers():
+        """Expose docs URL helpers to templates."""
+        return {"docs_url_for": docs_url_for}
 
     # -------------------- REGISTER BLUEPRINTS --------------------
     from app.routes.main import main_bp
