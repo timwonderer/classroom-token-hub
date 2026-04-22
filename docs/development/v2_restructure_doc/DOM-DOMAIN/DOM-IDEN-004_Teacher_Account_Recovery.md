@@ -27,9 +27,8 @@ Supersedes `docs/LOGS/AUDITS/LOG-ARC-011_Recovery_Evaluation.md` (informative).
 
 ## III. Core Invariants
 
-1. **No DOB in target model.** No date of birth, DOB sum, or any birth-date-derived
-   value is collected, stored, or used at any point in v2 teacher recovery. The current
-   runtime still uses `dob_sum_hash` — this must be removed as part of Project 9.
+1. **No DOB.** No date of birth, DOB sum, or any birth-date-derived
+   value is collected, stored, or used at any point in teacher recovery.
 
 2. **Self-serve.** Teacher recovery does not require system admin intervention.
 
@@ -64,17 +63,16 @@ Does not apply to:
 Recovery state is tracked via two models:
 
 ### `RecoveryRequest`
-- `teacher_id` — FK to teacher identity
+- `teacher_id` — FK to teacher identity (`users` table)
 - `status` — `pending` | `verified` | `expired`
 - `expires_at` — UTC, 5-day TTL from creation
 - `partial_codes` — DB-persisted list of codes entered so far (for cross-session resume)
 - `resume_pin_hash` — hashed 6-digit PIN for resuming a saved session
 - `resume_new_username` — saved new username for resume
-- `dob_sum_hash` — **legacy field; present in current runtime; must be removed in Project 9**
 
 ### `StudentRecoveryCode`
 - `recovery_request_id` — FK to `RecoveryRequest`
-- `student_id` — FK to student who will verify
+- `student_id` — FK to student who will verify (`seats` table)
 - `code_hash` — `HMAC(6-digit-code, b'')` — set when student completes verification;
   `NULL` means student has not yet generated their code
 - `verified_at` — timestamp when student completed their verification
@@ -105,17 +103,6 @@ The backend requires knowing how many pairs to expect and exactly which `join_co
 - Generic error on any failure. Do not reveal which pair failed, which join code was unrecognized, or whether any student username exists.
 - If an active recovery request already exists for this teacher, redirect to
   the recovery status page rather than creating a duplicate.
-
-**Current runtime note:**
-
-The code already implements the join_code-scoped lookup via `TeacherBlock`:
-`join_code → TeacherBlock rows → teacher_id + [student_id list] → username_lookup_hash within that set`.
-The `class_id` hop is implicit through `TeacherBlock`. In the target model (Project 9),
-this resolves cleanly through the `classes` table.
-
-> [!WARNING]
-> `Admin.dob_sum_hash` is still present in the current runtime schema. It is no longer
-> used in the recovery flow. It must be removed in Project 9 before cutover.
 
 On success: a `RecoveryRequest` is created with `status = 'pending'` and
 `expires_at = now + 5 days`. One `StudentRecoveryCode` row is created per selected
@@ -228,7 +215,7 @@ On expiry:
 | Resume PIN | 6-digit PIN, hashed — links browser back to DB-stored progress |
 | Passphrase gate on students | Student must re-enter passphrase to generate their code |
 | No contact PII | No email, phone used at any stage |
-| No DOB (target) | DOB removed in Project 9 — current runtime still uses it |
+| No DOB | No date of birth used anywhere |
 
 ---
 
@@ -240,26 +227,10 @@ The teacher recovery system must NOT:
 - Pre-validate individual codes before the teacher submits all of them
 - Reveal which code, student, or class caused a validation failure
 - Preserve any `StudentRecoveryCode.code_hash` after a failed submission
-- Collect or verify DOB at any point in the target v2 model
+- Collect or verify DOB at any point
 - Allow student-initiated confirmation outside an active `RecoveryRequest`
 - Preserve enrolled passkeys across a recovery event
 - Log student PII in recovery audit records
-
----
-
-## X. Target Model vs. Current Runtime
-
-| Aspect | Target (Project 9) | Current Runtime |
-|--------|-------------------|-----------------|
-| Teacher identity | `users` row | `Admin` row |
-| Step 1 auth factor | `(join_code, username)` pairs, class-scoped | Student usernames + DOB sum |
-| Username lookup | Scoped to `class_id` after `join_code` resolution | Global `username_lookup_hash` |
-| DOB involvement | **None** | `dob_sum_hash` on `Admin` — must be removed |
-| `RecoveryRequest` model | On `users` FK | On `Admin` FK — correct pattern, migrates as-is |
-| `StudentRecoveryCode` model | Migrates as-is | Current implementation |
-| Code format | 6-digit numeric | 6-digit numeric ✅ |
-| Code invalidation on failure | All-or-nothing wipe | All-or-nothing wipe ✅ |
-| Resume PIN | DB-persisted | DB-persisted ✅ |
 
 ---
 

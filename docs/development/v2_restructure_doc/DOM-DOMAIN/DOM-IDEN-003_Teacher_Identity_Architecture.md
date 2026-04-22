@@ -236,20 +236,7 @@ identity anchors:
 These tables may exist in current runtime code, but they do not define the target domain
 model.
 
----
 
-## Transitional Reality
-
-Current runtime code uses `Admin` (mapped to `teachers` table) as the active teacher
-identity. The `Seat` model exists as scaffolding with a `role` field and `user_id` FK,
-but teacher authentication and session management still flow through `Admin`.
-
-The `Admin` model retains:
-- `totp_secret` (encrypted) — correct pattern, will migrate to `users`
-- `dob_sum_hash` — **legacy; must be removed before Project 9 cutover**
-- `AdminCredential` (passkey metadata table) — will merge into `users` row
-
-Full cutover from `Admin` to `users`/`seats` is Project 9, explicitly post-launch.
 
 ---
 
