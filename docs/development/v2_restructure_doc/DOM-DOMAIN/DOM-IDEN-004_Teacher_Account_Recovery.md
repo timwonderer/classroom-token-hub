@@ -1,4 +1,4 @@
-# Teacher Account Recovery Domain
+# DOM-IDEN-004 Teacher Account Recovery
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
