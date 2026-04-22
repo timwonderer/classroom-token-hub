@@ -22,7 +22,8 @@ Supersedes `docs/ARCHITECTURE/IDENTITY/ARC-IDEN-001_Admin_Identity_Handling.md`.
 - `INV-CORE-000_Core_Invariants.md`
 - `DOM-CORE-000_Domain_Foundation.md`
 - `DOM-IDEN-001_Identity_Class_Binding_Domain.md`
-- `DOM-IDEN-002_Account_Recovery.md`
+- `DOM-IDEN-002_Student_Account_Recovery.md`
+- `DOM-IDEN-004_Teacher_Account_Recovery.md`
 - `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
 
 ## III. Core Design Principle

@@ -178,7 +178,9 @@ They may exist in current runtime code, but they do not define the target domain
 - Authentication flows are specified per role in:
   - `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md` — student credential and claim flow
   - `DOM-IDEN-003_Teacher_Identity_Architecture.md` — teacher credential and session flow
-- Recovery flows are specified in `DOM-IDEN-002_Account_Recovery.md`.
+- Recovery flows are specified in:
+  - `DOM-IDEN-002_Student_Account_Recovery.md`
+  - `DOM-IDEN-004_Teacher_Account_Recovery.md`
 
 ## X. Transitional Reality
 
