@@ -87,39 +87,49 @@ Recovery state is tracked via two models:
 
 Teacher navigates to `/recover` and submits:
 
-**Target model (v2):**
-- One `(join_code, username)` pair per active class period
+**Pair resolution chain (each pair must traverse all four steps in order):**
 
-Lookup rules (must be applied in this order):
-1. Resolve `join_code → class_id`. Reject if unrecognized or not belonging to the
-   teacher's account.
-2. Within that resolved `class_id`, find the student by `username_lookup_hash`. Never
-   search by username across the full table — always scope to the resolved `class_id`
-   first.
-3. Mark the pair verified if both the class resolves and the student is found within it.
+```
+join_code  →  class_id  →  username_lookup_hash  →  teacher user identifier
+```
 
-**Current runtime (transitional):**
-- Teacher submits student usernames (comma-separated) + DOB sum
-- Backend finds students by `username_lookup_hash` (global, not class-scoped)
-- Teacher identity is resolved via the common teacher across all submitted students
-- DOB sum is verified against `Admin.dob_sum_hash`
-- Block coverage is verified: submitted students must cover all active blocks
+1. `join_code → class_id` — Resolve the join code to a specific class. Reject
+   immediately if the join code is not recognized.
+2. `class_id → username_lookup_hash` — Find the student by `username_lookup_hash`
+   scoped strictly to that `class_id`. Never search by username across the full
+   table — the class scope must be established first.
+3. `username_lookup_hash → student` — Locate the exact student record within
+   the class.
+4. `class_id → teacher user identifier` — Derive the owning teacher from the
+   class. All pairs must resolve to the same teacher identifier. Any pair whose
+   class belongs to a different teacher rejects the entire submission.
 
-> [!WARNING]
-> The current runtime uses DOB sum as a verification factor. This is explicitly
-> prohibited in the target v2 model. `dob_sum_hash` on `Admin` must be removed
-> before Project 9 cutover.
-
-**Submission rules (both models):**
-- One student per active class period is required; full coverage is enforced.
-- All pairs/students validated atomically — partial success is not reported.
-- Generic error on any failure; do not reveal which student or class failed.
+**Submission rules:**
+- One pair is required per active class taught by the teacher.
+- The set of `join_codes` submitted must fully cover all active classes —
+  no partial coverage is accepted.
+- All pairs are validated in full before any are accepted. Partial success is
+  never reported.
+- Generic error on any failure. Do not reveal which pair failed, which join code
+  was unrecognized, or whether any student username exists.
 - If an active recovery request already exists for this teacher, redirect to
   the recovery status page rather than creating a duplicate.
+
+**Current runtime note:**
+
+The code already implements the join_code-scoped lookup via `TeacherBlock`:
+`join_code → TeacherBlock rows → teacher_id + [student_id list] → username_lookup_hash within that set`.
+The `class_id` hop is implicit through `TeacherBlock`. In the target model (Project 9),
+this resolves cleanly through the `classes` table.
+
+> [!WARNING]
+> `Admin.dob_sum_hash` is still present in the current runtime schema. It is no longer
+> used in the recovery flow. It must be removed in Project 9 before cutover.
 
 On success: a `RecoveryRequest` is created with `status = 'pending'` and
 `expires_at = now + 5 days`. One `StudentRecoveryCode` row is created per selected
 student with `code_hash = NULL`.
+
 
 ### Step 2 — Student verification and code generation
 
