@@ -51,8 +51,13 @@ This checklist is derived from the active and supporting development docs below.
 
 ### Phase 4: Temporal Architecture Rebuild (Post-Launch)
 
-- [x] Temporal Invariant Audit — all critical violations V-001 through V-009 resolved
-- [ ] Project T: Full TemporalContext implementation (per `V2_Temporal_Architecture_Rebuild_Plan.md`)
+- [x] Temporal Invariant Audit — V-001 through V-009 call-site violations remediated (bad patterns removed)
+- [ ] Project T: Full TemporalContext architecture (per `V2_Temporal_Architecture_Rebuild_Plan.md`)
+  - [ ] `TemporalContext` object constructed once per request
+  - [ ] Timezone authority moved from `session.get("timezone")` → `ClassEconomy.class_timezone` via `class_id`
+  - [ ] `build_temporal_context(class_id, timestamp_utc)` public interface
+  - [ ] Routes/domains receive TemporalContext rather than calling `get_timezone()` inline
+  - [ ] CI enforcement gates blocking `datetime.now`, hardcoded tz strings, etc.
 
 ### Docs Platform Split (Active)
 

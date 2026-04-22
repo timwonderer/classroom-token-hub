@@ -6,7 +6,35 @@
 | Last Reviewed | 2026-04-22 |
 | Specification | INV-ARC-015 v1.0 |
 | Authority | `docs/development/v2_restructure_doc/INV-INVARIANT/ARCHITECTURE/INV-ARC-015_Temporal_Model_and_Boundary_Enforcement.md` |
-| Status | **Largely remediated** — all critical violations resolved; one low-risk config fallback remains (see V-005 note) |
+| Status | **Individual violations remediated** — bad patterns removed; target `TemporalContext` architecture (per `V2_Temporal_Architecture_Rebuild_Plan.md`) is NOT yet implemented |
+
+---
+
+## What Is Done vs. What Remains
+
+### ✅ Violation Remediation (done)
+
+All V-001 through V-009 violations have been fixed at the call-site level:
+- Hardcoded `America/Los_Angeles` removed from 11 of 12 sites
+- `claim_period_bounds_utc()`, `local_date_bounds_utc()`, `week_bounds_utc()`, `month_bounds_utc()`, `semester_bounds_utc()` extracted to `app/utils/time.py`
+- Routes import and use the centralized helpers
+- `done_for_day_date` write sites use class-scoped timezone via `get_timezone()`
+- Jinja2 filter delegates to `get_timezone()`
+
+### ❌ Target Architecture (not implemented)
+
+The `V2_Temporal_Architecture_Rebuild_Plan.md` defines an execution-model rebuild that has NOT been built:
+
+| Target | Current State |
+|--------|---------------|
+| `TemporalContext` object, constructed once per request | Not implemented — no such class exists |
+| Timezone sourced from `ClassConfig.get_timezone(class_id)` (class record) | Not done — `get_timezone()` still reads `session.get("timezone")` with Pacific fallback |
+| `build_temporal_context(class_id, timestamp_utc)` public interface | Not implemented |
+| All domains receive TemporalContext — routes MUST NOT compute time inline | Not done — routes still call `get_timezone()` at individual call sites |
+| CI gates block `datetime.now`, `datetime.utcnow`, hardcoded timezones | Not implemented |
+| Class timezone immutable and class_id-authoritative at runtime | DB column exists (`ClassEconomy.class_timezone`), but `get_timezone()` does not read it — session-driven |
+
+**This distinction matters:** the violation fixes prevent correctness bugs today, but the target architecture is a larger structural project requiring dedicated implementation work. See `V2_Temporal_Architecture_Rebuild_Plan.md` for the full spec.
 
 ---
 
