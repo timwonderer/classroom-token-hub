@@ -1,6 +1,6 @@
 # V2 Launch Project Checklist
 
-**Last Updated:** 2026-04-08
+**Last Updated:** 2026-04-22
 **Purpose:** Consolidate the active `docs/development` v2 materials into one implementation-facing checklist organized by project, build order, invariants, and test expectations for v2 launch.  
 **Use this doc for:** sequencing work, assigning sections, and deciding what must be complete before live test, before production, or after launch.
 
@@ -48,6 +48,18 @@ This checklist is derived from the active and supporting development docs below.
   - [x] Task 8.1: Physical identity column purge (Admin.username, is_teacher_shadow)
   - [ ] Task 8.2: Remaining shim/validator cleanup
 - [ ] Project 9: Long-term identity-model convergence
+
+### Phase 4: Temporal Architecture Rebuild (Post-Launch)
+
+- [x] Temporal Invariant Audit — all critical violations V-001 through V-009 resolved
+- [ ] Project T: Full TemporalContext implementation (per `V2_Temporal_Architecture_Rebuild_Plan.md`)
+
+### Docs Platform Split (Active)
+
+- [x] Phase 1: Foundation — `docs-site/` Docusaurus workspace created, `EXTERNAL_DOCS_BASE_URL` supported, `docs_url_for()` centralized, unauthenticated redirect wired
+- [ ] Phase 2: Information architecture migration
+- [ ] Phase 3: In-app help simplification
+- [ ] Phase 4: Renderer retirement
 
 ## Global Launch Invariants
 
@@ -151,78 +163,78 @@ These rules appear repeatedly across the source docs and should be treated as no
 
 ### Scope A: Maintenance Workflow Security Fix
 
-- [ ] Port the workflow templating/security fix from `main`
-- [ ] Verify maintenance toggling still works after the workflow change
+- [x] Port the workflow templating/security fix from `main`
+- [x] Verify maintenance toggling still works after the workflow change
 
 **Files**
 
-- [ ] `.github/workflows/deploy.yml`
-- [ ] `.github/workflows/toggle-maintenance.yml`
+- [x] `.github/workflows/deploy.yml`
+- [x] `.github/workflows/toggle-maintenance.yml`
 
 **Verification**
 
-- [ ] Workflow review
-- [ ] Dry-run style inspection in CI if available
+- [x] Workflow review
+- [x] Dry-run style inspection in CI if available
 
 ### Scope B: Teacher Announcement Visibility And Sunset Messaging
 
-- [ ] Port the teacher-facing system announcement visibility fix
-- [ ] Keep README and docs-site sunset messaging consistent
+- [x] Port the teacher-facing system announcement visibility fix
+- [x] Keep README and docs-site sunset messaging consistent
 
 **Files**
 
-- [ ] `app/routes/admin.py`
-- [ ] `templates/admin_dashboard.html`
-- [ ] `docs/index.html`
-- [ ] `README.md`
+- [x] `app/routes/admin.py`
+- [x] `templates/admin_dashboard.html`
+- [x] `docs/index.html`
+- [x] `README.md`
 
 **Verification**
 
-- [ ] Add or reuse announcement visibility coverage
-- [ ] Manually confirm dashboard rendering for teacher users
+- [x] Add or reuse announcement visibility coverage
+- [x] Manually confirm dashboard rendering for teacher users
 
 ### Scope C: Transfer Submission Hardening
 
-- [ ] Port malformed/stale transfer submission protections
-- [ ] Preserve v2 student seat/user-context behavior while porting
-- [ ] Confirm intended feature-flag constraints remain enforced
+- [x] Port malformed/stale transfer submission protections
+- [x] Preserve v2 student seat/user-context behavior while porting
+- [x] Confirm intended feature-flag constraints remain enforced
 
 **Files**
 
-- [ ] `app/routes/student.py`
-- [ ] `templates/layout_student.html`
-- [ ] `templates/student_transfer.html`
+- [x] `app/routes/student.py`
+- [x] `templates/layout_student.html`
+- [x] `templates/student_transfer.html`
 
 **Verification**
 
-- [ ] Port relevant `tests/test_transfer_legacy_transactions.py` coverage
-- [ ] Update `tests/test_feature_flag_enforcement.py`
-- [ ] Exercise active-session and stale-session transfer paths
+- [x] Port relevant `tests/test_transfer_legacy_transactions.py` coverage
+- [x] Update `tests/test_feature_flag_enforcement.py`
+- [x] Exercise active-session and stale-session transfer paths
 
 ### Scope D: Collective Goal Reactivation Instance Codes
 
-- [ ] Add instance-code handling so reactivated collective goals start a new logical run
-- [ ] Implement a v2-native migration for instance-code fields
-- [ ] Avoid replaying `main` merge-head migrations verbatim
+- [x] Add instance-code handling so reactivated collective goals start a new logical run
+- [x] Implement a v2-native migration for instance-code fields
+- [x] Avoid replaying `main` merge-head migrations verbatim
 
 **Files**
 
-- [ ] `app/models.py`
-- [ ] `app/routes/admin.py`
-- [ ] `app/routes/api.py`
-- [ ] `app/routes/student.py`
-- [ ] `app/utils/store.py`
+- [x] `app/models.py`
+- [x] `app/routes/admin.py`
+- [x] `app/routes/api.py`
+- [x] `app/routes/student.py`
+- [x] `app/utils/store.py`
 
 **Verification**
 
-- [ ] Port `tests/test_collective_goal_expiration.py`
-- [ ] Manually verify that prior contributions do not reappear after reactivation
+- [x] Port `tests/test_collective_goal_expiration.py`
+- [x] Manually verify that prior contributions do not reappear after reactivation
 
 ### Cross-Cutting Invariants
 
-- [ ] Workflow hardening can land independently.
-- [ ] Shared-file application changes should wait until Project 2 route churn settles.
-- [ ] Manual ports must preserve v2 tenancy/session behavior already present on `codex/v2.0`.
+- [x] Workflow hardening can land independently.
+- [x] Shared-file application changes should wait until Project 2 route churn settles.
+- [x] Manual ports must preserve v2 tenancy/session behavior already present on `codex/v2.0`.
 
 ### Exit Criteria
 
@@ -506,6 +518,21 @@ These rules appear repeatedly across the source docs and should be treated as no
 - [ ] Project 7
 - [x] Project 8
 - [ ] Project 9
+- [ ] Project T: Temporal Architecture (full TemporalContext rebuild)
+- [ ] Docs Platform Split Phases 2–4
+
+## What's Next
+
+**Immediate (blocking production):**
+1. **Project 5** — execute backup/restore rehearsal on production topology, record operator sign-off.
+
+**Post-launch (structural hardening):**
+2. **Project T: Temporal Architecture Rebuild** — implement `TemporalContext`, CI enforcement, scheduler timezone fix (`admin.py:1823`). Spec: `V2_Temporal_Architecture_Rebuild_Plan.md`.
+3. **Docs Platform Split Phase 2** — migrate public user guides and technical docs into Docusaurus collections. Spec: `V2_DOCS_PLATFORM_SPLIT.md`.
+4. **Project 6** — admin route service extraction (`deletion_service`, `economy_service`, etc.).
+5. **Project 7** — class scope normalization (`class_id` as canonical internal key).
+6. **Project 8 Task 8.2** — remaining shim/validator cleanup.
+7. **Project 9** — long-term User/Seat/Class identity model convergence.
 
 ## Notes For Execution
 
