@@ -3327,37 +3327,66 @@ def recover():
             return render_template("admin_recover.html", form=form)
 
         # ----------------------------------------------------------------
-        # Step 1: Resolve each pair — join_code -> class scope -> student
+        # Step 1: Establish teacher identity from the first join_code
+        # ----------------------------------------------------------------
+        first_join_code = pairs[0][0]
+        first_block = TeacherBlock.query.filter_by(join_code=first_join_code).first()
+        if not first_block:
+            current_app.logger.warning(
+                f"Admin recovery: initial join_code '{first_join_code}' not found"
+            )
+            flash(_GENERIC_ERROR, "error")
+            return render_template("admin_recover.html", form=form)
+
+        teacher_id = first_block.teacher_id
+
+        # ----------------------------------------------------------------
+        # Step 2: Verify submitted join codes exactly match the teacher's active classes
+        # ----------------------------------------------------------------
+        teacher = db.session.get(Admin, teacher_id)
+        if not teacher:
+            flash(_GENERIC_ERROR, "error")
+            return render_template("admin_recover.html", form=form)
+
+        teacher_blocks = TeacherBlock.query.filter_by(teacher_id=teacher_id).all()
+        all_active_join_codes = set(b.join_code for b in teacher_blocks if b.join_code)
+        submitted_join_codes = set(jc for jc, _ in pairs)
+
+        # Must exactly match backend list
+        if all_active_join_codes != submitted_join_codes:
+            current_app.logger.warning(
+                f"Admin recovery: join_code set mismatch for teacher {teacher_id}"
+            )
+            flash(_GENERIC_ERROR, "error")
+            return render_template("admin_recover.html", form=form)
+
+        # Reject duplicates (e.g. submitting the same valid class 3 times)
+        if len(submitted_join_codes) != len(pairs):
+            current_app.logger.warning(
+                f"Admin recovery: duplicate join_codes submitted"
+            )
+            flash(_GENERIC_ERROR, "error")
+            return render_template("admin_recover.html", form=form)
+
+        # ----------------------------------------------------------------
+        # Step 3: Verify each username belongs in the correct join_code
         # ----------------------------------------------------------------
         resolved_students = {}   # join_code -> Student
-        teacher_id = None
+
+        # Group blocks by join_code for quick student_id lookup
+        blocks_by_jc = {}
+        for b in teacher_blocks:
+            if b.join_code:
+                blocks_by_jc.setdefault(b.join_code, []).append(b)
 
         for join_code, username in pairs:
-            # 1a. Resolve join_code to a TeacherBlock (establishes teacher and class)
-            block_rows = TeacherBlock.query.filter_by(join_code=join_code).all()
-            if not block_rows:
-                # Generic failure — do not reveal which code failed
-                current_app.logger.warning(
-                    f"Admin recovery: join_code '{join_code}' not found"
-                )
-                flash(_GENERIC_ERROR, "error")
-                return render_template("admin_recover.html", form=form)
-
-            block_teacher_id = block_rows[0].teacher_id
-
-            # 1b. All join codes must belong to the same teacher
-            if teacher_id is None:
-                teacher_id = block_teacher_id
-            elif teacher_id != block_teacher_id:
-                current_app.logger.warning(
-                    f"Admin recovery: join_code '{join_code}' belongs to a different teacher"
-                )
-                flash(_GENERIC_ERROR, "error")
-                return render_template("admin_recover.html", form=form)
-
-            # 1c. Find student by username_lookup_hash within this join_code's roster
+            # We already know this join_code belongs to the teacher from the set comparison
             lookup_hash = hash_username_lookup(username)
-            student_ids_in_class = [row.student_id for row in block_rows if row.student_id]
+
+            # Get all student IDs associated with this specific join_code
+            blocks_for_jc = blocks_by_jc[join_code]
+            student_ids_in_class = [b.student_id for b in blocks_for_jc if b.student_id]
+
             student = (
                 Student.query
                 .filter(
@@ -3366,6 +3395,7 @@ def recover():
                 )
                 .first()
             )
+
             if not student:
                 current_app.logger.warning(
                     f"Admin recovery: username not found in join_code scope"
@@ -3376,28 +3406,7 @@ def recover():
             resolved_students[join_code] = student
 
         # ----------------------------------------------------------------
-        # Step 2: Verify full coverage — all active join codes must be present
-        # ----------------------------------------------------------------
-        teacher = db.session.get(Admin, teacher_id)
-        if not teacher:
-            flash(_GENERIC_ERROR, "error")
-            return render_template("admin_recover.html", form=form)
-
-        all_active_join_codes = set(
-            row.join_code
-            for row in TeacherBlock.query.filter_by(teacher_id=teacher_id).all()
-            if row.join_code
-        )
-        submitted_join_codes = set(resolved_students.keys())
-        if not all_active_join_codes.issubset(submitted_join_codes):
-            current_app.logger.warning(
-                f"Admin recovery: incomplete join_code coverage for teacher {teacher_id}"
-            )
-            flash(_GENERIC_ERROR, "error")
-            return render_template("admin_recover.html", form=form)
-
-        # ----------------------------------------------------------------
-        # Step 3: Check for existing active recovery request
+        # Step 4: Check for existing active recovery request
         # ----------------------------------------------------------------
         existing_request = RecoveryRequest.query.filter_by(
             teacher_id=teacher.id,

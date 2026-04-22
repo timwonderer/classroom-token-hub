@@ -85,33 +85,24 @@ Recovery state is tracked via two models:
 
 ### Step 1 — Roster verification and request creation
 
-Teacher navigates to `/recover` and submits:
+**Pair resolution chain:**
 
-**Pair resolution chain (each pair must traverse all four steps in order):**
+The backend requires knowing how many pairs to expect and exactly which `join_codes` it is looking for. The sequence is:
 
-```
-join_code  →  class_id  →  username_lookup_hash  →  teacher user identifier
-```
-
-1. `join_code → class_id` — Resolve the join code to a specific class. Reject
-   immediately if the join code is not recognized.
-2. `class_id → username_lookup_hash` — Find the student by `username_lookup_hash`
-   scoped strictly to that `class_id`. Never search by username across the full
-   table — the class scope must be established first.
-3. `username_lookup_hash → student` — Locate the exact student record within
-   the class.
-4. `class_id → teacher user identifier` — Derive the owning teacher from the
-   class. All pairs must resolve to the same teacher identifier. Any pair whose
-   class belongs to a different teacher rejects the entire submission.
+1. `join_code → class_id → teacher identifier`
+   Resolve the *first* submitted join code to determine the target teacher. If it is unrecognized, reject the entire submission generically.
+2. `collect all join_codes under that teacher`
+   Retrieve the definitive list of all active class `join_codes` for this teacher from the backend.
+3. `verify collected join_code matches backend list`
+   Compare the submitted set of `join_codes` against the backend's definitive list. They must match exactly (no missing classes, no extra unrecognized classes, no duplicates). If they do not match, reject the entire submission generically.
+4. `verify each username belongs in the correct join_code`
+   For each submitted pair, search for the `username_lookup_hash` strictly within the roster of that specific `join_code`. If any username is not found in its corresponding class, reject the entire submission generically.
 
 **Submission rules:**
 - One pair is required per active class taught by the teacher.
-- The set of `join_codes` submitted must fully cover all active classes —
-  no partial coverage is accepted.
-- All pairs are validated in full before any are accepted. Partial success is
-  never reported.
-- Generic error on any failure. Do not reveal which pair failed, which join code
-  was unrecognized, or whether any student username exists.
+- The set of `join_codes` submitted must exactly match all active classes — no partial coverage or duplicate submissions are accepted.
+- All pairs are validated in full before any are accepted. Partial success is never reported.
+- Generic error on any failure. Do not reveal which pair failed, which join code was unrecognized, or whether any student username exists.
 - If an active recovery request already exists for this teacher, redirect to
   the recovery status page rather than creating a duplicate.
 
