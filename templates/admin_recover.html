@@ -19,7 +19,7 @@
         }
         .login-container {
             width: 100%;
-            max-width: 900px;
+            max-width: 960px;
             background: white;
             box-shadow: var(--shadow-lg);
             overflow: hidden;
@@ -48,10 +48,7 @@
         .login-right::before {
             content: '';
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
         }
         .logo-img {
@@ -72,9 +69,7 @@
             font-weight: 600;
             margin-bottom: 0.5rem;
         }
-        .subtitle {
-            color: var(--secondary) !important;
-        }
+        .subtitle { color: var(--secondary) !important; }
         .form-label {
             color: var(--secondary) !important;
             text-transform: uppercase;
@@ -82,35 +77,86 @@
             font-size: 0.75rem;
             letter-spacing: 0.05em;
         }
-        a {
-            color: var(--secondary);
-        }
-        a:hover {
-            color: var(--secondary);
-            opacity: 0.8;
-        }
+        a { color: var(--secondary); }
+        a:hover { color: var(--secondary); opacity: 0.8; }
         .btn-primary {
             background: var(--primary);
             border: none;
             color: white;
             transition: all 0.3s ease;
         }
-        .btn-primary:hover {
-            background: var(--secondary);
-            color: var(--text-primary);
+        .btn-primary:hover { background: var(--secondary); color: var(--text-primary); }
+
+        /* Pair rows */
+        .pair-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 0.5rem;
+            align-items: center;
+            margin-bottom: 0.5rem;
         }
+        .pair-row input {
+            font-size: 0.9rem;
+        }
+        .pair-row .remove-btn {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            line-height: 1;
+            border-radius: 50%;
+            border: 1px solid #dee2e6;
+            background: white;
+            color: #6c757d;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .pair-row .remove-btn:hover {
+            background: #f8d7da;
+            border-color: #f5c2c7;
+            color: #842029;
+        }
+        .pair-row .remove-btn:disabled {
+            opacity: 0.3;
+            cursor: default;
+            pointer-events: none;
+        }
+        .pair-header {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+        .pair-header span {
+            color: var(--secondary);
+            text-transform: uppercase;
+            font-weight: 600;
+            font-size: 0.7rem;
+            letter-spacing: 0.05em;
+        }
+        .btn-add-row {
+            font-size: 0.85rem;
+            color: var(--primary);
+            background: none;
+            border: 1px dashed var(--primary);
+            padding: 0.35rem 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+            margin-top: 0.25rem;
+        }
+        .btn-add-row:hover {
+            background: color-mix(in srgb, var(--primary) 8%, transparent);
+        }
+
         @media (max-width: 768px) {
-            .login-container {
-                flex-direction: column;
-                margin: 1rem;
-                min-height: auto;
-            }
-            .login-right {
-                display: none;
-            }
-            .login-left {
-                padding: 2rem;
-            }
+            .login-container { flex-direction: column; margin: 1rem; min-height: auto; }
+            .login-right { display: none; }
+            .login-left { padding: 2rem; }
         }
     </style>
 </head>
@@ -120,7 +166,7 @@
             <div class="mb-2">
                 <small class="text-muted">TEACHER PORTAL</small>
                 <h1 class="h3 fw-bold text-primary">Account Recovery</h1>
-                <p class="subtitle">Recover your teacher account using student usernames</p>
+                <p class="subtitle">Enter one student per class you teach to verify your identity</p>
             </div>
 
             {% with messages = get_flashed_messages(with_categories=true) %}
@@ -128,13 +174,9 @@
                 <div class="mb-3">
                   {% for category, message in messages %}
                     <div class="alert
-                      {% if category == 'success' %}
-                        alert-success
-                      {% elif category == 'error' %}
-                        alert-danger
-                      {% else %}
-                        alert-secondary
-                      {% endif %}
+                      {% if category == 'success' %}alert-success
+                      {% elif category == 'error' %}alert-danger
+                      {% else %}alert-secondary{% endif %}
                       alert-dismissible fade show" role="alert">
                       {{ message }}
                       <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -147,28 +189,37 @@
             <div class="info-box">
                 <h5>How Recovery Works</h5>
                 <ul class="small">
-                    <li>Provide <strong>one student username from EACH class</strong> you teach</li>
-                    <li>Enter your <strong>Date of Birth sum</strong> (MM+DD+YYYY)</li>
-                    <li>Upon verification, you can reset your username and TOTP</li>
+                    <li>Enter the <strong>join code</strong> and <strong>one student username</strong> for each class you teach</li>
+                    <li>All pairs must be correct to proceed</li>
+                    <li>Selected students will receive a verification prompt in the app</li>
                 </ul>
             </div>
 
-            <form method="POST" action="{{ url_for('admin.recover') }}">
+            <form method="POST" action="{{ url_for('admin.recover') }}" id="recovery-form">
                 {{ form.csrf_token if form and form.csrf_token }}
 
-                <div class="mb-3">
-                    <label for="student_usernames" class="form-label">Student Usernames</label>
-                    <input id="student_usernames" name="student_usernames" type="text" required autocomplete="off" class="form-control" placeholder="e.g., john_smith, jane_doe, mike_jones">
-                    <small class="text-muted">Enter one username from each class you teach, separated by commas</small>
+                <div class="mb-1">
+                    <div class="pair-header">
+                        <span>Join Code</span>
+                        <span>Student Username</span>
+                        <span style="width:32px"></span>
+                    </div>
+
+                    <div id="pair-list">
+                        <!-- Initial row -->
+                        <div class="pair-row" id="row-0">
+                            <input type="text" name="join_code[]" class="form-control form-control-sm" placeholder="e.g., ABC123" autocomplete="off" autocapitalize="characters" required>
+                            <input type="text" name="student_username[]" class="form-control form-control-sm" placeholder="e.g., john_doe" autocomplete="off" required>
+                            <button type="button" class="remove-btn" onclick="removeRow(this)" disabled title="Remove row">×</button>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn-add-row" id="add-row-btn" onclick="addRow()">
+                        + Add another class
+                    </button>
                 </div>
 
-                <div class="mb-4">
-                    <label for="dob_sum" class="form-label">Date of Birth</label>
-                    <input id="dob_sum" name="dob_sum" type="date" required autocomplete="off" class="form-control form-control-lg">
-                    <small class="text-muted">Enter your date of birth</small>
-                </div>
-
-                <button type="submit" class="btn btn-primary w-100 btn-lg mb-4">Verify Identity</button>
+                <button type="submit" class="btn btn-primary w-100 btn-lg mt-4 mb-4">Verify Identity</button>
             </form>
 
             <div class="text-center pt-3 border-top">
@@ -182,5 +233,39 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let rowCount = 1;
+
+        function addRow() {
+            const list = document.getElementById('pair-list');
+            const id = rowCount++;
+            const div = document.createElement('div');
+            div.className = 'pair-row';
+            div.id = `row-${id}`;
+            div.innerHTML = `
+                <input type="text" name="join_code[]" class="form-control form-control-sm" placeholder="e.g., ABC123" autocomplete="off" autocapitalize="characters" required>
+                <input type="text" name="student_username[]" class="form-control form-control-sm" placeholder="e.g., john_doe" autocomplete="off" required>
+                <button type="button" class="remove-btn" onclick="removeRow(this)" title="Remove row">×</button>
+            `;
+            list.appendChild(div);
+            updateRemoveButtons();
+            // Focus first input of new row
+            div.querySelector('input').focus();
+        }
+
+        function removeRow(btn) {
+            const row = btn.closest('.pair-row');
+            row.remove();
+            updateRemoveButtons();
+        }
+
+        function updateRemoveButtons() {
+            const rows = document.querySelectorAll('.pair-row');
+            rows.forEach(row => {
+                const btn = row.querySelector('.remove-btn');
+                btn.disabled = rows.length === 1;
+            });
+        }
+    </script>
 </body>
 </html>

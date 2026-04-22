@@ -3296,120 +3296,109 @@ def signup():
 @limiter.limit("5 per hour")
 def recover():
     """
-    Teacher account recovery - Step 1: Create recovery request.
-    Students must verify with passphrase to generate recovery codes.
-    Rate limited to prevent brute force attacks on DOB sum.
+    Teacher account recovery - Step 1: Roster pair verification.
+
+    Teacher submits one (join_code, student_username) pair per class taught.
+    Lookup order (enforced):
+      1. Resolve join_code -> TeacherBlock (establishes teacher_id and class scope)
+      2. Find student by username_lookup_hash *within* that join_code's roster
+    All pairs must resolve to the same teacher and must cover all active join codes.
+    No DOB is used.
+
+    Generic errors only — do not reveal which pair failed.
+    Rate limited to prevent brute-force enumeration.
     """
     form = AdminRecoveryForm()
-    if form.validate_on_submit():
-        student_usernames_str = form.student_usernames.data.strip()
-        dob_input = form.dob_sum.data
+    _GENERIC_ERROR = "Unable to verify identity. Please check your entries and try again."
 
-        # Parse DOB and calculate sum
-        try:
-            if isinstance(dob_input, str):
-                dob_input = dob_input.strip()
-                dob_input = datetime.strptime(dob_input, "%Y-%m-%d").date()
-            dob_sum = dob_input.month + dob_input.day + dob_input.year
-        except (ValueError, AttributeError, TypeError):
-            flash("Invalid date of birth. Please enter a valid date.", "error")
+    if request.method == 'POST' and form.validate_on_submit():
+        join_codes = request.form.getlist('join_code[]')
+        student_usernames = request.form.getlist('student_username[]')
+
+        # Strip and filter empty entries
+        pairs = [
+            (jc.strip().upper(), un.strip())
+            for jc, un in zip(join_codes, student_usernames)
+            if jc.strip() and un.strip()
+        ]
+
+        if not pairs:
+            flash(_GENERIC_ERROR, "error")
             return render_template("admin_recover.html", form=form)
 
-        # Parse student usernames
-        student_usernames = [u.strip() for u in student_usernames_str.split(',') if u.strip()]
-        if not student_usernames:
-            flash("Please provide at least one student username.", "error")
-            return render_template("admin_recover.html", form=form)
+        # ----------------------------------------------------------------
+        # Step 1: Resolve each pair — join_code -> class scope -> student
+        # ----------------------------------------------------------------
+        resolved_students = {}   # join_code -> Student
+        teacher_id = None
 
-        # Find students by username
-        students_by_username = {}
-        for username in student_usernames:
-            # FIX: Use username_lookup_hash for reliable lookup
+        for join_code, username in pairs:
+            # 1a. Resolve join_code to a TeacherBlock (establishes teacher and class)
+            block_rows = TeacherBlock.query.filter_by(join_code=join_code).all()
+            if not block_rows:
+                # Generic failure — do not reveal which code failed
+                current_app.logger.warning(
+                    f"Admin recovery: join_code '{join_code}' not found"
+                )
+                flash(_GENERIC_ERROR, "error")
+                return render_template("admin_recover.html", form=form)
+
+            block_teacher_id = block_rows[0].teacher_id
+
+            # 1b. All join codes must belong to the same teacher
+            if teacher_id is None:
+                teacher_id = block_teacher_id
+            elif teacher_id != block_teacher_id:
+                current_app.logger.warning(
+                    f"Admin recovery: join_code '{join_code}' belongs to a different teacher"
+                )
+                flash(_GENERIC_ERROR, "error")
+                return render_template("admin_recover.html", form=form)
+
+            # 1c. Find student by username_lookup_hash within this join_code's roster
             lookup_hash = hash_username_lookup(username)
-            student = Student.query.filter_by(username_lookup_hash=lookup_hash).first()
+            student_ids_in_class = [row.student_id for row in block_rows if row.student_id]
+            student = (
+                Student.query
+                .filter(
+                    Student.id.in_(student_ids_in_class),
+                    Student.username_lookup_hash == lookup_hash,
+                )
+                .first()
+            )
             if not student:
-                # Try looking up by exact username (for legacy or testing)
-                student = Student.query.filter_by(username=username).first()
-            if student:
-                students_by_username[username] = student
+                current_app.logger.warning(
+                    f"Admin recovery: username not found in join_code scope"
+                )
+                flash(_GENERIC_ERROR, "error")
+                return render_template("admin_recover.html", form=form)
 
-        if not students_by_username:
-            flash("No matching students found. Please check the usernames.", "error")
-            return render_template("admin_recover.html", form=form)
+            resolved_students[join_code] = student
 
-        # Find common teacher for all students
-        # Optimize by fetching all StudentTeacher links in a single query to avoid N+1
-        student_ids = [s.id for s in students_by_username.values()]
-        links = StudentTeacher.query.filter(StudentTeacher.student_id.in_(student_ids)).all()
-
-        teachers_by_student = {}
-        for link in links:
-            teachers_by_student.setdefault(link.student_id, set()).add(link.teacher_id)
-
-        common_teacher_ids = None
-        for student_id in student_ids:
-            student_teacher_ids = teachers_by_student.get(student_id, set())
-            if common_teacher_ids is None:
-                common_teacher_ids = student_teacher_ids
-            else:
-                common_teacher_ids &= student_teacher_ids
-
-        teacher_ids = common_teacher_ids if common_teacher_ids else set()
-
-        if len(teacher_ids) != 1:
-            flash("The provided students do not all belong to the same teacher.", "error")
-            return render_template("admin_recover.html", form=form)
-
-        teacher_id = list(teacher_ids)[0]
+        # ----------------------------------------------------------------
+        # Step 2: Verify full coverage — all active join codes must be present
+        # ----------------------------------------------------------------
         teacher = db.session.get(Admin, teacher_id)
-
-        if not teacher or not teacher.dob_sum_hash:
-            flash("Teacher account not configured for recovery.", "error")
+        if not teacher:
+            flash(_GENERIC_ERROR, "error")
             return render_template("admin_recover.html", form=form)
 
-        # Verify DOB sum hash
-        dob_sum_str = str(dob_sum).encode()
-        expected_hash = hash_hmac(dob_sum_str, teacher.salt)
-
-        if teacher.dob_sum_hash != expected_hash:
-            current_app.logger.warning(f"Admin recovery failed: DOB sum mismatch for teacher {teacher_id}")
-            flash("Unable to verify your identity. Please check your DOB sum.", "error")
-            return render_template("admin_recover.html", form=form)
-
-        # Enforce 'One from each period' policy
-        # Get all active blocks for this teacher
-        from app.models import TeacherBlock
-        teacher_blocks_query = (
-            Student.query
-            .join(StudentTeacher, Student.id == StudentTeacher.student_id)
-            .filter(StudentTeacher.teacher_id == teacher_id)
-            .with_entities(Student.block)
-            .distinct()
+        all_active_join_codes = set(
+            row.join_code
+            for row in TeacherBlock.query.filter_by(teacher_id=teacher_id).all()
+            if row.join_code
         )
-
-        teacher_blocks = set()
-        for (blocks_str,) in teacher_blocks_query.all():
-            if blocks_str:
-                teacher_blocks.update([b.strip().upper() for b in blocks_str.split(',') if b.strip()])
-
-        # Determine blocks covered by selected students
-        selected_blocks = set()
-        for s in students_by_username.values():
-            if s.block:
-                selected_blocks.update([b.strip().upper() for b in s.block.split(',') if b.strip()])
-
-        # Verify coverage
-        missing_blocks = teacher_blocks - selected_blocks
-        if missing_blocks:
-            flash(f"You must select at least one student from each of your active periods. Missing: {', '.join(sorted(missing_blocks))}", "error")
+        submitted_join_codes = set(resolved_students.keys())
+        if not all_active_join_codes.issubset(submitted_join_codes):
+            current_app.logger.warning(
+                f"Admin recovery: incomplete join_code coverage for teacher {teacher_id}"
+            )
+            flash(_GENERIC_ERROR, "error")
             return render_template("admin_recover.html", form=form)
 
-        # Verify student count matches or exceeds block count
-        if len(students_by_username) < len(teacher_blocks):
-             flash(f"Please select at least {len(teacher_blocks)} students (one from each period).", "error")
-             return render_template("admin_recover.html", form=form)
-
-        # Check for existing active recovery request
+        # ----------------------------------------------------------------
+        # Step 3: Check for existing active recovery request
+        # ----------------------------------------------------------------
         existing_request = RecoveryRequest.query.filter_by(
             teacher_id=teacher.id,
             status='pending'
@@ -3422,19 +3411,19 @@ def recover():
             session['recovery_request_id'] = existing_request.id
             return redirect(url_for('admin.recovery_status'))
 
-        # Create recovery request (5-day expiration)
+        # ----------------------------------------------------------------
+        # Step 4: Create recovery request (5-day expiration)
+        # ----------------------------------------------------------------
         expires_at = utc_now() + timedelta(days=5)
         recovery_request = RecoveryRequest(
             teacher_id=teacher.id,
-            dob_sum_hash=teacher.dob_sum_hash,
             status='pending',
             expires_at=expires_at
         )
         db.session.add(recovery_request)
         db.session.flush()  # Get the ID
 
-        # Create student verification entries
-        for username, student in students_by_username.items():
+        for student in resolved_students.values():
             student_code = StudentRecoveryCode(
                 recovery_request_id=recovery_request.id,
                 student_id=student.id
@@ -3444,12 +3433,15 @@ def recover():
         db.session.commit()
 
         session['recovery_request_id'] = recovery_request.id
-        current_app.logger.info(f"Admin recovery: request created for teacher {teacher.id}, expires {expires_at}")
+        current_app.logger.info(
+            f"Admin recovery: request created for teacher {teacher.id}, expires {expires_at}"
+        )
 
-        flash(f"Recovery request created! Your students have been notified. You have 5 days to complete this process.", "success")
+        flash("Recovery request created! Your students have been notified. You have 5 days to complete this process.", "success")
         return redirect(url_for('admin.recovery_status'))
 
     return render_template("admin_recover.html", form=form)
+
 
 
 @admin_bp.route('/recovery-status', methods=['GET'])

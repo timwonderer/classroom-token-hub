@@ -98,8 +98,8 @@ class AdminTOTPConfirmForm(FlaskForm):
     invite_code = HiddenField(validators=[DataRequired()])
 
 class AdminRecoveryForm(FlaskForm):
-    student_usernames = StringField('Student Usernames (comma-separated, one from each class)', validators=[DataRequired()])
-    dob_sum = DateField('Date of Birth', format='%Y-%m-%d', validators=[DataRequired()])
+    """Recovery form — join_code[]/student_username[] pairs are submitted as arrays.
+    This form only provides CSRF protection; no WTForms fields for the pair data."""
     submit = SubmitField('Verify Identity')
 
 class AdminResetCredentialsForm(FlaskForm):
