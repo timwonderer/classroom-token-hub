@@ -1,4 +1,4 @@
-# Teacher Identity Domain
+# DOM-IDEN-003 Teacher Identity Architecture
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -32,7 +32,7 @@ CTH uses a unified identity model. Both teachers and students are represented as
 with one or more `seats`. The role differentiates behavior, not the table.
 
 ```text
-users (user_role = 'teacher' | 'student')
+users (user_role = 'teacher' | 'student' | 'sysadmin')
   └─< seats (role = 'teacher' | 'student') >─ classes
          │
          └─1:1 identity_profiles
@@ -55,7 +55,7 @@ Key fields:
 
 - `id`
 - `public_id`
-- `user_role` — `'teacher'` | `'student'`
+- `user_role` — `'teacher'` | `'student'` | `'sysadmin'`
 - `username_hash` — HMAC of the normalized username; primary auth lookup key
 - `username_lookup_hash` — secondary lookup index (indexed separately)
 - `totp_secret_encrypted` — **teacher only**; base64-encoded encrypted TOTP seed
@@ -77,8 +77,8 @@ Rules:
 
 - One `users` row per human identity, regardless of role.
 - `user_role` is set at account creation and does not change.
-- Teacher-credential fields are `NULL` for student rows.
-- Student-credential fields are `NULL` for teacher rows.
+- Teacher/Sysadmin-credential fields are `NULL` for student rows.
+- Student-credential fields are `NULL` for teacher/sysadmin rows.
 - No DOB, DOB hash, DOB sum, or any birth-date-derived field is stored on `users`.
 - A teacher user may own multiple seats across multiple classes (one seat per class).
 - Session window fields behave identically for both roles.
@@ -152,12 +152,13 @@ Rules:
 ```text
 1. Teacher submits username.
 2. Backend computes username_lookup_hash and finds the users row.
-3. Backend verifies user_role == 'teacher'.
+3. Backend verifies user_role == 'teacher' OR 'sysadmin'.
 4. If passkey is enrolled and the client supports it → passkey challenge (preferred).
 5. Otherwise → TOTP challenge using totp_secret_encrypted.
 6. On success: write current_session_started_at, current_session_expires_at,
    current_session_nonce.
-7. Load teacher's available seats and set active seat context.
+7. If user_role == 'teacher': Load teacher's available seats and restore active seat context via `last_active_seat_id` (see DOM-IDEN-001 Section IX.3).
+8. If user_role == 'sysadmin': Active seat context is NULL (global access).
 ```
 
 TOTP is required for all teacher accounts. Passkey is an optional second authentication
@@ -208,7 +209,7 @@ The following patterns are explicitly excluded from the v2 teacher identity mode
 
 ## Credential Comparison: Teacher vs. Student
 
-| Credential | Teacher | Student |
+| Credential | Teacher / Sysadmin | Student |
 |------------|---------|---------|
 | Username | `username_hash` / `username_lookup_hash` | `username_hash` / `username_lookup_hash` |
 | Primary auth factor | TOTP (`totp_secret_encrypted`) | PIN (`pin_hash`) |
@@ -217,26 +218,6 @@ The following patterns are explicitly excluded from the v2 teacher identity mode
 | DOB | **Not stored** | **Not stored** |
 | Recovery | `reset_code_hash` | `reset_code_hash` |
 | Session | Nonce + expiry window | Nonce + expiry window |
-
----
-
-## Legacy Table Interpretation
-
-The following tables are legacy implementation structures, not target-state teacher
-identity anchors:
-
-- `teachers` / `admins` — encodes teacher credentials outside the `users` model
-- `teacher_credentials` — passkey table; superseded by `users.passkey_credential_id`
-- `system_admins` — separate sysadmin credential table; future target is a `user_role`
-  variant or separate admin tier (not in scope for this spec)
-- `teacher_blocks` — legacy roster-seat table; superseded by `seats`
-- `student_teachers` — legacy teacher–student membership join; superseded by
-  class-scoped `seats`
-
-These tables may exist in current runtime code, but they do not define the target domain
-model.
-
-
 
 ---
 

@@ -1,5 +1,4 @@
-# Student Account Recovery Domain
-
+# DOM-IDEN-002 Student Account Recovery
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
 | DOM-IDEN-002     | 2.0     | 2026-04-22     | ARC-IDEN-002 v1.1 | Normative |

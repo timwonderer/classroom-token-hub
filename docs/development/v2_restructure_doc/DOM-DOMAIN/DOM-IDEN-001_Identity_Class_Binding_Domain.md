@@ -2,210 +2,160 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-001 | 2.1 | 2026-04-22 | 2.0 | Normative |
+| DOM-IDEN-001 | 1.2 | 2026-04-23 | 1.1 | Constitutional |
+
+---
 
 ## I. Purpose
 
-Define the Identity domain as the authority for:
-
-- who a human is in the system
-- which class-local actor record that human owns
-- which class universe that actor belongs to
+This document defines the Identity and Class Binding domain as the absolute sovereign of human identity (users), classroom participation (seats), and the logical boundaries of the classroom economy (classes). It ensures that every economic action is anchored to a verified participant and prevents identity leakage or cross-class contamination.
 
 ## II. Scope
 
-This domain owns:
-
-- global human identity
-- class-local actor binding
-- display identity
-- roster and claim binding
-- active class-actor context resolution
+This domain governs:
+- **Global Human Identity**: The origin and lifecycle of `users` records.
+- **Class Context**: The definition and lifecycle of `classes`.
+- **Actor Binding**: The "Claim" lifecycle that links a global user to a class-local seat.
+- **Session Resolution**: The mapping of an authenticated session to an active class context.
 
 This domain does not own:
+- **Financial Truth**: Owned by `Ledger`.
+- **Operational Facts**: Owned by `Attendance`.
+- **Policy/Directives**: Owned by `Class Configuration`.
 
-- balances
-- entitlements
-- attendance standing
-- affordability
-- feature policy
+## III. Authority Level
 
-## III. Dependencies
+Tier 1 — Constitutional. This document defines structural enforcement mechanisms and domain-specific constraints that operationalize Foundational invariants. It is subordinate to `INV-CORE-000` and `INV-CORE-001`.
+
+## IV. Dependencies
 
 - `INV-CORE-000_Core_Invariants.md`
 - `DOM-CORE-000_Domain_Foundation.md`
+- `DOM-IDEN-003_Teacher_Identity_Architecture.md`
 - `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
-- `docs/development/specs/V2_TEACHER_IDENTITY_ARCHITECTURE.md`
 
-## IV. Schema Authority Declaration
+## V. Schema Authority Declaration
 
-This domain is the sole schema and mutation authority over the target identity model:
+This domain is the sole schema and mutation authority over:
 
 - `users`
 - `seats`
 - `identity_profiles`
 - `classes`
 
-This domain owns identity and class-binding truth only.
+## VI. Owned Tables
 
-## V. Owned Tables
+### 1. `users`
 
-### `users`
+Global human identity. Owns authentication credentials, recovery state, and session nonces.
 
-- Global human identity.
-- Authentication, recovery, and session identity state.
+### 2. `seats`
 
-### `seats`
+Class-local participant record. The "Economic Identity." Every activity record in other domains MUST reference `seat_id`.
 
-- Class-local actor binding.
-- One participant record inside one class universe.
+### 3. `identity_profiles`
 
-### `identity_profiles`
+Human-facing display identity (Names, initials). One-to-one with `seats`.
 
-- Human-facing display identity for one seat.
+### 4. `classes`
 
-### `classes`
+The universe anchor. Defines the boundary of a classroom economy.
 
-- Class universe anchor and lookup/UI record.
+---
 
-## VI. Schema Contract
+## VII. Schema Contract
 
-### `users`
+### 1. `users`
 
 Key fields:
-
-- `id`
-- `public_id`
-- `user_role` — `'teacher'` | `'student'`; determines credential scheme
-- `username_hash` / `username_lookup_hash`
-- `totp_secret_encrypted` — teacher only; nullable for students
-- `passkey_credential_id` — teacher only, optional
-- `pin_hash` — student only; nullable for teachers
-- `passphrase_hash` — student only, financial gate; nullable for teachers
-- recovery fields (`reset_code_hash`, `reset_code_expires_at`)
-- session fields (`current_session_started_at`, `current_session_expires_at`, `current_session_nonce`)
-- `money_action_cooldown_until`
-- `has_completed_setup`
+- `id` (PK)
+- `user_role` — `'teacher'` | `'student'` | `'sysadmin'`
+- `username_lookup_hash` — HMAC-based lookup
+- `totp_secret_encrypted` / `pin_hash` / `passphrase_hash`
+- `current_session_nonce` — binds requests to a specific login event
+- `last_active_seat_id` — nullable FK to `seats`; tracks the last resolved context for multi-device continuity
 
 Rules:
+- One row per human identity.
+- `user_role` is immutable after creation.
+- No PII (Date of Birth) shall be stored.
 
-- one row per human identity, regardless of role
-- `user_role` is immutable after creation
-- teacher-credential fields are NULL for student rows and vice versa
-- no DOB or DOB-derived hash is stored in any form
-- not a membership table
-- not a financial or attendance table
-
-### `seats`
+### 2. `seats`
 
 Key fields:
-
-- `id`
-- `public_id`
-- `user_id`
-- `class_id`
-- `role`
-- claim/roster fields
+- `id` (PK)
+- `user_id` — nullable; FK to `users` (The Binding)
+- `class_id` — FK to `classes` (The Anchor)
+- `role` — `'teacher'` | `'student'`
+- `claimed_at` — timestamp of binding
 
 Rules:
+- A seat is "Unclaimed" if `user_id` is NULL.
+- A seat is "Claimed" if `user_id` is NOT NULL.
+- **INV-IDEN-011: One-to-One Binding per Class**: A single `user_id` may own multiple seats across the system, but at most ONE seat per `class_id`.
 
-- one seat belongs to exactly one class universe
-- one seat belongs to at most one user
-- seat existence expresses class participation
-- `seat_id` is the participant identity key
+---
 
-### `identity_profiles`
+## VIII. Identity Lifecycle & Provisioning Law
 
-Key fields:
+### 1. User Origin
+- **Teacher Origin**: Created via Sysadmin provisioning or verified Invite flow.
+- **Student Origin**: Created at the moment of the **First Seat Claim**. If a person claims their first seat, a `users` record is created. Subsequent claims bind to the existing `user_id`.
+- **Sysadmin Origin**: Bootstrapped via secure environment configuration or existing Sysadmin promotion.
 
-- `id`
-- `seat_id`
-- display-name fields
+### 2. Seat Provisioning
+- **Teacher Seat**: Created automatically when a Teacher initializes a class.
+- **Student Seat**: Created by a Teacher (Roster Upload) or as a "Generic Placeholder" waiting for a claim.
 
-Rules:
+---
 
-- exactly one display profile per seat
-- display identity does not replace seat identity
+## IX. Seat Binding & Context Law
 
-### `classes`
+### 1. The Claim Lifecycle
+Binding a global user to a class-local seat is a non-reversible transaction (within the scope of a single class cycle).
 
-Key fields:
+- **Claim Logic**: A user provides a `join_code` + `claim_credentials` (e.g. roster name).
+- **Binding**: On match, the `user_id` is written to the `seats` row. This seat is now "Claimed."
+- **Immutable Association**: Once `claimed_at` is set, the `user_id` on a seat MUST NOT be changed to a different `user_id`.
 
-- `class_id`
-- `join_code_token`
-- `section`
-- `display_name`
+### 2. Context Resolution (The Binding Guard)
+Every request operating within a class MUST be resolved to a specific `seat_id`.
 
-Rules:
+- **INV-IDEN-012: Context Authority**: The system MUST verify that the authenticated `user_id` owns the `seat_id` provided in the request context for that `class_id`.
+- **Global vs. Scoped Requests**:
+  - **Global Requests**: Authentication only (`user_id`). Permitted for identity management, class selection, and Sysadmin actions.
+  - **Scoped Requests**: Authentication + Authorization (`user_id` + `seat_id`). MANDATORY for all activity in Ledger, Obligations, Attendance, and Store domains.
+- Cross-seat or cross-class requests where the `user_id` does not own the target `seat_id` MUST be rejected.
 
-- one row defines one class universe
-- class existence is existence-based, not lifecycle-state based
-- this table is not a membership table
-- `join_code_token` is a public lookup token, not an internal domain foreign key
+### 3. Context Restoration Law (The Sticky Context)
+To support multi-device continuity and prevent "Class Drift," the system maintains a persistent pointer to the last used context.
 
-## VII. Constraints
+- **Storage**: The `users.last_active_seat_id` is updated every time a user explicitly switches their active class context. This includes the initial binding during the **First Seat Claim**.
+- **Restoration**: On initial authentication (or session recovery), if no context is provided, the backend SHOULD resolve the request to the `last_active_seat_id`.
+- **Validation**: Restored context must still pass `INV-IDEN-012` validation. If the seat is no longer valid (e.g. deleted or unassigned), the user must be prompted to select a new context.
 
-- Identity is modeled through `users`, `seats`, `identity_profiles`, and `classes`.
-- Separate `Student` and `Teacher/Admin` identity tables are not part of the target model.
-- Seat existence, not a separate membership lifecycle label, defines whether a participant
-  exists in a class.
-- Identity does not grant financial, entitlement, or attendance authority.
-- No identity helper may become a cross-domain profile aggregator or mutable state sink.
+---
 
-## VIII. Legacy Table Interpretation
+## X. Invariants
 
-The following tables are legacy implementation structures, not target-state identity
-anchors:
+- **INV-IDEN-001: Unified Role Model**. No separate `students` or `teachers` tables. All role differentiation happens via `user_role` (Global) and `role` (Seat).
+- **INV-IDEN-002: Seat Sovereignty**. `seat_id` is the primary key for all activity-tracking in other domains.
+- **INV-IDEN-011: One-to-One Binding per Class**. A user shall not hold multiple seats in the same class universe.
+- **INV-IDEN-012: Context Authority**. Requests must prove ownership of the `seat_id` context.
 
-- `students`
-- `teachers` / `admins`
-- `teacher_blocks`
-- `student_teachers`
+---
 
-They may exist in current runtime code, but they do not define the target domain model.
+## XI. Derived / Cross-Domain Rules
 
-## IX. Derived / Cross-Domain Rules
+- Other domains reference `seat_id` (activity) and `class_id` (policy).
+- `user_id` is for authentication, recovery, and global security only.
+- Identity does not grant financial or attendance authority; it only provides the *binding* for those domains to record facts.
 
-- Other domains may reference `seat_id` and `class_id`, but that does not transfer
-  identity ownership.
-- `user_id` is for authentication, recovery, and global identity only.
-- `seat_id` is for participant and class-local actor identity.
-- `class_id` is for class-universe identity and class-wide configuration scope.
-- Domain tables that describe participant activity should reference `seat_id`.
-- Domain tables that describe class-wide policy should reference `class_id`.
-- `user_role` determines the credential scheme on `users`.
-- `role` on `seats` determines the operational role within a class.
-- Authentication flows are specified per role in:
-  - `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md` — student credential and claim flow
-  - `DOM-IDEN-003_Teacher_Identity_Architecture.md` — teacher credential and session flow
-- Recovery flows are specified in:
-  - `DOM-IDEN-002_Student_Account_Recovery.md`
-  - `DOM-IDEN-004_Teacher_Account_Recovery.md`
+---
 
-## X. Transitional Reality
+## XII. Amendment
 
-The following tables are legacy implementation structures active in the current
-runtime. They are not target-state identity anchors:
-
-- `students` — legacy student credential and financial state table; superseded by `users` + `seats`
-- `teachers` / `admins` — legacy teacher credential table; superseded by `users` + `seats`
-- `teacher_blocks` — legacy roster-seat table; superseded by `seats`
-- `student_teachers` — legacy teacher–student membership join; superseded by class-scoped `seats`
-
-Current gaps:
-
-- `classes` table does not exist; `class_economies` serves as the interim class anchor
-- `User` model in `models.py` does not yet match the `users` schema contract above;
-  it has a placeholder shape pending unified credential design completion
-- `IdentityProfile` in `models.py` does not yet have a `seat_id` FK; it is currently
-  accessed via `TeacherBlock.identity_id` and `Student.identity_id`
-- `Seat` model exists as scaffolding; runtime identity still flows through `Admin`/`Student`
-- `Admin.dob_sum_hash` must be removed before Project 9 cutover (DOB is not part of
-  the target model for any role)
-
-Full cutover from legacy tables to `users`/`seats`/`classes` is Project 9, post-launch.
-
-## XI. Amendment
-
-Revisions require version increment, effective-date update, and continued consistency
-with higher-order invariants.
+Revisions to this document must:
+1. Increment the version number.
+2. Update the Effective Date.
+3. Maintain consistency with `INV-CORE-000`.

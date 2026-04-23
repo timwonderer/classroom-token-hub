@@ -25,6 +25,46 @@ Supersedes `docs/LOGS/AUDITS/LOG-ARC-011_Recovery_Evaluation.md` (informative).
 
 ---
 
+## II-A. Schema Authority Declaration
+
+This document is the sole schema and mutation authority over:
+
+- `recovery_requests`
+- `student_recovery_codes`
+
+These tables exist only to support teacher account recovery. No other domain may
+define fields, impose lifecycle rules, or mutate these tables directly.
+
+### `recovery_requests`
+
+Key fields: `id`, `user_id` (FK to `users` where `user_role = 'teacher'`),
+`status` (`pending` | `verified` | `expired`), `expires_at`, `created_at`,
+`completed_at`, `partial_codes` (JSON), `resume_pin_hash`, `resume_new_username`.
+
+Constraints:
+- At most one `status = 'pending'` row per user at any time.
+- `expires_at` is a hard TTL (5 days). Rows past `expires_at` are inert regardless
+  of status.
+- `partial_codes` and `resume_new_username` carry in-progress submission state.
+  They must be cleared when `status` transitions to `verified` or `expired`.
+
+### `student_recovery_codes`
+
+Key fields: `id`, `recovery_request_id` (FK, CASCADE), `seat_id` (FK to `seats`
+where `role = 'student'`), `code_hash` (NULL until student generates their code),
+`verified_at`, `notified_at`, `dismissed`.
+
+Constraints:
+- One row per selected student seat per recovery request.
+- `code_hash` is `HMAC(6-digit-code, b'')`. Plaintext code is never stored.
+- `code_hash` is set to NULL and `verified_at` is cleared on any failed submission
+  (all-or-nothing invalidation per §III invariant 6).
+- These rows become inert when the parent `recovery_request.expires_at` passes.
+
+---
+
+---
+
 ## III. Core Invariants
 
 1. **No DOB.** No date of birth, DOB sum, or any birth-date-derived
