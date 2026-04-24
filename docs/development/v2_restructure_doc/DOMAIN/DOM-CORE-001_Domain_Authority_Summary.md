@@ -17,10 +17,19 @@ All domains listed below are bound by the following structural rules:
 2. **Event-Log Authority**: State is derived from immutable event logs. Caches are non-authoritative.
 3. **Policy vs. Execution**: Class Configuration owns "Directives"; Operational domains own "Facts."
 4. **Global Idempotency**: All write operations require a unique `idempotency_key`.
+5. **FEAT Execution Compliance**: All state mutation MUST occur through a compliant FEAT unit governed by [FEAT-CORE-000](file:///Users/timothychang/Documents/GitHub/classroom-economy/docs/development/v2_restructure_doc/FEAT-EXECUTION/FEAT-CORE-000_Feature_Execution_Constitutional_Directive.md).
 
 ---
 
-## III. Domain Summary Matrix
+## III. Master Directives
+
+### 1. Feature Execution Constitutional Directive ([FEAT-CORE-000](file:///Users/timothychang/Documents/GitHub/classroom-economy/docs/development/v2_restructure_doc/FEAT-EXECUTION/FEAT-CORE-000_Feature_Execution_Constitutional_Directive.md))
+- **Authority**: Mandatory execution contract for all cross-domain coordination and state mutation.
+- **Enforcement**: Atomic transactions, context-first resolution, mandatory audit logging.
+
+---
+
+## IV. Domain Summary Matrix
 
 ### 1. Identity & Class Binding (`DOM-IDEN-001`)
 - **Authority**: Sovereign over global human identity and class-local actor binding.
