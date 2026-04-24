@@ -29,8 +29,9 @@ All domains listed below are bound by the following structural rules:
   - `users`: Authoritative Global Identity.
   - `seats`: Authoritative Local Binding.
   - `classes`: Authoritative Universe Anchor.
-- **Key Transitions**: `Claim Seat`, `Resolve Context`.
+- **Key Transitions**: `Claim Seat`, `Resolve Context`, `Recover Account`.
 - **Primary Schema**: `users`, `seats`, `identity_profiles`, `classes`.
+- **Informative Map**: [DOM-IDEN-005 (MAP-IDEN-001)](file:///Users/timothychang/Documents/GitHub/classroom-economy/docs/development/v2_restructure_doc/DOM-DOMAIN/DOM-IDEN-005_Account_Lifecycle_Map.md).
 
 ### 2. Class Configuration (`DOM-CLASS-001`)
 - **Authority**: Sovereign over "Directives" (Class Law/Policy).
