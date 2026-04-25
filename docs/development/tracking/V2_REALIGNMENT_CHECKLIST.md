@@ -1,7 +1,7 @@
 # V2 Realignment Checklist
 
-**Last Updated:** 2026-04-13  
-**Status:** Active planning document  
+**Last Updated:** 2026-04-25  
+**Status:** Baseline complete; downstream derivation paused while runtime stabilization is active  
 **Purpose:** Align the parked v2 realignment workspace to the new authority model where
 `INV` contains both `CORE` and `ARC`, `DOM` and `FEAT` are the remaining normative
 layers, and all previous standalone `ARC-*` architectural docs are removed from this
@@ -21,9 +21,14 @@ As of 2026-04-13:
 
 The governing documents for this namespace realignment are:
 
-- `docs/development/v2_restructure_doc/INV-CORE-000_Core_Invariants.md`
-- `docs/development/v2_restructure_doc/INV-CORE-001_Capability_Based_Architecture_and_Authority_Model.md`
-- `docs/development/v2_restructure_doc/ARCHITECTURE/INV-ARC-000_EXECUTION_MODEL.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_Core_Invariants.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_Capability_Based_Architecture_and_Authority_Model.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-000_EXECUTION_MODEL.md`
+
+## Current Status Note (2026-04-25)
+
+- This checklist's structural realignment outcomes remain complete.
+- The remaining unchecked step is still valid, but execution is sequenced after current v2 runtime hardening and launch-readiness stabilization.
 
 ## Scope Boundary
 

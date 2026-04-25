@@ -1,6 +1,6 @@
 # V2 Documentation Compliance Sweep
 
-**Last Updated:** 2026-04-12
+**Last Updated:** 2026-04-25
 **Purpose:** Track active-document updates required so repository documentation matches current v2 runtime truth and launch framing.
 
 ## Active v2 Truth
@@ -24,6 +24,7 @@
 | Focused active-doc link validation | `fixed` | A focused active-doc link pass found a stale README support link to `docs/GITHUB_SITE/README.md` | Repointed the support link to `docs/README.md` and reran the focused link pass |
 | V2 Hardening Blueprint Coverage | `fixed` | Major gaps identified in multi-tenancy, join-code isolation, ledger integrity, and analytics alerting specs | Created 4 new constitutional documents (ARC-OPS-015, ARC-SYS-002, DOM-ECON-003, DOM-ECON-004) and updated identity spec ARC-IDEN-001 |
 | Historical development analyses | `defer` | Several development/historical docs still discuss legacy compatibility, `teacher_id`, or transition-only behavior | Preserve as historical unless they are promoted back into active guidance |
+| Runtime stabilization tracker sync (2026-04-25) | `fixed` | Core v2 trackers had stale dates/status against current branch baseline | Updated reconciliation, launch readiness, launch checklist, parallel workstreams, temporal audit, and realignment checklist to current baseline (`619 passed, 123 failed, 1 skipped`) and current blockers |
 
 ## Interpretation Rules
 
@@ -35,3 +36,4 @@
 
 1. If any must-port code changes alter runtime contract wording, update the corresponding architecture or SOP docs in the same change wave.
 2. Re-run the focused active-doc link check after future production-required doc or workflow ports land.
+3. Keep tracker baseline metrics synchronized whenever the full-suite snapshot changes materially.

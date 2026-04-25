@@ -3,10 +3,15 @@
 | Field | Value |
 |-------|-------|
 | Audit Date | 2026-04-21 |
-| Last Reviewed | 2026-04-22 |
+| Last Reviewed | 2026-04-25 |
 | Specification | INV-ARC-015 v1.0 |
-| Authority | `docs/development/v2_restructure_doc/INV-INVARIANT/ARCHITECTURE/INV-ARC-015_Temporal_Model_and_Boundary_Enforcement.md` |
+| Authority | `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-015_Temporal_Model_and_Boundary_Enforcement.md` |
 | Status | **Individual violations remediated** — bad patterns removed; target `TemporalContext` architecture (per `V2_Temporal_Architecture_Rebuild_Plan.md`) is NOT yet implemented |
+
+## 2026-04-25 Progress Note
+
+- No temporal regression reintroduction is currently tracked as a top blocker in the active stabilization wave.
+- The structural `TemporalContext` rebuild remains unimplemented and should continue to be treated as post-stabilization architecture work, not closed.
 
 ---
 

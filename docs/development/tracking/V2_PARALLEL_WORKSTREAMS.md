@@ -1,6 +1,6 @@
 # V2 Parallel Workstreams
 
-**Last Updated:** 2026-03-29
+**Last Updated:** 2026-04-25
 **Purpose:** Break the v2.0 reconciliation and launch-readiness program into parallelizable workstreams with clear file ownership, dependencies, and outputs.
 
 This document is the execution map for running multiple v2 threads at the same time. It complements:
@@ -8,6 +8,15 @@ This document is the execution map for running multiple v2 threads at the same t
 - `docs/development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md`
 - `docs/development/tracking/V2_LAUNCH_READINESS_MATRIX.md`
 - `docs/development/tracking/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`
+
+## Current Status Overlay (2026-04-25)
+
+- The branch has moved from broad porting into runtime stabilization.
+- Current full-suite baseline on `codex/v2.0` is **619 passed, 123 failed, 1 skipped**.
+- Thread 2 objectives are already merged.
+- Thread 1 and Thread 4 shared-surface stabilization is still active (admin/student routes, tenancy/context, rent/store/void edges).
+- Thread 3 launch runbook closure remains blocked on reducing the failing set, then re-running live-test rehearsal and PostgreSQL validation.
+- Thread 6 documentation synchronization is active and should continue to mirror tracker/readiness state as slices land.
 
 ## Coordination Rules
 

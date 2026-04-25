@@ -1,6 +1,11 @@
 # FEAT-VIOLATION-CATEGORIZATION: Execution Integrity Migration Map
 
+**Last Updated:** 2026-04-25  
+**Status:** Active categorization baseline; runtime stabilization in progress
+
 This document categorizes the 156 identified FEAT Constitutional violations into a tiered migration plan.
+
+**2026-04-25 Note:** The tier model remains the prioritization authority. The violation counts in this document are classification-era totals and not a live unresolved-count feed.
 
 | Priority | Risk Profile | Target | Violation Count (Est) |
 | :--- | :--- | :--- | :--- |

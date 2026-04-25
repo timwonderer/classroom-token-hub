@@ -1,8 +1,8 @@
 # V2 Main Reconciliation Tracker
 
-**Last Updated:** 2026-04-12
+**Last Updated:** 2026-04-25
 **Source Branches:** `codex/v2.0` vs `origin/main`
-**Diff Snapshot:** `git rev-list --left-right --count codex/v2.0...origin/main` -> `143 51`
+**Diff Snapshot:** `git rev-list --left-right --count codex/v2.0...origin/main` -> `227 108`
 **Purpose:** Current source of truth for features present on `origin/main` that have not yet been intentionally reconciled into `codex/v2.0`.
 
 This tracker replaces the partial main-feature note previously embedded in `LOG-ARC-049`. `LOG-ARC-049` remains a historical readiness artifact; this document is the active parity tracker.
@@ -27,6 +27,22 @@ This tracker replaces the partial main-feature note previously embedded in `LOG-
 3. Inspect touched code, migrations, tests, and docs for each cluster.
 4. Classify by v2 launch impact.
 5. Write implementation-ready steps for all `must-port` clusters.
+
+## Current Runtime Stabilization Snapshot (2026-04-25)
+
+The feature-cluster reconciliation status below remains valid, but branch-level runtime stabilization is still in progress.
+
+- Latest full-suite baseline on `codex/v2.0`: **619 passed, 123 failed, 1 skipped**
+- Prior baseline before current hardening continuation: **600 passed, 128 failed, 14 errors**
+- Net improvement in this continuation: **+19 passed, -5 failed, -14 errors**
+
+High-signal slices verified green in the current hardening wave:
+
+- `tests/test_rent_penalty_reversal.py` (4 passed)
+- `tests/test_insurance_security.py` (6 passed)
+- `tests/test_api_fixes.py tests/test_help_pages.py tests/test_insurance_snapshots.py tests/test_interest.py tests/test_timezone_fix.py` combined slice (22 passed)
+
+Current active engineering focus has shifted from feature-porting to regression stabilization across class-scope/session-context, attendance tenancy APIs, collective/store/rent privilege flows, and void/ledger edge cases.
 
 ## Feature Cluster Inventory
 

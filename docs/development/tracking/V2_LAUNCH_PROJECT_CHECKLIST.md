@@ -1,6 +1,6 @@
 # V2 Launch Project Checklist
 
-**Last Updated:** 2026-04-22
+**Last Updated:** 2026-04-25
 **Purpose:** Consolidate the active `docs/development` v2 materials into one implementation-facing checklist organized by project, build order, invariants, and test expectations for v2 launch.  
 **Use this doc for:** sequencing work, assigning sections, and deciding what must be complete before live test, before production, or after launch.
 
@@ -22,6 +22,16 @@ This checklist is derived from the active and supporting development docs below.
 - `docs/STANDARD_OPERATING_PROCEDURES/DEVOPS/SOP-DEV-001_REFACTOR_BEST_PRACTICES.md`
 
 ## Build Order Summary
+
+## Current Progress Snapshot (2026-04-25)
+
+- Reconciliation and porting waves remain landed per tracker.
+- Runtime stabilization is active: latest full-suite baseline is **619 passed, 123 failed, 1 skipped**.
+- Recent hardening wave removed major setup failures and recovered focused slices:
+  - rent penalty reversal slice green
+  - insurance security/snapshot slices green
+  - timezone/help/api-fix slice green
+- Immediate next execution slice is class-scope/session-context + attendance tenancy APIs, because those failures cascade into many downstream route tests.
 
 ### Phase 0: Already-Landed Foundation
 

@@ -1,8 +1,10 @@
 # V2.0 Backwards Compatibility Cleanup Guide
 
 **Date:** 2026-03-08  
+**Last Reviewed:** 2026-04-25  
 **Branch:** codex/v2.0  
 **Context:** Fresh database launch - no legacy data, no v1.x compatibility needed
+**Execution Status:** Deferred until current runtime stabilization recovers from full-suite baseline (`619 passed, 123 failed, 1 skipped` as of 2026-04-25)
 
 ---
 
@@ -11,6 +13,8 @@
 Since v2.0 is launching on a **fresh database with zero legacy data**, we can safely remove all backwards compatibility code, legacy fallbacks, and migration shims. This document identifies all such code for cleanup.
 
 **Impact:** Simpler codebase, reduced complexity, no unnecessary fallback paths
+
+**2026-04-25 Note:** This remains the cleanup authority, but broad removals listed below are intentionally deferred while launch-critical stabilization is still in progress.
 
 ---
 
@@ -464,7 +468,6 @@ def downgrade():
 
 ---
 
-**Last Updated:** 2026-03-08  
-**Status:** Ready for Implementation  
-**Next Steps:** Create migration, update code, run tests
-
+**Last Updated:** 2026-04-25  
+**Status:** Deferred pending runtime stabilization  
+**Next Steps:** Re-validate this cleanup set after failing-suite stabilization, then execute as a bounded post-stabilization wave
