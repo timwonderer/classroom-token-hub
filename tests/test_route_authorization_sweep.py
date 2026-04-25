@@ -112,7 +112,7 @@ def test_approve_redemption_requires_membership(client):
     db.session.add(item)
     db.session.flush()
     
-    student_item = StudentItem(
+    student_item = StudentItem(correlation_id='corr_test', 
         student_id=student.id,
         store_item_id=item.id,
         status="processing",

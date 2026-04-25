@@ -157,7 +157,7 @@ def test_process_expired_goals_refunds_pending_and_deactivates(client):
     db.session.add(purchase_tx)
     db.session.flush()
 
-    si = StudentItem(
+    si = StudentItem(correlation_id='corr_test', 
         student_id=student.id,
         store_item_id=item.id,
         join_code='JOINEXP1',
@@ -195,7 +195,7 @@ def test_process_expired_goals_skips_non_expired_items(client):
     db.session.flush()
 
     item = _collective_item(teacher, 'Future Goal', 'JOINEXP2', expires_at=_future())
-    si = StudentItem(
+    si = StudentItem(correlation_id='corr_test', 
         student_id=student.id,
         store_item_id=item.id,
         join_code='JOINEXP2',
@@ -224,7 +224,7 @@ def test_process_expired_goals_ignores_items_without_expiration(client):
 
     # No expires_at set
     item = _collective_item(teacher, 'No Expiry Goal', 'JOINEXP3', expires_at=None)
-    si = StudentItem(
+    si = StudentItem(correlation_id='corr_test', 
         student_id=student.id,
         store_item_id=item.id,
         join_code='JOINEXP3',
@@ -252,7 +252,7 @@ def test_process_expired_goals_ignores_already_inactive_items(client):
     # is_active=False and past deadline
     item = _collective_item(teacher, 'Already Inactive', 'JOINEXP4',
                             expires_at=_past(), is_active=False)
-    si = StudentItem(
+    si = StudentItem(correlation_id='corr_test', 
         student_id=student.id,
         store_item_id=item.id,
         join_code='JOINEXP4',
@@ -278,14 +278,14 @@ def test_process_expired_goals_only_voids_pending_not_processing(client):
 
     item = _collective_item(teacher, 'Mixed Status Goal', 'JOINEXP5', expires_at=_past())
 
-    si_processing = StudentItem(
+    si_processing = StudentItem(correlation_id='corr_test', 
         student_id=student_a.id,
         store_item_id=item.id,
         join_code='JOINEXP5',
         status='processing',  # Goal was already met for this student
         collective_goal_instance_code=item.collective_goal_instance_code,
     )
-    si_pending = StudentItem(
+    si_pending = StudentItem(correlation_id='corr_test', 
         student_id=student_b.id,
         store_item_id=item.id,
         join_code='JOINEXP5',
@@ -313,7 +313,7 @@ def test_process_expired_goals_skips_met_goals_with_no_pending(client):
     db.session.flush()
 
     item = _collective_item(teacher, 'Met Goal', 'JOINEXPMET', expires_at=_past())
-    si_processing = StudentItem(
+    si_processing = StudentItem(correlation_id='corr_test', 
         student_id=student.id,
         store_item_id=item.id,
         join_code='JOINEXPMET',
@@ -343,9 +343,9 @@ def test_process_expired_goals_scoped_to_teacher(client):
     expired_item_a = _collective_item(teacher_a, 'Teacher A Expired', 'JOINEXPA', expires_at=_past())
     expired_item_b = _collective_item(teacher_b, 'Teacher B Expired', 'JOINEXPB', expires_at=_past())
 
-    si_a = StudentItem(student_id=student_a.id, store_item_id=expired_item_a.id,
+    si_a = StudentItem(correlation_id='corr_test', student_id=student_a.id, store_item_id=expired_item_a.id,
                        join_code='JOINEXPA', status='pending', collective_goal_instance_code=expired_item_a.collective_goal_instance_code)
-    si_b = StudentItem(student_id=student_b.id, store_item_id=expired_item_b.id,
+    si_b = StudentItem(correlation_id='corr_test', student_id=student_b.id, store_item_id=expired_item_b.id,
                        join_code='JOINEXPB', status='pending', collective_goal_instance_code=expired_item_b.collective_goal_instance_code)
     db.session.add_all([si_a, si_b])
     db.session.commit()
@@ -377,7 +377,7 @@ def test_process_expired_goals_refund_fallback_to_item_price(client):
 
     item = _collective_item(teacher, 'No TX Item', 'JOINEXPFB', expires_at=_past())
     # StudentItem with no corresponding purchase Transaction
-    si = StudentItem(
+    si = StudentItem(correlation_id='corr_test', 
         student_id=student.id,
         store_item_id=item.id,
         join_code='JOINEXPFB',
@@ -418,7 +418,7 @@ def test_refund_pending_collective_purchases_marks_voided_and_creates_refund(cli
     db.session.add(purchase_tx)
     db.session.flush()
 
-    si = StudentItem(student_id=student.id, store_item_id=item.id,
+    si = StudentItem(correlation_id='corr_test', student_id=student.id, store_item_id=item.id,
                      join_code='JOINREFUND', status='pending',
                      purchase_transaction_id=purchase_tx.id,
                      collective_goal_instance_code=item.collective_goal_instance_code)
@@ -455,7 +455,7 @@ def test_refund_matching_uses_purchase_transaction_id_after_item_rename(client):
     db.session.add(purchase_tx)
     db.session.flush()
 
-    si = StudentItem(
+    si = StudentItem(correlation_id='corr_test', 
         student_id=student.id,
         store_item_id=item.id,
         join_code='JOINIDMATCH',
@@ -487,9 +487,9 @@ def test_refund_pending_skips_non_pending_statuses(client):
     db.session.flush()
 
     item = _collective_item(teacher, 'Skip Status Item', 'JOINSKIP')
-    si_proc = StudentItem(student_id=student.id, store_item_id=item.id,
+    si_proc = StudentItem(correlation_id='corr_test', student_id=student.id, store_item_id=item.id,
                           join_code='JOINSKIP', status='processing', collective_goal_instance_code=item.collective_goal_instance_code)
-    si_comp = StudentItem(student_id=student.id, store_item_id=item.id,
+    si_comp = StudentItem(correlation_id='corr_test', student_id=student.id, store_item_id=item.id,
                           join_code='JOINSKIP', status='completed', collective_goal_instance_code=item.collective_goal_instance_code)
     db.session.add_all([si_proc, si_comp])
     db.session.commit()
@@ -524,7 +524,7 @@ def test_delete_active_collective_item_refunds_pending(client):
     db.session.add(purchase_tx)
     db.session.flush()
 
-    si = StudentItem(student_id=student.id, store_item_id=item.id,
+    si = StudentItem(correlation_id='corr_test', student_id=student.id, store_item_id=item.id,
                      join_code='JOINDEL', status='pending',
                      purchase_transaction_id=purchase_tx.id,
                      collective_goal_instance_code=item.collective_goal_instance_code)
@@ -555,7 +555,7 @@ def test_delete_inactive_collective_item_does_not_refund(client):
     db.session.flush()
 
     item = _collective_item(teacher, 'Already Inactive Del', 'JOINDELINACT', is_active=False)
-    si = StudentItem(student_id=student.id, store_item_id=item.id,
+    si = StudentItem(correlation_id='corr_test', student_id=student.id, store_item_id=item.id,
                      join_code='JOINDELINACT', status='pending',
                      collective_goal_instance_code=item.collective_goal_instance_code)
     db.session.add(si)
@@ -642,7 +642,7 @@ def test_reactivated_item_voided_purchases_excluded_from_progress(client):
                             goal_type='fixed', target=2, expires_at=_past())
 
     # Simulate a previously-voided purchase (from a prior expiration cycle)
-    si_voided = StudentItem(
+    si_voided = StudentItem(correlation_id='corr_test', 
         student_id=student.id,
         store_item_id=item.id,
         join_code='JOINREACT',
@@ -674,9 +674,9 @@ def test_process_expired_goals_multiple_items_same_teacher(client):
     item_a = _collective_item(teacher, 'Multi Expired A', 'JOINMULTA', expires_at=_past())
     item_b = _collective_item(teacher, 'Multi Expired B', 'JOINMULTB', expires_at=_past())
 
-    si_a = StudentItem(student_id=student_a.id, store_item_id=item_a.id,
+    si_a = StudentItem(correlation_id='corr_test', student_id=student_a.id, store_item_id=item_a.id,
                        join_code='JOINMULTA', status='pending', collective_goal_instance_code=item_a.collective_goal_instance_code)
-    si_b = StudentItem(student_id=student_b.id, store_item_id=item_b.id,
+    si_b = StudentItem(correlation_id='corr_test', student_id=student_b.id, store_item_id=item_b.id,
                        join_code='JOINMULTB', status='pending', collective_goal_instance_code=item_b.collective_goal_instance_code)
     db.session.add_all([si_a, si_b])
     db.session.commit()
@@ -701,7 +701,7 @@ def test_shop_page_triggers_expiration_lazily(client):
     db.session.flush()
 
     item = _collective_item(teacher, 'Lazy Expired Goal', 'JOINLAZY', expires_at=_past())
-    si = StudentItem(student_id=student.id, store_item_id=item.id,
+    si = StudentItem(correlation_id='corr_test', student_id=student.id, store_item_id=item.id,
                      join_code='JOINLAZY', status='pending',
                      collective_goal_instance_code=item.collective_goal_instance_code)
     db.session.add(si)

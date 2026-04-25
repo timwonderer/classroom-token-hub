@@ -22,29 +22,24 @@ def execute_admin_adjustments(*, adjustments: list[dict], banking_settings=None)
     fee_count = 0
 
     for adjustment in adjustments:
-        student = adjustment["student"]
+        seat = adjustment["seat"]
         amount = Decimal(str(adjustment["amount"]))
         account_type = adjustment.get("account_type", "checking")
         teacher_id = adjustment["teacher_id"]
-        join_code = adjustment["join_code"]
+        class_id = seat.class_id
 
         shortfall = Decimal("0.00")
         if account_type == "checking" and amount < 0:
             allowed, shortfall, _, _ = evaluate_overdraft_allowance(
-                student,
+                seat,
                 abs(amount),
                 banking_settings,
-                teacher_id=teacher_id,
-                join_code=join_code,
             )
             if not allowed:
                 fee_charged, _ = ledger_service.apply_overdraft_fee_if_needed(
-                    student,
+                    seat,
                     banking_settings,
-                    teacher_id=teacher_id,
-                    join_code=join_code,
                     force=True,
-                    commit=False,
                 )
                 if fee_charged:
                     fee_count += 1
@@ -52,9 +47,9 @@ def execute_admin_adjustments(*, adjustments: list[dict], banking_settings=None)
                 continue
 
         ledger_service.create_pending_transaction(
-            student_id=student.id,
+            seat_id=seat.id,
+            class_id=class_id,
             teacher_id=teacher_id,
-            join_code=join_code,
             amount=amount,
             account_type=account_type,
             type=adjustment["type"],
@@ -64,9 +59,9 @@ def execute_admin_adjustments(*, adjustments: list[dict], banking_settings=None)
 
         if account_type == "checking" and amount < 0 and shortfall > 0:
             ledger_service.create_transfer_pair(
-                student_id=student.id,
+                seat_id=seat.id,
+                class_id=class_id,
                 teacher_id=teacher_id,
-                join_code=join_code,
                 amount=shortfall,
                 from_account="savings",
                 to_account="checking",

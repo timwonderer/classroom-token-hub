@@ -10,9 +10,18 @@ from app.utils.seat_scope import get_seat_ids_for_student_join, transaction_scop
 logger = logging.getLogger(__name__)
 
 
-def settle_pending_transaction_contexts(limit: int | None = None) -> dict[str, int]:
+from app.feats.base import feat_shell
+
+@feat_shell("FEAT-LED-003")
+def settle_pending_transaction_contexts(*args, **kwargs):
+    """FEAT-Shell for transaction settlement sweep."""
+    res = _settle_pending_transaction_contexts_legacy(*args, **kwargs)
+    db.session.commit() # FEAT-AUTHORIZED-SHELL
+    return res
+
+def _settle_pending_transaction_contexts_legacy(limit: int | None = None) -> dict[str, int]:
     """
-    Sweep each student/join_code context with unsettled ledger activity.
+    Sweep each student/join_code context with unsettled ledger activity (LEGACY).
 
     Each context is committed independently so one failure does not stop the run.
     """
@@ -33,18 +42,18 @@ def settle_pending_transaction_contexts(limit: int | None = None) -> dict[str, i
     )
     if limit is not None:
         context_query = context_query.limit(limit)
-
+ 
     settled_contexts = 0
     failed_contexts = 0
-
+ 
     # Materialize the contexts before iterating because the loop commits per
     # context, which invalidates server-side cursors on PostgreSQL.
     pending_contexts = context_query.all()
-
+ 
     for student_id, join_code in pending_contexts:
         try:
             settle_balances(student_id, join_code)
-            db.session.commit()
+            db.session.flush() # FEAT-LEGACY-WRAP: commit removed
             settled_contexts += 1
         except Exception:
             db.session.rollback()
@@ -54,7 +63,7 @@ def settle_pending_transaction_contexts(limit: int | None = None) -> dict[str, i
                 student_id,
                 join_code,
             )
-
+ 
     return {
         "settled_contexts": settled_contexts,
         "failed_contexts": failed_contexts,

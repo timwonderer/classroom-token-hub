@@ -472,151 +472,35 @@ class Student(db.Model):
             InsurancePolicy.teacher_id == teacher_id
         ).first()
 
-    def get_checking_balance(self, teacher_id=None, join_code=None):
-        """
-        Get checking balance scoped to a specific class economy.
+    def get_checking_balance(self, class_id: str | None = None, seat_id: int | None = None, **kwargs):
+        """Authoritative checking balance lookup via ledger service."""
+        from app.services.ledger_service import get_available_balance
+        cid = class_id or kwargs.get('join_code')
+        sid = seat_id
+        if not sid and cid:
+            from app.models import Seat
+            seat = Seat.query.filter_by(student_id=self.id, class_id=cid).first()
+            sid = seat.id if seat else None
+        
+        if not cid or not sid:
+            return Decimal('0.00')
+        
+        return get_available_balance(sid, cid, 'checking')
 
-        Financial reads must be scoped to a single join_code.
-
-        Args:
-            teacher_id: DEPRECATED - Only for backward compatibility
-            join_code: The unique class identifier for period-level isolation
-
-        Returns:
-            Decimal: The checking balance rounded to 2 decimal places
-        """
-        if join_code:
-            # Proper scoping by join_code (period-level isolation)
-            # Use Ledger + Settlement model (BalanceCache)
-            from app.models import BalanceCache, Seat, Transaction, TransactionStatus
-            # Note: eager settlement removed to prevent write-on-read performance issues.
-            # Balances are settled on transaction creation or async.
-
-            seat_ids = [
-                row[0]
-                for row in Seat.query.with_entities(Seat.id).filter(
-                    Seat.student_id == self.id,
-                    Seat.join_code == join_code,
-                ).all()
-            ]
-            tx_scope = sa.or_(
-                sa.and_(Transaction.seat_id.in_(seat_ids), Transaction.seat_id.is_not(None)),
-                sa.and_(Transaction.seat_id.is_(None), Transaction.student_id == self.id),
-            ) if seat_ids else (Transaction.student_id == self.id)
-
-            # 2. Read Posted from Cache
-            cache = None
-            if seat_ids:
-                cache = BalanceCache.query.filter(
-                    BalanceCache.join_code == join_code,
-                    BalanceCache.seat_id.in_(seat_ids),
-                ).first()
-            if not cache:
-                cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()
-            if cache:
-                posted = Decimal(cache.posted_checking_balance_cents) / 100
-            else:
-                # Recompute from class-scoped transactions if cache is not populated yet.
-                all_non_void = db.session.query(func.sum(Transaction.amount)).filter(
-                    tx_scope,
-                    Transaction.join_code == join_code,
-                    Transaction.account_type == 'checking',
-                    Transaction.is_void == False,
-                ).scalar() or Decimal('0.00')
-                pending_fallback = db.session.query(func.sum(Transaction.amount)).filter(
-                    tx_scope,
-                    Transaction.join_code == join_code,
-                    Transaction.status == TransactionStatus.PENDING,
-                    Transaction.account_type == 'checking',
-                    Transaction.is_void == False,
-                ).scalar() or Decimal('0.00')
-                posted = all_non_void - pending_fallback
-
-            # 3. Add Pending
-            pending = db.session.query(func.sum(Transaction.amount)).filter(
-                tx_scope,
-                Transaction.join_code == join_code,
-                Transaction.status == TransactionStatus.PENDING,
-                Transaction.account_type == 'checking',
-                Transaction.is_void == False
-            ).scalar() or Decimal('0.00')
-
-            return _quantize_currency(posted + pending)
-
-        return Decimal('0.00')
-
-    def get_savings_balance(self, teacher_id=None, join_code=None):
-        """
-        Get savings balance scoped to a specific class economy.
-
-        Financial reads must be scoped to a single join_code.
-
-        Args:
-            teacher_id: DEPRECATED - Only for backward compatibility
-            join_code: The unique class identifier for period-level isolation
-
-        Returns:
-            Decimal: The savings balance rounded to 2 decimal places
-        """
-        if join_code:
-            # Proper scoping by join_code (period-level isolation)
-            # Use Ledger + Settlement model (BalanceCache)
-            from app.models import BalanceCache, Seat, Transaction, TransactionStatus
-            # Note: eager settlement removed to prevent write-on-read performance issues.
-            # Balances are settled on transaction creation or async.
-
-            seat_ids = [
-                row[0]
-                for row in Seat.query.with_entities(Seat.id).filter(
-                    Seat.student_id == self.id,
-                    Seat.join_code == join_code,
-                ).all()
-            ]
-            tx_scope = sa.or_(
-                sa.and_(Transaction.seat_id.in_(seat_ids), Transaction.seat_id.is_not(None)),
-                sa.and_(Transaction.seat_id.is_(None), Transaction.student_id == self.id),
-            ) if seat_ids else (Transaction.student_id == self.id)
-
-            # 2. Read Posted from Cache
-            cache = None
-            if seat_ids:
-                cache = BalanceCache.query.filter(
-                    BalanceCache.join_code == join_code,
-                    BalanceCache.seat_id.in_(seat_ids),
-                ).first()
-            if not cache:
-                cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()
-            if cache:
-                posted = Decimal(cache.posted_savings_balance_cents) / 100
-            else:
-                # Recompute from class-scoped transactions if cache is not populated yet.
-                all_non_void = db.session.query(func.sum(Transaction.amount)).filter(
-                    tx_scope,
-                    Transaction.join_code == join_code,
-                    Transaction.account_type == 'savings',
-                    Transaction.is_void == False,
-                ).scalar() or Decimal('0.00')
-                pending_fallback = db.session.query(func.sum(Transaction.amount)).filter(
-                    tx_scope,
-                    Transaction.join_code == join_code,
-                    Transaction.status == TransactionStatus.PENDING,
-                    Transaction.account_type == 'savings',
-                    Transaction.is_void == False,
-                ).scalar() or Decimal('0.00')
-                posted = all_non_void - pending_fallback
-
-            # 3. Add Pending
-            pending = db.session.query(func.sum(Transaction.amount)).filter(
-                tx_scope,
-                Transaction.join_code == join_code,
-                Transaction.status == TransactionStatus.PENDING,
-                Transaction.account_type == 'savings',
-                Transaction.is_void == False
-            ).scalar() or Decimal('0.00')
-
-            return _quantize_currency(posted + pending)
-
-        return Decimal('0.00')
+    def get_savings_balance(self, class_id: str | None = None, seat_id: int | None = None, **kwargs):
+        """Authoritative savings balance lookup via ledger service."""
+        from app.services.ledger_service import get_available_balance
+        cid = class_id or kwargs.get('join_code')
+        sid = seat_id
+        if not sid and cid:
+            from app.models import Seat
+            seat = Seat.query.filter_by(student_id=self.id, class_id=cid).first()
+            sid = seat.id if seat else None
+        
+        if not cid or not sid:
+            return Decimal('0.00')
+        
+        return get_available_balance(sid, cid, 'savings')
 
     def get_total_earnings(self, teacher_id=None, join_code=None):
         """
@@ -713,6 +597,7 @@ class StudentTeacher(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=True)
 
@@ -732,8 +617,8 @@ class ClassEconomy(db.Model):
     """Canonical class anchor identified by a public join code and internal class_id."""
     __tablename__ = 'class_economies'
 
-    class_id = db.Column(db.String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
-    join_code = db.Column(db.String(20), primary_key=True)
+    class_id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    join_code = db.Column(db.String(20), unique=True, nullable=False, index=True)
     teacher_id = db.Column(
         db.Integer,
         db.ForeignKey('teachers.id', ondelete='CASCADE'),
@@ -741,7 +626,7 @@ class ClassEconomy(db.Model):
         index=True,
     )
     display_name = db.Column(db.String(100), nullable=True)
-    class_timezone = db.Column(db.String(64), nullable=True)
+    class_timezone = db.Column(db.String(64), nullable=False, default='UTC', server_default='UTC')
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
     created_by_admin_id = db.Column(
@@ -791,16 +676,17 @@ def prevent_class_timezone_mutation(_mapper, _connection, target):
 
 
 class EconomySnapshot(db.Model):
-    """Frozen economy analysis payload scoped to a class join code."""
+    """Frozen economy analysis payload scoped to a class universe."""
     __tablename__ = 'economy_snapshot'
 
     id = db.Column(db.Integer, primary_key=True)
-    join_code = db.Column(
-        db.String(20),
-        db.ForeignKey('class_economies.join_code', ondelete='CASCADE'),
+    class_id = db.Column(
+        db.String(36),
+        db.ForeignKey('class_economies.class_id', ondelete='CASCADE'),
         nullable=False,
         index=True,
     )
+    join_code = db.Column(db.String(20), nullable=True, index=True)
     policy_mode = db.Column(db.String(20), nullable=False, default='default')
     pay_rate = db.Column(db.Numeric(precision=12, scale=4), nullable=False)
     expected_hours = db.Column(db.Numeric(precision=8, scale=2), nullable=False)
@@ -829,12 +715,13 @@ class ClassMembership(db.Model):
     """Represents a teacher or student membership in a class economy."""
     __tablename__ = 'class_memberships'
     id = db.Column(db.Integer, primary_key=True)
-    join_code = db.Column(
-        db.String(20),
-        db.ForeignKey('class_economies.join_code', ondelete='CASCADE'),
+    class_id = db.Column(
+        db.String(36),
+        db.ForeignKey('class_economies.class_id', ondelete='CASCADE'),
         nullable=False,
         index=True,
     )
+    join_code = db.Column(db.String(20), nullable=True, index=True)
     admin_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=True, index=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=True, index=True)
     role = db.Column(
@@ -845,13 +732,40 @@ class ClassMembership(db.Model):
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
     __table_args__ = (
-        db.UniqueConstraint('join_code', 'admin_id', name='uq_class_membership_admin'),
-        db.UniqueConstraint('join_code', 'student_id', name='uq_class_membership_student'),
+        db.UniqueConstraint('class_id', 'admin_id', name='uq_class_membership_admin'),
+        db.UniqueConstraint('class_id', 'student_id', name='uq_class_membership_student'),
         db.CheckConstraint(
             '(admin_id IS NOT NULL AND student_id IS NULL) OR (admin_id IS NULL AND student_id IS NOT NULL)',
             name='ck_membership_xor'
         ),
     )
+
+
+@sa.event.listens_for(ClassMembership, "before_insert")
+@sa.event.listens_for(ClassMembership, "before_update")
+def _sync_class_membership_class_id(_mapper, connection, target):
+    """Backfill class_id from join_code for transitional write paths."""
+    if getattr(target, "class_id", None):
+        return
+    join_code = getattr(target, "join_code", None)
+    if not join_code:
+        return
+
+    class_id = connection.execute(
+        sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+        {"join_code": join_code},
+    ).scalar()
+    if not class_id:
+        session = db.session.object_session(target)
+        if session:
+            for obj in session.new:
+                if isinstance(obj, ClassEconomy) and obj.join_code == join_code:
+                    if not obj.class_id:
+                        obj.class_id = str(uuid.uuid4())
+                    class_id = obj.class_id
+                    break
+    if class_id:
+        target.class_id = str(class_id)
 
 
 # -------------------- SYSTEM ADMIN MODEL --------------------
@@ -902,8 +816,10 @@ class SystemAdminCredential(db.Model):
 class Transaction(db.Model):
     __tablename__ = 'transaction'
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
-    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
+    # student_id is DEPRECATED in favor of seat_id. 
+    # V2 Domain Law requires activity to be anchored to a Seat.
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True)
 
     # CRITICAL: join_code is the source of truth for class isolation
@@ -911,6 +827,7 @@ class Transaction(db.Model):
     # Example: Teacher has Period A (join=MATH1A) and Period B (join=MATH3B)
     # Student in both periods should see separate balances/transactions
     join_code = db.Column(db.String(20), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
 
     # CRITICAL: Use Numeric for exact decimal representation to avoid floating-point errors
     # Float causes bugs: -0.00 overdraft fees, unpayable rent balances
@@ -932,7 +849,9 @@ class Transaction(db.Model):
     effective_at = db.Column(db.DateTime(timezone=True), default=utc_now)
 
     description = db.Column(db.String(255))
-    idempotency_key = db.Column(db.String(128), nullable=True, unique=True, index=True)
+    correlation_id = db.Column(db.String(100), nullable=False, index=True)
+    feat_code = db.Column(db.String(100), nullable=True, index=True)
+    idempotency_key = db.Column(db.String(100), nullable=True, index=True)
     is_void = db.Column(db.Boolean, default=False)
     # References for compensating/reversal ledger entries.
     # Stored as IDs to keep compatibility simple across backends/migrations.
@@ -960,39 +879,201 @@ class Transaction(db.Model):
                 "type = 'insurance_reimbursement' AND original_transaction_id IS NOT NULL AND policy_id IS NOT NULL"
             ),
         ),
+        db.Index(
+            'uq_transaction_idempotency_scope',
+            'class_id',
+            'seat_id',
+            'feat_code',
+            'idempotency_key',
+            'type',
+            unique=True,
+            postgresql_where=sa.text("idempotency_key IS NOT NULL AND status != 'VOID'")
+        ),
     )
 
 
 @sa.event.listens_for(Transaction, "before_insert")
 @sa.event.listens_for(Transaction, "before_update")
-def _sync_transaction_amount_cents(_mapper, _connection, target):
-    """Keep amount_cents consistent with amount for all write paths."""
-    if target.amount is None:
-        return
-    target.amount_cents = int(_quantize_currency(target.amount) * 100)
+def _enforce_transaction_integrity(_mapper, _connection, target):
+    """
+    Enforce FEAT Constitutional Invariants on every ledger write.
+    1. Synchronize amount_cents.
+    2. Auto-populate seat_id and class_id if possible.
+    3. Assert correlation_id in Tier 1 paths.
+    4. Auto-populate feat_code from active context.
+    """
+    from app.feats.base import is_feat_active, get_correlation_id, get_active_feat_name, FEAT_REGISTRY, validate_id_format
 
-    # Dual-write bridge: populate seat_id from (student_id, join_code) when possible.
-    if not getattr(target, "seat_id", None) and getattr(target, "student_id", None) and getattr(target, "join_code", None):
-        seat_id = _connection.execute(
-            sa.text(
-                "SELECT id FROM seats WHERE student_id = :student_id AND join_code = :join_code LIMIT 1"
-            ),
-            {"student_id": target.student_id, "join_code": target.join_code},
+    # 1. Sync amount_cents
+    if target.amount is not None:
+        target.amount_cents = int(_quantize_currency(target.amount) * 100)
+
+    # 2. FEAT Context Enforcement
+    if is_feat_active():
+        feat_name = get_active_feat_name()
+        target.feat_code = feat_name
+        
+        # Auto-propagate correlation_id if not explicitly set
+        if not target.correlation_id:
+            target.correlation_id = get_correlation_id()
+        
+        # Session Isolation: Prevent mixed correlations in one flush
+        session = db.session.object_session(target)
+        if session:
+            active_corr = session.info.get("active_correlation_id")
+            if active_corr and target.correlation_id != active_corr:
+                 raise ValueError(f"FATAL: Mixed correlation in flush. Context={active_corr}, Object={target.correlation_id}")
+            session.info["active_correlation_id"] = target.correlation_id
+    else:
+        from app.feats.base import FEATContextError
+        raise FEATContextError("MANDATORY FEAT CONSTITUTIONAL VIOLATION: Ledger mutation outside of FEAT context.")
+
+    # 4. Auto-populate seat_id, class_id, and student_id if possible
+    if not target.seat_id and target.student_id:
+        existing_seat_id = _connection.execute(
+            sa.text("SELECT id FROM seats WHERE student_id = :student_id ORDER BY id ASC LIMIT 1"),
+            {"student_id": target.student_id},
         ).scalar()
-        if seat_id:
-            target.seat_id = int(seat_id)
+        if existing_seat_id:
+            target.seat_id = int(existing_seat_id)
 
-def _resolve_seat_id(connection, student_id, join_code):
-    """Lookup seat ID for a (student_id, join_code) pair."""
-    if not student_id or not join_code:
+    if not target.seat_id and target.student_id:
+        target.seat_id = _resolve_seat_id(_connection, target.student_id, class_id=target.class_id, join_code=target.join_code)
+    
+    if not target.class_id and target.join_code:
+        class_row = _connection.execute(
+            sa.text("SELECT class_id FROM class_economies WHERE join_code = :jc LIMIT 1"),
+            {"jc": target.join_code}
+        ).fetchone()
+        if class_row:
+            target.class_id = class_row[0]
+            if not target.seat_id and target.student_id:
+                target.seat_id = _resolve_seat_id(_connection, target.student_id, class_id=target.class_id)
+
+    if not target.class_id and target.seat_id:
+        seat_class_id = _connection.execute(
+            sa.text("SELECT class_id FROM seats WHERE id = :seat_id LIMIT 1"),
+            {"seat_id": target.seat_id},
+        ).scalar()
+        if seat_class_id:
+            target.class_id = str(seat_class_id)
+
+    if not target.join_code and target.class_id:
+        resolved_join_code = _connection.execute(
+            sa.text("SELECT join_code FROM class_economies WHERE class_id = :class_id LIMIT 1"),
+            {"class_id": target.class_id},
+        ).scalar()
+        if resolved_join_code:
+            target.join_code = str(resolved_join_code)
+
+    if not target.student_id and target.seat_id:
+        student_id = _connection.execute(
+            sa.text("SELECT student_id FROM seats WHERE id = :seat_id LIMIT 1"),
+            {"seat_id": target.seat_id},
+        ).scalar()
+        if student_id:
+            target.student_id = int(student_id)
+
+    if not target.seat_id and target.student_id:
+        legacy_join_code = target.join_code or f"LEGACY_{target.student_id}"
+        legacy_block = _connection.execute(
+            sa.text("SELECT COALESCE(block, 'A') FROM students WHERE id = :student_id LIMIT 1"),
+            {"student_id": target.student_id},
+        ).scalar() or "A"
+        legacy_seat_id = _connection.execute(
+            sa.text(
+                "INSERT INTO seats (public_id, user_id, class_id, role, block_identifier, roster_fingerprint, dedupe_code, claimed_at, join_code, student_id, block, created_at, updated_at) "
+                "VALUES (:public_id, NULL, NULL, :role, :block_identifier, NULL, NULL, NULL, :join_code, :student_id, :block, :created_at, :updated_at) "
+                "RETURNING id"
+            ),
+            {
+                "public_id": str(uuid.uuid4()),
+                "role": "student",
+                "block_identifier": legacy_block,
+                "join_code": legacy_join_code,
+                "student_id": target.student_id,
+                "block": legacy_block,
+                "created_at": utc_now(),
+                "updated_at": utc_now(),
+            },
+        ).scalar()
+        if legacy_seat_id:
+            target.seat_id = int(legacy_seat_id)
+
+    # 5. Global Format Validation
+    state = sa.inspect(target)
+    is_new = state.transient or state.pending
+
+    is_bypass = False
+    feat_name = "UNTRACKED"
+    if is_feat_active():
+        feat_name = get_active_feat_name()
+        is_bypass = feat_name == "FEAT-BYPASS-LEGACY" or (
+            bool(getattr(target, "correlation_id", None))
+            and str(target.correlation_id).startswith("bypass_test_")
+        )
+
+    if is_bypass:
+        if not target.correlation_id or not target.correlation_id.startswith("bypass_test_"):
+            raise ValueError(f"FATAL: Bypass mode active but correlation_id does not start with 'bypass_test_': {target.correlation_id}")
+    else:
+        # 1. Mandatory Identity Alignment (V2 Law)
+        # Tier-1 ledger FEATs require explicit class anchors; legacy low-blast
+        # admin/test flows can continue during migration hardening.
+        meta = FEAT_REGISTRY.get(feat_name, {})
+        is_tier_1 = meta.get("blast_radius") == "HIGH" or (feat_name and feat_name.startswith("FEAT-LED"))
+        if is_tier_1 and not target.class_id:
+             raise ValueError(f"FATAL: Ledger mutation for student {target.student_id} missing mandatory class_id in {feat_name}. Clean break V2 requires explicit class anchoring.")
+        if not target.correlation_id or target.correlation_id == "NO-CORRELATION":
+            raise ValueError(f"FATAL: Ledger mutation missing correlation_id in {feat_name}.")
+
+        if is_new:
+            if not validate_id_format(target.correlation_id, "corr_"):
+                raise ValueError(f"FATAL: Invalid correlation_id format for new insert in {feat_name}: {target.correlation_id}. Must start with 'corr_' or 'bypass_test_'")
+        else:
+            if not (validate_id_format(target.correlation_id, "corr_") or 
+                    target.correlation_id.startswith("bypass_test_")):
+                raise ValueError(f"FATAL: Invalid correlation_id format for update in {feat_name}: {target.correlation_id}")
+
+    # 4. Validation for Tier 1 / Ledger paths
+    meta = FEAT_REGISTRY.get(feat_name, {})
+    is_tier_1 = meta.get("blast_radius") == "HIGH" or (feat_name and feat_name.startswith("FEAT-LED"))
+    bypass_correlation = bool(getattr(target, "correlation_id", None)) and str(target.correlation_id).startswith("bypass_test_")
+
+    if is_tier_1 and not bypass_correlation:
+         if target.correlation_id != get_correlation_id():
+              raise ValueError(f"FATAL: Correlation mismatch in {feat_name}. Record={target.correlation_id}, Context={get_correlation_id()}")
+
+         # 2. Assert Identity Anchors (seat_id + class_id are the clean-break authority)
+         if not target.class_id:
+              raise ValueError(f"FATAL: Ledger mutation in {feat_name} missing class_id. Must be provided by service.")
+
+         if not target.seat_id:
+              raise ValueError(f"FATAL: Ledger mutation in {feat_name} missing seat_id. Must be provided by service.")
+
+    # 4. Identity synchronization (pure assignment only)
+    # seat_id is optional but student_id is the primary anchor
+
+def _resolve_seat_id(connection, student_id, *, class_id=None, join_code=None):
+    """Lookup seat ID for a student in a class universe."""
+    if not student_id:
         return None
-    seat_id = connection.execute(
-        sa.text(
-            "SELECT id FROM seats WHERE student_id = :student_id AND join_code = :join_code LIMIT 1"
-        ),
-        {"student_id": student_id, "join_code": join_code},
-    ).scalar()
-    return int(seat_id) if seat_id else None
+    
+    if class_id:
+        seat_id = connection.execute(
+            sa.text("SELECT id FROM seats WHERE student_id = :student_id AND class_id = :class_id LIMIT 1"),
+            {"student_id": student_id, "class_id": class_id},
+        ).scalar()
+        if seat_id: return int(seat_id)
+
+    if join_code:
+        seat_id = connection.execute(
+            sa.text("SELECT id FROM seats WHERE student_id = :student_id AND join_code = :join_code LIMIT 1"),
+            {"student_id": student_id, "join_code": join_code},
+        ).scalar()
+        return int(seat_id) if seat_id else None
+    
+    return None
 
 
 class BalanceCache(db.Model):
@@ -1003,9 +1084,10 @@ class BalanceCache(db.Model):
     __tablename__ = 'balance_cache'
 
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
-    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
-    join_code = db.Column(db.String(20), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=True)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=False, index=True)
+    join_code = db.Column(db.String(20), nullable=True)
 
     # Balances stored in CENTS to avoid floating point issues
     posted_checking_balance_cents = db.Column(db.Integer, default=0, nullable=False)
@@ -1015,8 +1097,7 @@ class BalanceCache(db.Model):
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
     __table_args__ = (
-        db.UniqueConstraint('join_code', 'student_id', name='uq_balance_cache_scope'),
-        db.UniqueConstraint('join_code', 'seat_id', name='uq_balance_cache_seat_scope'),
+        db.UniqueConstraint('class_id', 'seat_id', name='uq_balance_cache_seat_universe'),
     )
 
 
@@ -1032,8 +1113,8 @@ class StudentBlock(db.Model):
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
     period = db.Column(db.String(10), nullable=False)
 
-    # CRITICAL: join_code is the source of truth for class isolation
-    # Links this student-period combination to a specific class economy
+    # CRITICAL: class_id is the source of truth for class isolation
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
     # Toggle for enabling/disabling tap in/out for this student in this period
@@ -1067,7 +1148,8 @@ class TapEvent(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
     period = db.Column(db.String(10), nullable=False)
-    # CRITICAL: join_code scopes attendance to a specific class economy
+    # CRITICAL: class_id scopes attendance to a specific class economy
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     status = db.Column(db.String(10), nullable=False)  # 'active' or 'inactive'
     # All times stored as UTC (see header note)
@@ -1094,28 +1176,56 @@ class TapEvent(db.Model):
 @sa.event.listens_for(StudentBlock, "before_update")
 def _sync_student_block_seat(_mapper, connection, target):
     """Dual-write bridge for student_blocks.seat_id."""
-    if getattr(target, "seat_id", None):
+    if not getattr(target, "student_id", None):
         return
-    if not getattr(target, "student_id", None) or not getattr(target, "join_code", None):
-        return
+    
+    class_id = getattr(target, "class_id", None)
+    join_code = getattr(target, "join_code", None)
 
-    seat_id = _resolve_seat_id(connection, target.student_id, target.join_code)
-    if seat_id:
-        target.seat_id = seat_id
+    if not class_id and join_code:
+        class_id = connection.execute(
+            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+            {"join_code": join_code},
+        ).scalar()
+        if class_id:
+            target.class_id = str(class_id)
+    
+    if not getattr(target, "seat_id", None):
+        seat_id = _resolve_seat_id(connection, target.student_id, class_id=class_id, join_code=join_code)
+        if seat_id:
+            target.seat_id = seat_id
 
 
 @sa.event.listens_for(TapEvent, "before_insert")
 @sa.event.listens_for(TapEvent, "before_update")
 def _sync_tap_event_seat(_mapper, connection, target):
     """Dual-write bridge for tap_events.seat_id."""
-    if getattr(target, "seat_id", None):
-        return
-    if not getattr(target, "student_id", None) or not getattr(target, "join_code", None):
+    if not getattr(target, "student_id", None):
         return
 
-    seat_id = _resolve_seat_id(connection, target.student_id, target.join_code)
-    if seat_id:
-        target.seat_id = seat_id
+    class_id = getattr(target, "class_id", None)
+    join_code = getattr(target, "join_code", None)
+
+    if not class_id and join_code:
+        class_id = connection.execute(
+            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+            {"join_code": join_code},
+        ).scalar()
+        if class_id:
+            target.class_id = str(class_id)
+
+    if not getattr(target, "seat_id", None):
+        seat_id = _resolve_seat_id(connection, target.student_id, class_id=class_id, join_code=join_code)
+        if seat_id:
+            target.seat_id = seat_id
+
+    if not getattr(target, "class_id", None) and getattr(target, "seat_id", None):
+        seat_class_id = connection.execute(
+            sa.text("SELECT class_id FROM seats WHERE id = :seat_id LIMIT 1"),
+            {"seat_id": target.seat_id},
+        ).scalar()
+        if seat_class_id:
+            target.class_id = str(seat_class_id)
 
 
 # ---- Hall Pass Log Model ----
@@ -1128,8 +1238,8 @@ class HallPassLog(db.Model):
     status = db.Column(db.String(20), default='pending', nullable=False) # pending, approved, rejected, left, returned
     period = db.Column(db.String(10), nullable=True) # Which period the request was made in
 
-    # CRITICAL: join_code is the source of truth for class isolation
-    # Each hall pass request should be scoped to the specific class/period
+    # CRITICAL: class_id is the source of truth for class isolation
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
     request_time = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
@@ -1295,9 +1405,11 @@ class StudentItem(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     store_item_id = db.Column(db.Integer, db.ForeignKey('store_items.id'), nullable=False)
 
-    # CRITICAL: join_code is the source of truth for class isolation
-    # Each purchase should be scoped to the specific class/period where it was made
+    # CRITICAL: class_id is the source of truth for class isolation
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
+    correlation_id = db.Column(db.String(100), nullable=False, index=True)
 
     purchase_date = db.Column(db.DateTime(timezone=True), default=utc_now)
     expiry_date = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -1319,6 +1431,36 @@ class StudentItem(db.Model):
     # Relationships
     student = db.relationship('Student', backref=db.backref('items', lazy='dynamic'))
     collective_goal_instance_code = db.Column(db.String(36), nullable=True, index=True)
+
+
+@sa.event.listens_for(StudentItem, "before_insert")
+@sa.event.listens_for(StudentItem, "before_update")
+def _sync_student_item_scope(_mapper, connection, target):
+    """Dual-write bridge for student_items seat/class scope."""
+    class_id = getattr(target, "class_id", None)
+    join_code = getattr(target, "join_code", None)
+    student_id = getattr(target, "student_id", None)
+
+    if not class_id and join_code:
+        class_id = connection.execute(
+            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+            {"join_code": join_code},
+        ).scalar()
+        if class_id:
+            target.class_id = str(class_id)
+
+    if not getattr(target, "seat_id", None) and student_id:
+        seat_id = _resolve_seat_id(connection, student_id, class_id=class_id, join_code=join_code)
+        if seat_id:
+            target.seat_id = seat_id
+
+    if not getattr(target, "class_id", None) and getattr(target, "seat_id", None):
+        seat_class_id = connection.execute(
+            sa.text("SELECT class_id FROM seats WHERE id = :seat_id LIMIT 1"),
+            {"seat_id": target.seat_id},
+        ).scalar()
+        if seat_class_id:
+            target.class_id = str(seat_class_id)
 
 
 class RedemptionAuditAction(enum.Enum):
@@ -1349,6 +1491,8 @@ class RedemptionAuditLog(db.Model):
     )
     notes = db.Column(db.Text, nullable=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     timestamp = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, index=True)
     source = db.Column(
@@ -1420,12 +1564,13 @@ class RentSettings(db.Model):
 class RentPayment(db.Model):
     __tablename__ = 'rent_payments'
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
-    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
+    # student_id is DEPRECATED in favor of seat_id.
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=False, index=True)
     period = db.Column(db.String(10), nullable=False)  # Block/Period (e.g., 'A', 'B', 'C')
 
-    # CRITICAL: join_code is the source of truth for class isolation
-    # Each rent payment should be scoped to the specific class/period
+    # join_code is for UI display/filtering only
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
     amount_paid = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
@@ -1477,22 +1622,87 @@ class RentWaiver(db.Model):
 @sa.event.listens_for(HallPassLog, "before_update")
 def _sync_hall_pass_seat(_mapper, connection, target):
     """Dual-write bridge for hall_pass_logs.seat_id."""
-    if getattr(target, "seat_id", None):
-        return
-    seat_id = _resolve_seat_id(connection, getattr(target, "student_id", None), getattr(target, "join_code", None))
-    if seat_id:
-        target.seat_id = seat_id
+    student_id = getattr(target, "student_id", None)
+    class_id = getattr(target, "class_id", None)
+    join_code = getattr(target, "join_code", None)
+
+    if not class_id and join_code:
+        class_id = connection.execute(
+            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+            {"join_code": join_code},
+        ).scalar()
+        if class_id:
+            target.class_id = str(class_id)
+
+    if not getattr(target, "seat_id", None):
+        seat_id = _resolve_seat_id(connection, student_id, class_id=class_id, join_code=join_code)
+        if seat_id:
+            target.seat_id = seat_id
+
+    if not getattr(target, "class_id", None) and getattr(target, "seat_id", None):
+        seat_class_id = connection.execute(
+            sa.text("SELECT class_id FROM seats WHERE id = :seat_id LIMIT 1"),
+            {"seat_id": target.seat_id},
+        ).scalar()
+        if seat_class_id:
+            target.class_id = str(seat_class_id)
 
 
 @sa.event.listens_for(RentPayment, "before_insert")
 @sa.event.listens_for(RentPayment, "before_update")
 def _sync_rent_payment_seat(_mapper, connection, target):
-    """Dual-write bridge for rent_payments.seat_id."""
-    if getattr(target, "seat_id", None):
-        return
-    seat_id = _resolve_seat_id(connection, getattr(target, "student_id", None), getattr(target, "join_code", None))
-    if seat_id:
-        target.seat_id = seat_id
+    """Dual-write bridge for rent_payments.seat_id and rent_payments.class_id."""
+    student_id = getattr(target, "student_id", None)
+    class_id = getattr(target, "class_id", None)
+    join_code = getattr(target, "join_code", None)
+
+    if not class_id and join_code:
+        class_id = connection.execute(
+            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+            {"join_code": join_code},
+        ).scalar()
+        if class_id:
+            target.class_id = str(class_id)
+
+    if not getattr(target, "seat_id", None) and student_id:
+        seat_id = _resolve_seat_id(connection, student_id, class_id=class_id, join_code=join_code)
+        if seat_id:
+            target.seat_id = seat_id
+
+    if not getattr(target, "seat_id", None) and student_id:
+        legacy_join_code = join_code or f"LEGACY_{student_id}"
+        legacy_block = connection.execute(
+            sa.text("SELECT COALESCE(block, 'A') FROM students WHERE id = :student_id LIMIT 1"),
+            {"student_id": student_id},
+        ).scalar() or "A"
+        legacy_seat_id = connection.execute(
+            sa.text(
+                "INSERT INTO seats (public_id, user_id, class_id, role, block_identifier, roster_fingerprint, dedupe_code, claimed_at, join_code, student_id, block, created_at, updated_at) "
+                "VALUES (:public_id, NULL, :class_id, :role, :block_identifier, NULL, NULL, NULL, :join_code, :student_id, :block, :created_at, :updated_at) "
+                "RETURNING id"
+            ),
+            {
+                "public_id": str(uuid.uuid4()),
+                "class_id": str(class_id) if class_id else None,
+                "role": "student",
+                "block_identifier": legacy_block,
+                "join_code": legacy_join_code,
+                "student_id": student_id,
+                "block": legacy_block,
+                "created_at": utc_now(),
+                "updated_at": utc_now(),
+            },
+        ).scalar()
+        if legacy_seat_id:
+            target.seat_id = int(legacy_seat_id)
+
+    if not getattr(target, "class_id", None) and getattr(target, "seat_id", None):
+        seat_class_id = connection.execute(
+            sa.text("SELECT class_id FROM seats WHERE id = :seat_id LIMIT 1"),
+            {"seat_id": target.seat_id},
+        ).scalar()
+        if seat_class_id:
+            target.class_id = str(seat_class_id)
 
 
 @sa.event.listens_for(RentWaiver, "before_insert")
@@ -1501,7 +1711,12 @@ def _sync_rent_waiver_seat(_mapper, connection, target):
     """Dual-write bridge for rent_waivers.seat_id."""
     if getattr(target, "seat_id", None):
         return
-    seat_id = _resolve_seat_id(connection, getattr(target, "student_id", None), getattr(target, "join_code", None))
+    
+    student_id = getattr(target, "student_id", None)
+    class_id = getattr(target, "class_id", None)
+    join_code = getattr(target, "join_code", None)
+    
+    seat_id = _resolve_seat_id(connection, student_id, class_id=class_id, join_code=join_code)
     if seat_id:
         target.seat_id = seat_id
 
@@ -1660,11 +1875,13 @@ class InsurancePolicyBlock(db.Model):
 class StudentInsurance(db.Model):
     __tablename__ = 'student_insurance'
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    # student_id is DEPRECATED in favor of seat_id.
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=False, index=True)
     policy_id = db.Column(db.Integer, db.ForeignKey('insurance_policies.id'), nullable=False)
 
-    # CRITICAL: join_code is the source of truth for class isolation
-    # Each insurance enrollment should be scoped to the specific class/period
+    # join_code is for UI display/filtering only
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
     status = db.Column(db.String(20), default='active')  # active, cancelled, suspended, expired
@@ -1761,6 +1978,160 @@ class StudentInsurance(db.Model):
         )
 
 
+@sa.event.listens_for(StudentInsurance, "before_insert")
+@sa.event.listens_for(StudentInsurance, "before_update")
+def _sync_student_insurance_scope(_mapper, connection, target):
+    """Dual-write bridge for student_insurance seat/class scope."""
+    class_id = getattr(target, "class_id", None)
+    join_code = getattr(target, "join_code", None)
+    student_id = getattr(target, "student_id", None)
+    policy_id = getattr(target, "policy_id", None)
+    policy_teacher_id = None
+
+    if policy_id:
+        policy_teacher_id = connection.execute(
+            sa.text("SELECT teacher_id FROM insurance_policies WHERE id = :policy_id LIMIT 1"),
+            {"policy_id": policy_id},
+        ).scalar()
+
+    if not class_id and join_code:
+        class_id = connection.execute(
+            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+            {"join_code": join_code},
+        ).scalar()
+        if not class_id and policy_teacher_id:
+                proposed_class_id = str(uuid.uuid4())
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO class_economies "
+                        "(class_id, join_code, teacher_id, display_name, class_timezone, created_at, updated_at, created_by_admin_id) "
+                        "VALUES (:class_id, :join_code, :teacher_id, NULL, 'UTC', :created_at, :updated_at, :created_by_admin_id) "
+                        "ON CONFLICT (join_code) DO NOTHING"
+                    ),
+                    {
+                        "class_id": proposed_class_id,
+                        "join_code": join_code,
+                        "teacher_id": policy_teacher_id,
+                        "created_at": utc_now(),
+                        "updated_at": utc_now(),
+                        "created_by_admin_id": policy_teacher_id,
+                    },
+                )
+                class_id = connection.execute(
+                    sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+                    {"join_code": join_code},
+                ).scalar()
+        if class_id:
+            target.class_id = str(class_id)
+
+    if not class_id and student_id and policy_teacher_id:
+        membership_row = connection.execute(
+            sa.text(
+                "SELECT cm.class_id, ce.join_code "
+                "FROM class_memberships cm "
+                "JOIN class_economies ce ON ce.class_id = cm.class_id "
+                "WHERE cm.student_id = :student_id AND ce.teacher_id = :teacher_id "
+                "ORDER BY cm.id ASC LIMIT 1"
+            ),
+            {"student_id": student_id, "teacher_id": policy_teacher_id},
+        ).fetchone()
+        if membership_row:
+            class_id = membership_row[0]
+            target.class_id = str(class_id)
+            if not join_code and membership_row[1]:
+                join_code = membership_row[1]
+                target.join_code = str(join_code)
+
+    if not class_id and policy_teacher_id:
+        teacher_class = connection.execute(
+            sa.text(
+                "SELECT class_id, join_code FROM class_economies "
+                "WHERE teacher_id = :teacher_id ORDER BY created_at ASC LIMIT 1"
+            ),
+            {"teacher_id": policy_teacher_id},
+        ).fetchone()
+        if teacher_class:
+            class_id = teacher_class[0]
+            target.class_id = str(class_id)
+            if not join_code and teacher_class[1]:
+                join_code = teacher_class[1]
+                target.join_code = str(join_code)
+        else:
+            synthetic_join_code = f"INS{policy_teacher_id}_{uuid.uuid4().hex[:8]}".upper()[:20]
+            synthetic_class_id = str(uuid.uuid4())
+            connection.execute(
+                sa.text(
+                    "INSERT INTO class_economies "
+                    "(class_id, join_code, teacher_id, display_name, class_timezone, created_at, updated_at, created_by_admin_id) "
+                    "VALUES (:class_id, :join_code, :teacher_id, NULL, 'UTC', :created_at, :updated_at, :created_by_admin_id)"
+                ),
+                {
+                    "class_id": synthetic_class_id,
+                    "join_code": synthetic_join_code,
+                    "teacher_id": policy_teacher_id,
+                    "created_at": utc_now(),
+                    "updated_at": utc_now(),
+                    "created_by_admin_id": policy_teacher_id,
+                },
+            )
+            class_id = synthetic_class_id
+            join_code = synthetic_join_code
+            target.class_id = class_id
+            target.join_code = join_code
+
+    if not getattr(target, "seat_id", None) and student_id:
+        seat_id = _resolve_seat_id(connection, student_id, class_id=class_id, join_code=join_code)
+        if seat_id:
+            target.seat_id = seat_id
+
+    if not getattr(target, "seat_id", None) and student_id:
+        legacy_join_code = join_code or f"LEGACY_{student_id}"
+        legacy_block = connection.execute(
+            sa.text("SELECT COALESCE(block, 'A') FROM students WHERE id = :student_id LIMIT 1"),
+            {"student_id": student_id},
+        ).scalar() or "A"
+        legacy_seat_id = connection.execute(
+            sa.text(
+                "INSERT INTO seats (public_id, user_id, class_id, role, block_identifier, roster_fingerprint, dedupe_code, claimed_at, join_code, student_id, block, created_at, updated_at) "
+                "VALUES (:public_id, NULL, :class_id, :role, :block_identifier, NULL, NULL, NULL, :join_code, :student_id, :block, :created_at, :updated_at) "
+                "RETURNING id"
+            ),
+            {
+                "public_id": str(uuid.uuid4()),
+                "class_id": str(class_id) if class_id else None,
+                "role": "student",
+                "block_identifier": legacy_block,
+                "join_code": legacy_join_code,
+                "student_id": student_id,
+                "block": legacy_block,
+                "created_at": utc_now(),
+                "updated_at": utc_now(),
+            },
+        ).scalar()
+        if legacy_seat_id:
+            target.seat_id = int(legacy_seat_id)
+
+    if not getattr(target, "class_id", None) and getattr(target, "seat_id", None):
+        seat_class_id = connection.execute(
+            sa.text("SELECT class_id FROM seats WHERE id = :seat_id LIMIT 1"),
+            {"seat_id": target.seat_id},
+        ).scalar()
+        if seat_class_id:
+            target.class_id = str(seat_class_id)
+    elif getattr(target, "class_id", None) and getattr(target, "seat_id", None):
+        connection.execute(
+            sa.text("UPDATE seats SET class_id = :class_id WHERE id = :seat_id AND class_id IS NULL"),
+            {"class_id": str(target.class_id), "seat_id": target.seat_id},
+        )
+
+    if not getattr(target, "join_code", None) and getattr(target, "class_id", None):
+        resolved_join_code = connection.execute(
+            sa.text("SELECT join_code FROM class_economies WHERE class_id = :class_id LIMIT 1"),
+            {"class_id": target.class_id},
+        ).scalar()
+        if resolved_join_code:
+            target.join_code = str(resolved_join_code)
+
 class InsuranceClaim(db.Model):
     __tablename__ = 'insurance_claims'
     __table_args__ = (
@@ -1769,7 +2140,9 @@ class InsuranceClaim(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_insurance_id = db.Column(db.Integer, db.ForeignKey('student_insurance.id'), nullable=False)
     policy_id = db.Column(db.Integer, db.ForeignKey('insurance_policies.id'), nullable=False)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
     incident_date = db.Column(db.DateTime(timezone=True), nullable=False)  # When incident occurred
@@ -1792,6 +2165,31 @@ class InsuranceClaim(db.Model):
     processed_by = db.relationship('Admin', backref='processed_claims')
     transaction = db.relationship('Transaction', backref='insurance_claims')
 
+
+@sa.event.listens_for(InsuranceClaim, "before_insert")
+@sa.event.listens_for(InsuranceClaim, "before_update")
+def _sync_insurance_claim_scope(_mapper, connection, target):
+    """Dual-write bridge for insurance_claims seat/class/student scope."""
+    needs_scope_backfill = any(
+        not getattr(target, attr, None)
+        for attr in ("student_id", "seat_id", "class_id", "join_code")
+    )
+    if needs_scope_backfill and getattr(target, "student_insurance_id", None):
+        row = connection.execute(
+            sa.text(
+                "SELECT student_id, seat_id, class_id, join_code FROM student_insurance WHERE id = :sid LIMIT 1"
+            ),
+            {"sid": target.student_insurance_id},
+        ).fetchone()
+        if row:
+            if row[0]:
+                target.student_id = row[0]
+            if not getattr(target, "seat_id", None) and row[1]:
+                target.seat_id = row[1]
+            if not getattr(target, "class_id", None) and row[2]:
+                target.class_id = row[2]
+            if not getattr(target, "join_code", None) and row[3]:
+                target.join_code = row[3]
 
 # ---- Error Log Model ----
 class ErrorLog(db.Model):
@@ -1858,6 +2256,7 @@ class UserReport(db.Model):
     # Anonymous user identification (HMAC of user identifier)
     anonymous_code = db.Column(db.String(64), nullable=False, index=True)
     user_type = db.Column(db.String(20), nullable=False)  # 'student', 'teacher', 'anonymous'
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
     # Report details
@@ -1948,6 +2347,8 @@ class Issue(db.Model):
 
     # Class context
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=False, index=True)
     class_label = db.Column(db.String(50), nullable=True)  # Cached class name
 

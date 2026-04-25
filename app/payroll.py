@@ -335,15 +335,19 @@ def _resolve_payroll_cache_scope(students, teacher_id, join_code=None):
     return rows[0].join_code, rows[0].class_id
 
 
-def get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=None, join_code=None):
-    """
-    Cached version of calculate_payroll.
-    Returns (summary, last_updated_datetime).
+from app.feats.base import feat_shell
 
-    Cache Strategy:
-    - Stores one cache row per class (`class_id`).
-    - Only single-class requests use the cache.
-    - Mixed-class requests fall back to direct calculation to avoid teacher-global leakage.
+@feat_shell("FEAT-LED-004")
+def get_cached_payroll_with_meta(*args, **kwargs):
+    """FEAT-Shell for payroll calculation cache management."""
+    res = _get_cached_payroll_with_meta_legacy(*args, **kwargs)
+    db.session.commit() # FEAT-AUTHORIZED-SHELL
+    return res
+
+def _get_cached_payroll_with_meta_legacy(students, last_payroll_time, teacher_id=None, join_code=None):
+    """
+    Cached version of calculate_payroll (LEGACY).
+    Returns (summary, last_updated_datetime).
     """
     from app.models import PayrollCache, Student, TeacherBlock
     from app.extensions import db
@@ -355,29 +359,29 @@ def get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=None, j
         
     if not teacher_id:
         return calculate_payroll(students, last_payroll_time, teacher_id=teacher_id), None
-
+ 
     scoped_join_code, scoped_class_id = _resolve_payroll_cache_scope(students, teacher_id, join_code=join_code)
     if not scoped_join_code or not scoped_class_id:
         return calculate_payroll(students, last_payroll_time, teacher_id=teacher_id), None
-
+ 
     cache_entry = PayrollCache.query.filter_by(class_id=scoped_class_id).first()
     now = utc_now()
     cutoff = now - timedelta(hours=1)
-
+ 
     use_cache = False
     if cache_entry and cache_entry.last_calculated_at and ensure_utc(cache_entry.last_calculated_at) > cutoff:
         if cache_entry.cached_breakdown:
             use_cache = True
-
+ 
     summary = {}
     last_updated = now
-
+ 
     if use_cache:
         raw_data = cache_entry.cached_breakdown
         last_updated = ensure_utc(cache_entry.last_calculated_at)
-
+ 
         requested_ids = {s.id for s in students}
-
+ 
         for s_id_str, amount_raw in raw_data.items():
             s_id = int(s_id_str)
             if s_id in requested_ids:
@@ -391,10 +395,10 @@ def get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=None, j
         ).all()
         all_student_ids = sorted({c.student_id for c in all_creds if c.student_id})
         all_students = Student.query.filter(Student.id.in_(all_student_ids)).all() if all_student_ids else []
-
+ 
         full_summary = calculate_payroll(all_students, last_payroll_time, teacher_id=teacher_id)
         cache_data = {str(k): str(v) for k, v in full_summary.items()}
-
+ 
         if not cache_entry:
             cache_entry = PayrollCache(
                 teacher_id=teacher_id,
@@ -406,13 +410,13 @@ def get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=None, j
             cache_entry.teacher_id = teacher_id
             cache_entry.join_code = scoped_join_code
             cache_entry.class_id = scoped_class_id
-
+ 
         cache_entry.cached_breakdown = cache_data
         cache_entry.last_calculated_at = now
-        db.session.commit()
-
+        db.session.flush() # FEAT-LEGACY-WRAP: commit removed
+ 
         requested_ids = {s.id for s in students}
         summary = {k: v for k, v in full_summary.items() if k in requested_ids}
         last_updated = now
-
+ 
     return summary, last_updated

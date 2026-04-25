@@ -8,20 +8,16 @@ from app.utils.seat_scope import get_seat_ids_for_student_join, seat_scoped_filt
 from app.utils.time import day_bounds_utc, ensure_utc, normalize_for_db, utc_now
 
 
-def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, join_code=None):
+def calculate_unpaid_attendance_seconds(seat_id: int, class_id: str, period: str, last_payroll_time):
     """Calculate unpaid attendance from a caller-supplied payroll anchor."""
     last_payroll_time = ensure_utc(last_payroll_time)
-    seat_ids = get_seat_ids_for_student_join(student_id, join_code) if join_code else []
-    tap_scope = seat_scoped_filter(TapEvent, student_id, seat_ids)
-
+    
     base_query = TapEvent.query.filter(
-        tap_scope,
+        TapEvent.seat_id == seat_id,
+        TapEvent.class_id == class_id,
         TapEvent.period == period,
         TapEvent.is_deleted == False,
     )
-
-    if join_code:
-        base_query = base_query.filter(TapEvent.join_code == join_code)
 
     base_query = base_query.order_by(TapEvent.timestamp.asc())
 
@@ -41,7 +37,8 @@ def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, j
         return int(total_seconds)
 
     last_event_before_payroll = TapEvent.query.filter(
-        tap_scope,
+        TapEvent.seat_id == seat_id,
+        TapEvent.class_id == class_id,
         TapEvent.period == period,
         TapEvent.timestamp <= last_payroll_time,
         TapEvent.is_deleted == False,
@@ -72,17 +69,21 @@ def get_all_block_statuses(student, join_code=None, payroll_anchor_by_join_code=
     today_start_db = normalize_for_db(today_start_utc)
     today_end_db = normalize_for_db(today_end_utc)
 
+    from app.utils.attendance_helpers import get_join_code_for_student_period
+    from app.utils.seat_scope import get_seat_id_for_class
+    from app.models import ClassEconomy
+
     if join_code:
+        economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+        class_id = economy.class_id if economy else None
         claimed_seats = TeacherBlock.query.filter_by(
             student_id=student.id,
-            join_code=join_code,
+            class_id=class_id,
             is_claimed=True,
         ).all()
         student_blocks = [seat.block.strip() for seat in claimed_seats if seat.block]
-        join_scope_seat_ids = get_seat_ids_for_student_join(student.id, join_code)
     else:
         student_blocks = [b.strip() for b in student.block.split(",") if b.strip()]
-        join_scope_seat_ids = []
 
     period_states = {}
     payroll_anchor_by_join_code = payroll_anchor_by_join_code or {}
@@ -90,51 +91,56 @@ def get_all_block_statuses(student, join_code=None, payroll_anchor_by_join_code=
     for block_original in student_blocks:
         blk = block_original.upper()
         block_join_code = join_code or get_join_code_for_student_period(student.id, block_original)
-        block_seat_ids = get_seat_ids_for_student_join(student.id, block_join_code) if block_join_code else []
+        
+        if not block_join_code:
+            continue
 
-        latest_event_query = TapEvent.query.filter_by(period=blk, is_deleted=False)
-        if block_join_code:
-            latest_event_query = latest_event_query.filter(
-                seat_scoped_filter(TapEvent, student.id, block_seat_ids),
-                TapEvent.join_code == block_join_code,
-            )
-        else:
-            latest_event_query = latest_event_query.filter(TapEvent.student_id == student.id)
+        economy = ClassEconomy.query.filter_by(join_code=block_join_code).first()
+        if not economy:
+            continue
+        
+        class_id = economy.class_id
+        seat_id = get_seat_id_for_class(student.id, class_id)
+        
+        if not seat_id:
+            continue
 
-        latest_event = latest_event_query.order_by(TapEvent.timestamp.desc()).first()
+        latest_event = TapEvent.query.filter_by(
+            seat_id=seat_id,
+            class_id=class_id,
+            period=blk,
+            is_deleted=False
+        ).order_by(TapEvent.timestamp.desc()).first()
+        
         is_active = latest_event.status == "active" if latest_event else False
 
-        done_query = TapEvent.query.filter(
+        done = TapEvent.query.filter(
+            TapEvent.seat_id == seat_id,
+            TapEvent.class_id == class_id,
             TapEvent.period == blk,
             TapEvent.timestamp >= today_start_db,
             TapEvent.timestamp < today_end_db,
             TapEvent.reason != None,
             TapEvent.is_deleted == False,
-        )
-        if block_join_code:
-            done_query = done_query.filter(
-                seat_scoped_filter(TapEvent, student.id, block_seat_ids),
-                TapEvent.join_code == block_join_code,
-            )
-        else:
-            done_query = done_query.filter(TapEvent.student_id == student.id)
+            func.lower(TapEvent.reason).in_(["done", "done for the day"])
+        ).first() is not None
 
-        done = done_query.filter(func.lower(TapEvent.reason).in_(["done", "done for the day"])).first() is not None
         duration = calculate_unpaid_attendance_seconds(
-            student.id,
+            seat_id,
+            class_id,
             blk,
             payroll_anchor_by_join_code.get(block_join_code),
-            join_code=block_join_code,
         )
 
-        hall_pass = None
-        active_pass_query = HallPassLog.query.filter_by(student_id=student.id, period=blk)
-        if block_join_code:
-            active_pass_query = active_pass_query.filter_by(join_code=block_join_code)
-
-        active_pass = active_pass_query.filter(
+        active_pass = HallPassLog.query.filter_by(
+            seat_id=seat_id,
+            class_id=class_id,
+            period=blk
+        ).filter(
             HallPassLog.status.in_(["pending", "approved", "left", "rejected"])
         ).order_by(HallPassLog.request_time.desc()).first()
+
+        hall_pass = None
         if active_pass:
             hall_pass = {"id": active_pass.id, "status": active_pass.status, "reason": active_pass.reason}
 

@@ -191,3 +191,49 @@ def normalize_for_db(dt: datetime) -> datetime | None:
     if db.engine.dialect.name == "sqlite":
         return dt.replace(tzinfo=None)
     return dt
+
+
+# ============================================================================
+# V2 CLASS-SCOPED TEMPORAL AUTHORITY (INV-ARC-015)
+# ============================================================================
+
+def get_class_timezone(class_id: str) -> str:
+    """
+    Resolve the authoritative timezone for a class.
+    """
+    from app.models import ClassEconomy
+    economy = ClassEconomy.query.filter_by(class_id=class_id).first()
+    return economy.class_timezone if economy else PACIFIC_FALLBACK_TIMEZONE
+
+
+def get_class_now(class_id: str) -> datetime:
+    """
+    Get the current time in the class's authoritative timezone.
+    """
+    tz_name = get_class_timezone(class_id)
+    return utc_now().astimezone(get_timezone(tz_name))
+
+
+def to_class_time(dt_utc: datetime, class_id: str) -> datetime:
+    """
+    Convert a UTC datetime to class-local time.
+    """
+    tz_name = get_class_timezone(class_id)
+    return ensure_utc(dt_utc).astimezone(get_timezone(tz_name))
+
+
+def get_class_month_start_utc(class_id: str, reference_time: datetime | None = None) -> datetime:
+    """
+    Return the UTC timestamp representing the start of the current month in class time.
+    """
+    tz_name = get_class_timezone(class_id)
+    start_utc, _ = month_bounds_utc(reference_time=reference_time, timezone_name=tz_name)
+    return start_utc
+
+
+def get_class_today_range(class_id: str) -> tuple[datetime, datetime]:
+    """
+    Return the UTC [start, end) range for 'today' in class time.
+    """
+    tz_name = get_class_timezone(class_id)
+    return local_date_range_utc(class_date(timezone_name=tz_name), timezone_name=tz_name)

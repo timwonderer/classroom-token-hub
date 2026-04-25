@@ -3,63 +3,51 @@ from __future__ import annotations
 from decimal import Decimal
 
 from app.extensions import db
-from app.models import BalanceCache, Transaction, TransactionStatus, _quantize_currency
+from app.models import BalanceCache, Transaction, TransactionStatus, ClassEconomy, _quantize_currency
 from app.utils.seat_scope import get_seat_ids_for_student_join, transaction_scope_filter
 from app.utils.time import ensure_utc, utc_now
 from app.utils.transaction_idempotency import create_idempotent_transaction
+from app.feats.base import feat_shell
 
 
 def _non_void_filter():
     return Transaction.is_void.isnot(True)
 
 
-def get_last_payroll_time(student_id: int | None = None, join_code: str | None = None):
+def get_last_payroll_time(seat_id: int | None = None, class_id: str | None = None):
     """Return the most recent payroll anchor without mutating any state."""
-    if student_id:
-        query = Transaction.query.filter(
-            Transaction.student_id == student_id,
-            Transaction.type.in_(["payroll", "manual_payment"]),
-        )
+    query = Transaction.query.filter(
+        Transaction.type.in_(["payroll", "manual_payment"]),
+    )
+    if seat_id:
+        query = query.filter(Transaction.seat_id == seat_id)
+    if class_id:
+        query = query.filter(Transaction.class_id == class_id)
     else:
-        query = Transaction.query.filter_by(type="payroll")
-
-    if join_code:
-        query = query.filter(Transaction.join_code == join_code)
+        query = query.filter(Transaction.type == "payroll")
 
     last_payroll_tx = query.order_by(Transaction.timestamp.desc()).first()
     return ensure_utc(last_payroll_tx.timestamp) if last_payroll_tx else None
 
 
-def _get_balance_cache(student_id: int, join_code: str):
-    seat_ids = get_seat_ids_for_student_join(student_id, join_code)
-    if seat_ids:
-        cache = BalanceCache.query.filter(
-            BalanceCache.join_code == join_code,
-            BalanceCache.seat_id.in_(seat_ids),
-        ).first()
-        if cache:
-            return cache
-    return BalanceCache.query.filter_by(student_id=student_id, join_code=join_code).first()
+def _get_balance_cache(seat_id: int, class_id: str):
+    """Retrieve authoritative balance snapshot."""
+    if not class_id or not seat_id:
+        raise ValueError("FATAL: Balance lookup requires class_id and seat_id.")
+    return BalanceCache.query.filter_by(seat_id=seat_id, class_id=class_id).first()
 
 
-def _transaction_scope(student_id: int, join_code: str):
-    seat_ids = get_seat_ids_for_student_join(student_id, join_code)
-    if seat_ids:
-        return transaction_scope_filter(Transaction, student_id, seat_ids)
-    return Transaction.student_id == student_id
-
-
-def _get_posted_balance_fallback(student_id: int, join_code: str, account_type: str) -> Decimal:
-    tx_scope = _transaction_scope(student_id, join_code)
+def _get_posted_balance_fallback(seat_id: int, class_id: str, account_type: str) -> Decimal:
+    """Compute posted balance from class-scoped ledger history."""
     all_non_void = db.session.query(db.func.sum(Transaction.amount)).filter(
-        tx_scope,
-        Transaction.join_code == join_code,
+        Transaction.seat_id == seat_id,
+        Transaction.class_id == class_id,
         Transaction.account_type == account_type,
         _non_void_filter(),
     ).scalar() or Decimal("0.00")
     pending = db.session.query(db.func.sum(Transaction.amount)).filter(
-        tx_scope,
-        Transaction.join_code == join_code,
+        Transaction.seat_id == seat_id,
+        Transaction.class_id == class_id,
         Transaction.status == TransactionStatus.PENDING,
         Transaction.account_type == account_type,
         _non_void_filter(),
@@ -67,12 +55,9 @@ def _get_posted_balance_fallback(student_id: int, join_code: str, account_type: 
     return _quantize_currency(all_non_void - pending)
 
 
-def get_posted_balance(student_id: int, join_code: str, account_type: str) -> Decimal:
+def get_posted_balance(seat_id: int, class_id: str, account_type: str) -> Decimal:
     """Read the posted balance snapshot for a single account without side effects."""
-    if not join_code:
-        return Decimal("0.00")
-
-    cache = _get_balance_cache(student_id, join_code)
+    cache = _get_balance_cache(seat_id, class_id)
     if cache:
         cents = (
             cache.posted_checking_balance_cents
@@ -81,18 +66,14 @@ def get_posted_balance(student_id: int, join_code: str, account_type: str) -> De
         )
         return _quantize_currency(Decimal(cents) / 100)
 
-    return _get_posted_balance_fallback(student_id, join_code, account_type)
+    return _get_posted_balance_fallback(seat_id, class_id, account_type)
 
 
-def get_pending_balance_delta(student_id: int, join_code: str, account_type: str) -> Decimal:
+def get_pending_balance_delta(seat_id: int, class_id: str, account_type: str) -> Decimal:
     """Return the pending delta for an account without mutating settlement state."""
-    if not join_code:
-        return Decimal("0.00")
-
-    tx_scope = _transaction_scope(student_id, join_code)
     pending = db.session.query(db.func.sum(Transaction.amount)).filter(
-        tx_scope,
-        Transaction.join_code == join_code,
+        Transaction.seat_id == seat_id,
+        Transaction.class_id == class_id,
         Transaction.status == TransactionStatus.PENDING,
         Transaction.account_type == account_type,
         _non_void_filter(),
@@ -100,27 +81,27 @@ def get_pending_balance_delta(student_id: int, join_code: str, account_type: str
     return _quantize_currency(pending)
 
 
-def get_available_balance(student_id: int, join_code: str, account_type: str) -> Decimal:
+def get_available_balance(seat_id: int, class_id: str, account_type: str) -> Decimal:
     """Return posted + pending balance for an account under the current policy model."""
     return _quantize_currency(
-        get_posted_balance(student_id, join_code, account_type)
-        + get_pending_balance_delta(student_id, join_code, account_type)
+        get_posted_balance(seat_id, class_id, account_type)
+        + get_pending_balance_delta(seat_id, class_id, account_type)
     )
 
 
-def get_available_balances(student_id: int, join_code: str) -> tuple[Decimal, Decimal]:
+def get_available_balances(seat_id: int, class_id: str) -> tuple[Decimal, Decimal]:
     """Return checking and savings available balances without side effects."""
     return (
-        get_available_balance(student_id, join_code, "checking"),
-        get_available_balance(student_id, join_code, "savings"),
+        get_available_balance(seat_id, class_id, "checking"),
+        get_available_balance(seat_id, class_id, "savings"),
     )
 
 
 def create_pending_transaction(
     *,
-    student_id: int,
-    teacher_id: int | None,
-    join_code: str | None,
+    seat_id: int,
+    class_id: str,
+    teacher_id: int | None = None,
     amount,
     account_type: str,
     type: str,
@@ -129,10 +110,14 @@ def create_pending_transaction(
     policy_id: int | None = None,
 ) -> Transaction:
     """Create a pending transaction row as the canonical write path for ledger mutations."""
-    transaction = Transaction(
-        student_id=student_id,
+    if not class_id or not seat_id:
+         # CRITICAL: Clean break V2 requires explicit class_id and seat_id for all ledger writes.
+         raise ValueError(f"FATAL: Ledger mutation requires seat_id ({seat_id}) and class_id ({class_id}).")
+
+    transaction = Transaction(  # FEAT-AUTHORIZED-DIRECT-TX
+        seat_id=seat_id,
+        class_id=class_id,
         teacher_id=teacher_id,
-        join_code=join_code,
         amount=_quantize_currency(amount),
         account_type=account_type,
         status=TransactionStatus.PENDING,
@@ -148,9 +133,9 @@ def create_pending_transaction(
 def create_pending_transaction_idempotent(
     *,
     idempotency_key: str,
-    student_id: int,
-    teacher_id: int | None,
-    join_code: str | None,
+    seat_id: int,
+    class_id: str,
+    teacher_id: int | None = None,
     amount,
     account_type: str,
     type: str,
@@ -161,9 +146,9 @@ def create_pending_transaction_idempotent(
     """Create a pending transaction through the idempotent ledger path."""
     transaction, created = create_idempotent_transaction(
         idempotency_key=idempotency_key,
-        student_id=student_id,
+        seat_id=seat_id,
+        class_id=class_id,
         teacher_id=teacher_id,
-        join_code=join_code,
         amount=_quantize_currency(amount),
         account_type=account_type,
         status=TransactionStatus.PENDING,
@@ -194,9 +179,9 @@ def compensate_posted_transaction(
     if idempotency_key:
         reversal_tx, _created = create_idempotent_transaction(
             idempotency_key=idempotency_key,
-            student_id=transaction.student_id,
+            seat_id=transaction.seat_id,
+            class_id=transaction.class_id,
             teacher_id=transaction.teacher_id,
-            join_code=transaction.join_code,
             amount=compensation_amount,
             account_type=transaction.account_type or "checking",
             status=TransactionStatus.PENDING,
@@ -207,9 +192,9 @@ def compensate_posted_transaction(
         )
     else:
         reversal_tx = create_pending_transaction(
-            student_id=transaction.student_id,
+            seat_id=transaction.seat_id,
+            class_id=transaction.class_id,
             teacher_id=transaction.teacher_id,
-            join_code=transaction.join_code,
             amount=compensation_amount,
             account_type=transaction.account_type or "checking",
             type=compensation_type,
@@ -225,9 +210,9 @@ def compensate_posted_transaction(
 
 def create_transfer_pair(
     *,
-    student_id: int,
-    teacher_id: int | None,
-    join_code: str | None,
+    seat_id: int,
+    class_id: str,
+    teacher_id: int | None = None,
     amount,
     from_account: str,
     to_account: str,
@@ -237,18 +222,18 @@ def create_transfer_pair(
     """Create the canonical pending transfer pair."""
     quantized_amount = _quantize_currency(amount)
     withdraw_tx = create_pending_transaction(
-        student_id=student_id,
+        seat_id=seat_id,
+        class_id=class_id,
         teacher_id=teacher_id,
-        join_code=join_code,
         amount=-quantized_amount,
         account_type=from_account,
         type="Withdrawal",
         description=withdraw_description,
     )
     deposit_tx = create_pending_transaction(
-        student_id=student_id,
+        seat_id=seat_id,
+        class_id=class_id,
         teacher_id=teacher_id,
-        join_code=join_code,
         amount=quantized_amount,
         account_type=to_account,
         type="Deposit",
@@ -257,63 +242,142 @@ def create_transfer_pair(
     return withdraw_tx, deposit_tx
 
 
-def apply_overdraft_fee_if_needed(
-    student,
+@feat_shell("FEAT-LED-001")
+def apply_overdraft_fee_if_needed(*args, **kwargs):
+    """FEAT-Shell for overdraft fee application."""
+    from app.feats.base import is_nested_feat
+    res = _apply_overdraft_fee_if_needed(*args, **kwargs)
+    if not is_nested_feat():
+        db.session.commit() # FEAT-AUTHORIZED-SHELL
+    else:
+        db.session.flush() # FEAT-LEGACY-WRAP: parent owns commit
+    return res
+
+
+def _apply_overdraft_fee_if_needed(
+    seat,
     banking_settings,
     *,
-    teacher_id=None,
-    join_code=None,
     force=False,
-    actor_membership_id=None,
-    commit: bool = False,
+    idempotency_key: str | None = None,
 ):
     """Ledger-owned overdraft-fee command wrapper."""
     from app.utils.overdraft import charge_overdraft_fee_if_needed
 
     fee_charged, fee_amount = charge_overdraft_fee_if_needed(
-        student,
+        seat,
         banking_settings,
-        teacher_id=teacher_id,
-        join_code=join_code,
         force=force,
-        actor_membership_id=actor_membership_id,
+        idempotency_key=idempotency_key,
     )
-    if fee_charged and commit:
-        db.session.commit()
     return fee_charged, fee_amount
 
 
-def apply_monthly_savings_interest(student, *, teacher_id: int | None, join_code: str | None, annual_rate=Decimal("0.045")):
+@feat_shell("FEAT-LED-001")
+def apply_monthly_savings_interest(*args, **kwargs):
+    """FEAT-Shell for monthly savings interest application."""
+    from app.feats.base import is_nested_feat
+    res = _apply_monthly_savings_interest(*args, **kwargs)
+    if not is_nested_feat():
+        db.session.commit() # FEAT-AUTHORIZED-SHELL
+    else:
+        db.session.flush() # FEAT-LEGACY-WRAP: parent owns commit
+    return res
+
+
+def _apply_monthly_savings_interest(seat, *, annual_rate=Decimal("0.045"), **_ignored):
     """Command to post monthly savings interest through the ledger authority."""
-    if not student or not join_code:
+    if not seat:
         return None
 
-    now = utc_now()
+    # Legacy compatibility: older callers still pass a Student + join_code.
+    if not hasattr(seat, "class_id") or not hasattr(seat, "class_economy"):
+        student = seat
+        join_code = _ignored.get("join_code") or getattr(student, "join_code", None)
+        teacher_id = _ignored.get("teacher_id")
+        now = utc_now()
+        this_month = now.month
+        this_year = now.year
+
+        student_transactions = list(getattr(student, "transactions", []))
+        if join_code:
+            student_transactions = [tx for tx in student_transactions if tx.join_code == join_code]
+
+        for tx in student_transactions:
+            tx_timestamp = ensure_utc(tx.timestamp)
+            if (
+                tx.account_type == "savings"
+                and tx.description == "Monthly Savings Interest"
+                and tx_timestamp
+                and tx_timestamp.month == this_month
+                and tx_timestamp.year == this_year
+                and not tx.is_void
+            ):
+                return None
+
+        eligible_balance = Decimal("0.00")
+        for tx in student_transactions:
+            if tx.account_type != "savings" or tx.is_void or tx.amount is None:
+                continue
+            if tx.amount <= Decimal("0.00"):
+                continue
+            if tx.type == "Interest" or "Interest" in (tx.description or ""):
+                continue
+            available_at = ensure_utc(tx.date_funds_available)
+            if available_at and (now - available_at).days >= 30:
+                eligible_balance += _quantize_currency(tx.amount)
+
+        monthly_rate = annual_rate / Decimal("12")
+        interest = _quantize_currency(eligible_balance * monthly_rate)
+        if interest <= Decimal("0.00"):
+            return None
+
+        interest_tx = Transaction(
+            student_id=student.id,
+            teacher_id=teacher_id,
+            join_code=join_code,
+            amount=interest,
+            account_type="savings",
+            type="Interest",
+            description="Monthly Savings Interest",
+        )
+        db.session.add(interest_tx)
+        return interest_tx
+
+    # V2 Temporal Model: INTEREST IS CLASS-SCOPED
+    # Use class timezone for month/year resolution
+    from app.utils.time import get_class_now
+    now = get_class_now(seat.class_id)
     this_month = now.month
     this_year = now.year
 
-    for tx in student.transactions:
+    # Check for existing interest this month
+    for tx in seat.transactions:
         tx_timestamp = ensure_utc(tx.timestamp)
+        # Convert UTC timestamp to class time for comparison
+        from app.utils.time import to_class_time
+        tx_class_time = to_class_time(tx_timestamp, seat.class_id)
+        
         if (
-            tx.join_code == join_code
-            and tx.account_type == "savings"
+            tx.account_type == "savings"
             and tx.description == "Monthly Savings Interest"
-            and tx_timestamp
-            and tx_timestamp.month == this_month
-            and tx_timestamp.year == this_year
+            and tx_class_time.month == this_month
+            and tx_class_time.year == this_year
+            and not tx.is_void
         ):
             return None
 
     eligible_balance = Decimal("0.00")
-    for tx in student.transactions:
-        if tx.join_code != join_code or tx.account_type != "savings" or tx.is_void or tx.amount is None:
+    for tx in seat.transactions:
+        if tx.account_type != "savings" or tx.is_void or tx.amount is None:
             continue
         if tx.amount <= Decimal("0.00"):
             continue
         if tx.type == "Interest" or "Interest" in (tx.description or ""):
             continue
+            
         available_at = ensure_utc(tx.date_funds_available)
-        if available_at and (now - available_at).days >= 30:
+        if available_at and (now - to_class_time(available_at, seat.class_id)).days >= 30:
             eligible_balance += _quantize_currency(tx.amount)
 
     monthly_rate = annual_rate / Decimal("12")
@@ -322,9 +386,9 @@ def apply_monthly_savings_interest(student, *, teacher_id: int | None, join_code
         return None
 
     return create_pending_transaction(
-        student_id=student.id,
-        teacher_id=teacher_id,
-        join_code=join_code,
+        seat_id=seat.id,
+        class_id=seat.class_id,
+        teacher_id=seat.class_economy.teacher_id,
         amount=interest,
         account_type="savings",
         type="Interest",

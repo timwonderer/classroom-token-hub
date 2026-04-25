@@ -6,7 +6,7 @@ from flask import session
 
 from app.access.scope import Scope
 from app.auth import _column_exists, get_current_student_seat, sync_student_session_context
-from app.models import ClassEconomy, ClassMembership, TeacherBlock
+from app.models import ClassEconomy, Seat
 
 
 class AccessScopeDenied(Exception):
@@ -19,13 +19,13 @@ class AccessScopeDenied(Exception):
 @dataclass(frozen=True)
 class ResolvedStudentClassSwitch:
     scope: Scope
-    teacher_block_id: int
+    seat_id: int
 
 
 @dataclass(frozen=True)
 class ResolvedStudentTeacherSwitch:
     scope: Scope
-    teacher_block_id: int
+    seat_id: int
 
 
 def _store_session_class_context(*, class_id: str | None, join_code: str | None) -> None:
@@ -71,94 +71,84 @@ def resolve_student_class_switch_scope(*, actor, class_id: str) -> ResolvedStude
             message="No class selected. Please select a class to continue.",
         )
 
-    teacher_block = (
-        TeacherBlock.query.filter_by(
+    seat = (
+        Seat.query.filter_by(
             student_id=actor.id,
             class_id=normalized_class_id,
-            is_claimed=True,
         )
-        .order_by(TeacherBlock.id.asc())
+        .filter(Seat.claimed_at.isnot(None))
+        .order_by(Seat.id.asc())
         .first()
     )
-    if teacher_block is None:
-        class_row = ClassEconomy.query.filter_by(class_id=normalized_class_id).first()
-        if class_row is not None:
-            teacher_block = (
-                TeacherBlock.query.filter_by(
-                    student_id=actor.id,
-                    join_code=class_row.join_code,
-                    is_claimed=True,
-                )
-                .order_by(TeacherBlock.id.asc())
-                .first()
-            )
-    if teacher_block is None:
+
+    if seat is None:
         raise AccessScopeDenied(
             reason_code="foreign_class_scope",
             message="You don't have access to that class.",
         )
 
-    class_row = None
-    if teacher_block.class_id:
-        class_row = ClassEconomy.query.filter_by(class_id=teacher_block.class_id).first()
+    class_row = ClassEconomy.query.filter_by(class_id=seat.class_id).first()
     if not class_row:
-        class_row = ClassEconomy.query.filter_by(join_code=teacher_block.join_code).first()
+         raise AccessScopeDenied(
+            reason_code="foreign_class_scope",
+            message="Class configuration not found.",
+        )
 
     scope = Scope(
-        class_id=class_row.class_id if class_row else teacher_block.class_id,
-        join_code=teacher_block.join_code,
+        class_id=class_row.class_id,
+        join_code=seat.join_code,
         actor_id=actor.id,
         role="student",
-        teacher_id=class_row.teacher_id if class_row else teacher_block.teacher_id,
-        block=teacher_block.block,
-        seat_id=teacher_block.id,
+        teacher_id=class_row.teacher_id,
+        block=seat.block_identifier or seat.block,
+        seat_id=seat.id,
     )
-    return ResolvedStudentClassSwitch(scope=scope, teacher_block_id=teacher_block.id)
+    return ResolvedStudentClassSwitch(scope=scope, seat_id=seat.id)
 
 
 def resolve_student_teacher_switch_scope(*, actor, teacher_id: int) -> ResolvedStudentTeacherSwitch:
     """Resolve a strict claimed-class target for student teacher switching."""
-    teacher_blocks = (
-        TeacherBlock.query.filter_by(
-            student_id=actor.id,
-            teacher_id=teacher_id,
-            is_claimed=True,
+    seats = (
+        Seat.query.join(ClassEconomy, Seat.class_id == ClassEconomy.class_id)
+        .filter(
+            Seat.student_id == actor.id,
+            ClassEconomy.teacher_id == teacher_id,
         )
-        .order_by(TeacherBlock.block.asc(), TeacherBlock.id.asc())
+        .filter(Seat.claimed_at.isnot(None))
+        .order_by(Seat.block.asc(), Seat.id.asc())
         .all()
     )
-    if not teacher_blocks:
+    if not seats:
         raise AccessScopeDenied(
             reason_code="foreign_teacher_scope",
             message="You don't have access to that class.",
         )
 
     current_class_id = (session.get("current_class_id") or "").strip()
-    target_block = next((block for block in teacher_blocks if block.class_id == current_class_id), None) or teacher_blocks[0]
+    target_seat = next((s for s in seats if s.class_id == current_class_id), None) or seats[0]
 
-    class_row = None
-    if target_block.class_id:
-        class_row = ClassEconomy.query.filter_by(class_id=target_block.class_id).first()
+    class_row = ClassEconomy.query.filter_by(class_id=target_seat.class_id).first()
     if not class_row:
-        class_row = ClassEconomy.query.filter_by(join_code=target_block.join_code).first()
+         raise AccessScopeDenied(
+            reason_code="foreign_teacher_scope",
+            message="Class configuration not found.",
+        )
 
     scope = Scope(
-        class_id=class_row.class_id if class_row else target_block.class_id,
-        join_code=target_block.join_code,
+        class_id=class_row.class_id,
+        join_code=target_seat.join_code,
         actor_id=actor.id,
         role="student",
-        teacher_id=class_row.teacher_id if class_row else target_block.teacher_id,
-        block=target_block.block,
-        seat_id=target_block.id,
+        teacher_id=class_row.teacher_id,
+        block=target_seat.block_identifier or target_seat.block,
+        seat_id=target_seat.id,
     )
-    return ResolvedStudentTeacherSwitch(scope=scope, teacher_block_id=target_block.id)
+    return ResolvedStudentTeacherSwitch(scope=scope, seat_id=target_seat.id)
 
 
 def _resolve_teacher_scope(*, actor, selected_class_id: str | None) -> Scope:
     normalized_class_id = (selected_class_id or session.get("current_class_id") or "").strip() or None
-    membership_role_available = _column_exists("class_memberships", "role")
-
-    if normalized_class_id and membership_role_available:
+    if normalized_class_id:
         class_row = ClassEconomy.query.filter_by(
             teacher_id=actor.id,
             class_id=normalized_class_id,
@@ -175,14 +165,22 @@ def _resolve_teacher_scope(*, actor, selected_class_id: str | None) -> Scope:
                 seat_id=None,
             )
 
-    class_row = (
+    class_query = (
         ClassEconomy.query
-        .filter(ClassEconomy.teacher_id == actor.id)
+        .filter_by(teacher_id=actor.id)
         .order_by(ClassEconomy.display_name.asc(), ClassEconomy.join_code.asc())
-        .first()
     )
+    class_row = None
+    if normalized_class_id:
+        class_row = class_query.filter(ClassEconomy.class_id == normalized_class_id).first()
+    if class_row is None:
+        class_row = class_query.first()
+    
     if class_row:
-        _store_session_class_context(class_id=class_row.class_id, join_code=class_row.join_code)
+        _store_session_class_context(
+            class_id=class_row.class_id,
+            join_code=class_row.join_code,
+        )
         return Scope(
             class_id=class_row.class_id,
             join_code=class_row.join_code,
@@ -190,33 +188,6 @@ def _resolve_teacher_scope(*, actor, selected_class_id: str | None) -> Scope:
             role="teacher",
             teacher_id=actor.id,
             block=class_row.display_name,
-            seat_id=None,
-        )
-
-    teacher_block_query = (
-        TeacherBlock.query
-        .filter_by(teacher_id=actor.id)
-        .filter(TeacherBlock.join_code.isnot(None))
-        .order_by(TeacherBlock.block.asc(), TeacherBlock.join_code.asc())
-    )
-    teacher_block = None
-    if normalized_class_id:
-        teacher_block = teacher_block_query.filter(TeacherBlock.class_id == normalized_class_id).first()
-    if teacher_block is None:
-        teacher_block = teacher_block_query.first()
-    if teacher_block and teacher_block.join_code:
-        class_row = ClassEconomy.query.filter_by(join_code=teacher_block.join_code).first()
-        _store_session_class_context(
-            class_id=class_row.class_id if class_row else teacher_block.class_id,
-            join_code=teacher_block.join_code,
-        )
-        return Scope(
-            class_id=class_row.class_id if class_row else teacher_block.class_id,
-            join_code=teacher_block.join_code,
-            actor_id=actor.id,
-            role="teacher",
-            teacher_id=actor.id,
-            block=class_row.display_name if class_row else teacher_block.block,
             seat_id=None,
         )
 
@@ -250,8 +221,9 @@ def resolve_scope(*, actor, selected_join_code: str | None = None, actor_role: s
         return scope
 
     claimed_seats = (
-        TeacherBlock.query.filter_by(student_id=actor.id, is_claimed=True)
-        .order_by(TeacherBlock.id.asc())
+        Seat.query.filter_by(student_id=actor.id)
+        .filter(Seat.claimed_at.isnot(None))
+        .order_by(Seat.id.asc())
         .all()
     )
     if not claimed_seats:
@@ -267,18 +239,19 @@ def resolve_scope(*, actor, selected_join_code: str | None = None, actor_role: s
     _store_session_class_context(class_id=active_seat.class_id, join_code=active_seat.join_code)
     sync_student_session_context(actor, join_code=active_seat.join_code)
 
-    class_row = None
-    if active_seat.class_id:
-        class_row = ClassEconomy.query.filter_by(class_id=active_seat.class_id).first()
+    class_row = ClassEconomy.query.filter_by(class_id=active_seat.class_id).first()
     if not class_row:
-        class_row = ClassEconomy.query.filter_by(join_code=active_seat.join_code).first()
+         raise AccessScopeDenied(
+            reason_code="no_class_scope",
+            message="Class configuration not found.",
+        )
 
     return Scope(
-        class_id=class_row.class_id if class_row else active_seat.class_id,
+        class_id=class_row.class_id,
         join_code=active_seat.join_code,
         actor_id=actor.id,
         role="student",
-        teacher_id=class_row.teacher_id if class_row else active_seat.teacher_id,
-        block=active_seat.block,
+        teacher_id=class_row.teacher_id,
+        block=active_seat.block_identifier or active_seat.block,
         seat_id=active_seat.id,
     )

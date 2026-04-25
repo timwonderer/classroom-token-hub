@@ -148,11 +148,15 @@ def record_standard_purchase_items(
     """Store-owned mutation for standard StudentItem issuance."""
     created_item_ids = []
 
+    from app.feats.base import get_correlation_id
+    corr_id = get_correlation_id()
+    
     if item.is_bundle and item.bundle_quantity is not None:
         new_student_item = StudentItem(
             student_id=student.id,
             store_item_id=item.id,
             join_code=join_code,
+            correlation_id=corr_id,
             purchase_date=utc_now(),
             expiry_date=expiry_date,
             status=student_item_status,
@@ -173,6 +177,7 @@ def record_standard_purchase_items(
             student_id=student.id,
             store_item_id=item.id,
             join_code=join_code,
+            correlation_id=corr_id,
             purchase_date=utc_now(),
             expiry_date=expiry_date,
             status=student_item_status,

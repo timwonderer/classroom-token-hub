@@ -38,7 +38,8 @@ def test_set_current_class_requires_membership_even_if_teacherblock_exists(clien
     db.session.commit()
 
     _login_admin(client, admin_a.id)
-    response = client.post("/admin/current-class", json={"join_code": "GATE001"})
+    class_row = ClassEconomy.query.filter_by(join_code="GATE001").first()
+    response = client.post("/admin/current-class", json={"class_id": class_row.class_id})
     assert response.status_code == 403
     payload = response.get_json()
     assert payload["status"] == "error"

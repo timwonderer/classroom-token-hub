@@ -70,13 +70,13 @@ def _void_purchase(tx: Transaction) -> None:
         raise ValueError("Immediate-use item purchases are not voidable.")
     if store_item.item_type != 'delayed':
         raise ValueError("Only delayed-use item purchases are voidable.")
-    if not tx.join_code:
-        raise ValueError("Transaction is missing class scope (join_code) and cannot be voided safely.")
+    if not tx.class_id:
+        raise ValueError("Transaction is missing class scope (class_id) and cannot be voided safely.")
 
     matching_items = StudentItem.query.filter(
-        StudentItem.student_id == tx.student_id,
+        StudentItem.seat_id == tx.seat_id,
         StudentItem.store_item_id == store_item.id,
-        StudentItem.join_code == tx.join_code,
+        StudentItem.class_id == tx.class_id,
     ).all()
     if not matching_items:
         raise ValueError("No matching student item was found for this purchase.")
@@ -104,9 +104,9 @@ def _void_purchase(tx: Transaction) -> None:
         raise ValueError("Delayed-use item has already been used (redemption requested or completed) and cannot be voided.")
 
     ledger_service.create_pending_transaction(
-        student_id=tx.student_id,
+        seat_id=tx.seat_id,
+        class_id=tx.class_id,
         teacher_id=tx.teacher_id,
-        join_code=tx.join_code,
         amount=Decimal('0.00'),
         account_type=tx.account_type or 'checking',
         type='void_item_removed',
@@ -119,15 +119,15 @@ def _void_purchase(tx: Transaction) -> None:
 
 
 def _void_rent_payment(tx: Transaction) -> None:
-    if not tx.join_code:
-        raise ValueError("Transaction is missing class scope (join_code) and cannot be voided safely.")
-    seat_ids = get_seat_ids_for_student_join(tx.student_id, tx.join_code) if tx.join_code else []
-    rent_scope = seat_scoped_filter(RentPayment, tx.student_id, seat_ids)
+    if not tx.class_id:
+        raise ValueError("Transaction is missing class scope (class_id) and cannot be voided safely.")
+    
     rent_payments = RentPayment.query.filter(
-        rent_scope,
+        RentPayment.seat_id == tx.seat_id,
+        RentPayment.class_id == tx.class_id,
         RentPayment.amount_paid == abs(tx.amount or Decimal('0.00')),
-        RentPayment.join_code == tx.join_code,
     ).all()
+    
     if rent_payments:
         tx_ts = ensure_utc(tx.timestamp) if tx.timestamp else utc_now()
         matched_rent_payment = min(
@@ -141,16 +141,15 @@ def _void_insurance_premium(tx: Transaction) -> None:
     policy_title = None
     if tx.description and tx.description.startswith("Insurance premium: "):
         policy_title = tx.description.replace("Insurance premium: ", "", 1).strip()
-    if not tx.join_code:
-        raise ValueError("Transaction is missing class scope (join_code) and cannot be voided safely.")
+    if not tx.class_id:
+        raise ValueError("Transaction is missing class scope (class_id) and cannot be voided safely.")
 
     enrollments_query = (
         StudentInsurance.query
         .join(InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id)
         .filter(
-            StudentInsurance.student_id == tx.student_id,
-            InsurancePolicy.teacher_id == tx.teacher_id,
-            StudentInsurance.join_code == tx.join_code,
+            StudentInsurance.seat_id == tx.seat_id,
+            StudentInsurance.class_id == tx.class_id,
         )
     )
     if policy_title:

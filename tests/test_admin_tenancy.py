@@ -125,18 +125,20 @@ def test_student_detail_recovers_from_stale_class_context(client):
     Seat.query.filter_by(student_id=student_b.id, join_code="JOINB", class_id=class_b.class_id).first()
 
     # Teacher has two class contexts; stale session context points to the other student.
-    db.session.add(
-        Transaction(
-            student_id=student_a.id,
-            seat_id=seat_a.id,
-            amount=25,
-            type="bonus",
-            account_type="checking",
-            description="Scoped tx",
-            join_code="JOINA",
-        ),
-    )
-    db.session.commit()
+    from app.feats.base import FEATContext
+    with FEATContext("FEAT-ADMN-001"):
+        db.session.add(
+            Transaction(
+                student_id=student_a.id,
+                seat_id=seat_a.id,
+                amount=25,
+                type="bonus",
+                account_type="checking",
+                description="Scoped tx",
+                join_code="JOINA",
+            ),
+        )
+        db.session.commit()
 
     _login_admin(client, teacher, secret)
     with client.session_transaction() as sess:
@@ -674,17 +676,19 @@ def test_edit_student_transfer_updates_transaction_seat_scope(client):
     db.session.add_all([seat_a, seat_b])
     db.session.flush()
 
-    tx = Transaction(
-        student_id=student.id,
-        seat_id=seat_a.id,
-        join_code="JOINA",
-        amount=10,
-        account_type="checking",
-        type="bonus",
-        description="pre-transfer",
-    )
-    db.session.add(tx)
-    db.session.commit()
+    from app.feats.base import FEATContext
+    with FEATContext("FEAT-ADMN-001"):
+        tx = Transaction(
+            student_id=student.id,
+            seat_id=seat_a.id,
+            join_code="JOINA",
+            amount=10,
+            account_type="checking",
+            type="bonus",
+            description="pre-transfer",
+        )
+        db.session.add(tx)
+        db.session.commit()
 
     _login_admin(client, teacher, secret)
     response = client.post(

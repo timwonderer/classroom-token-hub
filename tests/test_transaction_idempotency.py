@@ -16,7 +16,15 @@ from app.utils.transaction_idempotency import (
 
 
 def test_idempotent_transaction_types_are_explicit():
-    assert IDEMPOTENT_TRANSACTION_TYPES == frozenset({"insurance_reimbursement", "purchase", "refund"})
+    expected = frozenset({
+        "insurance_reimbursement", 
+        "purchase", 
+        "refund",
+        "overdraft_fee",
+        "payroll",
+        "Interest",
+    })
+    assert IDEMPOTENT_TRANSACTION_TYPES == expected
 
 
 def test_create_idempotent_transaction_reuses_existing_row_on_retry(client):
@@ -113,13 +121,13 @@ def test_create_idempotent_transaction_rejects_non_idempotent_types(client):
 
     with pytest.raises(ValueError):
         create_idempotent_transaction(
-            idempotency_key="txn:payroll:block:a",
+            idempotency_key="txn:unknown:op",
             student_id=student.id,
             teacher_id=teacher.id,
             join_code="IDEMP789",
             amount=Decimal("5.00"),
             account_type="checking",
-            type="payroll",
+            type="UnknownType",
             description="Should fail",
         )
 

@@ -6,9 +6,9 @@ from app.models import InsuranceClaim, RentPayment, StudentInsurance
 
 def record_rent_payment(
     *,
-    student_id: int,
+    seat_id: int,
+    class_id: str,
     period: str,
-    join_code: str,
     amount_paid,
     period_month: int,
     period_year: int,
@@ -16,10 +16,12 @@ def record_rent_payment(
     coverage_year: int,
     was_late: bool,
     late_fee_charged,
+    join_code: str | None = None,
 ):
     """Obligations-owned mutation for rent payment truth."""
     payment = RentPayment(
-        student_id=student_id,
+        seat_id=seat_id,
+        class_id=class_id,
         period=period,
         join_code=join_code,
         amount_paid=amount_paid,
@@ -36,16 +38,18 @@ def record_rent_payment(
 
 def record_insurance_enrollment(
     *,
-    student_id: int,
+    seat_id: int,
+    class_id: str,
     policy,
-    join_code: str,
     purchase_date,
     next_payment_due,
     coverage_start_date,
+    join_code: str | None = None,
 ):
     """Obligations-owned mutation for insurance enrollment truth."""
     enrollment = StudentInsurance(
-        student_id=student_id,
+        seat_id=seat_id,
+        class_id=class_id,
         policy_id=policy.id,
         join_code=join_code,
         status='active',
@@ -84,20 +88,22 @@ def record_insurance_claim(
     *,
     student_insurance_id: int,
     policy_id: int,
-    student_id: int,
-    join_code: str | None,
+    seat_id: int,
+    class_id: str,
     incident_date,
     description: str,
     claim_amount,
     claim_item: str | None,
     comments: str | None,
     transaction_id: int | None,
+    join_code: str | None = None,
 ):
     """Obligations-owned mutation for filed insurance claims."""
     claim = InsuranceClaim(
         student_insurance_id=student_insurance_id,
         policy_id=policy_id,
-        student_id=student_id,
+        seat_id=seat_id,
+        class_id=class_id,
         join_code=join_code,
         incident_date=incident_date,
         description=description,

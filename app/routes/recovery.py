@@ -76,15 +76,24 @@ def _generate_reset_code(length=8):
     return ''.join(secrets.choice(RESET_CODE_ALPHABET) for _ in range(length))
 
 
+from app.feats.base import feat_shell
+
 # ----------------------------------------------------------------------
 # TEACHER ROUTES
 # ----------------------------------------------------------------------
 
 @recovery_bp.route('/admin/generate-code/<int:student_id>', methods=['POST'])
 @admin_required
-def generate_reset_code(student_id):
+@feat_shell("FEAT-IDEN-002")
+def generate_reset_code(*args, **kwargs):
+    """FEAT-Shell for recovery code generation."""
+    res = _generate_reset_code_legacy(*args, **kwargs)
+    db.session.commit() # FEAT-AUTHORIZED-SHELL
+    return res
+
+def _generate_reset_code_legacy(student_id):
     """
-    Step 1 — Teacher Initiates Reset.
+    Step 1 — Teacher Initiates Reset (LEGACY).
 
     System must:
       - Set student status -> to_be_claimed
@@ -98,20 +107,20 @@ def generate_reset_code(student_id):
     if not student:
         flash("Student not found.", "error")
         return redirect(url_for('admin.students'))
-
+ 
     # Invalidate any existing reset_code, then generate new one
     code = _generate_reset_code(8)
-
+ 
     student.reset_code = code
     student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
     student.recovery_status = 'to_be_claimed'
-
-    db.session.commit()
-
+ 
+    db.session.flush() # FEAT-LEGACY-WRAP: commit removed
+ 
     current_app.logger.info(
         f"Reset code generated for student {student.id} by admin {session.get('admin_id')}"
     )
-
+ 
     flash(f"Reset code generated for {student.first_name} {student.last_initial}. "
           f"Code: {code} — Expires in 10 minutes.", "success")
     return redirect(url_for('admin.student_detail', student_id=student.id))
@@ -128,9 +137,16 @@ def landing():
 
 @recovery_bp.route('/lookup', methods=['GET', 'POST'])
 @limiter.limit(_recovery_rate_limit)
-def account_lookup():
+@feat_shell("FEAT-IDEN-002")
+def account_lookup(*args, **kwargs):
+    """FEAT-Shell for student account lookup."""
+    res = _account_lookup_legacy(*args, **kwargs)
+    db.session.commit() # FEAT-AUTHORIZED-SHELL
+    return res
+
+def _account_lookup_legacy():
     """
-    Step 2 — Student Enters Join Code + Reset Code.
+    Step 2 — Student Enters Join Code + Reset Code (LEGACY).
 
     Validates:
       - reset_code exists
@@ -141,22 +157,15 @@ def account_lookup():
     On success: clears old credentials and redirects straight to username/credential
     setup. No PII re-entry is required — first name and last initial are managed by
     the teacher and remain unchanged through recovery.
-      - join_code matches a claimed seat for this student
-
-    On success: clears old credentials and redirects straight to username/credential
-    setup. No PII re-entry is required — first name and last initial are managed by
-    the teacher and remain unchanged through recovery.
-
-    On failure: generic message, do not reveal student identity.
     """
     if request.method == 'POST':
         join_code = request.form.get('join_code', '').strip().upper()
         reset_code = request.form.get('reset_code', '').strip().upper()
-
+ 
         if not join_code or not reset_code:
             flash("Both fields are required.", "error")
             return redirect(url_for('recovery.account_lookup'))
-
+ 
         # Find candidate row by both reset_code and join_code to avoid collisions.
         linked_block = (
             TeacherBlock.query
@@ -168,45 +177,40 @@ def account_lookup():
             .first()
         )
         student = db.session.get(Student, linked_block.student_id) if linked_block else None
-
+ 
         # Validate all conditions — use a single generic error for security
         valid = True
-
+ 
         if not student:
             valid = False
         elif not student.reset_code_expires_at or ensure_utc(student.reset_code_expires_at) < utc_now():
             valid = False
         elif student.recovery_status != 'to_be_claimed':
             valid = False
-
+ 
         if not valid:
             session.pop('recovery_student_id', None)
             flash("Invalid or expired recovery code.", "error")
             return redirect(url_for('recovery.account_lookup'))
-
+ 
         # Clear all credentials — forces fresh credential setup (username, PIN, passphrase).
         # first_name and last_initial are preserved; they are managed by the teacher.
         if linked_block and linked_block.is_claimed and linked_block.claimed_at is None:
             linked_block.claimed_at = utc_now()
-
+ 
         student.username_hash = None
         student.username_lookup_hash = None
         student.pin_hash = None
         student.passphrase_hash = None
         student.has_completed_setup = False
-        # Keep reset_code and recovery_status until setup_pin_passphrase completes.
-        # Keep reset_code and recovery_status until setup_pin_passphrase completes.
-
+ 
         bridge_seat = _get_or_create_bridge_seat_for_teacher_block(linked_block)
         linked_user = _find_linked_user_for_student(student.id)
         if bridge_seat and linked_user and bridge_seat.user_id != linked_user.id:
             bridge_seat.user_id = linked_user.id
+ 
+        db.session.flush() # FEAT-LEGACY-WRAP: commit removed
 
-        db.session.commit()
-
-        current_app.logger.info(
-            f"Recovery lookup succeeded for student {student.id}; credentials cleared."
-        )
         current_app.logger.info(
             f"Recovery lookup succeeded for student {student.id}; credentials cleared."
         )
@@ -218,7 +222,6 @@ def account_lookup():
         session['claimed_user_id'] = linked_user.id if linked_user else None
         session.pop('recovery_student_id', None)
 
-        flash("Recovery code verified. Please set up your new username and credentials.", "success")
         flash("Recovery code verified. Please set up your new username and credentials.", "success")
         return redirect(url_for('student.create_username'))
 

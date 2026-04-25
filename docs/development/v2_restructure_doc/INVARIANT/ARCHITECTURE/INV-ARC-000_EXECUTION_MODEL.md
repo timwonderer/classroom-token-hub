@@ -64,6 +64,7 @@ This execution model is elaborated by the following `INV-ARC` documents:
 - `INV-ARC-012_Hard_Deletion_Enforcement.md`
 - `INV-ARC-013_Membership_by_Existence.md`
 - `INV-ARC-014_No_Label_Based_Logic.md`
+- `INV-ARC-015_Temporal_Model_and_Boundary_Enforcement.md`
 
 ## VII. Rebuild Intent
 

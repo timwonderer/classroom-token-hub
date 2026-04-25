@@ -4,28 +4,51 @@ import sqlalchemy as sa
 
 
 def get_seat_ids_for_student_join(student_id: int, join_code: str) -> list[int]:
-    """Return seat IDs bound to a student and join code."""
+    """Legacy compatibility shim while callers migrate from join_code to class_id."""
+    from app.models import ClassEconomy, Seat
+
+    if not student_id or not join_code:
+        return []
+
+    class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+    query = Seat.query.with_entities(Seat.id).filter(Seat.student_id == student_id)
+    if class_row:
+        query = query.filter(Seat.class_id == class_row.class_id)
+    else:
+        query = query.filter(Seat.join_code == join_code)
+    return [row[0] for row in query.all()]
+
+
+def get_seat_ids_for_student_class(student_id: int, class_id: str) -> list[int]:
+    """Return seat IDs bound to a student and class ID."""
     from app.models import Seat
 
     return [
         row[0]
         for row in Seat.query.with_entities(Seat.id).filter(
             Seat.student_id == student_id,
-            Seat.join_code == join_code,
+            Seat.class_id == class_id,
         ).all()
     ]
 
 
-def transaction_scope_filter(TransactionModel, student_id: int, seat_ids: list[int]):
-    """Return a strict seat-scoped filter for transaction-style models."""
-    if not seat_ids:
-        return sa.false()
-    return sa.and_(TransactionModel.seat_id.in_(seat_ids), TransactionModel.seat_id.is_not(None))
+def get_seat_id_for_class(student_id: int, class_id: str) -> int | None:
+    """Return the primary seat ID bound to a student and class ID."""
+    from app.models import Seat
+    seat = Seat.query.filter_by(student_id=student_id, class_id=class_id).first()
+    return seat.id if seat else None
 
 
-def seat_scoped_filter(Model, student_id: int, seat_ids: list[int], seat_field: str = "seat_id", student_field: str = "student_id"):
+def transaction_scope_filter(TransactionModel, seat_or_student_id: int, seat_ids: list[int] | None = None):
+    """Return a seat-scoped filter, with a legacy fallback for old call sites."""
+    if seat_ids is not None:
+        if seat_ids:
+            return sa.and_(TransactionModel.seat_id.in_(seat_ids), TransactionModel.seat_id.is_not(None))
+        return TransactionModel.student_id == seat_or_student_id
+    return sa.and_(TransactionModel.seat_id == seat_or_student_id, TransactionModel.seat_id.is_not(None))
+
+
+def seat_scoped_filter(Model, seat_id: int, seat_field: str = "seat_id"):
     """Return a strict seat-scoped filter for models that carry seat references."""
     seat_col = getattr(Model, seat_field)
-    if not seat_ids:
-        return sa.false()
-    return sa.and_(seat_col.in_(seat_ids), seat_col.is_not(None))
+    return sa.and_(seat_col == seat_id, seat_col.is_not(None))

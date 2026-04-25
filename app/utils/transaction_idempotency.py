@@ -8,6 +8,9 @@ IDEMPOTENT_TRANSACTION_TYPES = frozenset({
     "insurance_reimbursement",
     "purchase",
     "refund",
+    "overdraft_fee",
+    "payroll",
+    "Interest",
 })
 
 IDEMPOTENCY_KEY_PREFIX = "txn"
@@ -52,13 +55,29 @@ def void_refund_key(transaction_id):
     return build_transaction_idempotency_key("void", "transaction", transaction_id, "refund")
 
 
-def get_idempotent_transaction(idempotency_key):
+def get_idempotent_transaction(idempotency_key, join_code=None, class_id=None, seat_id=None, type=None, feat_code=None):
     if not idempotency_key:
         return None
-    return Transaction.query.filter(Transaction.idempotency_key == idempotency_key).first()
+    
+    query = Transaction.query.filter(Transaction.idempotency_key == idempotency_key)
+    if class_id:
+        query = query.filter(Transaction.class_id == class_id)
+    elif join_code:
+        query = query.filter(Transaction.join_code == join_code)
+        
+    if seat_id:
+        query = query.filter(Transaction.seat_id == seat_id)
+    if type:
+        query = query.filter(Transaction.type == type)
+    if feat_code:
+        query = query.filter(Transaction.feat_code == feat_code)
+        
+    return query.first()
 
 
 def create_idempotent_transaction(*, idempotency_key, **transaction_kwargs):
+    from app.feats.base import get_active_feat_name
+    
     transaction_type = transaction_kwargs.get("type")
     if transaction_type not in IDEMPOTENT_TRANSACTION_TYPES:
         raise ValueError(f"Transaction type '{transaction_type}' is not enabled for idempotent creation.")
@@ -69,19 +88,35 @@ def create_idempotent_transaction(*, idempotency_key, **transaction_kwargs):
             f"Idempotency key exceeds max length of {MAX_IDEMPOTENCY_KEY_LENGTH} characters."
         )
 
-    existing = get_idempotent_transaction(idempotency_key)
+    feat_code = get_active_feat_name()
+
+    existing = get_idempotent_transaction(
+        idempotency_key, 
+        join_code=transaction_kwargs.get("join_code"),
+        class_id=transaction_kwargs.get("class_id"),
+        seat_id=transaction_kwargs.get("seat_id"),
+        type=transaction_type,
+        feat_code=feat_code
+    )
     if existing:
         return existing, False
 
+    new_txn = Transaction(idempotency_key=idempotency_key, feat_code=feat_code, **transaction_kwargs)
     try:
         with db.session.begin_nested():
-            transaction_model = Transaction
-            transaction = transaction_model(idempotency_key=idempotency_key, **transaction_kwargs)
-            db.session.add(transaction)
+            db.session.add(new_txn)
             db.session.flush()
-            return transaction, True
+        return new_txn, True
     except IntegrityError:
-        existing = get_idempotent_transaction(idempotency_key)
+        # Double-check if it was created by a concurrent request
+        existing = get_idempotent_transaction(
+            idempotency_key, 
+            join_code=transaction_kwargs.get("join_code"),
+            class_id=transaction_kwargs.get("class_id"),
+            seat_id=transaction_kwargs.get("seat_id"),
+            type=transaction_type,
+            feat_code=feat_code
+        )
         if existing:
             return existing, False
         raise

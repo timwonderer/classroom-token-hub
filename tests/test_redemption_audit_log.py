@@ -272,7 +272,7 @@ def test_legacy_adapter_shows_inferred_without_persisting(client, teacher_admin,
     )
     db.session.add(item)
     db.session.flush()
-    db.session.add(StudentItem(
+    db.session.add(StudentItem(correlation_id='corr_test', 
         student_id=student.id,
         store_item_id=item.id,
         join_code='AUDIT123',

@@ -28,6 +28,7 @@ from app.models import (
 )
 from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
 from app.access import AccessScopeDenied, resolve_scope
+from app.feats.base import feat_shell
 from app.routes.student import (
     get_current_class_context,
     get_current_teacher_id,
@@ -41,7 +42,7 @@ from app.feats.store_purchase_feat import execute_rent_perk_purchase, execute_st
 from app.services import store_service
 from app.utils.economy_policy import resolve_class_scope, resolve_feature_class
 from app.utils.overdraft import charge_overdraft_fee_if_needed
-from app.utils.seat_scope import get_seat_ids_for_student_join
+from app.utils.seat_scope import get_seat_id_for_class
 from app.utils.transaction_idempotency import (
     MAX_IDEMPOTENCY_KEY_LENGTH,
     get_idempotent_transaction,
@@ -131,18 +132,21 @@ def _calculate_due_dates(rent_setting, now):
     return (current_due, next_due)
 
 
-def _resolve_class_display_label(teacher_id, join_code, fallback_block=None):
+def _resolve_class_display_label(teacher_id, class_id, join_code=None, fallback_block=None):
     """
     Resolve a stable class display label snapshot for audit logging.
     """
+    if class_id:
+        class_economy = ClassEconomy.query.filter_by(class_id=class_id).first()
+        if class_economy:
+            return class_economy.display_name or class_economy.join_code
+    
     if join_code:
-        seat = TeacherBlock.query.filter_by(teacher_id=teacher_id, join_code=join_code).first()
-        if seat:
-            label = seat.get_class_label()
-            if label:
-                return label
-            if seat.block:
-                return seat.block
+        # Fallback for UI-driven requests
+        class_economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+        if class_economy:
+            return class_economy.display_name or class_economy.join_code
+
     return fallback_block or "Unknown Class"
 
 
@@ -164,8 +168,9 @@ def _append_redemption_audit_log(*, student_item, student, teacher_id, action, n
         raise ValueError(f"Unsupported redemption audit action: {action}")
 
     student_name = student.full_name if student else "Unknown Student"
+    class_id = getattr(student_item, 'class_id', None)
     join_code = getattr(student_item, 'join_code', None)
-    class_label = _resolve_class_display_label(teacher_id, join_code, fallback_block=fallback_block)
+    class_label = _resolve_class_display_label(teacher_id, class_id, join_code=join_code, fallback_block=fallback_block)
 
     db.session.add(RedemptionAuditLog(
         student_item_id=student_item.id if student_item else None,
@@ -174,6 +179,7 @@ def _append_redemption_audit_log(*, student_item, student, teacher_id, action, n
         action=action_map[action],
         notes=notes if notes else None,
         teacher_id=teacher_id,
+        class_id=class_id,
         timestamp=utc_now(),
         source=RedemptionAuditSource.LIVE,
     ))
@@ -197,25 +203,22 @@ def _get_hall_pass_settings_scope(teacher_id, join_code):
     return resolve_class_scope(teacher_id, join_code=join_code)
 
 
-def _get_or_create_hall_pass_settings(teacher_id, join_code):
+def _get_or_create_hall_pass_settings(teacher_id, class_id, join_code=None):
     """Return the hall pass settings row for a specific class, creating it if needed."""
-    scope = _get_hall_pass_settings_scope(teacher_id, join_code)
-    if not scope:
+    if not class_id:
         return None
 
-    settings = HallPassSettings.query.filter_by(class_id=scope["class_id"]).first()
+    settings = HallPassSettings.query.filter_by(class_id=class_id).first()
     if settings:
-        if settings.join_code != scope["join_code"]:
-            settings.join_code = scope["join_code"]
-        if settings.block != scope["block"]:
-            settings.block = scope["block"]
         return settings
 
+    # Fallback to join_code scope if class_id is missing (should not happen in V2)
+    scope = resolve_class_scope(teacher_id, join_code=join_code) if not class_id else None
+    
     settings = HallPassSettings(
         teacher_id=teacher_id,
-        join_code=scope["join_code"],
-        class_id=scope["class_id"],
-        block=scope["block"],
+        class_id=class_id or (scope["class_id"] if scope else None),
+        join_code=join_code or (scope["join_code"] if scope else None),
         queue_enabled=True,
         queue_limit=10,
     )
@@ -223,55 +226,57 @@ def _get_or_create_hall_pass_settings(teacher_id, join_code):
     return settings
 
 
-def _get_teacher_join_code_scope(admin_id):
-    """Return (join_code_scope_subquery, has_join_code_scope) for a teacher admin."""
-    join_code_scope = (
-        db.session.query(ClassMembership.join_code)
+def _get_teacher_class_scope(admin_id):
+    """Return (class_id_scope_subquery, has_class_scope) for a teacher admin."""
+    class_id_scope = (
+        db.session.query(ClassMembership.class_id)
         .filter(
             ClassMembership.admin_id == admin_id,
             ClassMembership.role == 'admin',
-            ClassMembership.join_code.isnot(None),
+            ClassMembership.class_id.isnot(None),
         )
         .distinct()
         .subquery()
     )
-    has_join_code_scope = db.session.query(
+    has_class_scope = db.session.query(
         sa.exists().where(
             sa.and_(
                 ClassMembership.admin_id == admin_id,
                 ClassMembership.role == 'admin',
-                ClassMembership.join_code.isnot(None),
+                ClassMembership.class_id.isnot(None),
             )
         )
     ).scalar()
-    return join_code_scope, has_join_code_scope
+    return class_id_scope, has_class_scope
 
 
-def _admin_has_join_code_scope(admin_id, join_code):
-    """Return True when admin owns the join_code via active admin membership."""
-    if not admin_id or not join_code:
+def _admin_has_class_scope(admin_id, class_id):
+    """Return True when admin owns the class_id via active admin membership."""
+    if not admin_id or not class_id:
         return False
 
     return db.session.query(
         sa.exists().where(
             sa.and_(
                 ClassMembership.admin_id == admin_id,
-                ClassMembership.join_code == join_code,
+                ClassMembership.class_id == class_id,
                 ClassMembership.role == 'admin',
             )
         )
     ).scalar()
 
 
-def _apply_admin_join_code_scope(query, model, admin_id, accessible_student_ids_query):
-    """Apply join_code tenant scoping. In V2, join_code is always present."""
-    join_code_scope, has_join_code_scope = _get_teacher_join_code_scope(admin_id)
-    if has_join_code_scope:
+def _apply_admin_class_scope(query, model, admin_id, accessible_student_ids_query=None):
+    """Apply class_id tenant scoping. In V2, class_id is the primary anchor."""
+    class_id_scope, has_class_scope = _get_teacher_class_scope(admin_id)
+    if has_class_scope:
         return query.filter(
-            model.join_code.isnot(None),
-            model.join_code.in_(sa.select(join_code_scope)),
+            model.class_id.isnot(None),
+            model.class_id.in_(sa.select(class_id_scope)),
         )
-    return query.filter(model.student_id.in_(accessible_student_ids_query))
+    if accessible_student_ids_query is not None:
+        return query.filter(model.student_id.in_(accessible_student_ids_query))
+    return query
 
 
 # -------------------- TIPS API --------------------
@@ -344,6 +349,7 @@ def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_
 
 @api_bp.route('/purchase-item', methods=['POST'])
 @login_required
+@feat_shell("FEAT-STOR-002")
 def purchase_item():
     from app.routes.student import get_current_class_context
 
@@ -377,20 +383,28 @@ def purchase_item():
     if not check_password_hash(student.passphrase_hash or '', passphrase):
         return jsonify({"status": "error", "message": "Incorrect passphrase."}), 403
 
-    # CRITICAL FIX v2: Get full class context (join_code is source of truth)
+    # CRITICAL FIX v2: Get full class context (class_id is source of truth)
     context = get_current_class_context()
     if not context:
         return jsonify({"status": "error", "message": "No class context available."}), 400
 
+    class_id = context['class_id']
     join_code = context['join_code']
     teacher_id = context['teacher_id']
     current_block = context.get('block', '').strip().upper()
-    seat_ids = get_seat_ids_for_student_join(student.id, join_code)
+    seat_id = get_seat_id_for_class(student.id, class_id)
+    if not seat_id:
+         return jsonify({"status": "error", "message": "No seat assigned in this class."}), 403
+    
+    # Authoritative seat object
+    from app.models import Seat
+    seat = db.session.get(Seat, seat_id)
+
     purchase_idempotency_key = None
     if client_purchase_id:
         purchase_idempotency_key = purchase_transaction_key(
-            student.id,
-            join_code,
+            seat.id,
+            class_id,
             item_id,
             client_purchase_id,
         )
@@ -419,7 +433,6 @@ def purchase_item():
         return jsonify({"status": "error", "message": "This item is not available."}), 404
 
     # Check if a collective goal has passed its expiration deadline.
-    # Do not reconcile or refund in a read path; reject expired goals using current truth only.
     if item.item_type == 'collective' and item.collective_goal_expires_at:
         if ensure_utc(item.collective_goal_expires_at) <= utc_now():
             return jsonify({"status": "error", "message": "This collective goal has expired and is no longer available."}), 400
@@ -427,9 +440,9 @@ def purchase_item():
     # For collective items with whole_class goal, enforce one purchase per student per class
     if item.item_type == 'collective' and item.collective_goal_type == 'whole_class':
         existing_purchase = StudentItem.query.filter(
-            StudentItem.student_id == student.id,
+            StudentItem.seat_id == seat.id,
             StudentItem.store_item_id == item.id,
-            StudentItem.join_code == join_code,
+            StudentItem.class_id == class_id,
             StudentItem.status.notin_(['voided', 'rejected'])
         ).first()
         if existing_purchase:
@@ -451,11 +464,9 @@ def purchase_item():
         if coverage_due_date:
             has_paid_rent = _is_student_coverage_period_paid(
                 rent_settings,
-                student.id,
-                current_block,
-                join_code,
+                seat.id,
+                class_id,
                 coverage_due_date,
-                seat_ids=seat_ids,
             )
 
         rent_item_links = RentItem.query.filter(
@@ -504,11 +515,9 @@ def purchase_item():
             if now > grace_end_date:
                 is_paid_for_coverage = _is_student_coverage_period_paid(
                     rent_settings,
-                    student.id,
-                    current_block,
-                    join_code,
+                    seat.id,
+                    class_id,
                     coverage_due_date,
-                    seat_ids=seat_ids,
                 )
 
                 # Student is late if they haven't fully settled the coverage period
@@ -535,7 +544,6 @@ def purchase_item():
                         }), 403
 
     # Check if student has free uses remaining from rent (per-use rent items).
-    # Also recover gracefully if a paid-rent student is missing the grant row.
     if (
         quantity == 1
         and item.item_type != 'hall_pass'
@@ -543,7 +551,8 @@ def purchase_item():
     ):
         # Look for an active StudentItem with uses_remaining for this store item
         rent_item_query = StudentItem.query.filter(
-            StudentItem.student_id == student.id,
+            StudentItem.seat_id == seat.id,
+            StudentItem.class_id == class_id,
             StudentItem.store_item_id == item.id,
             db.or_(
                 StudentItem.uses_remaining > 0,
@@ -554,41 +563,19 @@ def purchase_item():
                 StudentItem.expiry_date > now
             )
         )
-        rent_item_query = rent_item_query.filter(StudentItem.join_code == join_code)
 
         active_rent_item = rent_item_query.first()
-        existing_grant_row = StudentItem.query.filter(
-            StudentItem.student_id == student.id,
-            StudentItem.store_item_id == item.id,
-            StudentItem.join_code == join_code,
-            StudentItem.uses_remaining.isnot(None),
-            db.or_(
-                StudentItem.uses_remaining > 0,
-                StudentItem.uses_remaining == -1
-            ),
-            db.or_(
-                StudentItem.expiry_date.is_(None),
-                StudentItem.expiry_date > now
-            )
-        ).first()
-
         needs_rent_grant = (
             not active_rent_item
-            and not existing_grant_row
             and has_paid_rent
             and (per_use_rent_item or item.is_rent_linked)
         )
-        if needs_rent_grant:
-            # Missing grant edge case is handled inside the FEAT so the route
-            # does not mutate store truth ahead of the purchase workflow.
-            active_rent_item = None
 
         if active_rent_item or needs_rent_grant:
             result = execute_rent_perk_purchase(
                 scope=scope,
-                student=student,
+                seat=seat,
                 teacher_id=teacher_id,
-                join_code=join_code,
                 item=item,
                 active_rent_item=active_rent_item,
                 ensure_active_grant=needs_rent_grant,
@@ -596,6 +583,7 @@ def purchase_item():
                 banking_settings=None,
                 purchase_idempotency_key=purchase_idempotency_key,
             )
+            db.session.commit() # FEAT-AUTHORIZED-SHELL
             remaining = result.rent_uses_remaining
             if remaining == -1:
                 return jsonify({"status": "success", "message": f"{result.success_message} Unlimited free purchases remaining this period."})
@@ -615,9 +603,9 @@ def purchase_item():
     # Align balance checks and persisted purchase amount with 2dp currency semantics.
     total_price = _quantize_currency(unit_price * quantity)
 
-    # Get banking settings for overdraft handling (reuse teacher_id from above)
+    # Get banking settings for overdraft handling
     banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first()
-    checking_balance, savings_balance = get_available_balances(student.id, join_code)
+    checking_balance, savings_balance = get_available_balances(seat.id, class_id)
 
     # Check if student has sufficient funds
     if checking_balance < total_price:
@@ -628,11 +616,9 @@ def purchase_item():
             # Allow transaction - overdraft protection will transfer from savings
             pass
         else:
-            fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
-                student,
+            fee_charged, fee_amount = apply_ledger_overdraft_fee(
+                seat,
                 banking_settings,
-                teacher_id,
-                join_code,
                 force=True
             )
 
@@ -655,9 +641,9 @@ def purchase_item():
     if item.limit_per_student is not None:
         if item.item_type == 'hall_pass':
             # For hall passes, check transaction history and sum quantities
-            # Description format: "Purchase: {name}" or "Purchase: {name} (xN)" or "Purchase: {name} (xN) [discount]"
             transactions = Transaction.query.filter(
-                Transaction.student_id == student.id,
+                Transaction.seat_id == seat.id,
+                Transaction.class_id == class_id,
                 Transaction.type == 'purchase',
                 Transaction.description.like(f"Purchase: {item.name}%")
             ).all()
@@ -665,18 +651,14 @@ def purchase_item():
             # Parse quantities from transaction descriptions
             total_purchased = 0
             for txn in transactions:
-                # Extract quantity from description (e.g., "(x3)" -> 3)
                 match = re.search(r'\(x(\d+)\)', txn.description)
-                if match:
-                    total_purchased += int(match.group(1))
-                else:
-                    # No quantity suffix means quantity was 1
-                    total_purchased += 1
+                total_purchased += int(match.group(1)) if match else 1
 
             purchase_count = total_purchased
         else:
             purchase_count = StudentItem.query.filter(
-                StudentItem.student_id == student.id,
+                StudentItem.seat_id == seat.id,
+                StudentItem.class_id == class_id,
                 StudentItem.store_item_id == item.id,
                 StudentItem.status.notin_(['voided', 'rejected'])
             ).count()
@@ -697,23 +679,16 @@ def purchase_item():
 
         if rent_item:
             if rent_item.rent_item_type == 'privilege':
-                # Calculate NEXT rent due date and set as expiry
                 rent_setting = db.session.get(RentSettings, rent_item.rent_setting_id)
                 if rent_setting and rent_setting.is_enabled:
                     now = utc_now()
-
                     if rent_setting.first_rent_due_date:
                         current_due, next_due = _calculate_due_dates(rent_setting, now)
-
                         if current_due and next_due:
-                            # Align expiry to the next scheduled due date
                             expiry_date = next_due
                     else:
-                        # No first_rent_due_date set, use simple calculation from now
-                        # This is a fallback for backwards compatibility
                         delta = _get_period_delta(rent_setting)
                         expiry_date = _add_period(now, delta)
-            # For per-use rent items, do not set uses_remaining on paid purchases.
 
         # Fall back to standard auto_expiry for delayed items
         if expiry_date is None and item.item_type == 'delayed' and item.auto_expiry_days:
@@ -721,16 +696,16 @@ def purchase_item():
 
         student_item_status = 'purchased'
         if item.item_type == 'immediate':
-            student_item_status = 'redeemed' # Immediate use items are redeemed instantly
+            student_item_status = 'redeemed'
         elif item.item_type == 'collective':
             student_item_status = 'pending'
         else: # delayed
             student_item_status = 'purchased'
+        
         result = execute_store_purchase(
             scope=scope,
-            student=student,
+            seat=seat,
             teacher_id=teacher_id,
-            join_code=join_code,
             item=item,
             quantity=quantity,
             total_price=total_price,
@@ -741,6 +716,7 @@ def purchase_item():
             uses_remaining=uses_remaining,
             student_item_status=student_item_status,
         )
+        db.session.commit() # FEAT-AUTHORIZED-SHELL
 
         if item.item_type == 'hall_pass':
             return jsonify({
@@ -752,12 +728,13 @@ def purchase_item():
 
     except SQLAlchemyError as e:
         db.session.rollback()
-        current_app.logger.error(f"Purchase failed for student {student.id}: {e}", exc_info=True)
+        current_app.logger.error(f"Purchase failed for seat {seat.id}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred during purchase. Please try again."}), 500
 
 
 @api_bp.route('/use-item', methods=['POST'])
 @login_required
+@feat_shell("FEAT-STOR-005")
 def use_item():
     student = get_logged_in_student()
     data = request.get_json()
@@ -786,7 +763,7 @@ def use_item():
         student_item.status = 'redeemed'
         student_item.redemption_date = utc_now()
         student_item.redemption_details = f"Hall pass grant processed immediately ({qty} pass(es) added)."
-        db.session.commit()
+        db.session.flush()
         return jsonify({"status": "success", "message": f"Added {qty} hall pass(es) to your balance!"})
 
     # Validate the item can be used
@@ -802,7 +779,7 @@ def use_item():
     # Check expiry
     if student_item.expiry_date and utc_now() > student_item.expiry_date:
         student_item.status = 'expired'
-        db.session.commit()
+        db.session.flush()
         return jsonify({"status": "error", "message": "This item has expired."}), 400
 
     # Get context up front for audit snapshots and transaction scoping.
@@ -877,17 +854,17 @@ def use_item():
             student_item.redemption_details = details
 
         # Log the redemption event through Ledger without changing monetary balance.
-        if context:
+        if student_item.class_id:
             create_pending_transaction(
-                student_id=student.id,
-                teacher_id=context['teacher_id'],
-                join_code=context['join_code'],  # CRITICAL: Add join_code for period isolation
+                seat_id=student_item.seat_id,
+                class_id=student_item.class_id,
+                teacher_id=teacher_id_for_audit,
                 amount=Decimal('0.00'),
                 account_type='checking',
                 type='redemption',
                 description=f"Used: {student_item.store_item.name}" + (f" (bundle: {student_item.bundle_remaining} remaining)" if student_item.is_from_bundle else "")
             )
-        db.session.commit()
+        db.session.commit() # FEAT-AUTHORIZED-SHELL
 
         if student_item.is_from_bundle:
             return jsonify({"status": "success", "message": f"You have used 1 from your bundle of {student_item.store_item.name}. {student_item.bundle_remaining} uses remaining."})
@@ -924,7 +901,7 @@ def approve_redemption():
     if not current_admin:
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
 
-    has_membership = _admin_has_join_code_scope(current_admin.id, student_item.join_code)
+    has_membership = _admin_has_class_scope(current_admin.id, student_item.class_id)
     if not has_membership:
         return jsonify({"status": "error", "message": "You do not have access to this class."}), 403
 
@@ -947,9 +924,9 @@ def approve_redemption():
 
         # Find the corresponding 'redemption' transaction and update its description
         redemption_tx = Transaction.query.filter_by(
-            student_id=student_item.student_id,
+            seat_id=student_item.seat_id,
+            class_id=student_item.class_id,
             type='redemption',
-            join_code=student_item.join_code,
         ).filter(
             Transaction.description.like(f"Used: {student_item.store_item.name}%")
         ).order_by(Transaction.timestamp.desc()).first()
@@ -998,16 +975,13 @@ def reject_redemption():
         # 1. Determine Refund Amount from original purchase transaction
         # Look up the actual amount paid (handles price changes and bulk discounts)
         purchase_tx_query = Transaction.query.filter_by(
-            student_id=student_item.student_id,
+            seat_id=student_item.seat_id,
+            class_id=student_item.class_id,
             teacher_id=student_item.store_item.teacher_id,
             type='purchase',
         ).filter(
             Transaction.description.like(f"Purchase: {student_item.store_item.name}%")
         )
-        if student_item.join_code:
-            purchase_tx_query = purchase_tx_query.filter(
-                Transaction.join_code == student_item.join_code
-            )
         purchase_txs = purchase_tx_query.all()
 
         purchase_tx = None
@@ -1044,19 +1018,19 @@ def reject_redemption():
             # Fallback to current store price if purchase transaction not found
             refund_amount = student_item.store_item.price
 
-        # 2. Refund the student — join_code must always be present in V2.
-        refund_join_code = student_item.join_code
-        if not refund_join_code:
+        # 2. Refund the student — class_id must always be present in V2.
+        refund_class_id = student_item.class_id
+        if not refund_class_id:
             current_app.logger.error(
-                f"StudentItem {student_item.id} missing join_code during refund. Aborting to avoid unscoped transaction."
+                f"StudentItem {student_item.id} missing class_id during refund. Aborting to avoid unscoped transaction."
             )
             return jsonify({"status": "error", "message": "Unable to resolve class for refund."}), 400
 
         refund_tx, _created = create_pending_transaction_idempotent(
             idempotency_key=student_item_refund_key(student_item.id, 'redemption-rejected'),
-            student_id=student_item.student_id,
+            seat_id=student_item.seat_id,
+            class_id=refund_class_id,
             teacher_id=student_item.store_item.teacher_id,
-            join_code=refund_join_code,
             amount=refund_amount,
             account_type='checking',
             type='refund',
@@ -1110,16 +1084,16 @@ def handle_hall_pass_action(pass_id, action):
             # Decrement rent_hall_passes first (rent-granted passes consumed before purchased)
             block_period = log_entry.period or student.block
             student_block = StudentBlock.query.filter_by(
-                student_id=student.id,
+                seat_id=log_entry.seat_id,
+                class_id=log_entry.class_id,
                 period=block_period
             ).first()
-            if student_block and not student_block.join_code and log_entry.join_code:
-                student_block.join_code = log_entry.join_code
-            elif not student_block:
+            if not student_block:
                 student_block = StudentBlock(
-                    student_id=student.id,
+                    seat_id=log_entry.seat_id,
+                    class_id=log_entry.class_id,
                     period=block_period,
-                    join_code=log_entry.join_code
+                    student_id=student.id,
                 )
                 db.session.add(student_block)
             if student_block and student_block.rent_hall_passes > 0:
@@ -1143,12 +1117,12 @@ def handle_hall_pass_action(pass_id, action):
 
         # Create a tap-out event for attendance tracking
         tap_out_event = TapEvent(
-            student_id=student.id,
+            seat_id=log_entry.seat_id,
+            class_id=log_entry.class_id,
             period=log_entry.period,
             status='inactive',
             timestamp=now,
             reason=log_entry.reason,
-            join_code=log_entry.join_code
         )
         log_entry.status = 'left'
         log_entry.left_time = now
@@ -1162,12 +1136,12 @@ def handle_hall_pass_action(pass_id, action):
 
         # Create a tap-in event to close the loop
         tap_in_event = TapEvent(
-            student_id=student.id,
+            seat_id=log_entry.seat_id,
+            class_id=log_entry.class_id,
             period=log_entry.period,
             status='active',
             timestamp=now,
             reason="Return from hall pass",
-            join_code=log_entry.join_code
         )
         log_entry.status = 'returned'
         log_entry.return_time = now
@@ -1186,12 +1160,13 @@ def _get_default_timezone():
 
 def _check_simultaneous_pass_limit(log_entry):
     """Validate destination settings and simultaneous pass limits."""
-    teacher_block = TeacherBlock.query.filter_by(join_code=log_entry.join_code).first()
-    teacher_id = teacher_block.teacher_id if teacher_block else None
+    from app.models import ClassEconomy
+    economy = ClassEconomy.query.filter_by(class_id=log_entry.class_id).first()
+    teacher_id = economy.teacher_id if economy else None
     if not teacher_id:
         return None
 
-    settings = _get_or_create_hall_pass_settings(teacher_id, log_entry.join_code)
+    settings = _get_or_create_hall_pass_settings(teacher_id, log_entry.class_id)
     if not settings:
         return None
 
@@ -1219,7 +1194,7 @@ def _check_simultaneous_pass_limit(log_entry):
         currently_out = HallPassLog.query.filter(
             HallPassLog.status == 'left',
             HallPassLog.reason == log_entry.reason,
-            HallPassLog.join_code == log_entry.join_code,
+            HallPassLog.class_id == log_entry.class_id,
             HallPassLog.left_time >= today_start_db,
             HallPassLog.id != log_entry.id  # Exclude current pass
         ).count()
@@ -1322,12 +1297,12 @@ def checkout_hall_pass():
     
     # Create tap-out event for attendance tracking
     tap_out_event = TapEvent(
-        student_id=log_entry.student_id,
+        seat_id=log_entry.seat_id,
+        class_id=log_entry.class_id,
         period=log_entry.period,
         status='inactive',
         timestamp=now,
         reason=log_entry.reason,
-        join_code=log_entry.join_code
     )
     db.session.add(tap_out_event)
     
@@ -1376,12 +1351,12 @@ def checkin_hall_pass():
     
     # Create tap-in event for attendance tracking
     tap_in_event = TapEvent(
-        student_id=log_entry.student_id,
+        seat_id=log_entry.seat_id,
+        class_id=log_entry.class_id,
         period=log_entry.period,
         status='active',
         timestamp=now,
         reason="Returned from hall pass",
-        join_code=log_entry.join_code
     )
     db.session.add(tap_in_event)
     
@@ -1473,7 +1448,7 @@ def hall_pass_history():
             .subquery()
         )
         # Build query with tenant scoping
-        query = _apply_admin_join_code_scope(
+        query = _apply_admin_class_scope(
             HallPassLog.query,
             HallPassLog,
             session.get("admin_id"),
@@ -1706,9 +1681,10 @@ def get_available_hall_pass_types():
                 return jsonify({"status": "error", "message": "Hall pass is disabled for this class"}), 403
             resolved_teacher_id = context.get('teacher_id')
         else:
-            seat_row = TeacherBlock.query.with_entities(TeacherBlock.teacher_id).filter(
-                TeacherBlock.join_code == join_code
-            ).first()
+            from app.models import ClassEconomy
+            economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+            if economy:
+                resolved_teacher_id = economy.teacher_id
             if seat_row:
                 resolved_teacher_id = seat_row[0]
 
@@ -1768,10 +1744,10 @@ def hall_pass_verification_active():
     if not teacher:
         return jsonify({"status": "error", "message": "Teacher not found"}), 404
 
-    join_code_scope, _ = _get_teacher_join_code_scope(teacher.id)
+    class_id_scope, _ = _get_teacher_class_scope(teacher.id)
     passes = (
         HallPassLog.query
-        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
+        .filter(HallPassLog.class_id.in_(sa.select(class_id_scope)))
         .order_by(HallPassLog.request_time.desc())
         .all()
     )
@@ -1813,7 +1789,7 @@ def attendance_history():
         # Get student IDs that the current admin can access (tenant-scoped)
         accessible_student_ids_query = get_admin_student_query(include_unassigned=False).with_entities(Student.id)
         # Build query scoped to admin's students and exclude deleted records
-        query = _apply_admin_join_code_scope(
+        query = _apply_admin_class_scope(
             TapEvent.query.filter(TapEvent.is_deleted.is_(False)),
             TapEvent,
             session.get("admin_id"),
@@ -1835,15 +1811,12 @@ def attendance_history():
             sa.exists(
                 sa.select(1).where(
                     sa.and_(
-                        duplicate_tap.student_id == TapEvent.student_id,
+                        duplicate_tap.seat_id == TapEvent.seat_id,
+                        duplicate_tap.class_id == TapEvent.class_id,
                         duplicate_tap.period == TapEvent.period,
                         duplicate_tap.status == TapEvent.status,
                         duplicate_tap.reason == TapEvent.reason,
                         duplicate_tap.timestamp == TapEvent.timestamp,
-                        or_(
-                            duplicate_tap.join_code == TapEvent.join_code,
-                            sa.and_(duplicate_tap.join_code.is_(None), TapEvent.join_code.is_(None))
-                        ),
                         duplicate_tap.is_deleted.is_(False),
                         duplicate_tap.id < TapEvent.id
                     )
@@ -1874,11 +1847,11 @@ def attendance_history():
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid end date format"}), 400
 
-        # Filter by block (need to join with Student)
+        from app.models import Seat
+        # Filter by block (need to join with Seat)
         if block:
-            query = query.join(Student, TapEvent.student_id == Student.id)
-            # Use LIKE to match comma-separated blocks
-            query = query.filter(Student.block.like(f'%{block}%'))
+            query = query.join(Seat, TapEvent.seat_id == Seat.id)
+            query = query.filter(TapEvent.period == block)
 
         # Order by most recent first
         query = query.order_by(TapEvent.timestamp.desc())
@@ -1890,13 +1863,13 @@ def attendance_history():
         offset = (page - 1) * page_size
         records = query.offset(offset).limit(page_size).all()
 
-        # Build student lookup for names and blocks
-        student_ids = [r.student_id for r in records]
-        students = {s.id: {'name': s.full_name, 'block': s.block} for s in Student.query.filter(Student.id.in_(student_ids)).all()}
+        # Build seat lookup for names and blocks
+        seat_ids = [r.seat_id for r in records if r.seat_id]
+        seats = {s.id: {'name': s.student.full_name, 'block': r.period} for s in Seat.query.filter(Seat.id.in_(seat_ids)).all() for r in records if r.seat_id == s.id}
 
         # Get class labels for blocks
         admin_id = session.get("admin_id")
-        blocks_in_records = set(students[sid]['block'] for sid in students if students[sid]['block'])
+        blocks_in_records = set(seats[sid]['block'] for sid in seats if seats[sid]['block'])
         class_labels = {}
         if blocks_in_records:
             teacher_blocks = TeacherBlock.query.filter(
@@ -1909,8 +1882,8 @@ def attendance_history():
         # Format records for response
         records_data = []
         for record in records:
-            student_info = students.get(record.student_id, {'name': 'Unknown', 'block': 'Unknown'})
-            student_block = student_info['block']
+            seat_info = seats.get(record.seat_id, {'name': 'Unknown', 'block': 'Unknown'})
+            student_block = seat_info['block']
             student_class_label = class_labels.get(student_block, student_block) if student_block != 'Unknown' else 'Unknown'
 
             # Format timestamp as UTC with 'Z' suffix
@@ -1920,8 +1893,8 @@ def attendance_history():
 
             records_data.append({
                 "id": record.id,
-                "student_id": record.student_id,
-                "student_name": student_info['name'],
+                "seat_id": record.seat_id,
+                "student_name": seat_info['name'],
                 "student_block": student_block,
                 "student_class_label": student_class_label,
                 "period": record.period,
@@ -1948,6 +1921,7 @@ def attendance_history():
 
 @api_bp.route('/tap', methods=['POST'])
 @limiter.limit("100 per minute")
+@feat_shell("FEAT-ATTN-002")
 def handle_tap():
     data = request.get_json()
     safe_data = {k: ('***' if k == 'pin' else v) for k, v in data.items()}
@@ -1973,7 +1947,7 @@ def handle_tap():
     period = data.get("period", "").upper()
     action = data.get("action")
 
-    current_app.logger.info(f"TAP DEBUG: student_id={getattr(student, 'id', None)}, valid_periods={valid_periods}, period={period}, action={action}")
+    current_app.logger.info(f"TAP DEBUG: valid_periods={valid_periods}, period={period}, action={action}")
 
     # Support both old and new action names
     action_map = {
@@ -1993,16 +1967,28 @@ def handle_tap():
     join_code = get_join_code_for_student_period(student.id, period)
     if not join_code:
         current_app.logger.warning(
-            f"TAP ERROR: Unable to resolve join_code for student_id={student.id}, period={period}"
+            f"TAP ERROR: Unable to resolve join_code for period={period}"
         )
         return jsonify({"error": "Unable to resolve class context for this period."}), 400
 
     now = utc_now()
 
     # --- Check if tap is enabled for this student in this period ---
+    # Resolve seat_id and class_id for V2 identity
+    from app.utils.seat_scope import get_seat_id_for_class
+    from app.models import ClassEconomy
+    economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+    class_id = economy.class_id if economy else None
+    seat_id = get_seat_id_for_class(student.id, class_id) if class_id else None
+
+    if not seat_id or not class_id:
+        return jsonify({"error": "No seat assigned in this class."}), 403
+
+    # --- Check if tap is enabled for this student in this period ---
     from app.models import StudentBlock
     student_block = StudentBlock.query.filter_by(
-        student_id=student.id,
+        seat_id=seat_id,
+        class_id=class_id,
         period=period
     ).first()
 
@@ -2010,16 +1996,19 @@ def handle_tap():
     if not student_block:
         try:
             student_block = StudentBlock(
-                student_id=student.id,
+                seat_id=seat_id,
+                class_id=class_id,
                 period=period,
+                student_id=student.id,
                 tap_enabled=True
             )
             db.session.add(student_block)
-            db.session.commit()
+            db.session.flush()
         except IntegrityError:
             db.session.rollback()
             student_block = StudentBlock.query.filter_by(
-                student_id=student.id,
+                seat_id=seat_id,
+                class_id=class_id,
                 period=period
             ).first()
 
@@ -2034,7 +2023,7 @@ def handle_tap():
         # Automatically clear "done for the day" lock if it's from a previous day
         if student_block.done_for_day_date is not None and student_block.done_for_day_date < today_local:
             student_block.done_for_day_date = None
-            db.session.commit()
+            db.session.flush()
         if student_block.done_for_day_date == today_local:
             return jsonify({"error": "You are done for the day. You cannot Start Work again until tomorrow."}), 403
 
@@ -2053,19 +2042,20 @@ def handle_tap():
             # All other reasons go through the hall pass approval flow
             # Check hall pass settings and queue limits
 
-            # CRITICAL: Get teacher_id from join_code for multi-tenancy scoping
-            from app.models import TeacherBlock
-            teacher_block = TeacherBlock.query.filter_by(join_code=join_code).first()
-            if not teacher_block:
-                return jsonify({"error": "Unable to resolve teacher for this class period."}), 400
+            # CRITICAL: Resolve class context for V2 identity
+            from app.models import ClassEconomy
+            economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+            if not economy:
+                return jsonify({"error": "Unable to resolve class context."}), 400
 
-            teacher_id = teacher_block.teacher_id
+            teacher_id = economy.teacher_id
+            class_id = economy.class_id
 
             feature_scope = resolve_feature_class(teacher_id, 'hall_pass', block=period, join_code=join_code)
             if feature_scope and not feature_scope["enabled"]:
                 return jsonify({"error": "Hall pass is currently disabled for this class."}), 403
 
-            settings = _get_or_create_hall_pass_settings(teacher_id, join_code)
+            settings = _get_or_create_hall_pass_settings(teacher_id, class_id)
             if not settings:
                 return jsonify({"error": "Hall pass settings are not available for this class."}), 400
 
@@ -2095,7 +2085,7 @@ def handle_tap():
                 queue_count = HallPassLog.query.filter(
                     HallPassLog.status == 'approved',
                     HallPassLog.reason == reason,
-                    HallPassLog.join_code == join_code,
+                    HallPassLog.class_id == class_id,
                     HallPassLog.decision_time >= today_start_db
                 ).count()
 
@@ -2103,7 +2093,7 @@ def handle_tap():
                 out_count = HallPassLog.query.filter(
                     HallPassLog.status == 'left',
                     HallPassLog.reason == reason,
-                    HallPassLog.join_code == join_code,
+                    HallPassLog.class_id == class_id,
                     HallPassLog.left_time >= today_start_db
                 ).count()
 
@@ -2133,23 +2123,31 @@ def handle_tap():
             # Create a hall pass log entry
             hall_pass_log = HallPassLog(
                 student_id=student.id,
+                seat_id=seat_id,
+                class_id=class_id,
                 reason=reason,
                 period=period,
-                join_code=join_code,
                 status='pending',
                 request_time=now
             )
             db.session.add(hall_pass_log)
-            db.session.commit()
+            db.session.flush()
+
+            from app.utils.seat_scope import get_seat_id_for_class
+            from app.models import ClassEconomy
+            economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+            class_id = economy.class_id if economy else None
+            seat_id = get_seat_id_for_class(student.id, class_id) if class_id else None
 
             # Since the student is just requesting, they are still 'active'.
             # We need to return the current state to the UI.
             is_active = True
-            last_payroll_time = get_last_payroll_time(student_id=student.id, join_code=join_code)
-            duration = calculate_unpaid_attendance_seconds(student.id, period, last_payroll_time, join_code=join_code)
+            last_payroll_time = get_last_payroll_time(seat_id=seat_id, class_id=class_id)
+            duration = calculate_unpaid_attendance_seconds(seat_id, class_id, period, last_payroll_time)
             rate_per_second = get_pay_rate_for_block(block_lookup.get(period, period))
             projected_pay = duration * rate_per_second
 
+            db.session.commit() # FEAT-AUTHORIZED-SHELL
             return jsonify({
                 "status": "ok",
                 "message": "Hall pass requested.",
@@ -2169,6 +2167,13 @@ def handle_tap():
         reason = data.get("reason") if normalized_action == "stop_work" else None
 
         # Auto-tap-out from other periods when tapping into a new period
+        # Resolve seat_id and class_id for V2 identity
+        from app.utils.seat_scope import get_seat_id_for_class
+        from app.models import ClassEconomy
+        economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+        class_id = economy.class_id if economy else None
+        seat_id = get_seat_id_for_class(student.id, class_id) if class_id else None
+
         if normalized_action == "start_work":
             # Find all other periods where student is currently active
             for other_period in valid_periods:
@@ -2177,8 +2182,7 @@ def handle_tap():
 
                 latest_other = (
                     TapEvent.query
-                    .filter_by(student_id=student.id, period=other_period, is_deleted=False)
-                    .filter_by(join_code=join_code)
+                    .filter_by(seat_id=seat_id, class_id=class_id, period=other_period, is_deleted=False)
                     .order_by(TapEvent.timestamp.desc())
                     .first()
                 )
@@ -2186,28 +2190,28 @@ def handle_tap():
                 if latest_other and latest_other.status == "active":
                     # Auto tap-out from this period
                     auto_tapout = TapEvent(
-                        student_id=student.id,
+                        seat_id=seat_id,
+                        class_id=class_id,
                         period=other_period,
                         status="inactive",
                         timestamp=now,
                         reason="auto_switch",  # Mark as automatic switch
-                        join_code=join_code
                     )
                     db.session.add(auto_tapout)
-                    current_app.logger.info(f"Auto-tapped out student {student.id} from period {other_period} when tapping into {period}")
+                    current_app.logger.info(f"Auto-tapped out seat {seat_id} from period {other_period} when tapping into {period}")
 
         # Prevent duplicate tap-in or tap-out
         latest_event = (
             TapEvent.query
-            .filter_by(student_id=student.id, period=period, is_deleted=False)
-            .filter_by(join_code=join_code)
+            .filter_by(seat_id=seat_id, class_id=class_id, period=period, is_deleted=False)
             .order_by(TapEvent.timestamp.desc())
             .first()
         )
         if latest_event and latest_event.status == status:
-            current_app.logger.info(f"Duplicate {action} ignored for student {student.id} in period {period}")
-            last_payroll_time = get_last_payroll_time(student_id=student.id)
-            duration = calculate_unpaid_attendance_seconds(student.id, period, last_payroll_time, join_code=join_code)
+            current_app.logger.info(f"Duplicate {action} ignored for seat {seat_id} in period {period}")
+            last_payroll_time = get_last_payroll_time(seat_id=seat_id, class_id=class_id)
+            duration = calculate_unpaid_attendance_seconds(seat_id, class_id, period, last_payroll_time)
+            db.session.commit() # FEAT-AUTHORIZED-SHELL
             return jsonify({
                 "status": "ok",
                 "active": latest_event.status == "active",
@@ -2240,9 +2244,9 @@ def handle_tap():
         # When Starting Work, automatically return any active hall pass
         if normalized_action == "start_work":
             active_hall_pass = HallPassLog.query.filter_by(
-                student_id=student.id,
+                seat_id=seat_id,
+                class_id=class_id,
                 period=period,
-                join_code=join_code,
                 status='left'
             ).order_by(HallPassLog.request_time.desc()).first()
 
@@ -2252,12 +2256,12 @@ def handle_tap():
                 current_app.logger.info(f"Auto-returned hall pass {active_hall_pass.id} for student {student.id}")
 
         event = TapEvent(
-            student_id=student.id,
+            seat_id=seat_id,
+            class_id=class_id,
             period=period,
             status=status,
             timestamp=now,  # UTC-aware
             reason=reason,
-            join_code=join_code
         )
         db.session.add(event)
 
@@ -2266,39 +2270,39 @@ def handle_tap():
         # Clear done_for_day_date if it's a new day
         if student_block.done_for_day_date and student_block.done_for_day_date != today_local:
             student_block.done_for_day_date = None
-            current_app.logger.info(f"Cleared done_for_day_date for student {student.id} in period {period} (new day)")
+            current_app.logger.info(f"Cleared done_for_day_date for seat {seat_id} in period {period} (new day)")
         # Set or clear done_for_day_date based on stop work reason
         if normalized_action == "stop_work":
             if reason and reason.lower() in ['done', 'done for the day']:
                 student_block.done_for_day_date = today_local
-                current_app.logger.info(f"Student {student.id} marked as done for the day in period {period}")
+                current_app.logger.info(f"Seat {seat_id} marked as done for the day in period {period}")
             else:
                 if student_block.done_for_day_date is not None:
                     student_block.done_for_day_date = None
-                    current_app.logger.info(f"Cleared done_for_day_date for student {student.id} in period {period} (reason: {reason})")
+                    current_app.logger.info(f"Cleared done_for_day_date for seat {seat_id} in period {period} (reason: {reason})")
 
-        db.session.commit()
-        current_app.logger.info(f"TAP success - student {student.id} {period} {action}")
+        db.session.flush()
+        current_app.logger.info(f"TAP success - seat {seat_id} {period} {action}")
     except SQLAlchemyError as e:
         db.session.rollback()
-        current_app.logger.error(f"TAP failed for student {student.id}: {e}", exc_info=True)
+        current_app.logger.error(f"TAP failed for seat {seat_id}: {e}", exc_info=True)
         return jsonify({"error": "Database error"}), 500
 
     # Fetch latest status and unpaid duration for the tapped period
     latest_event = (
         TapEvent.query
-        .filter_by(student_id=student.id, period=period, is_deleted=False)
-        .filter_by(join_code=join_code)
+        .filter_by(seat_id=seat_id, class_id=class_id, period=period, is_deleted=False)
         .order_by(TapEvent.timestamp.desc())
         .first()
     )
     is_active = latest_event.status == "active" if latest_event else False
-    last_payroll_time = get_last_payroll_time(student_id=student.id)
-    duration = calculate_unpaid_attendance_seconds(student.id, period, last_payroll_time, join_code=join_code)
+    last_payroll_time = get_last_payroll_time(seat_id=seat_id, class_id=class_id)
+    duration = calculate_unpaid_attendance_seconds(seat_id, class_id, period, last_payroll_time)
 
     rate_per_second = get_pay_rate_for_block(block_lookup.get(period, period))
     projected_pay = duration * rate_per_second
 
+    db.session.commit() # FEAT-AUTHORIZED-SHELL
     return jsonify({
         "status": "ok",
         "active": is_active,
@@ -2327,14 +2331,24 @@ def get_tap_entries(student_id):
 
     current_join_code = (session.get("current_join_code") or "").strip()
     if current_join_code:
-        has_join_scope = _admin_has_join_code_scope(admin.id, current_join_code)
-        if not has_join_scope:
+        from app.models import ClassEconomy
+        economy = ClassEconomy.query.filter_by(join_code=current_join_code).first()
+        class_id = economy.class_id if economy else None
+        
+        has_class_scope = _admin_has_class_scope(admin.id, class_id)
+        if not has_class_scope:
+            return jsonify({"error": "Student not found or access denied"}), 404
+
+        # V2 Identity Resolution
+        from app.utils.seat_scope import get_seat_id_for_class
+        seat_id = get_seat_id_for_class(student_id, class_id)
+        if not seat_id:
             return jsonify({"error": "Student not found or access denied"}), 404
 
         has_student_membership = db.session.query(
             sa.exists().where(
                 sa.and_(
-                    ClassMembership.join_code == current_join_code,
+                    ClassMembership.class_id == class_id,
                     ClassMembership.student_id == student_id,
                     ClassMembership.role == 'student',
                 )
@@ -2345,10 +2359,16 @@ def get_tap_entries(student_id):
 
     accessible_student_ids_query = get_admin_student_query(include_unassigned=False).with_entities(Student.id)
 
-    # Get all tap events for this student, scoped by teacher join_code when available.
+    # Get all tap events for this student, scoped by teacher class_id when available.
+    query = TapEvent.query
+    if current_join_code:
+        query = query.filter(TapEvent.seat_id == seat_id, TapEvent.class_id == class_id)
+    else:
+        query = query.filter(TapEvent.student_id == student_id)
+
     events = (
-        _apply_admin_join_code_scope(
-            TapEvent.query.filter(TapEvent.student_id == student_id),
+        _apply_admin_class_scope(
+            query,
             TapEvent,
             admin.id,
             accessible_student_ids_query,
@@ -2406,6 +2426,7 @@ def get_tap_entries(student_id):
 
 
 @api_bp.route('/admin/tap-entries/<int:event_id>', methods=['DELETE'])
+@feat_shell("FEAT-ATTN-001")
 def delete_tap_entry(event_id):
     """
     Soft-delete a tap entry by marking it as deleted.
@@ -2423,10 +2444,14 @@ def delete_tap_entry(event_id):
         return jsonify({"error": "Tap entry not found"}), 404
 
     current_join_code = (session.get("current_join_code") or "").strip()
-    if current_join_code and event.join_code != current_join_code:
-        return jsonify({"error": "Access denied"}), 403
+    if current_join_code:
+        from app.models import ClassEconomy
+        economy = ClassEconomy.query.filter_by(join_code=current_join_code).first()
+        class_id = economy.class_id if economy else None
+        if event.class_id != class_id:
+            return jsonify({"error": "Access denied"}), 403
 
-    if not _admin_has_join_code_scope(admin.id, event.join_code):
+    if not _admin_has_class_scope(admin.id, event.class_id):
         return jsonify({"error": "Tap entry not found"}), 404
 
     # SECURITY FIX: Use scoped helper to verify admin owns this student
@@ -2439,7 +2464,7 @@ def delete_tap_entry(event_id):
     event.deleted_at = utc_now()
     event.deleted_by = admin.id
 
-    db.session.commit()
+    db.session.commit() # FEAT-AUTHORIZED-SHELL
 
     current_app.logger.info(f"Admin {admin.id} deleted tap entry {event_id} for student {event.student_id}")
 
@@ -2450,6 +2475,7 @@ def delete_tap_entry(event_id):
 
 
 @api_bp.route('/admin/student-block-settings', methods=['POST'])
+@feat_shell("FEAT-ATTN-001")
 def update_student_block_settings():
     """
     Update StudentBlock settings (tap_enabled toggle) for a student-period combination.
@@ -2474,53 +2500,40 @@ def update_student_block_settings():
     if not student:
         return jsonify({"error": "Student not found or access denied"}), 404
 
-    # Resolve admin-scoped join_code for this student-period.
-    scoped_join_codes = sorted(
-        {
-            row[0]
-            for row in TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
-                TeacherBlock.teacher_id == admin.id,
-                TeacherBlock.student_id == student_id,
-                TeacherBlock.is_claimed.is_(True),
-                func.upper(TeacherBlock.block) == period,
-                TeacherBlock.join_code.isnot(None),
-            ).all()
-        }
-    )
-    if not scoped_join_codes:
-        return jsonify({"error": "Student block not found or access denied"}), 403
-    target_join_code = scoped_join_codes[0]
+    # Resolve seat_id and class_id for V2 identity
+    seat = TeacherBlock.query.filter(
+        TeacherBlock.teacher_id == admin.id,
+        TeacherBlock.student_id == student_id,
+        TeacherBlock.is_claimed.is_(True),
+        func.upper(TeacherBlock.block) == period,
+    ).first()
 
-    # Strict v2 scope: student+period+join_code must match.
+    if not seat or not seat.class_id:
+        return jsonify({"error": "Student block not found or access denied"}), 403
+
+    class_id = seat.class_id
+    seat_id = seat.id
+
+    # Strict v2 scope: seat_id + class_id + period must match.
     student_block = StudentBlock.query.filter_by(
-        student_id=student_id,
+        seat_id=seat_id,
+        class_id=class_id,
         period=period,
-        join_code=target_join_code,
     ).first()
-
-    conflicting_block = StudentBlock.query.filter(
-        StudentBlock.student_id == student_id,
-        StudentBlock.period == period,
-        or_(
-            StudentBlock.join_code.is_(None),
-            StudentBlock.join_code != target_join_code,
-        ),
-    ).first()
-    if conflicting_block:
-        return jsonify({"error": "Student block not found or access denied"}), 403
 
     if not student_block:
         student_block = StudentBlock(
+            seat_id=seat_id,
+            class_id=class_id,
             student_id=student_id,
             period=period,
-            join_code=target_join_code,
             tap_enabled=tap_enabled
         )
         db.session.add(student_block)
     else:
         student_block.tap_enabled = tap_enabled
 
-    db.session.commit()
+    db.session.commit() # FEAT-AUTHORIZED-SHELL
 
     current_app.logger.info(f"Admin {admin.id} set tap_enabled={tap_enabled} for student {student_id} period {period}")
 
@@ -2558,25 +2571,30 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
     for block_original in student_blocks:
         period_upper = block_original.upper()
 
+        # Resolve seat_id and class_id for V2 identity
+        seat = TeacherBlock.query.filter_by(
+            student_id=student.id,
+            block=block_original,
+            is_claimed=True
+        ).first()
+        
+        if not seat or not seat.class_id:
+            continue
+            
+        class_id = seat.class_id
+        seat_id = seat.id
+
         # Check if student is currently active in this period (TapEvent uses uppercase)
         latest_event = (
             TapEvent.query
-            .filter_by(student_id=student.id, period=period_upper, is_deleted=False)
+            .filter_by(seat_id=seat_id, class_id=class_id, period=period_upper, is_deleted=False)
             .order_by(TapEvent.timestamp.desc())
             .first()
         )
 
         if latest_event and latest_event.status == "active":
             # Get teacher_id for this block (needed for settings lookup)
-            teacher_id = None
-            # Try to find seat for this block
-            seat = TeacherBlock.query.filter_by(student_id=student.id, block=block_original, is_claimed=True).first()
-            if seat:
-                teacher_id = seat.teacher_id
-            else:
-                # Fallback: get first teacher from StudentTeacher table
-                first_link = StudentTeacher.query.filter_by(student_id=student.id).first()
-                teacher_id = first_link.teacher_id if first_link else None
+            teacher_id = seat.teacher_id
 
             # Get daily limit for this period (use original case for settings lookup)
             daily_limit = get_daily_limit_seconds(block_original, teacher_id=teacher_id)
@@ -2584,7 +2602,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
             if daily_limit:
                 # Calculate today's completed attendance using canonical class-local day boundaries
                 today_attendance = calculate_period_attendance_utc_range(
-                    student.id, period_upper, start_of_day_utc, end_of_day_utc
+                    seat_id, class_id, period_upper, start_of_day_utc, end_of_day_utc
                 )
 
                 # Add current active session time
@@ -2603,18 +2621,24 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                     # v2 strict mode: active events must always carry join_code.
                     join_code = latest_event.join_code
 
-                    if not join_code:
+                    from app.models import ClassEconomy
+                    economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+                    class_id = economy.class_id if economy else None
+                    from app.utils.seat_scope import get_seat_id_for_class
+                    seat_id = get_seat_id_for_class(student.id, class_id) if class_id else None
+
+                    if not seat_id or not class_id:
                         current_app.logger.warning(
-                            f"Unable to resolve join_code for student {student.id} in period {period_upper} for auto-tap-out. TapEvent ID is {latest_event.id}."
+                            f"Unable to resolve V2 identity for student {student.id} in period {period_upper} for auto-tap-out."
                         )
                         continue
 
                     # IDEMPOTENCY CHECK: Check if we already created a daily limit tap-out today
                     # This prevents duplicate tap-outs from race conditions (multiple browser tabs, scheduled job, etc.)
                     existing_limit_tapout = TapEvent.query.filter(
-                        TapEvent.student_id == student.id,
+                        TapEvent.seat_id == seat_id,
+                        TapEvent.class_id == class_id,
                         TapEvent.period == period_upper,
-                        TapEvent.join_code == join_code,
                         TapEvent.status == "inactive",
                         TapEvent.timestamp >= start_of_day_utc,
                         TapEvent.timestamp < end_of_day_utc,
@@ -2624,13 +2648,13 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
 
                     if existing_limit_tapout:
                         current_app.logger.debug(
-                            f"Skipping duplicate auto-tap-out for student {student.id} in {period_upper} - "
+                            f"Skipping duplicate auto-tap-out for seat {seat_id} in {period_upper} - "
                             f"daily limit tap-out already exists at {existing_limit_tapout.timestamp}"
                         )
                         continue  # Skip creating duplicate
 
                     current_app.logger.info(
-                        f"Auto-tapping out student {student.id} from {period_upper} - daily limit of {hours_limit} hours reached (total: {today_attendance/3600:.2f}h)"
+                        f"Auto-tapping out seat {seat_id} from {period_upper} - daily limit of {hours_limit} hours reached (total: {today_attendance/3600:.2f}h)"
                     )
 
                     # Calculate when they SHOULD have been tapped out (at exactly the limit)
@@ -2640,27 +2664,30 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
 
                     # Create tap-out event backdated to when they hit the limit
                     tap_out_event = TapEvent(
+                        seat_id=seat_id,
+                        class_id=class_id,
                         student_id=student.id,
                         period=period_upper,
                         status="inactive",
                         timestamp=tapout_timestamp,
                         reason=f"Daily limit ({hours_limit:.1f}h) reached",
-                        reason_code=TapEventReasonCode.DAILY_LIMIT,
-                        join_code=join_code
+                        reason_code=TapEventReasonCode.DAILY_LIMIT
                     )
                     db.session.add(tap_out_event)
 
                     # Lock the student for the rest of the day in this period
                     student_block = StudentBlock.query.filter_by(
-                        student_id=student.id,
+                        seat_id=seat_id,
+                        class_id=class_id,
                         period=period_upper
                     ).first()
                     if not student_block:
                         student_block = StudentBlock(
+                            seat_id=seat_id,
+                            class_id=class_id,
                             student_id=student.id,
                             period=period_upper,
-                            tap_enabled=True,
-                            join_code=join_code
+                            tap_enabled=True
                         )
                         db.session.add(student_block)
                     student_block.done_for_day_date = today_local
@@ -2793,42 +2820,37 @@ def get_block_tap_settings():
     from app.models import Student, StudentBlock
     from app.auth import get_admin_student_query
     
-    # Get all students for this admin in this block
-    students = get_admin_student_query().all()
-    students_in_block = [
-        s for s in students
-        if s.block and block.upper() in [b.strip().upper() for b in s.block.split(',')]
-    ]
+    # Resolve class_id for this admin and block
+    class_row = TeacherBlock.query.with_entities(TeacherBlock.class_id).filter(
+        TeacherBlock.teacher_id == admin.id,
+        func.upper(TeacherBlock.block) == block,
+        TeacherBlock.class_id.isnot(None)
+    ).first()
     
-    if not students_in_block:
-        # No students in this block, default to enabled
+    if not class_row:
+        return jsonify({"tap_enabled": True})
+        
+    class_id = class_row[0]
+
+    # Get all claimed seats for this admin, block, and class
+    seats = TeacherBlock.query.filter(
+        TeacherBlock.teacher_id == admin.id,
+        func.upper(TeacherBlock.block) == block,
+        TeacherBlock.class_id == class_id,
+        TeacherBlock.is_claimed.is_(True)
+    ).all()
+
+    if not seats:
+        # No claimed seats in this block, default to enabled
         return jsonify({"tap_enabled": True})
     
-    # Check if tap is enabled for any student in this block
-    # Returns the overall block state: true if at least one student has tap enabled,
-    # false if all students have it disabled
+    # Check if tap is enabled for any seat in this block
     any_enabled = False
-    for student in students_in_block:
-        scoped_join_codes = sorted(
-            {
-                row[0]
-                for row in TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
-                    TeacherBlock.teacher_id == admin.id,
-                    TeacherBlock.student_id == student.id,
-                    TeacherBlock.is_claimed.is_(True),
-                    func.upper(TeacherBlock.block) == block,
-                    TeacherBlock.join_code.isnot(None),
-                ).all()
-            }
-        )
-        if not scoped_join_codes:
-            continue
-        target_join_code = scoped_join_codes[0]
-
+    for seat in seats:
         student_block = StudentBlock.query.filter_by(
-            student_id=student.id,
+            seat_id=seat.id,
+            class_id=class_id,
             period=block,
-            join_code=target_join_code,
         ).first()
         
         if student_block:
@@ -2865,59 +2887,46 @@ def update_block_tap_settings():
     from app.auth import get_admin_student_query
     
     try:
-        # Get all students for this admin in this block
-        students = get_admin_student_query().all()
-        students_in_block = [
-            s for s in students
-            if s.block and block.upper() in [b.strip().upper() for b in s.block.split(',')]
-        ]
+        # Resolve class_id for this admin and block
+        class_row = TeacherBlock.query.with_entities(TeacherBlock.class_id).filter(
+            TeacherBlock.teacher_id == admin.id,
+            func.upper(TeacherBlock.block) == block,
+            TeacherBlock.class_id.isnot(None)
+        ).first()
         
-        updated_count = 0
-        for student in students_in_block:
-            scoped_join_codes = sorted(
-                {
-                    row[0]
-                    for row in TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
-                        TeacherBlock.teacher_id == admin.id,
-                        TeacherBlock.student_id == student.id,
-                        TeacherBlock.is_claimed.is_(True),
-                        func.upper(TeacherBlock.block) == block,
-                        TeacherBlock.join_code.isnot(None),
-                    ).all()
-                }
-            )
-            if not scoped_join_codes:
-                continue
-            target_join_code = scoped_join_codes[0]
+        if not class_row:
+            return jsonify({"status": "error", "message": "Class not found"}), 404
+            
+        class_id = class_row[0]
 
-            # Strict v2 scope: only mutate student+period+join_code rows.
+        # Get all claimed seats for this admin, block, and class
+        seats = TeacherBlock.query.filter(
+            TeacherBlock.teacher_id == admin.id,
+            func.upper(TeacherBlock.block) == block,
+            TeacherBlock.class_id == class_id,
+            TeacherBlock.is_claimed.is_(True)
+        ).all()
+
+        updated_count = 0
+        for seat in seats:
+            # Strict v2 scope: seat_id + class_id + period must match.
             student_block = StudentBlock.query.filter_by(
-                student_id=student.id,
+                seat_id=seat.id,
+                class_id=class_id,
                 period=block,
-                join_code=target_join_code,
             ).first()
-            conflicting_row = StudentBlock.query.filter(
-                StudentBlock.student_id == student.id,
-                StudentBlock.period == block,
-                or_(
-                    StudentBlock.join_code.is_(None),
-                    StudentBlock.join_code != target_join_code,
-                ),
-            ).first()
-            if conflicting_row:
-                continue
 
             if not student_block:
                 student_block = StudentBlock(
-                    student_id=student.id,
+                    seat_id=seat.id,
+                    class_id=class_id,
+                    student_id=seat.student_id,
                     period=block,
-                    join_code=target_join_code,
                     tap_enabled=tap_enabled
                 )
                 db.session.add(student_block)
             else:
                 student_block.tap_enabled = tap_enabled
-            
             updated_count += 1
         
         db.session.commit()

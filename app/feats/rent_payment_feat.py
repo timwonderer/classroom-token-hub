@@ -22,8 +22,7 @@ class RentPaymentResult:
 
 def execute_rent_payment(
     *,
-    scope,
-    student,
+    seat,
     context: dict,
     payment_amount: Decimal,
     period: str,
@@ -46,11 +45,13 @@ def execute_rent_payment(
     """Obligations-led FEAT for rent payment orchestration."""
     now = now or utc_now()
     teacher_id = context.get("teacher_id")
-    join_code = context.get("join_code")
+    join_code = seat.join_code
+    class_id = seat.class_id
+    
     access_policy_service.assert_can_pay_rent(
-        scope=scope,
+        seat_id=seat.id,
+        class_id=class_id,
         teacher_id=teacher_id,
-        join_code=join_code,
     )
     current_block = (context.get("block") or period or "").strip().upper()
     is_partial = payment_amount < remaining_amount
@@ -63,9 +64,9 @@ def execute_rent_payment(
         payment_description += f' (includes ${late_fee:.2f} late fee)'
 
     transaction = ledger_service.create_pending_transaction(
-        student_id=student.id,
+        seat_id=seat.id,
+        class_id=class_id,
         teacher_id=teacher_id,
-        join_code=join_code,
         amount=-payment_amount,
         account_type='checking',
         type='Rent Payment',
@@ -81,9 +82,10 @@ def execute_rent_payment(
         )
 
     payment = obligations_service.record_rent_payment(
-        student_id=student.id,
-        period=period,
+        seat_id=seat.id,
+        class_id=class_id,
         join_code=join_code,
+        period=period,
         amount_paid=payment_amount,
         period_month=current_month,
         period_year=current_year,
@@ -96,9 +98,9 @@ def execute_rent_payment(
 
     if banking_settings and banking_settings.overdraft_protection_enabled and overdraft_shortfall > 0:
         ledger_service.create_transfer_pair(
-            student_id=student.id,
+            seat_id=seat.id,
+            class_id=class_id,
             teacher_id=teacher_id,
-            join_code=join_code,
             amount=overdraft_shortfall,
             from_account='savings',
             to_account='checking',
@@ -108,11 +110,8 @@ def execute_rent_payment(
         db.session.flush()
 
     ledger_service.apply_overdraft_fee_if_needed(
-        student,
+        seat,
         banking_settings,
-        teacher_id=teacher_id,
-        join_code=join_code,
-        commit=False,
     )
 
     passes_awarded = 0
@@ -121,15 +120,12 @@ def execute_rent_payment(
     if newly_fully_paid:
         target_rent_passes = store_service.get_rent_hall_pass_grant_total(settings.id)
         passes_awarded, _, _ = identity_service.reconcile_rent_hall_pass_top_off(
-            student=student,
-            join_code=join_code,
-            current_block=current_block,
+            seat=seat,
             target_rent_passes=target_rent_passes,
         )
         if calculate_due_dates_fn is not None:
             per_use_items_granted = store_service.grant_rent_per_use_items(
-                student=student,
-                join_code=join_code,
+                seat=seat,
                 settings=settings,
                 calculate_due_dates_fn=calculate_due_dates_fn,
             )

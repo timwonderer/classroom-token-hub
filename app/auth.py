@@ -281,8 +281,32 @@ def get_current_student_seat():
     return db.session.get(Seat, seat_id)
 
 
-def sync_student_session_context(student=None, *, join_code: str | None = None):
-    """Backfill user/seat session keys from the bridge-era student session."""
+def switch_student_session_context(student, *, class_id: str, seat_id: int):
+    """
+    CANONICAL SESSION CONTEXT SWITCH.
+    Logs the transition and ensures all session keys are synchronized.
+    """
+    from flask import session, current_app
+    
+    old_class = session.get('current_class_id')
+    
+    # 1. Update primary session anchors
+    session['current_class_id'] = class_id
+    session['current_seat_id'] = seat_id
+    
+    # 2. Sync seat/user identifiers via bridge utility
+    seat = sync_student_session_context(student, class_id=class_id, seat_id=seat_id)
+    
+    # 3. Log the transition for audit clarity
+    current_app.logger.info(
+        f"SESSION-CONTEXT-SWITCH: Student {student.id} moved from class {old_class} "
+        f"to {class_id} (Seat {seat_id})."
+    )
+    return seat
+
+
+def sync_student_session_context(student=None, *, class_id: str | None = None, seat_id: int | None = None):
+    """Backfill user/seat session keys for the current class context."""
     from app.models import Seat
 
     if student is None and 'student_id' in session:
@@ -290,26 +314,33 @@ def sync_student_session_context(student=None, *, join_code: str | None = None):
     if not student:
         session.pop('student_user_id', None)
         session.pop('current_seat_id', None)
+        session.pop('current_class_id', None)
         return None
 
-    normalized_join_code = (join_code or session.get('current_join_code') or '').strip().upper() or None
+    target_class_id = class_id or session.get('current_class_id')
+    target_seat_id = seat_id or session.get('current_seat_id')
 
-    seat_query = Seat.query.filter(Seat.student_id == student.id)
-    if normalized_join_code:
-        seat_query = seat_query.filter(Seat.join_code == normalized_join_code)
-    seat = seat_query.order_by(Seat.id.asc()).first()
+    seat = None
+    if target_seat_id:
+        seat = db.session.get(Seat, target_seat_id)
+    
+    if not seat and target_class_id:
+        seat = Seat.query.filter_by(student_id=student.id, class_id=target_class_id).first()
+    
     if not seat:
-        seat = Seat.query.filter(Seat.student_id == student.id).order_by(Seat.id.asc()).first()
+        seat = Seat.query.filter_by(student_id=student.id).order_by(Seat.id.asc()).first()
 
     if seat:
         session['current_seat_id'] = seat.id
+        session['current_class_id'] = seat.class_id
+        session['current_join_code'] = seat.join_code
         if seat.user_id:
             session['student_user_id'] = seat.user_id
-        if seat.join_code:
-            session['current_join_code'] = seat.join_code
     else:
         session.pop('current_seat_id', None)
         session.pop('student_user_id', None)
+        session.pop('current_class_id', None)
+        session.pop('current_join_code', None)
 
     return seat
 
@@ -344,52 +375,27 @@ def get_current_admin():
 
 def ensure_admin_join_code(admin_id):
     """Ensure an admin has a current join code selected in session."""
-    from app.models import ClassMembership, TeacherBlock  # Imported lazily to avoid circular import
+    from app.models import ClassEconomy  # Imported lazily to avoid circular import
 
     if not admin_id:
         return
 
-    membership_table_exists = _table_exists('class_memberships')
-    membership_role_exists = _column_exists('class_memberships', 'role')
-
     join_code = session.get('current_join_code')
-    if join_code and membership_table_exists and membership_role_exists:
-        if db.session.query(
-            sa.exists().where(
-            sa.and_(
-                ClassMembership.admin_id == admin_id,
-                ClassMembership.join_code == join_code,
-                ClassMembership.role == 'admin',
-            )
-        )
-        ).scalar():
+    if join_code:
+        # Verify the admin still owns this class economy
+        if ClassEconomy.query.filter_by(teacher_id=admin_id, join_code=join_code).first():
             return
         session.pop('current_join_code', None)
 
-    if membership_table_exists and membership_role_exists:
-        owned_join_code = (
-            db.session.query(ClassMembership.join_code)
-            .filter(
-                ClassMembership.admin_id == admin_id,
-                ClassMembership.role == 'admin',
-                ClassMembership.join_code.isnot(None),
-            )
-            .order_by(ClassMembership.join_code)
-            .first()
-        )
-        if owned_join_code and owned_join_code[0]:
-            session['current_join_code'] = owned_join_code[0]
-            return
-
-    teacher_block = (
-        TeacherBlock.query
+    # Fallback to the first class economy owned by this admin
+    first_class = (
+        ClassEconomy.query
         .filter_by(teacher_id=admin_id)
-        .filter(TeacherBlock.join_code.isnot(None))
-        .order_by(TeacherBlock.block, TeacherBlock.join_code)
+        .order_by(ClassEconomy.display_name, ClassEconomy.join_code)
         .first()
     )
-    if teacher_block and teacher_block.join_code:
-        session['current_join_code'] = teacher_block.join_code
+    if first_class:
+        session['current_join_code'] = first_class.join_code
 
 
 def get_admin_student_query(include_unassigned=True):

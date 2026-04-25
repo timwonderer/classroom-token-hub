@@ -201,7 +201,7 @@ def test_delete_join_code_removes_only_scoped_records(client):
     ])
     db.session.flush()
 
-    purchase = StudentItem(student_id=student_a.id, store_item_id=item_a.id, join_code="JCDEL1", status="purchased")
+    purchase = StudentItem(correlation_id='corr_test', student_id=student_a.id, store_item_id=item_a.id, join_code="JCDEL1", status="purchased")
     db.session.add(purchase)
     db.session.commit()
 

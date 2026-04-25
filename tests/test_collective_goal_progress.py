@@ -104,8 +104,8 @@ def test_student_shop_collective_progress_counts_current_class_only(client):
 
     # One purchaser in class A and one purchaser in class B.
     db.session.add_all([
-        StudentItem(student_id=student_a1.id, store_item_id=item.id, join_code='JOINA123', status='pending', collective_goal_instance_code=item.collective_goal_instance_code),
-        StudentItem(student_id=student_b1.id, store_item_id=item.id, join_code='JOINB456', status='pending', collective_goal_instance_code=item.collective_goal_instance_code),
+        StudentItem(correlation_id='corr_test', student_id=student_a1.id, store_item_id=item.id, join_code='JOINA123', status='pending', collective_goal_instance_code=item.collective_goal_instance_code),
+        StudentItem(correlation_id='corr_test', student_id=student_b1.id, store_item_id=item.id, join_code='JOINB456', status='pending', collective_goal_instance_code=item.collective_goal_instance_code),
     ])
     db.session.commit()
 
@@ -258,8 +258,8 @@ def test_collective_unlock_scoped_to_join_code_and_goal_type(client):
 
     # Existing purchase in class A and class B.
     db.session.add_all([
-        StudentItem(student_id=student_a1.id, store_item_id=item.id, join_code='JOINA777', status='pending', collective_goal_instance_code=item.collective_goal_instance_code),
-        StudentItem(student_id=student_b1.id, store_item_id=item.id, join_code='JOINB999', status='pending', collective_goal_instance_code=item.collective_goal_instance_code),
+        StudentItem(correlation_id='corr_test', student_id=student_a1.id, store_item_id=item.id, join_code='JOINA777', status='pending', collective_goal_instance_code=item.collective_goal_instance_code),
+        StudentItem(correlation_id='corr_test', student_id=student_b1.id, store_item_id=item.id, join_code='JOINB999', status='pending', collective_goal_instance_code=item.collective_goal_instance_code),
     ])
     db.session.commit()
 
@@ -306,7 +306,7 @@ def test_admin_store_shows_collective_progress(client):
     )
     db.session.add(item)
     db.session.flush()
-    db.session.add(StudentItem(student_id=student_a1.id, store_item_id=item.id, join_code='JOINADMINA', status='pending', collective_goal_instance_code=item.collective_goal_instance_code))
+    db.session.add(StudentItem(correlation_id='corr_test', student_id=student_a1.id, store_item_id=item.id, join_code='JOINADMINA', status='pending', collective_goal_instance_code=item.collective_goal_instance_code))
     db.session.commit()
 
     _login_admin(client, teacher.id)
@@ -438,7 +438,7 @@ def test_collective_progress_with_correct_roster_count_admin(client):
     db.session.flush()
     
     # One student purchases
-    db.session.add(StudentItem(student_id=student_a1.id, store_item_id=item.id, join_code='JOINADMIN', status='pending', collective_goal_instance_code=item.collective_goal_instance_code))
+    db.session.add(StudentItem(correlation_id='corr_test', student_id=student_a1.id, store_item_id=item.id, join_code='JOINADMIN', status='pending', collective_goal_instance_code=item.collective_goal_instance_code))
     db.session.commit()
 
     _login_admin(client, teacher.id)

@@ -24,7 +24,8 @@ def execute_file_claim(
     *,
     scope,
     enrollment,
-    student,
+    seat_id: int,
+    class_id: str,
     incident_date,
     description: str,
     claim_amount,
@@ -40,8 +41,8 @@ def execute_file_claim(
     claim = obligations_service.record_insurance_claim(
         student_insurance_id=enrollment.id,
         policy_id=enrollment.policy_id,
-        student_id=student.id,
-        join_code=enrollment.join_code,
+        seat_id=seat_id,
+        class_id=class_id,
         incident_date=incident_date,
         description=description,
         claim_amount=claim_amount,
@@ -88,9 +89,9 @@ def execute_insurance_claim_resolution(
             transaction_description += f" linked to transaction #{claim.transaction_id}"
         reimbursement_tx, _created = ledger_service.create_pending_transaction_idempotent(
             idempotency_key=insurance_reimbursement_key(claim.id),
-            student_id=claim.student_id,
+            seat_id=claim.seat_id,
+            class_id=scope.class_id,
             teacher_id=processed_by_teacher_id,
-            join_code=enrollment.join_code,
             amount=approved_amount,
             account_type="checking",
             type="insurance_reimbursement",

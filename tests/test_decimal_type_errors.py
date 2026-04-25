@@ -102,62 +102,64 @@ class TestDecimalTypeErrors:
         db.session.flush()
 
         # Add various transaction types to test edge cases
-        transactions = [
-            # Positive earning - should count
-            Transaction(
-                student_id=student.id,
-                teacher_id=teacher.id,
-                join_code=join_code,
-                amount=Decimal('100.00'),
-                account_type='checking',
-                type='Attendance',
-                description='Good work'
-            ),
-            # Zero amount - should not count
-            Transaction(
-                student_id=student.id,
-                teacher_id=teacher.id,
-                join_code=join_code,
-                amount=Decimal('0.00'),
-                account_type='checking',
-                type='Adjustment',
-                description='Zero adjustment'
-            ),
-            # Negative amount - should not count
-            Transaction(
-                student_id=student.id,
-                teacher_id=teacher.id,
-                join_code=join_code,
-                amount=Decimal('-50.00'),
-                account_type='checking',
-                type='Purchase',
-                description='Store purchase'
-            ),
-            # Transfer - should not count even if positive
-            Transaction(
-                student_id=student.id,
-                teacher_id=teacher.id,
-                join_code=join_code,
-                amount=Decimal('25.00'),
-                account_type='checking',
-                type='Transfer',
-                description='Transfer to savings'
-            ),
-            # Another positive earning
-            Transaction(
-                student_id=student.id,
-                teacher_id=teacher.id,
-                join_code=join_code,
-                amount=Decimal('75.50'),
-                account_type='checking',
-                type='Payroll',
-                description='Weekly pay'
-            ),
-        ]
-        
-        for tx in transactions:
-            db.session.add(tx)
-        db.session.commit()
+        from app.feats.base import FEATContext
+        with FEATContext("FEAT-ADMN-001"):
+            transactions = [
+                # Positive earning - should count
+                Transaction(
+                    student_id=student.id,
+                    teacher_id=teacher.id,
+                    join_code=join_code,
+                    amount=Decimal('100.00'),
+                    account_type='checking',
+                    type='Attendance',
+                    description='Good work'
+                ),
+                # Zero amount - should not count
+                Transaction(
+                    student_id=student.id,
+                    teacher_id=teacher.id,
+                    join_code=join_code,
+                    amount=Decimal('0.00'),
+                    account_type='checking',
+                    type='Adjustment',
+                    description='Zero adjustment'
+                ),
+                # Negative amount - should not count
+                Transaction(
+                    student_id=student.id,
+                    teacher_id=teacher.id,
+                    join_code=join_code,
+                    amount=Decimal('-50.00'),
+                    account_type='checking',
+                    type='Purchase',
+                    description='Store purchase'
+                ),
+                # Transfer - should not count even if positive
+                Transaction(
+                    student_id=student.id,
+                    teacher_id=teacher.id,
+                    join_code=join_code,
+                    amount=Decimal('25.00'),
+                    account_type='checking',
+                    type='Transfer',
+                    description='Transfer to savings'
+                ),
+                # Another positive earning
+                Transaction(
+                    student_id=student.id,
+                    teacher_id=teacher.id,
+                    join_code=join_code,
+                    amount=Decimal('75.50'),
+                    account_type='checking',
+                    type='Payroll',
+                    description='Weekly pay'
+                ),
+            ]
+            
+            for tx in transactions:
+                db.session.add(tx)
+            db.session.commit()
 
         # This should not raise decimal.InvalidOperation
         total_earnings = student.get_total_earnings(
@@ -270,30 +272,45 @@ class TestDecimalTypeErrors:
         join_code = 'INTEREST_TEST'
 
         # Create student with savings balance
+        from app.models import ClassEconomy
+        class_economy = ClassEconomy(
+            join_code=join_code,
+            teacher_id=teacher.id,
+            display_name="Interest Test Class"
+        )
+        db.session.add(class_economy)
+        db.session.flush()
+
         student = Student(
             first_name='Interest',
             last_initial='T',
             block='A',
             salt=b'test_salt',
-            passphrase_hash='test_hash'
+            passphrase_hash='test_hash',
+            class_id=class_economy.class_id
         )
         db.session.add(student)
         db.session.flush()
 
         # Add a savings deposit from 31+ days ago (eligible for interest)
         past_date = datetime.now(timezone.utc) - timedelta(days=35)
-        deposit = Transaction(
-            student_id=student.id,
-            teacher_id=teacher.id,
-            join_code=join_code,
-            amount=Decimal('100.00'),
-            account_type='savings',
-            type='Deposit',
-            description='Initial savings',
-            timestamp=past_date,
-            date_funds_available=past_date
-        )
-        db.session.add(deposit)
+        from app.feats.base import FEATContext
+        with FEATContext("FEAT-ADMN-001"):
+            deposit = Transaction(
+                student_id=student.id,
+                teacher_id=teacher.id,
+                join_code=join_code,
+                class_id=class_economy.class_id,
+                amount=Decimal('100.00'),
+                account_type='savings',
+                type='Deposit',
+                description='Initial savings',
+                timestamp=past_date,
+                date_funds_available=past_date
+            )
+            db.session.add(deposit)
+            db.session.commit()
+        db.session.flush()
 
         # Create banking settings with compound interest (daily frequency - most likely to trigger bug)
         banking_settings = BankingSettings(

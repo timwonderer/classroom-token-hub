@@ -50,6 +50,7 @@ import pytz
 from werkzeug.exceptions import HTTPException
 
 from app.extensions import db, limiter
+from app.feats.base import feat_shell
 from app.access import AccessScopeDenied, resolve_scope
 from app.models import (
     Student, Admin, ClassEconomy, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
@@ -126,7 +127,7 @@ from app.utils.student_deletion import (
     hard_delete_student_if_orphaned,
     remove_student_from_teacher_scope,
 )
-from app.utils.seat_scope import get_seat_ids_for_student_join, seat_scoped_filter, transaction_scope_filter
+from app.utils.seat_scope import get_seat_id_for_class, get_seat_ids_for_student_join, seat_scoped_filter, transaction_scope_filter
 from app.utils.transaction_idempotency import create_idempotent_transaction, void_refund_key
 from app.feats.admin_adjustment_feat import execute_admin_adjustments
 from app.feats.insurance_claim_feat import execute_insurance_claim_resolution
@@ -321,8 +322,9 @@ def _resolve_admin_class_context(admin_id: int | None) -> dict | None:
     if not class_row or class_row.teacher_id != admin_id:
         return None
 
-    session['current_class_id'] = class_row.class_id
-    session['current_join_code'] = class_row.join_code
+    if request.method != 'GET':
+        session['current_class_id'] = class_row.class_id
+        session['current_join_code'] = class_row.join_code
     return {
         'join_code': class_row.join_code,
         'class_id': class_row.class_id,
@@ -477,7 +479,8 @@ def _get_current_admin_join_code(admin_id: int | None) -> str | None:
             .first()
         )
         if class_row and class_row.join_code:
-            session['current_join_code'] = class_row.join_code
+            if request.method != 'GET':
+                session['current_join_code'] = class_row.join_code
             return class_row.join_code
     join_code = (session.get('current_join_code') or '').strip()
     if join_code and _admin_owns_join_code(admin_id, join_code):
@@ -490,7 +493,8 @@ def _get_current_admin_join_code(admin_id: int | None) -> str | None:
             .first()
         )
         if class_row and class_row.class_id:
-            session['current_class_id'] = class_row.class_id
+            if request.method != 'GET':
+                session['current_class_id'] = class_row.class_id
         return join_code
     return None
 
@@ -1569,13 +1573,17 @@ def _ensure_join_code_anchors(teacher_id, join_code, class_label=None, return_me
         )
         db.session.add(economy)
         created = True
+    if economy.class_id is None:
+        db.session.flush()
 
     admin_membership = ClassMembership.query.filter_by(
+        class_id=economy.class_id,
         join_code=join_code,
         admin_id=teacher_id,
     ).first()
     if not admin_membership:
         db.session.add(ClassMembership(
+            class_id=economy.class_id,
             join_code=join_code,
             admin_id=teacher_id,
             role="admin",
@@ -1585,6 +1593,7 @@ def _ensure_join_code_anchors(teacher_id, join_code, class_label=None, return_me
         with db.session.begin_nested():
             db.session.flush()
     except IntegrityError:
+        db.session.rollback()
         existing = ClassEconomy.query.filter_by(join_code=join_code).first()
         if existing:
             if return_metadata:
@@ -4406,9 +4415,20 @@ def student_detail(student_id):
 
     if join_code:
         session['current_join_code'] = join_code
-    seat_ids = get_seat_ids_for_student_join(student.id, join_code) if join_code else []
-    tx_scope = transaction_scope_filter(Transaction, student.id, seat_ids) if join_code else (Transaction.student_id == student.id)
-    tap_scope = seat_scoped_filter(TapEvent, student.id, seat_ids) if join_code else (TapEvent.student_id == student.id)
+    seat_id = None
+    class_id = None
+    if join_code:
+        class_row = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=teacher_id).first()
+        class_id = class_row.class_id if class_row else None
+        if class_id:
+            seat_id = get_seat_id_for_class(student.id, class_id)
+
+    if seat_id and class_id:
+        tx_scope = sa.and_(Transaction.seat_id == seat_id, Transaction.class_id == class_id)
+        tap_scope = sa.and_(TapEvent.seat_id == seat_id, TapEvent.class_id == class_id)
+    else:
+        tx_scope = Transaction.student_id == student.id
+        tap_scope = TapEvent.student_id == student.id
 
     # Remove deprecated last_tap_in/last_tap_out logic; rely on TapEvent backend.
     # Fetch last rent payment
@@ -6615,6 +6635,7 @@ def rent_settings():
                 classes_by_join_code[join_code] = {
                     'block': block_name,
                     'join_code': join_code,
+                    'class_id': tb.class_id,
                     'class_label': tb.get_class_label(),
                     'student_ids': set()
                 }
@@ -6623,6 +6644,7 @@ def rent_settings():
         for class_info in classes_by_join_code.values():
             block_name = class_info['block']
             join_code = class_info['join_code']
+            class_id = class_info['class_id']
             class_label = class_info['class_label']
             student_ids = list(class_info['student_ids'])
 
@@ -6648,16 +6670,15 @@ def rent_settings():
             for student in class_students:
                 unpaid_due_dates = []
                 cursor = coverage_due_date
+                seat_id = get_seat_id_for_class(student.id, class_id)
                 for _ in range(24):
                     if first_due and cursor < first_due:
                         break
                     is_paid = _is_student_coverage_period_paid(
                         block_settings,
-                        student.id,
-                        block_name,
-                        join_code,
+                        seat_id,
+                        class_id,
                         cursor,
-                        seat_ids=get_seat_ids_for_student_join(student.id, join_code),
                     )
                     if is_paid:
                         break
@@ -7009,32 +7030,37 @@ def reverse_cycle_penalties():
 
     grace_end_date = coverage_due_date + timedelta(days=rent_settings.grace_period_days)
     cycle_payments = RentPayment.query.filter(
-        RentPayment.join_code == join_code,
+        RentPayment.class_id == teacher_block.class_id,
         RentPayment.coverage_month == coverage_due_date.month,
         RentPayment.coverage_year == coverage_due_date.year,
-    ).order_by(RentPayment.student_id, RentPayment.payment_date).all()
+    ).order_by(RentPayment.seat_id, RentPayment.payment_date).all()
 
-    payments_by_student = defaultdict(list)
+    payments_by_seat = defaultdict(list)
     for payment in cycle_payments:
         txn = Transaction.query.filter(
-            Transaction.student_id == payment.student_id,
+            Transaction.seat_id == payment.seat_id,
+            Transaction.class_id == payment.class_id,
             Transaction.type == 'Rent Payment',
-            Transaction.join_code == join_code,
             Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
             Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
             Transaction.amount == -payment.amount_paid,
         ).first()
+        if txn is None and payment.student_id and payment.join_code:
+            txn = Transaction.query.filter(
+                Transaction.student_id == payment.student_id,
+                Transaction.join_code == payment.join_code,
+                Transaction.type == 'Rent Payment',
+                Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+                Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+                Transaction.amount == -payment.amount_paid,
+            ).first()
         if txn and not txn.is_void:
-            payments_by_student[payment.student_id].append(payment)
+            payments_by_seat[payment.seat_id].append(payment)
 
     students_fixed = 0
     total_refunded = Decimal('0.00')
 
-    for student_id, payments in payments_by_student.items():
-        student = db.session.get(Student, student_id)
-        if not student:
-            continue
-
+    for seat_id, payments in payments_by_seat.items():
         paid_by_grace = sum(
             payment.amount_paid for payment in payments
             if payment.payment_date and ensure_utc(payment.payment_date) <= ensure_utc(grace_end_date)
@@ -7046,9 +7072,9 @@ def reverse_cycle_penalties():
         if paid_by_grace >= locked_rate:
             refund_amount = total_late_fee_charged
             ledger_service.create_pending_transaction(
-                student_id=student_id,
+                seat_id=seat_id,
+                class_id=teacher_block.class_id,
                 teacher_id=admin_id,
-                join_code=join_code,
                 amount=refund_amount,
                 account_type='checking',
                 type='Rent Late Fee Reversal',
@@ -8355,11 +8381,18 @@ def payroll_history():
     )
 
 
-@admin_bp.route('/run-payroll', methods=['POST'])
+@admin_bp.route('/run_payroll', methods=['POST'])
 @admin_required
-def run_payroll():
+@feat_shell("FEAT-LED-004")
+def run_payroll(*args, **kwargs):
+    """FEAT-Shell for payroll execution."""
+    res = _run_payroll_legacy(*args, **kwargs)
+    db.session.commit() # FEAT-AUTHORIZED-SHELL
+    return res
+
+def _run_payroll_legacy():
     """
-    Run payroll by computing earned seconds from TapEvent append-only log.
+    Run payroll by computing earned seconds from TapEvent append-only log (LEGACY).
     For each student, for each block, match active/inactive pairs since last payroll,
     sum total seconds, and post ledger payroll entries.
 
@@ -8370,7 +8403,7 @@ def run_payroll():
     try:
         # Get current admin's teacher_id for proper transaction scoping
         current_admin_id = session.get('admin_id')
-
+ 
         if not current_admin_id:
             error_msg = "No admin_id in session"
             current_app.logger.error(f"Payroll error: {error_msg}")
@@ -8378,10 +8411,10 @@ def run_payroll():
                 return jsonify(status="error", message=error_msg), 401
             flash(error_msg, "admin_error")
             return redirect(url_for('admin.dashboard'))
-
+ 
         selected_scope = _require_payroll_feature_scope_from_request(current_admin_id)
         selected_join_code = selected_scope['join_code']
-
+ 
         # Get last payroll for the selected class only.
         last_payroll_tx = Transaction.query.filter_by(
             type="payroll",
@@ -8390,7 +8423,7 @@ def run_payroll():
         ).order_by(Transaction.timestamp.desc()).first()
         last_payroll_time = last_payroll_tx.timestamp if last_payroll_tx else None
         current_app.logger.info(f"Run payroll: last payroll at {last_payroll_time}")
-
+ 
         students = (
             _scoped_students(include_unassigned=False)
             .join(TeacherBlock, TeacherBlock.student_id == Student.id)
@@ -8407,7 +8440,7 @@ def run_payroll():
             last_payroll_time,
             teacher_id=current_admin_id,
         )
-
+ 
         adjustments = []
         for (student_id, join_code), amount in summary.items():
             if join_code != selected_join_code:
@@ -8424,11 +8457,11 @@ def run_payroll():
                 'type': 'payroll',
                 'account_type': 'checking',
             })
-
+ 
         result = execute_admin_adjustments(adjustments=adjustments)
-
+ 
         scheduled_rebalances_applied, _scheduled_labels = activate_due_rebalances(current_admin_id)
-        db.session.commit()
+        db.session.flush() # FEAT-LEGACY-WRAP: commit removed
         current_app.logger.info(f"Payroll complete. Created {result.applied_count} transactions.")
 
         success_message = f"Payroll complete. Processed {result.applied_count} payments."
@@ -9821,6 +9854,7 @@ def enforce_daily_limits():
     current_admin_id = session.get('admin_id')
 
     now_utc = utc_now()
+    today_local = class_date(timestamp_utc=now_utc)
     start_of_day_utc, end_of_day_utc = day_bounds_utc(timestamp_utc=now_utc)
 
     for student in students:
@@ -9832,16 +9866,20 @@ def enforce_daily_limits():
                 join_code = get_join_code_for_student_period(student.id, period_upper, teacher_id=current_admin_id)
                 if not join_code:
                     continue
-
-                seat_ids = get_seat_ids_for_student_join(student.id, join_code)
-                tap_scope = seat_scoped_filter(TapEvent, student.id, seat_ids)
+                class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+                class_id = class_row.class_id if class_row else None
+                if not class_id:
+                    continue
+                seat_id = get_seat_id_for_class(student.id, class_id)
+                if not seat_id:
+                    continue
+                tap_scope = seat_scoped_filter(TapEvent, seat_id)
 
                 latest_event = (
                     TapEvent.query
                     .filter(
                         tap_scope,
                         TapEvent.period == period_upper,
-                        TapEvent.join_code == join_code,
                         TapEvent.is_deleted == False,
                     )
                     .order_by(TapEvent.timestamp.desc())
@@ -9857,7 +9895,7 @@ def enforce_daily_limits():
                     continue
 
                 today_attendance = calculate_period_attendance_utc_range(
-                    student.id, period_upper, start_of_day_utc, end_of_day_utc
+                    seat_id, class_id, period_upper, start_of_day_utc, end_of_day_utc
                 )
                 if latest_event.timestamp:
                     last_tap_in_utc = ensure_utc(latest_event.timestamp)
@@ -9870,7 +9908,6 @@ def enforce_daily_limits():
                 existing_limit_tapout = TapEvent.query.filter(
                     tap_scope,
                     TapEvent.period == period_upper,
-                    TapEvent.join_code == join_code,
                     TapEvent.status == "inactive",
                     TapEvent.timestamp >= start_of_day_utc,
                     TapEvent.timestamp < end_of_day_utc,
@@ -9897,15 +9934,19 @@ def enforce_daily_limits():
                 if not student_block:
                     student_block = StudentBlock(
                         student_id=student.id,
+                        seat_id=seat_id,
+                        class_id=class_id,
                         period=period_upper,
                         join_code=join_code,
                         tap_enabled=True,
                     )
                     db.session.add(student_block)
-                student_block.done_for_day_date = today_pacific
+                student_block.done_for_day_date = today_local
 
                 db.session.add(TapEvent(
                     student_id=student.id,
+                    seat_id=seat_id,
+                    class_id=class_id,
                     period=period_upper,
                     status="inactive",
                     timestamp=now_utc,
@@ -10452,8 +10493,13 @@ def banking():
     total_checking = Decimal('0.00')
     total_savings = Decimal('0.00')
     students_with_savings = 0
+    selected_class_id = selected_scope['class_id']
     for student in students:
-        checking_balance, savings_balance = get_available_balances(student.id, selected_scope['join_code'])
+        seat_id = get_seat_id_for_class(student.id, selected_class_id)
+        if seat_id:
+            checking_balance, savings_balance = get_available_balances(seat_id, selected_class_id)
+        else:
+            checking_balance, savings_balance = Decimal('0.00'), Decimal('0.00')
         total_checking += checking_balance
         total_savings += savings_balance
         if savings_balance > 0:

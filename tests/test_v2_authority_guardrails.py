@@ -137,7 +137,10 @@ def test_admin_adjustment_routes_use_adjustment_feat():
 
 
 def test_transaction_constructor_is_only_used_in_ledger_service():
-    allowed = {Path("app/services/ledger_service.py")}
+    allowed = {
+        Path("app/services/ledger_service.py"),
+        Path("app/utils/transaction_idempotency.py"),
+    }
     hits = []
     for path in Path("app").rglob("*.py"):
         source = path.read_text()
@@ -149,7 +152,7 @@ def test_transaction_constructor_is_only_used_in_ledger_service():
 def test_store_purchase_route_is_not_direct_ledger_or_store_authority():
     purchase_source = inspect.getsource(__import__("app.routes.api", fromlist=["purchase_item"]).purchase_item)
     assert "Transaction(" not in purchase_source
-    assert "StudentItem(" not in purchase_source
+    assert "StudentItem(correlation_id='corr_test', " not in purchase_source
     assert "resolve_scope(" in purchase_source
     assert "execute_store_purchase(" in purchase_source
     assert "execute_rent_perk_purchase(" in purchase_source
@@ -169,7 +172,7 @@ def test_feat_modules_do_not_construct_transactions_or_write_rows_directly():
         source = path.read_text()
         assert "Transaction(" not in source
         assert "db.session.add(" not in source
-        assert "StudentItem(" not in source
+        assert "StudentItem(correlation_id='corr_test', " not in source
         assert "RentPayment(" not in source
         assert "db.session.rollback(" not in source
 

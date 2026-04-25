@@ -18,27 +18,27 @@ class InsurancePurchaseResult:
 
 def execute_insurance_purchase(
     *,
-    student,
+    seat,
     teacher_id: int,
-    join_code: str,
+    class_id: str,
     policy,
     banking_settings,
     overdraft_shortfall: Decimal = Decimal("0.00"),
 ) -> InsurancePurchaseResult:
     """Obligations-led FEAT for insurance enrollment + premium debit."""
     enrollment = obligations_service.record_insurance_enrollment(
-        student_id=student.id,
+        seat_id=seat.id,
         policy=policy,
-        join_code=join_code,
+        class_id=class_id,
         purchase_date=utc_now(),
         next_payment_due=utc_now() + timedelta(days=30),
         coverage_start_date=utc_now() + timedelta(days=policy.waiting_period_days),
     )
 
     premium_tx = ledger_service.create_pending_transaction(
-        student_id=student.id,
+        seat_id=seat.id,
+        class_id=class_id,
         teacher_id=teacher_id,
-        join_code=join_code,
         amount=-policy.premium,
         account_type="checking",
         type="insurance_premium",
@@ -49,9 +49,9 @@ def execute_insurance_purchase(
     overdraft_transfer_applied = False
     if banking_settings and banking_settings.overdraft_protection_enabled and overdraft_shortfall > 0:
         ledger_service.create_transfer_pair(
-            student_id=student.id,
+            seat_id=seat.id,
+            class_id=class_id,
             teacher_id=teacher_id,
-            join_code=join_code,
             amount=overdraft_shortfall,
             from_account="savings",
             to_account="checking",

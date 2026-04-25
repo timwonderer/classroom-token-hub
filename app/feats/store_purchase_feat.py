@@ -8,6 +8,8 @@ from app.services import access_policy_service, identity_service, ledger_service
 from app.utils.time import utc_now
 
 
+from app.feats.base import requires_feat_context
+
 @dataclass
 class StorePurchaseResult:
     transaction_id: int
@@ -17,12 +19,12 @@ class StorePurchaseResult:
     success_message: str = ""
 
 
+@requires_feat_context("FEAT-STOR-001-RENT-PERK")
 def execute_rent_perk_purchase(
     *,
     scope,
-    student,
+    seat,
     teacher_id: int,
-    join_code: str,
     item,
     active_rent_item,
     ensure_active_grant: bool = False,
@@ -31,18 +33,18 @@ def execute_rent_perk_purchase(
     purchase_idempotency_key: str | None = None,
 ):
     """Store-led FEAT for zero-cost rent-perk purchases."""
+    class_id = scope.class_id
     access_policy_service.assert_can_purchase_item(
         scope=scope,
         teacher_id=teacher_id,
-        join_code=join_code,
     )
     description = f"Purchase: {item.name} [Rent Perk $0]"
     if purchase_idempotency_key:
         purchase_tx, created = ledger_service.create_pending_transaction_idempotent(
             idempotency_key=purchase_idempotency_key,
-            student_id=student.id,
+            seat_id=seat.id,
+            class_id=class_id,
             teacher_id=teacher_id,
-            join_code=join_code,
             amount=Decimal('0.00'),
             account_type='checking',
             type='purchase',
@@ -56,9 +58,9 @@ def execute_rent_perk_purchase(
             )
     else:
         purchase_tx = ledger_service.create_pending_transaction(
-            student_id=student.id,
+            seat_id=seat.id,
+            class_id=class_id,
             teacher_id=teacher_id,
-            join_code=join_code,
             amount=Decimal('0.00'),
             account_type='checking',
             type='purchase',
@@ -67,9 +69,8 @@ def execute_rent_perk_purchase(
 
     if ensure_active_grant and active_rent_item is None:
         active_rent_item = store_service.ensure_active_rent_per_use_grant(
-            student=student,
+            seat=seat,
             store_item_id=item.id,
-            join_code=join_code,
             use_limit=rent_grant_use_limit,
             now=utc_now(),
             expiry_date=None,
@@ -77,14 +78,12 @@ def execute_rent_perk_purchase(
 
     db.session.flush()
     student_item = store_service.record_rent_perk_purchase(
-        student=student,
+        seat=seat,
         item=item,
-        join_code=join_code,
         purchase_tx_id=purchase_tx.id,
         active_rent_item=active_rent_item,
         now=utc_now(),
     )
-    db.session.commit()
 
     return StorePurchaseResult(
         transaction_id=purchase_tx.id,
@@ -94,12 +93,12 @@ def execute_rent_perk_purchase(
     )
 
 
+@requires_feat_context("FEAT-STOR-002")
 def execute_store_purchase(
     *,
     scope,
-    student,
+    seat,
     teacher_id: int,
-    join_code: str,
     item,
     quantity: int,
     total_price: Decimal,
@@ -111,17 +110,17 @@ def execute_store_purchase(
     student_item_status: str = 'purchased',
 ):
     """Store-led FEAT for standard purchases."""
+    class_id = scope.class_id
     access_policy_service.assert_can_purchase_item(
         scope=scope,
         teacher_id=teacher_id,
-        join_code=join_code,
     )
     if purchase_idempotency_key:
         purchase_tx, created = ledger_service.create_pending_transaction_idempotent(
             idempotency_key=purchase_idempotency_key,
-            student_id=student.id,
+            seat_id=seat.id,
+            class_id=class_id,
             teacher_id=teacher_id,
-            join_code=join_code,
             amount=-total_price,
             account_type='checking',
             type='purchase',
@@ -135,9 +134,9 @@ def execute_store_purchase(
             )
     else:
         purchase_tx = ledger_service.create_pending_transaction(
-            student_id=student.id,
+            seat_id=seat.id,
+            class_id=class_id,
             teacher_id=teacher_id,
-            join_code=join_code,
             amount=-total_price,
             account_type='checking',
             type='purchase',
@@ -151,12 +150,11 @@ def execute_store_purchase(
     created_item_ids: list[int] = []
 
     if item.item_type == 'hall_pass':
-        hall_pass_balance = identity_service.add_hall_passes(student, quantity)
+        hall_pass_balance = identity_service.add_hall_passes(seat, quantity)
     else:
         created_item_ids = store_service.record_standard_purchase_items(
-            student=student,
+            seat=seat,
             item=item,
-            join_code=join_code,
             quantity=quantity,
             purchase_tx_id=purchase_tx.id,
             expiry_date=expiry_date,
@@ -164,14 +162,14 @@ def execute_store_purchase(
             uses_remaining=uses_remaining,
         )
 
-    checking_balance, savings_balance = ledger_service.get_available_balances(student.id, join_code)
+    checking_balance, savings_balance = ledger_service.get_available_balances(seat.id, class_id)
     if banking_settings and banking_settings.overdraft_protection_enabled and checking_balance < 0:
         shortfall = abs(checking_balance)
         if savings_balance >= shortfall:
             ledger_service.create_transfer_pair(
-                student_id=student.id,
+                seat_id=seat.id,
+                class_id=class_id,
                 teacher_id=teacher_id,
-                join_code=join_code,
                 amount=shortfall,
                 from_account='savings',
                 to_account='checking',
@@ -181,21 +179,19 @@ def execute_store_purchase(
             db.session.flush()
 
     ledger_service.apply_overdraft_fee_if_needed(
-        student,
+        seat,
         banking_settings,
-        teacher_id=teacher_id,
-        join_code=join_code,
-        commit=False,
+        idempotency_key=f"{purchase_idempotency_key}:overdraft" if purchase_idempotency_key else None
     )
 
     if item.item_type == 'collective':
         store_service.unlock_collective_goal_if_ready(
             item=item,
-            join_code=join_code,
+            class_id=class_id,
             teacher_id=teacher_id,
         )
 
-    db.session.commit()
+    # FEAT-LEGACY-WRAP: commit moved to shell
 
     success_message = f"You purchased {item.name}!"
     if item.is_bundle and item.bundle_quantity is not None:

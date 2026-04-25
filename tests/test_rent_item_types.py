@@ -281,7 +281,7 @@ def test_student_use_per_use_item(client, teacher_admin, student_in_class):
     db.session.add(store_item)
     db.session.flush()
 
-    student_item = StudentItem(
+    student_item = StudentItem(correlation_id='corr_test', 
         student_id=student.id, store_item_id=store_item.id,
         status='purchased', uses_remaining=3,
         join_code='JOINCODE123'
@@ -928,7 +928,7 @@ def test_per_use_free_purchase_from_rent(client, teacher_admin, student_in_class
     db.session.flush()
 
     # Give student a rent-granted StudentItem with 3 uses remaining
-    rent_granted = StudentItem(
+    rent_granted = StudentItem(correlation_id='corr_test', 
         student_id=student.id, store_item_id=store_item.id,
         status='purchased', uses_remaining=3,
         purchase_date=datetime.now(timezone.utc),
@@ -987,7 +987,7 @@ def test_per_use_charges_when_uses_exhausted(client, teacher_admin, student_in_c
     db.session.flush()
 
     # Give student a rent-granted item with 0 uses remaining (exhausted)
-    rent_granted = StudentItem(
+    rent_granted = StudentItem(correlation_id='corr_test', 
         student_id=student.id, store_item_id=store_item.id,
         status='purchased', uses_remaining=0,
         purchase_date=datetime.now(timezone.utc),
@@ -1574,7 +1574,7 @@ def test_use_item_converts_legacy_hall_pass_inventory_row(client, teacher_admin,
     db.session.add(hall_pass_item)
     db.session.flush()
 
-    legacy_row = StudentItem(
+    legacy_row = StudentItem(correlation_id='corr_test', 
         student_id=student.id,
         store_item_id=hall_pass_item.id,
         join_code='JOINCODE123',
@@ -1627,7 +1627,7 @@ def test_shop_displays_rent_perk_price_as_free(client, teacher_admin, student_in
     db.session.flush()
 
     # Active rent-granted uses for this item
-    db.session.add(StudentItem(
+    db.session.add(StudentItem(correlation_id='corr_test', 
         student_id=student.id,
         store_item_id=store_item.id,
         status='purchased',
@@ -2070,7 +2070,7 @@ def test_per_use_free_purchase_recovers_from_exhausted_grant_row_when_rent_paid(
     ))
 
     # Stale legacy row: exhausted grant still present
-    db.session.add(StudentItem(
+    db.session.add(StudentItem(correlation_id='corr_test', 
         student_id=student.id,
         store_item_id=store_item.id,
         join_code='JOINCODE123',

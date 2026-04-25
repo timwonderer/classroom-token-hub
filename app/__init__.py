@@ -270,8 +270,10 @@ def create_app():
 
     # -------------------- EXTENSIONS --------------------
     from app.extensions import db, migrate, csrf, limiter
+    from app.feats.base import init_feat_enforcement
 
     db.init_app(app)
+    init_feat_enforcement(app)
     migrate.init_app(app, db)
     csrf.init_app(app)
     limiter.init_app(app)
@@ -286,6 +288,14 @@ def create_app():
         "[endpoint=%(endpoint)s method=%(method)s] "
         "[error_class=%(error_class)s correlation_version=%(correlation_version)s]: %(message)s",
     )
+    if log_format.strip().lower() == "json":
+        log_format = (
+            '{"timestamp":"%(asctime)s","level":"%(levelname)s","module":"%(module)s",'
+            '"request_id":"%(request_id)s","actor":"%(actor_type)s:%(actor_opaque_id)s",'
+            '"class_id":"%(class_id)s","endpoint":"%(endpoint)s","method":"%(method)s",'
+            '"error_class":"%(error_class)s","correlation_version":"%(correlation_version)s",'
+            '"message":"%(message)s"}'
+        )
 
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(log_level)
@@ -683,9 +693,9 @@ def create_app():
                 claimed_seats[0]
             )
             if current_seat.class_id and session.get('current_class_id') != current_seat.class_id:
-                session['current_class_id'] = current_seat.class_id
+                pass
             if session.get('current_join_code') != current_seat.join_code:
-                session['current_join_code'] = current_seat.join_code
+                pass
 
             class_rows_by_join_code = {
                 row.join_code: row
@@ -812,10 +822,6 @@ def create_app():
                 (item for item in admin_available_classes if item['class_id'] == resolved_class_id),
                 admin_available_classes[0],
             )
-            if current_class['class_id'] and session.get('current_class_id') != current_class['class_id']:
-                session['current_class_id'] = current_class['class_id']
-            if session.get('current_join_code') != current_class['join_code']:
-                session['current_join_code'] = current_class['join_code']
 
             admin_current_class_context = {
                 'join_code': current_class['join_code'],

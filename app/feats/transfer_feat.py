@@ -18,18 +18,18 @@ class TransferResult:
 
 def execute_account_transfer(
     *,
-    student,
+    seat_id: int,
+    class_id: str,
     teacher_id: int,
-    join_code: str,
     amount: Decimal,
     from_account: str,
     to_account: str,
 ) -> TransferResult:
     """Ledger-led FEAT for student checking/savings transfers."""
     withdraw_tx, deposit_tx = ledger_service.create_transfer_pair(
-        student_id=student.id,
+        seat_id=seat_id,
+        class_id=class_id,
         teacher_id=teacher_id,
-        join_code=join_code,
         amount=amount,
         from_account=from_account,
         to_account=to_account,

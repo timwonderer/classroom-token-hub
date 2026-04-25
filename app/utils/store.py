@@ -38,23 +38,23 @@ def refund_pending_collective_purchases(item, description_suffix="Goal Expired")
         if si.purchase_transaction_id:
             purchase_tx = db.session.get(Transaction, si.purchase_transaction_id)
             if purchase_tx and (
-                purchase_tx.student_id != si.student_id
+                purchase_tx.seat_id != si.seat_id
                 or purchase_tx.teacher_id != item.teacher_id
             ):
                 purchase_tx = None
 
         # Legacy fallback for rows created before purchase_transaction_id existed.
-        if purchase_tx is None and si.join_code:
+        if purchase_tx is None and si.class_id:
             purchase_tx = (
                 Transaction.query
                 .filter_by(
-                    student_id=si.student_id,
+                    seat_id=si.seat_id,
                     teacher_id=item.teacher_id,
                     type='purchase',
                     reversal_transaction_id=None,
                 )
                 .filter(
-                    Transaction.join_code == si.join_code,
+                    Transaction.class_id == si.class_id,
                     Transaction.description.like(f"Purchase: {item.name}%"),
                 )
                 .order_by(Transaction.timestamp.desc())
@@ -68,9 +68,9 @@ def refund_pending_collective_purchases(item, description_suffix="Goal Expired")
             refund_amount = item.price
 
         refund_tx = ledger_service.create_pending_transaction(
-            student_id=si.student_id,
+            seat_id=si.seat_id,
+            class_id=si.class_id,
             teacher_id=item.teacher_id,
-            join_code=si.join_code,
             amount=refund_amount,
             account_type='checking',
             type='refund',
@@ -89,7 +89,10 @@ def refund_pending_collective_purchases(item, description_suffix="Goal Expired")
 
     return refunded
 
+from app.feats.base import feat_shell
 
+
+@feat_shell("FEAT-STOR-003")
 def process_expired_collective_goals(teacher_id):
     """
     Find all expired collective goals for a teacher, refund pending purchases,
@@ -128,5 +131,5 @@ def process_expired_collective_goals(teacher_id):
         refund_pending_collective_purchases(item, description_suffix="Collective Goal Expired")
         item.is_active = False
 
-    db.session.commit()
+    db.session.commit()  # FEAT-AUTHORIZED-SHELL
     return len(expired_items)

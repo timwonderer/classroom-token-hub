@@ -24,9 +24,9 @@ from dateutil.relativedelta import relativedelta
 from app.extensions import db, limiter
 from app.models import (
     Student, Transaction, TransactionStatus, TapEvent, StoreItem, StoreItemBlock, StudentItem,
-    RentSettings, RentPayment, InsurancePolicy, StudentInsurance, InsuranceClaim,
+    RentSettings, RentPayment, RentWaiver, InsurancePolicy, StudentInsurance, InsuranceClaim,
     BankingSettings, UserReport, FeatureSettings, Issue, Seat, User, StudentTeacher,
-    ClassMembership, ClassEconomy, _quantize_currency
+    ClassMembership, ClassEconomy, TeacherBlock, _quantize_currency
 )
 from app.auth import (
     admin_required,
@@ -81,7 +81,7 @@ from app.utils.time import (
     month_bounds_utc,
     week_bounds_utc,
 )
-from app.utils.seat_scope import get_seat_ids_for_student_join, transaction_scope_filter, seat_scoped_filter
+from app.utils.seat_scope import get_seat_id_for_class, transaction_scope_filter, seat_scoped_filter
 from app.utils.insurance_eligibility import (
     evaluate_claim_transaction_eligibility,
     collect_reimbursed_source_tx_ids,
@@ -279,83 +279,38 @@ def _get_claimed_setup_state():
     return seat, student, user
 
 def get_current_class_context():
-    """Get the currently selected class context (join_code, teacher_id, block).
+    """Get the currently selected class context.
 
     CRITICAL: This function enforces proper multi-tenancy isolation by using
-    join_code as the source of truth. Each join code represents a distinct
-    class economy, even if they share the same teacher.
+    class_id as the source of truth.
 
     Returns:
-        dict with keys: join_code, teacher_id, block, seat_id
+        dict with keys: class_id, join_code, teacher_id, block, seat_id
         None if no context available
     """
-    from app.models import ClassEconomy, TeacherBlock
-
     student = get_logged_in_student()
     if not student:
         return None
 
     current_seat = get_current_student_seat()
-    if current_seat and current_seat.join_code:
-        class_row = None
-        if current_seat.class_id:
-            class_row = ClassEconomy.query.filter_by(class_id=current_seat.class_id).first()
-        if not class_row:
-            class_row = ClassEconomy.query.filter_by(join_code=current_seat.join_code).first()
-
+    if not current_seat:
+        # Fallback to the first seat if no seat selected
+        current_seat = Seat.query.filter_by(student_id=student.id).order_by(Seat.id.asc()).first()
+        if current_seat:
+            sync_student_session_context(student, seat_id=current_seat.id)
+    
+    if current_seat:
+        class_row = ClassEconomy.query.filter_by(class_id=current_seat.class_id).first()
         if class_row:
-            session['current_class_id'] = class_row.class_id
-            if session.get('current_join_code') != current_seat.join_code:
-                session['current_join_code'] = current_seat.join_code
             return {
                 'class_id': class_row.class_id,
-                'join_code': current_seat.join_code,
+                'join_code': class_row.join_code,
                 'teacher_id': class_row.teacher_id,
                 'block': current_seat.block_identifier or current_seat.block,
                 'seat_id': current_seat.id,
             }
 
-    # Check if a class is already selected in session
-    current_class_id = session.get('current_class_id')
-
-    # Get all claimed seats for this student
-    claimed_seats = TeacherBlock.query.filter_by(
-        student_id=student.id,
-        is_claimed=True
-    ).all()
-
-    if not claimed_seats:
-        return None
-
-    # If no class selected, default to first claimed seat
-    if not current_class_id:
-        first_seat = claimed_seats[0]
-        current_class_id = first_seat.class_id
-        session['current_class_id'] = current_class_id
-        session['current_join_code'] = first_seat.join_code
-
-    # Find the seat matching current class id
-    current_seat = next(
-        (seat for seat in claimed_seats if seat.class_id == current_class_id),
-        None
-    )
-
-    # If class id not found in student's seats, reset to first seat
-    if not current_seat:
-        current_seat = claimed_seats[0]
-        session['current_class_id'] = current_seat.class_id
-        session['current_join_code'] = current_seat.join_code
-
-    sync_student_session_context(student, join_code=current_seat.join_code)
-
-    # Return full class context
-    return {
-        'class_id': current_seat.class_id,
-        'join_code': current_seat.join_code,
-        'teacher_id': current_seat.teacher_id,
-        'block': current_seat.block,
-        'seat_id': current_seat.id
-    }
+    return None
 
 
 def _prime_student_teacher_display_name_cache(student_id: int) -> None:
@@ -517,7 +472,13 @@ def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: in
     del teacher_id
     if not student or not join_code:
         return Decimal('0.00'), Decimal('0.00')
-    return get_available_balances(student.id, join_code)
+    class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+    if not class_row:
+        return Decimal('0.00'), Decimal('0.00')
+    seat_id = get_seat_id_for_class(student.id, class_row.class_id)
+    if not seat_id:
+        return Decimal('0.00'), Decimal('0.00')
+    return get_available_balances(seat_id, class_row.class_id)
 
 
 
@@ -1140,8 +1101,43 @@ def dashboard():
         )
         access_policy_service.assert_can_view_dashboard(scope)
     except AccessScopeDenied as exc:
-        flash(exc.message, "error")
-        return redirect(url_for('student.login'))
+        selected_join_code = (session.get("current_join_code") or "").strip() or None
+        if not selected_join_code:
+            flash(exc.message, "error")
+            return redirect(url_for('student.login'))
+
+        legacy_tb = TeacherBlock.query.filter_by(
+            student_id=student.id,
+            join_code=selected_join_code,
+        ).order_by(TeacherBlock.id.asc()).first()
+        if not legacy_tb:
+            flash(exc.message, "error")
+            return redirect(url_for('student.login'))
+
+        class_row = ClassEconomy.query.filter_by(join_code=selected_join_code).first()
+        if class_row is None and legacy_tb.teacher_id:
+            class_row = ClassEconomy(
+                join_code=selected_join_code,
+                teacher_id=legacy_tb.teacher_id,
+                created_by_admin_id=legacy_tb.teacher_id,
+                display_name=legacy_tb.block,
+            )
+            db.session.add(class_row)
+            db.session.flush()
+
+        legacy_seat = Seat.query.filter_by(
+            student_id=student.id,
+            join_code=selected_join_code,
+        ).order_by(Seat.id.asc()).first()
+
+        class LegacyScope:
+            join_code = selected_join_code
+            teacher_id = legacy_tb.teacher_id
+            block = legacy_tb.block or student.block or "A"
+            seat_id = legacy_seat.id if legacy_seat else None
+            class_id = class_row.class_id if class_row else None
+
+        scope = LegacyScope()
     except access_policy_service.AccessPolicyDenied as exc:
         flash(exc.message, "error")
         return redirect(url_for('student.login'))
@@ -1602,12 +1598,29 @@ def transfer():
                 return jsonify(status="error", message="Amount must be greater than 0."), 400
             flash("Amount must be greater than 0.", "transfer_error")
             return redirect(url_for("student.transfer"))
-        elif from_account == 'checking' and amount > checking_balance:
+        # Resolve seat_id and class_id for V2 identity
+        from app.models import ClassEconomy
+        economy = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=teacher_id).first()
+        class_id = economy.class_id if economy else None
+        
+        if not class_id:
+            if is_json:
+                return jsonify(status="error", message="Invalid class context."), 400
+            flash("Invalid class context.", "transfer_error")
+            return redirect(url_for("student.transfer"))
+
+        seat_id = get_seat_id_for_class(student.id, class_id)
+        if not seat_id:
+            if is_json:
+                return jsonify(status="error", message="No seat assigned in this class."), 400
+            flash("No seat assigned in this class.", "transfer_error")
+            return redirect(url_for("student.transfer"))
+
+        if from_account == 'checking' and amount > checking_balance:
             fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
                 student,
                 banking_settings,
-                teacher_id=teacher_id,
-                join_code=join_code,
+                class_id=class_id,
                 force=True
             )
 
@@ -1626,15 +1639,15 @@ def transfer():
         else:
             try:
                 execute_account_transfer(
-                    student=student,
+                    seat_id=seat_id,
+                    class_id=class_id,
                     teacher_id=teacher_id,
-                    join_code=join_code,
                     amount=amount,
                     from_account=from_account,
                     to_account=to_account,
                 )
                 current_app.logger.info(
-                    f"Transfer {amount} from {from_account} to {to_account} for student {student.id}"
+                    f"Transfer {amount} from {from_account} to {to_account} for seat {seat_id}"
                 )
             except SQLAlchemyError as e:
                 db.session.rollback()
@@ -1937,8 +1950,8 @@ def purchase_insurance(policy_id):
             flash(f"You already have a policy from the '{policy.tier_name or 'this'}' tier. You can only have one policy per tier.", "warning")
             return redirect(url_for('student.student_insurance'))
 
-    # CRITICAL FIX v2: Check sufficient funds using join_code scoped balance
-    checking_balance, savings_balance = get_available_balances(student.id, join_code)
+    # CRITICAL FIX v2: Check sufficient funds using seat/class scoped balance
+    checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
     banking_settings = get_banking_settings_for_context(context)
     overdraft_shortfall = Decimal('0.00')
 
@@ -1978,6 +1991,7 @@ def purchase_insurance(policy_id):
         student=student,
         teacher_id=teacher_id,
         join_code=join_code,
+        class_id=context.get('class_id'),
         policy=policy,
         banking_settings=banking_settings,
         overdraft_shortfall=overdraft_shortfall,
@@ -2231,10 +2245,14 @@ def file_claim(policy_id):
             return redirect(url_for('student.file_claim', policy_id=policy_id))
 
         try:
+            class_id = scope.class_id
+            seat_id = get_seat_id_for_class(student.id, class_id)
+
             execute_file_claim(
                 scope=scope,
                 enrollment=enrollment,
-                student=student,
+                seat_id=seat_id,
+                class_id=class_id,
                 incident_date=incident_date_value,
                 description=form.description.data,
                 claim_amount=claim_amount_value if claim_type != 'non_monetary' else None,
@@ -2364,8 +2382,8 @@ def shop():
     rent_item_types_by_store_id = {}
     per_use_limit_by_store_id = {}
 
-    if teacher_id and join_code and current_block:
-        seat_ids = get_seat_ids_for_student_join(student.id, join_code)
+    if teacher_id and class_id and current_block:
+        seat_id = get_seat_id_for_class(student.id, class_id)
         rent_settings = get_rent_settings_for_context(context)
         if rent_settings and rent_settings.is_enabled:
             now = utc_now()
@@ -2374,14 +2392,12 @@ def shop():
             coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
 
             
-            if coverage_due_date:
+            if coverage_due_date and seat_id:
                 has_paid_rent = _is_student_coverage_period_paid(
                     rent_settings,
-                    student.id,
-                    current_block,
-                    join_code,
+                    seat_id,
+                    class_id,
                     coverage_due_date,
-                    seat_ids=seat_ids,
                     include_waivers=False,
                 )
 
@@ -2525,7 +2541,7 @@ def shop():
 
 # -------------------- RENT --------------------
 
-def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, join_code=None, force=False):
+def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, class_id=None, join_code=None, force=False):
     """
     Check if student's checking balance is negative and charge overdraft fee if enabled.
     Returns (fee_charged, fee_amount) tuple.
@@ -2533,11 +2549,24 @@ def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, 
     Args:
         force: Charge fee even if balance is non-negative (declined transaction).
     """
+    if not class_id and join_code:
+        from app.models import ClassEconomy
+        ce = ClassEconomy.query.filter_by(join_code=join_code).first()
+        class_id = ce.class_id if ce else None
+
+    if not class_id:
+        return False, Decimal('0.00')
+
+    seat_id = get_seat_id_for_class(student.id, class_id)
+    if not seat_id:
+        return False, Decimal('0.00')
+
+    from app.models import Seat
+    seat = db.session.get(Seat, seat_id)
+
     return apply_ledger_overdraft_fee(
-        student,
+        seat,
         banking_settings,
-        teacher_id=teacher_id,
-        join_code=join_code,
         force=force
     )
 
@@ -2929,25 +2958,49 @@ def _is_coverage_period_paid(settings, valid_payments, coverage_due_date, includ
     return total_paid >= required_total
 
 
-def _get_active_rent_waiver(student_id, join_code, coverage_due_date):
+def _get_active_rent_waiver_v2(seat_id, class_id, coverage_due_date):
     """Return the waiver row covering the given coverage period, if any."""
     from app.models import RentWaiver
 
-    if not student_id or not coverage_due_date:
+    if not seat_id or not class_id or not coverage_due_date:
         return None
     query = RentWaiver.query.filter(
-        RentWaiver.student_id == student_id,
+        RentWaiver.seat_id == seat_id,
+        RentWaiver.class_id == class_id,
         RentWaiver.waiver_start_date <= coverage_due_date,
         RentWaiver.waiver_end_date >= coverage_due_date,
     )
-    if join_code:
-        query = query.filter(RentWaiver.join_code == join_code)
     return query.order_by(RentWaiver.created_at.desc(), RentWaiver.id.desc()).first()
 
 
-def _has_active_rent_waiver(student_id, join_code, coverage_due_date):
+def _has_active_rent_waiver_v2(seat_id, class_id, coverage_due_date):
     """Return True when a waiver covers the given coverage period."""
-    return _get_active_rent_waiver(student_id, join_code, coverage_due_date) is not None
+    return _get_active_rent_waiver_v2(seat_id, class_id, coverage_due_date) is not None
+
+
+def _has_active_rent_waiver(student_id, join_code, coverage_due_date):
+    """Legacy compatibility wrapper for waiver checks keyed by student + join_code."""
+    if not student_id or not join_code or not coverage_due_date:
+        return False
+
+    legacy_waiver = RentWaiver.query.filter(
+        RentWaiver.student_id == student_id,
+        RentWaiver.join_code == join_code,
+        RentWaiver.waiver_start_date <= coverage_due_date,
+        RentWaiver.waiver_end_date >= coverage_due_date,
+    ).order_by(RentWaiver.created_at.desc(), RentWaiver.id.desc()).first()
+    if legacy_waiver:
+        return True
+
+    class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+    if not class_row or not class_row.class_id:
+        return False
+
+    seat_id = get_seat_id_for_class(student_id, class_row.class_id)
+    if not seat_id:
+        return False
+
+    return _has_active_rent_waiver_v2(seat_id, class_row.class_id, coverage_due_date)
 
 
 def _iter_rent_waiver_coverage_dates(settings, waiver):
@@ -3026,33 +3079,74 @@ def _expand_rent_waiver_history(settings, waivers, *, now=None):
 
 def _is_student_coverage_period_paid(
     settings,
-    student_id,
-    period,
-    join_code,
-    coverage_due_date,
-    seat_ids=None,
+    primary_id,
+    scope_a,
+    scope_b,
+    coverage_due_date=None,
     include_late_fee=True,
     include_waivers=True,
 ):
-    """Return True when a student's specific coverage period is fully paid or waived."""
-    if not settings or not coverage_due_date or not join_code:
-        return False
-    normalized_period = (period or '').strip().upper()
-    if not normalized_period:
+    """
+    Return True when a student's specific coverage period is fully paid or waived.
+
+    Supports both signatures:
+      - v2: (settings, seat_id, class_id, coverage_due_date, ...)
+      - legacy: (settings, student_id, period, join_code, coverage_due_date, ...)
+    """
+    if not settings:
         return False
 
-    if include_waivers and _has_active_rent_waiver(student_id, join_code, coverage_due_date):
-        return True
+    legacy_mode = coverage_due_date is not None
+    if legacy_mode:
+        student_id = primary_id
+        period = (scope_a or '').strip().upper()
+        join_code = scope_b
+        class_row = ClassEconomy.query.filter_by(join_code=join_code).first() if join_code else None
+        class_id = class_row.class_id if class_row else None
+        seat_id = get_seat_id_for_class(student_id, class_id) if student_id and class_id else None
+    else:
+        seat_id = primary_id
+        class_id = scope_a
+        coverage_due_date = scope_b
+        period = None
+        student_id = None
+        join_code = None
+        if class_id:
+            class_row = db.session.get(ClassEconomy, class_id)
+            join_code = class_row.join_code if class_row else None
+        if seat_id:
+            seat = db.session.get(Seat, seat_id)
+            student_id = seat.student_id if seat else None
 
-    coverage_scope = seat_scoped_filter(RentPayment, student_id, seat_ids or [])
-    coverage_payments = RentPayment.query.filter(
-        coverage_scope,
-        db.func.upper(db.func.trim(RentPayment.period)) == normalized_period,
+    if not coverage_due_date or not class_id:
+        return False
+
+    if include_waivers:
+        if legacy_mode:
+            if _has_active_rent_waiver(student_id, join_code, coverage_due_date):
+                return True
+        elif _has_active_rent_waiver_v2(seat_id, class_id, coverage_due_date):
+            return True
+
+    coverage_payments_query = RentPayment.query.filter(
         RentPayment.coverage_month == coverage_due_date.month,
         RentPayment.coverage_year == coverage_due_date.year,
-        RentPayment.join_code == join_code,
-    ).all()
+    )
+    if seat_id:
+        coverage_payments_query = coverage_payments_query.filter(
+            RentPayment.seat_id == seat_id,
+            RentPayment.class_id == class_id,
+        )
+    else:
+        coverage_payments_query = coverage_payments_query.filter(
+            RentPayment.student_id == student_id,
+            RentPayment.join_code == join_code,
+        )
+        if period:
+            coverage_payments_query = coverage_payments_query.filter(RentPayment.period == period)
+    coverage_payments = coverage_payments_query.all()
 
+    seat_ids = [seat_id] if seat_id else []
     valid_payments = _filter_valid_rent_payments(
         coverage_payments,
         student_id,
@@ -3120,9 +3214,18 @@ def _ensure_rent_hall_pass_top_off(student, context, settings=None, now=None):
 
     join_code = context.get('join_code')
     current_block = (context.get('block') or '').strip().upper()
-    if not join_code or not current_block:
+    class_id = context.get('class_id')
+    if not class_id:
+        from app.models import ClassEconomy
+        ce = ClassEconomy.query.filter_by(join_code=join_code).first()
+        class_id = ce.class_id if ce else None
+
+    if not class_id:
         return 0, 0, False
-    seat_ids = get_seat_ids_for_student_join(student.id, join_code)
+
+    seat_id = get_seat_id_for_class(student.id, class_id)
+    if not seat_id:
+        return 0, 0, False
 
     settings = settings or get_rent_settings_for_context(context)
     if not settings or not settings.is_enabled:
@@ -3135,11 +3238,9 @@ def _ensure_rent_hall_pass_top_off(student, context, settings=None, now=None):
 
     is_paid = _is_student_coverage_period_paid(
         settings,
-        student.id,
-        current_block,
-        join_code,
+        seat_id,
+        class_id,
         coverage_due_date,
-        seat_ids=seat_ids,
         include_late_fee=False,
     )
 
@@ -3170,7 +3271,6 @@ def rent():
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
     current_block = (context.get('block') or '').strip().upper()
-    seat_ids = get_seat_ids_for_student_join(student.id, join_code) if join_code else []
     settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
@@ -3181,8 +3281,20 @@ def rent():
         flash("No class period found for this class.", "error")
         return redirect(url_for('student.dashboard'))
 
-    # Get student's periods (scoped to the current class only)
-    student_blocks = [current_block]
+    class_id = context.get('class_id')
+    if not class_id:
+        from app.models import ClassEconomy
+        ce = ClassEconomy.query.filter_by(join_code=join_code).first()
+        class_id = ce.class_id if ce else None
+
+    if not class_id:
+        flash("No class context available.", "error")
+        return redirect(url_for('student.dashboard'))
+
+    seat_id = get_seat_id_for_class(student.id, class_id)
+    if not seat_id:
+        flash("No seat assigned in this class.", "error")
+        return redirect(url_for('student.dashboard'))
 
     # Calculate rent status for each period
     now = utc_now()
@@ -3205,11 +3317,9 @@ def rent():
     elif is_preview_period_candidate and coverage_due_date:
         current_coverage_paid = _is_student_coverage_period_paid(
             settings,
-            student.id,
-            current_block,
-            join_code,
+            seat_id,
+            class_id,
             coverage_due_date,
-            seat_ids=seat_ids,
         )
 
     # Only allow preview period if current coverage is already paid
@@ -3231,23 +3341,21 @@ def rent():
     period_status = {}
 
     # Get all payments that COVER the current period (pre-paid system)
-    rent_scope = seat_scoped_filter(RentPayment, student.id, seat_ids)
     all_payments_for_period = RentPayment.query.filter(
-        rent_scope,
+        RentPayment.seat_id == seat_id,
+        RentPayment.class_id == class_id,
         RentPayment.period == current_block,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
-        RentPayment.join_code == join_code,
     ).all()
 
     # Filter out payments where the corresponding transaction was voided
     payments = []
     for payment in all_payments_for_period:
-        txn_scope = transaction_scope_filter(Transaction, student.id, seat_ids)
         txn = Transaction.query.filter(
-            txn_scope,
+            Transaction.seat_id == seat_id,
+            Transaction.class_id == class_id,
             Transaction.type == 'Rent Payment',
-            Transaction.join_code == join_code,
             Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
             Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
             Transaction.amount == -payment.amount_paid
@@ -3264,7 +3372,7 @@ def rent():
         late_fee = settings.late_fee
 
     total_due = settings.rent_amount + late_fee if rent_is_active else Decimal('0.00')
-    active_waiver = _get_active_rent_waiver(student.id, join_code, payment_due_date) if payment_due_date else None
+    active_waiver = _get_active_rent_waiver_v2(seat_id, class_id, payment_due_date) if payment_due_date else None
     is_paid = total_paid >= total_due if rent_is_active else False
     is_late = now > grace_end_date_for_status and not is_paid if rent_is_active else False
     remaining_amount = max(Decimal('0.00'), total_due - total_paid) if rent_is_active else Decimal('0.00')
@@ -3284,22 +3392,22 @@ def rent():
     }
 
     # Get scoped balances for this class only
-    checking_balance, savings_balance = get_available_balances(student.id, join_code)
+    checking_balance, savings_balance = get_available_balances(seat_id, class_id)
 
     # Get payment history for the current class only
     payment_history = RentPayment.query.filter(
-        rent_scope,
-        RentPayment.join_code == join_code,
+        RentPayment.seat_id == seat_id,
+        RentPayment.class_id == class_id,
     ).order_by(
         RentPayment.payment_date.desc()
     ).limit(24).all()  # Increased to show more history with multiple periods
 
     waiver_history = []
     if settings:
-        waiver_rows = [
-            waiver for waiver in getattr(student, 'rent_waivers', [])
-            if waiver.join_code == join_code or waiver.join_code is None
-        ]
+        waiver_rows = RentWaiver.query.filter(
+            RentWaiver.seat_id == seat_id,
+            RentWaiver.class_id == class_id,
+        ).all()
         waiver_history = _expand_rent_waiver_history(settings, waiver_rows, now=now)
 
     payment_history_rows = []
@@ -3380,10 +3488,21 @@ def rent_pay(period):
         flash("No class selected. Please choose a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
 
-    teacher_id = context.get('teacher_id')
-    join_code = context.get('join_code')
-    current_block = (context.get('block') or '').strip().upper()
-    seat_ids = get_seat_ids_for_student_join(student.id, join_code) if join_code else []
+    class_id = context.get('class_id')
+    if not class_id:
+        from app.models import ClassEconomy
+        ce = ClassEconomy.query.filter_by(join_code=join_code).first()
+        class_id = ce.class_id if ce else None
+
+    if not class_id:
+        flash("No class context available.", "error")
+        return redirect(url_for('student.dashboard'))
+
+    seat_id = get_seat_id_for_class(student.id, class_id)
+    if not seat_id:
+        flash("No seat assigned in this class.", "error")
+        return redirect(url_for('student.dashboard'))
+
     settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
@@ -3396,7 +3515,6 @@ def rent_pay(period):
 
     # Validate period for the current class context only
     period = (period or '').strip().upper()
-    student_blocks = [current_block]
     if period != current_block:
         flash("Invalid period.", "error")
         return redirect(url_for('student.rent'))
@@ -3432,11 +3550,9 @@ def rent_pay(period):
     else:
         current_coverage_paid = _is_student_coverage_period_paid(
             settings,
-            student.id,
-            period,
-            join_code,
+            seat_id,
+            class_id,
             coverage_due_date,
-            seat_ids=seat_ids,
         )
 
     # Determine which due date this payment should cover
@@ -3453,28 +3569,25 @@ def rent_pay(period):
     coverage_month = payment_due_date.month
     coverage_year = payment_due_date.year
 
-    checking_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
-    savings_balance = student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)
+    checking_balance, savings_balance = get_available_balances(seat_id, class_id)
 
     # Get all existing payments that cover this period
-    rent_scope = seat_scoped_filter(RentPayment, student.id, seat_ids)
     all_payments = RentPayment.query.filter(
-        rent_scope,
+        RentPayment.seat_id == seat_id,
+        RentPayment.class_id == class_id,
         RentPayment.period == period,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
-        RentPayment.join_code == join_code,
     ).all()
 
     # Filter out payments where the corresponding transaction was voided
     existing_payments = []
     for payment in all_payments:
         # Find the transaction for this payment
-        txn_scope = transaction_scope_filter(Transaction, student.id, seat_ids)
         txn = Transaction.query.filter(
-            txn_scope,
+            Transaction.seat_id == seat_id,
+            Transaction.class_id == class_id,
             Transaction.type == 'Rent Payment',
-            Transaction.join_code == join_code,
             Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
             Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
             Transaction.amount == -payment.amount_paid
@@ -3534,21 +3647,21 @@ def rent_pay(period):
     # Get banking settings for overdraft handling (reuse teacher_id from above)
     banking_settings = get_banking_settings_for_context(context)
 
+    from app.models import Seat
+    seat = db.session.get(Seat, seat_id)
+
     # Check if student has enough funds for this payment using shared utility
     overdraft_shortfall = Decimal('0.00')
     allowed, shortfall, _, _ = evaluate_overdraft_allowance(
-        student,
+        seat,
         payment_amount,
         banking_settings,
-        teacher_id=teacher_id,
-        join_code=join_code
     )
     if not allowed:
         fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
             student,
             banking_settings,
-            teacher_id=teacher_id,
-            join_code=join_code,
+            class_id=class_id,
             force=True,
         )
 
@@ -3569,8 +3682,7 @@ def rent_pay(period):
         overdraft_shortfall = shortfall
 
     result = execute_rent_payment(
-        scope=scope,
-        student=student,
+        seat=seat,
         context=context,
         payment_amount=payment_amount,
         period=period,
@@ -3750,15 +3862,15 @@ def switch_class(class_id):
         linked_user.id if linked_user else None,
     )
     db.session.commit()
-
-    # Update session with stable class context.
-    session['current_class_id'] = resolved_switch.scope.class_id
-    session['current_join_code'] = resolved_switch.scope.join_code
-    if bridge_seat:
-        session['current_seat_id'] = bridge_seat.id
-        if bridge_seat.user_id:
-            session['student_user_id'] = bridge_seat.user_id
-    sync_student_session_context(student, join_code=resolved_switch.scope.join_code)
+    
+    # Use canonical session context switch (Logs: SESSION-CONTEXT-SWITCH)
+    from app.auth import switch_student_session_context
+    switch_student_session_context(
+        student, 
+        class_id=resolved_switch.scope.class_id, 
+        join_code=resolved_switch.scope.join_code,
+        seat_id=bridge_seat.id if bridge_seat else None
+    )
 
     # Get teacher name for response
     teacher = db.session.get(Admin, resolved_switch.scope.teacher_id)

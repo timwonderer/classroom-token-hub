@@ -262,7 +262,7 @@ def test_teacher_student_lifecycle(client, teacher, app):
         db.session.commit()
 
         # Teacher student buys it (should NOT contribute)
-        si_teacher = StudentItem(
+        si_teacher = StudentItem(correlation_id='corr_test', 
             student_id=student.id,
             store_item_id=goal_item.id,
             join_code=join_code,
@@ -278,7 +278,7 @@ def test_teacher_student_lifecycle(client, teacher, app):
         assert count == 0
 
         # Regular student buys it (should contribute)
-        si_regular = StudentItem(
+        si_regular = StudentItem(correlation_id='corr_test', 
             student_id=regular_student.id,
             store_item_id=goal_item.id,
             join_code=join_code,

@@ -245,7 +245,7 @@ def test_reject_redemption_legacy_item_resolves_join_code(client, teacher_admin,
     db.session.add(purchase_tx)
     db.session.flush()
 
-    legacy_item = StudentItem(
+    legacy_item = StudentItem(correlation_id='corr_test', 
         student_id=student.id,
         store_item_id=item.id,
         join_code='REJECT123',
