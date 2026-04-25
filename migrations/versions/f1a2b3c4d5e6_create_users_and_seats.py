@@ -17,51 +17,96 @@ down_revision = "e7f8a9b0c1d2"
 branch_labels = None
 depends_on = None
 
+def table_exists(table_name):
+    """Check if a table exists."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return table_name in inspector.get_table_names()
+
+def column_exists(table_name, column_name):
+    """Check if a column exists in a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        columns = [col['name'] for col in inspector.get_columns(table_name)]
+        return column_name in columns
+    except Exception:
+        return False
+
+def index_exists(table_name, index_name):
+    """Check if an index exists on a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
+        return index_name in indexes
+    except Exception:
+        return False
 
 def upgrade():
-    op.create_table(
-        "users",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("public_id", sa.String(length=36), nullable=False),
-        sa.Column("username", sa.String(length=255), nullable=False),
-        sa.Column("password_hash", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("public_id"),
-        sa.UniqueConstraint("username"),
-    )
-    op.create_index("ix_users_public_id", "users", ["public_id"], unique=True)
-    op.create_index("ix_users_username", "users", ["username"], unique=True)
+    if not table_exists("users"):
+        op.create_table(
+            "users",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("public_id", sa.String(length=36), nullable=False),
+            sa.Column("username", sa.String(length=255), nullable=False),
+            sa.Column("password_hash", sa.Text(), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("public_id"),
+            sa.UniqueConstraint("username"),
+        )
+        if not index_exists("users", "ix_users_public_id"):
+            op.create_index("ix_users_public_id", "users", ["public_id"], unique=True)
+        if not index_exists("users", "ix_users_username"):
+            op.create_index("ix_users_username", "users", ["username"], unique=True)
 
-    op.create_table(
-        "seats",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("public_id", sa.String(length=36), nullable=False),
-        sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.Column("join_code", sa.String(length=20), nullable=False),
-        sa.Column("student_id", sa.Integer(), nullable=True),
-        sa.Column("block", sa.String(length=10), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["student_id"], ["students.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("public_id"),
-        sa.UniqueConstraint("user_id", "join_code", name="uq_seats_user_join_code"),
-    )
-    op.create_index("ix_seats_public_id", "seats", ["public_id"], unique=True)
-    op.create_index("ix_seats_user_id", "seats", ["user_id"], unique=False)
-    op.create_index("ix_seats_join_code", "seats", ["join_code"], unique=False)
-    op.create_index("ix_seats_student_id", "seats", ["student_id"], unique=False)
+    if not table_exists("seats"):
+        op.create_table(
+            "seats",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("public_id", sa.String(length=36), nullable=False),
+            sa.Column("user_id", sa.Integer(), nullable=False),
+            sa.Column("join_code", sa.String(length=20), nullable=False),
+            sa.Column("student_id", sa.Integer(), nullable=True),
+            sa.Column("block", sa.String(length=10), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.ForeignKeyConstraint(["student_id"], ["students.id"], ondelete="SET NULL"),
+            sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("public_id"),
+            sa.UniqueConstraint("user_id", "join_code", name="uq_seats_user_join_code"),
+        )
+        if not index_exists("seats", "ix_seats_public_id"):
+            op.create_index("ix_seats_public_id", "seats", ["public_id"], unique=True)
+        if not index_exists("seats", "ix_seats_user_id"):
+            op.create_index("ix_seats_user_id", "seats", ["user_id"], unique=False)
+        if not index_exists("seats", "ix_seats_join_code"):
+            op.create_index("ix_seats_join_code", "seats", ["join_code"], unique=False)
+        if not index_exists("seats", "ix_seats_student_id"):
+            op.create_index("ix_seats_student_id", "seats", ["student_id"], unique=False)
 
     bind = op.get_bind()
-    metadata = sa.MetaData()
+    # Skip backfill if seats already has data (heuristic)
+    try:
+        result = bind.execute(sa.text("SELECT COUNT(*) FROM seats"))
+        count = result.scalar()
+        if count > 0:
+            return
+    except Exception:
+        return
 
-    students = sa.Table("students", metadata, autoload_with=bind)
-    teacher_blocks = sa.Table("teacher_blocks", metadata, autoload_with=bind)
-    users = sa.Table("users", metadata, autoload_with=bind)
-    seats = sa.Table("seats", metadata, autoload_with=bind)
+    metadata = sa.MetaData()
+    try:
+        students = sa.Table("students", metadata, autoload_with=bind)
+        teacher_blocks = sa.Table("teacher_blocks", metadata, autoload_with=bind)
+        users = sa.Table("users", metadata, autoload_with=bind)
+        seats = sa.Table("seats", metadata, autoload_with=bind)
+    except Exception:
+        # Tables might be missing or in incompatible state
+        return
 
     now = datetime.now(timezone.utc)
 

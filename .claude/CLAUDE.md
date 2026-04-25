@@ -7,13 +7,15 @@ This document provides essential guidance for Claude (or any AI assistant) worki
 1. [Project Overview](#project-overview)
 2. [Critical Rules](#critical-rules)
 3. [Architecture Patterns](#architecture-patterns)
-4. [Database Migrations](#database-migrations)
-5. [Documentation Standards](#documentation-standards)
-6. [Testing Requirements](#testing-requirements)
-7. [Security Principles](#security-principles)
-8. [Multi-Tenancy Scoping](#multi-tenancy-scoping)
-9. [Common Pitfalls](#common-pitfalls)
-10. [Workflow Checklist](#workflow-checklist)
+4. [FEAT Execution Model](#feat-execution-model)
+5. [Domain Authority Model](#domain-authority-model)
+6. [Database Migrations](#database-migrations)
+7. [Documentation Standards](#documentation-standards)
+8. [Testing Requirements](#testing-requirements)
+9. [Security Principles](#security-principles)
+10. [Multi-Tenancy Scoping](#multi-tenancy-scoping)
+11. [Common Pitfalls](#common-pitfalls)
+12. [Workflow Checklist](#workflow-checklist)
 
 ---
 
@@ -25,44 +27,61 @@ This document provides essential guidance for Claude (or any AI assistant) worki
 - **Students** can be enrolled in multiple periods with different teachers
 - **System Admins** oversee the entire platform
 
-**Version:** 1.4.1 - Documentation alignment release
+**Active Branch:** `codex/v2.0` — v2 architecture stabilization
 **License:** PolyForm Noncommercial 1.0.0
 **Python:** 3.10+
 **Database:** PostgreSQL with Alembic migrations
+
+### v2 Status
+
+The codebase is in an active v2 rebuild on `codex/v2.0`. The v2 architecture introduces:
+- A capability-based authority model (INV → DOM → FEAT hierarchy)
+- `seat_id` as the primary activity anchor (replacing raw `student_id` usage)
+- `class_id` (UUID) as the canonical class boundary (with `join_code` as its public alias)
+- A `feats/` execution layer that owns all state mutation
+- Domain-bounded services in `app/services/`
+
+Legacy v1 models (`Admin`, `Student`, `TeacherBlock`, etc.) still exist and are used for authentication; the `User`/`Seat` unified identity model is present in the schema but not yet the primary auth path. When reading or writing code, always confirm which model layer is actually in use for the feature you are touching.
 
 ---
 
 ## Critical Rules
 
-### 🚨 MUST FOLLOW EVERY TIME
+### MUST FOLLOW EVERY TIME
 
 1. **ALWAYS read existing code before proposing changes**
    - Never suggest modifications to files you haven't read
    - Understand context before making changes
 
-2. **ALWAYS scope database queries by `join_code`**
-   - Every query for student data MUST be scoped to the current class period
+2. **ALWAYS scope database queries by `class_id` (or `join_code`)**
+   - Every query for student/seat data MUST be scoped to the current class
+   - `class_id` is the canonical UUID boundary; `join_code` is its public alias
+   - `seat_id` anchors per-user activity within a class
    - See `.claude/rules/multi-tenancy.md` for detailed rules
 
-3. **ALWAYS create a migration for database schema changes**
+3. **ALWAYS route state mutations through a FEAT**
+   - Routes, background jobs, and CLI scripts MUST NOT call `db.session.add/commit` directly on domain models
+   - All writes go through `app/feats/` — see [FEAT Execution Model](#feat-execution-model)
+
+4. **ALWAYS create a migration for database schema changes**
    - Never modify models without creating a migration
    - See `.claude/rules/database-migrations.md` for the complete workflow
 
-4. **ALWAYS update documentation when adding features**
+5. **ALWAYS update documentation when adding features**
    - Update CHANGELOG.md for all changes
    - Update relevant user guides and technical docs
    - See `.claude/rules/documentation.md` for standards
 
-5. **ALWAYS write tests for new features**
+6. **ALWAYS write tests for new features**
    - Minimum: happy path + error cases
    - Include multi-tenancy scoping tests
    - See `.claude/rules/testing.md` for requirements
 
-6. **NEVER commit secrets or PII**
+7. **NEVER commit secrets or PII**
    - Use environment variables for sensitive data
    - Encrypt PII at rest using the encryption utilities
 
-7. **NEVER skip CSRF protection**
+8. **NEVER skip CSRF protection**
    - All forms must include CSRF tokens
    - All POST/PUT/DELETE routes must validate CSRF
 
@@ -71,8 +90,6 @@ This document provides essential guidance for Claude (or any AI assistant) worki
 ## Architecture Patterns
 
 ### Blueprint Structure
-
-The application uses Flask Blueprints for modular organization:
 
 ```
 app/
@@ -85,9 +102,26 @@ app/
 │   ├── docs.py           # In-app documentation browser
 │   ├── main.py           # Public/site routes
 │   └── recovery.py       # Student recovery flow
+├── feats/                # FEAT execution layer (all state mutation goes here)
+│   ├── base.py
+│   ├── admin_adjustment_feat.py
+│   ├── insurance_claim_feat.py
+│   ├── insurance_purchase_feat.py
+│   ├── rent_payment_feat.py
+│   ├── store_purchase_feat.py
+│   ├── transaction_void_feat.py
+│   └── transfer_feat.py
+├── services/             # Domain-bounded read/validation services
+│   ├── access_policy_service.py
+│   ├── attendance_service.py
+│   ├── balance_service.py
+│   ├── identity_service.py
+│   ├── ledger_service.py
+│   ├── obligations_service.py
+│   ├── store_service.py
+│   └── tlcp.py
 ├── auth.py               # Auth helpers and scoped access helpers
 ├── models.py             # SQLAlchemy models (55+ runtime models)
-├── services/             # Service-layer modules
 ├── utils/                # Utility and domain helpers
 ├── scheduled_tasks.py    # Background scheduler jobs
 └── __init__.py           # App factory
@@ -95,23 +129,124 @@ app/
 
 ### Key Files
 
-- `wsgi.py` - Application entry point
-- `app/forms.py` - WTForms form definitions
-- `app/auth.py` - Admin/student access helpers and auth/session utilities
-- `app/payroll.py` - Payroll automation logic
-- `app/services/balance_service.py` - Balance settlement/read helpers
-- `app/utils/analytics_engine.py` - Analytics computation backend
-- `app/scheduled_tasks.py` - Hourly and nightly background jobs
+- `wsgi.py` — Application entry point
+- `app/forms.py` — WTForms form definitions
+- `app/auth.py` — Admin/student access helpers and auth/session utilities
+- `app/payroll.py` — Payroll automation logic
+- `app/services/ledger_service.py` — Balance reads and ledger helpers (seat+class scoped)
+- `app/services/balance_service.py` — Balance settlement helpers
+- `app/utils/analytics_engine.py` — Analytics computation backend
+- `app/utils/seat_scope.py` — Seat/class scope resolution helpers
+- `app/scheduled_tasks.py` — Hourly and nightly background jobs
 
 ### Database Models
 
-**55+ SQLAlchemy models** including:
-- Identity and access: `Admin`, `SystemAdmin`, `User`, `IdentityProfile`, `Seat`
-- Class scope: `ClassEconomy`, `ClassMembership`, `TeacherBlock`, `StudentTeacher`, `JoinCode`
-- Student runtime: `Student`, `StudentBlock`, `Announcement`, `FeatureSettings`, `TeacherOnboarding`
-- Financial and attendance: `Transaction`, `BalanceCache`, `PayrollSettings`, `PayrollCache`, `BankingSettings`, `TapEvent`, `HallPassLog`
-- Support and observability: `Issue`, `IssueCategory`, `IssueStatusHistory`, `IssueResolutionAction`, `ErrorLog`, `ErrorEvent`, `ActorRequestTrace`, `UserReport`
-- Analytics: `AnalyticsAlert`, `AnalyticsSnapshot`, `AnalyticsEvent`
+**55+ SQLAlchemy models.** The v2 canonical identity models are:
+
+- **v2 canonical identity:**
+  - `User` — global login principal (table exists; auth still uses legacy tables during transition)
+  - `Seat` — class-local participant binding (`seat_id` is the primary activity anchor)
+  - `IdentityProfile` — display identity (names, initials), one-to-one with `seats`
+  - `ClassEconomy` — class universe anchor; `class_id` (UUID PK) is the canonical boundary; `join_code` is the public alias
+
+- **Legacy auth (still active):**
+  - `Admin` (teachers), `Student`, `SystemAdmin` — v1 tables still used for authentication
+  - `TeacherBlock` — roster seat records (claim flow)
+  - `StudentTeacher`, `ClassMembership` — ownership and membership records
+
+- **Financial and attendance (seat-scoped):**
+  - `Transaction`, `BalanceCache` — use `seat_id` + `class_id`
+  - `PayrollSettings`, `RentSettings`, `BankingSettings`, `FeatureSettings` — scoped by `class_id`
+  - `TapEvent`, `HallPassLog` — scoped by `join_code`/`class_id`
+
+- **Support and observability:**
+  - `Issue`, `IssueCategory`, `IssueStatusHistory`, `IssueResolutionAction`
+  - `ErrorLog`, `ErrorEvent`, `ActorRequestTrace`, `UserReport`
+
+- **Analytics:**
+  - `AnalyticsAlert`, `AnalyticsSnapshot`, `AnalyticsEvent`
+
+---
+
+## FEAT Execution Model
+
+The FEAT layer is the **only legal mechanism** for state mutation in v2.
+
+### What is a FEAT?
+
+A FEAT is an atomic orchestration unit that:
+1. Resolves identity context (`user_id`, `seat_id`, `class_id`) before any domain interaction
+2. Validates intent across domains (read-only domain guards)
+3. Executes all state mutations within a **single transaction boundary**
+4. Emits an auditable execution trace
+
+### The Rule
+
+```
+Routes → call FEAT → FEAT calls domain services → FEAT commits
+```
+
+**Routes and background jobs MUST NOT:**
+- call `db.session.add()` / `db.session.commit()` directly on domain models
+- orchestrate multi-domain logic themselves
+- bypass the FEAT layer
+
+### FEAT directory: `app/feats/`
+
+Existing FEATs: `transfer_feat`, `store_purchase_feat`, `rent_payment_feat`, `transaction_void_feat`, `insurance_claim_feat`, `insurance_purchase_feat`, `admin_adjustment_feat`.
+
+Use `app/feats/base.py` (`feat_shell`) as the scaffolding for new FEATs.
+
+### Domain Guard Pattern
+
+Domain services expose capability checks as guards:
+
+```python
+# Domain guard — read-only, returns (allowed, reason)
+allowed, reason = dom_led.check_solvency(seat_id, class_id, amount)
+if not allowed:
+    return deny(reason)
+
+# Mutation only happens inside FEAT after all guards pass
+```
+
+### GET Requests Must Be Pure
+
+**`INV-ARC-007`**: GET handlers must not trigger DB writes or commits. Any reconciliation, interest posting, or lazy expiration that currently happens on GET is a known v2 violation under active remediation. Do not introduce new GET-triggered writes.
+
+---
+
+## Domain Authority Model
+
+The v2 authority hierarchy is: **INV → DOM → FEAT**
+
+Specs live in `docs/development/`:
+- `specs/` — target-state architecture and authority contracts
+- `tracking/` — launch checklists and current status
+- `v2_restructure_doc/INVARIANT/` — core invariants
+- `v2_restructure_doc/DOMAIN/` — per-domain authority specs
+- `v2_restructure_doc/FEATURE-EXECUTION/` — FEAT contracts
+
+### Domain Summary
+
+| Domain | Authority | Primary Tables |
+|---|---|---|
+| Identity & Class Binding (`DOM-IDEN-001`) | Global identity, seat binding, class creation | `users`, `seats`, `identity_profiles`, `classes` |
+| Class Configuration (`DOM-CLASS-001`) | Policy/directives (rates, schedules, limits) | `payroll_settings`, `rent_settings`, `banking_settings`, `class_features` |
+| Attendance (`DOM-ATT-001`) | Time-tracking facts and hall pass execution | `attendance_sessions`, `hall_pass_logs` |
+| Obligations (`DOM-OBL-001`) | Seat-scoped debt lifecycles | `assessment_events`, `obligation_lifecycle` |
+| Ledger (`DOM-LED-001`) | Monetary truth — domain-blind | `ledger_transaction`, `ledger_balance_snapshot` |
+| Store & Entitlements (`DOM-STORE-001`) | Catalog and purchased perk redemption | `store_purchases`, `redemption_events`, `store_items` |
+| Operations (`DOM-OPS-001`) | Observability, audit, incidents | `audit_log`, `operational_events`, `incidents` |
+| Interpretation (`DOM-ITR-001`) | Behavioral and structural analytics signals | `interpretation_snapshots` |
+| Support (`DOM-SUP-001`) | Issue lifecycle and communications | `issues`, `issue_resolution_actions`, `announcements` |
+
+**Key invariants:**
+- Domains MUST NOT call other domains directly
+- All cross-domain coordination MUST occur inside a FEAT
+- Domains expose read-only guard checks; they never mutate during validation
+- `seat_id` is the primary key for all activity-tracking in non-identity domains
+- `class_id` is the class boundary anchor; `join_code` is its public alias
 
 ---
 
@@ -122,33 +257,38 @@ app/
 ### Quick Reference
 
 ```bash
-# ALWAYS follow this sequence:
+# 1. Sync with main FIRST
+git fetch origin main && git merge origin/main
 
-# 1. Modify the model in app/models.py
-# 2. Generate migration
+# 2. Verify single head
+flask db heads  # must show exactly 1
+
+# 3. Modify model in app/models.py
+# 4. Generate migration
 flask db migrate -m "Description of change"
 
-# 3. Review the generated migration file
-# 4. Test the migration
+# 5. Add idempotency helpers (column_exists, table_exists, etc.)
+# 6. Wrap all CREATE ops in existence checks
+# 7. Test upgrade
 flask db upgrade
 
-# 5. Test the downgrade
+# 8. Test downgrade
 flask db downgrade
 
-# 6. Re-upgrade for production
+# 9. Re-upgrade
 flask db upgrade
 
-# 7. Run tests
+# 10. Run tests
 pytest tests/
 ```
 
 ### Migration Naming Convention
 
-- `add_<field>_to_<table>` - Adding columns
-- `create_<table>` - New tables
-- `remove_<field>_from_<table>` - Removing columns
-- `rename_<old>_to_<new>_in_<table>` - Renaming
-- `add_<table>_<relationship>_relationship` - Adding relationships
+- `add_<field>_to_<table>` — Adding columns
+- `create_<table>` — New tables
+- `remove_<field>_from_<table>` — Removing columns
+- `rename_<old>_to_<new>_in_<table>` — Renaming
+- `add_<table>_<relationship>_relationship` — Adding relationships
 
 ### Common Migration Mistakes (DON'T DO THIS)
 
@@ -156,7 +296,8 @@ pytest tests/
 ❌ Editing old migration files after they're merged
 ❌ Creating migrations with generic names like "update database"
 ❌ Skipping migration testing before committing
-❌ Forgetting to add foreign key constraints
+❌ Forgetting to add idempotency helpers (`column_exists`, `table_exists`, etc.)
+❌ Hardcoding constraint names in downgrade (use `get_foreign_keys_by_column()`)
 
 ---
 
@@ -166,44 +307,26 @@ pytest tests/
 
 ### Files to Update for New Features
 
-1. **CHANGELOG.md** - All changes, following Keep a Changelog format
-2. **DEVELOPMENT.md** - Add to roadmap or mark as completed
-3. **README.md** - Update if it affects installation/quick start
-4. **User guides** in `docs/user-guides/` - If user-facing
-5. **Technical reference** in `docs/technical-reference/` - For architecture changes
+1. **CHANGELOG.md** — All changes, following Keep a Changelog format
+2. **DEVELOPMENT.md** — Add to roadmap or mark as completed
+3. **README.md** — Update if it affects installation/quick start
+4. **User guides** in `docs/user-guides/` — If user-facing
+5. **Technical reference** in `docs/technical-reference/` — For architecture changes
 
 ### Documentation Organization
 
 ```
 docs/
-├── README.md                  # Documentation index
+├── README.md
 ├── user-guides/               # Teachers and students
-│   ├── README.md
-│   ├── teacher_manual.md
-│   ├── student_guide.md
-│   ├── economy_guide.md
-│   ├── diagnostics/
-│   ├── features/
-│   └── legal/
 ├── technical-reference/       # Architecture, database, API
-│   ├── architecture.md
-│   ├── database_schema.md
-│   ├── api_reference.md
-│   ├── analytics-specification.md
-│   └── economy-specification.md
 ├── operations/                # Deployment and maintenance
-│   ├── README.md
-│   ├── Deployment_Guide.md
-│   ├── README_GITHUB_PAGES.md
-│   └── GITHUB_PAGES_SETUP.md
 ├── security/                  # Security audits
-│   ├── CRITICAL_SAME_TEACHER_LEAK.md
-│   └── MULTI_TENANCY_AUDIT.md
 ├── development/               # Dev guides and policies
-│   ├── codebase_organization_documentation_hygiene_playbook.md
-│   ├── SCHEMA_CHANGE_MD.md
-│   ├── migration-specifications.md
-│   └── TESTING_SUMMARY.md
+│   ├── specs/                 # Target-state architecture specs
+│   ├── tracking/              # Launch readiness and status
+│   ├── v2_restructure_doc/    # v2 domain/invariant/FEAT specs
+│   └── archive/               # Historical docs
 └── archive/                   # Historical docs
 ```
 
@@ -236,19 +359,9 @@ pytest --cov=app tests/
 pytest -k "recovery"
 ```
 
-### Test Structure
+### Current Baseline (as of 2026-04-25)
 
-```python
-def test_feature_name(client, app):
-    """Test description explaining what this verifies."""
-    # Setup: Create necessary data
-
-    # Execute: Perform the action
-
-    # Assert: Verify expected behavior
-
-    # Cleanup: Usually handled by fixtures
-```
+`619 passed, 123 failed, 1 skipped` — active stabilization in progress. Reducing the failing count is an ongoing priority before v2 live test.
 
 ---
 
@@ -259,8 +372,9 @@ def test_feature_name(client, app):
 ### Critical Security Rules
 
 1. **PII Encryption**
-   - All student names encrypted at rest
+   - All student names encrypted at rest via `PIIEncryptedType`
    - Use `encrypt_value()` and `decrypt_value()` from `hash_utils.py`
+   - No raw DOB storage; no contact info stored
 
 2. **Password Security**
    - All passwords salted AND peppered
@@ -291,96 +405,107 @@ def test_feature_name(client, app):
 
 ### The Golden Rule
 
-**EVERY query involving student data MUST be scoped by `join_code`.**
+**EVERY query involving student/seat data MUST be scoped by `class_id` (or `join_code`).**
 
-### Critical Context
+### v2 Scoping Model
 
-- A **teacher** may teach multiple class periods
-- A **student** may be enrolled in multiple periods (different teachers or same teacher)
-- Each class period has a unique `join_code`
-- `join_code` is the ABSOLUTE source of truth for data isolation
+The canonical boundary is `class_id` (UUID from `class_economies`). `join_code` is its public-facing alias and both are acceptable scoping keys. `seat_id` anchors per-user activity within a class.
 
-### Examples of Proper Scoping
+- **Class boundary:** `class_id` / `join_code`
+- **Per-user activity anchor:** `seat_id`
+- **Global identity:** `user_id` (for auth/recovery only — does NOT grant class scope)
 
 ```python
-# ✅ CORRECT - ownership helper + class scope
+# ✅ CORRECT — seat + class scope
+transactions = Transaction.query.filter_by(
+    seat_id=seat_id,
+    class_id=class_id,
+).all()
+
+# ✅ CORRECT — class membership scope
 students = (
     get_admin_student_query()
     .join(ClassMembership, ClassMembership.student_id == Student.id)
-    .filter(ClassMembership.join_code == current_join_code)
+    .filter(ClassMembership.join_code == join_code)
     .all()
 )
 
-# ✅ CORRECT - Transaction scoped by join_code
-transactions = Transaction.query.filter_by(
-    join_code=current_join_code
-).all()
-
-# ❌ WRONG - teacher ownership alone is not class scope
+# ❌ WRONG — teacher/user ownership alone is not class scope
 students = get_admin_student_query().all()
+
+# ❌ WRONG — student_id without class scope
+Transaction.query.filter_by(student_id=student_id).all()
+```
+
+### Getting Current Class Context
+
+**Student routes:**
+```python
+from app.routes.student import get_current_class_context
+
+context = get_current_class_context()
+if not context:
+    return redirect(url_for("student.select_class"))
+
+join_code = context["join_code"]
+class_id = context.get("class_id")
+seat_id = context.get("seat_id")
+```
+
+**Admin routes:**
+```python
+join_code = session.get("current_join_code")
+class_id = session.get("current_class_id")
 ```
 
 ### Tables That MUST Be Scoped
 
-- `Student` (via `ClassMembership` plus route-specific class checks)
-- `Transaction`
-- `TapEvent`
-- `PayrollSettings`
-- `RentSettings`
-- `BankingSettings`
-- `FeatureSettings`
-- `InsurancePolicy` (via `InsurancePolicyBlock`)
-- `StoreItem` (via `StoreItemBlock`)
-- All student-related data
+- `transactions` (by `seat_id` + `class_id`)
+- `balance_cache` (by `seat_id` + `class_id`)
+- `tap_events`, `hall_pass_logs` (by `join_code`/`class_id`)
+- `student_blocks`, `payroll_settings`, `rent_settings`, `banking_settings`, `feature_settings`
+- `store_purchases`, `student_items`, `student_insurance`, `insurance_claims`
+- All student/seat-associated data
 
 ---
 
 ## Common Pitfalls
 
-### 1. Database Migration Issues
+### 1. Bypassing the FEAT Layer
 
-**Problem:** Modifying models without creating migrations, or creating broken migrations.
+**Problem:** Writing `db.session.add/commit` directly in a route handler for domain models.
 
-**Solution:**
-- Always use the migration workflow in `.claude/rules/database-migrations.md`
-- Test migrations before committing
-- Never edit old migrations after they're merged
+**Solution:** Route logic should invoke a FEAT from `app/feats/`. Add new FEATs when needed rather than adding mutation logic to routes.
 
-### 2. Multi-Tenancy Data Leaks
+### 2. Using `join_code` When `class_id` Is Available
 
-**Problem:** Queries returning data from other class periods.
+**Problem:** New code added in v2 uses `join_code` as if it's the primary key when `class_id` is the canonical anchor.
 
-**Solution:**
-- Always scope queries by `join_code`
-- Add multi-tenancy tests for every student-related feature
-- Review `.claude/rules/multi-tenancy.md` before any student data query
+**Solution:** Use `class_id` (UUID) for new domain-level queries. `join_code` is acceptable as a public-facing alias but the underlying join should resolve to `class_id` when possible.
 
-### 3. Inconsistent Documentation
+### 3. Teacher Ownership ≠ Class Scope
 
-**Problem:** Features added without updating docs.
+**Problem:** Queries scoped only by `teacher_id` or `admin_id` return data across multiple class periods.
 
-**Solution:**
-- Update CHANGELOG.md for EVERY change
-- Update relevant docs in `docs/` directory
-- Check `.claude/rules/documentation.md` for what to update
+**Solution:** Always add `class_id`/`join_code` + seat/membership filter on top of ownership checks.
 
-### 4. Missing Tests
+### 4. GET Handlers With Side Effects
 
-**Problem:** Features or bug fixes without test coverage.
+**Problem:** Adding DB writes (reconciliation, lazy expiration, interest posting) inside GET handlers.
 
-**Solution:**
-- Write tests BEFORE or WITH feature implementation
-- Every bug fix needs a regression test
-- See `.claude/rules/testing.md` for requirements
+**Solution:** Never add new write-on-read patterns. Mutations must be explicitly triggered through a FEAT, not happen as a side effect of reading a page.
 
-### 5. Security Vulnerabilities
+### 5. Ignoring Idempotency on New FEATs
 
-**Problem:** Forgetting CSRF, exposing PII, or weak authentication.
+**Problem:** New FEATs that don't accept or generate an `idempotency_key` can produce duplicate effects on retry.
 
-**Solution:**
-- Review `.claude/rules/security.md` before ANY auth/data handling code
-- Use the existing encryption and hashing utilities
-- Never skip CSRF protection
+**Solution:** Every FEAT must accept or generate an `idempotency_key` and check it before executing. Use `app/utils/transaction_idempotency.py` patterns.
+
+### 6. Database Migration Issues
+
+**Problem:** Missing idempotency helpers, hardcoded constraint names, or broken migration chains.
+
+**Solution:** Follow `.claude/rules/database-migrations.md` exactly. Run the migration linter before committing.
 
 ---
 
@@ -388,12 +513,15 @@ students = get_admin_student_query().all()
 
 ### For New Features
 
-- [ ] Read existing relevant code
+- [ ] Read existing relevant code (routes, feats, services, models)
+- [ ] Identify which domain(s) are involved
 - [ ] Create/update database models if needed
-- [ ] Generate and test migration
-- [ ] Implement feature with proper scoping
+- [ ] Generate and test migration (with idempotency helpers)
+- [ ] Implement mutation logic inside a FEAT (`app/feats/`)
+- [ ] Implement read/guard logic inside the relevant service (`app/services/`)
+- [ ] Wire route to call the FEAT
 - [ ] Add CSRF protection if needed
-- [ ] Write comprehensive tests
+- [ ] Write comprehensive tests (including scoping tests)
 - [ ] Update CHANGELOG.md
 - [ ] Update relevant documentation
 - [ ] Run full test suite
@@ -412,14 +540,19 @@ students = get_admin_student_query().all()
 
 ### For Database Changes
 
+- [ ] Sync with main: `git fetch origin main && git merge origin/main`
+- [ ] Verify single head: `flask db heads`
 - [ ] Modify model in `app/models.py`
 - [ ] Generate migration: `flask db migrate -m "description"`
-- [ ] Review generated migration file
+- [ ] Add idempotency helpers from `migrations/migration_template.py.mako`
+- [ ] Wrap all CREATE ops in existence checks
+- [ ] Run linter: `python scripts/lint_migrations.py migrations/versions/abc*.py`
 - [ ] Test upgrade: `flask db upgrade`
 - [ ] Test downgrade: `flask db downgrade`
 - [ ] Re-upgrade: `flask db upgrade`
+- [ ] Verify single head still: `flask db heads`
 - [ ] Run tests: `pytest`
-- [ ] Update docs/technical-reference/database_schema.md if needed
+- [ ] Update `docs/technical-reference/database_schema.md` if significant
 - [ ] Update CHANGELOG.md
 - [ ] Commit migration with model changes
 
@@ -427,10 +560,13 @@ students = get_admin_student_query().all()
 
 ## Additional Resources
 
-- **Detailed Rules:** See `.claude/rules/` directory for in-depth guidance
-- **Project History:** `PROJECT_HISTORY.md` for context and philosophy
-- **Development Priorities:** `DEVELOPMENT.md` for roadmap and planned features
-- **Security Audits:** `docs/security/` for past security reviews
+- **v2 Invariants:** `docs/development/v2_restructure_doc/INVARIANT/`
+- **v2 Domain specs:** `docs/development/v2_restructure_doc/DOMAIN/`
+- **v2 FEAT specs:** `docs/development/v2_restructure_doc/FEATURE-EXECUTION/`
+- **v2 Architecture specs:** `docs/development/specs/`
+- **v2 Launch status:** `docs/development/tracking/V2_LAUNCH_READINESS_MATRIX.md`
+- **Detailed Rules:** `.claude/rules/` for in-depth guidance
+- **Security Audits:** `docs/security/`
 - **Architecture:** `docs/technical-reference/architecture.md`
 
 ---
@@ -438,14 +574,17 @@ students = get_admin_student_query().all()
 ## Questions or Clarifications?
 
 When uncertain about:
-- **Architecture decisions** → Review `docs/technical-reference/architecture.md`
-- **Database design** → Review `docs/technical-reference/database_schema.md`
-- **Multi-tenancy** → Review `docs/security/MULTI_TENANCY_AUDIT.md`
-- **Deployment** → Review `docs/operations/DEPLOYMENT.md`
+- **v2 architecture decisions** → `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-001_Domain_Authority_Summary.md`
+- **FEAT execution rules** → `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_Feature_Execution_Constitutional_Directive.md`
+- **Core invariants** → `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_Core_Invariants.md`
+- **Multi-tenancy** → `.claude/rules/multi-tenancy.md` and `docs/security/MULTI_TENANCY_AUDIT.md`
+- **Database design** → `docs/technical-reference/database_schema.md`
+- **Deployment** → `docs/operations/Deployment_Guide.md`
 
 Always prefer reading existing code and documentation before making assumptions.
 
 ---
 
-**Last Updated:** 2025-12-27
+**Last Updated:** 2026-04-25
+**Branch:** `codex/v2.0`
 **For:** Claude Code and AI assistants working on Classroom Token Hub

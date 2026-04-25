@@ -24,26 +24,70 @@ down_revision = 'e3fbfe180e69'
 branch_labels = None
 depends_on = None
 
+# ============================================================================
+# IDEMPOTENCY HELPERS (REQUIRED)
+# ============================================================================
+
+def column_exists(table_name, column_name):
+    """Check if a column exists in a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        columns = [col['name'] for col in inspector.get_columns(table_name)]
+        return column_name in columns
+    except Exception:
+        return False
+
+def index_exists(table_name, index_name):
+    """Check if an index exists on a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
+        return index_name in indexes
+    except Exception:
+        return False
+
+def foreign_key_exists(table_name, fk_name):
+    """Check if a foreign key exists on a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        fks = [fk['name'] for fk in inspector.get_foreign_keys(table_name)]
+        return fk_name in fks
+    except Exception:
+        return False
+
+# ============================================================================
+# MIGRATION FUNCTIONS
+# ============================================================================
 
 def upgrade():
     # Add new columns
     with op.batch_alter_table('announcements', schema=None) as batch_op:
         # Add system admin support
-        batch_op.add_column(sa.Column('system_admin_id', sa.Integer(), nullable=True))
-        batch_op.add_column(sa.Column('audience_type', sa.String(length=30), nullable=False, server_default='class'))
-        batch_op.add_column(sa.Column('target_teacher_id', sa.Integer(), nullable=True))
+        if not column_exists('announcements', 'system_admin_id'):
+            batch_op.add_column(sa.Column('system_admin_id', sa.Integer(), nullable=True))
+        if not column_exists('announcements', 'audience_type'):
+            batch_op.add_column(sa.Column('audience_type', sa.String(length=30), nullable=False, server_default='class'))
+        if not column_exists('announcements', 'target_teacher_id'):
+            batch_op.add_column(sa.Column('target_teacher_id', sa.Integer(), nullable=True))
 
         # Make teacher_id and join_code nullable for system admin announcements
         batch_op.alter_column('teacher_id', existing_type=sa.Integer(), nullable=True)
         batch_op.alter_column('join_code', existing_type=sa.String(length=20), nullable=True)
 
         # Add foreign keys
-        batch_op.create_foreign_key('fk_announcements_system_admin_id', 'system_admins', ['system_admin_id'], ['id'], ondelete='CASCADE')
-        batch_op.create_foreign_key('fk_announcements_target_teacher_id', 'admins', ['target_teacher_id'], ['id'], ondelete='CASCADE')
+        if not foreign_key_exists('announcements', 'fk_announcements_system_admin_id'):
+            batch_op.create_foreign_key('fk_announcements_system_admin_id', 'system_admins', ['system_admin_id'], ['id'], ondelete='CASCADE')
+        if not foreign_key_exists('announcements', 'fk_announcements_target_teacher_id'):
+            batch_op.create_foreign_key('fk_announcements_target_teacher_id', 'admins', ['target_teacher_id'], ['id'], ondelete='CASCADE')
 
         # Add new indexes
-        batch_op.create_index('ix_announcements_audience_type', ['audience_type', 'is_active'], unique=False)
-        batch_op.create_index('ix_announcements_system_admin', ['system_admin_id', 'is_active'], unique=False)
+        if not index_exists('announcements', 'ix_announcements_audience_type'):
+            batch_op.create_index('ix_announcements_audience_type', ['audience_type', 'is_active'], unique=False)
+        if not index_exists('announcements', 'ix_announcements_system_admin'):
+            batch_op.create_index('ix_announcements_system_admin', ['system_admin_id', 'is_active'], unique=False)
 
 
 def downgrade():

@@ -35,6 +35,18 @@ CLASS_ID_TABLES = (
     ("students", "CASCADE"),
     ("teacher_blocks", "CASCADE"),
     ("ticket_correlation_pack", "SET NULL"),
+    ("hall_pass_logs", "CASCADE"),
+    ("tap_events", "CASCADE"),
+    ("rent_waivers", "CASCADE"),
+    ("issues", "CASCADE"),
+    ("rent_payments", "CASCADE"),
+    ("student_insurance", "CASCADE"),
+    ("insurance_claims", "CASCADE"),
+    ("payroll_fines", "CASCADE"),
+    ("payroll_rewards", "CASCADE"),
+    ("announcements", "CASCADE"),
+    ("feature_settings", "CASCADE"),
+    ("teacher_onboarding", "CASCADE"),
 )
 
 
@@ -202,17 +214,21 @@ def _rename_join_code_id_columns() -> None:
         has_class_id = column_exists(table_name, "class_id")
 
         if has_join_code_id:
-            for fk_name in foreign_keys_for_column(table_name, "join_code_id"):
+            if has_class_id:
                 with op.batch_alter_table(table_name) as batch_op:
-                    batch_op.drop_constraint(fk_name, type_="foreignkey")
+                    batch_op.drop_column("join_code_id")
+            else:
+                for fk_name in foreign_keys_for_column(table_name, "join_code_id"):
+                    with op.batch_alter_table(table_name) as batch_op:
+                        batch_op.drop_constraint(fk_name, type_="foreignkey")
 
-            with op.batch_alter_table(table_name) as batch_op:
-                batch_op.alter_column(
-                    "join_code_id",
-                    new_column_name="class_id",
-                    existing_type=sa.String(length=36),
-                    existing_nullable=True,
-                )
+                with op.batch_alter_table(table_name) as batch_op:
+                    batch_op.alter_column(
+                        "join_code_id",
+                        new_column_name="class_id",
+                        existing_type=sa.String(length=36),
+                        existing_nullable=True,
+                    )
             has_class_id = True
 
         if not has_class_id:

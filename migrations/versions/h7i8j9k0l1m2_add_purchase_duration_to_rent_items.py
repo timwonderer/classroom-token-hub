@@ -19,11 +19,29 @@ down_revision = '6feaa660d6c3'
 branch_labels = None
 depends_on = None
 
+# ============================================================================
+# IDEMPOTENCY HELPERS (REQUIRED)
+# ============================================================================
+
+def column_exists(table_name, column_name):
+    """Check if a column exists in a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        columns = [col['name'] for col in inspector.get_columns(table_name)]
+        return column_name in columns
+    except Exception:
+        return False
+
+# ============================================================================
+# MIGRATION FUNCTIONS
+# ============================================================================
 
 def upgrade():
     # Add purchase_duration column to rent_items
     with op.batch_alter_table('rent_items', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('purchase_duration', sa.String(length=20), nullable=True, server_default='per_use'))
+        if not column_exists('rent_items', 'purchase_duration'):
+            batch_op.add_column(sa.Column('purchase_duration', sa.String(length=20), nullable=True, server_default='per_use'))
 
 
 def downgrade():

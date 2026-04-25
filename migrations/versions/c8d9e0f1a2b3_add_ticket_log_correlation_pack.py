@@ -107,7 +107,7 @@ def _create_actor_request_trace():
             ["created_at"],
             unique=False,
         )
-    if table_exists("actor_request_trace") and not index_exists("actor_request_trace", "ix_actor_request_trace_join_code_id"):
+    if table_exists("actor_request_trace") and column_exists("actor_request_trace", "join_code_id") and not index_exists("actor_request_trace", "ix_actor_request_trace_join_code_id"):
         op.create_index(
             "ix_actor_request_trace_join_code_id",
             "actor_request_trace",
@@ -177,7 +177,7 @@ def _create_error_events():
             ["created_at"],
             unique=False,
         )
-    if table_exists("error_events") and not index_exists("error_events", "ix_error_events_join_code_id"):
+    if table_exists("error_events") and column_exists("error_events", "join_code_id") and not index_exists("error_events", "ix_error_events_join_code_id"):
         op.create_index(
             "ix_error_events_join_code_id",
             "error_events",

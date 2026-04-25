@@ -23,6 +23,14 @@ def table_exists(table_name):
     return table_name in inspector.get_table_names()
 
 
+def type_exists(type_name):
+    conn = op.get_bind()
+    return conn.execute(
+        sa.text("SELECT 1 FROM pg_type WHERE typname = :name"),
+        {"name": type_name},
+    ).scalar() is not None
+
+
 def column_exists(table_name, column_name):
     """Check if a column exists in a table."""
     conn = op.get_bind()
@@ -72,15 +80,17 @@ def upgrade():
 
     if table_exists("class_memberships"):
         if column_exists("class_memberships", "role"):
+            # Check if role is an enum in DB
+            role_cast = "::classmembershiprole" if type_exists("classmembershiprole") else ""
             op.execute(
                 sa.text(
-                    """
+                    f"""
                     UPDATE class_memberships
                     SET role = CASE
                         WHEN admin_id IS NOT NULL THEN 'admin'
                         ELSE 'student'
-                    END
-                    WHERE role IS NULL OR role NOT IN ('admin', 'student')
+                    END{role_cast}
+                    WHERE role IS NULL OR role::text NOT IN ('admin', 'student')
                     """
                 )
             )
@@ -91,7 +101,7 @@ def upgrade():
                     """
                     UPDATE class_memberships
                     SET status = 'active'
-                    WHERE status IS NULL OR status NOT IN ('active', 'archived')
+                    WHERE status IS NULL OR status::text NOT IN ('active', 'archived')
                     """
                 )
             )
@@ -103,7 +113,7 @@ def upgrade():
                 "((admin_id IS NOT NULL AND role = 'admin') OR (student_id IS NOT NULL AND role = 'student'))",
             )
 
-        if not check_constraint_exists("class_memberships", "ck_class_memberships_status_allowed"):
+        if column_exists("class_memberships", "status") and not check_constraint_exists("class_memberships", "ck_class_memberships_status_allowed"):
             op.create_check_constraint(
                 "ck_class_memberships_status_allowed",
                 "class_memberships",

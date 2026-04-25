@@ -94,7 +94,8 @@ def upgrade():
     # 3. Handle activity tables with backfill
     
     # --- Rent Payments ---
-    op.add_column('rent_payments', sa.Column('class_id', sa.String(length=36), nullable=True))
+    if not column_exists('rent_payments', 'class_id'):
+        op.add_column('rent_payments', sa.Column('class_id', sa.String(length=36), nullable=True))
     op.execute("""
         UPDATE rent_payments rp
         SET class_id = (SELECT ce.class_id FROM class_economies ce WHERE ce.join_code = rp.join_code)
@@ -112,8 +113,10 @@ def upgrade():
         batch_op.create_foreign_key('rent_payments_seat_id_fkey', 'seats', ['seat_id'], ['id'], ondelete='CASCADE')
 
     # --- Student Insurance ---
-    op.add_column('student_insurance', sa.Column('seat_id', sa.Integer(), nullable=True))
-    op.add_column('student_insurance', sa.Column('class_id', sa.String(length=36), nullable=True))
+    if not column_exists('student_insurance', 'seat_id'):
+        op.add_column('student_insurance', sa.Column('seat_id', sa.Integer(), nullable=True))
+    if not column_exists('student_insurance', 'class_id'):
+        op.add_column('student_insurance', sa.Column('class_id', sa.String(length=36), nullable=True))
     op.execute("""
         UPDATE student_insurance si
         SET class_id = (SELECT ce.class_id FROM class_economies ce WHERE ce.join_code = si.join_code),
@@ -130,15 +133,17 @@ def upgrade():
         batch_op.create_foreign_key('student_insurance_seat_id_fkey', 'seats', ['seat_id'], ['id'], ondelete='CASCADE')
 
     # --- Transactions ---
-    with op.batch_alter_table('transaction', schema=None) as batch_op:
-        batch_op.alter_column('student_id', existing_type=sa.INTEGER(), nullable=True)
-        batch_op.alter_column('seat_id', existing_type=sa.INTEGER(), nullable=False)
-        for fk in get_foreign_keys_by_column('transaction', 'seat_id'):
-            batch_op.drop_constraint(fk['name'], type_='foreignkey')
-        batch_op.create_foreign_key('transaction_seat_id_fkey', 'seats', ['seat_id'], ['id'], ondelete='CASCADE')
+    if column_exists('transaction', 'seat_id'):
+        with op.batch_alter_table('transaction', schema=None) as batch_op:
+            batch_op.alter_column('student_id', existing_type=sa.INTEGER(), nullable=True)
+            batch_op.alter_column('seat_id', existing_type=sa.INTEGER(), nullable=False)
+            for fk in get_foreign_keys_by_column('transaction', 'seat_id'):
+                batch_op.drop_constraint(fk['name'], type_='foreignkey')
+            batch_op.create_foreign_key('transaction_seat_id_fkey', 'seats', ['seat_id'], ['id'], ondelete='CASCADE')
 
     # --- Snapshots ---
-    op.add_column('economy_snapshot', sa.Column('class_id', sa.String(length=36), nullable=True))
+    if not column_exists('economy_snapshot', 'class_id'):
+        op.add_column('economy_snapshot', sa.Column('class_id', sa.String(length=36), nullable=True))
     op.execute("""
         UPDATE economy_snapshot es
         SET class_id = (SELECT ce.class_id FROM class_economies ce WHERE ce.join_code = es.join_code)
@@ -147,13 +152,15 @@ def upgrade():
     with op.batch_alter_table('economy_snapshot', schema=None) as batch_op:
         batch_op.alter_column('class_id', existing_type=sa.String(length=36), nullable=False)
         batch_op.alter_column('join_code', existing_type=sa.VARCHAR(length=20), nullable=True)
-        batch_op.create_index(batch_op.f('ix_economy_snapshot_class_id'), ['class_id'], unique=False)
+        if not index_exists('economy_snapshot', 'ix_economy_snapshot_class_id'):
+            batch_op.create_index(batch_op.f('ix_economy_snapshot_class_id'), ['class_id'], unique=False)
         for fk in get_foreign_keys_by_column('economy_snapshot', 'join_code'):
             batch_op.drop_constraint(fk['name'], type_='foreignkey')
         batch_op.create_foreign_key('economy_snapshot_class_id_fkey', 'class_economies', ['class_id'], ['class_id'], ondelete='CASCADE')
 
     # --- Memberships ---
-    op.add_column('class_memberships', sa.Column('class_id', sa.String(length=36), nullable=True))
+    if not column_exists('class_memberships', 'class_id'):
+        op.add_column('class_memberships', sa.Column('class_id', sa.String(length=36), nullable=True))
     op.execute("""
         UPDATE class_memberships cm
         SET class_id = (SELECT ce.class_id FROM class_economies ce WHERE ce.join_code = cm.join_code)
@@ -161,7 +168,8 @@ def upgrade():
     """)
     with op.batch_alter_table('class_memberships', schema=None) as batch_op:
         batch_op.alter_column('join_code', existing_type=sa.VARCHAR(length=20), nullable=True)
-        batch_op.create_index(batch_op.f('ix_class_memberships_class_id'), ['class_id'], unique=False)
+        if not index_exists('class_memberships', 'ix_class_memberships_class_id'):
+            batch_op.create_index(batch_op.f('ix_class_memberships_class_id'), ['class_id'], unique=False)
         for fk in get_foreign_keys_by_column('class_memberships', 'join_code'):
             batch_op.drop_constraint(fk['name'], type_='foreignkey')
         batch_op.create_foreign_key('class_memberships_class_id_fkey', 'class_economies', ['class_id'], ['class_id'], ondelete='CASCADE')

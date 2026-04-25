@@ -61,12 +61,10 @@ def upgrade():
                 if not existing:
                     break
 
-            # Update the policy with the code
             connection.execute(
                 sa.text("UPDATE insurance_policies SET policy_code = :code WHERE id = :id"),
                 {"code": code, "id": policy_id}
             )
-            connection.commit()
 
     # Backfill teacher_id for existing policies using enrolled students' primary teacher
     # Only run if teacher_id column was just added
@@ -98,8 +96,6 @@ def upgrade():
                 ),
                 {"teacher_id": teacher_id, "policy_id": policy_id},
             )
-
-        connection.commit()
 
     # Now make policy_code non-nullable and unique (only if it was just added)
     if not policy_code_existed:

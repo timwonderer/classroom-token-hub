@@ -49,6 +49,12 @@ def foreign_key_exists(table_name, fk_name):
     except Exception:
         return False
 
+def enum_exists(enum_name):
+    """Check if a postgres enum type exists."""
+    conn = op.get_bind()
+    result = conn.execute(sa.text(f"SELECT 1 FROM pg_type WHERE typname = '{enum_name}'"))
+    return result.fetchone() is not None
+
 # ============================================================================
 # MIGRATION FUNCTIONS
 # ============================================================================
@@ -81,12 +87,12 @@ def upgrade():
 
     # 2. Update Transaction table schema
     # Create Enum type explicitly for Postgres (UPPERCASE for SQLAlchemy compatibility)
-    transaction_status_enum = sa.Enum('PENDING', 'POSTED', 'VOID', name='transactionstatus')
-    try:
-        transaction_status_enum.create(bind)
-    except Exception:
-        # Ignore if exists (e.g. partial run)
-        pass
+    if not enum_exists('transactionstatus'):
+        transaction_status_enum = sa.Enum('PENDING', 'POSTED', 'VOID', name='transactionstatus')
+        try:
+            transaction_status_enum.create(bind)
+        except Exception:
+            pass
 
     with op.batch_alter_table('transaction', schema=None) as batch_op:
         if not column_exists('transaction', 'status'):
@@ -127,27 +133,32 @@ def upgrade():
     # status is already defaulted to 'POSTED' by server_default
     
     # Populate Initial BalanceCache
-    op.execute("""
-        INSERT INTO balance_cache (
-            student_id,
-            join_code,
-            posted_checking_balance_cents,
-            posted_savings_balance_cents,
-            last_settlement_at,
-            updated_at
-        )
-        SELECT
-            student_id,
-            join_code,
-            COALESCE(SUM(CASE WHEN account_type = 'checking' THEN CAST(amount * 100 AS INTEGER) ELSE 0 END), 0),
-            COALESCE(SUM(CASE WHEN account_type = 'savings' THEN CAST(amount * 100 AS INTEGER) ELSE 0 END), 0),
-            CURRENT_TIMESTAMP,
-            CURRENT_TIMESTAMP
-        FROM transaction
-        WHERE is_void = FALSE
-          AND join_code IS NOT NULL
-        GROUP BY student_id, join_code
-    """)
+    if table_exists('balance_cache') and not column_exists('balance_cache', 'class_id'):
+        try:
+            op.execute("""
+                INSERT INTO balance_cache (
+                    student_id,
+                    join_code,
+                    posted_checking_balance_cents,
+                    posted_savings_balance_cents,
+                    last_settlement_at,
+                    updated_at
+                )
+                SELECT
+                    student_id,
+                    join_code,
+                    COALESCE(SUM(CASE WHEN account_type = 'checking' THEN CAST(amount * 100 AS INTEGER) ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN account_type = 'savings' THEN CAST(amount * 100 AS INTEGER) ELSE 0 END), 0),
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                FROM transaction
+                WHERE is_void = FALSE
+                  AND join_code IS NOT NULL
+                GROUP BY student_id, join_code
+                ON CONFLICT (join_code, student_id) DO NOTHING
+            """)
+        except Exception:
+            pass
     # ---------------------------------------------------------
 
 

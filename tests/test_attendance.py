@@ -66,26 +66,42 @@ def test_get_last_payroll_time(client):
     # Test with no payroll transactions
     assert get_last_payroll_time() is None
 
-    # Create a student first to satisfy foreign key constraint
+    # Create a student first
     student = Student(first_name="Test", last_initial="S", block="A", salt=b'salt', has_completed_setup=True)
     db.session.add(student)
     db.session.commit()
+    join_code = _attach_student_to_class(student, join_code="PAYROLL1", block="A")
 
     # Test with a payroll transaction
     now = datetime.now(timezone.utc)
-    tx = Transaction(student_id=student.id, amount=10, type="payroll", timestamp=now)
+    # V2 requires seat_id/class_id, but compatibility layer supports join_code
+    tx = Transaction(
+        student_id=student.id, 
+        amount=10, 
+        type="payroll", 
+        timestamp=now,
+        join_code=join_code
+    )
     db.session.add(tx)
     db.session.commit()
-    assert get_last_payroll_time() == now
+    
+    # Must provide join_code for V2 safety
+    assert get_last_payroll_time(join_code=join_code) == now
 
     # Manual payments should only change the per-student anchor
     manual_time = now + timedelta(hours=1)
-    manual_tx = Transaction(student_id=student.id, amount=5, type="manual_payment", timestamp=manual_time)
+    manual_tx = Transaction(
+        student_id=student.id, 
+        amount=5, 
+        type="manual_payment", 
+        timestamp=manual_time,
+        join_code=join_code
+    )
     db.session.add(manual_tx)
     db.session.commit()
 
-    assert get_last_payroll_time() == now
-    assert get_last_payroll_time(student_id=student.id) == manual_time
+    assert get_last_payroll_time(join_code=join_code) == now
+    assert get_last_payroll_time(student_id=student.id, join_code=join_code) == manual_time
 
     # Class-scoped anchors must ignore payroll/manual payment activity from other classes
     other_join_time = manual_time + timedelta(hours=1)

@@ -83,7 +83,8 @@ def upgrade():
             batch_op.drop_index(batch_op.f('ix_balance_cache_scope'))
 
     with op.batch_alter_table('class_economies', schema=None) as batch_op:
-        batch_op.create_index('ix_class_economies_status', ['status'], unique=False)
+        if column_exists('class_economies', 'status') and not index_exists('class_economies', 'ix_class_economies_status'):
+            batch_op.create_index('ix_class_economies_status', ['status'], unique=False)
 
     with op.batch_alter_table('insurance_policies', schema=None) as batch_op:
         batch_op.create_foreign_key(None, 'admins', ['teacher_id'], ['id'])
@@ -94,7 +95,7 @@ def upgrade():
         SET teacher_id = class_memberships.admin_id
         FROM class_memberships
         WHERE rent_settings.join_code = class_memberships.join_code
-          AND class_memberships.role IN ('admin', 'observer')
+          AND class_memberships.role = 'admin'
           AND class_memberships.admin_id IS NOT NULL
           AND rent_settings.teacher_id IS NULL
     """)
@@ -146,7 +147,7 @@ def upgrade():
                 WHERE conname = 'ck_membership_role_consistency'
             ) THEN
                 ALTER TABLE class_memberships ADD CONSTRAINT ck_membership_role_consistency 
-                CHECK (((admin_id IS NOT NULL AND role IN ('admin', 'observer')) OR (student_id IS NOT NULL AND role = 'student')));
+                CHECK (((admin_id IS NOT NULL AND role = 'admin') OR (student_id IS NOT NULL AND role = 'student')));
             END IF;
         END
         $$;

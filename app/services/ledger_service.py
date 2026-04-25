@@ -16,14 +16,26 @@ def _non_void_filter():
 
 def get_last_payroll_time(seat_id: int | None = None, class_id: str | None = None):
     """Return the most recent payroll anchor without mutating any state."""
-    query = Transaction.query.filter(
-        Transaction.type.in_(["payroll", "manual_payment"]),
-    )
+    if seat_id is None and class_id is None:
+        # V2 Safety: If no scope is provided, we cannot reliably find an anchor.
+        return None
+
+    query = Transaction.query.filter(_non_void_filter())
+    
     if seat_id:
-        query = query.filter(Transaction.seat_id == seat_id)
-    if class_id:
-        query = query.filter(Transaction.class_id == class_id)
+        # Seat-specific anchor: includes manual payments
+        query = query.filter(
+            Transaction.seat_id == seat_id,
+            Transaction.type.in_(["payroll", "manual_payment"])
+        )
+    elif class_id:
+        # Class-wide anchor: only actual payroll runs
+        query = query.filter(
+            Transaction.class_id == class_id,
+            Transaction.type == "payroll"
+        )
     else:
+        # Fallback for unexpected states (should be caught by the first check though)
         query = query.filter(Transaction.type == "payroll")
 
     last_payroll_tx = query.order_by(Transaction.timestamp.desc()).first()

@@ -18,15 +18,43 @@ down_revision = 'a7b8c9d0e1f2'
 branch_labels = None
 depends_on = None
 
+# ============================================================================
+# IDEMPOTENCY HELPERS (REQUIRED)
+# ============================================================================
+
+def table_exists(table_name):
+    """Check if a table exists."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return table_name in inspector.get_table_names()
+
+def column_exists(table_name, column_name):
+    """Check if a column exists in a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        columns = [col['name'] for col in inspector.get_columns(table_name)]
+        return column_name in columns
+    except Exception:
+        return False
+
+# ============================================================================
+# MIGRATION FUNCTIONS
+# ============================================================================
 
 def upgrade():
     # 1. Add new columns
-    with op.batch_alter_table('admins', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('dob_sum_hash', sa.String(length=64), nullable=True))
-        batch_op.add_column(sa.Column('salt', sa.LargeBinary(length=16), nullable=True))
+    if table_exists('admins'):
+        with op.batch_alter_table('admins', schema=None) as batch_op:
+            if not column_exists('admins', 'dob_sum_hash'):
+                batch_op.add_column(sa.Column('dob_sum_hash', sa.String(length=64), nullable=True))
+            if not column_exists('admins', 'salt'):
+                batch_op.add_column(sa.Column('salt', sa.LargeBinary(length=16), nullable=True))
 
-    with op.batch_alter_table('recovery_requests', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('dob_sum_hash', sa.String(length=64), nullable=True))
+    if table_exists('recovery_requests'):
+        with op.batch_alter_table('recovery_requests', schema=None) as batch_op:
+            if not column_exists('recovery_requests', 'dob_sum_hash'):
+                batch_op.add_column(sa.Column('dob_sum_hash', sa.String(length=64), nullable=True))
 
     # 2. Data Migration
     # Get connection
@@ -65,14 +93,15 @@ def upgrade():
         print(f"Warning: Data migration failed: {e}")
 
     # 3. Drop old columns
-    with op.batch_alter_table('admins', schema=None) as batch_op:
-        # Check if column exists before dropping to avoid errors if it was already gone
-        # But batch_op doesn't support 'if_exists'.
-        # We assume it exists based on previous state.
-        batch_op.drop_column('dob_sum')
+    if table_exists('admins'):
+        with op.batch_alter_table('admins', schema=None) as batch_op:
+            if column_exists('admins', 'dob_sum'):
+                batch_op.drop_column('dob_sum')
 
-    with op.batch_alter_table('recovery_requests', schema=None) as batch_op:
-        batch_op.drop_column('dob_sum')
+    if table_exists('recovery_requests'):
+        with op.batch_alter_table('recovery_requests', schema=None) as batch_op:
+            if column_exists('recovery_requests', 'dob_sum'):
+                batch_op.drop_column('dob_sum')
 
 
 def downgrade():

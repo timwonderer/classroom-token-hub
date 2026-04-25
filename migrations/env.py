@@ -37,6 +37,7 @@ def get_engine_url():
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 config.set_main_option('sqlalchemy.url', get_engine_url())
+print(f"DEBUG: Migrating database at {get_engine_url()}")
 target_db = current_app.extensions['migrate'].db
 
 # other values from the config, defined by the needs of env.py,
@@ -91,11 +92,9 @@ def run_migrations_online():
                 logger.info('No changes in schema detected.')
 
     conf_args = current_app.extensions['migrate'].configure_args
+    conf_args["render_as_batch"] = False
     if conf_args.get("process_revision_directives") is None:
         conf_args["process_revision_directives"] = process_revision_directives
-
-    conf_args.setdefault("compare_type", True)
-    conf_args["render_as_batch"] = True
 
     connectable = get_engine()
 

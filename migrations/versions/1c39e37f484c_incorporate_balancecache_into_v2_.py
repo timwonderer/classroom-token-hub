@@ -78,7 +78,8 @@ depends_on = None
 
 def upgrade():
     # --- Balance Cache ---
-    op.add_column('balance_cache', sa.Column('class_id', sa.String(length=36), nullable=True))
+    if not column_exists('balance_cache', 'class_id'):
+        op.add_column('balance_cache', sa.Column('class_id', sa.String(length=36), nullable=True))
     op.execute("""
         UPDATE balance_cache bc
         SET class_id = (SELECT ce.class_id FROM class_economies ce WHERE ce.join_code = bc.join_code)
@@ -95,8 +96,22 @@ def upgrade():
         op.execute("ALTER TABLE balance_cache DROP CONSTRAINT IF EXISTS uq_balance_cache_scope")
         op.execute("ALTER TABLE balance_cache DROP CONSTRAINT IF EXISTS uq_balance_cache_seat_scope")
         
-        batch_op.create_index(batch_op.f('ix_balance_cache_class_id'), ['class_id'], unique=False)
-        batch_op.create_unique_constraint('uq_balance_cache_seat_universe', ['class_id', 'seat_id'])
+        if not index_exists('balance_cache', 'ix_balance_cache_class_id'):
+            batch_op.create_index(batch_op.f('ix_balance_cache_class_id'), ['class_id'], unique=False)
+        
+        # Check if unique constraint exists before adding
+        # We need a helper for unique constraints.
+        # inspector.get_unique_constraints doesn't always show them if they are part of create_table.
+        # But we can use raw SQL if needed.
+        op.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_balance_cache_seat_universe') THEN
+                    ALTER TABLE balance_cache ADD CONSTRAINT uq_balance_cache_seat_universe UNIQUE (class_id, seat_id);
+                END IF;
+            END
+            $$;
+        """)
         
         # Safely drop existing FK on seat_id
         for fk in get_foreign_keys_by_column('balance_cache', 'seat_id'):

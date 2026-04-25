@@ -37,27 +37,58 @@ down_revision = 'f9fbd037a0f1'
 branch_labels = None
 depends_on = None
 
+# ============================================================================
+# IDEMPOTENCY HELPERS (REQUIRED)
+# ============================================================================
+
+def table_exists(table_name):
+    """Check if a table exists."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return table_name in inspector.get_table_names()
+
+def index_exists(table_name, index_name):
+    """Check if an index exists on a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
+        return index_name in indexes
+    except Exception:
+        return False
+
+# ============================================================================
+# MIGRATION FUNCTIONS
+# ============================================================================
 
 def upgrade():
     # Create store_item_blocks association table
-    op.create_table(
-        'store_item_blocks',
-        sa.Column('store_item_id', sa.Integer(), sa.ForeignKey('store_items.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('block', sa.String(length=10), nullable=False),
-        sa.PrimaryKeyConstraint('store_item_id', 'block')
-    )
-    op.create_index('ix_store_item_blocks_item', 'store_item_blocks', ['store_item_id'])
-    op.create_index('ix_store_item_blocks_block', 'store_item_blocks', ['block'])
+    if not table_exists('store_item_blocks'):
+        op.create_table(
+            'store_item_blocks',
+            sa.Column('store_item_id', sa.Integer(), sa.ForeignKey('store_items.id', ondelete='CASCADE'), nullable=False),
+            sa.Column('block', sa.String(length=10), nullable=False),
+            sa.PrimaryKeyConstraint('store_item_id', 'block')
+        )
+    
+    if not index_exists('store_item_blocks', 'ix_store_item_blocks_item'):
+        op.create_index('ix_store_item_blocks_item', 'store_item_blocks', ['store_item_id'])
+    if not index_exists('store_item_blocks', 'ix_store_item_blocks_block'):
+        op.create_index('ix_store_item_blocks_block', 'store_item_blocks', ['block'])
 
     # Create insurance_policy_blocks association table
-    op.create_table(
-        'insurance_policy_blocks',
-        sa.Column('policy_id', sa.Integer(), sa.ForeignKey('insurance_policies.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('block', sa.String(length=10), nullable=False),
-        sa.PrimaryKeyConstraint('policy_id', 'block')
-    )
-    op.create_index('ix_insurance_policy_blocks_policy', 'insurance_policy_blocks', ['policy_id'])
-    op.create_index('ix_insurance_policy_blocks_block', 'insurance_policy_blocks', ['block'])
+    if not table_exists('insurance_policy_blocks'):
+        op.create_table(
+            'insurance_policy_blocks',
+            sa.Column('policy_id', sa.Integer(), sa.ForeignKey('insurance_policies.id', ondelete='CASCADE'), nullable=False),
+            sa.Column('block', sa.String(length=10), nullable=False),
+            sa.PrimaryKeyConstraint('policy_id', 'block')
+        )
+    
+    if not index_exists('insurance_policy_blocks', 'ix_insurance_policy_blocks_policy'):
+        op.create_index('ix_insurance_policy_blocks_policy', 'insurance_policy_blocks', ['policy_id'])
+    if not index_exists('insurance_policy_blocks', 'ix_insurance_policy_blocks_block'):
+        op.create_index('ix_insurance_policy_blocks_block', 'insurance_policy_blocks', ['block'])
 
     # Migrate existing data from comma-separated strings (if any exist)
     # Get connection for data migration

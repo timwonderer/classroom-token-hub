@@ -54,47 +54,39 @@ def _rebuild_database_state():
     import app.models  # Ensure model metadata is registered before create_all().
 
     db.session.remove()
+    
     # Determine dialect from config URL to avoid stale engine property access
     test_db_url = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
-    dialect = "postgresql" if "postgresql" in test_db_url else "other"
-    if dialect == "postgresql":
-        test_db_url = os.environ.get("TEST_DATABASE_URL")
-        # Ensure the main engine is disposed so it reconnects to the fresh schema
+    is_postgres = "postgresql" in test_db_url
+
+    if is_postgres:
+        # For Postgres, we do a faster wipe by dropping the schema.
+        # We dispose the engine to clear all connections before dropping the schema.
         db.engine.dispose()
         
-        with db.engine.begin() as conn:
-            # 1. Broadest possible wipe
+        # Use a raw connection to avoid SQLAlchemy's transaction management during schema drop
+        with db.engine.connect() as conn:
+            # Postgres doesn't allow DROP SCHEMA inside a transaction block in some cases,
+            # or it can cause locks. We use an explicit commit.
             conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
             conn.execute(text("CREATE SCHEMA public"))
             conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
             conn.execute(text("SET search_path TO public"))
+            conn.commit()
         
-        # 2. Fresh creation on the main engine
-        for attempt in range(2):
-            try:
-                db.metadata.create_all(bind=db.engine)
-                # Verify one table
-                with db.engine.connect() as conn:
-                    if not db.engine.dialect.has_table(conn, "teachers"):
-                         raise RuntimeError("Table 'teachers' missing after create_all")
-                break
-            except Exception as e:
-                if attempt == 0:
-                    db.session.remove()
-                    db.engine.dispose()
-                    with db.engine.begin() as conn:
-                        conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
-                        conn.execute(text("CREATE SCHEMA public"))
-                        conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
-                        conn.execute(text("SET search_path TO public"))
-                    continue
-                raise
-        db.session.remove()
-        return
+        # Dispose again to ensure the next connection (for create_all) is fresh
+        db.engine.dispose()
+        
+        # Fresh creation
+        db.create_all()
+        db.session.commit()
+    else:
+        # SQLite or other
+        db.drop_all()
+        db.create_all()
 
-    db.create_all()
-    db.drop_all()
-    db.create_all()
+    db.session.remove()
+
 
 
 @pytest.fixture
