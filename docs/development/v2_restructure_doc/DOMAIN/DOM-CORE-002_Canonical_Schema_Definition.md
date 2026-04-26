@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002     | 1.0     | 2026-04-25     | N/A        | Constitutional |
+| DOM-CORE-002     | 1.1     | 2026-04-25     | 1.0        | Constitutional |
 
 ---
 
@@ -132,10 +132,17 @@ The system guarantees:
 
 **Tables:**
 
-- `users`
-- `seats`
-- `classes`
-- `identity_profiles`
+- `users` — global login principal; `user_role ∈ {STUDENT, TEACHER, SYSADMIN}`
+- `seats` — class-local participant binding; `role ∈ {STUDENT, TEACHER}`
+- `classes` — class universe anchor; `class_id` (UUID) is the canonical boundary
+- `identity_profiles` — display identity; one-to-one with `seats`
+
+**Composition tables** (owned by DOM-IDEN-001; no independent authority):
+
+- `user_invite_tokens` — short-lived provisioning tokens for teacher account creation; CASCADE-deleted on first use
+- `user_recovery_tokens` — time-limited credential recovery tokens; CASCADE-deleted on redemption
+
+**Invariant:** `User.user_role = SYSADMIN` is the sole expression of system-administrator identity. No separate `system_admins`, `admin_credentials`, or `system_admin_credentials` tables exist.
 
 ---
 
@@ -151,6 +158,15 @@ The system guarantees:
 - `rent_settings`
 - `payroll_settings`
 - `banking_settings`
+
+**Composition tables** (owned by DOM-CLASS-001; child rows of `payroll_settings`):
+
+- `payroll_rewards` — per-class reward definitions; FK to `payroll_settings`, no independent uniqueness
+- `payroll_fines` — per-class fine definitions; FK to `payroll_settings`, no independent uniqueness
+
+**Invariant:** `payroll_rewards` and `payroll_fines` have no authority of their own; they express the parent `payroll_settings` directive. Deleting a `payroll_settings` row CASCADE-deletes its rewards and fines.
+
+**Prohibited:** No persisted compute-result caches (e.g., `payroll_cache`). Computed values are derived on read from authoritative event tables or recomputed by services.
 
 ---
 
