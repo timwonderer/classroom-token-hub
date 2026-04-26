@@ -17,7 +17,7 @@ def get_rent_hall_pass_grant_total(rent_setting_id: int) -> int:
     return int(total)
 
 
-def grant_rent_per_use_items(*, student, join_code: str, settings, calculate_due_dates_fn) -> int:
+def grant_rent_per_use_items(*, seat, settings, calculate_due_dates_fn) -> int:
     """Store-owned mutation for rent-derived per-use entitlements."""
     per_use_items = RentItem.query.filter_by(
         rent_setting_id=settings.id,
@@ -32,10 +32,9 @@ def grant_rent_per_use_items(*, student, join_code: str, settings, calculate_due
             continue
 
         existing = StudentItem.query.filter(
-            StudentItem.student_id == student.id,
+            StudentItem.seat_id == seat.id,
             StudentItem.store_item_id == pu_item.store_item_id,
             db.or_(StudentItem.uses_remaining > 0, StudentItem.uses_remaining == -1),
-            StudentItem.join_code == join_code,
             db.or_(StudentItem.expiry_date.is_(None), StudentItem.expiry_date > now),
         ).first()
 
@@ -50,9 +49,11 @@ def grant_rent_per_use_items(*, student, join_code: str, settings, calculate_due
                 expiry_date = next_due
 
         db.session.add(StudentItem(
-            student_id=student.id,
+            student_id=seat.student_id,
+            seat_id=seat.id,
+            class_id=seat.class_id,
             store_item_id=pu_item.store_item_id,
-            join_code=join_code,
+            join_code=seat.join_code,
             purchase_date=now,
             expiry_date=expiry_date,
             status='purchased',
@@ -67,9 +68,8 @@ def grant_rent_per_use_items(*, student, join_code: str, settings, calculate_due
 
 def ensure_active_rent_per_use_grant(
     *,
-    student,
+    seat,
     store_item_id: int,
-    join_code: str,
     use_limit: int | None,
     now=None,
     expiry_date=None,
@@ -77,19 +77,20 @@ def ensure_active_rent_per_use_grant(
     """Store-owned mutation for ensuring a current rent grant row exists."""
     now = now or utc_now()
     existing = StudentItem.query.filter(
-        StudentItem.student_id == student.id,
+        StudentItem.seat_id == seat.id,
         StudentItem.store_item_id == store_item_id,
         db.or_(StudentItem.uses_remaining > 0, StudentItem.uses_remaining == -1),
-        StudentItem.join_code == join_code,
         db.or_(StudentItem.expiry_date.is_(None), StudentItem.expiry_date > now),
     ).first()
     if existing:
         return existing
 
     granted_item = StudentItem(
-        student_id=student.id,
+        seat_id=seat.id,
+        student_id=seat.student_id,
+        class_id=seat.class_id,
         store_item_id=store_item_id,
-        join_code=join_code,
+        join_code=seat.join_code,
         purchase_date=now,
         expiry_date=expiry_date,
         status='purchased',
@@ -103,9 +104,8 @@ def ensure_active_rent_per_use_grant(
 
 def record_rent_perk_purchase(
     *,
-    student,
+    seat,
     item,
-    join_code: str,
     purchase_tx_id: int,
     active_rent_item,
     now,
@@ -119,9 +119,11 @@ def record_rent_perk_purchase(
         expiry_date = now + timedelta(days=item.auto_expiry_days)
 
     student_item = StudentItem(
-        student_id=student.id,
+        seat_id=seat.id,
+        student_id=seat.student_id,
+        class_id=seat.class_id,
         store_item_id=item.id,
-        join_code=join_code,
+        join_code=seat.join_code,
         purchase_date=now,
         expiry_date=expiry_date,
         status='purchased',
@@ -136,9 +138,8 @@ def record_rent_perk_purchase(
 
 def record_standard_purchase_items(
     *,
-    student,
+    seat,
     item,
-    join_code: str,
     quantity: int,
     purchase_tx_id: int,
     expiry_date,
@@ -153,9 +154,11 @@ def record_standard_purchase_items(
     
     if item.is_bundle and item.bundle_quantity is not None:
         new_student_item = StudentItem(
-            student_id=student.id,
+            seat_id=seat.id,
+            student_id=seat.student_id,
+            class_id=seat.class_id,
             store_item_id=item.id,
-            join_code=join_code,
+            join_code=seat.join_code,
             correlation_id=corr_id,
             purchase_date=utc_now(),
             expiry_date=expiry_date,
@@ -174,9 +177,11 @@ def record_standard_purchase_items(
 
     for _ in range(quantity):
         new_student_item = StudentItem(
-            student_id=student.id,
+            seat_id=seat.id,
+            student_id=seat.student_id,
+            class_id=seat.class_id,
             store_item_id=item.id,
-            join_code=join_code,
+            join_code=seat.join_code,
             correlation_id=corr_id,
             purchase_date=utc_now(),
             expiry_date=expiry_date,

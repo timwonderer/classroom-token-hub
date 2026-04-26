@@ -66,6 +66,7 @@ from app.services.ledger_service import (
     get_available_balances,
 )
 from app.services import access_policy_service, identity_service, store_service
+from app.feats.base import feat_shell
 from app.feats.rent_payment_feat import execute_rent_payment
 from app.feats.transfer_feat import execute_account_transfer
 from app.feats.insurance_purchase_feat import execute_insurance_purchase
@@ -3244,12 +3245,13 @@ def _ensure_rent_hall_pass_top_off(student, context, settings=None, now=None):
         include_late_fee=False,
     )
 
+    from app.models import Seat
+    seat = Seat.query.get(seat_id)
+
     total_grant = store_service.get_rent_hall_pass_grant_total(settings.id)
     target_rent_passes = total_grant if is_paid else 0
     return identity_service.reconcile_rent_hall_pass_top_off(
-        student=student,
-        join_code=join_code,
-        current_block=current_block,
+        seat=seat,
         target_rent_passes=target_rent_passes,
     )
 
@@ -3472,6 +3474,7 @@ def rent():
 
 @student_bp.route('/rent/pay/<period>', methods=['POST'])
 @login_required
+@feat_shell("FEAT-OBL-001")
 def rent_pay(period):
     """Process rent payment for a specific period."""
     student = get_logged_in_student()
@@ -3515,6 +3518,7 @@ def rent_pay(period):
 
     # Validate period for the current class context only
     period = (period or '').strip().upper()
+    current_block = context.get('block', '').strip().upper()
     if period != current_block:
         flash("Invalid period.", "error")
         return redirect(url_for('student.rent'))

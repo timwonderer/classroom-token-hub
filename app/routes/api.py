@@ -583,7 +583,7 @@ def purchase_item():
                 banking_settings=None,
                 purchase_idempotency_key=purchase_idempotency_key,
             )
-            db.session.commit() # FEAT-AUTHORIZED-SHELL
+            # No manual commit here; feat_shell owns it
             remaining = result.rent_uses_remaining
             if remaining == -1:
                 return jsonify({"status": "success", "message": f"{result.success_message} Unlimited free purchases remaining this period."})
@@ -716,7 +716,7 @@ def purchase_item():
             uses_remaining=uses_remaining,
             student_item_status=student_item_status,
         )
-        db.session.commit() # FEAT-AUTHORIZED-SHELL
+        # No manual commit here; feat_shell owns it
 
         if item.item_type == 'hall_pass':
             return jsonify({

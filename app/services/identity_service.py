@@ -14,9 +14,7 @@ def add_hall_passes(student, quantity: int) -> int:
 
 def reconcile_rent_hall_pass_top_off(
     *,
-    student,
-    join_code: str,
-    current_block: str,
+    seat,
     target_rent_passes: int,
 ):
     """
@@ -24,14 +22,16 @@ def reconcile_rent_hall_pass_top_off(
 
     Returns (passes_awarded, passes_revoked, state_changed).
     """
-    if not student or not join_code or not current_block:
+    if not seat:
         return 0, 0, False
 
-    current_block = current_block.strip().upper()
+    student = seat.student
+    if not student:
+        from app.models import Student
+        student = Student.query.get(seat.student_id)
+
     student_block = StudentBlock.query.filter(
-        StudentBlock.student_id == student.id,
-        StudentBlock.period == current_block,
-        StudentBlock.join_code == join_code,
+        StudentBlock.seat_id == seat.id,
     ).first()
 
     state_changed = False
@@ -39,9 +39,11 @@ def reconcile_rent_hall_pass_top_off(
 
     if not student_block and target_rent_passes > 0:
         student_block = StudentBlock(
-            student_id=student.id,
-            period=current_block,
-            join_code=join_code,
+            student_id=seat.student_id,
+            seat_id=seat.id,
+            period=seat.block,
+            class_id=seat.class_id,
+            join_code=seat.join_code,
             rent_hall_passes=0,
         )
         db.session.add(student_block)

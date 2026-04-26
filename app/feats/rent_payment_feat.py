@@ -130,7 +130,7 @@ def execute_rent_payment(
                 calculate_due_dates_fn=calculate_due_dates_fn,
             )
 
-    db.session.commit()
+    db.session.flush()
 
     return RentPaymentResult(
         transaction_id=transaction.id,

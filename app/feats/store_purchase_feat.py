@@ -37,6 +37,7 @@ def execute_rent_perk_purchase(
     access_policy_service.assert_can_purchase_item(
         scope=scope,
         teacher_id=teacher_id,
+        class_id=class_id,
     )
     description = f"Purchase: {item.name} [Rent Perk $0]"
     if purchase_idempotency_key:
@@ -114,6 +115,7 @@ def execute_store_purchase(
     access_policy_service.assert_can_purchase_item(
         scope=scope,
         teacher_id=teacher_id,
+        class_id=class_id,
     )
     if purchase_idempotency_key:
         purchase_tx, created = ledger_service.create_pending_transaction_idempotent(

@@ -91,6 +91,7 @@ FEAT_REGISTRY = {
     "FEAT-ATTN-001": {"domain": "Attendance", "blast_radius": "MED", "desc": "Session Management"},
     "FEAT-ATTN-002": {"domain": "Attendance", "blast_radius": "LOW", "desc": "Individual Tap"},
     "FEAT-ADMN-001": {"domain": "Logistics", "blast_radius": "LOW", "desc": "Bulk Admin"},
+    "FEAT-OBL-001": {"domain": "Obligations", "blast_radius": "MED", "desc": "Rent Payment"},
 }
 
 class FEATContext:
@@ -340,7 +341,11 @@ def feat_shell(feat_name: str):
                 pass # Heuristic failed to read source
                 
             with FEATContext(feat_name, correlation_id=correlation_id, idempotency_key=idempotency_key):
-                return f(*args, **kwargs)
+                result = f(*args, **kwargs)
+                # If this is the top-level shell, it owns the final commit.
+                if not is_nested_feat():
+                    db.session.commit()
+                return result
         return decorated_function
     return decorator
 

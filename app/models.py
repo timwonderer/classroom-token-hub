@@ -1599,6 +1599,7 @@ class RentWaiver(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     waiver_start_date = db.Column(db.DateTime(timezone=True), nullable=False)
     waiver_end_date = db.Column(db.DateTime(timezone=True), nullable=False)
@@ -1619,6 +1620,36 @@ class RentWaiver(db.Model):
     def created_by_admin_id(self, value):
         self.created_by_teacher_id = value
 
+
+
+@sa.event.listens_for(RentWaiver, "before_insert")
+@sa.event.listens_for(RentWaiver, "before_update")
+def _sync_rent_waiver_scope(_mapper, connection, target):
+    """Dual-write bridge for rent_waivers.seat_id and class_id."""
+    student_id = getattr(target, "student_id", None)
+    class_id = getattr(target, "class_id", None)
+    join_code = getattr(target, "join_code", None)
+
+    if not class_id and join_code:
+        class_id = connection.execute(
+            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+            {"join_code": join_code},
+        ).scalar()
+        if class_id:
+            target.class_id = str(class_id)
+
+    if not getattr(target, "seat_id", None) and student_id:
+        seat_id = _resolve_seat_id(connection, student_id, class_id=class_id, join_code=join_code)
+        if seat_id:
+            target.seat_id = seat_id
+
+    if not getattr(target, "class_id", None) and getattr(target, "seat_id", None):
+        seat_class_id = connection.execute(
+            sa.text("SELECT class_id FROM seats WHERE id = :seat_id LIMIT 1"),
+            {"seat_id": target.seat_id},
+        ).scalar()
+        if seat_class_id:
+            target.class_id = str(seat_class_id)
 
 @sa.event.listens_for(HallPassLog, "before_insert")
 @sa.event.listens_for(HallPassLog, "before_update")
@@ -1705,6 +1736,15 @@ def _sync_rent_payment_seat(_mapper, connection, target):
         ).scalar()
         if seat_class_id:
             target.class_id = str(seat_class_id)
+
+    # Backfill student_id from seat_id if missing (for legacy compatibility)
+    if not getattr(target, "student_id", None) and getattr(target, "seat_id", None):
+        seat_student_id = connection.execute(
+            sa.text("SELECT student_id FROM seats WHERE id = :seat_id LIMIT 1"),
+            {"seat_id": target.seat_id},
+        ).scalar()
+        if seat_student_id:
+            target.student_id = seat_student_id
 
 
 @sa.event.listens_for(RentWaiver, "before_insert")

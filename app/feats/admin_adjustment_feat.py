@@ -22,7 +22,18 @@ def execute_admin_adjustments(*, adjustments: list[dict], banking_settings=None)
     fee_count = 0
 
     for adjustment in adjustments:
-        seat = adjustment["seat"]
+        seat = adjustment.get("seat")
+        if not seat and "student" in adjustment and "join_code" in adjustment:
+            from app.models import Seat
+            seat = Seat.query.filter_by(
+                student_id=adjustment["student"].id,
+                join_code=adjustment["join_code"]
+            ).first()
+
+        if not seat:
+            # Fallback for unexpected cases: if no seat and no student/join_code, we can't proceed
+            raise KeyError("Adjustment missing 'seat' and cannot resolve from 'student'/'join_code'.")
+
         amount = Decimal(str(adjustment["amount"]))
         account_type = adjustment.get("account_type", "checking")
         teacher_id = adjustment["teacher_id"]
@@ -69,5 +80,10 @@ def execute_admin_adjustments(*, adjustments: list[dict], banking_settings=None)
                 deposit_description="Overdraft protection transfer from savings",
             )
 
-    db.session.commit()
+    from app.feats.base import is_nested_feat
+    if not is_nested_feat():
+        db.session.commit()
+    else:
+        db.session.flush()
+
     return AdminAdjustmentResult(applied_count=applied_count, declined_count=declined_count, fee_count=fee_count)

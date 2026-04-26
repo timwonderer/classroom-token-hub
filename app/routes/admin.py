@@ -8387,7 +8387,7 @@ def payroll_history():
 def run_payroll(*args, **kwargs):
     """FEAT-Shell for payroll execution."""
     res = _run_payroll_legacy(*args, **kwargs)
-    db.session.commit() # FEAT-AUTHORIZED-SHELL
+    # No manual commit here; feat_shell owns it
     return res
 
 def _run_payroll_legacy():

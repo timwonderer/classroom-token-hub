@@ -364,10 +364,16 @@ def test_transfer_pairs_are_zero_sum_within_class_scope(client):
     _link_student_to_teacher(other_student, admin, "JOIN-OTHER", block="B")
     db.session.commit()
 
+    from app.models import Seat, ClassEconomy
+    seat = Seat.query.filter_by(student_id=student.id, join_code="JOIN-XFER").first()
+    other_seat = Seat.query.filter_by(student_id=other_student.id, join_code="JOIN-OTHER").first()
+    economy = ClassEconomy.query.filter_by(join_code="JOIN-XFER").first()
+    other_economy = ClassEconomy.query.filter_by(join_code="JOIN-OTHER").first()
+
     withdraw_tx, deposit_tx = ledger_service.create_transfer_pair(
-        student_id=student.id,
+        seat_id=seat.id,
+        class_id=economy.class_id,
         teacher_id=admin.id,
-        join_code="JOIN-XFER",
         amount=Decimal("12.34"),
         from_account="checking",
         to_account="savings",
@@ -375,9 +381,9 @@ def test_transfer_pairs_are_zero_sum_within_class_scope(client):
         deposit_description="Transfer from checking",
     )
     ledger_service.create_transfer_pair(
-        student_id=other_student.id,
+        seat_id=other_seat.id,
+        class_id=other_economy.class_id,
         teacher_id=admin.id,
-        join_code="JOIN-OTHER",
         amount=Decimal("7.89"),
         from_account="checking",
         to_account="savings",
