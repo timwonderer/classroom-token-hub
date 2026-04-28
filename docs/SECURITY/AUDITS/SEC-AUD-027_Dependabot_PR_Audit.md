@@ -15,7 +15,7 @@ This report summarizes the outstanding Dependabot PRs and categorizes them by sa
 | PR # | Package(s) | Version Change | Safety | Recommendation |
 | :--- | :--- | :--- | :--- | :--- |
 | **1170** | `packaging` | 25.0 -> 26.1 | ✅ **Safe** | Merged into combo branch. |
-| **1174** | `patch-updates` group | Various (Patch) | ⚠️ **Unsafe** | **Conflict detected.** See details below. |
+| **1174** | `patch-updates` group | Various (Patch) | ✅ **Resolved** | Conflict fixed manually. See details below. |
 | **1150** | `gevent` | 24.11.1 -> 26.4.0 | ⛔ **Unsafe** | Major bump. Risky for concurrency logic. |
 | **1149** | `zope-interface` | 7.2 -> 8.3 | ⛔ **Unsafe** | Major bump. Foundational interface logic. |
 | **1145** | `actions/github-script` | 8 -> 9 | ⛔ **Unsafe** | **Breaking changes** in script execution. |
@@ -24,14 +24,15 @@ This report summarizes the outstanding Dependabot PRs and categorizes them by sa
 
 ## III. Detailed Risk Analysis
 
-### PR #1174: Patch Updates Group (Unsafe As-Is)
-**Risk Level**: High (Dependency Conflict)
+### PR #1174: Patch Updates Group (Resolved)
+**Risk Level**: ~~High (Dependency Conflict)~~ → **Resolved**
 **Updates**: `click`, `mako`, `psycopg2-binary`, `opentelemetry-api/sdk/exporter`.
-**Risk**:
-- Attempting to merge this PR results in a **Dependency Resolution Failure**.
-- `opentelemetry-sdk 1.41.1` (proposed) requires `opentelemetry-semantic-conventions==0.62b1`.
-- However, the repository has `opentelemetry-instrumentation-flask` pinned to `0.62b0`, which strictly requires `opentelemetry-semantic-conventions==0.62b0`.
-- **Recommendation**: This PR should be recreated or updated to include the `opentelemetry-instrumentation-*` packages in the update group to ensure version alignment.
+**Root Cause**:
+- Dependabot's `patch-updates` group did not recognize the instrumentation pre-release bump (`0.62b0 → 0.62b1`) as a patch update, leaving the instrumentation packages out of the group.
+- This caused `opentelemetry-sdk 1.41.1` (requires `semantic-conventions==0.62b1`) to conflict with `opentelemetry-instrumentation-flask 0.62b0` (requires `semantic-conventions==0.62b0`).
+**Resolution** (applied 2026-04-27 on `dependabot-combo-safe-updates`):
+- `requirements.txt`: All OTel packages bumped in lockstep to `1.41.1` / `0.62b1`. `opentelemetry-semantic-conventions==0.62b1` explicitly pinned (was previously unpinned).
+- `.github/dependabot.yml`: Added dedicated `opentelemetry` group (minor + patch) ahead of the catch-all group so core and instrumentation packages are always co-bumped in future PRs.
 
 ### PR #1145: actions/github-script (Unsafe)
 **Risk Level**: High (Breaking Changes)
@@ -64,8 +65,9 @@ This report summarizes the outstanding Dependabot PRs and categorizes them by sa
 ## IV. Combo Merge Status
 
 A new branch `dependabot-combo-safe-updates` has been created.
-- **Included**: PR #1170 (`packaging`).
-- **Excluded**: All others due to identified risks.
+- **Included**: PR #1170 (`packaging`), OpenTelemetry lockstep upgrade (manual fix for PR #1174 conflict).
+- **Excluded**: PR #1145, #1149, #1150 due to identified risks.
 
 **Verification**:
 - Local tests (`pytest`) were run. While errors were detected in the database setup (`psycopg2.errors.DependentObjectsStillExist`), these were confirmed to be **pre-existing** on the `main` branch and unrelated to the `packaging` update.
+- The OpenTelemetry fix resolves the pip dependency resolution failure. `opentelemetry-semantic-conventions==0.62b1` is now the sole required version across all OTel packages.

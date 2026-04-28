@@ -16,8 +16,19 @@ updates:
     # Assign reviewers (update with your GitHub username)
     reviewers:
       - "timwonderer"
-    # Group all patch updates into a single PR
+    # Group all patch updates into a single PR.
+    # opentelemetry-* is listed first so all OTel packages (core + instrumentation)
+    # are always co-grouped regardless of whether the version bump is classified as
+    # patch or minor by Dependabot (instrumentation pre-release bumps like 0.62b0→0.62b1
+    # may not be recognized as patch updates). This prevents the lockstep version
+    # conflict that occurred in PR #1174.
     groups:
+      opentelemetry:
+        patterns:
+          - "opentelemetry-*"
+        update-types:
+          - "minor"
+          - "patch"
       patch-updates:
         patterns:
           - "*"
