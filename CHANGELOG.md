@@ -8,6 +8,13 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+- Bumped all OpenTelemetry packages in lockstep: `opentelemetry-api/sdk/exporter-otlp-proto-http` 1.41.0 → 1.41.1; `opentelemetry-instrumentation-flask/requests/sqlalchemy` 0.62b0 → 0.62b1. Explicitly pinned `opentelemetry-semantic-conventions==0.62b1` (was previously unpinned).
+- Updated `.github/dependabot.yml` to add a dedicated `opentelemetry` group (minor + patch) ahead of the catch-all `patch-updates` group, ensuring all OTel core and instrumentation packages are always co-bumped in future Dependabot PRs.
+
+### Fixed
+- Resolved dependency resolution conflict from Dependabot PR #1174 where `opentelemetry-sdk 1.41.1` required `opentelemetry-semantic-conventions==0.62b1` but `opentelemetry-instrumentation-flask 0.62b0` hard-required `==0.62b0`. Root cause: the patch-updates group did not recognize the instrumentation pre-release bump as a patch update, leaving the packages out of lockstep.
+
 ### Added
 - **Insurance recurring billing — Phases 2–4** — Builds on the Phase 1 nightly billing job shipped in PR #1168:
   - **`bill_preview_days` teacher setting** — Teachers configure how many days before the due date students on manual-pay policies see their upcoming bill. Appears beneath the Autopay toggle in create and edit policy forms (hidden via JS when autopay is on). Migration `f9a8b7c6d5e4` adds `bill_preview_days INTEGER NOT NULL DEFAULT 5` to `insurance_policies`. (#1172)

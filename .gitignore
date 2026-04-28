@@ -19,3 +19,4 @@ venv
 .codex/
 *_optimized.txt
 known_hosts_github_secret.txt
+.env.*

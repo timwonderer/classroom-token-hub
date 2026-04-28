@@ -117,7 +117,17 @@ def app():
     with flask_app.app_context():
         db.session.remove()
         _terminate_other_postgres_sessions()
-        db.drop_all()
+        if db.engine.dialect.name == "postgresql":
+            # drop_all() emits bare DROP TABLE statements whose order may not
+            # respect FK constraints, causing DependentObjectsStillExist errors.
+            # Dropping the whole schema with CASCADE is the reliable alternative.
+            with db.engine.connect() as conn:
+                conn.execute(text("DROP SCHEMA public CASCADE"))
+                conn.execute(text("CREATE SCHEMA public"))
+                conn.execute(text("GRANT ALL ON SCHEMA public TO PUBLIC"))
+                conn.commit()
+        else:
+            db.drop_all()
         db.create_all()
 
     yield flask_app
