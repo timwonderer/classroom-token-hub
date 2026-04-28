@@ -1,4 +1,11 @@
-from functools import wraps
+import os
+import glob
+
+print("Realignment: Beginning Auth")
+
+# First, we need to completely replace `app/auth.py`
+with open("app/auth.py", "w") as f:
+    f.write("""from functools import wraps
 from flask import session, redirect, url_for, flash, g, request, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 import hmac
@@ -77,3 +84,4 @@ def load_user_context():
     g.user = get_current_user()
     g.seat = get_current_seat()
     g.class_id = get_current_class_id()
+""")

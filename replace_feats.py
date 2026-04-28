@@ -1,4 +1,33 @@
+print("Realignment: Rewriting Feats")
+import os
+os.system("rm -rf app/feats/*")
+os.makedirs("app/feats", exist_ok=True)
+with open("app/feats/__init__.py", "w") as f:
+    f.write("")
 
+with open("app/feats/base.py", "w") as f:
+    f.write("""
+from functools import wraps
+from app.extensions import db
+from app.models import OperationalEvent, AuditLog
+
+def feat_shell(domain, level="INFO"):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                result = func(*args, **kwargs)
+                db.session.commit()
+                return result
+            except Exception as e:
+                db.session.rollback()
+                raise e
+        return wrapper
+    return decorator
+""")
+
+with open("app/feats/transfer_feat.py", "w") as f:
+    f.write("""
 from app.extensions import db
 from app.models import LedgerTransaction, LedgerBalanceSnapshot
 from .base import feat_shell
@@ -38,3 +67,4 @@ def execute_transfer(from_seat_id, to_seat_id, amount_cents, idempotency_key):
             bal = LedgerBalanceSnapshot(seat_id=seat_id, posted_balance_cents=0, last_event_id=0)
             db.session.add(bal)
         bal.posted_balance_cents += amt
+""")
