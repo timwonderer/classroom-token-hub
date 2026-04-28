@@ -118,13 +118,33 @@ def app():
         db.session.remove()
         _terminate_other_postgres_sessions()
         if db.engine.dialect.name == "postgresql":
+            # Safety guard: refuse to wipe a database that does not look like a
+            # dedicated test DB.  A misconfigured DATABASE_URL pointing at dev or
+            # prod would otherwise destroy live data irreversibly.
+            db_name = db.engine.url.database or ""
+            is_test_db = db_name.endswith("_test") or bool(os.environ.get("TEST_DATABASE_URL"))
+            if not is_test_db:
+                raise RuntimeError(
+                    f"Refusing to reset PostgreSQL database {db_name!r}: it does not end "
+                    "with '_test' and TEST_DATABASE_URL is not set.  Set TEST_DATABASE_URL "
+                    "or rename the database to end with '_test' before running tests."
+                )
+
             # drop_all() emits bare DROP TABLE statements whose order may not
             # respect FK constraints, causing DependentObjectsStillExist errors.
-            # Dropping the whole schema with CASCADE is the reliable alternative.
+            # Cascade-drop every table individually so schema-level objects such
+            # as extensions (uuid-ossp, pg_trgm, …) installed by a superuser are
+            # preserved — unlike DROP SCHEMA … CASCADE which removes them too.
             with db.engine.connect() as conn:
-                conn.execute(text("DROP SCHEMA public CASCADE"))
-                conn.execute(text("CREATE SCHEMA public"))
-                conn.execute(text("GRANT ALL ON SCHEMA public TO PUBLIC"))
+                conn.execute(text("""
+                    DO $$ DECLARE
+                        r RECORD;
+                    BEGIN
+                        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+                            EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+                        END LOOP;
+                    END $$;
+                """))
                 conn.commit()
         else:
             db.drop_all()
