@@ -59,13 +59,17 @@ def admin_with_students(client):
         reason='done for the day'
     )
     db.session.add(tap_out)
-    
+
+    # Capture the event date before commit so tests don't lazy-load expired objects.
+    event_utc_date = (now_utc - timedelta(hours=1)).date()
+
     db.session.commit()
-    
+
     return {
         'admin': admin,
         'student': student,
-        'tap_events': [tap_in, tap_out]
+        'tap_events': [tap_in, tap_out],
+        'event_date': event_utc_date,
     }
 
 
@@ -110,11 +114,8 @@ def test_attendance_history_with_date_filters(client, admin_with_students):
         sess['admin_id'] = admin.id
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
     
-    # Use the tap event date to avoid timezone-boundary flakiness
-    event_ts = admin_with_students['tap_events'][0].timestamp
-    if event_ts.tzinfo is None:
-        event_ts = event_ts.replace(tzinfo=timezone.utc)
-    today_str = event_ts.date().strftime('%Y-%m-%d')
+    # Use the pre-captured event date to avoid lazy-loading expired ORM objects.
+    today_str = admin_with_students['event_date'].strftime('%Y-%m-%d')
     
     # Call the API endpoint with today's date as filter
     response = client.get(f'/api/attendance/history?start_date={today_str}&end_date={today_str}')
