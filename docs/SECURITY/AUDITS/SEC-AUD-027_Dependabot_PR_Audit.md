@@ -69,5 +69,5 @@ A new branch `dependabot-combo-safe-updates` has been created.
 - **Excluded**: PR #1145, #1149, #1150 due to identified risks.
 
 **Verification**:
-- Local tests (`pytest`) were run. While errors were detected in the database setup (`psycopg2.errors.DependentObjectsStillExist`), these were confirmed to be **pre-existing** on the `main` branch and unrelated to the `packaging` update.
-- The OpenTelemetry fix resolves the pip dependency resolution failure. `opentelemetry-semantic-conventions==0.62b1` is now the sole required version across all OTel packages.
+- Local tests (`pytest`) were run. The pre-existing `psycopg2.errors.DependentObjectsStillExist` DB teardown error (present on `main`) was resolved in this PR by replacing `db.drop_all()` with `DROP SCHEMA public CASCADE` in `tests/conftest.py`.
+- `pip install -r requirements.txt --dry-run` confirms clean dependency resolution. `opentelemetry-semantic-conventions==0.62b1` is now the sole required version across all OTel packages.
