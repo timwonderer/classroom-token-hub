@@ -133,6 +133,15 @@ def app():
     yield flask_app
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _stop_scheduler():
+    """Shut down APScheduler after the test session to prevent hanging threads."""
+    yield
+    from app.extensions import scheduler
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+
+
 @pytest.fixture
 def client(app):
     """
@@ -158,7 +167,9 @@ def client(app):
         original_session = db.session
         db.session = test_session
 
-        @event.listens_for(test_session(), "after_transaction_end")
+        _session = test_session()
+
+        @event.listens_for(_session, "after_transaction_end")
         def restart_savepoint(session, transaction):
             nonlocal nested_transaction
             if transaction.nested and not transaction.parent.nested:
@@ -169,7 +180,7 @@ def client(app):
         try:
             yield client
         finally:
-            event.remove(test_session(), "after_transaction_end", restart_savepoint)
+            event.remove(_session, "after_transaction_end", restart_savepoint)
             limiter.reset()
             test_session.remove()
             db.session = original_session
