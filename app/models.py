@@ -99,7 +99,7 @@ class AnalyticsAlert(db.Model):
 
     # Deterministic identity (prevents duplicate / zombie alerts)
     alert_key = db.Column(db.String(100), nullable=False)  # e.g. 'participation_low'
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=False, index=True)
 
     # Snapshot window this alert applies to
@@ -224,7 +224,7 @@ class Seat(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     public_id = db.Column(db.String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     role = db.Column(db.String(20), nullable=False, default='student')
 
     # Canonical seat-local metadata for the identity overhaul target.
@@ -260,7 +260,7 @@ def _sync_seat_scope(mapper, connection, target):
         target.block = target.block_identifier
     if getattr(target, "class_id", None) is None and getattr(target, "join_code", None):
         class_id = connection.execute(
-            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code"),
+            sa.text("SELECT class_id FROM classes WHERE join_code = :join_code"),
             {"join_code": target.join_code},
         ).scalar()
         if class_id:
@@ -307,7 +307,7 @@ class TeacherBlock(db.Model):
 
     # Join code for this period (shared across all students in same teacher-block)
     join_code = db.Column(db.String(20), nullable=False)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     dedupe_key = db.Column(db.String(64), nullable=True, index=True)
 
     # Claim status
@@ -357,7 +357,7 @@ class Student(db.Model):
     identity_id = db.Column(db.Integer, db.ForeignKey('identity_profiles.id', ondelete='RESTRICT'), nullable=False, index=True)
     block = db.Column(db.String(10), nullable=False)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
 
     # Hash and credential fields
     # Credential: CONCAT(first_initial, DOB_sum) - simpler than old name_code system
@@ -598,7 +598,7 @@ class StudentTeacher(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=True)
 
@@ -616,7 +616,7 @@ class ClassMembershipRole(enum.Enum):
 
 class ClassEconomy(db.Model):
     """Canonical class anchor identified by a public join code and internal class_id."""
-    __tablename__ = 'class_economies'
+    __tablename__ = 'classes'
 
     class_id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     join_code = db.Column(db.String(20), unique=True, nullable=False, index=True)
@@ -642,7 +642,7 @@ class ClassEconomy(db.Model):
     teacher = db.relationship(
         'Admin',
         foreign_keys=[teacher_id],
-        backref=db.backref('class_economies', lazy='dynamic', passive_deletes=True),
+        backref=db.backref('classes', lazy='dynamic', passive_deletes=True),
     )
     created_by_admin = db.relationship('Admin', foreign_keys=[created_by_admin_id])
 
@@ -683,7 +683,7 @@ class EconomySnapshot(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     class_id = db.Column(
         db.String(36),
-        db.ForeignKey('class_economies.class_id', ondelete='CASCADE'),
+        db.ForeignKey('classes.class_id', ondelete='CASCADE'),
         nullable=False,
         index=True,
     )
@@ -718,7 +718,7 @@ class ClassMembership(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     class_id = db.Column(
         db.String(36),
-        db.ForeignKey('class_economies.class_id', ondelete='CASCADE'),
+        db.ForeignKey('classes.class_id', ondelete='CASCADE'),
         nullable=False,
         index=True,
     )
@@ -753,7 +753,7 @@ def _sync_class_membership_class_id(_mapper, connection, target):
         return
 
     class_id = connection.execute(
-        sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+        sa.text("SELECT class_id FROM classes WHERE join_code = :join_code LIMIT 1"),
         {"join_code": join_code},
     ).scalar()
     if not class_id:
@@ -828,7 +828,7 @@ class Transaction(db.Model):
     # Example: Teacher has Period A (join=MATH1A) and Period B (join=MATH3B)
     # Student in both periods should see separate balances/transactions
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
 
     # CRITICAL: Use Numeric for exact decimal representation to avoid floating-point errors
     # Float causes bugs: -0.00 overdraft fees, unpayable rent balances
@@ -943,7 +943,7 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
     
     if not target.class_id and target.join_code:
         class_row = _connection.execute(
-            sa.text("SELECT class_id FROM class_economies WHERE join_code = :jc LIMIT 1"),
+            sa.text("SELECT class_id FROM classes WHERE join_code = :jc LIMIT 1"),
             {"jc": target.join_code}
         ).fetchone()
         if class_row:
@@ -961,7 +961,7 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
 
     if not target.join_code and target.class_id:
         resolved_join_code = _connection.execute(
-            sa.text("SELECT join_code FROM class_economies WHERE class_id = :class_id LIMIT 1"),
+            sa.text("SELECT join_code FROM classes WHERE class_id = :class_id LIMIT 1"),
             {"class_id": target.class_id},
         ).scalar()
         if resolved_join_code:
@@ -1087,7 +1087,7 @@ class BalanceCache(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=True)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=False, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True)
 
     # Balances stored in CENTS to avoid floating point issues
@@ -1115,7 +1115,7 @@ class StudentBlock(db.Model):
     period = db.Column(db.String(10), nullable=False)
 
     # CRITICAL: class_id is the source of truth for class isolation
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
     # Toggle for enabling/disabling tap in/out for this student in this period
@@ -1150,7 +1150,7 @@ class TapEvent(db.Model):
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
     period = db.Column(db.String(10), nullable=False)
     # CRITICAL: class_id scopes attendance to a specific class economy
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     status = db.Column(db.String(10), nullable=False)  # 'active' or 'inactive'
     # All times stored as UTC (see header note)
@@ -1185,7 +1185,7 @@ def _sync_student_block_seat(_mapper, connection, target):
 
     if not class_id and join_code:
         class_id = connection.execute(
-            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+            sa.text("SELECT class_id FROM classes WHERE join_code = :join_code LIMIT 1"),
             {"join_code": join_code},
         ).scalar()
         if class_id:
@@ -1209,7 +1209,7 @@ def _sync_tap_event_seat(_mapper, connection, target):
 
     if not class_id and join_code:
         class_id = connection.execute(
-            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+            sa.text("SELECT class_id FROM classes WHERE join_code = :join_code LIMIT 1"),
             {"join_code": join_code},
         ).scalar()
         if class_id:
@@ -1240,7 +1240,7 @@ class HallPassLog(db.Model):
     period = db.Column(db.String(10), nullable=True) # Which period the request was made in
 
     # CRITICAL: class_id is the source of truth for class isolation
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
     request_time = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
@@ -1257,7 +1257,7 @@ class HallPassSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=False, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
     block = db.Column(db.String(10), nullable=False)
 
     # Queue system toggle
@@ -1306,7 +1306,7 @@ class PayrollCache(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
     cached_breakdown = db.Column(db.JSON, nullable=True)  # Stores the breakdown: {"(id, code)": amount}
     last_calculated_at = db.Column(db.DateTime(timezone=True), default=utc_now)
 
@@ -1323,7 +1323,7 @@ class StoreItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
     price = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
@@ -1392,7 +1392,7 @@ class StoreItemBlock(db.Model):
     __tablename__ = 'store_item_blocks'
     store_item_id = db.Column(db.Integer, db.ForeignKey('store_items.id', ondelete='CASCADE'), primary_key=True)
     block = db.Column(db.String(10), primary_key=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
     __table_args__ = (
@@ -1408,7 +1408,7 @@ class StudentItem(db.Model):
     store_item_id = db.Column(db.Integer, db.ForeignKey('store_items.id'), nullable=False)
 
     # CRITICAL: class_id is the source of truth for class isolation
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     correlation_id = db.Column(db.String(100), nullable=False, index=True)
@@ -1445,7 +1445,7 @@ def _sync_student_item_scope(_mapper, connection, target):
 
     if not class_id and join_code:
         class_id = connection.execute(
-            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+            sa.text("SELECT class_id FROM classes WHERE join_code = :join_code LIMIT 1"),
             {"join_code": join_code},
         ).scalar()
         if class_id:
@@ -1493,7 +1493,7 @@ class RedemptionAuditLog(db.Model):
     )
     notes = db.Column(db.Text, nullable=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     timestamp = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, index=True)
@@ -1522,7 +1522,7 @@ class RentSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
 
     # Main toggle
@@ -1569,7 +1569,7 @@ class RentPayment(db.Model):
     # student_id is DEPRECATED in favor of seat_id.
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=False, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     period = db.Column(db.String(10), nullable=False)  # Block/Period (e.g., 'A', 'B', 'C')
 
     # join_code is for UI display/filtering only
@@ -1599,7 +1599,7 @@ class RentWaiver(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     waiver_start_date = db.Column(db.DateTime(timezone=True), nullable=False)
     waiver_end_date = db.Column(db.DateTime(timezone=True), nullable=False)
@@ -1632,7 +1632,7 @@ def _sync_rent_waiver_scope(_mapper, connection, target):
 
     if not class_id and join_code:
         class_id = connection.execute(
-            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+            sa.text("SELECT class_id FROM classes WHERE join_code = :join_code LIMIT 1"),
             {"join_code": join_code},
         ).scalar()
         if class_id:
@@ -1661,7 +1661,7 @@ def _sync_hall_pass_seat(_mapper, connection, target):
 
     if not class_id and join_code:
         class_id = connection.execute(
-            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+            sa.text("SELECT class_id FROM classes WHERE join_code = :join_code LIMIT 1"),
             {"join_code": join_code},
         ).scalar()
         if class_id:
@@ -1691,7 +1691,7 @@ def _sync_rent_payment_seat(_mapper, connection, target):
 
     if not class_id and join_code:
         class_id = connection.execute(
-            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+            sa.text("SELECT class_id FROM classes WHERE join_code = :join_code LIMIT 1"),
             {"join_code": join_code},
         ).scalar()
         if class_id:
@@ -1773,7 +1773,7 @@ class RentItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     rent_setting_id = db.Column(db.Integer, db.ForeignKey('rent_settings.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
 
     # Item details
     name = db.Column(db.String(100), nullable=False)
@@ -1810,7 +1810,7 @@ class InsurancePolicy(db.Model):
     version_number = db.Column(db.Integer, nullable=False, default=1)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True)  # Owner teacher
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
     premium = db.Column(db.Numeric(precision=12, scale=2), nullable=False)  # Monthly cost
@@ -1906,7 +1906,7 @@ class InsurancePolicyBlock(db.Model):
     __tablename__ = 'insurance_policy_blocks'
     policy_id = db.Column(db.Integer, db.ForeignKey('insurance_policies.id', ondelete='CASCADE'), primary_key=True)
     block = db.Column(db.String(10), primary_key=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
     __table_args__ = (
@@ -1921,7 +1921,7 @@ class StudentInsurance(db.Model):
     # student_id is DEPRECATED in favor of seat_id.
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=False, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     policy_id = db.Column(db.Integer, db.ForeignKey('insurance_policies.id'), nullable=False)
 
     # join_code is for UI display/filtering only
@@ -2039,14 +2039,14 @@ def _sync_student_insurance_scope(_mapper, connection, target):
 
     if not class_id and join_code:
         class_id = connection.execute(
-            sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+            sa.text("SELECT class_id FROM classes WHERE join_code = :join_code LIMIT 1"),
             {"join_code": join_code},
         ).scalar()
         if not class_id and policy_teacher_id:
                 proposed_class_id = str(uuid.uuid4())
                 connection.execute(
                     sa.text(
-                        "INSERT INTO class_economies "
+                        "INSERT INTO classes "
                         "(class_id, join_code, teacher_id, display_name, class_timezone, created_at, updated_at, created_by_admin_id) "
                         "VALUES (:class_id, :join_code, :teacher_id, NULL, 'UTC', :created_at, :updated_at, :created_by_admin_id) "
                         "ON CONFLICT (join_code) DO NOTHING"
@@ -2061,7 +2061,7 @@ def _sync_student_insurance_scope(_mapper, connection, target):
                     },
                 )
                 class_id = connection.execute(
-                    sa.text("SELECT class_id FROM class_economies WHERE join_code = :join_code LIMIT 1"),
+                    sa.text("SELECT class_id FROM classes WHERE join_code = :join_code LIMIT 1"),
                     {"join_code": join_code},
                 ).scalar()
         if class_id:
@@ -2072,7 +2072,7 @@ def _sync_student_insurance_scope(_mapper, connection, target):
             sa.text(
                 "SELECT cm.class_id, ce.join_code "
                 "FROM class_memberships cm "
-                "JOIN class_economies ce ON ce.class_id = cm.class_id "
+                "JOIN classes ce ON ce.class_id = cm.class_id "
                 "WHERE cm.student_id = :student_id AND ce.teacher_id = :teacher_id "
                 "ORDER BY cm.id ASC LIMIT 1"
             ),
@@ -2088,7 +2088,7 @@ def _sync_student_insurance_scope(_mapper, connection, target):
     if not class_id and policy_teacher_id:
         teacher_class = connection.execute(
             sa.text(
-                "SELECT class_id, join_code FROM class_economies "
+                "SELECT class_id, join_code FROM classes "
                 "WHERE teacher_id = :teacher_id ORDER BY created_at ASC LIMIT 1"
             ),
             {"teacher_id": policy_teacher_id},
@@ -2104,7 +2104,7 @@ def _sync_student_insurance_scope(_mapper, connection, target):
             synthetic_class_id = str(uuid.uuid4())
             connection.execute(
                 sa.text(
-                    "INSERT INTO class_economies "
+                    "INSERT INTO classes "
                     "(class_id, join_code, teacher_id, display_name, class_timezone, created_at, updated_at, created_by_admin_id) "
                     "VALUES (:class_id, :join_code, :teacher_id, NULL, 'UTC', :created_at, :updated_at, :created_by_admin_id)"
                 ),
@@ -2169,7 +2169,7 @@ def _sync_student_insurance_scope(_mapper, connection, target):
 
     if not getattr(target, "join_code", None) and getattr(target, "class_id", None):
         resolved_join_code = connection.execute(
-            sa.text("SELECT join_code FROM class_economies WHERE class_id = :class_id LIMIT 1"),
+            sa.text("SELECT join_code FROM classes WHERE class_id = :class_id LIMIT 1"),
             {"class_id": target.class_id},
         ).scalar()
         if resolved_join_code:
@@ -2185,7 +2185,7 @@ class InsuranceClaim(db.Model):
     policy_id = db.Column(db.Integer, db.ForeignKey('insurance_policies.id'), nullable=False)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
     incident_date = db.Column(db.DateTime(timezone=True), nullable=False)  # When incident occurred
@@ -2257,7 +2257,7 @@ class ActorRequestTrace(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     actor_type = db.Column(db.String(20), nullable=False, index=True)
     actor_opaque_id = db.Column(db.String(64), nullable=False, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='SET NULL'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='SET NULL'), nullable=True, index=True)
     request_id = db.Column(db.String(128), nullable=False, index=True)
     method = db.Column(db.String(10), nullable=False)
     endpoint = db.Column(db.String(500), nullable=False)
@@ -2278,7 +2278,7 @@ class ErrorEvent(db.Model):
     request_id = db.Column(db.String(128), nullable=True, index=True)
     actor_type = db.Column(db.String(20), nullable=True, index=True)
     actor_opaque_id = db.Column(db.String(64), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='SET NULL'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='SET NULL'), nullable=True, index=True)
     endpoint = db.Column(db.String(500), nullable=True)
     method = db.Column(db.String(10), nullable=True)
     error_class = db.Column(db.String(200), nullable=False)
@@ -2299,7 +2299,7 @@ class UserReport(db.Model):
     # Anonymous user identification (HMAC of user identifier)
     anonymous_code = db.Column(db.String(64), nullable=False, index=True)
     user_type = db.Column(db.String(20), nullable=False)  # 'student', 'teacher', 'anonymous'
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
     # Report details
@@ -2390,7 +2390,7 @@ class Issue(db.Model):
 
     # Class context
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=False, index=True)
     class_label = db.Column(db.String(50), nullable=True)  # Cached class name
@@ -2515,7 +2515,7 @@ class TicketCorrelationPack(db.Model):
     correlation_version = db.Column(db.Integer, nullable=False, default=1, server_default='1')
     actor_type = db.Column(db.String(20), nullable=False)
     actor_opaque_id = db.Column(db.String(64), nullable=False)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='SET NULL'), nullable=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='SET NULL'), nullable=True)
     request_trace_json = db.Column(db.JSON, nullable=False, default=list)
     error_refs_json = db.Column(db.JSON, nullable=False, default=list)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
@@ -2534,7 +2534,7 @@ class IssueStatusHistory(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), nullable=False, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
     previous_status = db.Column(db.String(50), nullable=True)
@@ -2557,7 +2557,7 @@ class IssueResolutionAction(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), nullable=False, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
     action_type = db.Column(db.String(100), nullable=False)
@@ -2733,7 +2733,7 @@ class PayrollSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global/default settings
     pay_rate = db.Column(db.Numeric(precision=12, scale=2), nullable=False, default=0.25)  # $ per minute
     payroll_frequency_days = db.Column(db.Integer, nullable=False, default=14)
@@ -2782,7 +2782,7 @@ class PayrollReward(db.Model):
     __tablename__ = 'payroll_rewards'
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
@@ -2802,7 +2802,7 @@ class PayrollFine(db.Model):
     __tablename__ = 'payroll_fines'
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
@@ -2823,7 +2823,7 @@ class BankingSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
 
     # Interest settings for savings
@@ -2871,7 +2871,7 @@ class ClassFeature(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     class_id = db.Column(
         db.String(36),
-        db.ForeignKey('class_economies.class_id', ondelete='CASCADE'),
+        db.ForeignKey('classes.class_id', ondelete='CASCADE'),
         nullable=False,
         index=True,
     )
@@ -2926,7 +2926,7 @@ class FeatureSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
     join_code = db.Column(db.String(20), nullable=False, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
     block = db.Column(db.String(10), nullable=False)
 
     # Economy policy and rebalance tracking
@@ -3105,7 +3105,7 @@ class Announcement(db.Model):
     system_admin_id = db.Column(db.Integer, db.ForeignKey('system_admins.id', ondelete='CASCADE'), nullable=True)
 
     # Audience targeting
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)  # For teacher/sysadmin specific class announcements
     audience_type = db.Column(db.String(30), default='class', nullable=False)  # 'class', 'system_wide', 'all_teachers', 'all_students', 'teacher_all_classes', 'specific_class'
     target_teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=True)  # For 'teacher_all_classes' audience type
@@ -3212,7 +3212,7 @@ class AnalyticsSnapshot(db.Model):
     
     # Scoping (CRITICAL: join_code is source of truth for multi-tenancy)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=False, index=True)
     
     # Time window
@@ -3277,7 +3277,7 @@ class AnalyticsEvent(db.Model):
     
     # Scoping
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=False, index=True)
     
     # Event details
