@@ -169,6 +169,21 @@ Each domain wave (3–10) follows this exact sequence:
 - `flask db heads` → `0001` only
 - Full test suite: same pass count as Wave 1
 
+### Status Update (2026-04-30)
+
+- ✅ Archived `196` migration files from `migrations/versions/` to `migrations/archive/v1_196_migrations/`.
+- ✅ Added bootstrap migration `migrations/versions/0001_bootstrap.py` with `down_revision = None`.
+- ✅ Added `scripts/verify_migration_squash.py` and validated: head is `0001`, canonical table count is `44`.
+- ✅ Migration gate executed on active Postgres environment:
+  - `flask db upgrade`
+  - `flask db downgrade`
+  - `flask db upgrade`
+  - `flask db heads` → `0001 (head)`
+- ✅ Targeted verification tests passed: `tests/domain/test_smoke.py`, `tests/test_migration_idempotency.py`, `tests/test_migration_1a4ee2388d62_fix.py` (`11 passed`).
+
+Operational note:
+- `flask db` in this codebase resolves DB URL via Flask app bootstrap and may force `.env` values during CLI runs depending on environment flags. When validating against alternate DB URLs, confirm the effective URL from command output (`DEBUG: Migrating database at ...`) and use explicit environment guards in CI.
+
 ---
 
 ## Wave 3 — Identity Domain (DOM-IDEN-001)

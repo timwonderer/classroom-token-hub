@@ -9,6 +9,7 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Changed
+- **Wave 2 bootstrap migration squash started** - Archived 196 legacy Alembic revisions into `migrations/archive/v1_196_migrations/`, introduced `migrations/versions/0001_bootstrap.py` as the new baseline head (`down_revision = None`) to idempotently co-create legacy and canonical tables, and added `scripts/verify_migration_squash.py` to assert head/table expectations.
 - **V2 money authority model closed** — Student, admin, sysadmin, and redemption money paths now funnel through FEAT/domain services into `ledger_service`, with `Transaction(` construction restricted to `app/services/ledger_service.py` and enforced by structural guardrails.
 - **Admin-side authority extraction completed for money workflows** — Payroll runs, manual payroll adjustments, bonus/fine flows, insurance claim reimbursement, transaction void, and bug-reward issuance no longer create money rows inline in route handlers.
 - **Transfer zero-sum invariant is now explicit** — Added a class-scoped critical smoke test proving canonical transfer pairs net to zero within a `join_code` boundary and remain isolated from transfer activity in other class scopes.
