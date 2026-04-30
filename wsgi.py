@@ -15,8 +15,9 @@ import platform
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load .env before importing the app so CLI commands see required settings
-load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=True)
+# Load .env defaults before importing the app, but preserve explicitly provided
+# environment variables (e.g., DATABASE_URL overrides for migration/test gates).
+load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=False)
 
 os.environ['TZ'] = 'UTC'
 
