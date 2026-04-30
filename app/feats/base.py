@@ -156,6 +156,8 @@ class FEATContext:
 
         self.commit_count = 0
         self.flush_count = 0
+        self._owns_transaction = False
+        self._transaction_ctx = None
 
     def __enter__(self):
         if not hasattr(_feat_context, "stack"):
@@ -180,6 +182,13 @@ class FEATContext:
         # Bind context to the current session for cross-layer verification
         db.session.info["feat_context_active"] = True
         db.session.info["active_correlation_id"] = self.correlation_id
+        db.session.info["feat_orchestrator_commit"] = False
+
+        # FEAT is the transaction boundary: top-level FEAT owns exactly one DB transaction.
+        self._owns_transaction = not is_nested_feat()
+        if self._owns_transaction:
+            self._transaction_ctx = db.session.begin()
+            self._transaction_ctx.__enter__()
         
         self.log_event("FEAT-ENTRY", {
             "feat": self.feat_name,
@@ -194,6 +203,15 @@ class FEATContext:
         logger.info(msg)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        # Commit on success / rollback on failure for the whole FEAT transaction.
+        if self._owns_transaction and self._transaction_ctx is not None:
+            # Allow the single orchestrator commit path triggered by session.begin().__exit__.
+            db.session.info["feat_orchestrator_commit"] = True
+            try:
+                self._transaction_ctx.__exit__(exc_type, exc_val, exc_tb)
+            finally:
+                db.session.info["feat_orchestrator_commit"] = False
+
         if hasattr(_feat_context, "stack") and _feat_context.stack:
             prev = _feat_context.stack.pop()
             _feat_context.active_feat = prev["name"]
@@ -208,6 +226,7 @@ class FEATContext:
             _feat_context.flush_count = 0
             db.session.info["feat_context_active"] = False
             db.session.info["active_correlation_id"] = None
+            db.session.info["feat_orchestrator_commit"] = False
 
 def increment_commit_count():
     """Track number of commits in current FEAT and tripwire multiple commits."""
@@ -341,11 +360,7 @@ def feat_shell(feat_name: str):
                 pass # Heuristic failed to read source
                 
             with FEATContext(feat_name, correlation_id=correlation_id, idempotency_key=idempotency_key):
-                result = f(*args, **kwargs)
-                # If this is the top-level shell, it owns the final commit.
-                if not is_nested_feat():
-                    db.session.commit()
-                return result
+                return f(*args, **kwargs)
         return decorated_function
     return decorator
 
@@ -392,5 +407,17 @@ def init_feat_enforcement(app):
                     f"is_feat_active={is_feat_active()}, session.info={session.info.get('feat_context_active')}. "
                     f"New={len(session.new)}, Dirty={len(session.dirty)}, Deleted={len(session.deleted)}."
                 )
+        # Hard atomicity rule: only FEAT orchestrator may commit.
+        if (
+            not is_bypass
+            and is_feat_active()
+            and session.info.get("feat_context_active")
+            and not session.info.get("feat_orchestrator_commit")
+        ):
+            raise FEATContextError(
+                "MANDATORY FEAT ATOMICITY VIOLATION (COMMIT): "
+                "Direct commit attempted from inside FEAT execution. "
+                "Only FEAT orchestrator transaction boundary may commit."
+            )
 
         increment_commit_count()

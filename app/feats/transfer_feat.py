@@ -36,7 +36,6 @@ def execute_account_transfer(
         withdraw_description=f"Transfer to {to_account}",
         deposit_description=f"Transfer from {from_account}",
     )
-    db.session.commit()
     return TransferResult(
         withdrawal_transaction_id=withdraw_tx.id,
         deposit_transaction_id=deposit_tx.id,

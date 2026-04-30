@@ -60,7 +60,6 @@ def execute_insurance_purchase(
         )
         overdraft_transfer_applied = True
 
-    db.session.commit()
     return InsurancePurchaseResult(
         enrollment_id=enrollment.id,
         premium_transaction_id=premium_tx.id,

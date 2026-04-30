@@ -50,7 +50,6 @@ def execute_file_claim(
         comments=comments,
         transaction_id=transaction_id,
     )
-    db.session.commit()
     return InsuranceClaimFileResult(claim_id=claim.id)
 
 
@@ -101,5 +100,4 @@ def execute_insurance_claim_resolution(
         )
         reimbursement_tx_id = reimbursement_tx.id
 
-    db.session.commit()
     return InsuranceClaimResolutionResult(claim_id=claim.id, reimbursement_transaction_id=reimbursement_tx_id)

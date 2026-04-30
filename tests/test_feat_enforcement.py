@@ -50,7 +50,7 @@ def test_flush_fails_outside_feat_context(app):
 
 def test_commit_succeeds_inside_feat_context(app):
     """
-    CONFIRM: Mutations are permitted when wrapped in @requires_feat_context.
+    CONFIRM: Mutations are permitted in FEAT context without direct commit.
     """
     @requires_feat_context("FEAT-TEST-001")
     def legal_mutation():
@@ -65,7 +65,7 @@ def test_commit_succeeds_inside_feat_context(app):
             pin_hash="fake-hash",
         )
         db.session.add(stu)
-        db.session.commit()
+        db.session.flush()
         return stu
 
     stu = legal_mutation()
@@ -74,7 +74,7 @@ def test_commit_succeeds_inside_feat_context(app):
 
 def test_nested_feat_context(app):
     """
-    CONFIRM: Nested FEATs are tracked correctly.
+    CONFIRM: Nested FEATs are tracked correctly without direct commit calls.
     """
     @requires_feat_context("OUTER")
     def outer():
@@ -83,14 +83,27 @@ def test_nested_feat_context(app):
         @requires_feat_context("INNER")
         def inner():
             assert is_feat_active()
-            db.session.commit() # Should be allowed
+            db.session.flush()
         
         inner()
         assert is_feat_active()
-        db.session.commit() # Should still be allowed
+        db.session.flush()
     
     outer()
     assert is_feat_active() is False
+
+
+def test_direct_commit_inside_feat_context_is_blocked(app):
+    """
+    CONFIRM: Only FEAT orchestrator boundary can commit.
+    """
+    @requires_feat_context("FEAT-TEST-001")
+    def illegal_commit():
+        db.session.commit()
+
+    with pytest.raises(FEATContextError) as excinfo:
+        illegal_commit()
+    assert "MANDATORY FEAT ATOMICITY VIOLATION (COMMIT)" in str(excinfo.value)
 
 def test_feat_bypass_fails_in_production(app, monkeypatch):
     """

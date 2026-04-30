@@ -80,10 +80,6 @@ def execute_admin_adjustments(*, adjustments: list[dict], banking_settings=None)
                 deposit_description="Overdraft protection transfer from savings",
             )
 
-    from app.feats.base import is_nested_feat
-    if not is_nested_feat():
-        db.session.commit()
-    else:
-        db.session.flush()
+    db.session.flush()
 
     return AdminAdjustmentResult(applied_count=applied_count, declined_count=declined_count, fee_count=fee_count)
