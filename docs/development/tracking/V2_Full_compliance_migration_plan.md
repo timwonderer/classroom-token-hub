@@ -240,6 +240,26 @@ Operational note:
 - System admin login functional
 - `flask db heads` → `0002`; schema has `classes` table, no `class_economies`, no `teachers`/`students`
 
+### Status Update (2026-05-03): Wave 3C.10-B Rent Lifecycle + Scheduled Execution
+
+- Added class-scoped scheduler entrypoints in `app/scheduled_tasks.py`:
+  - `run_rent_cycle_for_class(class_id, execution_time)`
+  - `run_rent_cycle_scheduler(execution_time=None)`
+- Enforced seat-scoped economic actor for scheduled rent (`seat_id + class_id`) with claimed-seat gating (`claimed_at IS NOT NULL`).
+- Added explicit prepay coverage windows on `rent_payments`:
+  - `coverage_start_time`
+  - `coverage_end_time`
+- Added deterministic cycle idempotency:
+  - `cycle_idempotency_key`
+  - normalized cycle-boundary derivation before key generation
+- Added new-seat one-cycle exemption state on `seats`:
+  - `has_received_rent_exemption`
+
+Focused validation:
+
+- `pytest -q tests/test_scheduled_tasks_rent_cycle.py tests/test_add_rent_waiver_route.py tests/test_redemption_audit_log.py tests/test_redemption_rejection.py tests/test_scheduled_tasks_store_item_cleanup.py`
+- Result: `18 passed`
+
 ---
 
 ## Wave 4 — Class Configuration Domain (DOM-CLASS-001)
