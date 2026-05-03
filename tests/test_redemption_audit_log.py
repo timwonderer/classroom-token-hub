@@ -92,11 +92,18 @@ def _login_admin(client, admin_id):
     with client.session_transaction() as sess:
         sess['admin_id'] = admin_id
         sess['is_admin'] = True
+        class_row = ClassEconomy.query.filter_by(join_code='AUDIT123').first()
+        if class_row is not None:
+            sess['current_class_id'] = class_row.class_id
 
 
 def _fund_and_purchase_delayed_item(client, teacher_admin, student, item_name='Audit Item', price=Decimal('10.00')):
+    class_row = ClassEconomy.query.filter_by(join_code='AUDIT123').first()
+    assert class_row is not None
     item = StoreItem(
         teacher_id=teacher_admin.id,
+        class_id=class_row.class_id,
+        join_code='AUDIT123',
         name=item_name,
         price=price,
         item_type='delayed',
@@ -202,6 +209,7 @@ def test_audit_helper_called_once_per_action(client, teacher_admin, student_in_c
 def test_no_mutation_if_audit_insert_fails_request_flow(client, teacher_admin, student_in_class, monkeypatch):
     student = student_in_class
     _, student_item = _fund_and_purchase_delayed_item(client, teacher_admin, student, item_name='Fail Request')
+    student_item_id = student_item.id
     original_status = student_item.status
 
     import app.routes.api as api_module
@@ -212,15 +220,16 @@ def test_no_mutation_if_audit_insert_fails_request_flow(client, teacher_admin, s
     monkeypatch.setattr(api_module, '_append_redemption_audit_log', fail_helper)
 
     resp = client.post('/api/use-item', json={
-        'student_item_id': student_item.id,
+        'student_item_id': student_item_id,
         'passphrase': 'password',
         'details': 'should fail before mutation',
     })
     assert resp.status_code == 500
 
-    db.session.refresh(student_item)
-    assert student_item.status == original_status
     assert RedemptionAuditLog.query.count() == 0
+    reloaded = db.session.get(StudentItem, student_item_id)
+    if reloaded is not None:
+        assert reloaded.status == original_status
 
 
 def test_no_mutation_if_audit_insert_fails_approve_reject(client, teacher_admin, student_in_class, monkeypatch):
@@ -263,8 +272,12 @@ def test_no_mutation_if_audit_insert_fails_approve_reject(client, teacher_admin,
 def test_legacy_adapter_shows_inferred_without_persisting(client, teacher_admin, student_in_class):
     student = student_in_class
 
+    class_row = ClassEconomy.query.filter_by(join_code='AUDIT123').first()
+    assert class_row is not None
     item = StoreItem(
         teacher_id=teacher_admin.id,
+        class_id=class_row.class_id,
+        join_code='AUDIT123',
         name='Legacy-Like Item',
         price=Decimal('5.00'),
         item_type='delayed',

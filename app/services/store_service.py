@@ -204,30 +204,37 @@ def decrement_inventory(item, quantity: int) -> None:
         item.inventory -= quantity
 
 
-def unlock_collective_goal_if_ready(*, item, join_code: str, teacher_id: int) -> None:
+def unlock_collective_goal_if_ready(*, item, class_id: str, join_code: str | None = None) -> None:
     """Store-owned mutation for collective-goal unlock state."""
+    if not class_id:
+        raise ValueError("class_id is required for collective goal unlock")
     class_size = db.session.query(db.func.count(db.func.distinct(Student.id))).join(
         TeacherBlock, TeacherBlock.student_id == Student.id,
     ).filter(
-        TeacherBlock.teacher_id == teacher_id,
-        TeacherBlock.join_code == join_code,
+        TeacherBlock.class_id == class_id,
         TeacherBlock.is_claimed == True,
     ).scalar() or 0
 
-    purchased_students_count = db.session.query(db.func.count(db.func.distinct(StudentItem.student_id))).filter(
+    purchased_query = db.session.query(db.func.count(db.func.distinct(StudentItem.student_id))).filter(
         StudentItem.store_item_id == item.id,
-        StudentItem.join_code == join_code,
+        StudentItem.class_id == class_id,
         StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
         StudentItem.collective_goal_instance_code == item.collective_goal_instance_code,
-    ).scalar() or 0
+    )
+    if join_code:
+        purchased_query = purchased_query.filter(StudentItem.join_code == join_code)
+    purchased_students_count = purchased_query.scalar() or 0
 
     target = int(item.collective_goal_target or 0) if item.collective_goal_type == 'fixed' else class_size
     if target > 0 and purchased_students_count >= target:
-        pending_items = StudentItem.query.filter(
+        pending_items_query = StudentItem.query.filter(
             StudentItem.store_item_id == item.id,
-            StudentItem.join_code == join_code,
+            StudentItem.class_id == class_id,
             StudentItem.status == 'pending',
             StudentItem.collective_goal_instance_code == item.collective_goal_instance_code,
-        ).all()
+        )
+        if join_code:
+            pending_items_query = pending_items_query.filter(StudentItem.join_code == join_code)
+        pending_items = pending_items_query.all()
         for pending_item in pending_items:
             pending_item.status = "processing"

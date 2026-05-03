@@ -24,9 +24,18 @@ from app.models import (
     TapEventReasonCode, HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
     StudentTeacher, TeacherBlock, StudentBlock, StoreItemBlock,
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource, _quantize_currency,
-    ClassEconomy, ClassMembership,
+    ClassEconomy, ClassMembership, Seat,
 )
-from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
+from app.auth import (
+    login_required,
+    admin_required,
+    get_current_seat,
+    get_logged_in_student,
+    get_current_admin,
+    get_current_user,
+    get_current_class_id,
+    SESSION_TIMEOUT_MINUTES,
+)
 from app.access import AccessScopeDenied, resolve_scope
 from app.feats.base import feat_shell
 from app.routes.student import (
@@ -212,13 +221,13 @@ def _get_or_create_hall_pass_settings(teacher_id, class_id, join_code=None):
     if settings:
         return settings
 
-    # Fallback to join_code scope if class_id is missing (should not happen in V2)
-    scope = resolve_class_scope(teacher_id, join_code=join_code) if not class_id else None
-    
+    class_row = ClassEconomy.query.filter_by(class_id=class_id).first()
+    resolved_join_code = join_code or (class_row.join_code if class_row else None)
+
     settings = HallPassSettings(
         teacher_id=teacher_id,
-        class_id=class_id or (scope["class_id"] if scope else None),
-        join_code=join_code or (scope["join_code"] if scope else None),
+        class_id=class_id,
+        join_code=resolved_join_code,
         queue_enabled=True,
         queue_limit=10,
     )
@@ -413,7 +422,7 @@ def purchase_item():
 
     item_filters = [
         StoreItem.id == item_id,
-        StoreItem.teacher_id == teacher_id,
+        StoreItem.class_id == class_id,
     ]
     if current_block:
         item_filters.append(
@@ -604,7 +613,7 @@ def purchase_item():
     total_price = _quantize_currency(unit_price * quantity)
 
     # Get banking settings for overdraft handling
-    banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first()
+    banking_settings = BankingSettings.query.filter_by(class_id=class_id).first()
     checking_balance, savings_balance = get_available_balances(seat.id, class_id)
 
     # Check if student has sufficient funds
@@ -864,7 +873,8 @@ def use_item():
                 type='redemption',
                 description=f"Used: {student_item.store_item.name}" + (f" (bundle: {student_item.bundle_remaining} remaining)" if student_item.is_from_bundle else "")
             )
-        db.session.commit() # FEAT-AUTHORIZED-SHELL
+        # FEAT wrapper owns commit/rollback boundaries; keep mutations in the open transaction.
+        db.session.flush()
 
         if student_item.is_from_bundle:
             return jsonify({"status": "success", "message": f"You have used 1 from your bundle of {student_item.store_item.name}. {student_item.bundle_remaining} uses remaining."})
@@ -905,7 +915,9 @@ def approve_redemption():
     if not has_membership:
         return jsonify({"status": "error", "message": "You do not have access to this class."}), 403
 
-    if student_item.store_item.teacher_id != current_admin.id:
+    if not student_item.store_item.class_id or student_item.store_item.class_id != student_item.class_id:
+        return jsonify({"status": "error", "message": "Unauthorized."}), 403
+    if not _admin_has_class_scope(current_admin.id, student_item.store_item.class_id):
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
 
     try:
@@ -955,9 +967,13 @@ def reject_redemption():
     if not student_item or student_item.status != 'processing':
         return jsonify({"status": "error", "message": "Invalid or already processed item."}), 404
 
-    # SECURITY: Verify the current admin owns the store item
+    # SECURITY: Verify the current admin has class scope for this store item
     current_admin = get_current_admin()
-    if not current_admin or student_item.store_item.teacher_id != current_admin.id:
+    if not current_admin:
+        return jsonify({"status": "error", "message": "Unauthorized."}), 403
+    if not student_item.store_item.class_id or student_item.store_item.class_id != student_item.class_id:
+        return jsonify({"status": "error", "message": "Unauthorized."}), 403
+    if not _admin_has_class_scope(current_admin.id, student_item.store_item.class_id):
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
 
     try:
@@ -977,7 +993,6 @@ def reject_redemption():
         purchase_tx_query = Transaction.query.filter_by(
             seat_id=student_item.seat_id,
             class_id=student_item.class_id,
-            teacher_id=student_item.store_item.teacher_id,
             type='purchase',
         ).filter(
             Transaction.description.like(f"Purchase: {student_item.store_item.name}%")
@@ -1063,6 +1078,14 @@ def reject_redemption():
 @admin_required
 def handle_hall_pass_action(pass_id, action):
     log_entry = db.get_or_404(HallPassLog, pass_id)
+    current_admin = get_current_admin()
+    if not current_admin:
+        return jsonify({"status": "error", "message": "Pass not found."}), 404
+    if not log_entry.class_id:
+        return jsonify({"status": "error", "message": "Pass not found."}), 404
+    class_scope = ClassEconomy.query.filter_by(class_id=log_entry.class_id).first()
+    if not class_scope or class_scope.teacher_id != current_admin.id:
+        return jsonify({"status": "error", "message": "Pass not found."}), 404
     student = log_entry.student
     now = utc_now()
 
@@ -1117,8 +1140,10 @@ def handle_hall_pass_action(pass_id, action):
 
         # Create a tap-out event for attendance tracking
         tap_out_event = TapEvent(
+            student_id=log_entry.student_id,
             seat_id=log_entry.seat_id,
             class_id=log_entry.class_id,
+            join_code=log_entry.join_code,
             period=log_entry.period,
             status='inactive',
             timestamp=now,
@@ -1136,8 +1161,10 @@ def handle_hall_pass_action(pass_id, action):
 
         # Create a tap-in event to close the loop
         tap_in_event = TapEvent(
+            student_id=log_entry.student_id,
             seat_id=log_entry.seat_id,
             class_id=log_entry.class_id,
+            join_code=log_entry.join_code,
             period=log_entry.period,
             status='active',
             timestamp=now,
@@ -1218,14 +1245,24 @@ def _enforce_hall_pass_student_context(student, log_entry):
     """
     Enforce active student class context for hall-pass state mutations.
 
-    If no class context is active, the check is skipped (student has not selected a class yet).
+    Class context is required and must match the pass class/join scope.
     """
     context = get_current_class_context()
-    if not context:
-        return None
+    current_join_code = context.get("join_code") if context else None
+    current_class_id = context.get("class_id") if context else None
 
-    current_join_code = context.get("join_code")
+    if not current_join_code or not current_class_id:
+        return jsonify({
+            "status": "error",
+            "message": "This pass belongs to a different class context. Switch class and retry.",
+        }), 403
+
     if current_join_code and log_entry.join_code and log_entry.join_code != current_join_code:
+        return jsonify({
+            "status": "error",
+            "message": "This pass belongs to a different class context. Switch class and retry.",
+        }), 403
+    if current_class_id and log_entry.class_id and log_entry.class_id != current_class_id:
         return jsonify({
             "status": "error",
             "message": "This pass belongs to a different class context. Switch class and retry.",
@@ -1240,7 +1277,10 @@ def _enforce_hall_pass_student_context(student, log_entry):
 @login_required
 def cancel_hall_pass(pass_id):
     """Allow students to cancel their pending hall pass request"""
-    student = get_logged_in_student()
+    seat = get_current_seat()
+    student = db.session.get(Student, seat.student_id) if seat and seat.student_id else None
+    if not student:
+        student = get_logged_in_student()
     log_entry = db.get_or_404(HallPassLog, pass_id)
 
     # Verify this pass belongs to the logged-in student
@@ -1266,7 +1306,10 @@ def cancel_hall_pass(pass_id):
 @login_required
 def checkout_hall_pass():
     """Allow student to check out with their approved hall pass (replaces terminal use)"""
-    student = get_logged_in_student()
+    seat = get_current_seat()
+    student = db.session.get(Student, seat.student_id) if seat and seat.student_id else None
+    if not student:
+        student = get_logged_in_student()
     data = request.get_json()
     pass_id = data.get('pass_id')
     
@@ -1274,6 +1317,16 @@ def checkout_hall_pass():
         return jsonify({"status": "error", "message": "Pass ID is required."}), 400
     
     log_entry = db.get_or_404(HallPassLog, pass_id)
+    current_app.logger.info(
+        "HALL_PASS_CHECKOUT_DEBUG: student_id=%s pass_id=%s pass_student_id=%s pass_seat_id=%s pass_class_id=%s pass_join_code=%s session_join_code=%s",
+        getattr(student, "id", None),
+        pass_id,
+        log_entry.student_id,
+        log_entry.seat_id,
+        log_entry.class_id,
+        log_entry.join_code,
+        session.get("current_join_code"),
+    )
     
     # Verify this pass belongs to the logged-in student
     if log_entry.student_id != student.id:
@@ -1294,11 +1347,43 @@ def checkout_hall_pass():
     now = utc_now()
     log_entry.status = 'left'
     log_entry.left_time = now
+
+    resolved_seat_id = log_entry.seat_id
+    resolved_class_id = log_entry.class_id
+    resolved_join_code = log_entry.join_code
+
+    if not resolved_seat_id and resolved_class_id:
+        resolved_seat_id = get_seat_id_for_class(student.id, resolved_class_id)
+    if not resolved_seat_id and resolved_join_code:
+        seat_row = Seat.query.filter_by(student_id=student.id, join_code=resolved_join_code).order_by(Seat.id.asc()).first()
+        if seat_row:
+            resolved_seat_id = seat_row.id
+            if not resolved_class_id:
+                resolved_class_id = seat_row.class_id
+
+    if not resolved_class_id and resolved_seat_id:
+        seat_row = db.session.get(Seat, resolved_seat_id)
+        if seat_row:
+            resolved_class_id = seat_row.class_id
+            if not resolved_join_code:
+                resolved_join_code = seat_row.join_code
+
+    if not student.id or not resolved_class_id or not resolved_seat_id:
+        current_app.logger.error(
+            "HALL_PASS_CHECKOUT_IDENTITY_MISSING: student_id=%s class_id=%s seat_id=%s join_code=%s",
+            getattr(student, "id", None),
+            resolved_class_id,
+            resolved_seat_id,
+            resolved_join_code,
+        )
+        return jsonify({"status": "error", "message": "Missing class/seat context for hall pass checkout."}), 401
     
     # Create tap-out event for attendance tracking
     tap_out_event = TapEvent(
-        seat_id=log_entry.seat_id,
-        class_id=log_entry.class_id,
+        student_id=student.id,
+        seat_id=resolved_seat_id,
+        class_id=resolved_class_id,
+        join_code=resolved_join_code,
         period=log_entry.period,
         status='inactive',
         timestamp=now,
@@ -1324,7 +1409,10 @@ def checkout_hall_pass():
 @login_required
 def checkin_hall_pass():
     """Allow student to check in from their hall pass (replaces terminal return)"""
-    student = get_logged_in_student()
+    seat = get_current_seat()
+    student = db.session.get(Student, seat.student_id) if seat and seat.student_id else None
+    if not student:
+        student = get_logged_in_student()
     data = request.get_json()
     pass_id = data.get('pass_id')
     
@@ -1332,6 +1420,16 @@ def checkin_hall_pass():
         return jsonify({"status": "error", "message": "Pass ID is required."}), 400
     
     log_entry = db.get_or_404(HallPassLog, pass_id)
+    current_app.logger.info(
+        "HALL_PASS_CHECKIN_DEBUG: student_id=%s pass_id=%s pass_student_id=%s pass_seat_id=%s pass_class_id=%s pass_join_code=%s session_join_code=%s",
+        getattr(student, "id", None),
+        pass_id,
+        log_entry.student_id,
+        log_entry.seat_id,
+        log_entry.class_id,
+        log_entry.join_code,
+        session.get("current_join_code"),
+    )
     
     # Verify this pass belongs to the logged-in student
     if log_entry.student_id != student.id:
@@ -1348,11 +1446,43 @@ def checkin_hall_pass():
     now = utc_now()
     log_entry.status = 'returned'
     log_entry.return_time = now
+
+    resolved_seat_id = log_entry.seat_id
+    resolved_class_id = log_entry.class_id
+    resolved_join_code = log_entry.join_code
+
+    if not resolved_seat_id and resolved_class_id:
+        resolved_seat_id = get_seat_id_for_class(student.id, resolved_class_id)
+    if not resolved_seat_id and resolved_join_code:
+        seat_row = Seat.query.filter_by(student_id=student.id, join_code=resolved_join_code).order_by(Seat.id.asc()).first()
+        if seat_row:
+            resolved_seat_id = seat_row.id
+            if not resolved_class_id:
+                resolved_class_id = seat_row.class_id
+
+    if not resolved_class_id and resolved_seat_id:
+        seat_row = db.session.get(Seat, resolved_seat_id)
+        if seat_row:
+            resolved_class_id = seat_row.class_id
+            if not resolved_join_code:
+                resolved_join_code = seat_row.join_code
+
+    if not student.id or not resolved_class_id or not resolved_seat_id:
+        current_app.logger.error(
+            "HALL_PASS_CHECKIN_IDENTITY_MISSING: student_id=%s class_id=%s seat_id=%s join_code=%s",
+            getattr(student, "id", None),
+            resolved_class_id,
+            resolved_seat_id,
+            resolved_join_code,
+        )
+        return jsonify({"status": "error", "message": "Missing class/seat context for hall pass checkin."}), 401
     
     # Create tap-in event for attendance tracking
     tap_in_event = TapEvent(
-        seat_id=log_entry.seat_id,
-        class_id=log_entry.class_id,
+        student_id=student.id,
+        seat_id=resolved_seat_id,
+        class_id=resolved_class_id,
+        join_code=resolved_join_code,
         period=log_entry.period,
         status='active',
         timestamp=now,
@@ -1379,12 +1509,18 @@ def checkin_hall_pass():
 @admin_required
 def hall_pass_settings():
     """Get or update hall pass settings (admin only)"""
-    teacher_id = session.get('admin_id')
-    if not teacher_id:
+    current_admin = get_current_admin()
+    if not current_admin:
         return jsonify({"status": "error", "message": "Admin ID not found in session"}), 401
+    scoped_admin_id = current_admin.id
 
     join_code = _get_request_join_code()
-    settings = _get_or_create_hall_pass_settings(teacher_id, join_code)
+    if not join_code:
+        return jsonify({"status": "error", "message": "join_code is required"}), 400
+    scope = _get_hall_pass_settings_scope(scoped_admin_id, join_code)
+    if not scope:
+        return jsonify({"status": "error", "message": "join_code is required"}), 400
+    settings = _get_or_create_hall_pass_settings(scoped_admin_id, scope["class_id"], join_code=scope["join_code"])
     if not settings:
         return jsonify({"status": "error", "message": "join_code is required"}), 400
 
@@ -1448,10 +1584,14 @@ def hall_pass_history():
             .subquery()
         )
         # Build query with tenant scoping
+        current_admin = get_current_admin()
+        if not current_admin:
+            return jsonify({"status": "error", "message": "Unauthorized"}), 401
+        scoped_admin_id = current_admin.id
         query = _apply_admin_class_scope(
             HallPassLog.query,
             HallPassLog,
-            session.get("admin_id"),
+            scoped_admin_id,
             sa.select(student_ids_subquery),
         )
 
@@ -1528,8 +1668,17 @@ def hall_pass_history():
 @admin_required
 def get_hall_pass_setup():
     """Get teacher's hall pass configuration"""
-    teacher_id = session.get('admin_id')
+    _ = get_current_user()
+    current_admin = get_current_admin()
+    if not current_admin:
+        return jsonify({"status": "error", "message": "Admin ID not found in session"}), 401
+    teacher_id = current_admin.id
     join_code = _get_request_join_code()
+    if not join_code:
+        current_class_id = get_current_class_id()
+        if current_class_id:
+            class_row = ClassEconomy.query.filter_by(class_id=current_class_id).first()
+            join_code = class_row.join_code if class_row else None
     if not join_code:
         return jsonify({"status": "error", "message": "join_code is required"}), 400
 
@@ -1563,7 +1712,10 @@ def get_hall_pass_setup():
 @admin_required
 def save_hall_pass_setup():
     """Save teacher's hall pass configuration"""
-    teacher_id = session.get('admin_id')
+    current_admin = get_current_admin()
+    if not current_admin:
+        return jsonify({"status": "error", "message": "Admin ID not found in session"}), 401
+    scoped_admin_id = current_admin.id
     data = request.get_json()
     join_code = _get_request_join_code(data)
     if not join_code:
@@ -1606,11 +1758,14 @@ def save_hall_pass_setup():
                     return jsonify({"status": "error", "message": f"{field} must be a number or blank"}), 400
 
     try:
-        settings = _get_or_create_hall_pass_settings(teacher_id, join_code)
+        scope = _get_hall_pass_settings_scope(scoped_admin_id, join_code)
+        if not scope:
+            return jsonify({"status": "error", "message": "Class scope not found"}), 404
+        settings = _get_or_create_hall_pass_settings(scoped_admin_id, scope["class_id"], join_code=scope["join_code"])
         if not settings:
             return jsonify({"status": "error", "message": "Class scope not found"}), 404
 
-        feature_scope = resolve_feature_class(teacher_id, 'hall_pass', block=settings.block, join_code=join_code)
+        feature_scope = resolve_feature_class(scoped_admin_id, 'hall_pass', block=settings.block, join_code=join_code)
         if feature_scope and not feature_scope["enabled"]:
             return jsonify({"status": "error", "message": "Hall pass is disabled for this class"}), 403
 
@@ -1644,7 +1799,10 @@ def rotate_hall_pass_verify_token():
     traffic, or student screenshot concern.
     """
     from app.models import Admin
-    teacher_id = session.get('admin_id')
+    current_admin = get_current_admin()
+    if not current_admin:
+        return jsonify({"status": "error", "message": "Admin ID not found in session"}), 401
+    teacher_id = current_admin.id
     teacher = db.session.get(Admin, teacher_id)
     if not teacher:
         return jsonify({"status": "error", "message": "Teacher not found."}), 404
@@ -1671,6 +1829,7 @@ def get_available_hall_pass_types():
     teacher_public_id = (request.args.get('teacher_public_id') or '').strip()
 
     resolved_teacher_id = None
+    resolved_class_id = None
     context = get_current_class_context()
 
     if join_code:
@@ -1680,13 +1839,13 @@ def get_available_hall_pass_types():
             if not get_feature_settings_for_student().get("hall_pass_enabled", True):
                 return jsonify({"status": "error", "message": "Hall pass is disabled for this class"}), 403
             resolved_teacher_id = context.get('teacher_id')
+            resolved_class_id = context.get('class_id')
         else:
             from app.models import ClassEconomy
             economy = ClassEconomy.query.filter_by(join_code=join_code).first()
             if economy:
                 resolved_teacher_id = economy.teacher_id
-            if seat_row:
-                resolved_teacher_id = seat_row[0]
+                resolved_class_id = economy.class_id
 
     if not resolved_teacher_id and teacher_public_id:
         teacher = Admin.query.filter_by(teacher_public_id=teacher_public_id).first()
@@ -1701,10 +1860,15 @@ def get_available_hall_pass_types():
 
     settings = None
     if join_code:
-        settings = HallPassSettings.query.filter_by(
-            teacher_id=resolved_teacher_id,
-            join_code=join_code,
-        ).first()
+        if not resolved_class_id:
+            from app.models import ClassEconomy
+            class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+            resolved_class_id = class_row.class_id if class_row else None
+        if resolved_class_id:
+            settings = HallPassSettings.query.filter_by(
+                class_id=resolved_class_id,
+                join_code=join_code,
+            ).first()
     elif teacher_public_id:
         return jsonify({
             "status": "error",
@@ -1786,13 +1950,16 @@ def attendance_history():
         # Import auth helper for tenant scoping
         from app.auth import get_admin_student_query
         
+        current_admin = get_current_admin()
+        scoped_admin_id = current_admin.id if current_admin else session.get("admin_id")
+
         # Get student IDs that the current admin can access (tenant-scoped)
         accessible_student_ids_query = get_admin_student_query(include_unassigned=False).with_entities(Student.id)
         # Build query scoped to admin's students and exclude deleted records
         query = _apply_admin_class_scope(
             TapEvent.query.filter(TapEvent.is_deleted.is_(False)),
             TapEvent,
-            session.get("admin_id"),
+            scoped_admin_id,
             accessible_student_ids_query,
         )
 
@@ -1868,12 +2035,11 @@ def attendance_history():
         seats = {s.id: {'name': s.student.full_name, 'block': r.period} for s in Seat.query.filter(Seat.id.in_(seat_ids)).all() for r in records if r.seat_id == s.id}
 
         # Get class labels for blocks
-        admin_id = session.get("admin_id")
         blocks_in_records = set(seats[sid]['block'] for sid in seats if seats[sid]['block'])
         class_labels = {}
         if blocks_in_records:
             teacher_blocks = TeacherBlock.query.filter(
-                TeacherBlock.teacher_id == admin_id,
+                TeacherBlock.teacher_id == scoped_admin_id,
                 TeacherBlock.block.in_(blocks_in_records)
             ).all()
             for teacher_block in teacher_blocks:
@@ -1927,7 +2093,10 @@ def handle_tap():
     safe_data = {k: ('***' if k == 'pin' else v) for k, v in data.items()}
     current_app.logger.info(f"TAP DEBUG: Received data {safe_data}")
 
-    student = get_logged_in_student()
+    seat = get_current_seat()
+    student = db.session.get(Student, seat.student_id) if seat and seat.student_id else None
+    if not student:
+        student = get_logged_in_student()
 
     if not student:
         current_app.logger.warning("TAP ERROR: Unauthenticated tap attempt.")
@@ -2190,8 +2359,10 @@ def handle_tap():
                 if latest_other and latest_other.status == "active":
                     # Auto tap-out from this period
                     auto_tapout = TapEvent(
+                        student_id=student.id,
                         seat_id=seat_id,
                         class_id=class_id,
+                        join_code=join_code,
                         period=other_period,
                         status="inactive",
                         timestamp=now,
@@ -2256,8 +2427,10 @@ def handle_tap():
                 current_app.logger.info(f"Auto-returned hall pass {active_hall_pass.id} for student {student.id}")
 
         event = TapEvent(
+            student_id=student.id,
             seat_id=seat_id,
             class_id=class_id,
+            join_code=join_code,
             period=period,
             status=status,
             timestamp=now,  # UTC-aware
@@ -2627,6 +2800,12 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                     from app.utils.seat_scope import get_seat_id_for_class
                     seat_id = get_seat_id_for_class(student.id, class_id) if class_id else None
 
+                    if not join_code:
+                        current_app.logger.warning(
+                            f"Unable to resolve join_code for auto-tap-out; TapEvent ID is {latest_event.id}."
+                        )
+                        continue
+
                     if not seat_id or not class_id:
                         current_app.logger.warning(
                             f"Unable to resolve V2 identity for student {student.id} in period {period_upper} for auto-tap-out."
@@ -2667,6 +2846,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                         seat_id=seat_id,
                         class_id=class_id,
                         student_id=student.id,
+                        join_code=join_code,
                         period=period_upper,
                         status="inactive",
                         timestamp=tapout_timestamp,

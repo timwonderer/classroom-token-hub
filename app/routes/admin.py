@@ -332,7 +332,8 @@ def _resolve_admin_class_context(admin_id: int | None) -> dict | None:
 
 
 def _handle_mismatched_admin_class_context():
-    admin_id = session.get('admin_id')
+    current_admin = get_current_admin()
+    scoped_admin_id = current_admin.id if current_admin else session.get('admin_id')
     current_app.logger.error(
         "Blocked admin write with mismatched class context",
         extra={
@@ -355,18 +356,19 @@ def _handle_mismatched_admin_class_context():
 
 def _handle_missing_admin_class_context():
     """Block class-scoped writes when the teacher has not selected an active class."""
-    admin_id = session.get('admin_id')
-    if not admin_id:
+    current_admin = get_current_admin()
+    scoped_admin_id = current_admin.id if current_admin else session.get('admin_id')
+    if not scoped_admin_id:
         return None
 
-    current_join_code = _get_current_admin_join_code(admin_id)
+    current_join_code = _get_current_admin_join_code(scoped_admin_id)
     if current_join_code:
         return None
 
     current_app.logger.error(
         "Blocked admin write without class context",
         extra={
-            'admin_id': admin_id,
+            'admin_id': scoped_admin_id,
             'endpoint': request.endpoint,
             'method': request.method,
             'path': request.path,
@@ -1014,6 +1016,8 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
         .filter(Issue.join_code == join_code)
         .subquery()
     )
+    class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+    class_id = class_row.class_id if class_row else None
     class_blocks = [
         block for (block,) in db.session.query(TeacherBlock.block).filter(
             TeacherBlock.teacher_id == teacher_id,
@@ -1069,7 +1073,7 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
         deletable_store_item_ids = (
             db.session.query(StoreItem.id)
             .filter(
-                StoreItem.teacher_id == teacher_id,
+                StoreItem.class_id == class_id,
                 StoreItem.id.in_(sa.select(store_item_ids_for_blocks)),
             )
             .subquery()
@@ -1096,7 +1100,7 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
             db.session.query(StoreItemBlock.store_item_id, StoreItemBlock.block)
             .join(StoreItem, StoreItemBlock.store_item_id == StoreItem.id)
             .filter(
-                StoreItem.teacher_id == teacher_id,
+                StoreItem.class_id == class_id,
                 StoreItemBlock.block.in_(class_blocks)
             )
             .subquery()
@@ -2070,10 +2074,12 @@ def _resolve_rent_settings_for_block(admin_id, block_name):
     join_code = _resolve_join_code_for_block(admin_id, block_name)
     if not join_code:
         return None
+    class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+    if not class_row:
+        return None
     return (
         RentSettings.query.filter(
-            RentSettings.teacher_id == admin_id,
-            RentSettings.join_code == join_code,
+            RentSettings.class_id == class_row.class_id,
             RentSettings.is_enabled.is_(True),
         )
         .order_by(desc(RentSettings.block.isnot(None)))
@@ -3870,12 +3876,17 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
     if not target_blocks:
         return student_rent_privileges
 
+    target_join_codes = [join_codes_by_block[b] for b in target_blocks if join_codes_by_block.get(b)]
+    target_classes = ClassEconomy.query.filter(ClassEconomy.join_code.in_(target_join_codes)).all()
+    class_id_by_block = {c.block: c.class_id for c in target_classes if c.block}
     all_rent_settings = RentSettings.query.filter(
-        RentSettings.teacher_id == current_admin,
-        RentSettings.block.in_(target_blocks),
+        RentSettings.class_id.in_([c.class_id for c in target_classes]),
         RentSettings.is_enabled == True
     ).all()
-    settings_by_block = {rs.block: rs for rs in all_rent_settings}
+    settings_by_block = {
+        block: next((rs for rs in all_rent_settings if rs.class_id == class_id_by_block.get(block)), None)
+        for block in target_blocks
+    }
 
     if not settings_by_block:
         return student_rent_privileges
@@ -3924,11 +3935,13 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
         coverage_year = coverage_due_date.year
 
         join_code = join_codes_by_block[block]
+        class_id = class_id_by_block.get(block)
+        if not class_id:
+            continue
         payment_filters.append(and_(
-            RentPayment.period == block,
+            RentPayment.class_id == class_id,
             RentPayment.coverage_month == coverage_month,
             RentPayment.coverage_year == coverage_year,
-            RentPayment.join_code == join_code
         ))
 
     if not all_student_ids:
@@ -3940,10 +3953,12 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
         rent_payments = RentPayment.query.filter(
             RentPayment.student_id.in_(list(all_student_ids)),
             or_(*payment_filters)
-        ).with_entities(RentPayment.student_id, RentPayment.period).all()
+        ).with_entities(RentPayment.student_id, RentPayment.class_id).all()
 
-        for student_id, period in rent_payments:
-            paid_student_ids_by_block[period].add(student_id)
+        for student_id, class_id in rent_payments:
+            for block, block_class_id in class_id_by_block.items():
+                if block_class_id == class_id:
+                    paid_student_ids_by_block[block].add(student_id)
 
     # 5. Fetch all relevant StudentItems in a single query each
     items_by_student = defaultdict(set)
@@ -4000,14 +4015,14 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
     return student_rent_privileges
 
 
-def _get_rent_privileges_for_student(student, teacher_id, join_code):
+def _get_rent_privileges_for_student(student, class_id, join_code):
     """Return rent privileges for a single student in the current class context.
 
     Pre-paid system: Check if student has paid rent that COVERS the current period.
     A payment made for January covers the student until the February due date.
     """
     rent_privileges = []
-    if not (teacher_id and join_code):
+    if not (class_id and join_code):
         return rent_privileges
 
     teacher_block = TeacherBlock.query.filter_by(join_code=join_code).first()
@@ -4015,7 +4030,7 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
     if not current_block:
         return rent_privileges
 
-    rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
+    rent_settings = RentSettings.query.filter_by(class_id=class_id, block=current_block).first()
     if not rent_settings or not rent_settings.is_enabled:
         return rent_privileges
 
@@ -4035,10 +4050,9 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
 
     has_paid_rent = RentPayment.query.filter(
         rent_scope,
-        RentPayment.period == current_block,
+        RentPayment.class_id == class_id,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
-        RentPayment.join_code == join_code
     ).first() is not None
 
     per_period_items = RentItem.query.filter_by(
@@ -4522,7 +4536,8 @@ def student_detail(student_id):
         )
 
     # Get active rent privileges (per-period items)
-    rent_privileges = _get_rent_privileges_for_student(student, teacher_id, join_code)
+    class_row = ClassEconomy.query.filter_by(join_code=join_code).first() if join_code else None
+    rent_privileges = _get_rent_privileges_for_student(student, class_row.class_id if class_row else None, join_code)
 
     # CRITICAL: Fetch Join Codes for student's blocks (for Account Recovery display)
     join_codes = {}
@@ -5611,7 +5626,7 @@ def store_management():
 
     # Get items for this teacher only (reuse admin_id from above)
     items = [
-        item for item in StoreItem.query.filter_by(teacher_id=admin_id).order_by(StoreItem.name).all()
+        item for item in StoreItem.query.filter_by(class_id=selected_scope['class_id']).order_by(StoreItem.name).all()
         if not item.blocks_list or selected_block in {b.strip().upper() for b in item.blocks_list if b}
     ]
 
@@ -5655,7 +5670,7 @@ def store_management():
     collective_progress_by_item = {}
     collective_items = [item for item in items if item.item_type == 'collective']
     if collective_items:
-        teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id, is_claimed=True).all()
+        teacher_blocks = TeacherBlock.query.filter_by(class_id=selected_scope['class_id'], is_claimed=True).all()
         join_code_to_block = {}
         join_code_to_label = {}
         
@@ -5668,7 +5683,7 @@ def store_management():
             )
             .join(Student, TeacherBlock.student_id == Student.id)
             .filter(
-                TeacherBlock.teacher_id == admin_id,
+                TeacherBlock.class_id == selected_scope['class_id'],
                 TeacherBlock.is_claimed == True,
                 TeacherBlock.join_code.isnot(None)
             )
@@ -5798,7 +5813,7 @@ def store_management():
         .join(Student, StudentItem.student_id == Student.id)
         .join(StoreItem, StudentItem.store_item_id == StoreItem.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
-        .filter(StoreItem.teacher_id == admin_id)
+        .filter(StoreItem.class_id == selected_scope['class_id'])
         .filter(StudentItem.join_code == selected_join_code)
     )
     if audit_student:
@@ -5890,7 +5905,7 @@ def store_management():
         row[0] for row in db.session.query(RentItem.store_item_id).join(
             RentSettings, RentItem.rent_setting_id == RentSettings.id
         ).filter(
-            RentSettings.teacher_id == admin_id,
+            RentSettings.class_id == selected_scope['class_id'],
             RentItem.store_item_id.isnot(None)
         ).all()
     }
@@ -5926,7 +5941,7 @@ def edit_store_item(item_id):
         requested_join_code=request.values.get('join_code'),
         requested_block=request.values.get('block'),
     )
-    item = StoreItem.query.filter_by(id=item_id, teacher_id=admin_id).first_or_404()
+    item = StoreItem.query.filter_by(id=item_id, class_id=selected_scope['class_id']).first_or_404()
     if item.blocks_list and selected_scope['block'] not in {b.strip().upper() for b in item.blocks_list if b}:
         abort(404)
     form = StoreItemForm(obj=item)
@@ -5970,7 +5985,7 @@ def edit_store_item(item_id):
         db.session.commit()
         flash(f"'{item.name}' has been updated.", "success")
         return redirect(url_for('admin.store_management', join_code=selected_scope['join_code']))
-    payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True).first()
+    payroll_settings = PayrollSettings.query.filter_by(class_id=selected_scope['class_id'], is_active=True).first()
     return render_template('admin_edit_item.html', form=form, item=item, current_page="store", payroll_settings=payroll_settings, selected_feature_scope=selected_scope)
 
 
@@ -5986,7 +6001,7 @@ def delete_store_item(item_id):
         requested_join_code=request.values.get('join_code'),
         requested_block=request.values.get('block'),
     )
-    item = StoreItem.query.filter_by(id=item_id, teacher_id=admin_id).first_or_404()
+    item = StoreItem.query.filter_by(id=item_id, class_id=selected_scope['class_id']).first_or_404()
     if item.blocks_list and selected_scope['block'] not in {b.strip().upper() for b in item.blocks_list if b}:
         abort(404)
 
@@ -6023,7 +6038,7 @@ def hard_delete_store_item(item_id):
         requested_join_code=request.values.get('join_code'),
         requested_block=request.values.get('block'),
     )
-    item = StoreItem.query.filter_by(id=item_id, teacher_id=admin_id).first_or_404()
+    item = StoreItem.query.filter_by(id=item_id, class_id=selected_scope['class_id']).first_or_404()
     if item.blocks_list and selected_scope['block'] not in {b.strip().upper() for b in item.blocks_list if b}:
         abort(404)
 
@@ -6046,7 +6061,7 @@ def _block_rent_linked_store_item(item: StoreItem) -> bool:
     is_managed_by_rent = item.is_rent_linked or db.session.query(RentItem.id).join(
         RentSettings, RentItem.rent_setting_id == RentSettings.id
     ).filter(
-        RentSettings.teacher_id == item.teacher_id,
+        RentSettings.class_id == item.class_id,
         RentItem.store_item_id == item.id
     ).first() is not None
 
@@ -6117,7 +6132,7 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                 store_item = StoreItem.query.join(
                     RentItem, RentItem.store_item_id == StoreItem.id
                 ).filter(
-                    StoreItem.teacher_id == teacher_id,
+                    StoreItem.class_id == class_id,
                     StoreItem.name == rent_item.name
                 ).first()
 
@@ -6269,9 +6284,19 @@ def rent_settings():
     # Get or create rent settings for this class
     settings = None
     if settings_block:
-        settings = RentSettings.query.filter_by(teacher_id=admin_id, block=settings_block).first()
+        settings = RentSettings.query.filter_by(class_id=selected_scope['class_id'], block=settings_block).first()
         if not settings:
-            settings = RentSettings(teacher_id=admin_id, block=settings_block)
+            settings = RentSettings.query.filter_by(join_code=selected_scope['join_code'], block=settings_block).first()
+            if settings:
+                settings.class_id = selected_scope['class_id']
+                settings.join_code = selected_scope['join_code']
+        if not settings:
+            settings = RentSettings(
+                teacher_id=admin_id,
+                class_id=selected_scope['class_id'],
+                join_code=selected_scope['join_code'],
+                block=settings_block,
+            )
             db.session.add(settings)
             db.session.commit()
 
@@ -6291,11 +6316,21 @@ def rent_settings():
                     join_code_map[block] = join_code
 
         for block in blocks_to_update:
-            require_admin_feature_scope('rent', admin_id=admin_id, requested_block=block, allow_default=False)
+            scope_for_block = require_admin_feature_scope('rent', admin_id=admin_id, requested_block=block, allow_default=False)
             # Get or create settings for this class
-            block_settings = RentSettings.query.filter_by(teacher_id=admin_id, block=block).first()
+            block_settings = RentSettings.query.filter_by(class_id=scope_for_block['class_id'], block=block).first()
             if not block_settings:
-                block_settings = RentSettings(teacher_id=admin_id, block=block)
+                block_settings = RentSettings.query.filter_by(join_code=scope_for_block['join_code'], block=block).first()
+                if block_settings:
+                    block_settings.class_id = scope_for_block['class_id']
+                    block_settings.join_code = scope_for_block['join_code']
+            if not block_settings:
+                block_settings = RentSettings(
+                    teacher_id=admin_id,
+                    class_id=scope_for_block['class_id'],
+                    join_code=scope_for_block['join_code'],
+                    block=block,
+                )
                 db.session.add(block_settings)
 
             # Main toggle
@@ -6422,7 +6457,13 @@ def rent_settings():
         # Apply parsed items to each block
         for block in blocks_to_update:
             # Re-fetch settings for this block to ensure we have the object attached to session
-            block_settings = RentSettings.query.filter_by(teacher_id=admin_id, block=block).first()
+            scope_for_block = require_admin_feature_scope('rent', admin_id=admin_id, requested_block=block, allow_default=False)
+            block_settings = RentSettings.query.filter_by(class_id=scope_for_block['class_id'], block=block).first()
+            if not block_settings:
+                block_settings = RentSettings.query.filter_by(join_code=scope_for_block['join_code'], block=block).first()
+                if block_settings:
+                    block_settings.class_id = scope_for_block['class_id']
+                    block_settings.join_code = scope_for_block['join_code']
             if not block_settings:
                 continue
 
@@ -6447,14 +6488,10 @@ def rent_settings():
                 coverage_due = _calculate_rent_coverage_due_date(block_settings, now)
                 if coverage_due:
                     paid_query = RentPayment.query.filter_by(
-                        period=block,
+                        class_id=block_settings.class_id,
                         coverage_month=coverage_due.month,
                         coverage_year=coverage_due.year
                     )
-                    if block_join_code:
-                        paid_query = paid_query.filter(RentPayment.join_code == block_join_code)
-                    else:
-                        paid_query = paid_query.filter(sa.false())
                     paid_count = paid_query.count()
                     if paid_count > 0:
                         mid_period_locked = True
@@ -6651,7 +6688,7 @@ def rent_settings():
             if not student_ids:
                 continue
 
-            block_settings = RentSettings.query.filter_by(teacher_id=admin_id, block=block_name).first()
+            block_settings = RentSettings.query.filter_by(class_id=class_id, block=block_name).first()
             if not block_settings or not block_settings.is_enabled:
                 continue
 
@@ -6713,7 +6750,7 @@ def rent_settings():
             RentPayment.query
             .join(Student, RentPayment.student_id == Student.id)
             .filter(Student.id.in_(sa.select(student_ids_subq)))
-            .filter(RentPayment.join_code.in_([info['join_code'] for info in classes_by_join_code.values()]))
+            .filter(RentPayment.class_id.in_([info['class_id'] for info in classes_by_join_code.values() if info.get('class_id')]))
             .order_by(RentPayment.payment_date.desc())
             .limit(200)
         )
@@ -6861,24 +6898,33 @@ def add_rent_waiver():
 
     admin_id = session.get("admin_id")
     join_code = session.get('current_join_code')
-
-    settings_query = RentSettings.query.filter_by(teacher_id=admin_id)
-    if settings_block:
-        settings_query = settings_query.filter_by(block=settings_block)
-    settings = settings_query.first()
-    if not settings:
-        flash("Rent settings not configured.", "danger")
-        return redirect(url_for('admin.rent_settings'))
-
-    if not join_code and settings_block:
-        tb = TeacherBlock.query.filter_by(teacher_id=admin_id, block=settings_block).first()
-        if tb:
-            join_code = tb.join_code
     if not join_code:
         flash(
             "Unable to resolve the class join code for this waiver. Please select a class/block and try again.",
             "danger",
         )
+        return redirect(url_for('admin.rent_settings'))
+
+    class_id = session.get('current_class_id')
+    if not class_id and join_code:
+        class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+        class_id = class_row.class_id if class_row else None
+    settings = (
+        RentSettings.query.filter_by(class_id=class_id, block=settings_block).first()
+        if class_id and settings_block
+        else None
+    )
+    if not settings:
+        settings_query = RentSettings.query.filter_by(teacher_id=admin_id)
+        if settings_block:
+            settings_query = settings_query.filter_by(block=settings_block)
+        settings = settings_query.first()
+        if settings and class_id:
+            settings.class_id = class_id
+            if join_code:
+                settings.join_code = join_code
+    if not settings:
+        flash("Rent settings not configured.", "danger")
         return redirect(url_for('admin.rent_settings'))
 
     now = utc_now()
@@ -7009,7 +7055,7 @@ def reverse_cycle_penalties():
 
     block = teacher_block.block
     rent_settings = RentSettings.query.filter_by(
-        teacher_id=admin_id,
+        class_id=teacher_block.class_id,
         block=block,
     ).first()
     if not rent_settings or not rent_settings.is_enabled:
@@ -7918,12 +7964,14 @@ def hall_pass():
         requested_block=request.args.get('block'),
     )
     selected_join_code = selected_scope['join_code']
+    selected_class_id = selected_scope.get('class_id')
     student_ids_subq = _student_scope_subquery_for_join_code(selected_join_code)
     pending_requests = (
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(HallPassLog.join_code == selected_join_code)
+        .filter(HallPassLog.class_id == selected_class_id)
         .filter(HallPassLog.status == 'pending')
         .order_by(HallPassLog.request_time.asc())
         .all()
@@ -7933,6 +7981,7 @@ def hall_pass():
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(HallPassLog.join_code == selected_join_code)
+        .filter(HallPassLog.class_id == selected_class_id)
         .filter(HallPassLog.status == 'approved')
         .order_by(HallPassLog.decision_time.asc())
         .all()
@@ -7942,6 +7991,7 @@ def hall_pass():
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(HallPassLog.join_code == selected_join_code)
+        .filter(HallPassLog.class_id == selected_class_id)
         .filter(HallPassLog.status == 'left')
         .order_by(HallPassLog.left_time.asc())
         .all()
@@ -8071,12 +8121,18 @@ def apply_economy_rebalance():
         return redirect(url_for('admin.economy_health', block=effective_block, review_rebalance=1))
 
     checker = EconomyBalanceChecker(admin_id, effective_block)
+    effective_join_code = _resolve_join_code_for_block(admin_id, effective_block)
+    effective_class = ClassEconomy.query.filter_by(join_code=effective_join_code).first() if effective_join_code else None
+    scoped_store_items = (
+        StoreItem.query.filter_by(class_id=effective_class.class_id, is_active=True).all()
+        if effective_class else []
+    )
     analysis = checker.analyze_economy(
         payroll_settings=payroll_settings,
         rent_settings=rent_settings,
         insurance_policies=insurance_policies,
         fines=PayrollFine.query.filter_by(teacher_id=admin_id, is_active=True).all(),
-        store_items=StoreItem.query.filter_by(teacher_id=admin_id, is_active=True).all(),
+        store_items=scoped_store_items,
         expected_weekly_hours=payroll_settings.expected_weekly_hours if payroll_settings.expected_weekly_hours is not None else 5.0,
     )
     preview_items = _build_rebalance_preview(
@@ -8156,7 +8212,12 @@ def economy_health():
     has_payroll_settings = len(all_payroll_settings) > 0
 
     fines = PayrollFine.query.filter_by(teacher_id=admin_id, is_active=True).all()
-    store_items = StoreItem.query.filter_by(teacher_id=admin_id, is_active=True).all()
+    selected_join_code = _resolve_join_code_for_block(admin_id, selected_block) if selected_block else None
+    selected_class = ClassEconomy.query.filter_by(join_code=selected_join_code).first() if selected_join_code else None
+    store_items = (
+        StoreItem.query.filter_by(class_id=selected_class.class_id, is_active=True).all()
+        if selected_class else []
+    )
 
     banking_settings = _resolve_banking_settings_for_block(admin_id, selected_block) if selected_block else None
 
@@ -11090,7 +11151,7 @@ def announcements():
     # Get unique teacher blocks (class periods) by join_code
     # TeacherBlock has one row per student seat, so we need to get distinct periods
     teacher_blocks_query = TeacherBlock.query.filter_by(
-        teacher_id=admin_id
+        teacher_id=scoped_admin_id
     ).order_by(TeacherBlock.block).all()
 
     # Deduplicate by join_code to get unique periods
@@ -11147,7 +11208,7 @@ def announcement_create():
     # Get unique teacher blocks (class periods) by join_code
     # TeacherBlock has one row per student seat, so we need to get distinct periods
     teacher_blocks_query = TeacherBlock.query.filter_by(
-        teacher_id=admin_id
+        teacher_id=scoped_admin_id
     ).order_by(TeacherBlock.block).all()
 
     # Deduplicate by join_code to get unique periods
@@ -11177,7 +11238,7 @@ def announcement_create():
             # Create an announcement for each selected period
             for join_code in selected_join_codes:
                 announcement = Announcement(
-                    teacher_id=admin_id,
+                    teacher_id=scoped_admin_id,
                     join_code=join_code,
                     title=form.title.data,
                     message=form.message.data,
@@ -11217,12 +11278,13 @@ def announcement_edit(announcement_id):
     from app.forms import AnnouncementForm
     from app.models import Announcement
 
-    admin_id = session.get('admin_id')
+    current_admin = get_current_admin()
+    scoped_admin_id = current_admin.id if current_admin else session.get('admin_id')
 
     # Get announcement and verify ownership
     announcement = Announcement.query.filter_by(
         id=announcement_id,
-        teacher_id=admin_id
+        teacher_id=scoped_admin_id
     ).first()
 
     if not announcement:
@@ -11231,7 +11293,7 @@ def announcement_edit(announcement_id):
 
     # Get the block info for this announcement
     teacher_block = TeacherBlock.query.filter_by(
-        teacher_id=admin_id,
+        teacher_id=scoped_admin_id,
         join_code=announcement.join_code
     ).first()
 
@@ -11273,12 +11335,13 @@ def announcement_delete(announcement_id):
     """Delete an announcement."""
     from app.models import Announcement
 
-    admin_id = session.get('admin_id')
+    current_admin = get_current_admin()
+    scoped_admin_id = current_admin.id if current_admin else session.get('admin_id')
 
     # Get announcement and verify ownership
     announcement = Announcement.query.filter_by(
         id=announcement_id,
-        teacher_id=admin_id
+        teacher_id=scoped_admin_id
     ).first()
 
     if not announcement:
@@ -11306,12 +11369,13 @@ def announcement_toggle(announcement_id):
     """Toggle announcement active status."""
     from app.models import Announcement
 
-    admin_id = session.get('admin_id')
+    current_admin = get_current_admin()
+    scoped_admin_id = current_admin.id if current_admin else session.get('admin_id')
 
     # Get announcement and verify ownership
     announcement = Announcement.query.filter_by(
         id=announcement_id,
-        teacher_id=admin_id
+        teacher_id=scoped_admin_id
     ).first()
 
     if not announcement:
@@ -11412,7 +11476,12 @@ def onboarding_status():
         data_completed['payroll'] = payroll_settings is not None
 
         # Store: has at least one store item for ANY block OR marked complete
-        store_items = StoreItem.query.filter_by(teacher_id=admin_id).count()
+        class_ids_subq = db.session.query(ClassEconomy.class_id).filter_by(teacher_id=admin_id).subquery()
+        store_items = (
+            StoreItem.query
+            .filter(StoreItem.class_id.in_(sa.select(class_ids_subq)))
+            .count()
+        )
         data_completed['store'] = store_items > 0
 
         # Banking: has banking settings configured for ANY block OR marked complete
@@ -11420,7 +11489,11 @@ def onboarding_status():
         data_completed['banking'] = banking_settings is not None
 
         # Rent: has rent settings configured for ANY block OR marked complete
-        rent_settings = RentSettings.query.filter_by(teacher_id=admin_id).first()
+        rent_settings = (
+            RentSettings.query
+            .filter(RentSettings.class_id.in_(sa.select(class_ids_subq)))
+            .first()
+        )
         data_completed['rent'] = rent_settings is not None
 
         # Insurance: has at least one insurance policy for ANY block OR marked complete

@@ -63,16 +63,15 @@ def _void_purchase(tx: Transaction) -> None:
 
     item_name = (purchase_match.group('name') or '').strip()
     quantity = int(purchase_match.group('qty') or 1)
-    store_item = StoreItem.query.filter_by(teacher_id=tx.teacher_id, name=item_name).first()
+    if not tx.class_id:
+        raise ValueError("Transaction is missing class scope (class_id) and cannot be voided safely.")
+    store_item = StoreItem.query.filter_by(class_id=tx.class_id, name=item_name).first()
     if not store_item:
         raise ValueError("Purchase item record was not found. This transaction cannot be voided.")
     if store_item.item_type == 'immediate':
         raise ValueError("Immediate-use item purchases are not voidable.")
     if store_item.item_type != 'delayed':
         raise ValueError("Only delayed-use item purchases are voidable.")
-    if not tx.class_id:
-        raise ValueError("Transaction is missing class scope (class_id) and cannot be voided safely.")
-
     matching_items = StudentItem.query.filter(
         StudentItem.seat_id == tx.seat_id,
         StudentItem.store_item_id == store_item.id,

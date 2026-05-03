@@ -30,6 +30,9 @@ from app.models import (
 )
 from app.auth import (
     admin_required,
+    get_current_class_id,
+    get_current_seat,
+    get_current_user,
     get_current_student_seat,
     login_required,
     get_logged_in_student,
@@ -331,19 +334,17 @@ def _prime_student_teacher_display_name_cache(student_id: int) -> None:
 
 
 def get_rent_settings_for_context(context):
-    """Return rent settings scoped strictly to the current class join_code."""
+    """Return rent settings scoped strictly to the current class_id."""
     if not context:
         return None
 
-    teacher_id = context.get('teacher_id')
-    join_code = context.get('join_code')
+    class_id = context.get('class_id')
     current_block = (context.get('block') or '').strip().upper()
-    if not teacher_id or not join_code:
+    if not class_id:
         return None
 
     base_query = RentSettings.query.filter(
-        RentSettings.teacher_id == teacher_id,
-        RentSettings.join_code == join_code,
+        RentSettings.class_id == class_id,
     )
     if current_block:
         scoped = base_query.filter(func.upper(RentSettings.block) == current_block).first()
@@ -356,6 +357,16 @@ def get_rent_settings_for_context(context):
             return scoped
 
     return base_query.filter(RentSettings.block.is_(None)).first()
+
+
+def _get_rent_coverage_window(settings, coverage_due_date):
+    """Return canonical [start, end) coverage window for a rent cycle."""
+    if not settings or not coverage_due_date:
+        return (None, None)
+    start = ensure_utc(coverage_due_date)
+    period_delta = _get_rent_period_delta(settings)
+    end = _add_rent_period(start, period_delta)
+    return (start, end)
 
 
 def get_banking_settings_for_context(context):
@@ -1253,10 +1264,9 @@ def dashboard():
             rent_scope = seat_scoped_filter(RentPayment, student.id, seat_ids)
             all_payments_for_period = RentPayment.query.filter(
                 rent_scope,
-                RentPayment.period == period,
+                RentPayment.class_id == class_id,
                 RentPayment.coverage_month == coverage_month,
                 RentPayment.coverage_year == coverage_year,
-                RentPayment.join_code == join_code
             ).all()
 
             payments = []
@@ -1467,7 +1477,12 @@ def payroll():
     if not is_feature_enabled('payroll'):
         abort(404)
 
-    student = get_logged_in_student()
+    seat = get_current_seat()
+    class_id = get_current_class_id()
+    _ = get_current_user()
+    student = db.session.get(Student, seat.student_id) if seat and seat.student_id else None
+    if not student:
+        student = get_logged_in_student()
 
     context = get_current_class_context()
     if not context:
@@ -1778,7 +1793,12 @@ def insurance_marketplace():
     if not is_feature_enabled('insurance'):
         abort(404)
 
-    student = get_logged_in_student()
+    seat = get_current_seat()
+    class_id = get_current_class_id()
+    _ = get_current_user()
+    student = db.session.get(Student, seat.student_id) if seat and seat.student_id else None
+    if not student:
+        student = get_logged_in_student()
 
     # CRITICAL FIX v2: Get full class context (join_code is source of truth)
     context = get_current_class_context()
@@ -1788,6 +1808,8 @@ def insurance_marketplace():
 
     teacher_id = context['teacher_id']
     join_code = context['join_code']
+    if not class_id:
+        class_id = context.get('class_id')
     now_utc = utc_now()
 
     # FIX: Get student's active policies scoped to current class only
@@ -2302,7 +2324,12 @@ def file_claim(policy_id):
 @login_required
 def view_policy(enrollment_id):
     """View policy details and claims history."""
-    student = get_logged_in_student()
+    seat = get_current_seat()
+    class_id = get_current_class_id()
+    _ = get_current_user()
+    student = db.session.get(Student, seat.student_id) if seat and seat.student_id else None
+    if not student:
+        student = get_logged_in_student()
     enrollment = db.get_or_404(StudentInsurance, enrollment_id)
 
     # Verify ownership
@@ -2338,7 +2365,12 @@ def shop():
     if not is_feature_enabled('store'):
         abort(404)
 
-    student = get_logged_in_student()
+    seat = get_current_seat()
+    class_id = get_current_class_id()
+    _ = get_current_user()
+    student = db.session.get(Student, seat.student_id) if seat and seat.student_id else None
+    if not student:
+        student = get_logged_in_student()
 
     # CRITICAL FIX v2: Get full class context
     context = get_current_class_context()
@@ -2348,6 +2380,8 @@ def shop():
 
     teacher_id = context['teacher_id']
     join_code = context['join_code']
+    if not class_id:
+        class_id = context.get('class_id')
 
     current_block = (context.get('block') or '').strip().upper()
 
@@ -2816,9 +2850,12 @@ def _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date):
     """Return the first valid payer's base rent for a join_code coverage cycle."""
     if not join_code or not coverage_due_date:
         return None
+    class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+    if not class_row:
+        return None
 
     cycle_payments = RentPayment.query.filter(
-        RentPayment.join_code == join_code,
+        RentPayment.class_id == class_row.class_id,
         RentPayment.coverage_month == coverage_due_date.month,
         RentPayment.coverage_year == coverage_due_date.year,
     ).order_by(RentPayment.payment_date.asc()).all()
@@ -3080,71 +3117,47 @@ def _expand_rent_waiver_history(settings, waivers, *, now=None):
 
 def _is_student_coverage_period_paid(
     settings,
-    primary_id,
-    scope_a,
-    scope_b,
-    coverage_due_date=None,
+    seat_id,
+    class_id,
+    coverage_due_date,
     include_late_fee=True,
     include_waivers=True,
 ):
     """
     Return True when a student's specific coverage period is fully paid or waived.
-
-    Supports both signatures:
-      - v2: (settings, seat_id, class_id, coverage_due_date, ...)
-      - legacy: (settings, student_id, period, join_code, coverage_due_date, ...)
     """
     if not settings:
         return False
-
-    legacy_mode = coverage_due_date is not None
-    if legacy_mode:
-        student_id = primary_id
-        period = (scope_a or '').strip().upper()
-        join_code = scope_b
-        class_row = ClassEconomy.query.filter_by(join_code=join_code).first() if join_code else None
-        class_id = class_row.class_id if class_row else None
-        seat_id = get_seat_id_for_class(student_id, class_id) if student_id and class_id else None
-    else:
-        seat_id = primary_id
-        class_id = scope_a
-        coverage_due_date = scope_b
-        period = None
-        student_id = None
-        join_code = None
-        if class_id:
-            class_row = db.session.get(ClassEconomy, class_id)
-            join_code = class_row.join_code if class_row else None
-        if seat_id:
-            seat = db.session.get(Seat, seat_id)
-            student_id = seat.student_id if seat else None
+    join_code = None
+    student_id = None
+    if class_id:
+        class_row = db.session.get(ClassEconomy, class_id)
+        join_code = class_row.join_code if class_row else None
+    if seat_id:
+        seat = db.session.get(Seat, seat_id)
+        student_id = seat.student_id if seat else None
 
     if not coverage_due_date or not class_id:
         return False
 
     if include_waivers:
-        if legacy_mode:
-            if _has_active_rent_waiver(student_id, join_code, coverage_due_date):
-                return True
-        elif _has_active_rent_waiver_v2(seat_id, class_id, coverage_due_date):
+        if _has_active_rent_waiver_v2(seat_id, class_id, coverage_due_date):
             return True
 
+    coverage_start, coverage_end = _get_rent_coverage_window(settings, coverage_due_date)
     coverage_payments_query = RentPayment.query.filter(
         RentPayment.coverage_month == coverage_due_date.month,
         RentPayment.coverage_year == coverage_due_date.year,
     )
-    if seat_id:
+    if coverage_start and coverage_end:
         coverage_payments_query = coverage_payments_query.filter(
-            RentPayment.seat_id == seat_id,
-            RentPayment.class_id == class_id,
+            RentPayment.payment_date >= coverage_start,
+            RentPayment.payment_date < coverage_end,
         )
-    else:
-        coverage_payments_query = coverage_payments_query.filter(
-            RentPayment.student_id == student_id,
-            RentPayment.join_code == join_code,
-        )
-        if period:
-            coverage_payments_query = coverage_payments_query.filter(RentPayment.period == period)
+    coverage_payments_query = coverage_payments_query.filter(
+        RentPayment.seat_id == seat_id,
+        RentPayment.class_id == class_id,
+    )
     coverage_payments = coverage_payments_query.all()
 
     seat_ids = [seat_id] if seat_id else []
@@ -3264,7 +3277,12 @@ def rent():
     if not is_feature_enabled('rent'):
         abort(404)
 
-    student = get_logged_in_student()
+    seat = get_current_seat()
+    class_id = get_current_class_id()
+    _ = get_current_user()
+    student = db.session.get(Student, seat.student_id) if seat and seat.student_id else None
+    if not student:
+        student = get_logged_in_student()
     context = get_current_class_context()
     if not context:
         flash("No class selected. Please choose a class to continue.", "error")
@@ -3283,7 +3301,7 @@ def rent():
         flash("No class period found for this class.", "error")
         return redirect(url_for('student.dashboard'))
 
-    class_id = context.get('class_id')
+    class_id = class_id or context.get('class_id')
     if not class_id:
         from app.models import ClassEconomy
         ce = ClassEconomy.query.filter_by(join_code=join_code).first()
@@ -3346,7 +3364,6 @@ def rent():
     all_payments_for_period = RentPayment.query.filter(
         RentPayment.seat_id == seat_id,
         RentPayment.class_id == class_id,
-        RentPayment.period == current_block,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
     ).all()
@@ -3579,7 +3596,6 @@ def rent_pay(period):
     all_payments = RentPayment.query.filter(
         RentPayment.seat_id == seat_id,
         RentPayment.class_id == class_id,
-        RentPayment.period == period,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
     ).all()
