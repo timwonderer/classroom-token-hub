@@ -16,6 +16,9 @@ def record_rent_payment(
     coverage_year: int,
     was_late: bool,
     late_fee_charged,
+    coverage_start_time=None,
+    coverage_end_time=None,
+    cycle_idempotency_key: str | None = None,
     join_code: str | None = None,
 ):
     """Obligations-owned mutation for rent payment truth."""
@@ -29,6 +32,9 @@ def record_rent_payment(
         period_year=period_year,
         coverage_month=coverage_month,
         coverage_year=coverage_year,
+        coverage_start_time=coverage_start_time,
+        coverage_end_time=coverage_end_time,
+        cycle_idempotency_key=cycle_idempotency_key,
         was_late=was_late,
         late_fee_charged=late_fee_charged,
     )

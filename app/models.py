@@ -232,6 +232,7 @@ class Seat(db.Model):
     roster_fingerprint = db.Column(db.String(128), nullable=True, index=True)
     dedupe_code = db.Column(db.String(8), nullable=True)
     claimed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    has_received_rent_exemption = db.Column(db.Boolean, nullable=False, default=False)
 
     # Transitional public-token bridge until seat/class rewiring is complete.
     join_code = db.Column(db.String(20), nullable=False, index=True)
@@ -983,14 +984,15 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
         ).scalar() or "A"
         legacy_seat_id = _connection.execute(
             sa.text(
-                "INSERT INTO seats (public_id, user_id, class_id, role, block_identifier, roster_fingerprint, dedupe_code, claimed_at, join_code, student_id, block, created_at, updated_at) "
-                "VALUES (:public_id, NULL, NULL, :role, :block_identifier, NULL, NULL, NULL, :join_code, :student_id, :block, :created_at, :updated_at) "
+                "INSERT INTO seats (public_id, user_id, class_id, role, block_identifier, roster_fingerprint, dedupe_code, claimed_at, has_received_rent_exemption, join_code, student_id, block, created_at, updated_at) "
+                "VALUES (:public_id, NULL, NULL, :role, :block_identifier, NULL, NULL, NULL, :has_received_rent_exemption, :join_code, :student_id, :block, :created_at, :updated_at) "
                 "RETURNING id"
             ),
             {
                 "public_id": str(uuid.uuid4()),
                 "role": "student",
                 "block_identifier": legacy_block,
+                "has_received_rent_exemption": False,
                 "join_code": legacy_join_code,
                 "student_id": target.student_id,
                 "block": legacy_block,
@@ -1552,6 +1554,9 @@ class RentSettings(db.Model):
     bypass_cwi_warnings = db.Column(db.Boolean, default=False, nullable=False)
 
     # Metadata
+    rent_configured_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=True, index=True)
+    rent_effective_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
+    cycle_length_days = db.Column(db.Integer, nullable=False, default=30)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
     # Relationships
@@ -1586,12 +1591,24 @@ class RentPayment(db.Model):
     # Enables pre-paid system: payment in January covers until February due date
     coverage_month = db.Column(db.Integer, nullable=False, default=_current_utc_month)  # Month covered (1-12)
     coverage_year = db.Column(db.Integer, nullable=False, default=_current_utc_year)  # Year covered (e.g., 2025)
+    coverage_start_time = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
+    coverage_end_time = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
+    cycle_idempotency_key = db.Column(db.String(160), nullable=True, index=True)
 
     was_late = db.Column(db.Boolean, default=False)
     late_fee_charged = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))
 
     student = db.relationship('Student', backref='rent_payments')
     seat = db.relationship('Seat', backref='rent_payments')
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'seat_id',
+            'class_id',
+            'cycle_idempotency_key',
+            name='uq_rent_payment_cycle_seat_class',
+        ),
+    )
 
 
 class RentWaiver(db.Model):
@@ -1710,8 +1727,8 @@ def _sync_rent_payment_seat(_mapper, connection, target):
         ).scalar() or "A"
         legacy_seat_id = connection.execute(
             sa.text(
-                "INSERT INTO seats (public_id, user_id, class_id, role, block_identifier, roster_fingerprint, dedupe_code, claimed_at, join_code, student_id, block, created_at, updated_at) "
-                "VALUES (:public_id, NULL, :class_id, :role, :block_identifier, NULL, NULL, NULL, :join_code, :student_id, :block, :created_at, :updated_at) "
+                "INSERT INTO seats (public_id, user_id, class_id, role, block_identifier, roster_fingerprint, dedupe_code, claimed_at, has_received_rent_exemption, join_code, student_id, block, created_at, updated_at) "
+                "VALUES (:public_id, NULL, :class_id, :role, :block_identifier, NULL, NULL, NULL, :has_received_rent_exemption, :join_code, :student_id, :block, :created_at, :updated_at) "
                 "RETURNING id"
             ),
             {
@@ -1719,6 +1736,7 @@ def _sync_rent_payment_seat(_mapper, connection, target):
                 "class_id": str(class_id) if class_id else None,
                 "role": "student",
                 "block_identifier": legacy_block,
+                "has_received_rent_exemption": False,
                 "join_code": legacy_join_code,
                 "student_id": student_id,
                 "block": legacy_block,
@@ -2135,8 +2153,8 @@ def _sync_student_insurance_scope(_mapper, connection, target):
         ).scalar() or "A"
         legacy_seat_id = connection.execute(
             sa.text(
-                "INSERT INTO seats (public_id, user_id, class_id, role, block_identifier, roster_fingerprint, dedupe_code, claimed_at, join_code, student_id, block, created_at, updated_at) "
-                "VALUES (:public_id, NULL, :class_id, :role, :block_identifier, NULL, NULL, NULL, :join_code, :student_id, :block, :created_at, :updated_at) "
+                "INSERT INTO seats (public_id, user_id, class_id, role, block_identifier, roster_fingerprint, dedupe_code, claimed_at, has_received_rent_exemption, join_code, student_id, block, created_at, updated_at) "
+                "VALUES (:public_id, NULL, :class_id, :role, :block_identifier, NULL, NULL, NULL, :has_received_rent_exemption, :join_code, :student_id, :block, :created_at, :updated_at) "
                 "RETURNING id"
             ),
             {
@@ -2144,6 +2162,7 @@ def _sync_student_insurance_scope(_mapper, connection, target):
                 "class_id": str(class_id) if class_id else None,
                 "role": "student",
                 "block_identifier": legacy_block,
+                "has_received_rent_exemption": False,
                 "join_code": legacy_join_code,
                 "student_id": student_id,
                 "block": legacy_block,

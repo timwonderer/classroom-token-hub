@@ -5,7 +5,7 @@ Contains periodic tasks that run in the background to maintain system state.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from app.utils.time import utc_now
 
 
@@ -154,6 +154,149 @@ def database_maintenance_job():
         logger.error(f"Database maintenance job failed: {e}", exc_info=True)
 
 
+def _derive_cycle_length_days(settings) -> int:
+    """Resolve cycle length in days from rent settings."""
+    configured = int(getattr(settings, "cycle_length_days", 0) or 0)
+    if configured > 0:
+        return configured
+
+    frequency = (getattr(settings, "frequency_type", "monthly") or "monthly").lower()
+    if frequency == "daily":
+        return 1
+    if frequency == "weekly":
+        return 7
+    if frequency == "custom":
+        unit = (getattr(settings, "custom_frequency_unit", "days") or "days").lower()
+        value = int(getattr(settings, "custom_frequency_value", 1) or 1)
+        if unit.startswith("week"):
+            return max(1, value * 7)
+        if unit.startswith("month"):
+            return max(1, value * 30)
+        return max(1, value)
+    return 30
+
+
+def _normalize_cycle_start(execution_time, rent_effective_at, cycle_length_days: int):
+    """
+    Normalize execution time to the deterministic class cycle boundary.
+
+    This guarantees one idempotency key and one coverage window per cycle
+    even if scheduler invocations drift within the same cycle.
+    """
+    if execution_time <= rent_effective_at:
+        return rent_effective_at
+
+    cycle_seconds = max(1, int(cycle_length_days)) * 86400
+    elapsed_seconds = (execution_time - rent_effective_at).total_seconds()
+    cycle_index = int(elapsed_seconds // cycle_seconds)
+    return rent_effective_at + timedelta(seconds=cycle_index * cycle_seconds)
+
+
+def run_rent_cycle_for_class(class_id: str, execution_time):
+    """
+    Execute one rent cycle for one class.
+
+    Actor model: seat_id + class_id only.
+    """
+    from app.extensions import db
+    from app.models import RentSettings, RentPayment, Seat
+    from app.feats.rent_cycle_feat import execute_scheduled_rent_charge
+
+    execution_time = execution_time or utc_now()
+
+    settings = (
+        RentSettings.query
+        .filter_by(class_id=class_id, is_enabled=True)
+        .order_by(RentSettings.updated_at.desc())
+        .first()
+    )
+    if not settings:
+        return {"status": "skipped", "reason": "rent_disabled_or_missing", "class_id": class_id}
+
+    cycle_length_days = _derive_cycle_length_days(settings)
+    settings.cycle_length_days = cycle_length_days
+
+    rent_configured_at = settings.rent_configured_at or settings.updated_at or utc_now()
+    if not settings.rent_effective_at:
+        settings.rent_effective_at = rent_configured_at + timedelta(days=cycle_length_days)
+        db.session.flush()
+
+    rent_effective_at = settings.rent_effective_at
+    if execution_time < rent_effective_at:
+        return {"status": "skipped", "reason": "before_effective_at", "class_id": class_id}
+
+    # Freeze cycle boundary for the full class execution.
+    cycle_start = _normalize_cycle_start(execution_time, rent_effective_at, cycle_length_days)
+
+    claimed_seats = Seat.query.filter(
+        Seat.class_id == class_id,
+        Seat.claimed_at.is_not(None),
+    ).all()
+
+    charged = 0
+    exempted = 0
+    skipped_existing = 0
+
+    for seat in claimed_seats:
+        if (
+            seat.claimed_at
+            and seat.claimed_at >= rent_configured_at
+            and not seat.has_received_rent_exemption
+        ):
+            seat.has_received_rent_exemption = True
+            exempted += 1
+            continue
+
+        idem_key = f"rent_cycle:{class_id}:{seat.id}:{cycle_start.isoformat()}"
+        existing = RentPayment.query.filter_by(
+            class_id=class_id,
+            seat_id=seat.id,
+            cycle_idempotency_key=idem_key,
+        ).first()
+        if existing:
+            skipped_existing += 1
+            continue
+
+        execute_scheduled_rent_charge(
+            seat=seat,
+            settings=settings,
+            class_id=class_id,
+            execution_time=cycle_start,
+            idempotency_key=idem_key,
+        )
+        charged += 1
+
+    db.session.commit()
+    return {
+        "status": "ok",
+        "class_id": class_id,
+        "charged": charged,
+        "exempted": exempted,
+        "skipped_existing": skipped_existing,
+    }
+
+
+def run_rent_cycle_scheduler(execution_time=None):
+    """
+    Iterate all rent-enabled classes and execute one rent cycle per class.
+    """
+    from app.models import RentSettings
+
+    execution_time = execution_time or utc_now()
+    class_ids = [
+        class_id for (class_id,) in
+        RentSettings.query.filter(
+            RentSettings.is_enabled.is_(True),
+            RentSettings.class_id.is_not(None),
+        ).with_entities(RentSettings.class_id).distinct().all()
+    ]
+
+    outcomes = []
+    for class_id in class_ids:
+        outcomes.append(run_rent_cycle_for_class(class_id, execution_time))
+    return outcomes
+
+
 def init_scheduled_tasks(app):
     """
     Initialize and start scheduled tasks.
@@ -174,6 +317,10 @@ def init_scheduled_tasks(app):
     def run_database_maintenance():
         with app.app_context():
             database_maintenance_job()
+
+    def run_scheduled_rent_cycles():
+        with app.app_context():
+            run_rent_cycle_scheduler()
 
     if not scheduler.running:
         # Add the auto tap-out enforcement job to run every hour
@@ -199,7 +346,18 @@ def init_scheduled_tasks(app):
             max_instances=1  # Prevent overlapping executions
         )
 
+        scheduler.add_job(
+            func=run_scheduled_rent_cycles,
+            trigger='cron',
+            hour='*',
+            minute=5,
+            id='run_rent_cycles',
+            name='Run class-scoped rent cycles',
+            replace_existing=True,
+            max_instances=1
+        )
+
         scheduler.start()
-        logger.info("Scheduled tasks initialized: auto tap-out (hourly), database maintenance (2 AM UTC daily)")
+        logger.info("Scheduled tasks initialized: auto tap-out (hourly), database maintenance (2 AM UTC daily), rent cycles (hourly)")
     else:
         logger.info("Scheduler already running")
