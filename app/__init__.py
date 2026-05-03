@@ -504,22 +504,37 @@ def create_app():
 
         # Set tenant context for both admin and student sessions
         teacher_id = None
-        
-        # Check if admin is logged in
-        admin_id = session.get('admin_id')
-        if admin_id:
-            teacher_id = admin_id
-        else:
-            # Check if student is logged in and has a current teacher
-            # Students query teacher-scoped tables (StoreItem, RentSettings, etc.)
-            # so we need to set RLS context for them too
-            student_id = session.get('student_id')
-            if student_id:
-                # Get the student's current teacher context
-                # This uses the multi-period support system
-                current_teacher_id = session.get('current_teacher_id')
-                if current_teacher_id:
-                    teacher_id = current_teacher_id
+        try:
+            from app.auth import get_current_seat, get_current_class_id, get_current_user
+            from app.models import ClassEconomy
+
+            # Canonical path for student-scoped requests: class_id -> teacher_id
+            current_seat = get_current_seat()
+            current_class_id = get_current_class_id()
+            if current_seat and current_class_id:
+                class_row = ClassEconomy.query.filter_by(class_id=current_class_id).first()
+                if class_row and class_row.teacher_id:
+                    teacher_id = class_row.teacher_id
+
+            # Canonical user currently has no teacher-role mapping in this phase.
+            # Keep this lookup to centralize identity dependency for future phases.
+            if teacher_id is None:
+                _ = get_current_user()
+        except Exception:
+            # Keep request resilient; legacy fallbacks below preserve behavior.
+            teacher_id = None
+
+        # Legacy fallback path (required until admin identity cutover).
+        if teacher_id is None:
+            admin_id = session.get('admin_id')
+            if admin_id:
+                teacher_id = admin_id
+
+        # Legacy student teacher-context fallback.
+        if teacher_id is None:
+            current_teacher_id = session.get('current_teacher_id')
+            if current_teacher_id:
+                teacher_id = current_teacher_id
         
         if teacher_id:
             try:
@@ -640,12 +655,20 @@ def create_app():
     def inject_admin_feature_settings():
         """Inject class-scoped admin feature settings into all templates."""
         try:
-            from flask import session
+            from app.auth import get_current_class_id, get_current_user
             from app.models import FeatureSettings
             from app.routes.admin import get_admin_feature_settings_for_join_code
 
+            # Canonical helper-first resolution (legacy fallback retained below).
+            _ = get_current_user()
             admin_id = session.get('admin_id')
             join_code = session.get('current_join_code')
+            if not join_code:
+                current_class_id = get_current_class_id()
+                if current_class_id:
+                    from app.models import ClassEconomy
+                    class_row = ClassEconomy.query.filter_by(class_id=current_class_id).first()
+                    join_code = class_row.join_code if class_row else None
             if not admin_id:
                 return {'admin_feature_settings': FeatureSettings.get_defaults()}
             return {
@@ -663,7 +686,7 @@ def create_app():
     def inject_class_context():
         """Inject current class context and available classes for student navigation."""
         try:
-            from app.auth import get_logged_in_student
+            from app.auth import get_logged_in_student, get_current_seat, get_current_class_id, get_current_user
             from app.models import TeacherBlock, Admin, ClassEconomy
             from flask import session
             from app.routes.student import get_current_class_context
@@ -672,13 +695,19 @@ def create_app():
                 upsert_teacher_display_name_cache,
             )
 
-            student = get_logged_in_student()
-            if not student:
+            current_seat_ctx = get_current_seat()
+            _ = get_current_user()
+            student_id = current_seat_ctx.student_id if current_seat_ctx and current_seat_ctx.student_id else None
+            if student_id is None:
+                # Legacy fallback until all student routes/session anchors are migrated.
+                student = get_logged_in_student()
+                student_id = student.id if student else None
+            if not student_id:
                 return {'current_class_context': None, 'available_classes': []}
 
             # Get all claimed seats for this student
             claimed_seats = TeacherBlock.query.filter_by(
-                student_id=student.id,
+                student_id=student_id,
                 is_claimed=True
             ).order_by(TeacherBlock.teacher_id, TeacherBlock.block).all()
 
@@ -686,7 +715,7 @@ def create_app():
                 return {'current_class_context': None, 'available_classes': []}
 
             resolved_context = get_current_class_context()
-            resolved_class_id = resolved_context.get('class_id') if resolved_context else None
+            resolved_class_id = get_current_class_id() or (resolved_context.get('class_id') if resolved_context else None)
 
             # Class context is required whenever the student has at least one claimed seat.
             current_seat = next(
@@ -768,7 +797,9 @@ def create_app():
             from flask import session
             from app.models import TeacherBlock, ClassEconomy
             from app.routes.admin import _resolve_admin_class_context
+            from app.auth import get_current_user, get_current_class_id
 
+            _ = get_current_user()
             admin_id = session.get('admin_id')
             if not admin_id or not session.get('is_admin'):
                 return {'admin_current_class_context': None, 'admin_available_classes': []}
@@ -818,7 +849,7 @@ def create_app():
                 return {'admin_current_class_context': None, 'admin_available_classes': []}
 
             resolved_context = _resolve_admin_class_context(admin_id)
-            resolved_class_id = resolved_context.get('class_id') if resolved_context else None
+            resolved_class_id = get_current_class_id() or (resolved_context.get('class_id') if resolved_context else None)
             current_class = next(
                 (item for item in admin_available_classes if item['class_id'] == resolved_class_id),
                 admin_available_classes[0],
@@ -848,18 +879,15 @@ def create_app():
     def inject_current_admin():
         """Inject current admin object into all templates."""
         try:
-            from app.models import Admin
-            from flask import session
+            from app.auth import get_current_user, get_current_admin
             from app.utils.display_name_session import (
                 get_admin_display_name_cache,
                 set_admin_display_name_cache,
             )
 
-            admin_id = session.get('admin_id')
-            if admin_id:
-                admin = db.session.get(Admin, admin_id)
-                if not admin:
-                    return {'current_admin': None, 'current_admin_display_name': None}
+            _ = get_current_user()
+            admin = get_current_admin()
+            if admin:
                 cached_name = get_admin_display_name_cache(admin_id=admin.id)
                 if not cached_name:
                     cached_name = admin.get_display_name()

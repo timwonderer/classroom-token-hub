@@ -33,11 +33,13 @@ def home():
     - If not logged in -> Redirect to Marketing Site (classroomtokenhub.com)
     """
     # Check for user session and redirect accordingly
+    from app.auth import get_current_seat, get_current_user
+
     if session.get('is_system_admin') and session.get('sysadmin_id'):
         return redirect(url_for('sysadmin.dashboard'))
-    elif session.get('is_admin') and session.get('admin_id'):
+    elif session.get('is_admin') and (get_current_user() is not None or session.get('admin_id')):
         return redirect(url_for('admin.dashboard'))
-    elif session.get('student_id'):
+    elif get_current_seat() is not None or session.get('student_id'):
         return redirect(url_for('student.dashboard'))
     else:
         # Default: Redirect to marketing site
@@ -225,12 +227,12 @@ def verify_hall_pass(teacher_public_token):
     # Get teacher's active classes (distinct join_codes with labels)
     # Use plain .distinct() (all columns) + Python deduplication for cross-DB compat
     classes_rows = (
-        db.session.query(TeacherBlock.join_code, TeacherBlock.block, TeacherBlock.class_label)
+        db.session.query(TeacherBlock.join_code, TeacherBlock.class_id, TeacherBlock.block, TeacherBlock.class_label)
         .filter(
             TeacherBlock.teacher_id == teacher.id,
             TeacherBlock.join_code.isnot(None),
         )
-        .group_by(TeacherBlock.join_code, TeacherBlock.block, TeacherBlock.class_label)
+        .group_by(TeacherBlock.join_code, TeacherBlock.class_id, TeacherBlock.block, TeacherBlock.class_label)
         .order_by(TeacherBlock.block)
         .all()
     )
@@ -241,7 +243,7 @@ def verify_hall_pass(teacher_public_token):
         if row.join_code and row.join_code not in seen_codes:
             seen_codes.add(row.join_code)
             label = row.class_label if row.class_label else row.block
-            classes.append({"join_code": row.join_code, "label": label})
+            classes.append({"join_code": row.join_code, "class_id": row.class_id, "label": label})
 
     if request.method == 'GET':
         return render_template(
@@ -294,10 +296,13 @@ def verify_hall_pass(teacher_public_token):
     today_start_db = normalize_for_db(today_start_utc)
     today_end_db = normalize_for_db(today_end_utc)
 
-    # Query today's hall pass records for this join_code.
+    selected_class_id = next((c['class_id'] for c in classes if c['join_code'] == selected_join_code), None)
+
+    # Query today's hall pass records for this class scope.
     # Only include actionable statuses (not pending/rejected).
     passes_query = HallPassLog.query.filter(
         HallPassLog.join_code == selected_join_code,
+        HallPassLog.class_id == selected_class_id,
         HallPassLog.request_time >= today_start_db,
         HallPassLog.request_time <= today_end_db,
         HallPassLog.status.in_(['approved', 'left', 'returned'])

@@ -5,12 +5,14 @@ Contains session management helpers, authentication decorators, and timeout logi
 """
 
 import urllib.parse
+import secrets
 from datetime import datetime, timedelta
 from app.utils.time import utc_now
 from functools import wraps
 
 import sqlalchemy as sa
-from flask import session, flash, redirect, url_for, request, current_app, jsonify
+from flask import session, flash, redirect, url_for, request, current_app, jsonify, abort, g
+from werkzeug.security import generate_password_hash
 from app.extensions import db
 
 
@@ -132,6 +134,8 @@ def login_required(f):
             session.pop('student_id', None)
             session.pop('student_user_id', None)
             session.pop('current_seat_id', None)
+            session.pop('seat_id', None)
+            session.pop('class_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
             session.pop('teacher_display_name_cache', None)
@@ -147,6 +151,8 @@ def login_required(f):
             session.pop('student_id', None)
             session.pop('student_user_id', None)
             session.pop('current_seat_id', None)
+            session.pop('seat_id', None)
+            session.pop('class_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
             session.pop('teacher_display_name_cache', None)
@@ -164,6 +170,8 @@ def login_required(f):
             session.pop('student_id', None)
             session.pop('student_user_id', None)
             session.pop('current_seat_id', None)
+            session.pop('seat_id', None)
+            session.pop('class_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
             session.pop('teacher_display_name_cache', None)
@@ -281,6 +289,131 @@ def get_current_student_seat():
     return db.session.get(Seat, seat_id)
 
 
+def _first_present_session_value(*keys):
+    """Return the first non-empty value found in session for the provided keys."""
+    for key in keys:
+        value = session.get(key)
+        if value is not None and value != "":
+            return value
+    return None
+
+
+def _safe_int_id(value):
+    """Return int(value) for integer ID fields when possible, otherwise None."""
+    try:
+        if value is None:
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def get_current_seat():
+    """
+    Return the current Seat from session context.
+
+    Resolution order:
+    1) seat_id/current_seat_id
+    2) student_id -> first Seat for that student
+    Returns None when context cannot be resolved safely.
+    """
+    from app.models import Seat
+
+    if hasattr(g, "_auth_current_seat_cache"):
+        return g._auth_current_seat_cache
+
+    seat_id = _safe_int_id(_first_present_session_value('seat_id', 'current_seat_id'))
+    if seat_id:
+        seat = db.session.get(Seat, seat_id)
+        if seat:
+            g._auth_current_seat_cache = seat
+            return seat
+
+    student_id = _safe_int_id(_first_present_session_value('student_id'))
+    if not student_id:
+        return None
+
+    target_class_id = _first_present_session_value('class_id', 'current_class_id')
+    if target_class_id:
+        seat = (
+            Seat.query
+            .filter_by(student_id=student_id, class_id=target_class_id)
+            .order_by(Seat.id.asc())
+            .first()
+        )
+        if seat:
+            g._auth_current_seat_cache = seat
+            return seat
+        return None
+
+    seat = (
+        Seat.query
+        .filter_by(student_id=student_id)
+        .order_by(Seat.id.asc())
+        .first()
+    )
+    g._auth_current_seat_cache = seat
+    return seat
+
+
+def get_current_class_id():
+    """
+    Return current class identifier from session/seat context.
+
+    Resolution order:
+    1) class_id/current_class_id
+    2) get_current_seat().class_id
+    """
+    class_id = _first_present_session_value('class_id', 'current_class_id')
+    if class_id:
+        return class_id
+
+    seat = get_current_seat()
+    return seat.class_id if seat else None
+
+
+def get_current_user():
+    """
+    Return the current User from session/seat context.
+
+    Resolution order:
+    1) user_id/current_user_id (and legacy student_user_id bridge)
+    2) get_current_seat().user
+    Returns None when unavailable.
+    """
+    from app.models import User
+
+    if hasattr(g, "_auth_current_user_cache"):
+        return g._auth_current_user_cache
+
+    user_id = _safe_int_id(_first_present_session_value('user_id', 'current_user_id', 'student_user_id'))
+    if user_id:
+        user = db.session.get(User, user_id)
+        if user:
+            g._auth_current_user_cache = user
+            return user
+
+    seat = get_current_seat()
+    if seat and seat.user_id:
+        user = db.session.get(User, seat.user_id)
+        if user:
+            g._auth_current_user_cache = user
+        return user
+    return None
+
+
+def require_seat_context():
+    """
+    Return a Seat when valid seat context exists.
+
+    Aborts with HTTP 401 when seat context cannot be resolved.
+    """
+    seat = get_current_seat()
+    if seat:
+        return seat
+    abort(401)
+
+
 def switch_student_session_context(student, *, class_id: str, seat_id: int):
     """
     CANONICAL SESSION CONTEXT SWITCH.
@@ -307,7 +440,7 @@ def switch_student_session_context(student, *, class_id: str, seat_id: int):
 
 def sync_student_session_context(student=None, *, class_id: str | None = None, seat_id: int | None = None):
     """Backfill user/seat session keys for the current class context."""
-    from app.models import Seat
+    from app.models import User, Seat, TeacherBlock, ClassMembership, ClassEconomy
 
     if student is None and 'student_id' in session:
         student = get_logged_in_student()
@@ -315,10 +448,13 @@ def sync_student_session_context(student=None, *, class_id: str | None = None, s
         session.pop('student_user_id', None)
         session.pop('current_seat_id', None)
         session.pop('current_class_id', None)
+        session.pop('seat_id', None)
+        session.pop('class_id', None)
         return None
 
     target_class_id = class_id or session.get('current_class_id')
     target_seat_id = seat_id or session.get('current_seat_id')
+    target_join_code = session.get('current_join_code')
 
     seat = None
     if target_seat_id:
@@ -330,10 +466,105 @@ def sync_student_session_context(student=None, *, class_id: str | None = None, s
     if not seat:
         seat = Seat.query.filter_by(student_id=student.id).order_by(Seat.id.asc()).first()
 
+    linked_user = None
+    if seat and seat.user_id:
+        linked_user = db.session.get(User, seat.user_id)
+
+    if not linked_user:
+        linked_user = (
+            User.query
+            .join(Seat, Seat.user_id == User.id)
+            .filter(
+                Seat.student_id == student.id,
+                Seat.user_id.isnot(None),
+            )
+            .order_by(Seat.id.asc())
+            .first()
+        )
+
+    created_identity_rows = False
+    if not linked_user:
+        linked_user = User(
+            username=f"pending_{student.id}_{secrets.token_urlsafe(8)}",
+            password_hash=generate_password_hash(secrets.token_urlsafe(24)),
+        )
+        db.session.add(linked_user)
+        db.session.flush()
+        created_identity_rows = True
+
+    if not seat:
+        chosen_membership = None
+        if target_join_code:
+            chosen_membership = ClassMembership.query.filter_by(
+                student_id=student.id,
+                join_code=target_join_code,
+            ).first()
+        if not chosen_membership:
+            chosen_membership = (
+                ClassMembership.query
+                .filter_by(student_id=student.id)
+                .order_by(ClassMembership.id.asc())
+                .first()
+            )
+
+        chosen_teacher_block = None
+        if target_join_code:
+            chosen_teacher_block = (
+                TeacherBlock.query
+                .filter_by(student_id=student.id, join_code=target_join_code)
+                .order_by(TeacherBlock.id.asc())
+                .first()
+            )
+        if not chosen_teacher_block:
+            chosen_teacher_block = (
+                TeacherBlock.query
+                .filter_by(student_id=student.id)
+                .order_by(TeacherBlock.id.asc())
+                .first()
+            )
+
+        resolved_join_code = (
+            target_join_code
+            or (chosen_membership.join_code if chosen_membership else None)
+            or (chosen_teacher_block.join_code if chosen_teacher_block else None)
+        )
+        resolved_class_id = (
+            target_class_id
+            or (chosen_teacher_block.class_id if chosen_teacher_block else None)
+        )
+        if not resolved_class_id and resolved_join_code:
+            class_anchor = ClassEconomy.query.filter_by(join_code=resolved_join_code).first()
+            if class_anchor:
+                resolved_class_id = class_anchor.class_id
+
+        if resolved_join_code:
+            seat = Seat(
+                user_id=linked_user.id,
+                student_id=student.id,
+                role='student',
+                class_id=resolved_class_id,
+                join_code=resolved_join_code,
+                block_identifier=(chosen_teacher_block.block if chosen_teacher_block else None),
+                block=(chosen_teacher_block.block if chosen_teacher_block else None),
+                claimed_at=(chosen_teacher_block.claimed_at if chosen_teacher_block else None),
+            )
+            db.session.add(seat)
+            db.session.flush()
+            created_identity_rows = True
+
+    if seat and linked_user and seat.user_id != linked_user.id:
+        seat.user_id = linked_user.id
+        created_identity_rows = True
+
+    if created_identity_rows:
+        db.session.commit()
+
     if seat:
         session['current_seat_id'] = seat.id
         session['current_class_id'] = seat.class_id
         session['current_join_code'] = seat.join_code
+        session['seat_id'] = seat.id
+        session['class_id'] = seat.class_id
         if seat.user_id:
             session['student_user_id'] = seat.user_id
     else:
@@ -341,6 +572,8 @@ def sync_student_session_context(student=None, *, class_id: str | None = None, s
         session.pop('student_user_id', None)
         session.pop('current_class_id', None)
         session.pop('current_join_code', None)
+        session.pop('seat_id', None)
+        session.pop('class_id', None)
 
     return seat
 
