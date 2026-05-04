@@ -68,6 +68,74 @@ Target state:
 
 ---
 
+## Authoritative Tracking Scope
+
+This file is the single active tracker for v2 migration execution. All prior tracking/checklist/matrix docs under `docs/development/tracking/` have been archived to `docs/development/archive/tracking/` and are informational history only.
+
+### Consolidated Open TODO Backlog
+
+#### Active execution waves
+- [ ] Complete Wave 3 identity migration sequence through remaining scoped domains
+- [ ] Complete Wave 4 class-configuration canonicalization and drop legacy settings columns
+- [ ] Complete Wave 5 ledger table migration and FEAT hook reassignment
+- [ ] Complete Wave 6 attendance table migration (`tap_events` lineage removal)
+- [ ] Complete Wave 7 obligations schema migration while preserving already-landed prepay/temporal behavior
+- [ ] Complete Wave 8 store schema migration and remove remaining teacher-scoped enforcement remnants
+- [ ] Complete Wave 9 operations + interpretation canonical migration
+- [ ] Complete Wave 10 support domain canonical migration
+
+#### Post-launch hardening and readiness
+- [ ] Wave 11 backup/restore rehearsal evidence
+- [ ] Wave 11 operator sign-off flow completion (`user_invite_tokens`)
+- [ ] Wave 11 system-admin compliance audit completion
+- [ ] Wave 11 admin route decomposition (`app/routes/admin.py`)
+- [ ] Wave 11 invariant sweeps complete (INV-ARC-007, INV-ARC-014, INV-ARC-015 full repo pass)
+- [ ] Wave 11 `V2_CLASS_ID_INVARIANT_BACKLOG` closure
+- [ ] Wave 12 final schema/code/test validation gate (exact 44 tables, zero v1 runtime artifacts, clean suite)
+
+#### Deferred-but-tracked architecture items
+- [ ] TemporalContext full architecture rebuild (`V2_Temporal_Architecture_Rebuild_Plan.md`)
+- [ ] Backwards compatibility cleanup execution (`V2_BACKWARDS_COMPATIBILITY_CLEANUP.md` scope, when explicitly re-opened)
+- [ ] Remaining docs-platform migration phases from `V2_DOCS_PLATFORM_SPLIT.md` (Phases 2–4)
+
+### Build Specs Index (Authoritative Specs in `docs/development/specs/`)
+
+- `V2_ADMIN_ROUTE_REFACTOR.md`
+- `V2_AUTHORITY_EXTRACTION_PLAN.md`
+- `V2_BANKING_LEDGER_SETTLEMENT_PLAN.md`
+- `V2_CAPABILITY-BASED_ARCHITECTURE_REBUILD.md`
+- `V2_CLASS_ID_INVARIANT_BACKLOG.md`
+- `V2_Class_Scope_Normalization_Target.md`
+- `V2_DOCS_PLATFORM_SPLIT.md`
+- `V2_SESSION_MUTATION_SAFETY.md`
+- `V2_STUDENT_BLOCKS_REDESIGN_NOTE.md`
+- `V2_STUDENT_IDENTITY_ARCHITECTURE.md`
+- `V2_TEACHER_IDENTITY_ARCHITECTURE.md`
+- `V2_Temporal_Architecture_Rebuild_Plan.md`
+- `V2_WAVE_3_IDENTITY_DOMAIN_RISK_AND_DEPENDENCY.md`
+
+---
+
+### Cross-Wave Status Update: Temporal + Obligations Hardening (Pre-Wave 7)
+
+Work completed ahead of formal Wave 7 (Obligations Domain) and Wave 11 (Temporal Audit):
+
+- Rent lifecycle fully implemented (prepay + coverage windows)
+- Scheduled rent execution with idempotency
+- Seat-scoped economic actor enforcement (`seat_id + class_id`)
+- Class-scoped temporal enforcement across attendance, analytics, and scheduler (INV-ARC-015)
+- Insurance waiting period aligned to class-local calendar semantics (next-day midnight start, N-day window)
+- Coverage start stored as UTC derived from class-local boundary
+- Temporal guardrails added (tests enforcing scoped time helpers)
+
+Interpretation:
+- This work is a partial early completion of Wave 7 (behavior) and Wave 11 (temporal invariants).
+- Subsequent waves MUST preserve these behaviors; only structural/schema migration is expected.
+
+---
+
+---
+
 ## Cross-Wave Protocol
 
 ### Verification Gate (required at end of every wave)
@@ -103,6 +171,88 @@ Each domain wave (3–10) follows this exact sequence:
 9. **Verification gate** — app operational, no regression
 
 ---
+## System Behavior Contracts (Locked)
+
+The following behaviors are considered **canonical and invariant**. These are not subject to redesign in later waves and must be preserved during all schema migrations.
+
+---
+
+### Rent (Obligations — Prepay Cycle Model)
+
+* Rent is a **prepay system**: payment grants coverage for a future cycle.
+* Coverage window is explicit and enforced as:
+
+  ```
+  coverage_start_time <= now < coverage_end_time
+  ```
+* Coverage windows are derived from **class-local cycle boundaries**, then stored in UTC.
+* Rent execution:
+
+  * Runs per `class_id`
+  * Uses deterministic cycle boundaries (`get_class_cycle_start_utc`)
+  * Enforces idempotency via `cycle_idempotency_key`
+* Economic actor is strictly `seat_id + class_id`
+
+---
+
+### Insurance (Calendar-Based Waiting Period Model)
+
+* Waiting period is **calendar-based**, not duration-based.
+* Defined as:
+
+  * Waiting starts at **00:00 of the next class-local day after purchase**
+  * Waiting spans N full calendar days
+  * Coverage becomes active at the next class-local midnight after waiting ends
+* All calculations:
+
+  * Performed in class-local time
+  * Converted to UTC only for storage
+* Eligibility evaluation is **event-time based**:
+
+  * Must evaluate coverage relative to transaction timestamp, not current time
+* No raw UTC-based waiting period logic is allowed
+
+---
+
+### Attendance (Session-Based Model)
+
+* Attendance is modeled as **sessions**, not individual events
+* All day boundaries are class-local:
+
+  * Derived using `get_class_today_range(class_id)`
+* No write operations are allowed during GET requests (INV-ARC-007)
+
+---
+
+### Ledger (Immutable Transaction Model)
+
+* All financial state is derived from `ledger_transaction`
+* Transactions are:
+
+  * Immutable
+  * FEAT-controlled
+  * Idempotent via `(class_id, seat_id, feat_code, idempotency_key)`
+* Balance is computed or snapshotted; never stored as authoritative mutable state
+
+---
+
+### Temporal Model (INV-ARC-015)
+
+* All timestamps are stored in UTC
+* All logic uses **class-local time** derived from `class_id`
+* Server/system time MUST NOT influence business logic
+* Day and cycle boundaries are always class-local and normalized
+
+---
+
+### Purpose of This Section
+
+This section defines **behavioral truth**, independent of schema implementation.
+
+* "What the system does" is fixed here
+* "How the system stores it" evolves across waves
+
+All future migration work must preserve these contracts.
 
 ## Wave 1 — Canonical Model Foundation
 
@@ -121,14 +271,14 @@ Each domain wave (3–10) follows this exact sequence:
    - Interpretation: `InterpretationSnapshot`, `InterpretationAnnotation`
    - Support: `Issue`, `IssueStatusHistory`, `IssueResolutionAction`, `TicketCorrelationPack`, `Announcement`, `IssueCategory`
 
-2. **`docs/development/tracking/V2_SCHEMA_GAP_AUDIT.md`** — for each of the 44 canonical tables: current table name (if any), columns to add, columns to drop, FK changes needed, and which wave ports it
+2. **`docs/development/archive/tracking/V2_SCHEMA_GAP_AUDIT.md`** — for each of the 44 canonical tables: current table name (if any), columns to add, columns to drop, FK changes needed, and which wave ports it
 
 3. **`tests/domain/`** directory with `tests/domain/test_smoke.py` (imports all 44 classes, no DB needed)
 
 ### Critical Files
 
 - `app/models_canonical.py` (create)
-- `docs/development/tracking/V2_SCHEMA_GAP_AUDIT.md` (create)
+- `docs/development/archive/tracking/V2_SCHEMA_GAP_AUDIT.md` (historical artifact)
 - `tests/domain/test_smoke.py` (create)
 
 ### Verification
@@ -261,6 +411,8 @@ Focused validation:
 - Result: `18 passed`
 
 ### Status Update (2026-05-04): Wave 3C.10-T/C Temporal Enforcement + Insurance Calendar Semantics
+
+> NOTE: This is cross-wave work (primarily Wave 7 + Wave 11) executed early. It is documented here for chronological accuracy but should be interpreted as part of obligations and temporal invariant completion.
 
 - Enforced temporal boundary discipline in critical execution paths:
   - attendance/day-boundary evaluation now class-scoped (`get_class_today_range`)
@@ -415,6 +567,21 @@ Focused validation:
 ---
 
 ## Wave 7 — Obligations Domain (DOM-OBL-001)
+
+### Pre-Implemented Behavior (from 3C.10-T/C)
+
+The following obligation behaviors are already implemented and MUST be preserved during this wave:
+
+- Rent operates on a prepay cycle model with explicit coverage windows (`coverage_start_time`, `coverage_end_time`)
+- Rent execution is class-scoped and scheduled with deterministic idempotency keys
+- Economic actor is strictly `seat_id + class_id`
+- Insurance waiting period is calendar-based using class-local midnight boundaries (not duration-based)
+- Coverage eligibility is evaluated against class-local time, not raw UTC
+- All temporal logic in obligations respects INV-ARC-015 (canonical class time)
+
+Constraint:
+- Wave 7 MUST NOT redesign or alter these behaviors.
+- Wave 7 is strictly responsible for migrating these behaviors into canonical obligation tables (`assessment_events`, `obligation_lifecycle`, `entitlement_events`, etc.)
 
 **Goal:** Port rent and insurance to the canonical obligation hierarchy. Drop all old obligation tables. This is the highest-complexity domain wave.
 
@@ -577,7 +744,7 @@ Focused validation:
 
 ## Wave 11 — Post-Launch Completion
 
-**Goal:** Complete all deferred post-launch items from V2_LAUNCH_READINESS_MATRIX.md plus structural cleanup.
+**Goal:** Complete all deferred post-launch items from `docs/development/archive/tracking/V2_LAUNCH_READINESS_MATRIX.md` plus structural cleanup.
 
 ### Deliverables
 
@@ -605,9 +772,15 @@ Focused validation:
 
 7. **INV-ARC-014 final sweep** — confirm zero label-based routing (`block`/`period`/`section` as control keys)
 
-8. **`V2_TEMPORAL_INVARIANT_AUDIT.md`** completed (INV-ARC-015 temporal correctness)
+8. **`docs/development/archive/tracking/V2_TEMPORAL_INVARIANT_AUDIT.md`** completion and verification
+   - INV-ARC-015 is substantially implemented as of 3C.10-T/C:
+     - class-local time enforcement complete in critical execution paths (attendance, scheduler, analytics, obligations)
+     - temporal guardrails present in test suite
+   - Remaining work:
+     - full-repo enforcement sweep (no unscoped temporal helpers)
+     - documentation formalization
 
-9. **`V2_CLASS_ID_INVARIANT_BACKLOG.md`** all items closed
+9. **`docs/development/specs/V2_CLASS_ID_INVARIANT_BACKLOG.md`** all items closed
 
 10. **TLCP (`app/services/tlcp.py`)** validated against canonical `ledger_transaction` table
 
@@ -623,6 +796,9 @@ Focused validation:
 ## Wave 12 — Final Validation
 
 **Goal:** Confirm the schema is exactly DOM-CORE-002, the codebase has zero v1 artifacts, and the test suite is clean.
+
+
+
 
 ### Deliverables
 
@@ -687,7 +863,8 @@ grep -r "\.student_id" app/routes/            # 0 results (outside identity_serv
 | Domain authority | `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-001_Domain_Authority_Summary.md` |
 | FEAT constitution | `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_Feature_Execution_Constitutional_Directive.md` |
 | Core invariants | `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_Core_Invariants.md` |
-| Launch readiness | `docs/development/tracking/V2_LAUNCH_READINESS_MATRIX.md` |
+| Archived tracker history | `docs/development/archive/tracking/` |
+| Active build specs | `docs/development/specs/` |
 | Migration template | `migrations/migration_template.py.mako` |
 | Migration linter | `scripts/lint_migrations.py` |
 | Current models | `app/models.py` (3261+ lines) |
