@@ -260,6 +260,30 @@ Focused validation:
 - `pytest -q tests/test_scheduled_tasks_rent_cycle.py tests/test_add_rent_waiver_route.py tests/test_redemption_audit_log.py tests/test_redemption_rejection.py tests/test_scheduled_tasks_store_item_cleanup.py`
 - Result: `18 passed`
 
+### Status Update (2026-05-04): Wave 3C.10-T/C Temporal Enforcement + Insurance Calendar Semantics
+
+- Enforced temporal boundary discipline in critical execution paths:
+  - attendance/day-boundary evaluation now class-scoped (`get_class_today_range`)
+  - student weekly/monthly windows now class-scoped (`get_class_week_range_utc`, `get_class_month_start_utc`)
+  - rent scheduler cycle boundary now class-aligned (`get_class_cycle_start_utc`)
+- Added temporal helper hardening in `app/utils/time.py`:
+  - `get_class_cycle_start_utc(...)`
+  - class-reference-aware `get_class_now(...)` / `get_class_today_range(...)`
+- Completed insurance temporal semantics alignment:
+  - waiting period is calendar-based in class-local time (not purchase timestamp + N*24h)
+  - waiting-start = next class-local midnight after purchase day
+  - coverage-start storage is derived from class-local boundary and converted to UTC
+  - eligibility checks use class-local temporal comparisons from `class_id` context
+- Corrected rent cycle month/year derivation:
+  - `period_month/year` and `coverage_month/year` now come from class-local cycle start, not raw UTC month/year
+
+Focused validation:
+
+- `pytest -q tests/test_time_money_guardrails.py tests/test_scheduled_tasks_rent_cycle.py tests/test_add_rent_waiver_route.py tests/test_redemption_audit_log.py tests/test_redemption_rejection.py tests/test_scheduled_tasks_store_item_cleanup.py`
+- Result: `22 passed`
+- `pytest -q tests/test_insurance_security.py tests/test_scheduled_tasks_rent_cycle.py tests/test_add_rent_waiver_route.py tests/test_redemption_audit_log.py tests/test_redemption_rejection.py tests/test_scheduled_tasks_store_item_cleanup.py`
+- Result: `24 passed`
+
 ---
 
 ## Wave 4 — Class Configuration Domain (DOM-CLASS-001)
