@@ -2352,7 +2352,11 @@ def _load_economy_rebalance_context(admin_id, selected_block):
 
     rent_settings = _resolve_rent_settings_for_block(admin_id, effective_block) if effective_block else None
 
-    insurance_policies_query = InsurancePolicy.query.filter_by(teacher_id=admin_id, is_active=True)
+    class_ids_query = db.session.query(ClassEconomy.class_id).filter_by(teacher_id=admin_id)
+    insurance_policies_query = InsurancePolicy.query.filter(
+        InsurancePolicy.class_id.in_(sa.select(class_ids_query.subquery())),
+        InsurancePolicy.is_active.is_(True),
+    )
     if effective_block:
         insurance_policies = [
             policy for policy in insurance_policies_query.all()
@@ -7205,6 +7209,7 @@ def insurance_management():
     teacher_blocks = [option['block'] for option in feature_options]
     settings_block = selected_scope['block']
     selected_join_code = selected_scope['join_code']
+    selected_class_id = selected_scope['class_id']
 
     # Get class labels for display
     class_labels_by_block = _get_class_labels_for_blocks(admin_id, teacher_blocks)
@@ -7212,8 +7217,6 @@ def insurance_management():
     # Populate blocks choices from teacher's students
     blocks = _get_teacher_blocks()
     form.blocks.choices = [(block, f"Period {block}") for block in blocks]
-
-    current_teacher_id = admin_id
 
     # CRITICAL: Filter policies by selected block for multi-tenancy
     # Policies are visible in a block if:
@@ -7223,7 +7226,7 @@ def insurance_management():
         # Get policies that are either specifically visible to this block or visible to all blocks
         existing_policies = (
             InsurancePolicy.query
-            .filter_by(teacher_id=current_teacher_id)
+            .filter_by(class_id=selected_class_id)
             .filter(
                 sa.or_(
                     InsurancePolicy.id.in_(
@@ -7237,7 +7240,7 @@ def insurance_management():
             .all()
         )
     else:
-        existing_policies = InsurancePolicy.query.filter_by(teacher_id=current_teacher_id).all()
+        existing_policies = InsurancePolicy.query.filter_by(class_id=selected_class_id).all()
 
     # Collect existing tier groups for the current teacher
     tier_groups_map = {}
@@ -7277,6 +7280,7 @@ def insurance_management():
         policy = InsurancePolicy(
             policy_code=policy_code,
             teacher_id=session.get('admin_id'),
+            class_id=selected_class_id,
             settings_mode=request.form.get('settings_mode', 'advanced'),
         )
         _populate_policy_from_form(policy, form, next_tier_category_id=tier_category_id)
@@ -7400,8 +7404,12 @@ def edit_insurance_policy(policy_id):
     """Edit existing insurance policy."""
     policy = db.get_or_404(InsurancePolicy, policy_id)
 
-    # Verify this policy belongs to the current teacher
-    if policy.teacher_id != session.get('admin_id'):
+    # Verify this policy belongs to a class currently owned by the current teacher.
+    class_owned = ClassEconomy.query.filter_by(
+        class_id=policy.class_id,
+        teacher_id=session.get('admin_id'),
+    ).first()
+    if not class_owned:
         abort(403)
 
     form = InsurancePolicyForm(obj=policy)
@@ -7414,7 +7422,7 @@ def edit_insurance_policy(policy_id):
     if request.method == 'GET':
         form.blocks.data = policy.blocks_list
 
-    teacher_policies = InsurancePolicy.query.filter_by(teacher_id=session.get('admin_id')).all()
+    teacher_policies = InsurancePolicy.query.filter_by(class_id=policy.class_id).all()
     tier_groups_map = {}
     for teacher_policy in teacher_policies:
         if teacher_policy.tier_category_id:
@@ -7446,6 +7454,7 @@ def edit_insurance_policy(policy_id):
     # Get other active policies for bundle selection (excluding current policy)
     available_policies = InsurancePolicy.query.filter(
         InsurancePolicy.is_active == True,
+        InsurancePolicy.class_id == policy.class_id,
         InsurancePolicy.id != policy_id
     ).all()
 
@@ -9832,12 +9841,13 @@ def export_students():
     # Prefetch active insurances to avoid N+1 queries
     active_insurances_map = {}
     if teacher_id and student_ids:
+        class_ids_subq = db.session.query(ClassEconomy.class_id).filter_by(teacher_id=teacher_id).subquery()
         scoped_insurances = StudentInsurance.query.join(
             InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id
         ).filter(
             StudentInsurance.student_id.in_(student_ids),
             StudentInsurance.status == 'active',
-            InsurancePolicy.teacher_id == teacher_id
+            InsurancePolicy.class_id.in_(sa.select(class_ids_subq)),
         )
         if selected_join_code:
             scoped_insurances = scoped_insurances.filter(StudentInsurance.join_code == selected_join_code)
@@ -11497,7 +11507,11 @@ def onboarding_status():
         data_completed['rent'] = rent_settings is not None
 
         # Insurance: has at least one insurance policy for ANY block OR marked complete
-        insurance_policies = InsurancePolicy.query.filter_by(teacher_id=admin_id).count()
+        insurance_policies = (
+            InsurancePolicy.query
+            .filter(InsurancePolicy.class_id.in_(sa.select(class_ids_subq)))
+            .count()
+        )
         data_completed['insurance'] = insurance_policies > 0
 
         # Hall pass: check if hall pass settings exist for ANY block OR marked complete

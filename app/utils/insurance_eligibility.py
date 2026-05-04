@@ -104,9 +104,10 @@ def _check_delay_use_rule(tx: Transaction, *, class_id: str, now_class: datetime
         # Preserve claimability for legacy/manual purchase descriptions.
         return None
 
-    item_query = StoreItem.query.filter(StoreItem.name == item_name)
-    if tx.teacher_id:
-        item_query = item_query.filter(StoreItem.teacher_id == tx.teacher_id)
+    item_query = StoreItem.query.filter(
+        StoreItem.name == item_name,
+        StoreItem.class_id == class_id,
+    )
     store_item = item_query.order_by(StoreItem.id.desc()).first()
     if not store_item:
         # Store item metadata may have changed; skip delay-use checks when unknown.
@@ -152,7 +153,7 @@ def _check_delay_use_rule(tx: Transaction, *, class_id: str, now_class: datetime
     return None
 
 
-def _is_rent_perk_or_privilege_purchase(tx: Transaction) -> bool:
+def _is_rent_perk_or_privilege_purchase(tx: Transaction, *, class_id: str) -> bool:
     if _normalize_tx_type(tx.type) != "purchase":
         return False
     if tx.amount is not None and tx.amount == 0:
@@ -164,9 +165,10 @@ def _is_rent_perk_or_privilege_purchase(tx: Transaction) -> bool:
     item_name = _extract_purchase_item_name(tx.description)
     if not item_name:
         return False
-    item_query = StoreItem.query.filter(StoreItem.name == item_name)
-    if tx.teacher_id:
-        item_query = item_query.filter(StoreItem.teacher_id == tx.teacher_id)
+    item_query = StoreItem.query.filter(
+        StoreItem.name == item_name,
+        StoreItem.class_id == class_id,
+    )
     store_item = item_query.order_by(StoreItem.id.desc()).first()
     if not store_item:
         return False
@@ -209,9 +211,6 @@ def evaluate_claim_transaction_eligibility(
     if _is_hard_deny(tx):
         return False, CLAIM_REASON_HARD_DENY_CATEGORY
 
-    if _is_rent_perk_or_privilege_purchase(tx):
-        return False, CLAIM_REASON_HARD_DENY_CATEGORY
-
     if _is_internal_transfer(tx):
         return False, CLAIM_REASON_INTERNAL_TRANSFER
 
@@ -225,6 +224,9 @@ def evaluate_claim_transaction_eligibility(
     class_id = getattr(enrollment, "class_id", None) or getattr(tx, "class_id", None)
     if not class_id:
         return False, CLAIM_REASON_UNCLASSIFIED_TRANSACTION
+
+    if _is_rent_perk_or_privilege_purchase(tx, class_id=class_id):
+        return False, CLAIM_REASON_HARD_DENY_CATEGORY
 
     purchase_utc = ensure_utc(getattr(enrollment, "purchase_date", None) or tx_ts)
     waiting_days = int(getattr(getattr(enrollment, "policy", None), "waiting_period_days", 0) or 0)

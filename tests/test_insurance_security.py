@@ -91,8 +91,9 @@ def _ensure_admin_class_scope(admin, student, join_code="JOIN-INS-SEC", block="A
         db.session.add(StudentTeacher(student_id=student.id, teacher_id=admin.id))
     if not db.session.query(InsurancePolicy.id).filter_by(teacher_id=admin.id).first():
         pass
-    create_class_scope(teacher=admin, join_code=join_code, student=student, block=block)
+    class_row = create_class_scope(teacher=admin, join_code=join_code, student=student, block=block)
     db.session.commit()
+    return class_row
 
 
 def test_duplicate_transaction_claim_blocked(client, test_student, admin_user):
@@ -102,7 +103,7 @@ def test_duplicate_transaction_claim_blocked(client, test_student, admin_user):
     st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
     db.session.add(st)
     db.session.commit()
-    _ensure_admin_class_scope(admin_user, test_student)
+    class_row = _ensure_admin_class_scope(admin_user, test_student)
 
     policy = _create_policy(admin_user.id)
     enrollment = _enroll_student(test_student.id, policy.id)
@@ -129,7 +130,7 @@ def test_voided_transaction_cannot_be_approved(client, test_student, admin_user)
     st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
     db.session.add(st)
     db.session.commit()
-    _ensure_admin_class_scope(admin_user, test_student)
+    class_row = _ensure_admin_class_scope(admin_user, test_student)
 
     policy = _create_policy(admin_user.id)
     enrollment = _enroll_student(test_student.id, policy.id)
@@ -163,7 +164,7 @@ def test_hard_deny_transaction_type_cannot_be_approved(client, test_student, adm
     st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
     db.session.add(st)
     db.session.commit()
-    _ensure_admin_class_scope(admin_user, test_student)
+    class_row = _ensure_admin_class_scope(admin_user, test_student)
 
     policy = _create_policy(admin_user.id)
     enrollment = _enroll_student(test_student.id, policy.id)
@@ -253,7 +254,7 @@ def test_pending_transaction_cannot_be_approved(client, test_student, admin_user
     st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
     db.session.add(st)
     db.session.commit()
-    _ensure_admin_class_scope(admin_user, test_student)
+    class_row = _ensure_admin_class_scope(admin_user, test_student)
 
     policy = _create_policy(admin_user.id)
     enrollment = _enroll_student(test_student.id, policy.id)
@@ -292,13 +293,14 @@ def test_rent_privilege_purchase_cannot_be_approved(client, test_student, admin_
     st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
     db.session.add(st)
     db.session.commit()
-    _ensure_admin_class_scope(admin_user, test_student)
+    class_row = _ensure_admin_class_scope(admin_user, test_student)
 
     policy = _create_policy(admin_user.id)
     enrollment = _enroll_student(test_student.id, policy.id)
 
     store_item = StoreItem(
         teacher_id=admin_user.id,
+        class_id=class_row.class_id,
         name="Desk Pass",
         price=5.0,
         item_type="delayed",
@@ -309,6 +311,7 @@ def test_rent_privilege_purchase_cannot_be_approved(client, test_student, admin_
 
     rent_settings = RentSettings(
         teacher_id=admin_user.id,
+        class_id=class_row.class_id,
         is_enabled=True,
         rent_amount=10.0,
     )
@@ -327,6 +330,8 @@ def test_rent_privilege_purchase_cannot_be_approved(client, test_student, admin_
     privilege_purchase = Transaction(
         student_id=test_student.id,
         teacher_id=admin_user.id,
+        class_id=class_row.class_id,
+        join_code=class_row.join_code,
         amount=-5.0,
         account_type="checking",
         status=TransactionStatus.POSTED,
