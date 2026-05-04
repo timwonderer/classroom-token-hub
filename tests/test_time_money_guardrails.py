@@ -71,3 +71,42 @@ def test_no_generic_float_zero_fallbacks_in_routes(app_python_sources):
             offenders.append(f"{path}:{idx}")
 
     assert not offenders, f"Use Decimal-safe defaults or explicit non-money justification: {offenders}"
+
+
+def test_no_unscoped_temporal_bounds_helpers(app_python_sources):
+    """
+    Enforce INV-ARC-015 call-site discipline.
+
+    day/week/month bounds helpers must be invoked with explicit class-temporal
+    scope (timezone_name or class_id).
+    """
+    call_pattern = re.compile(r"\b(day_bounds_utc|week_bounds_utc|month_bounds_utc)\((.*?)\)", re.DOTALL)
+    offenders = []
+
+    target_paths = {
+        "app/services/attendance_service.py",
+        "app/attendance.py",
+        "app/routes/student.py",
+        "app/scheduled_tasks.py",
+        "app/utils/insurance_eligibility.py",
+    }
+
+    for path, source in app_python_sources:
+        if path.endswith("app/utils/time.py"):
+            continue
+        if not any(path.endswith(target) for target in target_paths):
+            continue
+
+        for match in call_pattern.finditer(source):
+            helper = match.group(1)
+            args = match.group(2)
+            if "timezone_name=" in args or "class_id" in args:
+                continue
+            start_line = source.count("\n", 0, match.start()) + 1
+            offenders.append(f"{path}:{start_line}:{helper}")
+
+    assert not offenders, (
+        "Temporal bounds helpers must be class/timezone scoped "
+        "(pass timezone_name=... or class_id context): "
+        f"{offenders}"
+    )

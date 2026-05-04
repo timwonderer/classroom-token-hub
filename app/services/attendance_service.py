@@ -5,7 +5,7 @@ from sqlalchemy import func
 from app.models import HallPassLog, StudentTeacher, TapEvent, TeacherBlock
 from app.utils.attendance_helpers import get_join_code_for_student_period
 from app.utils.seat_scope import get_seat_ids_for_student_join, seat_scoped_filter
-from app.utils.time import day_bounds_utc, ensure_utc, normalize_for_db, utc_now
+from app.utils.time import ensure_utc, get_class_now, get_class_today_range, normalize_for_db
 
 
 def calculate_unpaid_attendance_seconds(seat_id: int, class_id: str, period: str, last_payroll_time):
@@ -33,7 +33,7 @@ def calculate_unpaid_attendance_seconds(seat_id: int, class_id: str, period: str
                 total_seconds += (event_time - in_time).total_seconds()
                 in_time = None
         if in_time:
-            total_seconds += (utc_now() - in_time).total_seconds()
+            total_seconds += (get_class_now(class_id) - in_time).total_seconds()
         return int(total_seconds)
 
     last_event_before_payroll = TapEvent.query.filter(
@@ -59,16 +59,12 @@ def calculate_unpaid_attendance_seconds(seat_id: int, class_id: str, period: str
             in_time = None
 
     if in_time:
-        total_seconds += (utc_now() - in_time).total_seconds()
+        total_seconds += (get_class_now(class_id) - in_time).total_seconds()
     return int(total_seconds)
 
 
 def get_all_block_statuses(student, join_code=None, payroll_anchor_by_join_code=None):
     """Return attendance facts only for the student's active blocks."""
-    today_start_utc, today_end_utc = day_bounds_utc()
-    today_start_db = normalize_for_db(today_start_utc)
-    today_end_db = normalize_for_db(today_end_utc)
-
     from app.utils.attendance_helpers import get_join_code_for_student_period
     from app.utils.seat_scope import get_seat_id_for_class
     from app.models import ClassEconomy
@@ -104,6 +100,10 @@ def get_all_block_statuses(student, join_code=None, payroll_anchor_by_join_code=
         
         if not seat_id:
             continue
+
+        today_start_utc, today_end_utc = get_class_today_range(class_id)
+        today_start_db = normalize_for_db(today_start_utc)
+        today_end_db = normalize_for_db(today_end_utc)
 
         latest_event = TapEvent.query.filter_by(
             seat_id=seat_id,

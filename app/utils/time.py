@@ -206,12 +206,13 @@ def get_class_timezone(class_id: str) -> str:
     return economy.class_timezone if economy else PACIFIC_FALLBACK_TIMEZONE
 
 
-def get_class_now(class_id: str) -> datetime:
+def get_class_now(class_id: str, reference_time_utc: datetime | None = None) -> datetime:
     """
     Get the current time in the class's authoritative timezone.
     """
     tz_name = get_class_timezone(class_id)
-    return utc_now().astimezone(get_timezone(tz_name))
+    reference_utc = ensure_utc(reference_time_utc) if reference_time_utc is not None else utc_now()
+    return reference_utc.astimezone(get_timezone(tz_name))
 
 
 def to_class_time(dt_utc: datetime, class_id: str) -> datetime:
@@ -231,9 +232,58 @@ def get_class_month_start_utc(class_id: str, reference_time: datetime | None = N
     return start_utc
 
 
-def get_class_today_range(class_id: str) -> tuple[datetime, datetime]:
+def get_class_today_range(class_id: str, reference_time_utc: datetime | None = None) -> tuple[datetime, datetime]:
     """
     Return the UTC [start, end) range for 'today' in class time.
     """
     tz_name = get_class_timezone(class_id)
-    return local_date_range_utc(class_date(timezone_name=tz_name), timezone_name=tz_name)
+    return local_date_range_utc(
+        class_date(timezone_name=tz_name, timestamp_utc=reference_time_utc),
+        timezone_name=tz_name,
+    )
+
+
+def get_class_week_range_utc(class_id: str, reference_time_utc: datetime | None = None) -> tuple[datetime, datetime]:
+    """
+    Return the UTC [start, end) range for the class-local week containing reference time.
+    """
+    tz_name = get_class_timezone(class_id)
+    local_now = get_class_now(class_id, reference_time_utc=reference_time_utc)
+    week_start = local_now.date() - timedelta(days=local_now.weekday())
+    start_utc, _ = local_date_range_utc(week_start, timezone_name=tz_name)
+    return start_utc, start_utc + timedelta(days=7)
+
+
+def get_class_cycle_start_utc(
+    class_id: str,
+    reference_time_utc: datetime,
+    *,
+    cycle_length_days: int,
+    effective_start_utc: datetime | None = None,
+) -> datetime:
+    """
+    Return deterministic class-aligned cycle start in UTC.
+
+    For monthly-equivalent cycles (30 days), aligns to class month boundary.
+    For other cycles, aligns relative to the class-local effective start.
+    """
+    reference_utc = ensure_utc(reference_time_utc) or utc_now()
+    normalized_cycle_days = max(1, int(cycle_length_days))
+
+    if normalized_cycle_days == 30:
+        return get_class_month_start_utc(class_id, reference_time=reference_utc)
+
+    tz_name = get_class_timezone(class_id)
+    tz = get_timezone(tz_name)
+    local_reference = reference_utc.astimezone(tz)
+
+    effective_utc = ensure_utc(effective_start_utc) if effective_start_utc is not None else reference_utc
+    local_effective = effective_utc.astimezone(tz)
+
+    if local_reference <= local_effective:
+        return local_effective.astimezone(timezone.utc)
+
+    elapsed_days = (local_reference.date() - local_effective.date()).days
+    cycle_index = elapsed_days // normalized_cycle_days
+    cycle_start_local = local_effective + timedelta(days=cycle_index * normalized_cycle_days)
+    return cycle_start_local.astimezone(timezone.utc)

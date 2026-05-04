@@ -7,7 +7,7 @@ from decimal import Decimal
 from app.extensions import db
 from app.feats.base import feat_shell
 from app.services import ledger_service, obligations_service
-from app.utils.time import ensure_utc, utc_now
+from app.utils.time import ensure_utc, to_class_time, utc_now
 
 
 @dataclass
@@ -32,6 +32,7 @@ def execute_scheduled_rent_charge(
     cycle_start = ensure_utc(execution_time) if execution_time else utc_now()
     cycle_length_days = int(getattr(settings, "cycle_length_days", 30) or 30)
     cycle_end = cycle_start + timedelta(days=cycle_length_days)
+    cycle_start_class = to_class_time(cycle_start, class_id)
 
     teacher_id = seat.class_economy.teacher_id if getattr(seat, "class_economy", None) else None
     amount = Decimal(str(settings.rent_amount or Decimal("0.00")))
@@ -54,10 +55,10 @@ def execute_scheduled_rent_charge(
         join_code=seat.join_code,
         period=period,
         amount_paid=amount,
-        period_month=cycle_start.month,
-        period_year=cycle_start.year,
-        coverage_month=cycle_start.month,
-        coverage_year=cycle_start.year,
+        period_month=cycle_start_class.month,
+        period_year=cycle_start_class.year,
+        coverage_month=cycle_start_class.month,
+        coverage_year=cycle_start_class.year,
         coverage_start_time=cycle_start,
         coverage_end_time=cycle_end,
         cycle_idempotency_key=idempotency_key,

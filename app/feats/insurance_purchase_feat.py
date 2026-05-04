@@ -7,6 +7,7 @@ from datetime import timedelta
 from app.extensions import db
 from app.services import ledger_service, obligations_service
 from app.utils.time import utc_now
+from app.utils.insurance_eligibility import compute_coverage_start_utc_from_purchase
 
 
 @dataclass
@@ -26,13 +27,20 @@ def execute_insurance_purchase(
     overdraft_shortfall: Decimal = Decimal("0.00"),
 ) -> InsurancePurchaseResult:
     """Obligations-led FEAT for insurance enrollment + premium debit."""
+    purchase_utc = utc_now()
+    coverage_start_utc = compute_coverage_start_utc_from_purchase(
+        purchase_utc=purchase_utc,
+        class_id=class_id,
+        waiting_period_days=policy.waiting_period_days,
+    )
+
     enrollment = obligations_service.record_insurance_enrollment(
         seat_id=seat.id,
         policy=policy,
         class_id=class_id,
-        purchase_date=utc_now(),
-        next_payment_due=utc_now() + timedelta(days=30),
-        coverage_start_date=utc_now() + timedelta(days=policy.waiting_period_days),
+        purchase_date=purchase_utc,
+        next_payment_due=purchase_utc + timedelta(days=30),
+        coverage_start_date=coverage_start_utc,
     )
 
     premium_tx = ledger_service.create_pending_transaction(

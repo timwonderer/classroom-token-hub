@@ -1,5 +1,13 @@
 from datetime import datetime, timezone, timedelta
-from app.utils.time import utc_now, ensure_utc, normalize_for_db, day_bounds_utc, class_date
+from app.utils.time import (
+    utc_now,
+    ensure_utc,
+    normalize_for_db,
+    class_date,
+    get_class_now,
+    get_class_today_range,
+    local_date_range_utc,
+)
 from sqlalchemy import func
 from flask import current_app
 from app.extensions import db
@@ -286,7 +294,19 @@ def get_session_status(student_id, period):
     from app.models import TapEvent
     from datetime import datetime, timezone
 
-    today_start_utc, today_end_utc = day_bounds_utc()
+    class_id = None
+    if join_code:
+        class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+        class_id = class_row.class_id if class_row else None
+
+    if class_id:
+        today_start_utc, today_end_utc = get_class_today_range(class_id)
+    else:
+        # Safe fallback for legacy rows without class context.
+        today_start_utc, today_end_utc = local_date_range_utc(
+            class_date(timezone_name="America/Los_Angeles"),
+            timezone_name="America/Los_Angeles",
+        )
     today_start_db = normalize_for_db(today_start_utc)
     today_end_db = normalize_for_db(today_end_utc)
     join_code = get_join_code_for_student_period(student_id, period)
@@ -518,8 +538,30 @@ def batch_auto_tapout_students(admin_id):
         return 0
 
     now_utc = utc_now()
-    start_of_day_utc, _ = day_bounds_utc(timestamp_utc=now_utc)
-    today_local = class_date(timestamp_utc=now_utc)
+    class_ids_by_join_code = {
+        row.join_code: row.class_id
+        for row in ClassEconomy.query.with_entities(ClassEconomy.join_code, ClassEconomy.class_id)
+        .filter(ClassEconomy.join_code.in_(admin_join_codes))
+        .all()
+    }
+    class_day_start_by_join_code = {}
+    class_today_by_join_code = {}
+    for join_code in admin_join_codes:
+        class_id = class_ids_by_join_code.get(join_code)
+        if not class_id:
+            continue
+        day_start_utc, _ = get_class_today_range(class_id, reference_time_utc=now_utc)
+        class_day_start_by_join_code[join_code] = day_start_utc
+        class_today_by_join_code[join_code] = get_class_now(class_id, reference_time_utc=now_utc).date()
+
+    if class_day_start_by_join_code:
+        start_of_day_utc = min(class_day_start_by_join_code.values())
+    else:
+        start_of_day_utc, _ = local_date_range_utc(
+            class_date(timezone_name="America/Los_Angeles", timestamp_utc=now_utc),
+            timezone_name="America/Los_Angeles",
+        )
+    default_today_local = class_date(timestamp_utc=now_utc)
 
     # 3. Batch fetch events for today, scoped to this admin's join codes only.
     # events_map: (student_id, period, join_code) -> list[TapEvent]
@@ -615,7 +657,7 @@ def batch_auto_tapout_students(admin_id):
                         )
                         db.session.add(sb)
                         student_blocks_lookup[(student.id, period)] = sb
-                    sb.done_for_day_date = today_local
+                    sb.done_for_day_date = class_today_by_join_code.get(join_code, default_today_local)
 
     if tapped_out_count > 0:
         try:

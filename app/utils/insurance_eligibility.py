@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from typing import Optional, Set, Tuple
 
 from sqlalchemy import and_
 
 from app.models import InsuranceClaim, RentItem, StoreItem, StudentItem, Transaction, TransactionStatus
-from app.utils.time import ensure_utc
+from app.utils.time import ensure_utc, get_class_now, to_class_time
 
 
 CLAIM_REASON_HARD_DENY_CATEGORY = "HARD_DENY_CATEGORY"
@@ -27,6 +27,41 @@ CLAIM_REASON_UNCLASSIFIED_TRANSACTION = "UNCLASSIFIED_TRANSACTION"
 _PURCHASE_NAME_RE = re.compile(r"^Purchase:\s*(.+?)(?:\s+\(x\d+\)|\s+\[|$)")
 _TRANSFER_TYPES = {"withdrawal", "deposit"}
 _HARD_DENY_TYPES = {"rent payment", "insurance_premium", "insurance_reimbursement"}
+
+
+def _compute_waiting_end_class(
+    *,
+    purchase_utc: datetime,
+    class_id: str,
+    waiting_period_days: int,
+) -> datetime:
+    """
+    Calendar-based waiting end in class-local time.
+
+    Purchase day is excluded; waiting starts at next class-local midnight.
+    """
+    purchase_class = to_class_time(purchase_utc, class_id)
+    tz = purchase_class.tzinfo
+    next_day = purchase_class.date() + timedelta(days=1)
+    waiting_start_class = datetime.combine(next_day, time.min).replace(tzinfo=tz)
+    return waiting_start_class + timedelta(days=max(0, int(waiting_period_days or 0)))
+
+
+def compute_coverage_start_utc_from_purchase(
+    *,
+    purchase_utc: datetime,
+    class_id: str,
+    waiting_period_days: int,
+) -> datetime:
+    """
+    Convert class-local calendar waiting boundary into UTC for storage.
+    """
+    waiting_end_class = _compute_waiting_end_class(
+        purchase_utc=ensure_utc(purchase_utc),
+        class_id=class_id,
+        waiting_period_days=waiting_period_days,
+    )
+    return ensure_utc(waiting_end_class)
 
 
 def _normalize_tx_type(tx_type: Optional[str]) -> str:
@@ -60,7 +95,7 @@ def _extract_purchase_item_name(description: Optional[str]) -> Optional[str]:
     return match.group(1).strip() or None
 
 
-def _check_delay_use_rule(tx: Transaction, now_utc: datetime) -> Optional[str]:
+def _check_delay_use_rule(tx: Transaction, *, class_id: str, now_class: datetime) -> Optional[str]:
     if _normalize_tx_type(tx.type) != "purchase":
         return None
 
@@ -112,7 +147,7 @@ def _check_delay_use_rule(tx: Transaction, now_utc: datetime) -> Optional[str]:
     expiry_at = ensure_utc(item_row.expiry_date) if item_row.expiry_date else None
     if expiry_at and used_at > expiry_at:
         return CLAIM_REASON_DELAY_USE_EXPIRED
-    if expiry_at and not used_at and now_utc > expiry_at:
+    if expiry_at and not used_at and now_class > to_class_time(expiry_at, class_id):
         return CLAIM_REASON_DELAY_USE_EXPIRED
     return None
 
@@ -183,18 +218,33 @@ def evaluate_claim_transaction_eligibility(
     if not enrollment.payment_current:
         return False, CLAIM_REASON_PREMIUM_NOT_CURRENT
 
-    coverage_start = ensure_utc(enrollment.coverage_start_date) if enrollment.coverage_start_date else None
-    if not coverage_start or coverage_start > now_utc:
-        return False, CLAIM_REASON_WAITING_PERIOD
-    if tx.timestamp and ensure_utc(tx.timestamp) < coverage_start:
-        return False, CLAIM_REASON_WAITING_PERIOD
-
     tx_ts = ensure_utc(tx.timestamp) if tx.timestamp else None
     if tx_ts is None:
         return False, CLAIM_REASON_UNCLASSIFIED_TRANSACTION
+
+    class_id = getattr(enrollment, "class_id", None) or getattr(tx, "class_id", None)
+    if not class_id:
+        return False, CLAIM_REASON_UNCLASSIFIED_TRANSACTION
+
+    purchase_utc = ensure_utc(getattr(enrollment, "purchase_date", None) or tx_ts)
+    waiting_days = int(getattr(getattr(enrollment, "policy", None), "waiting_period_days", 0) or 0)
+    waiting_end_class = _compute_waiting_end_class(
+        purchase_utc=purchase_utc,
+        class_id=class_id,
+        waiting_period_days=waiting_days,
+    )
+
+    now_class = get_class_now(class_id, reference_time_utc=now_utc)
+    if now_class < waiting_end_class:
+        return False, CLAIM_REASON_WAITING_PERIOD
+
+    tx_ts_class = to_class_time(tx_ts, class_id)
+    if tx_ts_class < waiting_end_class:
+        return False, CLAIM_REASON_WAITING_PERIOD
+
     effective_time_limit = int(claim_time_limit_days) if claim_time_limit_days is not None else None
     if effective_time_limit is not None and effective_time_limit > 0:
-        if (now_utc - tx_ts).days > effective_time_limit:
+        if (now_class.date() - tx_ts_class.date()).days > effective_time_limit:
             return False, CLAIM_REASON_TIME_LIMIT_EXCEEDED
 
     if enrollment_join_code and tx.join_code != enrollment_join_code:
@@ -221,7 +271,7 @@ def evaluate_claim_transaction_eligibility(
     elif tx.id in reimbursed_tx_ids:
         return False, CLAIM_REASON_REIMBURSEMENT_ALREADY_EXISTS
 
-    delay_reason = _check_delay_use_rule(tx, now_utc)
+    delay_reason = _check_delay_use_rule(tx, class_id=class_id, now_class=now_class)
     if delay_reason:
         return False, delay_reason
 

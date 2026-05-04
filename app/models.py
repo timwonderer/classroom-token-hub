@@ -1983,15 +1983,25 @@ class StudentInsurance(db.Model):
 
     def build_renewed_enrollment(self, policy):
         """Create a new enrollment row with a fresh snapshot for the next coverage period."""
+        from app.utils.insurance_eligibility import compute_coverage_start_utc_from_purchase
+
+        purchase_utc = utc_now()
+        coverage_start_utc = compute_coverage_start_utc_from_purchase(
+            purchase_utc=purchase_utc,
+            class_id=self.class_id,
+            waiting_period_days=policy.waiting_period_days,
+        )
         renewal = StudentInsurance(
             student_id=self.student_id,
+            seat_id=self.seat_id,
+            class_id=self.class_id,
             policy_id=policy.id,
             join_code=self.join_code,
             status='active',
-            purchase_date=utc_now(),
-            last_payment_date=utc_now(),
-            next_payment_due=utc_now() + timedelta(days=30),
-            coverage_start_date=utc_now() + timedelta(days=policy.waiting_period_days),
+            purchase_date=purchase_utc,
+            last_payment_date=purchase_utc,
+            next_payment_due=purchase_utc + timedelta(days=30),
+            coverage_start_date=coverage_start_utc,
             payment_current=True,
             days_unpaid=0,
         )

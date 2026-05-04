@@ -6,7 +6,7 @@ Contains periodic tasks that run in the background to maintain system state.
 
 import logging
 from datetime import datetime, timezone, timedelta
-from app.utils.time import utc_now
+from app.utils.time import get_class_cycle_start_utc, utc_now
 
 
 def enforce_daily_limits_job():
@@ -176,22 +176,6 @@ def _derive_cycle_length_days(settings) -> int:
     return 30
 
 
-def _normalize_cycle_start(execution_time, rent_effective_at, cycle_length_days: int):
-    """
-    Normalize execution time to the deterministic class cycle boundary.
-
-    This guarantees one idempotency key and one coverage window per cycle
-    even if scheduler invocations drift within the same cycle.
-    """
-    if execution_time <= rent_effective_at:
-        return rent_effective_at
-
-    cycle_seconds = max(1, int(cycle_length_days)) * 86400
-    elapsed_seconds = (execution_time - rent_effective_at).total_seconds()
-    cycle_index = int(elapsed_seconds // cycle_seconds)
-    return rent_effective_at + timedelta(seconds=cycle_index * cycle_seconds)
-
-
 def run_rent_cycle_for_class(class_id: str, execution_time):
     """
     Execute one rent cycle for one class.
@@ -225,8 +209,13 @@ def run_rent_cycle_for_class(class_id: str, execution_time):
     if execution_time < rent_effective_at:
         return {"status": "skipped", "reason": "before_effective_at", "class_id": class_id}
 
-    # Freeze cycle boundary for the full class execution.
-    cycle_start = _normalize_cycle_start(execution_time, rent_effective_at, cycle_length_days)
+    # Freeze deterministic class-local cycle boundary for the full execution.
+    cycle_start = get_class_cycle_start_utc(
+        class_id,
+        execution_time,
+        cycle_length_days=cycle_length_days,
+        effective_start_utc=rent_effective_at,
+    )
 
     claimed_seats = Seat.query.filter(
         Seat.class_id == class_id,

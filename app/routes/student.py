@@ -82,8 +82,9 @@ from app.utils.time import (
     get_timezone,
     class_date,
     claim_period_bounds_utc,
-    month_bounds_utc,
-    week_bounds_utc,
+    get_class_month_start_utc,
+    get_class_week_range_utc,
+    get_class_now,
 )
 from app.utils.seat_scope import get_seat_id_for_class, transaction_scope_filter, seat_scoped_filter
 from app.utils.insurance_eligibility import (
@@ -1336,8 +1337,19 @@ def dashboard():
     # --- Calculate weekly/monthly analytics ---
     from app.models import TapEvent
     now_utc = utc_now()
-    week_start, week_end = week_bounds_utc(reference_time=now_utc)
-    month_start, _ = month_bounds_utc(reference_time=now_utc)
+    if class_id:
+        class_now_utc = get_class_now(class_id, reference_time_utc=now_utc).astimezone(timezone.utc)
+        week_start, week_end = get_class_week_range_utc(class_id, reference_time_utc=class_now_utc)
+        month_start = get_class_month_start_utc(class_id, reference_time=class_now_utc)
+    else:
+        week_start, week_end = get_class_week_range_utc(
+            context.get('class_id'),
+            reference_time_utc=now_utc,
+        ) if context.get('class_id') else (now_utc, now_utc + timedelta(days=7))
+        month_start = get_class_month_start_utc(
+            context.get('class_id'),
+            reference_time=now_utc,
+        ) if context.get('class_id') else now_utc
 
 
 
