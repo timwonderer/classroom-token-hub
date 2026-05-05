@@ -148,6 +148,7 @@ from app.services.ledger_service import get_available_balances
 from app.utils.insurance_eligibility import (
     collect_reimbursed_source_tx_ids,
     evaluate_claim_transaction_eligibility,
+    resolve_claim_type,
     CLAIM_REASON_ALREADY_CLAIMED,
     CLAIM_REASON_DELAY_USE_EXPIRED,
     CLAIM_REASON_DELAY_USE_NOT_USED,
@@ -7676,10 +7677,9 @@ def process_claim(claim_id):
 
     form = AdminClaimProcessForm(obj=claim)
 
-    claim_type = (
-        'transaction_monetary'
-        if claim.transaction_id
-        else ('non_monetary' if claim.claim_item else 'legacy_monetary')
+    claim_type = resolve_claim_type(
+        claim=claim,
+        policy_claim_type=getattr(enrollment.policy, "claim_type", None),
     )
     max_claim_amount = enrollment.contract_max_claim_amount
     max_payout_per_period = enrollment.contract_max_payout_per_period

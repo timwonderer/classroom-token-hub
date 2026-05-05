@@ -90,6 +90,7 @@ from app.utils.seat_scope import get_seat_id_for_class, transaction_scope_filter
 from app.utils.insurance_eligibility import (
     evaluate_claim_transaction_eligibility,
     collect_reimbursed_source_tx_ids,
+    resolve_claim_type,
 )
 from app.utils.display_name_session import (
     get_teacher_display_name_cache,
@@ -2081,7 +2082,7 @@ def file_claim(policy_id):
         return redirect(url_for('student.student_insurance'))
 
     policy = enrollment.policy
-    claim_type = policy.claim_type
+    claim_type = resolve_claim_type(policy_claim_type=policy.claim_type)
     max_claim_amount = enrollment.contract_max_claim_amount
     max_payout_per_period = enrollment.contract_max_payout_per_period
     max_claims_count = enrollment.contract_max_claims_count

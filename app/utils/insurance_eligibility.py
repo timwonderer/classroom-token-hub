@@ -11,6 +11,9 @@ from sqlalchemy import and_
 from app.models import InsuranceClaim, RentItem, StoreItem, StudentItem, Transaction, TransactionStatus
 from app.utils.time import ensure_utc, get_class_now, to_class_time
 
+CLAIM_TYPE_TRANSACTION_MONETARY = "transaction_monetary"
+CLAIM_TYPE_NON_MONETARY = "non_monetary"
+CLAIM_TYPE_LEGACY_MONETARY = "legacy_monetary"
 
 CLAIM_REASON_HARD_DENY_CATEGORY = "HARD_DENY_CATEGORY"
 CLAIM_REASON_INTERNAL_TRANSFER = "INTERNAL_TRANSFER"
@@ -193,7 +196,7 @@ def evaluate_claim_transaction_eligibility(
     if not tx or tx.id is None:
         return False, CLAIM_REASON_UNCLASSIFIED_TRANSACTION
 
-    if claim_type != "transaction_monetary":
+    if claim_type != CLAIM_TYPE_TRANSACTION_MONETARY:
         return False, CLAIM_REASON_UNCLASSIFIED_TRANSACTION
 
     if not enrollment or enrollment.status != "active":
@@ -228,21 +231,31 @@ def evaluate_claim_transaction_eligibility(
     if _is_rent_perk_or_privilege_purchase(tx, class_id=class_id):
         return False, CLAIM_REASON_HARD_DENY_CATEGORY
 
-    purchase_utc = ensure_utc(getattr(enrollment, "purchase_date", None) or tx_ts)
-    waiting_days = int(getattr(getattr(enrollment, "policy", None), "waiting_period_days", 0) or 0)
-    waiting_end_class = _compute_waiting_end_class(
-        purchase_utc=purchase_utc,
-        class_id=class_id,
-        waiting_period_days=waiting_days,
-    )
-
     now_class = get_class_now(class_id, reference_time_utc=now_utc)
-    if now_class < waiting_end_class:
-        return False, CLAIM_REASON_WAITING_PERIOD
 
     tx_ts_class = to_class_time(tx_ts, class_id)
-    if tx_ts_class < waiting_end_class:
-        return False, CLAIM_REASON_WAITING_PERIOD
+
+    # Canonical waiting-period anchor is the enrollment coverage window.
+    # Fallback to computed waiting boundary only when coverage_start_date is absent.
+    coverage_start_utc = ensure_utc(getattr(enrollment, "coverage_start_date", None))
+    if coverage_start_utc is not None:
+        coverage_start_class = to_class_time(coverage_start_utc, class_id)
+        if now_class < coverage_start_class or tx_ts_class < coverage_start_class:
+            return False, CLAIM_REASON_WAITING_PERIOD
+    else:
+        purchase_utc = ensure_utc(getattr(enrollment, "purchase_date", None) or tx_ts)
+        waiting_days = int(
+            getattr(enrollment, "contract_waiting_period_days", None)
+            or getattr(getattr(enrollment, "policy", None), "waiting_period_days", 0)
+            or 0
+        )
+        waiting_end_class = _compute_waiting_end_class(
+            purchase_utc=purchase_utc,
+            class_id=class_id,
+            waiting_period_days=waiting_days,
+        )
+        if now_class < waiting_end_class or tx_ts_class < waiting_end_class:
+            return False, CLAIM_REASON_WAITING_PERIOD
 
     effective_time_limit = int(claim_time_limit_days) if claim_time_limit_days is not None else None
     if effective_time_limit is not None and effective_time_limit > 0:
@@ -292,3 +305,20 @@ def collect_reimbursed_source_tx_ids(policy_id: int) -> Set[int]:
         .all()
     )
     return {row[0] for row in rows if row[0] is not None}
+
+
+def resolve_claim_type(*, claim=None, policy_claim_type: Optional[str] = None) -> str:
+    """Canonical claim type resolution used across admin/student claim flows."""
+    if policy_claim_type in {
+        CLAIM_TYPE_TRANSACTION_MONETARY,
+        CLAIM_TYPE_NON_MONETARY,
+        CLAIM_TYPE_LEGACY_MONETARY,
+    }:
+        return policy_claim_type
+    if claim is None:
+        return CLAIM_TYPE_LEGACY_MONETARY
+    if getattr(claim, "transaction_id", None):
+        return CLAIM_TYPE_TRANSACTION_MONETARY
+    if getattr(claim, "claim_item", None):
+        return CLAIM_TYPE_NON_MONETARY
+    return CLAIM_TYPE_LEGACY_MONETARY
