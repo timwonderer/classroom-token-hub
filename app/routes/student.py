@@ -88,6 +88,7 @@ from app.utils.time import (
 )
 from app.utils.seat_scope import get_seat_id_for_class, transaction_scope_filter, seat_scoped_filter
 from app.utils.insurance_eligibility import (
+    compute_waiting_end_class_for_enrollment,
     evaluate_claim_transaction_eligibility,
     collect_reimbursed_source_tx_ids,
     resolve_claim_type,
@@ -2100,9 +2101,24 @@ def file_claim(policy_id):
     enrollment.cancel_date = ensure_utc(enrollment.cancel_date)
     now_utc = utc_now()
 
+    waiting_end_class = compute_waiting_end_class_for_enrollment(
+        enrollment,
+        fallback_purchase_utc=now_utc,
+    )
+    coverage_not_started = False
+    if waiting_end_class is not None and enrollment.class_id:
+        now_class = get_class_now(enrollment.class_id, reference_time_utc=now_utc)
+        coverage_not_started = now_class < waiting_end_class
+    elif not enrollment.coverage_start_date or enrollment.coverage_start_date > now_utc:
+        coverage_not_started = True
+
     # Check if coverage has started
-    if not enrollment.coverage_start_date or enrollment.coverage_start_date > now_utc:
-        wait_until = enrollment.coverage_start_date.strftime('%B %d, %Y') if enrollment.coverage_start_date else 'coverage starts'
+    if coverage_not_started:
+        wait_until = (
+            waiting_end_class.strftime('%B %d, %Y')
+            if waiting_end_class is not None
+            else enrollment.coverage_start_date.strftime('%B %d, %Y') if enrollment.coverage_start_date else 'coverage starts'
+        )
         errors.append(f"Coverage has not started yet. Please wait until {wait_until}.")
 
     # Check if payment is current

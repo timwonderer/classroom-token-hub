@@ -94,8 +94,8 @@ def test_admin_claim_approval_uses_frozen_claim_cap(client, test_student):
         policy_id=policy.id,
         status="active",
         join_code="JOIN-SNAP-1",
-        purchase_date=datetime.now(timezone.utc),
-        coverage_start_date=datetime.now(timezone.utc) - timedelta(days=2),
+        purchase_date=datetime.now(timezone.utc) - timedelta(days=10),
+        coverage_start_date=datetime.now(timezone.utc) - timedelta(days=9),
         payment_current=True,
     )
     enrollment.freeze_policy_snapshot(policy)
@@ -110,8 +110,8 @@ def test_admin_claim_approval_uses_frozen_claim_cap(client, test_student):
         amount=Decimal("-50.00"),
         account_type="checking",
         status=TransactionStatus.POSTED,
-        type="purchase",
-        description="Purchase: Lost calculator",
+        type="fine",
+        description="Fine: Lost calculator",
     )
     db.session.add(tx)
     db.session.flush()

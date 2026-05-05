@@ -32,6 +32,7 @@ from app.utils.time import (
     claim_period_bounds_utc,
     class_date,
     day_bounds_utc,
+    get_class_now,
     get_timezone,
 )
 from decimal import Decimal, InvalidOperation
@@ -147,6 +148,7 @@ from app.services import access_policy_service, ledger_service
 from app.services.ledger_service import get_available_balances
 from app.utils.insurance_eligibility import (
     collect_reimbursed_source_tx_ids,
+    compute_waiting_end_class_for_enrollment,
     evaluate_claim_transaction_eligibility,
     resolve_claim_type,
     CLAIM_REASON_ALREADY_CLAIMED,
@@ -7699,12 +7701,18 @@ def process_claim(claim_id):
     # Validate claim
     validation_errors = []
 
-    # Check if coverage has started (past waiting period)
-    # Ensure timezone-aware comparison
-    coverage_start = ensure_utc(enrollment.coverage_start_date)
-
-    if not coverage_start or coverage_start > utc_now():
-        validation_errors.append("Coverage has not started yet (still in waiting period)")
+    # Canonical waiting-period gate:
+    # 00:00 next class-local day after purchase through 00:00 after day N.
+    now_utc = utc_now()
+    waiting_end_class = compute_waiting_end_class_for_enrollment(
+        enrollment,
+        fallback_purchase_utc=claim.transaction.timestamp if claim.transaction else claim.incident_date,
+        fallback_class_id=getattr(claim.transaction, "class_id", None),
+    )
+    if waiting_end_class is not None and enrollment.class_id:
+        now_class = get_class_now(enrollment.class_id, reference_time_utc=now_utc)
+        if now_class < waiting_end_class:
+            validation_errors.append("Coverage has not started yet (still in waiting period)")
 
     # Check if payment is current
     if not enrollment.payment_current:
@@ -7760,7 +7768,7 @@ def process_claim(claim_id):
         transaction_eligible, reason_code = evaluate_claim_transaction_eligibility(
             claim.transaction,
             enrollment=enrollment,
-            now_utc=utc_now(),
+            now_utc=now_utc,
             claim_type=claim_type,
             claim_time_limit_days=claim_time_limit_days,
             policy_id=claim.policy_id,
@@ -7773,7 +7781,7 @@ def process_claim(claim_id):
 
     incident_reference = claim.transaction.timestamp if claim_type == 'transaction_monetary' and claim.transaction else claim.incident_date
     incident_reference = ensure_utc(incident_reference)
-    days_since_incident = (utc_now() - incident_reference).days if incident_reference else 0
+    days_since_incident = (now_utc - incident_reference).days if incident_reference else 0
     if claim_time_limit_days is not None and days_since_incident > claim_time_limit_days:
         validation_errors.append(f"Claim filed too late ({days_since_incident} days after incident, limit is {claim_time_limit_days} days)")
 

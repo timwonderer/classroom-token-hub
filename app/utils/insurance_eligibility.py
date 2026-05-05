@@ -67,6 +67,40 @@ def compute_coverage_start_utc_from_purchase(
     return ensure_utc(waiting_end_class)
 
 
+def compute_waiting_end_class_for_enrollment(
+    enrollment,
+    *,
+    fallback_purchase_utc: Optional[datetime] = None,
+    fallback_class_id: Optional[str] = None,
+) -> Optional[datetime]:
+    """
+    Canonical waiting-window boundary for an enrollment:
+    00:00 next class-local day after purchase through 00:00 after day N.
+    """
+    class_id = (
+        getattr(enrollment, "class_id", None)
+        or fallback_class_id
+        or getattr(getattr(enrollment, "policy", None), "class_id", None)
+    )
+    if not class_id:
+        return None
+
+    purchase_utc = ensure_utc(getattr(enrollment, "purchase_date", None) or fallback_purchase_utc)
+    if purchase_utc is None:
+        return None
+
+    waiting_days = int(
+        getattr(enrollment, "contract_waiting_period_days", None)
+        or getattr(getattr(enrollment, "policy", None), "waiting_period_days", 0)
+        or 0
+    )
+    return _compute_waiting_end_class(
+        purchase_utc=purchase_utc,
+        class_id=class_id,
+        waiting_period_days=waiting_days,
+    )
+
+
 def _normalize_tx_type(tx_type: Optional[str]) -> str:
     return (tx_type or "").strip().lower()
 
@@ -237,25 +271,13 @@ def evaluate_claim_transaction_eligibility(
 
     # Canonical waiting-period anchor is the enrollment coverage window.
     # Fallback to computed waiting boundary only when coverage_start_date is absent.
-    coverage_start_utc = ensure_utc(getattr(enrollment, "coverage_start_date", None))
-    if coverage_start_utc is not None:
-        coverage_start_class = to_class_time(coverage_start_utc, class_id)
-        if now_class < coverage_start_class or tx_ts_class < coverage_start_class:
-            return False, CLAIM_REASON_WAITING_PERIOD
-    else:
-        purchase_utc = ensure_utc(getattr(enrollment, "purchase_date", None) or tx_ts)
-        waiting_days = int(
-            getattr(enrollment, "contract_waiting_period_days", None)
-            or getattr(getattr(enrollment, "policy", None), "waiting_period_days", 0)
-            or 0
-        )
-        waiting_end_class = _compute_waiting_end_class(
-            purchase_utc=purchase_utc,
-            class_id=class_id,
-            waiting_period_days=waiting_days,
-        )
-        if now_class < waiting_end_class or tx_ts_class < waiting_end_class:
-            return False, CLAIM_REASON_WAITING_PERIOD
+    waiting_end_class = compute_waiting_end_class_for_enrollment(
+        enrollment,
+        fallback_purchase_utc=tx_ts,
+        fallback_class_id=class_id,
+    )
+    if waiting_end_class is not None and (now_class < waiting_end_class or tx_ts_class < waiting_end_class):
+        return False, CLAIM_REASON_WAITING_PERIOD
 
     effective_time_limit = int(claim_time_limit_days) if claim_time_limit_days is not None else None
     if effective_time_limit is not None and effective_time_limit > 0:
