@@ -4,6 +4,7 @@ import pytest
 from app.models import Admin, Student, StudentTeacher, TeacherBlock, RentSettings, TeacherOnboarding, InsurancePolicy
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
+from tests.helpers.class_scope import create_class_scope
 import os
 
 def test_admin_dashboard_rendering(client):
@@ -46,9 +47,14 @@ def test_insurance_upgrade_prompt_for_legacy_policies(client):
     )
     db.session.add(onboarding)
 
+    class_row = create_class_scope(teacher=admin, join_code="LEGACY-INS-1", student=None, block="A", create_student_membership=False, create_seat=False)
+    db.session.flush()
+
     policy = InsurancePolicy(
         policy_code="LEGACY001",
         teacher_id=admin.id,
+        class_id=class_row.class_id,
+        join_code=class_row.join_code,
         title="Legacy Plan",
         description="Old structure",
         premium=5.0,

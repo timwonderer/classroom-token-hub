@@ -461,18 +461,26 @@ class Student(db.Model):
         total = sum((_quantize_currency(tx.amount) for tx in self.transactions if tx.account_type == 'savings' and not tx.is_void), Decimal('0.00'))
         return _quantize_currency(total)
 
-    def get_active_insurance(self, teacher_id):
-        """Return the active insurance enrollment scoped to a teacher, if any."""
-        if not teacher_id:
-            return None
+    def get_active_insurance(self, teacher_id=None, class_id=None):
+        """
+        Return the active insurance enrollment for this student.
 
-        return StudentInsurance.query.join(
+        Resolution order:
+        1) class-scoped (`class_id`) when available (canonical)
+        2) teacher-scoped fallback for legacy callers
+        """
+        query = StudentInsurance.query.join(
             InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id
         ).filter(
             StudentInsurance.student_id == self.id,
             StudentInsurance.status == 'active',
-            InsurancePolicy.teacher_id == teacher_id
-        ).first()
+        )
+
+        if class_id:
+            return query.filter(InsurancePolicy.class_id == class_id).first()
+        if teacher_id:
+            return query.filter(InsurancePolicy.teacher_id == teacher_id).first()
+        return None
 
     def get_checking_balance(self, class_id: str | None = None, seat_id: int | None = None, **kwargs):
         """Authoritative checking balance lookup via ledger service."""

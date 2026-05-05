@@ -1206,9 +1206,12 @@ def _delete_teacher_rent_rows(teacher_id):
 
 
 def _delete_teacher_insurance_rows(teacher_id):
-    """Delete teacher-owned insurance policies and dependent rows."""
+    """Delete insurance policies and dependent rows scoped to classes owned by the teacher."""
+    class_ids_subq = db.session.query(ClassEconomy.class_id).filter(
+        ClassEconomy.teacher_id == teacher_id
+    ).subquery()
     policy_ids_subq = db.session.query(InsurancePolicy.id).filter(
-        InsurancePolicy.teacher_id == teacher_id
+        InsurancePolicy.class_id.in_(sa.select(class_ids_subq))
     ).subquery()
     InsuranceClaim.query.filter(
         InsuranceClaim.policy_id.in_(sa.select(policy_ids_subq))
@@ -4502,8 +4505,8 @@ def student_detail(student_id):
     # Fetch most recent TapEvent for this student
     latest_tap_event = latest_tap_event_query.order_by(TapEvent.timestamp.desc()).first()
 
-    # Get student's active insurance policy (scoped to current teacher)
-    active_insurance = student.get_active_insurance(teacher_id)
+    # Get student's active insurance policy scoped to current class.
+    active_insurance = student.get_active_insurance(class_id=join_code, teacher_id=teacher_id)
 
     # Get all blocks for the edit modal
     all_students = _scoped_students().all()

@@ -1233,9 +1233,16 @@ def dashboard():
         recent_deposit = None
 
     # Get student's active insurance policies (scoped to current class)
-    context = {'join_code': scope.join_code, 'teacher_id': scope.teacher_id, 'block': scope.block, 'seat_id': scope.seat_id}
+    context = {
+        'join_code': scope.join_code,
+        'teacher_id': scope.teacher_id,
+        'class_id': scope.class_id,
+        'block': scope.block,
+        'seat_id': scope.seat_id,
+    }
     teacher_id = scope.teacher_id
-    active_insurance = student.get_active_insurance(teacher_id)
+    class_id = scope.class_id
+    active_insurance = student.get_active_insurance(class_id=join_code, teacher_id=teacher_id)
 
     rent_status = None
     rent_settings = get_rent_settings_for_context(context)

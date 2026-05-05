@@ -429,6 +429,30 @@ Focused validation:
 - Corrected rent cycle month/year derivation:
   - `period_month/year` and `coverage_month/year` now come from class-local cycle start, not raw UTC month/year
 
+### Status Update (2026-05-04): Wave 3C.11 Insurance Scope Completion + Waiting Rule Unification
+
+- Completed remaining insurance scope migrations for active enforcement paths:
+  - admin insurance queries now class-scoped in dashboard/context analysis and policy-management surfaces
+  - insurance eligibility item resolution remains class-scoped (`StoreItem.class_id`)
+- Unified claim-type resolution across admin/student claim flows:
+  - canonical resolver used instead of ad-hoc route-specific inference
+- Unified waiting-period semantics across insurance claim evaluation:
+  - canonical rule enforced everywhere:
+    - starts at class-local `00:00` on day after purchase
+    - ends at class-local `00:00` after day `N` (equivalent to `24:00` on waiting day `N`)
+  - implemented via shared helper and reused by:
+    - transaction eligibility checks
+    - admin claim gate
+    - student claim gate
+- Completed class-scope cleanup in teacher account insurance deletion paths:
+  - policy/dependent deletes now resolved by teacher-owned `class_id` set (not teacher-only policy filter)
+- Student/admin active-insurance lookup now class-first with teacher fallback only for legacy callers.
+
+Focused validation:
+
+- `pytest -q tests/test_insurance_class_scoping.py tests/test_insurance_security.py tests/test_insurance_snapshots.py tests/test_dashboard_rendering.py tests/test_login_redirect.py`
+- Result: `18 passed`
+
 Focused validation:
 
 - `pytest -q tests/test_time_money_guardrails.py tests/test_scheduled_tasks_rent_cycle.py tests/test_add_rent_waiver_route.py tests/test_redemption_audit_log.py tests/test_redemption_rejection.py tests/test_scheduled_tasks_store_item_cleanup.py`
