@@ -2695,9 +2695,14 @@ def dashboard():
     show_insurance_tier_prompt = False
     onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=session['admin_id']).first()
     if onboarding_record and onboarding_record.steps_completed and onboarding_record.steps_completed.get("needs_insurance_tier_upgrade"):
+        class_ids_subq = (
+            db.session.query(ClassEconomy.class_id)
+            .filter(ClassEconomy.teacher_id == session['admin_id'])
+            .subquery()
+        )
         legacy_policy_exists = (
             db.session.query(InsurancePolicy.id)
-            .filter(InsurancePolicy.teacher_id == session['admin_id'])
+            .filter(InsurancePolicy.class_id.in_(sa.select(class_ids_subq)))
             .filter(InsurancePolicy.tier_category_id.is_(None))
             .filter(InsurancePolicy.tier_level.is_(None))
             .first()
@@ -11806,10 +11811,29 @@ def api_economy_analyze():
             is_enabled=True
         ).first()
 
-        insurance_policies = InsurancePolicy.query.filter_by(
-            teacher_id=admin_id,
-            is_active=True
-        ).all()
+        class_ids_query = db.session.query(ClassEconomy.class_id).filter_by(teacher_id=admin_id)
+        insurance_policies_query = InsurancePolicy.query.filter(
+            InsurancePolicy.class_id.in_(sa.select(class_ids_query.subquery())),
+            InsurancePolicy.is_active.is_(True),
+        )
+        if block:
+            scoped_join_code_row = (
+                TeacherBlock.query.with_entities(TeacherBlock.join_code)
+                .filter(
+                    TeacherBlock.teacher_id == admin_id,
+                    TeacherBlock.block == block,
+                    TeacherBlock.join_code.isnot(None),
+                )
+                .first()
+            )
+            scoped_join_code = (
+                scoped_join_code_row[0] if scoped_join_code_row and scoped_join_code_row[0] else None
+            )
+            if scoped_join_code:
+                insurance_policies_query = insurance_policies_query.filter(
+                    InsurancePolicy.join_code == scoped_join_code
+                )
+        insurance_policies = insurance_policies_query.all()
 
         fines = PayrollFine.query.filter_by(
             teacher_id=admin_id,
