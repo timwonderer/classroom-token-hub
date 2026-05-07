@@ -9204,7 +9204,6 @@ def payroll_add_reward():
             reward = PayrollReward(
                 teacher_id=admin_id,
                 class_id=selected_scope['class_id'],
-                join_code=selected_scope['join_code'],
                 name=form.name.data,
                 description=form.description.data,
                 amount=form.amount.data,
@@ -9259,7 +9258,6 @@ def payroll_add_fine():
             fine = PayrollFine(
                 teacher_id=admin_id,
                 class_id=selected_scope['class_id'],
-                join_code=selected_scope['join_code'],
                 name=form.name.data,
                 description=form.description.data,
                 amount=form.amount.data,
