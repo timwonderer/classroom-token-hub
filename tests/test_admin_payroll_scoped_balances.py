@@ -82,7 +82,7 @@ def test_admin_payroll_displays_scoped_balances_only(client):
                 description="Teacher B balance",
             ),
         ])
-        db.session.commit()
+        db.session.flush()
 
     _login_admin(client, teacher_a.id)
     response = client.get("/admin/payroll")

@@ -340,11 +340,11 @@ def _handle_mismatched_admin_class_context():
     current_app.logger.error(
         "Blocked admin write with mismatched class context",
         extra={
-            'admin_id': admin_id,
+            'admin_id': scoped_admin_id,
             'endpoint': request.endpoint,
             'method': request.method,
             'path': request.path,
-            'session_join_code': _get_current_admin_join_code(admin_id),
+            'session_join_code': _get_current_admin_join_code(scoped_admin_id),
             'requested_join_code': _get_requested_admin_join_code(),
         },
     )
@@ -2343,7 +2343,11 @@ def _build_insurance_recommendation_context(admin_id, *, block=None, charge_freq
 
 
 def _load_economy_rebalance_context(admin_id, selected_block):
-    payroll_query = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True)
+    class_ids_query = db.session.query(ClassEconomy.class_id).filter_by(teacher_id=admin_id)
+    payroll_query = PayrollSettings.query.filter(
+        PayrollSettings.class_id.in_(sa.select(class_ids_query.subquery())),
+        PayrollSettings.is_active.is_(True),
+    )
     all_payroll_settings = payroll_query.order_by(PayrollSettings.block.asc()).all()
     settings_by_block = {s.block: s for s in all_payroll_settings if s.block}
 
@@ -8610,16 +8614,25 @@ def payroll():
     )
     blocks = [selected_block] if selected_block else []
 
-    # Check if payroll settings exist for this teacher
-    has_settings = PayrollSettings.query.filter_by(teacher_id=admin_id, block=selected_block).first() is not None
+    selected_class_id = selected_scope['class_id']
+    # Check if payroll settings exist for the selected class scope
+    has_settings = (
+        PayrollSettings.query.filter_by(class_id=selected_class_id, block=selected_block)
+        .first()
+        is not None
+    )
     show_setup_banner = not has_settings
 
     # Get payroll settings for this teacher, filtered to only include blocks with current students
-    block_settings = PayrollSettings.query.filter_by(
-        teacher_id=admin_id,
-        is_active=True,
-        block=selected_block,
-    ).all() if selected_block else []
+    block_settings = (
+        PayrollSettings.query.filter_by(
+            class_id=selected_class_id,
+            is_active=True,
+            block=selected_block,
+        ).all()
+        if selected_block
+        else []
+    )
 
     # Get first block's settings for form pre-population (no global settings)
     default_setting = block_settings[0] if block_settings else None
@@ -11497,12 +11510,16 @@ def onboarding_status():
         student_count = StudentTeacher.query.filter_by(teacher_id=admin_id).count()
         data_completed['roster'] = student_count > 0
 
-        # Payroll: has payroll settings configured for ANY block OR marked complete
-        payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id).first()
+        class_ids_subq = db.session.query(ClassEconomy.class_id).filter_by(teacher_id=admin_id).subquery()
+        # Payroll: has payroll settings configured for ANY class OR marked complete
+        payroll_settings = (
+            PayrollSettings.query
+            .filter(PayrollSettings.class_id.in_(sa.select(class_ids_subq)))
+            .first()
+        )
         data_completed['payroll'] = payroll_settings is not None
 
         # Store: has at least one store item for ANY block OR marked complete
-        class_ids_subq = db.session.query(ClassEconomy.class_id).filter_by(teacher_id=admin_id).subquery()
         store_items = (
             StoreItem.query
             .filter(StoreItem.class_id.in_(sa.select(class_ids_subq)))

@@ -349,7 +349,7 @@ from app.feats.base import feat_shell
 def get_cached_payroll_with_meta(*args, **kwargs):
     """FEAT-Shell for payroll calculation cache management."""
     res = _get_cached_payroll_with_meta_legacy(*args, **kwargs)
-    db.session.commit() # FEAT-AUTHORIZED-SHELL
+    db.session.flush()  # Preserve FEAT orchestrator transaction ownership.
     return res
 
 def _get_cached_payroll_with_meta_legacy(students, last_payroll_time, teacher_id=None, join_code=None):
