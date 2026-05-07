@@ -3007,10 +3007,6 @@ def login():
             if decrypted_secret:
                 totp = pyotp.TOTP(decrypted_secret)
                 if totp.verify(totp_code, valid_window=1):
-                    # Update last login timestamp
-                    admin.last_login = utc_now()
-                    db.session.commit()
-
                     session["is_admin"] = True
                     session["admin_id"] = admin.id
                     session["admin_auth_username"] = username

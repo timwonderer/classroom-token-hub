@@ -293,7 +293,9 @@ def inject_payroll_status():
     if maintenance_mode_enabled():
         return dict(has_payroll_settings=False)
 
-    has_payroll_settings = PayrollSettings.query.first() is not None
+    # Context processors must be read-only; never trigger autoflush from pending session state.
+    with db.session.no_autoflush:
+        has_payroll_settings = PayrollSettings.query.first() is not None
     return dict(has_payroll_settings=has_payroll_settings)
 
 

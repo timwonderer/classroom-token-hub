@@ -22,8 +22,9 @@ from app.utils.admin_identity import (
     generate_teacher_public_id,
     generate_teacher_public_id_with_suffix,
 )
+from app.feats.base import FEATBypass
 from app.hash_utils import hash_username_lookup
-from app.utils.username_migration import build_hashed_username_fields
+from app.utils.auth_username import build_hashed_username_fields
 
 
 def clear_screen():
@@ -52,8 +53,6 @@ def create_system_admin(username):
         # Check if username already exists
         lookup_hash = hash_username_lookup(username)
         existing = SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
-        if not existing:
-            existing = SystemAdmin.query.filter_by(username=username).first()
         if existing:
             print(f"❌ SystemAdmin '{username}' already exists!")
             return False
@@ -64,14 +63,15 @@ def create_system_admin(username):
         # Create the admin
         salt, username_hash, username_lookup_hash = build_hashed_username_fields(username)
         admin = SystemAdmin(
-            username=None,
             username_hash=username_hash,
             username_lookup_hash=username_lookup_hash,
             salt=salt,
             totp_secret=encrypt_totp(totp_secret)  # Encrypt before storing
         )
-        db.session.add(admin)
-        db.session.commit()
+        db.session.rollback()
+        with FEATBypass():
+            db.session.add(admin)
+            db.session.commit()
 
         print("=" * 70)
         print(f"✅ SystemAdmin '{username}' created successfully!")
@@ -116,8 +116,6 @@ def create_regular_admin(username):
         # Check if username already exists
         lookup_hash = hash_username_lookup(username)
         existing = Admin.query.filter_by(username_lookup_hash=lookup_hash).first()
-        if not existing:
-            existing = Admin.query.filter_by(username=username).first()
         if existing:
             print(f"❌ Admin '{username}' already exists!")
             return False
@@ -142,7 +140,6 @@ def create_regular_admin(username):
 
         # Create the admin
         admin = Admin(
-            username=None,
             username_hash=username_hash,
             username_lookup_hash=lookup_hash,
             teacher_public_id=teacher_public_id,
@@ -151,8 +148,10 @@ def create_regular_admin(username):
             salt=salt,
             hall_pass_verify_token=Admin.generate_verify_token(),
         )
-        db.session.add(admin)
-        db.session.commit()
+        db.session.rollback()
+        with FEATBypass():
+            db.session.add(admin)
+            db.session.commit()
 
         print("=" * 70)
         print(f"✅ Admin '{username}' created successfully!")
