@@ -2060,13 +2060,21 @@ def _get_frozen_economy_analysis_payload(
 def _resolve_payroll_settings_for_block(admin_id, block_name):
     if not block_name:
         return None
-    join_code = _resolve_join_code_for_block(admin_id, block_name)
-    if not join_code:
+    class_id_row = (
+        TeacherBlock.query.with_entities(TeacherBlock.class_id)
+        .filter(
+            TeacherBlock.teacher_id == admin_id,
+            TeacherBlock.block == block_name,
+            TeacherBlock.class_id.isnot(None),
+        )
+        .first()
+    )
+    class_id = class_id_row[0] if class_id_row and class_id_row[0] else None
+    if not class_id:
         return None
     return (
         PayrollSettings.query.filter(
-            PayrollSettings.teacher_id == admin_id,
-            PayrollSettings.join_code == join_code,
+            PayrollSettings.class_id == class_id,
             PayrollSettings.is_active.is_(True),
         )
         .order_by(desc(PayrollSettings.block.isnot(None)))
@@ -11826,25 +11834,24 @@ def _resolve_admin_payroll_settings_for_block(admin_id: int, block: str | None):
     """
     Resolve payroll settings with class-first precedence when a block is selected.
 
-    - If block is provided: resolve join-code scoped settings only.
-    - If block is absent: preserve legacy teacher-level behavior.
+    - If block is provided: resolve class-scoped settings for that block.
+    - If block is absent: resolve first active settings row across admin-owned classes.
     """
     if block:
-        join_code_row = (
-            TeacherBlock.query.with_entities(TeacherBlock.join_code)
+        class_id_row = (
+            TeacherBlock.query.with_entities(TeacherBlock.class_id)
             .filter(
                 TeacherBlock.teacher_id == admin_id,
                 TeacherBlock.block == block,
-                TeacherBlock.join_code.isnot(None),
+                TeacherBlock.class_id.isnot(None),
             )
             .first()
         )
-        join_code = join_code_row[0] if join_code_row and join_code_row[0] else None
-        if join_code:
+        class_id = class_id_row[0] if class_id_row and class_id_row[0] else None
+        if class_id:
             scoped_settings = (
                 PayrollSettings.query.filter(
-                    PayrollSettings.teacher_id == admin_id,
-                    PayrollSettings.join_code == join_code,
+                    PayrollSettings.class_id == class_id,
                     PayrollSettings.is_active.is_(True),
                 )
                 .order_by(desc(PayrollSettings.block.isnot(None)))
@@ -11853,19 +11860,25 @@ def _resolve_admin_payroll_settings_for_block(admin_id: int, block: str | None):
             if scoped_settings:
                 return scoped_settings
 
+        class_ids_subq = db.session.query(ClassEconomy.class_id).filter_by(teacher_id=admin_id).subquery()
         return (
             PayrollSettings.query.filter(
-                PayrollSettings.teacher_id == admin_id,
+                PayrollSettings.class_id.in_(sa.select(class_ids_subq)),
                 PayrollSettings.block == block,
                 PayrollSettings.is_active.is_(True),
             )
             .first()
         )
 
-    return PayrollSettings.query.filter_by(
-        teacher_id=admin_id,
-        is_active=True
-    ).first()
+    class_ids_subq = db.session.query(ClassEconomy.class_id).filter_by(teacher_id=admin_id).subquery()
+    return (
+        PayrollSettings.query
+        .filter(
+            PayrollSettings.class_id.in_(sa.select(class_ids_subq)),
+            PayrollSettings.is_active.is_(True),
+        )
+        .first()
+    )
 
 
 @admin_bp.route('/api/economy/analyze', methods=['POST'])
