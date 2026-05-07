@@ -2071,7 +2071,7 @@ def _resolve_payroll_settings_for_block(admin_id, block_name):
     )
     class_id = class_id_row[0] if class_id_row and class_id_row[0] else None
     if not class_id:
-        return None
+        raise NotFound("Payroll class scope is unavailable for the selected block.")
     return (
         PayrollSettings.query.filter(
             PayrollSettings.class_id == class_id,
@@ -11848,22 +11848,23 @@ def _resolve_admin_payroll_settings_for_block(admin_id: int, block: str | None):
             .first()
         )
         class_id = class_id_row[0] if class_id_row and class_id_row[0] else None
-        if class_id:
-            scoped_settings = (
-                PayrollSettings.query.filter(
-                    PayrollSettings.class_id == class_id,
-                    PayrollSettings.is_active.is_(True),
-                )
-                .order_by(desc(PayrollSettings.block.isnot(None)))
-                .first()
-            )
-            if scoped_settings:
-                return scoped_settings
+        if not class_id:
+            raise NotFound("Payroll class scope is unavailable for the selected block.")
 
-        class_ids_subq = db.session.query(ClassEconomy.class_id).filter_by(teacher_id=admin_id).subquery()
+        scoped_settings = (
+            PayrollSettings.query.filter(
+                PayrollSettings.class_id == class_id,
+                PayrollSettings.is_active.is_(True),
+            )
+            .order_by(desc(PayrollSettings.block.isnot(None)))
+            .first()
+        )
+        if scoped_settings:
+            return scoped_settings
+
         return (
             PayrollSettings.query.filter(
-                PayrollSettings.class_id.in_(sa.select(class_ids_subq)),
+                PayrollSettings.class_id == class_id,
                 PayrollSettings.block == block,
                 PayrollSettings.is_active.is_(True),
             )
