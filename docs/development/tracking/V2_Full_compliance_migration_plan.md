@@ -390,6 +390,21 @@ Operational note:
 - System admin login functional
 - `flask db heads` → `0002`; schema has `classes` table, no `class_economies`, no `teachers`/`students`
 
+### Status Update (2026-05-02): Wave 3C.2–3C.6 Identity Compatibility Bridge
+
+- Landed compatibility helpers and context plumbing to centralize canonical identity resolution while preserving runtime behavior:
+  - `get_current_seat()`, `get_current_class_id()`, `get_current_user()`, `require_seat_context()`
+- Request context moved to helper-derived identity (no raw-session-only dependency in global plumbing).
+- Low-risk route slices migrated to helper-first identity resolution (`main`, `docs`, read-only `api`, student read paths).
+- Non-ledger write-path bridge pattern established and validated:
+  - `seat -> student` one-time resolution per handler with a single legacy fallback
+  - Hall pass/tap flows hardened with explicit identity anchors (`student_id`, `seat_id`, `class_id`, `join_code`) and fail-closed context guards.
+
+### Status Update (2026-05-02): Class Table Rename Execution
+
+- Executed table rename migration from `class_economies` to `classes` with FK/index updates in supporting code paths.
+- Schema/runtime now treat `classes` as the active class anchor in migration sequencing.
+
 ### Status Update (2026-05-03): Wave 3C.10-B Rent Lifecycle + Scheduled Execution
 
 - Added class-scoped scheduler entrypoints in `app/scheduled_tasks.py`:
@@ -466,6 +481,23 @@ Focused validation:
 
 - `pytest -q tests/test_feature_flag_enforcement.py -k "payroll_allowed_when_payroll_enabled or payroll_blocked_when_payroll_disabled" tests/test_dashboard_rendering.py`
 - Result: `2 passed` (`13 deselected`)
+
+### Status Update (2026-05-06): Wave 3C.12-B Payroll Scope Bridge (Admin Read Paths)
+
+- Expanded payroll class-scope migration across admin read/query paths without changing FEAT orchestration or response behavior.
+- `app/routes/admin.py` updates:
+  - `_load_economy_rebalance_context(...)` now resolves active payroll settings by admin-owned `class_id` set (instead of teacher-scoped payroll filtering).
+  - `/admin/payroll` `has_settings` + `block_settings` now scope on selected `class_id`.
+  - `onboarding_status` payroll completion now checks `PayrollSettings.class_id` across admin-owned classes.
+- Fixed runtime guard bug in `_handle_mismatched_admin_class_context()` (used undefined `admin_id` in log payload; now consistently uses `scoped_admin_id`).
+- FEAT atomicity hardening surfaced by this slice was resolved without behavior redesign:
+  - `app/payroll.py:get_cached_payroll_with_meta(...)` changed `db.session.commit()` to `db.session.flush()` inside FEAT shell (`FEAT-LED-004`) to preserve orchestrator-owned transaction boundaries.
+  - `tests/test_admin_payroll_scoped_balances.py` fixture setup updated from `commit()` to `flush()` inside `FEATContext` for invariant compliance.
+
+Focused validation:
+
+- `pytest -q tests/test_admin_payroll_scoped_balances.py tests/test_feature_flag_enforcement.py -k "admin_payroll" tests/test_admin_membership_gates.py -k "payroll"`
+- Result: `6 passed` (`22 deselected`)
 
 Focused validation:
 
@@ -558,6 +590,12 @@ Focused validation:
 - Transfer succeeds and reflected correctly
 - No `transaction` or `balance_cache` tables remain in schema
 
+### Status Update (2026-05-01): FEAT Atomicity Enforcement Baseline
+
+- Enforced FEAT-owned transaction boundaries as a runtime invariant:
+  - direct `db.session.commit()` outside orchestrator-owned FEAT boundaries now fails fast with `FEATContextError`
+- Subsequent wave fixes (including 3C.12-B payroll cache shell) are required to conform to this baseline via `flush()` or orchestrator commit ownership.
+
 ---
 
 ## Wave 6 — Attendance Domain (DOM-ATT-001)
@@ -601,6 +639,13 @@ Focused validation:
 - Hall pass lifecycle functional
 - Done-for-day lock works
 - Dashboard load produces no DB writes
+
+### Status Update (2026-05-02): Wave 3C.8 Hall Pass Scope Hardening
+
+- Completed hall-pass enforcement hardening to class-authoritative scope:
+  - removed permissive teacher-only and inferential fallback paths in action enforcement
+  - class context is required for mutation paths (fail-closed)
+  - verification token entry remains teacher-scoped for physical verification, while pass rows remain class-anchored.
 
 ---
 
@@ -699,6 +744,13 @@ Constraint:
 - Student purchases; balance decreases
 - Teacher marks redeemed
 - No `student_items` or `store_item_blocks` in schema
+
+### Status Update (2026-05-02 to 2026-05-03): Wave 3C.9 / 3C.9-B Store Scope Migration
+
+- Migrated active store enforcement paths from teacher-scoped filtering to class-scoped filtering:
+  - item resolution, pricing/settings, purchase eligibility, and redemption-facing reads/writes now class-authoritative.
+- Completed cross-domain cleanup for remaining store-related scope leaks in linked admin/service/feat paths where store behavior was still teacher-filtered.
+- Preserved FEAT orchestration and transaction boundaries while updating enforcement scope only.
 
 ---
 
