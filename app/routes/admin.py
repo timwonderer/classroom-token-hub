@@ -8168,7 +8168,10 @@ def apply_economy_rebalance():
         payroll_settings=payroll_settings,
         rent_settings=rent_settings,
         insurance_policies=insurance_policies,
-        fines=PayrollFine.query.filter_by(teacher_id=admin_id, is_active=True).all(),
+        fines=(
+            PayrollFine.query.filter_by(class_id=effective_class.class_id, is_active=True).all()
+            if effective_class else []
+        ),
         store_items=scoped_store_items,
         expected_weekly_hours=payroll_settings.expected_weekly_hours if payroll_settings.expected_weekly_hours is not None else 5.0,
     )
@@ -8248,9 +8251,12 @@ def economy_health():
     )
     has_payroll_settings = len(all_payroll_settings) > 0
 
-    fines = PayrollFine.query.filter_by(teacher_id=admin_id, is_active=True).all()
     selected_join_code = _resolve_join_code_for_block(admin_id, selected_block) if selected_block else None
     selected_class = ClassEconomy.query.filter_by(join_code=selected_join_code).first() if selected_join_code else None
+    fines = (
+        PayrollFine.query.filter_by(class_id=selected_class.class_id, is_active=True).all()
+        if selected_class else []
+    )
     store_items = (
         StoreItem.query.filter_by(class_id=selected_class.class_id, is_active=True).all()
         if selected_class else []
