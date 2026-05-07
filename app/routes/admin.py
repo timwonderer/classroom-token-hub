@@ -8799,9 +8799,19 @@ def payroll():
             'total_earned': earnings_map.get(student.id, Decimal('0.00'))
         })
 
-    # Get rewards and fines for this teacher
-    rewards = PayrollReward.query.filter_by(teacher_id=admin_id).order_by(PayrollReward.created_at.desc()).all()
-    fines = PayrollFine.query.filter_by(teacher_id=admin_id).order_by(PayrollFine.created_at.desc()).all()
+    # Get rewards and fines for this class scope
+    rewards = (
+        PayrollReward.query
+        .filter_by(class_id=selected_scope['class_id'])
+        .order_by(PayrollReward.created_at.desc())
+        .all()
+    )
+    fines = (
+        PayrollFine.query
+        .filter_by(class_id=selected_scope['class_id'])
+        .order_by(PayrollFine.created_at.desc())
+        .all()
+    )
 
     # Initialize forms
     settings_form = PayrollSettingsForm()
@@ -8852,7 +8862,7 @@ def payroll():
     if cwi_block:
         # Get the payroll setting for this specific block
         cwi_setting = PayrollSettings.query.filter_by(
-            teacher_id=admin_id,
+            class_id=selected_scope['class_id'],
             block=cwi_block
         ).first()
 
@@ -9193,6 +9203,8 @@ def payroll_add_reward():
         try:
             reward = PayrollReward(
                 teacher_id=admin_id,
+                class_id=selected_scope['class_id'],
+                join_code=selected_scope['join_code'],
                 name=form.name.data,
                 description=form.description.data,
                 amount=form.amount.data,
@@ -9216,9 +9228,13 @@ def payroll_add_reward():
 def payroll_delete_reward(reward_id):
     """Delete a payroll reward."""
     try:
-        _require_payroll_feature_scope_from_request(session.get("admin_id"))
+        selected_scope = _require_payroll_feature_scope_from_request(session.get("admin_id"))
         admin_id = session.get("admin_id")
-        reward = PayrollReward.query.filter_by(id=reward_id, teacher_id=admin_id).first_or_404()
+        reward = PayrollReward.query.filter_by(
+            id=reward_id,
+            teacher_id=admin_id,
+            class_id=selected_scope['class_id'],
+        ).first_or_404()
         db.session.delete(reward)
         db.session.commit()
         return jsonify({'success': True, 'message': 'Reward deleted successfully'})
@@ -9242,6 +9258,8 @@ def payroll_add_fine():
         try:
             fine = PayrollFine(
                 teacher_id=admin_id,
+                class_id=selected_scope['class_id'],
+                join_code=selected_scope['join_code'],
                 name=form.name.data,
                 description=form.description.data,
                 amount=form.amount.data,
@@ -9265,9 +9283,13 @@ def payroll_add_fine():
 def payroll_delete_fine(fine_id):
     """Delete a payroll fine."""
     try:
-        _require_payroll_feature_scope_from_request(session.get("admin_id"))
+        selected_scope = _require_payroll_feature_scope_from_request(session.get("admin_id"))
         admin_id = session.get("admin_id")
-        fine = PayrollFine.query.filter_by(id=fine_id, teacher_id=admin_id).first_or_404()
+        fine = PayrollFine.query.filter_by(
+            id=fine_id,
+            teacher_id=admin_id,
+            class_id=selected_scope['class_id'],
+        ).first_or_404()
         db.session.delete(fine)
         db.session.commit()
         return jsonify({'success': True, 'message': 'Fine deleted successfully'})
@@ -9285,9 +9307,13 @@ def payroll_edit_reward(reward_id):
     """Edit an existing reward."""
     try:
         from app.models import _quantize_currency
-        _require_payroll_feature_scope_from_request(session.get("admin_id"))
+        selected_scope = _require_payroll_feature_scope_from_request(session.get("admin_id"))
         admin_id = session.get("admin_id")
-        reward = PayrollReward.query.filter_by(id=reward_id, teacher_id=admin_id).first_or_404()
+        reward = PayrollReward.query.filter_by(
+            id=reward_id,
+            teacher_id=admin_id,
+            class_id=selected_scope['class_id'],
+        ).first_or_404()
         data = request.get_json()
 
         reward.name = data.get('name', reward.name)
@@ -9311,9 +9337,13 @@ def payroll_edit_fine(fine_id):
     """Edit an existing fine."""
     try:
         from app.models import _quantize_currency
-        _require_payroll_feature_scope_from_request(session.get("admin_id"))
+        selected_scope = _require_payroll_feature_scope_from_request(session.get("admin_id"))
         admin_id = session.get("admin_id")
-        fine = PayrollFine.query.filter_by(id=fine_id, teacher_id=admin_id).first_or_404()
+        fine = PayrollFine.query.filter_by(
+            id=fine_id,
+            teacher_id=admin_id,
+            class_id=selected_scope['class_id'],
+        ).first_or_404()
         data = request.get_json()
 
         fine.name = data.get('name', fine.name)
@@ -9404,15 +9434,22 @@ def void_transactions_bulk():
 def payroll_apply_reward(reward_id):
     """Apply a reward to selected students."""
     try:
-        reward = db.get_or_404(PayrollReward, reward_id)
+        current_admin_id = session.get('admin_id')
+        selected_scope = _require_payroll_feature_scope_from_request(current_admin_id)
+        reward = (
+            PayrollReward.query
+            .filter_by(
+                id=reward_id,
+                teacher_id=current_admin_id,
+                class_id=selected_scope['class_id'],
+            )
+            .first_or_404()
+        )
         student_ids = request.form.getlist('student_ids')
 
         if not student_ids:
             return jsonify({'success': False, 'message': 'Please select at least one student'}), 400
 
-        # Get current admin ID for teacher_id
-        current_admin_id = session.get('admin_id')
-        selected_scope = _require_payroll_feature_scope_from_request(current_admin_id)
         selected_join_code = selected_scope['join_code']
 
         adjustments = []
@@ -9452,15 +9489,22 @@ def payroll_apply_reward(reward_id):
 def payroll_apply_fine(fine_id):
     """Apply a fine to selected students."""
     try:
-        fine = db.get_or_404(PayrollFine, fine_id)
+        current_admin_id = session.get('admin_id')
+        selected_scope = _require_payroll_feature_scope_from_request(current_admin_id)
+        fine = (
+            PayrollFine.query
+            .filter_by(
+                id=fine_id,
+                teacher_id=current_admin_id,
+                class_id=selected_scope['class_id'],
+            )
+            .first_or_404()
+        )
         student_ids = request.form.getlist('student_ids')
 
         if not student_ids:
             return jsonify({'success': False, 'message': 'Please select at least one student'}), 400
 
-        # Get current admin ID for teacher_id
-        current_admin_id = session.get('admin_id')
-        selected_scope = _require_payroll_feature_scope_from_request(current_admin_id)
         selected_join_code = selected_scope['join_code']
         banking_settings = BankingSettings.query.filter_by(
             teacher_id=current_admin_id,
