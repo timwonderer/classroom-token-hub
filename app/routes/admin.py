@@ -6350,11 +6350,6 @@ def rent_settings():
     if settings_block:
         settings = RentSettings.query.filter_by(class_id=selected_scope['class_id'], block=settings_block).first()
         if not settings:
-            settings = RentSettings.query.filter_by(join_code=selected_scope['join_code'], block=settings_block).first()
-            if settings:
-                settings.class_id = selected_scope['class_id']
-                settings.join_code = selected_scope['join_code']
-        if not settings:
             settings = RentSettings(
                 teacher_id=admin_id,
                 class_id=selected_scope['class_id'],
@@ -6383,11 +6378,6 @@ def rent_settings():
             scope_for_block = require_admin_feature_scope('rent', admin_id=admin_id, requested_block=block, allow_default=False)
             # Get or create settings for this class
             block_settings = RentSettings.query.filter_by(class_id=scope_for_block['class_id'], block=block).first()
-            if not block_settings:
-                block_settings = RentSettings.query.filter_by(join_code=scope_for_block['join_code'], block=block).first()
-                if block_settings:
-                    block_settings.class_id = scope_for_block['class_id']
-                    block_settings.join_code = scope_for_block['join_code']
             if not block_settings:
                 block_settings = RentSettings(
                     teacher_id=admin_id,
