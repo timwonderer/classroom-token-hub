@@ -11549,15 +11549,11 @@ def onboarding_status():
     join_code = session.get('current_join_code')
 
     try:
-        # Get or create onboarding record for this teacher
+        # GET endpoint must remain read-only: do not create records here.
         onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
-        if not onboarding_record:
-            onboarding_record = TeacherOnboarding(teacher_id=admin_id)
-            db.session.add(onboarding_record)
-            db.session.commit()
 
         # Check if widget is dismissed
-        if onboarding_record.widget_dismissed:
+        if onboarding_record and onboarding_record.widget_dismissed:
             return jsonify({
                 'status': 'success',
                 'dismissed': True,
@@ -11598,7 +11594,7 @@ def onboarding_status():
         data_completed = completion.copy()
         skipped_tasks = {}
 
-        widget_task_statuses = onboarding_record.widget_tasks_completed or {}
+        widget_task_statuses = (onboarding_record.widget_tasks_completed if onboarding_record else {}) or {}
         for task_name, status in widget_task_statuses.items():
             if status is True or status == 'skipped':
                 skipped_tasks[task_name] = True
