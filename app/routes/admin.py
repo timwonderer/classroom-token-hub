@@ -100,6 +100,7 @@ from app.utils.claim_credentials import (
     normalize_claim_hash,
 )
 from app.utils.ip_handler import get_real_ip
+from app.utils.turnstile import verify_turnstile_token
 from app.utils.name_utils import hash_last_name_parts, verify_last_name_parts
 from app.utils.help_content import HELP_ARTICLES
 from app.utils.encryption import encrypt_totp, decrypt_totp
@@ -653,11 +654,10 @@ def _resolve_class_id(teacher_id: int, join_code: str) -> str:
     return _ensure_join_code_anchors(teacher_id, join_code)
 
 
-def _build_teacher_block_dedupe_key(class_id: str, first_name: str, last_name: str, dob_date) -> str:
-    """Build deterministic dedupe key: class_id|normalized_full_name|YYYYMMDD."""
+def _build_teacher_block_dedupe_key(class_id: str, first_name: str, last_name: str) -> str:
+    """Build deterministic dedupe key: class_id|normalized_full_name."""
     normalized_full_name = _normalize_full_name_for_dedupe(first_name, last_name)
-    dob_yyyymmdd = dob_date.strftime("%Y%m%d")
-    dedupe_input = f"{class_id}|{normalized_full_name}|{dob_yyyymmdd}".encode()
+    dedupe_input = f"{class_id}|{normalized_full_name}".encode()
     return hash_hmac(dedupe_input, b"")
 
 
@@ -1639,11 +1639,13 @@ def _resolve_student_add_class_context(admin_id: int | None, block: str) -> dict
     if not block:
         return None
 
+    class_name = (request.form.get('class_name') or '').strip()
+    class_label = class_name or block
     join_code = _generate_unique_teacher_join_code(block)
     class_id, class_created, class_row = _ensure_join_code_anchors(
         admin_id,
         join_code,
-        class_label=block,
+        class_label=class_label,
         return_metadata=True,
     )
     _ensure_teacher_student_seat(admin_id, join_code, block)
@@ -2739,9 +2741,8 @@ def dashboard():
             days_until_friday = 7
         next_payroll_date = now_utc + timedelta(days=days_until_friday)
 
-    # Check for missing recovery setup (legacy accounts)
-    current_admin = db.session.get(Admin, session['admin_id'])
-    show_recovery_setup = current_admin and current_admin.dob_sum_hash is None
+    # v2: DOB-based recovery setup prompt is disabled.
+    show_recovery_setup = False
 
     # Prompt legacy teachers to upgrade insurance policies to the new tiered design
     show_insurance_tier_prompt = False
@@ -3109,7 +3110,7 @@ def username_migration():
 @admin_bp.route('/signup', methods=['GET', 'POST'])
 def signup():
     """
-    TOTP-only admin registration. Requires valid invite code.
+    TOTP-only admin registration for v2.
     Uses AdminSignupForm for initial signup, AdminTOTPConfirmForm for TOTP confirmation.
     """
     is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
@@ -3126,7 +3127,7 @@ def signup():
     # Debug logging
     if request.method == 'POST':
         current_app.logger.info(f"Signup POST request received (TOTP submission: {is_totp_submission})")
-        current_app.logger.info(f"   Form data: username={request.form.get('username')}, invite_code={repr(request.form.get('invite_code'))}")
+        current_app.logger.info(f"   Form data: username={request.form.get('username')}")
 
     if form.validate_on_submit():
         current_app.logger.info("Form validation passed")
@@ -3135,37 +3136,11 @@ def signup():
         if is_totp_submission:
             # TOTP form has all fields as strings
             username = normalize_auth_username(form.username.data)
-            invite_code = form.invite_code.data.strip()
-            dob_string = form.dob_sum.data  # This is a string from hidden field
             totp_code = form.totp_code.data.strip()
-            # Parse the date string
-            try:
-                dob_input = datetime.strptime(dob_string, "%Y-%m-%d").date()
-            except (ValueError, TypeError):
-                current_app.logger.warning("TOTP submission failed: invalid DOB string")
-                msg = "Invalid date of birth. Please try again."
-                flash(msg, "error")
-                return redirect(url_for('admin.signup'))
         else:
             # Initial signup form
             username = normalize_auth_username(form.username.data)
-            invite_code = form.invite_code.data.strip()
-            dob_input = form.dob_sum.data
             totp_code = ""
-
-        # Validate and parse DOB sum
-        try:
-            if isinstance(dob_input, str):
-                dob_input = dob_input.strip()
-                dob_input = datetime.strptime(dob_input, "%Y-%m-%d").date()
-            dob_sum = dob_input.month + dob_input.day + dob_input.year
-        except (ValueError, AttributeError, TypeError):
-            current_app.logger.warning("Admin signup failed: invalid DOB input")
-            msg = "Invalid date of birth. Please enter a valid date."
-            if is_json:
-                return jsonify(status="error", message=msg), 400
-            flash(msg, "error")
-            return redirect(url_for('admin.signup'))
 
         # Validate ToS for initial signup
         # Validate ToS for initial signup
@@ -3173,43 +3148,16 @@ def signup():
             flash("You must agree to the Terms of Service and Privacy Policy.", "error")
             return redirect(url_for('admin.signup'))
 
-        # Step 1: Validate invite code
-        current_app.logger.info(f"Validating invite code")
-        code_row = db.session.execute(
-            text("SELECT * FROM teacher_invite_codes WHERE TRIM(code) = :code"),
-            {"code": invite_code}
-        ).fetchone()
-        if not code_row:
-            current_app.logger.warning(f"Admin signup failed: invalid invite code")
-            msg = "Invalid invite code."
-            if is_json:
-                return jsonify(status="error", message=msg), 400
-            flash(msg, "error")
-            return redirect(url_for('admin.signup'))
-        if code_row.used:
-            current_app.logger.warning("Admin signup failed: invite code already used")
-            msg = "Invite code already used."
-            if is_json:
-                return jsonify(status="error", message=msg), 400
-            flash(msg, "error")
-            return redirect(url_for('admin.signup'))
-        if code_row.expires_at:
-            # Handle both datetime objects and strings (SQLite quirk)
-            if isinstance(code_row.expires_at, str):
-                from dateutil import parser
-                expires_dt = parser.parse(code_row.expires_at)
-            else:
-                expires_dt = code_row.expires_at
-
-            # Ensure UTC-aware for comparison
-            expires_aware = ensure_utc(expires_dt)
-            if expires_aware < utc_now():
-                current_app.logger.warning("Admin signup failed: invite code expired")
-                msg = "Invite code expired."
+        # Step 1: Validate Turnstile for initial signup submit.
+        if not is_totp_submission:
+            turnstile_token = request.form.get('cf-turnstile-response') or request.form.get('turnstile_token')
+            if not verify_turnstile_token(turnstile_token, get_real_ip()):
+                msg = "Security verification failed. Please complete Turnstile and try again."
                 if is_json:
                     return jsonify(status="error", message=msg), 400
                 flash(msg, "error")
                 return redirect(url_for('admin.signup'))
+
         # Step 2: Check username uniqueness
         if _auth_username_exists(username):
             current_app.logger.warning("Admin signup failed: username already exists")
@@ -3223,12 +3171,8 @@ def signup():
             totp_secret = pyotp.random_base32()
             session["admin_totp_secret"] = totp_secret
             session["admin_totp_username"] = username
-            session["admin_dob_sum"] = dob_sum
-            session["admin_dob_string"] = dob_input.strftime("%Y-%m-%d")  # Store original date string
         else:
             totp_secret = session["admin_totp_secret"]
-            dob_sum = session.get("admin_dob_sum", dob_sum)
-            dob_input = datetime.strptime(session.get("admin_dob_string"), "%Y-%m-%d").date()
         totp_uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(name=username, issuer_name="Classroom Economy Admin")
         # Step 4: If no TOTP code submitted yet, show QR
         if not totp_code:
@@ -3241,8 +3185,6 @@ def signup():
             # Populate form with data
             totp_form = AdminTOTPConfirmForm()
             totp_form.username.data = username
-            totp_form.invite_code.data = invite_code
-            totp_form.dob_sum.data = dob_input.strftime("%Y-%m-%d")
             return render_template(
                 "admin_signup_totp.html",
                 form=totp_form,
@@ -3270,8 +3212,6 @@ def signup():
             # Populate form with data
             totp_form = AdminTOTPConfirmForm()
             totp_form.username.data = username
-            totp_form.invite_code.data = invite_code
-            totp_form.dob_sum.data = dob_input.strftime("%Y-%m-%d")
             return render_template(
                 "admin_signup_totp.html",
                 form=totp_form,
@@ -3280,10 +3220,10 @@ def signup():
             )
         # Step 6: Create admin account and mark invite as used
         current_app.logger.info(f"TOTP verified. Creating admin account")
-        # Hash DOB sum
+        # v2: no DOB usage in teacher signup.
         salt = get_random_salt()
-        dob_sum_str = str(dob_sum).encode()
-        dob_sum_hash = hash_hmac(dob_sum_str, salt)
+        signup_seed = int.from_bytes(salt[:2], "big") % 10000
+        signup_seed_hash = hash_hmac(str(signup_seed).encode(), salt)
 
         # Check ToS acknowledgement
         tos_agreed = request.form.get('tos_agreed') == 'true'
@@ -3306,8 +3246,6 @@ def signup():
             # Populate form with data
             totp_form = AdminTOTPConfirmForm()
             totp_form.username.data = username
-            totp_form.invite_code.data = invite_code
-            totp_form.dob_sum.data = dob_input.strftime("%Y-%m-%d")
             return render_template(
                 "admin_signup_totp.html",
                 form=totp_form,
@@ -3319,26 +3257,13 @@ def signup():
         # Encrypt TOTP secret before storing
         encrypted_totp_secret = encrypt_totp(totp_secret)
 
-        # Mark the exact validated invite row as used.
-        invite_update = db.session.execute(
-            text("UPDATE teacher_invite_codes SET used = TRUE WHERE id = :id AND used = FALSE"),
-            {"id": code_row.id}
-        )
-        if invite_update.rowcount != 1:
-            db.session.rollback()
-            msg = "Invite code already used."
-            if is_json:
-                return jsonify(status="error", message=msg), 400
-            flash(msg, "error")
-            return redirect(url_for('admin.signup'))
-
         salt, username_hash, username_lookup_hash = _build_admin_auth_fields(username, existing_salt=salt)
         new_admin = Admin(
             username_hash=username_hash,
             username_lookup_hash=username_lookup_hash,
             teacher_public_id=_generate_unique_teacher_public_id(),
             totp_secret=encrypted_totp_secret,
-            dob_sum_hash=dob_sum_hash,
+            dob_sum_hash=signup_seed_hash,
             salt=salt,
             hall_pass_verify_token=Admin.generate_verify_token(),
             tos_accepted=True,
@@ -3350,8 +3275,6 @@ def signup():
         # Clear session
         session.pop("admin_totp_secret", None)
         session.pop("admin_totp_username", None)
-        session.pop("admin_dob_sum", None)
-        session.pop("admin_dob_string", None)
         msg = "Admin account created successfully! Please log in using your authenticator app."
         if is_json:
             return jsonify(status="success", message=msg)
@@ -3361,7 +3284,11 @@ def signup():
     if request.method == 'POST':
         current_app.logger.warning("Form validation failed")
         current_app.logger.warning(f"   Form errors: {form.errors}")
-    return render_template("admin_signup.html", form=form)
+    return render_template(
+        "admin_signup.html",
+        form=form,
+        turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+    )
 
 
 @admin_bp.route('/recover', methods=['GET', 'POST'])
@@ -3830,28 +3757,10 @@ def resume_credentials():
 @admin_bp.route('/setup-recovery', methods=['GET', 'POST'])
 @admin_required
 def setup_recovery():
-    """Prompt legacy teachers to set up account recovery (date of birth)."""
-    admin = db.session.get(Admin, session['admin_id'])
-
+    """v2: recovery setup no longer collects DOB."""
     if request.method == 'POST':
-        dob_sum_str = request.form.get('dob_sum', '').strip()
-        try:
-            dob_sum = parse_dob_input(dob_sum_str)
-        except ValueError as e:
-            flash(str(e) if "date format" in str(e) else "Invalid date of birth. Please use the date picker.", "error")
-            return render_template('admin_setup_recovery.html')
-
-        # Hash and save
-        salt = get_random_salt()
-        dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
-
-        admin.dob_sum_hash = dob_sum_hash
-        admin.salt = salt
-        db.session.commit()
-
-        flash("Recovery setup complete! You can now use the student-assisted recovery feature if needed.", "success")
+        flash("Recovery setup is already enabled without date-of-birth requirements.", "success")
         return redirect(url_for('admin.dashboard'))
-
     return render_template('admin_setup_recovery.html')
 
 
@@ -5265,10 +5174,10 @@ def add_individual_student():
     try:
         first_name = request.form.get('first_name', '').strip()
         last_name = request.form.get('last_name', '').strip()
-        dob_str = request.form.get('dob', '').strip()
         block = request.form.get('block', '').strip().upper()
+        additional_notes = (request.form.get('additional_notes') or '').strip()
 
-        if not all([first_name, last_name, dob_str, block]):
+        if not all([first_name, last_name, block]):
             flash("All fields are required.", "error")
             return redirect(url_for('admin.students'))
 
@@ -5281,20 +5190,14 @@ def add_individual_student():
         first_initial = first_name[0].upper()
         last_initial = last_name[0].upper()
 
-        # Parse DOB and calculate sum
-        try:
-            dob_date = _parse_dob_date(dob_str)
-            dob_sum = parse_dob_input(dob_str)
-        except ValueError:
-            flash("Invalid date of birth. Please use the date picker.", "error")
-            return redirect(url_for('admin.students'))
-
         # Generate salt
         salt = get_random_salt()
 
-        # Compute first_half_hash using canonical claim credential (first initial + DOB sum)
-        first_half_hash = compute_primary_claim_hash(first_initial, dob_sum, salt)
-        second_half_hash = hash_hmac(str(dob_sum).encode(), salt)
+        # v2: eliminate DOB-based credential material.
+        claim_seed = int.from_bytes(salt[:2], "big") % 10000
+        first_half_hash = compute_primary_claim_hash(first_initial, claim_seed, salt)
+        second_half_hash = hash_hmac(str(claim_seed).encode(), salt)
+        seed_hash = hash_hmac(str(claim_seed).encode(), salt)
 
         # Compute last_name_hash_by_part for fuzzy matching
         last_name_parts = hash_last_name_parts(last_name, salt)
@@ -5307,8 +5210,7 @@ def add_individual_student():
 
         join_code = class_context['join_code']
         class_id = class_context['class_id']
-        dedupe_key = _build_teacher_block_dedupe_key(class_id, first_name, last_name, dob_date)
-        dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
+        dedupe_key = _build_teacher_block_dedupe_key(class_id, first_name, last_name)
 
         existing_seat_in_class = TeacherBlock.query.filter_by(
             teacher_id=current_admin_id,
@@ -5319,53 +5221,13 @@ def add_individual_student():
             flash(f"Student {first_name} {last_name} is already in your class.", "info")
             return redirect(url_for('admin.students'))
 
-        # Check for duplicates - need to check ALL students GLOBALLY (not scoped to teacher)
-        # This prevents creating duplicate accounts when multiple teachers have the same student
-        potential_duplicates = Student.query.filter_by(
-            first_name=first_name,
-            last_initial=last_initial,
-        ).all()
-
-        # Check if any existing student matches (using new credential system)
-        for existing_student in potential_duplicates:
-            # Verify credential matches
-            credential_matches, is_primary, canonical_hash = match_claim_hash(
-                existing_student.first_half_hash,
-                first_initial,
-                last_initial,
-                dob_sum,
-                existing_student.salt,
+        if additional_notes:
+            current_app.logger.info(
+                "Student add additional notes provided (not persisted): class_id=%s block=%s length=%s",
+                class_id,
+                block,
+                len(additional_notes),
             )
-
-            if credential_matches:
-                if canonical_hash and not is_primary:
-                    existing_student.first_half_hash = canonical_hash
-                # Student already exists globally. Only block if this specific
-                # class already has a seat for them; teacher-level linkage alone
-                # does not mean they are already enrolled in the selected class.
-                current_admin_id = session.get("admin_id")
-                existing_class_seat = TeacherBlock.query.filter_by(
-                    teacher_id=current_admin_id,
-                    student_id=existing_student.id,
-                    join_code=join_code,
-                ).first()
-
-                if existing_class_seat:
-                    flash(f"Student {first_name} {last_name} is already in your class.", "info")
-                else:
-                    _link_student_to_admin(
-                        existing_student,
-                        current_admin_id,
-                        join_code=join_code,
-                        class_id=class_id,
-                        block=block,
-                    )
-                    db.session.commit()
-                    if class_context.get('class_created'):
-                        _queue_pending_class_timezone_confirmation(class_context.get('class_row'))
-                    flash(f"Student {first_name} {last_name} already exists. Added to your class.", "success")
-
-                return redirect(url_for('admin.students'))
 
         # Create student
         new_student = Student(
@@ -5393,7 +5255,7 @@ def add_individual_student():
             first_name=first_name,
             last_initial=last_initial,
             last_name_hash_by_part=last_name_parts,
-            dob_sum_hash=dob_sum_hash,
+            dob_sum_hash=seed_hash,
             salt=salt,
             first_half_hash=first_half_hash,
             join_code=join_code,
@@ -5468,7 +5330,7 @@ def add_manual_student():
 
         join_code = class_context['join_code']
         class_id = class_context['class_id']
-        dedupe_key = _build_teacher_block_dedupe_key(class_id, first_name, last_name, dob_date)
+        dedupe_key = _build_teacher_block_dedupe_key(class_id, first_name, last_name)
         dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
 
         existing_seat_in_class = TeacherBlock.query.filter_by(
@@ -9751,10 +9613,11 @@ def upload_students():
             # Try template column names first, then fall back to lowercase versions
             first_name = (row.get('First Name') or row.get('first_name') or '').strip()
             last_name = (row.get('Last Name') or row.get('last_name') or '').strip()
-            dob_str = (row.get('Date of Birth (MM/DD/YYYY)') or row.get('date_of_birth') or '').strip()
-            block = (row.get('Period/Block') or row.get('block') or '').strip().upper()
+            block = (row.get('Class Section') or row.get('class_section') or row.get('block') or '').strip().upper()
+            class_name = (row.get('Class Name') or row.get('class_name') or '').strip()
+            additional_notes = (row.get('Additional Notes') or row.get('additional_notes') or '').strip()
 
-            if not all([first_name, last_name, dob_str, block]):
+            if not all([first_name, last_name, block]):
                 raise ValueError("Missing required fields.")
 
             # Generate initials
@@ -9799,7 +9662,7 @@ def upload_students():
                 class_id, class_created, class_row = _ensure_join_code_anchors(
                     teacher_id,
                     join_codes_by_block[block],
-                    class_label=block,
+                    class_label=class_name or block,
                     return_metadata=True,
                 )
                 class_ids_by_block[block] = class_id
@@ -9809,22 +9672,7 @@ def upload_students():
             join_code = join_codes_by_block[block]
             class_id = class_ids_by_block[block]
 
-            # Generate dob_sum first (needed for duplicate detection)
-            # Handle both mm/dd/yy and mm/dd/yyyy formats
-            date_parts = dob_str.split('/')
-            mm = int(date_parts[0])
-            dd = int(date_parts[1])
-            year = int(date_parts[2])
-
-            # If year is 2 digits, convert to 4 digits by adding 2000
-            if year < 100:
-                yyyy = year + 2000
-            else:
-                yyyy = year
-
-            dob_sum = mm + dd + yyyy
-            dob_date = datetime.strptime(f"{yyyy:04d}-{mm:02d}-{dd:02d}", "%Y-%m-%d").date()
-            dedupe_key = _build_teacher_block_dedupe_key(class_id, first_name, last_name, dob_date)
+            dedupe_key = _build_teacher_block_dedupe_key(class_id, first_name, last_name)
 
             # Check if this seat already exists in this join code.
             existing_seat = TeacherBlock.query.filter_by(
@@ -9840,14 +9688,13 @@ def upload_students():
             # Generate salt
             salt = get_random_salt()
 
-            # Compute first_half_hash using canonical claim credential (first initial + DOB sum)
-            first_half_hash = compute_primary_claim_hash(first_initial, dob_sum, salt)
+            # v2: eliminate DOB-based credential material.
+            claim_seed = int.from_bytes(salt[:2], "big") % 10000
+            first_half_hash = compute_primary_claim_hash(first_initial, claim_seed, salt)
+            seed_hash = hash_hmac(str(claim_seed).encode(), salt)
 
             # Compute last_name_hash_by_part for fuzzy matching
             last_name_parts = hash_last_name_parts(last_name, salt)
-
-            # Compute dob_sum_hash (HMAC of DOB sum with the seat's salt)
-            dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
 
             # Create TeacherBlock seat (unclaimed account)
             seat = TeacherBlock(
@@ -9856,7 +9703,7 @@ def upload_students():
                 first_name=first_name,
                 last_initial=last_initial,
                 last_name_hash_by_part=last_name_parts,
-                dob_sum_hash=dob_sum_hash,
+                dob_sum_hash=seed_hash,
                 salt=salt,
                 first_half_hash=first_half_hash,
                 join_code=join_code,
@@ -9865,6 +9712,13 @@ def upload_students():
                 is_claimed=False,
             )
             db.session.add(seat)
+            if additional_notes:
+                current_app.logger.info(
+                    "Bulk upload additional notes provided (not persisted): class_id=%s block=%s length=%s",
+                    class_id,
+                    block,
+                    len(additional_notes),
+                )
             added_count += 1
 
         except Exception as e:

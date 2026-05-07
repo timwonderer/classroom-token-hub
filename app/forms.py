@@ -88,14 +88,11 @@ class StoreItemForm(FlaskForm):
 
 class AdminSignupForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
-    invite_code = StringField('Invite Code', validators=[DataRequired()])
-    dob_sum = DateField('Date of Birth', format='%Y-%m-%d', validators=[DataRequired()])
+    turnstile_token = HiddenField('cf-turnstile-response')
 
 class AdminTOTPConfirmForm(FlaskForm):
     totp_code = StringField('TOTP Code', validators=[DataRequired()])
     username = HiddenField(validators=[DataRequired()])
-    dob_sum = HiddenField(validators=[DataRequired()])
-    invite_code = HiddenField(validators=[DataRequired()])
 
 class AdminRecoveryForm(FlaskForm):
     """Recovery form — join_code[]/student_username[] pairs are submitted as arrays.

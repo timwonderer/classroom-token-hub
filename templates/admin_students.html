@@ -70,7 +70,7 @@
                 <strong>Roster accuracy checklist:</strong>
                 <ul class="mb-0 mt-2">
                   <li>Do not modify the header row</li>
-                  <li>Date of Birth must be in MM/DD/YYYY format (matches student claim entry)</li>
+                  <li>Use class section and class name exactly as you want them to appear</li>
                   <li>Students must be assigned to a class section</li>
                 </ul>
               </div>
@@ -100,7 +100,7 @@
                 <li><strong>Join Code</strong> — Found in the Class Roster tab for each class section</li>
                 <li><strong>First Name</strong> — As entered in your roster</li>
                 <li><strong>Last Name</strong> — As entered in your roster</li>
-                <li><strong>Date of Birth</strong> — The exact date you entered</li>
+                <li><strong>Class Section + Class Name</strong> — Must match your roster entry</li>
               </ul>
 
               <p class="mb-2"><strong>Account Setup Steps:</strong></p>
@@ -137,7 +137,7 @@
           <div id="collapseEditClaim" class="accordion-collapse collapse mt-2" aria-labelledby="headingEditClaim"
             data-bs-parent="#helpAccordion">
             <div class="accordion-body">
-              <p><strong>What you can update:</strong> First name, last name, date of birth, and class assignment.</p>
+              <p><strong>What you can update:</strong> First name, last name, class section, and class assignment.</p>
 
               <p class="mb-2"><strong>How to update:</strong></p>
               <ol class="mb-3">
@@ -355,7 +355,7 @@
                         <li>Go to student sign-in page</li>
                         <li>Click "First Time? Set Up Account"</li>
                         <li>Enter this join code</li>
-                        <li>Provide first name, last name, and date of birth</li>
+                        <li>Provide first name, last name, and class section</li>
                       </ol>
                     </div>
                   </div>
@@ -405,7 +405,7 @@
                         <td>
                           <span class="fw-bold">{{ seat.first_name }} {{ seat.last_initial }}.</span>
                           {% if seat.is_teacher %}
-                          <div><small class="text-muted">Claim DOB: 01/01/2001</small></div>
+                          <div><small class="text-muted">Claim credential: managed by system</small></div>
                           {% endif %}
                         </td>
                         <td>
@@ -651,8 +651,8 @@
                     Template
                   </a>
 
-                  <li class="mb-2">Fill in student information (First Name, Last Name, Date of Birth in MM/DD/YYYY
-                    format, Class/Block)</li>
+                  <li class="mb-2">Fill in student information (First Name, Last Name, Class Section, Class Name,
+                    Additional Notes)</li>
                   <li class="mb-2">Save the file as CSV format</li>
                   <li class="mb-2">Upload the completed file</li>
                 </ol>
@@ -661,7 +661,7 @@
                       style="vertical-align: middle;">warning</span>Important:</strong>
                   <ul class="mb-0 mt-2">
                     <li>Do not modify the header row</li>
-                    <li>Date of Birth must be in MM/DD/YYYY format</li>
+                    <li>Class Section is required for each row</li>
                     <li>Duplicate students will be automatically skipped</li>
                   </ul>
                 </div>
@@ -732,12 +732,6 @@
                   </div>
                   <div class="row">
                     <div class="col-md-6 mb-3">
-                      <label for="dob" class="form-label fw-bold">Date of Birth <span
-                          class="text-danger">*</span></label>
-                      <input type="date" class="form-control" id="dob" name="dob" required>
-                      <div class="form-text">Use the date picker to select a birth date.</div>
-                    </div>
-                    <div class="col-md-6 mb-3">
                       <label for="block" class="form-label fw-bold">Class <span class="text-danger">*</span></label>
                       <select class="form-select" id="block_select" name="block_select">
                         <option value="">Select a block...</option>
@@ -756,6 +750,18 @@
                           placeholder="Enter new class section name (e.g., Period 1, Block A)">
                         <div class="form-text">Enter a unique name for the new class section (10 characters max)</div>
                       </div>
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col-md-6 mb-3">
+                      <label for="class_name" class="form-label fw-bold">Class Name</label>
+                      <input type="text" class="form-control" id="class_name" name="class_name"
+                        placeholder="Optional display name for the class">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                      <label for="additional_notes" class="form-label fw-bold">Additional Notes</label>
+                      <input type="text" class="form-control" id="additional_notes" name="additional_notes"
+                        placeholder="Optional notes for your import record">
                     </div>
                   </div>
                 </div>
@@ -880,7 +886,7 @@
               <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" style="display:none;">
                 <small><span class="material-symbols-outlined me-2"
                     style="vertical-align: middle;">warning</span>Student will need to re-claim their account using
-                  their name and date of birth.</small>
+                  their name and class section details.</small>
               </div>
             </div>
           </div>
