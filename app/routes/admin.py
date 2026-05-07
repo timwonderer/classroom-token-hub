@@ -11952,38 +11952,42 @@ def api_economy_analyze():
         ).first()
 
         class_ids_query = db.session.query(ClassEconomy.class_id).filter_by(teacher_id=admin_id)
+        scoped_class_id = None
+        if block:
+            class_id_row = (
+                TeacherBlock.query.with_entities(TeacherBlock.class_id)
+                .filter(
+                    TeacherBlock.teacher_id == admin_id,
+                    TeacherBlock.block == block,
+                    TeacherBlock.class_id.isnot(None),
+                )
+                .first()
+            )
+            scoped_class_id = class_id_row[0] if class_id_row and class_id_row[0] else None
+            if not scoped_class_id:
+                return jsonify({'status': 'error', 'message': 'Class scope is unavailable for the selected block.'}), 404
+
         insurance_policies_query = InsurancePolicy.query.filter(
             InsurancePolicy.class_id.in_(sa.select(class_ids_query.subquery())),
             InsurancePolicy.is_active.is_(True),
         )
-        if block:
-            scoped_join_code_row = (
-                TeacherBlock.query.with_entities(TeacherBlock.join_code)
-                .filter(
-                    TeacherBlock.teacher_id == admin_id,
-                    TeacherBlock.block == block,
-                    TeacherBlock.join_code.isnot(None),
-                )
-                .first()
-            )
-            scoped_join_code = (
-                scoped_join_code_row[0] if scoped_join_code_row and scoped_join_code_row[0] else None
-            )
-            if scoped_join_code:
-                insurance_policies_query = insurance_policies_query.filter(
-                    InsurancePolicy.join_code == scoped_join_code
-                )
+        fines_query = PayrollFine.query.filter(
+            PayrollFine.class_id.in_(sa.select(class_ids_query.subquery())),
+            PayrollFine.is_active.is_(True),
+        )
+        store_items_query = StoreItem.query.filter(
+            StoreItem.class_id.in_(sa.select(class_ids_query.subquery())),
+            StoreItem.is_active.is_(True),
+        )
+
+        if scoped_class_id:
+            insurance_policies_query = insurance_policies_query.filter(InsurancePolicy.class_id == scoped_class_id)
+            fines_query = fines_query.filter(PayrollFine.class_id == scoped_class_id)
+            store_items_query = store_items_query.filter(StoreItem.class_id == scoped_class_id)
+
         insurance_policies = insurance_policies_query.all()
-
-        fines = PayrollFine.query.filter_by(
-            teacher_id=admin_id,
-            is_active=True
-        ).all()
-
-        store_items = StoreItem.query.filter_by(
-            teacher_id=admin_id,
-            is_active=True
-        ).all()
+        fines = fines_query.all()
+        store_items = store_items_query.all()
 
         # Perform analysis
         # Use expected_weekly_hours from payroll_settings unless explicitly overridden in request
