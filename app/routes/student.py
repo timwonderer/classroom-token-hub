@@ -1520,7 +1520,11 @@ def payroll():
     student_blocks = [current_block]
 
     # Determine the pay rate for the current block (per minute)
-    pay_rate_per_second = get_pay_rate_for_block(current_block, teacher_id=teacher_id)
+    pay_rate_per_second = get_pay_rate_for_block(
+        current_block,
+        teacher_id=teacher_id,
+        join_code=join_code,
+    )
     pay_rate_per_minute = round(pay_rate_per_second * 60, 2)
 
     unpaid_seconds_per_block = {

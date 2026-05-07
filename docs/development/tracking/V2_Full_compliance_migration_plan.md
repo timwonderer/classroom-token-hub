@@ -453,6 +453,20 @@ Focused validation:
 - `pytest -q tests/test_insurance_class_scoping.py tests/test_insurance_security.py tests/test_insurance_snapshots.py tests/test_dashboard_rendering.py tests/test_login_redirect.py`
 - Result: `18 passed`
 
+### Status Update (2026-05-06): Wave 3C.12-A Payroll Scope Bridge (Student Read Path)
+
+- Started Wave 3C.12 with a low-risk payroll/attendance read-path slice.
+- `app/payroll.py` now resolves teacher scope from `join_code` when `teacher_id` is absent in:
+  - `get_pay_rate_for_block(...)`
+  - `get_daily_limit_seconds(...)`
+- `student.payroll` now passes `join_code` explicitly into pay-rate resolution.
+- Behavior preserved: existing teacher-scoped callers remain valid, while class/join-code callers no longer fail-closed to default rates when `teacher_id` is missing.
+
+Focused validation:
+
+- `pytest -q tests/test_feature_flag_enforcement.py -k "payroll_allowed_when_payroll_enabled or payroll_blocked_when_payroll_disabled" tests/test_dashboard_rendering.py`
+- Result: `2 passed` (`13 deselected`)
+
 Focused validation:
 
 - `pytest -q tests/test_time_money_guardrails.py tests/test_scheduled_tasks_rent_cycle.py tests/test_add_rent_waiver_route.py tests/test_redemption_audit_log.py tests/test_redemption_rejection.py tests/test_scheduled_tasks_store_item_cleanup.py`

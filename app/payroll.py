@@ -49,6 +49,10 @@ def get_pay_rate_for_block(block, teacher_id=None, join_code=None):
     """
     from decimal import Decimal
     
+    # Resolve teacher scope from class join_code when possible.
+    if teacher_id is None and join_code is not None:
+        class_row = ClassEconomy.query.with_entities(ClassEconomy.teacher_id).filter_by(join_code=join_code).first()
+        teacher_id = class_row[0] if class_row else None
     # Can't lookup settings without a teacher_id - return default
     if teacher_id is None:
         return DEFAULT_PAY_RATE_PER_SECOND_DECIMAL
@@ -87,6 +91,10 @@ def get_daily_limit_seconds(block, teacher_id=None, join_code=None):
     Returns:
         int or None: The daily limit in seconds, or None if no limit is set.
     """
+    # Resolve teacher scope from class join_code when possible.
+    if teacher_id is None and join_code is not None:
+        class_row = ClassEconomy.query.with_entities(ClassEconomy.teacher_id).filter_by(join_code=join_code).first()
+        teacher_id = class_row[0] if class_row else None
     # Can't lookup settings without a teacher_id - return no limit
     if teacher_id is None:
         return None
