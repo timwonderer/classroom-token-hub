@@ -2279,6 +2279,40 @@ def _build_policy_summary(admin_id, selected_block, analysis, rent_settings, ins
     }
 
 
+def _extract_pending_rebalance_effective_at(policy_summary: dict) -> datetime | None:
+    """Return the next known effective timestamp for a pending rebalance payload."""
+    pending_payload = policy_summary.get('pending_rebalance_json')
+    if not pending_payload:
+        return None
+
+    try:
+        payload = json.loads(pending_payload)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+    changes = payload.get('changes') or []
+    effective_candidates: list[datetime] = []
+    for change in changes:
+        effective_at_raw = change.get('effective_at')
+        if not effective_at_raw:
+            continue
+        try:
+            effective_candidates.append(ensure_utc(datetime.fromisoformat(effective_at_raw)))
+        except (TypeError, ValueError):
+            continue
+
+    if effective_candidates:
+        return min(effective_candidates)
+
+    scheduled_at_raw = payload.get('scheduled_at')
+    if not scheduled_at_raw:
+        return None
+    try:
+        return ensure_utc(datetime.fromisoformat(scheduled_at_raw))
+    except (TypeError, ValueError):
+        return None
+
+
 def _build_rebalance_preview(admin_id, selected_block, checker, cwi, rent_settings, insurance_policies):
     preview_items = []
     recommendations = get_price_recommendation_context(checker.policy_mode, cwi) or {}
@@ -8344,6 +8378,7 @@ def economy_health():
         fines,
         warnings=actionable_warnings,
     )
+    pending_rebalance_effective_at = _extract_pending_rebalance_effective_at(policy_summary)
     rebalance_preview = []
     show_rebalance_review = request.args.get('review_rebalance') == '1'
     if payroll_settings and show_rebalance_review and cwi_calc:
@@ -8391,6 +8426,7 @@ def economy_health():
         analysis_schedule=analysis_schedule,
         policy_modes=POLICY_MODES,
         policy_summary=policy_summary,
+        pending_rebalance_effective_at=pending_rebalance_effective_at,
         rebalance_preview=rebalance_preview,
         show_rebalance_review=show_rebalance_review,
         feature_links=feature_links,

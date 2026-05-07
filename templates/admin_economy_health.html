@@ -172,6 +172,11 @@
           {% endif %}
           {% if policy_summary.pending_rebalance_json %}
           <span class="badge bg-info text-dark">Economy Update Scheduled</span>
+          {% if pending_rebalance_effective_at %}
+          <div class="small text-muted mt-1">
+            Scheduled effective date: {{ pending_rebalance_effective_at.strftime('%B %-d, %Y') }}
+          </div>
+          {% endif %}
           {% endif %}
         </div>
       </form>
