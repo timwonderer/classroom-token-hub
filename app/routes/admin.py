@@ -6331,7 +6331,6 @@ def rent_settings():
     """Configure rent settings."""
     admin_id = session.get("admin_id")
     student_ids_subq = _student_scope_subquery()
-    payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True).first()
     feature_options = get_admin_feature_join_code_options('rent', admin_id=admin_id)
     selected_scope = require_admin_feature_scope(
         'rent',
@@ -6339,6 +6338,10 @@ def rent_settings():
         requested_join_code=request.values.get('join_code'),
         requested_block=request.values.get('settings_block'),
     )
+    payroll_settings = PayrollSettings.query.filter_by(
+        class_id=selected_scope['class_id'],
+        is_active=True,
+    ).first()
     teacher_blocks = [option['block'] for option in feature_options]
     settings_block = selected_scope['block']
 
