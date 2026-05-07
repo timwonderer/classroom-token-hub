@@ -8929,6 +8929,11 @@ def payroll_settings():
         admin_id = session.get("admin_id")
         feature_options = get_admin_feature_join_code_options('payroll', admin_id=admin_id)
         enabled_blocks = {option['block'] for option in feature_options if option.get('block')}
+        class_id_by_block = {
+            option['block']: option['class_id']
+            for option in feature_options
+            if option.get('block') and option.get('class_id')
+        }
         selected_scope = require_admin_feature_scope(
             'payroll',
             admin_id=admin_id,
@@ -9077,9 +9082,13 @@ def payroll_settings():
             abort(404)
 
         for block_value in target_blocks:
-            setting = PayrollSettings.query.filter_by(teacher_id=admin_id, block=block_value).first()
+            class_id = class_id_by_block.get(block_value)
+            if not class_id:
+                abort(404)
+
+            setting = PayrollSettings.query.filter_by(class_id=class_id, block=block_value).first()
             if not setting:
-                setting = PayrollSettings(teacher_id=admin_id, block=block_value)
+                setting = PayrollSettings(teacher_id=admin_id, class_id=class_id, block=block_value)
 
             # Update all fields
             for key, value in settings_data.items():
@@ -9114,10 +9123,12 @@ def update_expected_weekly_hours():
         expected_weekly_hours = _quantize_currency(request.form.get('expected_weekly_hours', '5.0'))
         cwi_block = selected_scope['block']
         apply_to_all = request.form.get('apply_to_all', 'false').lower() == 'true'
-        enabled_blocks = {
-            option['block']
-            for option in get_admin_feature_join_code_options('payroll', admin_id=admin_id)
-            if option.get('block')
+        feature_options = get_admin_feature_join_code_options('payroll', admin_id=admin_id)
+        enabled_blocks = {option['block'] for option in feature_options if option.get('block')}
+        class_id_by_block = {
+            option['block']: option['class_id']
+            for option in feature_options
+            if option.get('block') and option.get('class_id')
         }
 
         # Validate expected_weekly_hours is within a reasonable range (0.25 to 80)
@@ -9127,10 +9138,15 @@ def update_expected_weekly_hours():
 
         if apply_to_all:
             # Update all existing payroll settings
-            settings_to_update = PayrollSettings.query.filter(
-                PayrollSettings.teacher_id == admin_id,
-                PayrollSettings.block.in_(enabled_blocks),
-            ).all()
+            class_ids = [class_id_by_block[block] for block in enabled_blocks if block in class_id_by_block]
+            settings_to_update = (
+                PayrollSettings.query
+                .filter(
+                    PayrollSettings.class_id.in_(class_ids),
+                    PayrollSettings.block.in_(enabled_blocks),
+                )
+                .all()
+            )
 
             if settings_to_update:
                 for setting in settings_to_update:
@@ -9138,8 +9154,12 @@ def update_expected_weekly_hours():
                 flash_message = f'Expected weekly hours updated to {expected_weekly_hours} hours/week for all classes.'
             else:
                 # No settings exist - create a default one for the selected block
+                class_id = class_id_by_block.get(cwi_block)
+                if not class_id:
+                    abort(404)
                 new_setting = PayrollSettings(
                     teacher_id=admin_id,
+                    class_id=class_id,
                     block=cwi_block,
                     pay_rate=0.25,  # Default $0.25/min = $15/hour
                     expected_weekly_hours=expected_weekly_hours,
@@ -9150,10 +9170,10 @@ def update_expected_weekly_hours():
                 flash_message = f'Expected weekly hours set to {expected_weekly_hours} hours/week for all classes.'
         else:
             # Update only the selected block
-            block_setting = PayrollSettings.query.filter_by(
-                teacher_id=admin_id,
-                block=cwi_block
-            ).first()
+            class_id = class_id_by_block.get(cwi_block)
+            if not class_id:
+                abort(404)
+            block_setting = PayrollSettings.query.filter_by(class_id=class_id, block=cwi_block).first()
 
             if block_setting:
                 block_setting.expected_weekly_hours = expected_weekly_hours
@@ -9162,6 +9182,7 @@ def update_expected_weekly_hours():
                 # Create new setting for this block
                 new_setting = PayrollSettings(
                     teacher_id=admin_id,
+                    class_id=class_id,
                     block=cwi_block,
                     pay_rate=0.25,  # Default $0.25/min = $15/hour
                     expected_weekly_hours=expected_weekly_hours,
