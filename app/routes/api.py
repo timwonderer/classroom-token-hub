@@ -1514,26 +1514,25 @@ def hall_pass_settings():
         return jsonify({"status": "error", "message": "Admin ID not found in session"}), 401
     scoped_admin_id = current_admin.id
 
-    join_code = _get_request_join_code()
-    if not join_code:
-        return jsonify({"status": "error", "message": "join_code is required"}), 400
-    scope = _get_hall_pass_settings_scope(scoped_admin_id, join_code)
-    if not scope:
-        return jsonify({"status": "error", "message": "join_code is required"}), 400
-    settings = _get_or_create_hall_pass_settings(scoped_admin_id, scope["class_id"], join_code=scope["join_code"])
-    if not settings:
-        return jsonify({"status": "error", "message": "join_code is required"}), 400
+    join_code = (session.get("current_join_code") or "").strip()
+    class_id = (session.get("current_class_id") or "").strip()
+    if not join_code or not class_id:
+        return jsonify({"status": "error", "message": "Class context is required"}), 400
 
     if request.method == 'GET':
+        settings = HallPassSettings.query.filter_by(class_id=class_id).first()
         return jsonify({
             "status": "success",
             "settings": {
-                "queue_enabled": settings.queue_enabled,
-                "queue_limit": settings.queue_limit
+                "queue_enabled": settings.queue_enabled if settings else True,
+                "queue_limit": settings.queue_limit if settings else 10
             }
         })
 
     # POST - update settings
+    settings = _get_or_create_hall_pass_settings(scoped_admin_id, class_id, join_code=join_code)
+    if not settings:
+        return jsonify({"status": "error", "message": "Class context is required"}), 400
     data = request.get_json()
 
     if 'queue_enabled' in data:
@@ -1594,6 +1593,11 @@ def hall_pass_history():
             scoped_admin_id,
             sa.select(student_ids_subquery),
         )
+
+        # Enforce single-class context for admin history views.
+        current_class_id = (session.get("current_class_id") or "").strip()
+        if current_class_id:
+            query = query.filter(HallPassLog.class_id == current_class_id)
 
         # Apply filters
         if period:
@@ -1962,6 +1966,9 @@ def attendance_history():
             scoped_admin_id,
             accessible_student_ids_query,
         )
+        current_class_id = (session.get("current_class_id") or "").strip()
+        if current_class_id:
+            query = query.filter(TapEvent.class_id == current_class_id)
 
         # Suppress duplicate auto tap-outs from known race conditions.
         # Keep only the earliest row when daily-limit inactive events are otherwise identical.
@@ -2030,9 +2037,27 @@ def attendance_history():
         offset = (page - 1) * page_size
         records = query.offset(offset).limit(page_size).all()
 
-        # Build seat lookup for names and blocks
+        # Build seat lookup for names and blocks without loading full Seat entities.
         seat_ids = [r.seat_id for r in records if r.seat_id]
-        seats = {s.id: {'name': s.student.full_name, 'block': r.period} for s in Seat.query.filter(Seat.id.in_(seat_ids)).all() for r in records if r.seat_id == s.id}
+        seats = {}
+        if seat_ids:
+            seat_rows = db.session.query(Seat.id, Seat.student_id, Seat.block).filter(Seat.id.in_(seat_ids)).all()
+            student_ids = list({row.student_id for row in seat_rows if row.student_id})
+            students_by_id = {}
+            if student_ids:
+                student_rows = Student.query.filter(Student.id.in_(student_ids)).all()
+                students_by_id = {student.id: student for student in student_rows}
+
+            period_by_seat_id = {}
+            for record in records:
+                if record.seat_id and record.seat_id not in period_by_seat_id:
+                    period_by_seat_id[record.seat_id] = record.period
+
+            for row in seat_rows:
+                student = students_by_id.get(row.student_id)
+                student_name = student.full_name if student else "Unknown"
+                student_block = period_by_seat_id.get(row.id) or row.block or "Unknown"
+                seats[row.id] = {"name": student_name, "block": student_block}
 
         # Get class labels for blocks
         blocks_in_records = set(seats[sid]['block'] for sid in seats if seats[sid]['block'])

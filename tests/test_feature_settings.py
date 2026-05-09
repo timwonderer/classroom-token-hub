@@ -48,12 +48,12 @@ class TestClassFeatures:
     """Tests for class feature row-existence semantics."""
 
     def test_class_feature_defaults(self, client, test_admin):
-        """New classes start with all supported features enabled."""
+        """New classes start with payroll enabled and other features disabled."""
         economy = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
         db.session.commit()
 
         enabled_names = ClassFeature.enabled_names_for_class(economy.class_id)
-        assert enabled_names == set(ClassFeature.feature_names())
+        assert enabled_names == {'payroll'}
 
     def test_feature_settings_to_dict_reads_class_features(self, client, test_admin):
         """Policy rows expose feature state from class_features."""
@@ -79,25 +79,21 @@ class TestClassFeatures:
         """Test that different periods can have different settings."""
         economy_a = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
         economy_b = _create_class_scope(test_admin, block='B', join_code='JOIN_B')
-        for row in ClassFeature.query.filter_by(class_id=economy_a.class_id).all():
-            if row.feature_name == 'rent':
-                db.session.delete(row)
-        for row in ClassFeature.query.filter_by(class_id=economy_b.class_id).all():
-            if row.feature_name == 'payroll':
-                db.session.delete(row)
+        # Enable rent for class A only.
+        db.session.add(ClassFeature(class_id=economy_a.class_id, feature_name='rent'))
         db.session.commit()
 
         settings_a = ClassFeature.feature_map_for_class(economy_a.class_id)
         settings_b = ClassFeature.feature_map_for_class(economy_b.class_id)
-        assert settings_a['rent_enabled'] is False
-        assert settings_b['rent_enabled'] is True
+        assert settings_a['rent_enabled'] is True
+        assert settings_b['rent_enabled'] is False
         assert settings_a['payroll_enabled'] is True
-        assert settings_b['payroll_enabled'] is False
+        assert settings_b['payroll_enabled'] is True
 
     def test_unique_constraint_class_feature(self, client, test_admin):
         """Duplicate feature rows for the same class are prevented."""
         economy = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
-        db.session.add(ClassFeature(class_id=economy.class_id, feature_name='rent'))
+        db.session.add(ClassFeature(class_id=economy.class_id, feature_name='payroll'))
 
         with pytest.raises(Exception):  # Should raise IntegrityError
             db.session.commit()
@@ -257,7 +253,7 @@ class TestTeacherDeletionCascade:
 
         assert ClassFeature.query.join(ClassEconomy, ClassFeature.class_id == ClassEconomy.class_id).filter(
             ClassEconomy.teacher_id == teacher_id
-        ).count() == len(ClassFeature.feature_names()) * 2
+        ).count() == 2
 
         # Delete the teacher
         db.session.delete(admin)

@@ -2930,7 +2930,10 @@ class ClassFeature(db.Model):
 
     @classmethod
     def defaults_dict(cls):
-        return {f'{feature_name}_enabled': True for feature_name in cls.feature_names()}
+        return {
+            f'{feature_name}_enabled': (feature_name == 'payroll')
+            for feature_name in cls.feature_names()
+        }
 
     @classmethod
     def enabled_names_for_class(cls, class_id):
@@ -3001,17 +3004,14 @@ class FeatureSettings(db.Model):
 
 @event.listens_for(ClassEconomy, 'after_insert')
 def _seed_default_class_features(mapper, connection, target):
-    """New classes start with every supported feature enabled by default."""
+    """New classes start with payroll enabled and all other features disabled."""
     connection.execute(
         sa.insert(ClassFeature.__table__),
-        [
-            {
-                'class_id': target.class_id,
-                'feature_name': feature_name,
-                'created_at': utc_now(),
-            }
-            for feature_name in ClassFeature.feature_names()
-        ],
+        {
+            'class_id': target.class_id,
+            'feature_name': 'payroll',
+            'created_at': utc_now(),
+        },
     )
 
 

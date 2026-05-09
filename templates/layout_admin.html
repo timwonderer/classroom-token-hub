@@ -94,7 +94,7 @@
         <div class="sidebar-scope-panel">
             <div class="sidebar-scope-time class-scoped-time"
                 id="admin-class-time"
-                data-timezone="{{ admin_current_class_context.class_timezone if admin_current_class_context else '' }}"
+                data-timezone="{% if admin_current_class_context and admin_current_class_context.class_timezone != 'UTC' %}{{ admin_current_class_context.class_timezone }}{% endif %}"
                 data-empty-message="No classes yet. Official class time will appear after class creation."
                 data-unset-message="Official class time zone not set yet.">
             </div>
@@ -364,8 +364,9 @@
                 const timezone = (timeElement.dataset.timezone || '').trim();
                 const emptyMessage = timeElement.dataset.emptyMessage || '';
                 const unsetMessage = timeElement.dataset.unsetMessage || '';
+                const isUnsetTimezone = !timezone || timezone === 'UTC';
 
-                if (!timezone) {
+                if (isUnsetTimezone) {
                     timeElement.textContent = unsetMessage || emptyMessage;
                     return;
                 }
@@ -453,7 +454,8 @@
 
                     const toastBody = document.createElement('div');
                     toastBody.className = 'toast-body';
-                    toastBody.textContent = message; // Use textContent instead of innerHTML
+                    toastBody.style.whiteSpace = 'pre-line';
+                    toastBody.textContent = String(message).replace(/<br\s*\/?>/gi, '\n');
 
                     const closeBtn = document.createElement('button');
                     closeBtn.type = 'button';

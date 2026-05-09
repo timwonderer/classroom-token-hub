@@ -25,7 +25,7 @@ os.environ['TZ'] = 'UTC'
 if platform.system() != 'Windows':
     time.tzset()  # Apply timezone change
 
-from flask import render_template, request, session
+from flask import has_request_context, render_template, request, session
 from datetime import datetime, timedelta, timezone
 import traceback
 import collections
@@ -331,14 +331,30 @@ def log_error_to_db(error_type=None, error_message=None, stack_trace=None, log_o
     This function should not raise exceptions to avoid recursive error loops.
     """
     try:
+        in_request_context = has_request_context()
+
+        # Never persist noisy static asset misses.
+        if in_request_context and request.path in {"/favicon.ico", "/sw.js"}:
+            return None
+
+        # FEAT constitutional rule: no ORM writes outside FEAT context.
+        from app.feats.base import is_feat_active
+        if not is_feat_active():
+            app.logger.warning(
+                "Skipping DB error log outside FEAT context: %s %s",
+                error_type or "unknown",
+                request.path if in_request_context else "-",
+            )
+            return None
+
         # Get request information if available
-        request_path = request.path if request else None
-        request_method = request.method if request else None
-        user_agent = request.headers.get('User-Agent', None) if request else None
+        request_path = request.path if in_request_context else None
+        request_method = request.method if in_request_context else None
+        user_agent = request.headers.get('User-Agent', None) if in_request_context else None
 
         # Get real IP (handles Cloudflare proxy)
         ip_address = None
-        if request:
+        if in_request_context:
             try:
                 from app.utils.ip_handler import get_real_ip
                 ip_address = get_real_ip()

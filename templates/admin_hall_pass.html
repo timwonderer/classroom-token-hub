@@ -103,25 +103,6 @@
 </div>
 
 <div class="container-fluid">
-    <div class="card shadow-sm mb-4">
-        <div class="card-body d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
-            <div>
-                <div class="fw-semibold">Class Context</div>
-                <div class="text-muted small">Only classes with hall pass enabled are available here.</div>
-            </div>
-            <form method="GET" action="{{ url_for('admin.hall_pass') }}" class="d-flex align-items-center gap-2">
-                <label for="hallPassJoinCode" class="form-label mb-0 small text-muted">Class</label>
-                <select id="hallPassJoinCode" name="join_code" class="form-select" onchange="this.form.submit()">
-                    {% for option in feature_options %}
-                        <option value="{{ option.join_code }}" {% if option.join_code == selected_feature_scope.join_code %}selected{% endif %}>
-                            {{ option.label }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </form>
-        </div>
-    </div>
-
     <div class="d-flex justify-content-end align-items-center mb-4">
         <div>
             {% if verify_url %}
@@ -162,7 +143,7 @@
                     </div>
                 </div>
                 <div class="col-auto">
-                    <a href="{{ url_for('admin.hall_pass_setup', join_code=current_join_code) }}" class="btn btn-outline-primary btn-sm">
+                    <a href="{{ url_for('admin.hall_pass_setup') }}" class="btn btn-outline-primary btn-sm">
                         <span class="material-symbols-outlined align-middle" style="font-size: 1.1rem;">tune</span>
                         Configure Pass Types
                     </a>
@@ -296,28 +277,7 @@
                 <div class="tab-pane fade" id="history" role="tabpanel" aria-labelledby="history-tab">
                     <!-- Filters -->
                     <div class="row g-3 mb-4">
-                        <div class="col-md-3">
-                            <label for="filterPeriod" class="form-label small fw-bold">Period</label>
-                            <select class="form-select form-select-sm" id="filterPeriod">
-                                <option value="">All Periods</option>
-                                {% if available_periods %}
-                                    {% for period in available_periods %}
-                                        <option value="{{ period }}">{{ period }}</option>
-                                    {% endfor %}
-                                {% else %}
-                                    <!-- Fallback to numeric periods if no data available -->
-                                    <option value="1">Period 1</option>
-                                    <option value="2">Period 2</option>
-                                    <option value="3">Period 3</option>
-                                    <option value="4">Period 4</option>
-                                    <option value="5">Period 5</option>
-                                    <option value="6">Period 6</option>
-                                    <option value="7">Period 7</option>
-                                    <option value="8">Period 8</option>
-                                {% endif %}
-                            </select>
-                        </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label for="filterType" class="form-label small fw-bold">Type</label>
                             <select class="form-select form-select-sm" id="filterType">
                                 <option value="">All Types</option>
@@ -328,11 +288,11 @@
                                 <option value="Summon">Summon</option>
                             </select>
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-3">
                             <label for="filterStartDate" class="form-label small fw-bold">Start Date</label>
                             <input type="date" class="form-control form-control-sm" id="filterStartDate">
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-3">
                             <label for="filterEndDate" class="form-label small fw-bold">End Date</label>
                             <input type="date" class="form-control form-control-sm" id="filterEndDate">
                         </div>
@@ -420,8 +380,7 @@ const settingsSavedIndicator = document.getElementById('settingsSavedIndicator')
 // Load current settings on page load
 function loadQueueSettings() {
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    const params = new URLSearchParams({ join_code: {{ current_join_code|tojson }} });
-    fetch(`/api/hall-pass/settings?${params.toString()}`, {
+    fetch('/api/hall-pass/settings', {
         method: 'GET',
         headers: {
             'X-CSRFToken': csrfToken
@@ -466,7 +425,6 @@ function saveQueueSettings() {
             'X-CSRFToken': csrfToken
         },
         body: JSON.stringify({
-            join_code: {{ current_join_code|tojson }},
             queue_enabled: queueEnabled,
             queue_limit: queueLimit
         })
@@ -506,7 +464,6 @@ const historyPageSize = 25;
 function loadHistory(page = 1) {
     currentHistoryPage = page;
 
-    const period = document.getElementById('filterPeriod').value;
     const type = document.getElementById('filterType').value;
     const startDate = document.getElementById('filterStartDate').value;
     const endDate = document.getElementById('filterEndDate').value;
@@ -516,11 +473,9 @@ function loadHistory(page = 1) {
         page_size: historyPageSize
     });
 
-    if (period) params.append('period', period);
     if (type) params.append('type', type);
     if (startDate) params.append('start_date', startDate);
     if (endDate) params.append('end_date', endDate);
-    params.append('join_code', {{ current_join_code|tojson }});
 
     fetch(`/api/hall-pass/history?${params.toString()}`)
         .then(response => response.json())

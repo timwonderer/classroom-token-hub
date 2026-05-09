@@ -23,6 +23,65 @@
     cursor: not-allowed;
     opacity: 0.65;
   }
+
+  #classTimezoneModal .modal-dialog {
+    max-width: 760px;
+  }
+
+  #classTimezoneModal .modal-body {
+    padding: 1.85rem 1.9rem 1.25rem;
+  }
+
+  #classTimezoneModal .modal-footer {
+    padding: 1rem 1.9rem 1.45rem;
+    border-top: 0;
+  }
+
+  #classTimezoneModal .class-timezone-body-copy {
+    font-size: 1.05rem;
+    line-height: 1.55;
+    margin-bottom: 1.35rem;
+  }
+
+  #classTimezoneModal .class-timezone-focus-panel {
+    border: 0;
+    border-radius: 0.45rem;
+    background: #f7f9fc;
+    padding: 1.05rem 1.1rem;
+    margin-bottom: 1rem;
+    text-align: center;
+  }
+
+  #classTimezoneModal .class-timezone-focus-label {
+    display: block;
+    font-size: 0.98rem;
+    font-weight: 700;
+    margin-bottom: 0.28rem;
+  }
+
+  #classTimezoneModal .class-timezone-focus-value {
+    font-size: 2.05rem;
+    line-height: 1.15;
+    letter-spacing: 0.01em;
+  }
+
+  #classTimezoneModal .class-timezone-focus-value.class-timezone-time {
+    font-size: 1.55rem;
+    line-height: 1.25;
+  }
+
+  #classTimezoneModal .class-timezone-actions .btn {
+    min-width: 250px;
+    font-size: 1.06rem;
+    line-height: 1.25;
+    padding: 0.72rem 1rem;
+  }
+
+  #classTimezoneModal .alert.alert-warning {
+    margin-bottom: 1.25rem;
+    padding: 0.85rem 1rem;
+    font-size: 1.02rem;
+  }
 </style>
 <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
 {% endblock %}
@@ -265,39 +324,12 @@
         <h5 class="mb-0 fs-3"><span class="material-symbols-outlined me-2 align-middle fs-1">groups</span>Class Roster
         </h5>
         <div>
-          <a href="{{ url_for('admin.export_students', join_code=session.get('current_join_code')) }}" class="btn btn-light btn-sm me-2">
+          <a href="{{ url_for('admin.export_students') }}" class="btn btn-light btn-sm me-2">
             <span class="material-symbols-outlined me-1" style="vertical-align: middle;">download</span> Export All
           </a>
         </div>
       </div>
       <div class="card-body">
-        <!-- Class Filter Tabs -->
-        <ul class="nav nav-pills mb-3" id="blockTabs" role="tablist">
-          {% for block in blocks %}
-          <li class="nav-item" role="presentation">
-            <button class="nav-link {% if loop.first %}active{% endif %}" id="block-{{ block }}-tab"
-              data-bs-toggle="pill" data-bs-target="#block-{{ block }}"
-              data-join-code="{{ join_codes_by_block.get(block|upper, '') }}" type="button" role="tab">
-              {% if block == "Unassigned" %}
-              <span class="material-symbols-outlined me-1" style="vertical-align: middle;">help</span>{{ block }}
-              {% else %}
-              {{ class_label(block) }}
-              {% endif %}
-              {% set all_students_in_block = students_by_block[block] if block in students_by_block else [] %}
-              {% set claimed_count = all_students_in_block|selectattr('username_hash')|list|length %}
-              {% set unclaimed_students_count = all_students_in_block|rejectattr('username_hash')|list|length %}
-              {% set unclaimed_seats_count = unclaimed_seats_by_block.get(block|upper, 0) %}
-              {% set unclaimed_count = unclaimed_seats_count + unclaimed_students_count %}
-              {% set total_count = claimed_count + unclaimed_count %}
-              <span class="badge bg-secondary ms-1">{{ total_count }}</span>
-              {% if unclaimed_count > 0 %}
-              <span class="badge bg-warning text-dark ms-1">{{ unclaimed_count }} unclaimed</span>
-              {% endif %}
-            </button>
-          </li>
-          {% endfor %}
-        </ul>
-
         <!-- Class Content -->
         <div class="tab-content block-tab-content" id="blockTabContent">
           {% for block in blocks %}
@@ -430,7 +462,7 @@
                       {% for student in unclaimed_students %}
                       <tr>
                         <td>
-                          <a href="{{ url_for('admin.student_detail', student_id=student.id, join_code=join_codes_by_block.get(block|upper, '')) }}"
+                          <a href="{{ url_for('admin.student_detail', student_id=student.id) }}"
                             class="text-decoration-none">
                             <span class="fw-bold">{{ student.full_name }}</span>
                           </a>
@@ -442,7 +474,7 @@
                           <span class="badge bg-warning text-dark">Needs Username</span>
                         </td>
                         <td>
-                          <a href="{{ url_for('admin.student_detail', student_id=student.id, join_code=join_codes_by_block.get(block|upper, '')) }}"
+                          <a href="{{ url_for('admin.student_detail', student_id=student.id) }}"
                             class="btn btn-sm btn-outline-primary"
                             aria-label="View details for {{ student.full_name }}">
                             <span class="material-symbols-outlined align-middle fs-6"
@@ -561,7 +593,7 @@
                             onchange="updateBulkToolbar('{{ block }}')" aria-label="Select {{ student.full_name }}">
                         </td>
                         <td>
-                          <a href="{{ url_for('admin.student_detail', student_id=student.id, join_code=join_codes_by_block.get(block|upper, '')) }}"
+                          <a href="{{ url_for('admin.student_detail', student_id=student.id) }}"
                             class="fw-bold text-decoration-none">
                             {{ student.full_name }}
                           </a>
@@ -994,11 +1026,27 @@
         </h5>
       </div>
       <div class="modal-body">
-        <div class="alert alert-warning">
-          Once you set the official class time zone for <strong id="class-timezone-identifier-inline"></strong>, it cannot be changed.
+        <div class="alert alert-warning" role="status">
+          You are currently setting the time zone for Class <strong id="class-timezone-identifier-inline"></strong>
         </div>
-        <p class="mb-3" id="class-timezone-detected-copy"></p>
-        <p class="mb-3">This means your entire classroom economy will operate based on the time of this time zone.</p>
+
+        <p class="class-timezone-body-copy">
+          This class uses one shared time zone so payroll, rent, and other time-based actions run consistently for everyone.
+        </p>
+
+        <div class="class-timezone-focus-panel">
+          <p class="class-timezone-focus-label">We have automatically detected your time zone to be:</p>
+          <p class="class-timezone-focus-value fw-semibold text-center" id="class-timezone-detected-zone"></p>
+        </div>
+
+        <div class="class-timezone-focus-panel">
+          <p class="class-timezone-focus-label ">Your current local time is:</p>
+          <p class="class-timezone-focus-value class-timezone-time fw-semibold text-center" id="class-timezone-detected-time"></p>
+        </div>
+
+        <p class="class-timezone-body-copy mb-0" id="class-timezone-detected-copy">
+          Would you like to use this time zone for this class?
+        </p>
 
         <div id="class-timezone-custom-section" class="d-none">
           <label for="class-timezone-select" class="form-label fw-bold">Choose a different time zone</label>
@@ -1015,7 +1063,7 @@
       </div>
       <div class="modal-footer justify-content-between">
         <button type="button" class="btn btn-outline-secondary d-none" id="class-timezone-back-btn">Back</button>
-        <div class="ms-auto d-flex gap-2">
+        <div class="ms-auto d-flex gap-2 class-timezone-actions">
           <button type="button" class="btn btn-outline-primary" id="class-timezone-no-btn">No, I want to choose a different one</button>
           <button type="button" class="btn btn-primary" id="class-timezone-yes-btn">Yes, use this time zone</button>
           <button type="button" class="btn btn-primary d-none" id="class-timezone-confirm-btn">Confirm Selected Time Zone</button>
@@ -1031,6 +1079,9 @@
 <script>
   console.log('Student management scripts loading.');
   const pendingClassTimezoneConfirmations = {{ pending_class_timezone_confirmations|tojson }};
+  const currentClassTimezone = "{{ (admin_current_class_context.class_timezone if admin_current_class_context else '')|e }}";
+  const currentClassId = "{{ (admin_current_class_context.class_id if admin_current_class_context else '')|e }}";
+  const currentClassIdentifier = "{{ (admin_current_class_context.class_identifier if admin_current_class_context else '')|e }}";
 
   // Join Code Copy Function
   function copyJoinCode(code, btn) {
@@ -1923,42 +1974,11 @@
       });
   }
 
-  function setCurrentJoinCode(joinCode) {
-    if (!joinCode) {
-      return;
-    }
-
-    fetch('/admin/current-class', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-      },
-      body: JSON.stringify({ join_code: joinCode })
-    }).catch(error => {
-      console.error('Error updating current class:', error);
-    });
-  }
-
-  function initCurrentClassSync() {
-    const activeTab = document.querySelector('#blockTabs .nav-link.active[data-join-code]');
-    if (activeTab) {
-      setCurrentJoinCode(activeTab.dataset.joinCode);
-    }
-
-    document.querySelectorAll('#blockTabs .nav-link[data-join-code]').forEach(tab => {
-      tab.addEventListener('shown.bs.tab', event => {
-        setCurrentJoinCode(event.target.dataset.joinCode);
-      });
-    });
-  }
-
   // (Tap toggle controls moved to Attendance page)
 
   // -------------------- CREATE NEW CLASS SECTION --------------------
 
   document.addEventListener('DOMContentLoaded', function () {
-    initCurrentClassSync();
     const blockSelect = document.getElementById('block_select');
     const blockHidden = document.getElementById('block');
     const newBlockInput = document.getElementById('new_block_input');
@@ -1993,13 +2013,32 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     const modalEl = document.getElementById('classTimezoneModal');
-    if (!modalEl || !window.bootstrap || !Array.isArray(pendingClassTimezoneConfirmations) || pendingClassTimezoneConfirmations.length === 0) {
+    if (!modalEl || !window.bootstrap) {
+      return;
+    }
+
+    const timezoneConfirmationQueue = Array.isArray(pendingClassTimezoneConfirmations)
+      ? [...pendingClassTimezoneConfirmations]
+      : [];
+    const unresolvedCurrentTimezone = ['', 'UTC', 'Etc/UTC'].includes((currentClassTimezone || '').trim());
+    const inferredClassId = currentClassId || document.getElementById('admin-class-switcher-select')?.value || '';
+    const inferredClassIdentifier = currentClassIdentifier || document.querySelector('.sidebar-scope-context')?.textContent?.trim() || 'this class';
+    if (timezoneConfirmationQueue.length === 0 && unresolvedCurrentTimezone && inferredClassId) {
+      timezoneConfirmationQueue.push({
+        class_id: inferredClassId,
+        class_identifier: inferredClassIdentifier,
+        class_timezone: currentClassTimezone || '',
+      });
+    }
+    if (timezoneConfirmationQueue.length === 0) {
       return;
     }
 
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     const identifierInline = document.getElementById('class-timezone-identifier-inline');
     const detectedCopy = document.getElementById('class-timezone-detected-copy');
+    const detectedZone = document.getElementById('class-timezone-detected-zone');
+    const detectedTime = document.getElementById('class-timezone-detected-time');
     const customSection = document.getElementById('class-timezone-custom-section');
     const selectEl = document.getElementById('class-timezone-select');
     const previewEl = document.getElementById('class-timezone-preview');
@@ -2009,6 +2048,12 @@
     const backBtn = document.getElementById('class-timezone-back-btn');
     const confirmBtn = document.getElementById('class-timezone-confirm-btn');
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    // If core modal internals are missing (stale template / cached partial), fail safely.
+    if (!identifierInline || !detectedCopy || !customSection || !selectEl || !previewEl || !errorEl || !yesBtn || !noBtn || !backBtn || !confirmBtn) {
+      console.warn('Timezone modal DOM incomplete; skipping timezone modal flow.');
+      return;
+    }
 
     let queueIndex = 0;
     const detectedTimezone = (window.TimezoneUtils?.detectTimezone?.() || 'America/Los_Angeles');
@@ -2024,7 +2069,7 @@
           hour: 'numeric',
           minute: '2-digit',
           hour12: true,
-          timeZoneName: 'long',
+          timeZoneName: 'short',
         });
       } catch (error) {
         return now.toLocaleString('en-US', {
@@ -2058,7 +2103,17 @@
 
     function showDetectedState(item) {
       identifierInline.textContent = item.class_identifier;
-      detectedCopy.textContent = `We have detected your current time zone as ${detectedTimezone} and your local time is ${formatCurrentTime(detectedTimezone)}. Do you want to use this time zone as your official class time zone? This means your entire classroom economy will operate based on the time of this time zone. Once you have set this for ${item.class_identifier}, you cannot change it in the future.`;
+      if (detectedZone) {
+        detectedZone.textContent = detectedTimezone.split('_').join(' ');
+      }
+      if (detectedTime) {
+        detectedTime.textContent = formatCurrentTime(detectedTimezone);
+      }
+      if (!detectedZone || !detectedTime) {
+        detectedCopy.innerHTML = `We detected <strong>${detectedTimezone.split('_').join(' ')}</strong>. Current local time: <strong>${formatCurrentTime(detectedTimezone)}</strong>. Use this as the official class time zone? <strong>Once you confirm, it cannot be changed.</strong>`;
+      } else {
+        detectedCopy.innerHTML = `Use this as the official class time zone? <strong>Once you confirm, it cannot be changed.</strong>`;
+      }
       customSection.classList.add('d-none');
       backBtn.classList.add('d-none');
       yesBtn.classList.remove('d-none');
@@ -2103,7 +2158,7 @@
         }
 
         queueIndex += 1;
-        if (queueIndex >= pendingClassTimezoneConfirmations.length) {
+        if (queueIndex >= timezoneConfirmationQueue.length) {
           modal.hide();
           window.location.reload();
           return;
@@ -2118,7 +2173,7 @@
     }
 
     function renderQueueItem() {
-      const item = pendingClassTimezoneConfirmations[queueIndex];
+      const item = timezoneConfirmationQueue[queueIndex];
       if (!item) {
         modal.hide();
         return;
@@ -2128,21 +2183,21 @@
     }
 
     yesBtn.addEventListener('click', function () {
-      const item = pendingClassTimezoneConfirmations[queueIndex];
+      const item = timezoneConfirmationQueue[queueIndex];
       if (item) {
         saveTimezone(item, detectedTimezone);
       }
     });
 
     noBtn.addEventListener('click', function () {
-      const item = pendingClassTimezoneConfirmations[queueIndex];
+      const item = timezoneConfirmationQueue[queueIndex];
       if (item) {
         showCustomState(item);
       }
     });
 
     backBtn.addEventListener('click', function () {
-      const item = pendingClassTimezoneConfirmations[queueIndex];
+      const item = timezoneConfirmationQueue[queueIndex];
       if (item) {
         showDetectedState(item);
       }
@@ -2153,14 +2208,14 @@
         previewEl.textContent = 'Select a time zone to preview the current local time.';
         return;
       }
-      const item = pendingClassTimezoneConfirmations[queueIndex];
+      const item = timezoneConfirmationQueue[queueIndex];
       if (item) {
         previewEl.textContent = `Current local time in ${this.value} is ${formatCurrentTime(this.value)}. Confirm to lock this as the official class time zone for ${item.class_identifier}.`;
       }
     });
 
     confirmBtn.addEventListener('click', function () {
-      const item = pendingClassTimezoneConfirmations[queueIndex];
+      const item = timezoneConfirmationQueue[queueIndex];
       if (!item) return;
       if (!selectEl.value) {
         setError('Choose a time zone before confirming.');

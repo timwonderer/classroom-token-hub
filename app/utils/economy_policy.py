@@ -523,6 +523,8 @@ def replace_enabled_class_features(class_id: str, enabled_features: set[str]) ->
 
     valid_features = set(ClassFeature.feature_names())
     requested_features = {name for name in enabled_features if name in valid_features}
+    # Payroll is mandatory in v2 class feature gating.
+    requested_features.add("payroll")
     existing_rows = ClassFeature.query.filter_by(class_id=class_id).all()
     existing_names = {row.feature_name for row in existing_rows}
 

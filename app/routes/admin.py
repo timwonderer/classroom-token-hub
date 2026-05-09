@@ -51,7 +51,7 @@ import pytz
 from werkzeug.exceptions import HTTPException
 
 from app.extensions import db, limiter
-from app.feats.base import feat_shell
+from app.feats.base import feat_shell, FEATContext
 from app.access import AccessScopeDenied, resolve_scope
 from app.models import (
     Student, Admin, ClassEconomy, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
@@ -257,6 +257,22 @@ def _admin_write_has_join_code_conflict(admin_id: int | None) -> bool:
     return requested_join_code != session_join_code
 
 
+def _admin_request_has_join_code_conflict(admin_id: int | None) -> bool:
+    """Return True when request-supplied join_code disagrees with active nav/session class context."""
+    if not admin_id:
+        return False
+
+    requested_join_code = _get_requested_admin_join_code()
+    if not requested_join_code:
+        return False
+
+    session_join_code = _get_current_admin_join_code(admin_id)
+    if not session_join_code:
+        return True
+
+    return requested_join_code != session_join_code
+
+
 def _route_uses_admin_class_context() -> bool:
     endpoint = request.endpoint or ''
     if not endpoint.startswith('admin.'):
@@ -279,24 +295,6 @@ def _resolve_admin_class_context(admin_id: int | None) -> dict | None:
         return None
 
     candidate_class_id = (session.get('current_class_id') or '').strip() or None
-    if request.method == 'GET':
-        requested_join_code = _get_requested_admin_join_code()
-        if requested_join_code:
-            if not _admin_owns_join_code(admin_id, requested_join_code):
-                return None
-            requested_class = (
-                ClassEconomy.query.with_entities(
-                    ClassEconomy.class_id, ClassEconomy.join_code, ClassEconomy.teacher_id
-                )
-                .filter(
-                    ClassEconomy.teacher_id == admin_id,
-                    ClassEconomy.join_code == requested_join_code,
-                )
-                .first()
-            )
-            if not requested_class:
-                return None
-            candidate_class_id = requested_class.class_id
 
     if candidate_class_id:
         class_row = (
@@ -405,6 +403,9 @@ def before_request():
 
     admin_id = session.get('admin_id')
     if admin_id and _route_uses_admin_class_context():
+        if _admin_request_has_join_code_conflict(admin_id):
+            return _handle_mismatched_admin_class_context()
+
         if _route_requires_admin_class_context() and _admin_write_has_join_code_conflict(admin_id):
             return _handle_mismatched_admin_class_context()
 
@@ -705,16 +706,39 @@ def _build_admin_auth_fields(username: str, *, existing_salt: bytes | None = Non
 
 def _scoped_students(include_unassigned=True):
     """Return a query for students the current admin can access."""
-    return get_admin_student_query(include_unassigned=include_unassigned)
+    query = get_admin_student_query(include_unassigned=include_unassigned)
+    class_id = getattr(g, "admin_class_id", None) or (session.get("current_class_id") or "").strip() or None
+    admin_id = session.get("admin_id")
+    if not class_id or not admin_id:
+        return query
+
+    class_scoped_student_ids = (
+        db.session.query(TeacherBlock.student_id)
+        .filter(
+            TeacherBlock.teacher_id == admin_id,
+            TeacherBlock.class_id == class_id,
+            TeacherBlock.student_id.isnot(None),
+        )
+        .subquery()
+    )
+    return query.filter(Student.id.in_(sa.select(class_scoped_student_ids)))
 
 
 def _get_teacher_blocks():
     """Get sorted list of blocks from teacher's students."""
-    students_blocks = _scoped_students().with_entities(Student.block).all()
-    return sorted(set(
-        b.strip().upper() for s_blocks, in students_blocks if s_blocks
-        for b in s_blocks.split(',') if b.strip()
-    ))
+    admin_id = session.get("admin_id")
+    class_id = getattr(g, "admin_class_id", None) or (session.get("current_class_id") or "").strip() or None
+    if not admin_id:
+        return []
+
+    query = TeacherBlock.query.with_entities(TeacherBlock.block).filter(
+        TeacherBlock.teacher_id == admin_id,
+        TeacherBlock.block.isnot(None),
+    )
+    if class_id:
+        query = query.filter(TeacherBlock.class_id == class_id)
+    rows = query.all()
+    return sorted({(block or "").strip().upper() for (block,) in rows if (block or "").strip()})
 
 
 def _get_students_needing_transaction_backfill(teacher_id):
@@ -803,11 +827,14 @@ def _get_class_labels_for_blocks(admin_id, blocks):
     if not blocks:
         return {}
 
-    teacher_blocks = (
+    class_id = getattr(g, "admin_class_id", None) or (session.get("current_class_id") or "").strip() or None
+    teacher_blocks_query = (
         TeacherBlock.query
         .filter(TeacherBlock.teacher_id == admin_id, TeacherBlock.block.in_(blocks))
-        .all()
     )
+    if class_id:
+        teacher_blocks_query = teacher_blocks_query.filter(TeacherBlock.class_id == class_id)
+    teacher_blocks = teacher_blocks_query.all()
     labels = {tb.block: tb.get_class_label() for tb in teacher_blocks}
 
     for block in blocks:
@@ -822,11 +849,14 @@ def _get_join_codes_by_block(admin_id, blocks):
     if not blocks:
         return {}
 
-    teacher_blocks = (
+    class_id = getattr(g, "admin_class_id", None) or (session.get("current_class_id") or "").strip() or None
+    teacher_blocks_query = (
         TeacherBlock.query
         .filter(TeacherBlock.teacher_id == admin_id, TeacherBlock.block.in_(blocks))
-        .all()
     )
+    if class_id:
+        teacher_blocks_query = teacher_blocks_query.filter(TeacherBlock.class_id == class_id)
+    teacher_blocks = teacher_blocks_query.all()
     join_codes = {tb.block: tb.join_code for tb in teacher_blocks if tb.join_code}
 
     return join_codes
@@ -1504,8 +1534,15 @@ def _build_pending_class_timezone_payload(class_row: ClassEconomy) -> dict:
     }
 
 
+def _class_timezone_needs_confirmation(class_row: ClassEconomy | None) -> bool:
+    if class_row is None:
+        return False
+    timezone_name = (class_row.class_timezone or "").strip()
+    return timezone_name in ("", "UTC")
+
+
 def _queue_pending_class_timezone_confirmation(class_row: ClassEconomy | None):
-    if class_row is None or class_row.class_timezone:
+    if not _class_timezone_needs_confirmation(class_row):
         return
 
     pending = session.get("pending_class_timezone_confirmations", [])
@@ -1538,7 +1575,7 @@ def _consume_pending_class_timezone_confirmations(admin_id: int | None) -> list[
     refreshed = []
     for item in pending:
         class_row = class_rows.get(item.get("class_id"))
-        if class_row is None or class_row.class_timezone:
+        if not _class_timezone_needs_confirmation(class_row):
             continue
         refreshed.append(_build_pending_class_timezone_payload(class_row))
 
@@ -1599,17 +1636,7 @@ def _ensure_join_code_anchors(teacher_id, join_code, class_label=None, return_me
             role="admin",
         ))
 
-    try:
-        with db.session.begin_nested():
-            db.session.flush()
-    except IntegrityError:
-        db.session.rollback()
-        existing = ClassEconomy.query.filter_by(join_code=join_code).first()
-        if existing:
-            if return_metadata:
-                return existing.class_id, False, existing
-            return existing.class_id
-        raise
+    db.session.flush()
     if return_metadata:
         return economy.class_id, created, economy
     return economy.class_id
@@ -3269,8 +3296,13 @@ def signup():
             tos_accepted=True,
             tos_accepted_at=utc_now()
         )
-        db.session.add(new_admin)
-        db.session.commit()
+        # Close any read-only transaction opened during validation before FEAT entry.
+        db.session.rollback()
+
+        signup_idempotency_key = f"feat:iden:admin-signup:{username}"
+        with FEATContext("FEAT-IDEN-001", idempotency_key=signup_idempotency_key):
+            db.session.add(new_admin)
+            db.session.flush()
         current_app.logger.info(f"Admin account created successfully")
         # Clear session
         session.pop("admin_totp_secret", None)
@@ -3772,26 +3804,34 @@ def settings():
     admin = db.get_or_404(Admin, admin_id)
 
     if request.method == 'POST':
-        # Update display name
-        display_name = request.form.get('display_name', '').strip()
-        if display_name:
-            admin.display_name = display_name
-        else:
-            admin.display_name = None  # Use teacher_public_id as fallback
+        form_pairs = sorted((key, value) for key, value in request.form.items())
+        payload_hash = hashlib.sha256(repr(form_pairs).encode("utf-8")).hexdigest()[:16]
+        idempotency_key = f"feat:iden:admin-settings:{admin_id}:{payload_hash}"
 
-        # Update class labels for each block
-        blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).distinct(TeacherBlock.block).all()
-        for block in blocks:
-            class_label_key = f'class_label_{block.block}'
-            class_label = request.form.get(class_label_key, '').strip()
+        # Ensure FEAT owns transaction boundary for this write path.
+        db.session.rollback()
+        with FEATContext("FEAT-IDEN-001", idempotency_key=idempotency_key):
+            admin = db.get_or_404(Admin, admin_id)
 
-            # Update all TeacherBlock entries with this block value
-            TeacherBlock.query.filter_by(
-                teacher_id=admin_id,
-                block=block.block
-            ).update({'class_label': class_label if class_label else None})
+            # Update display name
+            display_name = request.form.get('display_name', '').strip()
+            if display_name:
+                admin.display_name = display_name
+            else:
+                admin.display_name = None  # Use teacher_public_id as fallback
 
-        db.session.commit()
+            # Update class labels for each block
+            blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).distinct(TeacherBlock.block).all()
+            for block in blocks:
+                class_label_key = f'class_label_{block.block}'
+                class_label = request.form.get(class_label_key, '').strip()
+
+                # Update all TeacherBlock entries with this block value
+                TeacherBlock.query.filter_by(
+                    teacher_id=admin_id,
+                    block=block.block
+                ).update({'class_label': class_label if class_label else None})
+
         set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
         flash("Settings updated successfully!", "success")
         return redirect(url_for('admin.settings'))
@@ -3844,11 +3884,45 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
 
     target_join_codes = [join_codes_by_block[b] for b in target_blocks if join_codes_by_block.get(b)]
     target_classes = ClassEconomy.query.filter(ClassEconomy.join_code.in_(target_join_codes)).all()
-    class_id_by_block = {c.block: c.class_id for c in target_classes if c.block}
-    all_rent_settings = RentSettings.query.filter(
-        RentSettings.class_id.in_([c.class_id for c in target_classes]),
-        RentSettings.is_enabled == True
-    ).all()
+    class_id_by_join_code = {c.join_code: c.class_id for c in target_classes if c.join_code}
+    class_id_by_block = {
+        block: class_id_by_join_code.get(join_codes_by_block.get(block))
+        for block in target_blocks
+        if join_codes_by_block.get(block)
+    }
+    # Use projected columns only; local dev DB may not have newer RentSettings fields yet.
+    rent_settings_rows = (
+        db.session.query(
+            RentSettings.id,
+            RentSettings.class_id,
+            RentSettings.is_enabled,
+            RentSettings.first_rent_due_date,
+            RentSettings.frequency_type,
+            RentSettings.custom_frequency_value,
+            RentSettings.custom_frequency_unit,
+            RentSettings.due_day_of_month,
+            RentSettings.grace_period_days,
+        )
+        .filter(
+            RentSettings.class_id.in_([c.class_id for c in target_classes]),
+            RentSettings.is_enabled == True
+        )
+        .all()
+    )
+    all_rent_settings = [
+        SimpleNamespace(
+            id=row.id,
+            class_id=row.class_id,
+            is_enabled=row.is_enabled,
+            first_rent_due_date=row.first_rent_due_date,
+            frequency_type=row.frequency_type,
+            custom_frequency_value=row.custom_frequency_value,
+            custom_frequency_unit=row.custom_frequency_unit,
+            due_day_of_month=row.due_day_of_month,
+            grace_period_days=row.grace_period_days,
+        )
+        for row in rent_settings_rows
+    ]
     settings_by_block = {
         block: next((rs for rs in all_rent_settings if rs.class_id == class_id_by_block.get(block)), None)
         for block in target_blocks
@@ -4067,6 +4141,46 @@ def students():
     current_admin = session.get('admin_id')
     pending_class_timezone_confirmations = _consume_pending_class_timezone_confirmations(current_admin)
 
+    class_context = g.admin_class_context or {}
+    current_class_id = (class_context.get('class_id') or session.get('current_class_id') or '').strip()
+    current_join_code = (class_context.get('join_code') or session.get('current_join_code') or '').strip()
+    if not current_class_id:
+        first_class = (
+            ClassEconomy.query.with_entities(ClassEconomy.class_id, ClassEconomy.join_code)
+            .filter(ClassEconomy.teacher_id == current_admin)
+            .order_by(ClassEconomy.display_name.asc(), ClassEconomy.join_code.asc())
+            .first()
+        )
+        if not first_class:
+            flash("Create a class before managing students.", "error")
+            return redirect(url_for('admin.dashboard'))
+        current_class_id = first_class.class_id
+        current_join_code = first_class.join_code
+        session['current_class_id'] = current_class_id
+        session['current_join_code'] = current_join_code
+
+    # Single-context invariant: timezone prompt on this page must only target current class.
+    if current_class_id:
+        pending_class_timezone_confirmations = [
+            item for item in pending_class_timezone_confirmations
+            if item.get("class_id") == current_class_id
+        ]
+    else:
+        pending_class_timezone_confirmations = []
+
+    pending_ids = {item.get("class_id") for item in pending_class_timezone_confirmations if item.get("class_id")}
+    if current_class_id and current_class_id not in pending_ids:
+        class_row = ClassEconomy.query.filter(
+            ClassEconomy.teacher_id == current_admin,
+            ClassEconomy.class_id == current_class_id,
+            sa.or_(
+                ClassEconomy.class_timezone.is_(None),
+                ClassEconomy.class_timezone == 'UTC',
+            ),
+        ).first()
+        if class_row:
+            pending_class_timezone_confirmations.append(_build_pending_class_timezone_payload(class_row))
+
     # Backfill any legacy credential hashes to the canonical format for this admin's data
     updated_records = _normalize_claim_credentials_for_admin(current_admin)
     if updated_records:
@@ -4074,50 +4188,35 @@ def students():
             "Normalized %s student/seat claim credential(s) for admin %s", updated_records, current_admin
         )
 
-    # Get claimed students (Student records)
-    all_students = _scoped_students().order_by(Student.block, Student.first_name).all()
+    # Strict single-context: only roster data anchored to the active class_id.
+    teacher_blocks = TeacherBlock.query.filter_by(
+        teacher_id=current_admin,
+        class_id=current_class_id,
+    ).all()
 
-    # Get ALL TeacherBlock records (both claimed and unclaimed seats)
-    teacher_blocks = TeacherBlock.query.filter_by(teacher_id=current_admin).all()
-
-    # Collect all blocks from both students and teacher_blocks
-    blocks_set = set()
-
-    # Add blocks from claimed students
-    for s in all_students:
-        if s.block:
-            for b in s.block.split(','):
-                b = b.strip().upper()
-                if b:
-                    blocks_set.add(b)
-
-    # Add blocks from TeacherBlock records (including unclaimed)
-    for tb in teacher_blocks:
-        if tb.block:
-            blocks_set.add(tb.block.strip().upper())
-
-    blocks = sorted(blocks_set)
-
-    # Check if there are any students without block assignments
-    unassigned_students = [s for s in all_students if not s.block or not s.block.strip()]
-    if unassigned_students:
-        # Add "Unassigned" as a special block at the beginning
-        blocks = ["Unassigned"] + blocks
+    blocks = sorted({
+        tb.block.strip().upper()
+        for tb in teacher_blocks
+        if tb.block and tb.block.strip()
+    })
 
     # Group students by block (students can appear in multiple blocks)
     students_by_block = {}
 
-    # Handle unassigned students first
-    if unassigned_students:
-        students_by_block["Unassigned"] = unassigned_students
+    # Claimed students are resolved through TeacherBlock rows in the active class.
+    claimed_student_ids = sorted({
+        tb.student_id for tb in teacher_blocks
+        if tb.student_id is not None
+    })
+    all_students = _scoped_students().filter(Student.id.in_(claimed_student_ids)).order_by(Student.block, Student.first_name).all() if claimed_student_ids else []
 
-    # Group students by their assigned blocks
+    # Group students by block within this class only.
     for block in blocks:
-        if block != "Unassigned":  # Skip the special "Unassigned" block
-            students_by_block[block] = [
-                s for s in all_students
-                if s.block and block.upper() in [b.strip().upper() for b in s.block.split(',')]
-            ]
+        block_claimed_ids = {
+            tb.student_id for tb in teacher_blocks
+            if tb.block and tb.block.strip().upper() == block and tb.student_id is not None
+        }
+        students_by_block[block] = [s for s in all_students if s.id in block_claimed_ids]
 
     # Add username_display attribute to each student
     for student in all_students:
@@ -4133,7 +4232,7 @@ def students():
     unclaimed_seats_by_block = {}
     unclaimed_seats_list_by_block = {}
 
-    # Process teacher_blocks in one pass to build all required structures
+    # Process current-class teacher_blocks in one pass to build all required structures.
     for tb in teacher_blocks:
         block_name = tb.block.strip().upper() if tb.block else None
         if block_name:
@@ -4195,71 +4294,10 @@ def students():
     from app.models import RentItem, RentSettings, RentPayment, StudentItem
     student_rent_privileges = _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, students_by_block)
 
-    # Ensure all blocks with students have join codes (for legacy teachers with pre-c3aa3a0 classes)
-    # If a block has students but no TeacherBlock records, look up or generate a join code
-    # Fetch all claimed TeacherBlock records for current admin upfront
-    claimed_tb_by_block = {tb.block: tb for tb in teacher_blocks if tb.block and tb.is_claimed}
-    for block in blocks:
-        if block != "Unassigned" and block not in join_codes_by_block:
-            # This block has students but no TeacherBlock records yet
-            # Check if there are any claimed TeacherBlock records for this teacher-block combination
-            existing_tb = claimed_tb_by_block.get(block)
-            
-            if existing_tb and existing_tb.join_code:
-                # Use existing join code from claimed seat
-                join_codes_by_block[block] = existing_tb.join_code
-            else:
-                # No join code exists for this block yet - generate a new unique one
-                # Try up to 10 times to generate a unique code to prevent infinite loops
-                new_code = None
-                for _ in range(MAX_JOIN_CODE_RETRIES):
-                    new_code = generate_join_code()
-                    # Ensure uniqueness across all teachers
-                    if not TeacherBlock.query.filter_by(join_code=new_code).first():
-                        join_codes_by_block[block] = new_code
-                        # Persist the new join code to the database to prevent race conditions
-                        # Create a placeholder TeacherBlock with dummy values to satisfy NOT NULL constraints
-                        # This is for legacy classes that don't have TeacherBlock entries yet
-                        placeholder_salt = get_random_salt()
-                        placeholder_first_half_hash = hash_hmac(LEGACY_PLACEHOLDER_CREDENTIAL.encode(), placeholder_salt)
-                        
-                        new_teacher_block = TeacherBlock(
-                            teacher_id=current_admin,
-                            block=block,
-                            join_code=new_code,
-                            is_claimed=False,
-                            # Placeholder values for required fields
-                            first_name=LEGACY_PLACEHOLDER_FIRST_NAME,
-                            last_initial=LEGACY_PLACEHOLDER_LAST_INITIAL,
-                            last_name_hash_by_part=None,
-                            dob_sum_hash=None,
-                            salt=placeholder_salt,
-                            first_half_hash=placeholder_first_half_hash,
-                        )
-                        db.session.add(new_teacher_block)
-                        try:
-                            db.session.commit()
-                        except Exception as e:
-                            current_app.logger.error(f"Failed to persist TeacherBlock for block {block} with join code {new_code}: {e}")
-                            db.session.rollback()
-                        break
-                else:
-                    # If we couldn't generate a unique code after max_retries, use a timestamp-based fallback
-                    # Format: B + block_initial + timestamp_suffix (e.g., "BA0123" for block "A")
-                    # This produces a 6-character code: B(1) + block_initial(1) + timestamp(4) = 6 total
-                    block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
-                    timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
-                    new_code = f"B{block_initial}{timestamp_suffix:04d}"
-                    join_codes_by_block[block] = new_code
-                    current_app.logger.warning(
-                        f"Failed to generate unique join code after {MAX_JOIN_CODE_RETRIES} attempts. "
-                        f"Using fallback code {new_code} for block {block}"
-                    )
-            
-            # Initialize unclaimed seats counter for this block
-            if block not in unclaimed_seats_by_block:
-                unclaimed_seats_by_block[block] = 0
-                unclaimed_seats_list_by_block[block] = []
+    # Canonical class context (single page scope).
+    if blocks and current_join_code:
+        for block in blocks:
+            join_codes_by_block[block] = current_join_code
 
     return render_template('admin_students.html',
                          students=all_students,
@@ -4273,6 +4311,7 @@ def students():
                          student_rent_privileges=student_rent_privileges,
                          timezone_choices=pytz.common_timezones,
                          pending_class_timezone_confirmations=pending_class_timezone_confirmations,
+                         single_context_mode=True,
                          current_page="students")
 
 
@@ -4282,18 +4321,19 @@ def set_current_class():
     """Set the current class using class_id as the backend session reference."""
     data = request.get_json(silent=True) or {}
     class_id = (data.get('class_id') or '').strip()
-    if not class_id:
+    join_code = (data.get('join_code') or '').strip().upper()
+    if not class_id and not join_code:
         return jsonify({'status': 'error', 'message': 'Class ID required'}), 400
 
     admin_id = session.get('admin_id')
-    class_row = (
-        ClassEconomy.query.with_entities(ClassEconomy.class_id, ClassEconomy.join_code)
-        .filter(
-            ClassEconomy.teacher_id == admin_id,
-            ClassEconomy.class_id == class_id,
-        )
-        .first()
+    query = ClassEconomy.query.with_entities(ClassEconomy.class_id, ClassEconomy.join_code).filter(
+        ClassEconomy.teacher_id == admin_id,
     )
+    if class_id:
+        query = query.filter(ClassEconomy.class_id == class_id)
+    else:
+        query = query.filter(ClassEconomy.join_code == join_code)
+    class_row = query.first()
     if class_row is None:
         return jsonify({'status': 'error', 'message': 'Access denied'}), 403
 
@@ -4314,11 +4354,19 @@ def set_class_timezone(class_id: str):
         return jsonify({'status': 'error', 'message': 'Invalid timezone.'}), 400
 
     admin_id = session.get('admin_id')
+    current_class_id = (session.get('current_class_id') or '').strip()
+    if current_class_id and class_id != current_class_id:
+        return jsonify({
+            'status': 'error',
+            'message': 'Class scope mismatch. Switch class from the navigation to continue.',
+        }), 403
+
     class_row = ClassEconomy.query.filter_by(class_id=class_id, teacher_id=admin_id).first()
     if class_row is None:
         return jsonify({'status': 'error', 'message': 'Class not found.'}), 404
 
-    if class_row.class_timezone:
+    timezone_needs_confirmation = _class_timezone_needs_confirmation(class_row)
+    if not timezone_needs_confirmation:
         if class_row.class_timezone == timezone_name:
             _remove_pending_class_timezone_confirmation(class_id)
             return jsonify({
@@ -4332,10 +4380,14 @@ def set_class_timezone(class_id: str):
         }), 409
 
     try:
-        class_row.class_timezone = timezone_name
-        db.session.commit()
-    except Exception as exc:
+        idempotency_key = f"feat:iden:set-class-timezone:{admin_id}:{class_id}:{timezone_name}"
+        # Route reads above may open an implicit transaction; clear it so FEAT owns the boundary.
         db.session.rollback()
+        with FEATContext("FEAT-IDEN-001", idempotency_key=idempotency_key):
+            # Persist an explicit confirmed UTC value distinct from default placeholder UTC.
+            class_row.class_timezone = 'Etc/UTC' if timezone_name == 'UTC' else timezone_name
+            db.session.flush()
+    except Exception:
         current_app.logger.error(
             "Failed to set class timezone for class_id=%s", class_id, exc_info=True
         )
@@ -7882,8 +7934,8 @@ def hall_pass():
     selected_scope = require_admin_feature_scope(
         'hall_pass',
         admin_id=admin_id,
-        requested_join_code=request.args.get('join_code'),
-        requested_block=request.args.get('block'),
+        requested_join_code=None,
+        requested_block=None,
     )
     selected_join_code = selected_scope['join_code']
     selected_class_id = selected_scope.get('class_id')
@@ -7967,7 +8019,7 @@ def hall_pass_setup():
     selected_scope = require_admin_feature_scope(
         'hall_pass',
         admin_id=admin_id,
-        requested_join_code=request.args.get('join_code'),
+        requested_join_code=None,
     )
     return render_template(
         'hall_pass_setup.html',
@@ -9591,165 +9643,164 @@ def upload_students():
 
     # Read file content and remove BOM if present
     content = file.stream.read().decode("UTF-8-sig")  # UTF-8-sig removes BOM
-    stream = io.StringIO(content, newline=None)
-    csv_input = csv.DictReader(stream)
-    added_count = 0
-    errors = 0
-    duplicated = 0
-
-    # Track join codes for each block
-    from app.models import TeacherBlock
-    from app.utils.join_code import generate_join_code
     teacher_id = session.get("admin_id")
+    idempotency_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+    idempotency_key = f"feat:iden:upload-students:{teacher_id}:{idempotency_hash}"
 
-    # Get or generate join codes for each block in this upload
-    join_codes_by_block = {}
-    class_ids_by_block = {}
-    created_class_rows_by_block = {}
+    # Close any open read transaction before FEAT entry.
+    db.session.rollback()
 
-    for row in csv_input:
-        try:
-            # Handle both template column names and code-friendly names (case-insensitive)
-            # Try template column names first, then fall back to lowercase versions
-            first_name = (row.get('First Name') or row.get('first_name') or '').strip()
-            last_name = (row.get('Last Name') or row.get('last_name') or '').strip()
-            block = (row.get('Class Section') or row.get('class_section') or row.get('block') or '').strip().upper()
-            class_name = (row.get('Class Name') or row.get('class_name') or '').strip()
-            additional_notes = (row.get('Additional Notes') or row.get('additional_notes') or '').strip()
+    with FEATContext("FEAT-IDEN-001", idempotency_key=idempotency_key):
+        stream = io.StringIO(content, newline=None)
+        csv_input = csv.DictReader(stream)
+        added_count = 0
+        errors = 0
+        duplicated = 0
 
-            if not all([first_name, last_name, block]):
-                raise ValueError("Missing required fields.")
+        # Track join codes for each block
+        from app.models import TeacherBlock
+        from app.utils.join_code import generate_join_code
 
-            # Generate initials
-            first_initial = first_name[0].upper()
-            last_initial = last_name[0].upper()
+        # Get or generate join codes for each block in this upload
+        join_codes_by_block = {}
+        class_ids_by_block = {}
+        created_class_rows_by_block = {}
 
-            # Get or generate join code for this teacher-block combination
-            if block not in join_codes_by_block:
-                # Check if this teacher already has a join code for this block
+        for row in csv_input:
+            try:
+                # Handle both template column names and code-friendly names (case-insensitive)
+                # Try template column names first, then fall back to lowercase versions
+                first_name = (row.get('First Name') or row.get('first_name') or '').strip()
+                last_name = (row.get('Last Name') or row.get('last_name') or '').strip()
+                block = (row.get('Class Section') or row.get('class_section') or row.get('block') or '').strip().upper()
+                class_name = (row.get('Class Name') or row.get('class_name') or '').strip()
+                additional_notes = (row.get('Additional Notes') or row.get('additional_notes') or '').strip()
+
+                if not all([first_name, last_name, block]):
+                    raise ValueError("Missing required fields.")
+
+                # Generate initials
+                first_initial = first_name[0].upper()
+                last_initial = last_name[0].upper()
+
+                # Get or generate join code for this teacher-block combination
+                if block not in join_codes_by_block:
+                    # Check if this teacher already has a join code for this block
+                    existing_seat = TeacherBlock.query.filter_by(
+                        teacher_id=teacher_id,
+                        block=block
+                    ).first()
+
+                    if existing_seat:
+                        # Reuse existing join code
+                        join_codes_by_block[block] = existing_seat.join_code
+                    else:
+                        # Generate new unique join code with retry limit
+                        new_code = None
+                        for _ in range(MAX_JOIN_CODE_RETRIES):
+                            new_code = generate_join_code()
+                            # Ensure uniqueness across all teachers
+                            if not TeacherBlock.query.filter_by(join_code=new_code).first():
+                                join_codes_by_block[block] = new_code
+                                break
+                        else:
+                            # If we couldn't generate a unique code after max_retries, use a timestamp-based fallback
+                            block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
+                            timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
+                            new_code = f"B{block_initial}{timestamp_suffix:04d}"
+                            join_codes_by_block[block] = new_code
+                            current_app.logger.warning(
+                                f"Failed to generate unique join code after {MAX_JOIN_CODE_RETRIES} attempts. "
+                                f"Using fallback code {new_code} for block {block} in roster upload"
+                            )
+
+                    # Ensure the teacher student seat exists for this new or existing join code
+                    _ensure_teacher_student_seat(teacher_id, join_codes_by_block[block], block)
+
+                if block not in class_ids_by_block:
+                    class_id, class_created, class_row = _ensure_join_code_anchors(
+                        teacher_id,
+                        join_codes_by_block[block],
+                        class_label=class_name or block,
+                        return_metadata=True,
+                    )
+                    class_ids_by_block[block] = class_id
+                    if class_created:
+                        created_class_rows_by_block[block] = class_row
+
+                join_code = join_codes_by_block[block]
+                class_id = class_ids_by_block[block]
+
+                dedupe_key = _build_teacher_block_dedupe_key(class_id, first_name, last_name)
+
+                # Check if this seat already exists in this join code.
                 existing_seat = TeacherBlock.query.filter_by(
                     teacher_id=teacher_id,
-                    block=block
+                    class_id=class_id,
+                    dedupe_key=dedupe_key,
                 ).first()
 
                 if existing_seat:
-                    # Reuse existing join code
-                    join_codes_by_block[block] = existing_seat.join_code
-                else:
-                    # Generate new unique join code with retry limit
-                    new_code = None
-                    for _ in range(MAX_JOIN_CODE_RETRIES):
-                        new_code = generate_join_code()
-                        # Ensure uniqueness across all teachers
-                        if not TeacherBlock.query.filter_by(join_code=new_code).first():
-                            join_codes_by_block[block] = new_code
-                            break
-                    else:
-                        # If we couldn't generate a unique code after max_retries, use a timestamp-based fallback
-                        block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
-                        timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
-                        new_code = f"B{block_initial}{timestamp_suffix:04d}"
-                        join_codes_by_block[block] = new_code
-                        current_app.logger.warning(
-                            f"Failed to generate unique join code after {MAX_JOIN_CODE_RETRIES} attempts. "
-                            f"Using fallback code {new_code} for block {block} in roster upload"
-                        )
+                    duplicated += 1
+                    continue
 
-                # Ensure the teacher student seat exists for this new or existing join code
-                _ensure_teacher_student_seat(teacher_id, join_codes_by_block[block], block)
+                # Generate salt
+                salt = get_random_salt()
 
-            if block not in class_ids_by_block:
-                class_id, class_created, class_row = _ensure_join_code_anchors(
-                    teacher_id,
-                    join_codes_by_block[block],
-                    class_label=class_name or block,
-                    return_metadata=True,
+                # v2: eliminate DOB-based credential material.
+                claim_seed = int.from_bytes(salt[:2], "big") % 10000
+                first_half_hash = compute_primary_claim_hash(first_initial, claim_seed, salt)
+                seed_hash = hash_hmac(str(claim_seed).encode(), salt)
+
+                # Compute last_name_hash_by_part for fuzzy matching
+                last_name_parts = hash_last_name_parts(last_name, salt)
+
+                # Create TeacherBlock seat (unclaimed account)
+                seat = TeacherBlock(
+                    teacher_id=teacher_id,
+                    block=block,
+                    first_name=first_name,
+                    last_initial=last_initial,
+                    last_name_hash_by_part=last_name_parts,
+                    dob_sum_hash=seed_hash,
+                    salt=salt,
+                    first_half_hash=first_half_hash,
+                    join_code=join_code,
+                    class_id=class_id,
+                    dedupe_key=dedupe_key,
+                    is_claimed=False,
                 )
-                class_ids_by_block[block] = class_id
-                if class_created:
-                    created_class_rows_by_block[block] = class_row
+                db.session.add(seat)
+                if additional_notes:
+                    current_app.logger.info(
+                        "Bulk upload additional notes provided (not persisted): class_id=%s block=%s length=%s",
+                        class_id,
+                        block,
+                        len(additional_notes),
+                    )
+                added_count += 1
+            except Exception as e:
+                current_app.logger.error(f"Error processing row {row}: {e}", exc_info=True)
+                errors += 1
 
-            join_code = join_codes_by_block[block]
-            class_id = class_ids_by_block[block]
-
-            dedupe_key = _build_teacher_block_dedupe_key(class_id, first_name, last_name)
-
-            # Check if this seat already exists in this join code.
-            existing_seat = TeacherBlock.query.filter_by(
-                teacher_id=teacher_id,
-                class_id=class_id,
-                dedupe_key=dedupe_key,
-            ).first()
-
-            if existing_seat:
-                duplicated += 1
-                continue
-
-            # Generate salt
-            salt = get_random_salt()
-
-            # v2: eliminate DOB-based credential material.
-            claim_seed = int.from_bytes(salt[:2], "big") % 10000
-            first_half_hash = compute_primary_claim_hash(first_initial, claim_seed, salt)
-            seed_hash = hash_hmac(str(claim_seed).encode(), salt)
-
-            # Compute last_name_hash_by_part for fuzzy matching
-            last_name_parts = hash_last_name_parts(last_name, salt)
-
-            # Create TeacherBlock seat (unclaimed account)
-            seat = TeacherBlock(
-                teacher_id=teacher_id,
-                block=block,
-                first_name=first_name,
-                last_initial=last_initial,
-                last_name_hash_by_part=last_name_parts,
-                dob_sum_hash=seed_hash,
-                salt=salt,
-                first_half_hash=first_half_hash,
-                join_code=join_code,
-                class_id=class_id,
-                dedupe_key=dedupe_key,
-                is_claimed=False,
-            )
-            db.session.add(seat)
-            if additional_notes:
-                current_app.logger.info(
-                    "Bulk upload additional notes provided (not persisted): class_id=%s block=%s length=%s",
-                    class_id,
-                    block,
-                    len(additional_notes),
-                )
-            added_count += 1
-
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error processing row {row}: {e}", exc_info=True)
-            errors += 1
-
-    try:
-        db.session.commit()
         for class_row in created_class_rows_by_block.values():
             _queue_pending_class_timezone_confirmation(class_row)
 
         # Build success message with join codes
         success_msg = f"{added_count} roster seats created successfully"
         if errors > 0:
-            success_msg += f"<br>{errors} rows could not be processed"
+            success_msg += f"\n{errors} rows could not be processed"
         if duplicated > 0:
-            success_msg += f"<br>{duplicated} duplicate seats skipped"
+            success_msg += f"\n{duplicated} duplicate seats skipped"
 
         # Display join codes for each block
         if join_codes_by_block:
-            success_msg += "<br><br><strong>Join Codes by Period:</strong><br>"
+            success_msg += "\n\nJoin Codes by Period:\n"
             for period, code in sorted(join_codes_by_block.items()):
-                success_msg += f"Period {period}: <strong>{code}</strong><br>"
-            success_msg += "<br>Share these codes with your students so they can claim their accounts."
+                success_msg += f"Period {period}: {code}\n"
+            success_msg += "\nShare these codes with your students so they can claim their accounts."
 
         flash(success_msg, "admin_success")
-    except Exception as e:
-        db.session.rollback()
-        flash(f"Upload failed: {e}", "admin_error")
-        current_app.logger.error(f"Upload commit failed: {e}", exc_info=True)
 
     return redirect(url_for('admin.students'))
 
@@ -11485,7 +11536,7 @@ def onboarding_status():
 
         # Rent: has rent settings configured for ANY block OR marked complete
         rent_settings = (
-            RentSettings.query
+            RentSettings.query.with_entities(RentSettings.id)
             .filter(RentSettings.class_id.in_(sa.select(class_ids_subq)))
             .first()
         )
