@@ -33,6 +33,16 @@ def with_teacher_id_fallback(func):
     return wrapper
 
 
+def _resolve_class_id_for_scope(*, teacher_id=None, join_code=None):
+    if not join_code:
+        return None
+    query = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(join_code=join_code)
+    if teacher_id is not None:
+        query = query.filter(ClassEconomy.teacher_id == teacher_id)
+    row = query.first()
+    return row[0] if row and row[0] else None
+
+
 @with_teacher_id_fallback
 def get_pay_rate_for_block(block, teacher_id=None, join_code=None):
     """
@@ -49,17 +59,11 @@ def get_pay_rate_for_block(block, teacher_id=None, join_code=None):
     """
     from decimal import Decimal
     
-    # Resolve teacher scope from class join_code when possible.
-    if teacher_id is None and join_code is not None:
-        class_row = ClassEconomy.query.with_entities(ClassEconomy.teacher_id).filter_by(join_code=join_code).first()
-        teacher_id = class_row[0] if class_row else None
-    # Can't lookup settings without a teacher_id - return default
-    if teacher_id is None:
+    class_id = _resolve_class_id_for_scope(teacher_id=teacher_id, join_code=join_code)
+    if not class_id:
         return DEFAULT_PAY_RATE_PER_SECOND_DECIMAL
 
-    base_query = PayrollSettings.query.filter_by(teacher_id=teacher_id, is_active=True)
-    if join_code is not None:
-        base_query = base_query.filter(PayrollSettings.join_code == join_code)
+    base_query = PayrollSettings.query.filter_by(class_id=class_id, is_active=True)
 
     # Try block-specific settings first
     if block:
@@ -91,17 +95,11 @@ def get_daily_limit_seconds(block, teacher_id=None, join_code=None):
     Returns:
         int or None: The daily limit in seconds, or None if no limit is set.
     """
-    # Resolve teacher scope from class join_code when possible.
-    if teacher_id is None and join_code is not None:
-        class_row = ClassEconomy.query.with_entities(ClassEconomy.teacher_id).filter_by(join_code=join_code).first()
-        teacher_id = class_row[0] if class_row else None
-    # Can't lookup settings without a teacher_id - return no limit
-    if teacher_id is None:
+    class_id = _resolve_class_id_for_scope(teacher_id=teacher_id, join_code=join_code)
+    if not class_id:
         return None
 
-    base_query = PayrollSettings.query.filter_by(teacher_id=teacher_id, is_active=True)
-    if join_code is not None:
-        base_query = base_query.filter(PayrollSettings.join_code == join_code)
+    base_query = PayrollSettings.query.filter_by(class_id=class_id, is_active=True)
 
     # Try block-specific settings first
     if block:
@@ -238,7 +236,19 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
 def _get_batch_pay_rates(teacher_id):
     """Batch fetch pay rates for a teacher."""
     from decimal import Decimal
-    settings = PayrollSettings.query.filter_by(teacher_id=teacher_id, is_active=True).all()
+    class_ids_subq = (
+        db.session.query(ClassEconomy.class_id)
+        .filter(ClassEconomy.teacher_id == teacher_id)
+        .subquery()
+    )
+    settings = (
+        PayrollSettings.query
+        .filter(
+            PayrollSettings.class_id.in_(class_ids_subq),
+            PayrollSettings.is_active.is_(True),
+        )
+        .all()
+    )
     rates = {}
     
     # Populate specific blocks and global (key=None)

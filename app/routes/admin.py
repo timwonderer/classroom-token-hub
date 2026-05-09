@@ -190,6 +190,25 @@ _table_names_cache_lock = threading.Lock()
 # Create blueprint
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
+ADMIN_FEATURE_ENDPOINTS = {
+    "admin.payroll": "payroll",
+    "admin.store_management": "store",
+    "admin.banking": "banking",
+    "admin.rent_settings": "rent",
+    "admin.insurance_management": "insurance",
+    "admin.hall_pass": "hall_pass",
+    "admin.hall_pass_setup": "hall_pass",
+}
+
+FEATURE_LABELS = {
+    "payroll": "Payroll",
+    "store": "Store",
+    "banking": "Banking",
+    "rent": "Rent",
+    "insurance": "Insurance",
+    "hall_pass": "Hall Pass",
+}
+
 ADMIN_FEATURE_PATH_PREFIXES = {
     '/admin/hall-pass': 'hall_pass',
     '/admin/payroll': 'payroll',
@@ -419,6 +438,27 @@ def before_request():
         response = _handle_missing_admin_class_context()
         if response is not None:
             return response
+
+    feature_name = ADMIN_FEATURE_ENDPOINTS.get(request.endpoint or "")
+    if (
+        feature_name
+        and request.method == "GET"
+        and g.admin_class_context is not None
+    ):
+        scoped_admin_id = session.get("admin_id")
+        scope = resolve_feature_class(
+            scoped_admin_id,
+            feature_name,
+            block=g.admin_class_context.get("block"),
+            join_code=g.admin_class_context.get("join_code"),
+        ) if scoped_admin_id else None
+        if scope and not scope["enabled"]:
+            return render_template(
+                "admin_feature_disabled.html",
+                current_page="feature_disabled",
+                feature_name=feature_name,
+                feature_label=FEATURE_LABELS.get(feature_name, feature_name.replace("_", " ").title()),
+            )
 
     return None
 
@@ -1208,12 +1248,27 @@ def _delete_teacher_residual_ownership_rows(teacher_id):
 
 def _delete_teacher_settings_activity_and_audit_rows(teacher_id):
     """Delete teacher-scoped settings, activity, and audit rows."""
-    BankingSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
-    FeatureSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
-    HallPassSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
-    PayrollFine.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
-    PayrollReward.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
-    PayrollSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    class_ids_subq = db.session.query(ClassEconomy.class_id).filter(
+        ClassEconomy.teacher_id == teacher_id
+    ).subquery()
+    BankingSettings.query.filter(
+        BankingSettings.class_id.in_(sa.select(class_ids_subq))
+    ).delete(synchronize_session=False)
+    FeatureSettings.query.filter(
+        FeatureSettings.class_id.in_(sa.select(class_ids_subq))
+    ).delete(synchronize_session=False)
+    HallPassSettings.query.filter(
+        HallPassSettings.class_id.in_(sa.select(class_ids_subq))
+    ).delete(synchronize_session=False)
+    PayrollFine.query.filter(
+        PayrollFine.class_id.in_(sa.select(class_ids_subq))
+    ).delete(synchronize_session=False)
+    PayrollReward.query.filter(
+        PayrollReward.class_id.in_(sa.select(class_ids_subq))
+    ).delete(synchronize_session=False)
+    PayrollSettings.query.filter(
+        PayrollSettings.class_id.in_(sa.select(class_ids_subq))
+    ).delete(synchronize_session=False)
     Announcement.query.filter(
         sa.or_(
             Announcement.teacher_id == teacher_id,
@@ -1226,13 +1281,18 @@ def _delete_teacher_settings_activity_and_audit_rows(teacher_id):
 
 def _delete_teacher_rent_rows(teacher_id):
     """Delete rent settings and dependent items owned by a teacher."""
+    class_ids_subq = db.session.query(ClassEconomy.class_id).filter(
+        ClassEconomy.teacher_id == teacher_id
+    ).subquery()
     rent_setting_ids_subq = db.session.query(RentSettings.id).filter(
-        RentSettings.teacher_id == teacher_id
+        RentSettings.class_id.in_(sa.select(class_ids_subq))
     ).subquery()
     RentItem.query.filter(
         RentItem.rent_setting_id.in_(sa.select(rent_setting_ids_subq))
     ).delete(synchronize_session=False)
-    RentSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    RentSettings.query.filter(
+        RentSettings.class_id.in_(sa.select(class_ids_subq))
+    ).delete(synchronize_session=False)
 
 
 def _delete_teacher_insurance_rows(teacher_id):
@@ -2136,10 +2196,15 @@ def _resolve_banking_settings_for_block(admin_id, block_name):
     join_code = _resolve_join_code_for_block(admin_id, block_name)
     if not join_code:
         return None
+    class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
+        teacher_id=admin_id,
+        join_code=join_code,
+    ).first()
+    if not class_row or not class_row[0]:
+        return None
     return (
         BankingSettings.query.filter(
-            BankingSettings.teacher_id == admin_id,
-            BankingSettings.join_code == join_code,
+            BankingSettings.class_id == class_row[0],
             BankingSettings.is_active.is_(True),
         )
         .order_by(desc(BankingSettings.block.isnot(None)))
@@ -2848,7 +2913,12 @@ def give_bonus_all():
     )
     join_code_map = {student_id: join_code for student_id, join_code in teacher_blocks}
 
-    banking_settings = BankingSettings.query.filter_by(teacher_id=current_admin_id).first()
+    class_ids_subq = db.session.query(ClassEconomy.class_id).filter_by(teacher_id=current_admin_id).subquery()
+    banking_settings = (
+        BankingSettings.query
+        .filter(BankingSettings.class_id.in_(sa.select(class_ids_subq)))
+        .first()
+    )
     adjustments = []
 
     # Stream students in batches to reduce memory usage
@@ -5525,7 +5595,6 @@ def store_management():
     selected_scope = require_admin_feature_scope(
         'store',
         admin_id=admin_id,
-        requested_join_code=request.args.get('join_code'),
         requested_block=request.args.get('block'),
     )
     selected_join_code = selected_scope['join_code']
@@ -5593,7 +5662,7 @@ def store_management():
             new_item.set_blocks(form.blocks.data)
         db.session.commit()
         flash(f"'{new_item.name}' has been added to the store.", "success")
-        return redirect(url_for('admin.store_management', join_code=selected_join_code))
+        return redirect(url_for('admin.store_management'))
 
     # Get items for this teacher only (reuse admin_id from above)
     items = [
@@ -5909,7 +5978,6 @@ def edit_store_item(item_id):
     selected_scope = require_admin_feature_scope(
         'store',
         admin_id=admin_id,
-        requested_join_code=request.values.get('join_code'),
         requested_block=request.values.get('block'),
     )
     item = StoreItem.query.filter_by(id=item_id, class_id=selected_scope['class_id']).first_or_404()
@@ -5955,7 +6023,7 @@ def edit_store_item(item_id):
 
         db.session.commit()
         flash(f"'{item.name}' has been updated.", "success")
-        return redirect(url_for('admin.store_management', join_code=selected_scope['join_code']))
+        return redirect(url_for('admin.store_management'))
     payroll_settings = PayrollSettings.query.filter_by(class_id=selected_scope['class_id'], is_active=True).first()
     return render_template('admin_edit_item.html', form=form, item=item, current_page="store", payroll_settings=payroll_settings, selected_feature_scope=selected_scope)
 
@@ -5969,7 +6037,6 @@ def delete_store_item(item_id):
     selected_scope = require_admin_feature_scope(
         'store',
         admin_id=admin_id,
-        requested_join_code=request.values.get('join_code'),
         requested_block=request.values.get('block'),
     )
     item = StoreItem.query.filter_by(id=item_id, class_id=selected_scope['class_id']).first_or_404()
@@ -5978,7 +6045,7 @@ def delete_store_item(item_id):
 
     # Prevent deletion if linked to rent settings
     if _block_rent_linked_store_item(item):
-        return redirect(url_for('admin.store_management', join_code=selected_scope['join_code']))
+        return redirect(url_for('admin.store_management'))
 
     # For active collective items, refund any pending purchases before deactivating
     # so students are not left with purchased but unredeemable items.
@@ -5995,7 +6062,7 @@ def delete_store_item(item_id):
     item.is_active = False
     db.session.commit()
     flash(f"'{item.name}' has been deactivated and removed from the store.", "success")
-    return redirect(url_for('admin.store_management', join_code=selected_scope['join_code']))
+    return redirect(url_for('admin.store_management'))
 
 
 @admin_bp.route('/store/hard-delete/<int:item_id>', methods=['POST'])
@@ -6006,7 +6073,6 @@ def hard_delete_store_item(item_id):
     selected_scope = require_admin_feature_scope(
         'store',
         admin_id=admin_id,
-        requested_join_code=request.values.get('join_code'),
         requested_block=request.values.get('block'),
     )
     item = StoreItem.query.filter_by(id=item_id, class_id=selected_scope['class_id']).first_or_404()
@@ -6015,14 +6081,14 @@ def hard_delete_store_item(item_id):
 
     # Prevent deletion if linked to rent settings
     if _block_rent_linked_store_item(item):
-        return redirect(url_for('admin.store_management', join_code=selected_scope['join_code']))
+        return redirect(url_for('admin.store_management'))
 
     flash(
         f"Hard deletion for '{item.name}' is disabled. Deactivate items instead, "
         "or delete the class join code for full scoped cleanup.",
         "error",
     )
-    return redirect(url_for('admin.store_management', join_code=selected_scope['join_code']))
+    return redirect(url_for('admin.store_management'))
 
 
 # -------------------- RENT SETTINGS --------------------
@@ -6242,12 +6308,25 @@ def rent_settings():
     admin_id = session.get("admin_id")
     student_ids_subq = _student_scope_subquery()
     feature_options = get_admin_feature_join_code_options('rent', admin_id=admin_id)
-    selected_scope = require_admin_feature_scope(
-        'rent',
-        admin_id=admin_id,
-        requested_join_code=request.values.get('join_code'),
-        requested_block=request.values.get('settings_block'),
-    )
+    requested_block = request.values.get('settings_block')
+    try:
+        selected_scope = require_admin_feature_scope(
+            'rent',
+            admin_id=admin_id,
+            requested_block=requested_block,
+        )
+    except HTTPException:
+        # Fallback for legacy/test flows where feature rows are not yet seeded.
+        context = _resolve_admin_class_context(admin_id)
+        if not context:
+            raise
+        fallback_block = (requested_block or context.get('block') or '').strip().upper() or None
+        selected_scope = {
+            'join_code': context.get('join_code'),
+            'class_id': context.get('class_id'),
+            'block': fallback_block,
+            'label': f"Period {fallback_block}" if fallback_block else (context.get('join_code') or 'Class'),
+        }
     payroll_settings = PayrollSettings.query.filter_by(
         class_id=selected_scope['class_id'],
         is_active=True,
@@ -6423,11 +6502,6 @@ def rent_settings():
             # Re-fetch settings for this block to ensure we have the object attached to session
             scope_for_block = require_admin_feature_scope('rent', admin_id=admin_id, requested_block=block, allow_default=False)
             block_settings = RentSettings.query.filter_by(class_id=scope_for_block['class_id'], block=block).first()
-            if not block_settings:
-                block_settings = RentSettings.query.filter_by(join_code=scope_for_block['join_code'], block=block).first()
-                if block_settings:
-                    block_settings.class_id = scope_for_block['class_id']
-                    block_settings.join_code = scope_for_block['join_code']
             if not block_settings:
                 continue
 
@@ -6823,7 +6897,8 @@ def rent_settings():
                           next_due_date=next_due_date,
                           student_past_due_json=student_past_due_json,
                           current_coverage_due_date=current_coverage_due_date,
-                          upcoming_coverage_due_date=upcoming_coverage_due_date)
+                          upcoming_coverage_due_date=upcoming_coverage_due_date,
+                          selected_feature_scope=selected_scope)
 
 
 @admin_bp.route('/rent-waiver/add', methods=['POST'])
@@ -6878,15 +6953,6 @@ def add_rent_waiver():
         if class_id and settings_block
         else None
     )
-    if not settings:
-        settings_query = RentSettings.query.filter_by(teacher_id=admin_id)
-        if settings_block:
-            settings_query = settings_query.filter_by(block=settings_block)
-        settings = settings_query.first()
-        if settings and class_id:
-            settings.class_id = class_id
-            if join_code:
-                settings.join_code = join_code
     if not settings:
         flash("Rent settings not configured.", "danger")
         return redirect(url_for('admin.rent_settings'))
@@ -7163,7 +7229,6 @@ def insurance_management():
     selected_scope = require_admin_feature_scope(
         'insurance',
         admin_id=admin_id,
-        requested_join_code=request.values.get('join_code'),
         requested_block=request.values.get('settings_block'),
     )
     teacher_blocks = [option['block'] for option in feature_options]
@@ -7355,7 +7420,8 @@ def insurance_management():
                           teacher_blocks=teacher_blocks,
                           settings_block=settings_block,
                           class_labels_by_block=class_labels_by_block,
-                          insurance_recommendation=insurance_recommendation)
+                          insurance_recommendation=insurance_recommendation,
+                          selected_feature_scope=selected_scope)
 
 
 @admin_bp.route('/insurance/edit/<int:policy_id>', methods=['GET', 'POST'])
@@ -8514,7 +8580,7 @@ def _run_payroll_legacy():
             return jsonify(status="success", message=success_message), 200
 
         flash(success_message, "admin_success")
-        return redirect(url_for('admin.payroll', join_code=selected_join_code))
+        return redirect(url_for('admin.payroll'))
     except (SQLAlchemyError, Exception) as e:
         db.session.rollback()
         is_db_error = isinstance(e, SQLAlchemyError)
@@ -8544,7 +8610,6 @@ def payroll():
     selected_scope = require_admin_feature_scope(
         'payroll',
         admin_id=admin_id,
-        requested_join_code=request.args.get('join_code'),
         requested_block=request.args.get('cwi_block') or request.args.get('block'),
     )
     selected_join_code = selected_scope['join_code']
@@ -8890,7 +8955,6 @@ def payroll_settings():
         selected_scope = require_admin_feature_scope(
             'payroll',
             admin_id=admin_id,
-            requested_join_code=request.form.get('join_code'),
             requested_block=request.form.get('cwi_block') or request.form.get('block'),
         )
         
@@ -9062,7 +9126,7 @@ def payroll_settings():
         current_app.logger.error(f"Error saving payroll settings: {e}")
         flash(f'Error saving payroll settings', 'error')
 
-    return redirect(url_for('admin.payroll', join_code=selected_scope['join_code']))
+    return redirect(url_for('admin.payroll'))
 
 
 @admin_bp.route('/payroll/update-expected-hours', methods=['POST'])
@@ -9160,7 +9224,7 @@ def update_expected_weekly_hours():
     if next_url and is_safe_url(next_url, request.host_url):
         return redirect(next_url)  # nosec # Safe: validated by is_safe_url()
 
-    return redirect(url_for('admin.payroll', join_code=selected_scope['join_code']))
+    return redirect(url_for('admin.payroll'))
 
 
 # -------------------- PAYROLL REWARDS & FINES --------------------
@@ -9193,7 +9257,7 @@ def payroll_add_reward():
     else:
         flash('Invalid form data. Please check your inputs.', 'error')
 
-    return redirect(url_for('admin.payroll', join_code=selected_scope['join_code']))
+    return redirect(url_for('admin.payroll'))
 
 
 @admin_bp.route('/payroll/rewards/<int:reward_id>/delete', methods=['POST'])
@@ -9247,7 +9311,7 @@ def payroll_add_fine():
     else:
         flash('Invalid form data. Please check your inputs.', 'error')
 
-    return redirect(url_for('admin.payroll', join_code=selected_scope['join_code']))
+    return redirect(url_for('admin.payroll'))
 
 
 @admin_bp.route('/payroll/fines/<int:fine_id>/delete', methods=['POST'])
@@ -9558,7 +9622,7 @@ def payroll_manual_payment():
                     )
                     if not teacher_block:
                         flash('One or more selected students are outside the selected class scope.', 'error')
-                        return redirect(url_for('admin.payroll', join_code=selected_join_code))
+                        return redirect(url_for('admin.payroll'))
 
                     adjustments.append({
                         'student': student,
@@ -9587,7 +9651,7 @@ def payroll_manual_payment():
         flash('Invalid form data. Please check your inputs.', 'error')
 
     selected_scope = _require_payroll_feature_scope_from_request(session.get('admin_id'))
-    return redirect(url_for('admin.payroll', join_code=selected_scope['join_code']))
+    return redirect(url_for('admin.payroll'))
 
 
 # -------------------- ATTENDANCE --------------------
@@ -10465,7 +10529,6 @@ def banking():
     selected_scope = require_admin_feature_scope(
         'banking',
         admin_id=admin_id,
-        requested_join_code=request.args.get('join_code'),
         requested_block=request.args.get('settings_block'),
     )
     teacher_blocks = [option['block'] for option in feature_options]
@@ -10474,10 +10537,18 @@ def banking():
     # Get current banking settings for this class
     settings = None
     if settings_block:
-        settings = BankingSettings.query.filter_by(teacher_id=admin_id, block=settings_block).first()
+        settings = BankingSettings.query.filter_by(
+            class_id=selected_scope['class_id'],
+            block=settings_block,
+        ).first()
         if not settings:
             # Create default settings for this class
-            settings = BankingSettings(teacher_id=admin_id, block=settings_block)
+            settings = BankingSettings(
+                teacher_id=admin_id,
+                class_id=selected_scope['class_id'],
+                join_code=selected_scope['join_code'],
+                block=settings_block,
+            )
             db.session.add(settings)
             db.session.commit()
 
@@ -10658,7 +10729,8 @@ def banking():
         current_page="banking",
         format_utc_iso=format_utc_iso,
         settings_block=settings_block,
-        teacher_blocks=teacher_blocks
+        teacher_blocks=teacher_blocks,
+        selected_feature_scope=selected_scope,
     )
 
 
@@ -10675,7 +10747,6 @@ def banking_settings_update():
         selected_scope = require_admin_feature_scope(
             'banking',
             admin_id=admin_id,
-            requested_join_code=request.form.get('join_code'),
             requested_block=request.form.get('settings_block'),
         )
         settings_block = selected_scope['block']
@@ -10686,10 +10757,24 @@ def banking_settings_update():
         blocks_to_update = enabled_blocks if apply_to_all else [settings_block]
 
         for block in blocks_to_update:
+            scope_for_block = require_admin_feature_scope(
+                'banking',
+                admin_id=admin_id,
+                requested_block=block,
+                allow_default=False,
+            )
             # Get or create settings for this class
-            settings = BankingSettings.query.filter_by(teacher_id=admin_id, block=block).first()
+            settings = BankingSettings.query.filter_by(
+                class_id=scope_for_block['class_id'],
+                block=block,
+            ).first()
             if not settings:
-                settings = BankingSettings(teacher_id=admin_id, block=block)
+                settings = BankingSettings(
+                    teacher_id=admin_id,
+                    class_id=scope_for_block['class_id'],
+                    join_code=scope_for_block['join_code'],
+                    block=block,
+                )
                 db.session.add(settings)
 
             # Update settings from form
@@ -10732,8 +10817,7 @@ def banking_settings_update():
 
     # Redirect back to the same settings block
     settings_block = request.form.get('settings_block')
-    join_code = request.form.get('join_code')
-    return redirect(url_for('admin.banking', settings_block=settings_block, join_code=join_code))
+    return redirect(url_for('admin.banking', settings_block=settings_block))
 
 
 # -------------------- DELETION REQUESTS --------------------
@@ -10813,7 +10897,7 @@ def help_support():
     """Teacher support center with direct ticket submission to sysadmin."""
 
     admin_id = session.get('admin_id')
-    selected_join_code = request.values.get('join_code', '').strip()
+    selected_join_code = (_get_current_admin_join_code(admin_id) or '').strip()
 
     teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
     class_scope_map = {}
@@ -10880,8 +10964,6 @@ def help_support():
         description = request.form.get('description', '').strip()
         expected_behavior = request.form.get('expected_behavior', '').strip()
         page_url = request.form.get('page_url', '').strip()
-        selected_join_code = request.form.get('join_code', '').strip()
-
         class_label = class_scope_map.get(selected_join_code)
 
         if not selected_join_code or selected_join_code not in class_scope_map:
@@ -10959,7 +11041,7 @@ def help_support():
             db.session.commit()
 
             flash("Your support ticket has been submitted directly to system administration.", "success")
-            return redirect(url_for('admin.help_support', join_code=selected_join_code))
+            return redirect(url_for('admin.help_support'))
         except SQLAlchemyError:
             db.session.rollback()
             current_app.logger.error("Error submitting report", exc_info=True)
@@ -11016,44 +11098,6 @@ def feature_settings():
     ))
     join_codes_by_period = _get_join_codes_by_block(admin_id, periods)
 
-    if request.method == 'POST':
-        try:
-            apply_to = request.form.get('apply_to', 'all')
-            selected_periods = request.form.getlist('selected_periods[]') if apply_to == 'selected' else periods
-
-            enabled_features = {
-                feature_name
-                for feature_name in ('payroll', 'insurance', 'banking', 'rent', 'hall_pass', 'store')
-                if f'{feature_name}_enabled' in request.form
-            }
-
-            if apply_to == 'all':
-                for period in periods:
-                    scope = resolve_class_scope(admin_id, block=period)
-                    if not scope:
-                        raise ValueError(f"Missing class scope for period {period}")
-                    replace_enabled_class_features(scope["class_id"], enabled_features)
-
-                flash('Feature settings applied to all periods successfully!', 'success')
-            else:
-                for period in selected_periods:
-                    normalized_period = period.strip().upper()
-                    scope = resolve_class_scope(admin_id, block=normalized_period)
-                    if not scope:
-                        raise ValueError(f"Missing class scope for period {normalized_period}")
-                    replace_enabled_class_features(scope["class_id"], enabled_features)
-
-                flash(f'Feature settings applied to {len(selected_periods)} period(s) successfully!', 'success')
-
-            db.session.commit()
-
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error saving feature settings: {e}")
-            flash('Error saving feature settings. Please try again.', 'error')
-
-        return redirect(url_for('admin.feature_settings'))
-
     period_settings = {}
     for period in periods:
         scoped_features = get_class_feature_settings(admin_id, block=period)
@@ -11061,8 +11105,7 @@ def feature_settings():
 
     return render_template(
         'admin_feature_settings.html',
-        current_page='settings',
-        global_settings=FeatureSettings.get_defaults(),
+        current_page='feature_settings',
         periods=periods,
         period_settings=period_settings,
         join_codes_by_period=join_codes_by_period,
@@ -11531,7 +11574,11 @@ def onboarding_status():
         data_completed['store'] = store_items > 0
 
         # Banking: has banking settings configured for ANY block OR marked complete
-        banking_settings = BankingSettings.query.filter_by(teacher_id=admin_id).first()
+        banking_settings = (
+            BankingSettings.query
+            .filter(BankingSettings.class_id.in_(sa.select(class_ids_subq)))
+            .first()
+        )
         data_completed['banking'] = banking_settings is not None
 
         # Rent: has rent settings configured for ANY block OR marked complete
@@ -11551,7 +11598,11 @@ def onboarding_status():
         data_completed['insurance'] = insurance_policies > 0
 
         # Hall pass: check if hall pass settings exist for ANY block OR marked complete
-        hall_pass_settings = HallPassSettings.query.filter_by(teacher_id=admin_id).first()
+        hall_pass_settings = (
+            HallPassSettings.query
+            .filter(HallPassSettings.class_id.in_(sa.select(class_ids_subq)))
+            .first()
+        )
         data_completed['hall_pass'] = hall_pass_settings is not None
 
         # Personalization: check if ANY TeacherBlock has class_label set OR marked complete

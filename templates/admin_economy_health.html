@@ -106,16 +106,7 @@
       <p class="text-muted mb-0">Review your current CWI and see how payroll, rent, banking, insurance, and the store fit together.</p>
       {{ help.help_icon("user-guides/diagnostics/teacher-attendance-payroll", "Economy health help") }}
     </div>
-    {% if blocks|length > 1 %}
-    <div class="d-flex align-items-center gap-2">
-      <label for="classSelector" class="text-muted mb-0">Class:</label>
-      <select id="classSelector" class="form-select" style="width: auto;" onchange="window.location.href='{{ url_for('admin.economy_health') }}?block=' + encodeURIComponent(this.value)">
-        {% for block in blocks %}
-        <option value="{{ block }}" {% if selected_block == block %}selected{% endif %}>{{ block }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    {% endif %}
+    <div class="small text-muted">Class context: {{ selected_block or "N/A" }}</div>
   </div>
 
   {% if not payroll_settings %}

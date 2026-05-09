@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from decimal import Decimal
+import sqlalchemy as sa
 
 from app.extensions import db
-from app.models import FeatureSettings, InsurancePolicy, RentSettings
+from app.models import ClassEconomy, FeatureSettings, InsurancePolicy, RentSettings
 from app.utils.time import ensure_utc, utc_now
 
 
@@ -63,34 +64,41 @@ def prepare_scheduled_rebalance_changes(change_plan, *, rent_settings=None, insu
     return scheduled_changes
 
 
-def _get_effective_rent_settings(teacher_id, block=None, *, join_code=None):
+def _resolve_class_id(*, teacher_id: int, join_code: str | None = None, block: str | None = None) -> str | None:
     if join_code:
-        settings = (
-            RentSettings.query.filter_by(
-                teacher_id=teacher_id,
-                join_code=join_code,
-                is_enabled=True,
+        class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
+            teacher_id=teacher_id,
+            join_code=join_code,
+        ).first()
+        if class_row and class_row[0]:
+            return class_row[0]
+    if block:
+        class_row = (
+            ClassEconomy.query.with_entities(ClassEconomy.class_id)
+            .join(FeatureSettings, FeatureSettings.class_id == ClassEconomy.class_id)
+            .filter(
+                ClassEconomy.teacher_id == teacher_id,
+                FeatureSettings.block == block,
             )
-            .order_by(RentSettings.block.isnot(None).desc(), RentSettings.id.desc())
             .first()
         )
-        if settings:
-            return settings
+        if class_row and class_row[0]:
+            return class_row[0]
+    return None
 
-    if block:
-        settings = RentSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=block,
+
+def _get_effective_rent_settings(teacher_id, block=None, *, join_code=None):
+    class_id = _resolve_class_id(teacher_id=teacher_id, join_code=join_code, block=block)
+    if not class_id:
+        return None
+    return (
+        RentSettings.query.filter_by(
+            class_id=class_id,
             is_enabled=True,
-        ).first()
-        if settings:
-            return settings
-
-    return RentSettings.query.filter_by(
-        teacher_id=teacher_id,
-        block=None,
-        is_enabled=True,
-    ).first()
+        )
+        .order_by(RentSettings.block.isnot(None).desc(), RentSettings.id.desc())
+        .first()
+    )
 
 
 def _apply_change_list(teacher_id, settings_row, changes, activation_mode, *, reference_time=None):
@@ -139,8 +147,13 @@ def apply_rebalance_changes(teacher_id, settings_row, change_plan, activation_mo
 
 def activate_due_rebalances(teacher_id, *, block=None, reference_time=None, renewal_policy_id=None):
     reference_time = ensure_utc(reference_time) if reference_time else utc_now()
+    class_ids_subq = (
+        db.session.query(ClassEconomy.class_id)
+        .filter(ClassEconomy.teacher_id == teacher_id)
+        .subquery()
+    )
     pending_rows_query = FeatureSettings.query.filter(
-        FeatureSettings.teacher_id == teacher_id,
+        FeatureSettings.class_id.in_(sa.select(class_ids_subq)),
         FeatureSettings.economy_pending_rebalance_json.isnot(None),
     )
     if block:

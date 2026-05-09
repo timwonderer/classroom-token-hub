@@ -535,6 +535,113 @@ Remaining follow-up (same sweep family):
 
 - remove remaining page-level class selectors and `join_code` query propagation on other admin templates (notably payroll/store/banking/support surfaces) while preserving existing visual design.
 
+### Status Update (2026-05-09): Wave 3C.12-D Single-Context Enforcement Sweep (Payroll/Store/Banking/Support)
+
+- Enforced single-context UI behavior on additional admin surfaces:
+  - `templates/admin_payroll.html`
+    - removed page-level class selector (`join_code` GET switching)
+    - removed request-level `join_code` propagation in payroll AJAX/form actions
+  - `templates/admin_store.html`
+    - removed page-level class selector (`join_code` GET switching)
+    - removed request-level `join_code` propagation from edit/deactivate/delete actions
+  - `templates/admin_support_tickets.html`
+    - removed page-level join-code selectors for submission/filtering
+    - support submission now carries active session class context only
+- Enforced session/class context authority in backend scope resolution:
+  - `app/routes/admin.py`
+    - payroll/store/banking pages no longer resolve feature scope from request `join_code`
+    - support page no longer accepts request-level `join_code` context switching
+    - payroll/store/banking redirects no longer propagate `join_code` query params
+
+Focused validation:
+
+- `python3 -m py_compile app/routes/admin.py`
+- `pytest -q tests/test_admin_payroll_scoped_balances.py tests/test_dashboard_rendering.py -k "payroll or store or banking or support"`
+- Result: `1 passed` (`3 deselected`)
+
+### Status Update (2026-05-09): Wave 3C.12-E Single-Context Enforcement Sweep (Hall Pass Setup/Insurance/Rent/Economy Health)
+
+- Enforced single-context UI behavior on additional admin surfaces:
+  - `templates/hall_pass_setup.html`
+    - removed page-level class selector (`join_code` GET switching)
+    - removed request-level `join_code` propagation in hall-pass setup API calls
+  - `templates/admin_insurance.html`
+    - removed page-level class selector (`settings_block` GET switching)
+  - `templates/admin_rent_settings.html`
+    - removed page-level class selector (`settings_block` GET switching)
+  - `templates/admin_banking.html`
+    - removed page-level class selector (`settings_block` GET switching)
+  - `templates/admin_economy_health.html`
+    - removed page-level class selector control and made active context display-only
+- Enforced session/class context authority in backend scope resolution:
+  - `app/routes/admin.py`
+    - rent/insurance/banking scope resolution no longer accepts request-level class switching on page load
+  - `app/routes/api.py`
+    - hall-pass setup GET/POST now derive class scope from active session class context only
+
+### Status Update (2026-05-09): Wave 3C.12-F Feature Toggle Authority + Disabled Route UX
+
+- Established feature toggle authority and disabled-route behavior for class-scoped surfaces:
+  - `app/routes/admin.py`
+    - admin feature pages (`payroll`, `store`, `banking`, `rent`, `insurance`, `hall_pass`) are now gated from class-scoped feature state in `@admin_bp.before_request`
+    - when disabled for active `class_id`, teacher sees a simple disabled page with a direct link to `/admin/feature-settings`
+  - `app/routes/student.py`
+    - centralized feature-gate hook in `@student_bp.before_request` for mapped student feature routes
+    - when disabled, student receives hard `404` (no feature existence disclosure)
+  - `templates/admin_feature_settings.html`
+    - reduced to per-period feature controls only (global/copy UI removed)
+  - `templates/admin_feature_disabled.html` (new)
+    - minimal disabled-state page for teachers with clear enablement path
+- Added/updated regression coverage:
+  - `tests/test_feature_flag_enforcement.py`
+    - validates teacher disabled-page behavior for admin feature routes in active class context
+    - validates student hard-`404` behavior for disabled feature routes
+    - aligns enabled banking transfer case with explicit `ClassFeature` seed
+
+Focused validation:
+
+- `python3 -m py_compile app/routes/admin.py app/routes/student.py tests/test_feature_flag_enforcement.py`
+- `pytest -q tests/test_feature_flag_enforcement.py tests/test_feature_settings.py`
+- Result: `29 passed`
+
+### Status Update (2026-05-09): Wave 3C.12-G Runtime Class-Scoped Settings Normalization
+
+- Continued clean-break runtime normalization (no migration/backfill paths introduced):
+  - `app/routes/student.py`
+    - banking settings context lookup now reads strictly by `class_id`
+  - `app/payroll.py`
+    - pay-rate and daily-limit resolution for student payroll now resolve class scope and query `PayrollSettings` by `class_id`
+  - `app/routes/analytics.py`
+    - payroll/rent cycle settings resolution now resolves class first and queries settings by `class_id`
+  - `app/utils/analytics_engine.py`
+    - CWI payroll settings lookup now resolves and queries by `class_id`
+- Kept compatibility at API surface level (function signatures), while enforcing `class_id` authority under the hood.
+
+Focused validation:
+
+- `python3 -m py_compile app/payroll.py app/routes/analytics.py app/utils/analytics_engine.py`
+- `pytest -q tests/test_feature_flag_enforcement.py tests/test_feature_settings.py -k "feature"`
+- Result: `29 passed`
+
+### Status Update (2026-05-09): Wave 3C.12-H Class-Scoped Cleanup in Rebalance + Admin Teardown Paths
+
+- Removed additional runtime dependence on teacher/global settings rows:
+  - `app/utils/economy_rebalance.py`
+    - pending rebalance selection now scopes `FeatureSettings` by teacher-owned `class_id`s
+    - effective rent settings now resolve class scope first and query `RentSettings.class_id`
+  - `app/routes/admin.py`
+    - teacher cleanup helpers now delete settings/activity rows through teacher-owned `class_id`s (`BankingSettings`, `FeatureSettings`, `HallPassSettings`, `PayrollSettings`, `PayrollFine`, `PayrollReward`, `RentSettings`)
+    - banking settings block resolver now queries by resolved `class_id`
+  - `app/payroll.py`
+    - batch pay-rate fetch now queries `PayrollSettings` by teacher-owned class IDs
+- Updated rent-waiver tests to use canonical class-scoped `RentSettings` fixtures (`class_id` + `join_code`).
+
+Focused validation:
+
+- `python3 -m py_compile app/payroll.py app/routes/admin.py app/utils/economy_rebalance.py tests/test_add_rent_waiver_route.py`
+- `pytest -q tests/test_class_deletion.py tests/test_add_rent_waiver_route.py tests/test_feature_flag_enforcement.py tests/test_feature_settings.py -k "deletion or rent or feature"`
+- Result: `39 passed`
+
 ---
 
 ## Wave 4 — Class Configuration Domain (DOM-CLASS-001)

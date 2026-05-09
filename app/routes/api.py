@@ -1677,14 +1677,13 @@ def get_hall_pass_setup():
     if not current_admin:
         return jsonify({"status": "error", "message": "Admin ID not found in session"}), 401
     teacher_id = current_admin.id
-    join_code = _get_request_join_code()
+    current_class_id = get_current_class_id()
+    if not current_class_id:
+        return jsonify({"status": "error", "message": "Active class context is required"}), 400
+    class_row = ClassEconomy.query.filter_by(class_id=current_class_id).first()
+    join_code = class_row.join_code if class_row else None
     if not join_code:
-        current_class_id = get_current_class_id()
-        if current_class_id:
-            class_row = ClassEconomy.query.filter_by(class_id=current_class_id).first()
-            join_code = class_row.join_code if class_row else None
-    if not join_code:
-        return jsonify({"status": "error", "message": "join_code is required"}), 400
+        return jsonify({"status": "error", "message": "Class scope not found"}), 404
 
     scope = _get_hall_pass_settings_scope(teacher_id, join_code)
     if not scope:
@@ -1720,10 +1719,14 @@ def save_hall_pass_setup():
     if not current_admin:
         return jsonify({"status": "error", "message": "Admin ID not found in session"}), 401
     scoped_admin_id = current_admin.id
-    data = request.get_json()
-    join_code = _get_request_join_code(data)
+    data = request.get_json() or {}
+    current_class_id = get_current_class_id()
+    if not current_class_id:
+        return jsonify({"status": "error", "message": "Active class context is required"}), 400
+    class_row = ClassEconomy.query.filter_by(class_id=current_class_id).first()
+    join_code = class_row.join_code if class_row else None
     if not join_code:
-        return jsonify({"status": "error", "message": "join_code is required"}), 400
+        return jsonify({"status": "error", "message": "Class scope not found"}), 404
 
     pass_types = data.get('pass_types', [])
     hall_pass_enabled = data.get('hall_pass_enabled', True)

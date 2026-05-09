@@ -27,7 +27,7 @@ import sqlalchemy as sa
 from app.extensions import db
 from app.models import (
     Student, Transaction, TapEvent, StudentBlock, PayrollSettings,
-    RentSettings, AnalyticsSnapshot, AnalyticsAlert, TeacherBlock,
+    RentSettings, AnalyticsSnapshot, AnalyticsAlert, TeacherBlock, ClassEconomy,
     StudentTeacher
 )
 from app.utils.economy_balance import EconomyBalanceChecker
@@ -155,10 +155,17 @@ class AnalyticsEngine:
     
     def _get_cwi(self) -> float:
         """Calculate current CWI for this class."""
+        class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
+            teacher_id=self.teacher_id,
+            join_code=self.join_code,
+        ).first()
+        if not class_row or not class_row[0]:
+            return 0.0
+        class_id = class_row[0]
+
         payroll_settings = (
             PayrollSettings.query.filter(
-                PayrollSettings.teacher_id == self.teacher_id,
-                PayrollSettings.join_code == self.join_code,
+                PayrollSettings.class_id == class_id,
             )
             .order_by(sa.desc(PayrollSettings.block.isnot(None)))
             .first()

@@ -213,23 +213,15 @@
 </div>
 
 <!-- Class Selector Banner -->
-{% if teacher_blocks %}
 <div class="alert alert-primary d-flex align-items-center justify-content-between mb-4">
   <div class="d-flex align-items-center gap-3">
     <span class="material-symbols-outlined" style="font-size: 2rem;">school</span>
     <div>
       <h6 class="mb-1 fw-bold">Viewing Insurance For:</h6>
-      <select class="form-select form-select-sm" id="settings_block_selector" style="width: auto; min-width: 200px;">
-        {% for block in teacher_blocks %}
-        <option value="{{ block }}" {% if block==settings_block %}selected{% endif %}>
-          {{ class_labels_by_block.get(block, block) }}
-        </option>
-        {% endfor %}
-      </select>
+      <div class="small text-muted">{{ selected_feature_scope.label }}</div>
     </div>
   </div>
 </div>
-{% endif %}
 
 <!-- Nav Tabs -->
 <ul class="nav nav-tabs mb-4" id="insuranceTabs" role="tablist">
@@ -1850,14 +1842,6 @@
       });
     }
 
-    // Handle class selector change
-    const settingsBlockSelector = document.getElementById('settings_block_selector');
-    if (settingsBlockSelector) {
-      settingsBlockSelector.addEventListener('change', function () {
-        const selectedBlock = this.value;
-        window.location.href = "{{ url_for('admin.insurance_management') }}?settings_block=" + encodeURIComponent(selectedBlock);
-      });
-    }
   });
 </script>
 

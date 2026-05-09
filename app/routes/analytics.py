@@ -20,7 +20,7 @@ from app.extensions import db, limiter
 from app.auth import admin_required
 from app.models import (
     Admin, AnalyticsAlert, AnalyticsEvent,
-    PayrollSettings, RentSettings, Student, StudentBlock, TeacherBlock
+    PayrollSettings, RentSettings, Student, StudentBlock, TeacherBlock, ClassEconomy
 )
 from app.models import Transaction
 
@@ -95,14 +95,21 @@ def get_block_for_join_code(join_code: str):
 
 
 def _get_payroll_settings_for_join_code(teacher_id: int, join_code: str):
-    """Resolve payroll settings for a selected class using join-code-first precedence."""
+    """Resolve payroll settings for a selected class via class_id authority."""
     if not teacher_id or not join_code:
         return None
 
+    class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
+        teacher_id=teacher_id,
+        join_code=join_code,
+    ).first()
+    if not class_row or not class_row[0]:
+        return None
+    class_id = class_row[0]
+
     return (
         PayrollSettings.query.filter(
-            PayrollSettings.teacher_id == teacher_id,
-            PayrollSettings.join_code == join_code,
+            PayrollSettings.class_id == class_id,
         )
         .order_by(desc(PayrollSettings.block.isnot(None)))
         .first()
@@ -117,14 +124,21 @@ def get_pay_cycle_days(teacher_id: int, join_code: str) -> int:
 
 
 def _get_rent_settings_for_join_code(teacher_id: int, join_code: str):
-    """Resolve rent settings for a selected class using join-code-first precedence."""
+    """Resolve rent settings for a selected class via class_id authority."""
     if not teacher_id or not join_code:
         return None
 
+    class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
+        teacher_id=teacher_id,
+        join_code=join_code,
+    ).first()
+    if not class_row or not class_row[0]:
+        return None
+    class_id = class_row[0]
+
     return (
         RentSettings.query.filter(
-            RentSettings.teacher_id == teacher_id,
-            RentSettings.join_code == join_code,
+            RentSettings.class_id == class_id,
         )
         .order_by(desc(RentSettings.block.isnot(None)))
         .first()

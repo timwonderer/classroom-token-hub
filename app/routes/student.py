@@ -116,6 +116,28 @@ STUDENT_FEATURE_ENDPOINTS = {
     'student.rent_pay': 'rent',
 }
 
+
+@student_bp.before_request
+def enforce_student_feature_gates():
+    """Hide disabled student features by returning hard 404 for mapped routes."""
+    endpoint = request.endpoint or ""
+    feature_name = STUDENT_FEATURE_ENDPOINTS.get(endpoint)
+    if not feature_name:
+        return None
+
+    # Let auth/session guards run first when no student is logged in.
+    if not get_logged_in_student():
+        return None
+
+    # Some legacy tests/flows hydrate seat context lazily during route execution.
+    # Only enforce here when class context is already resolvable.
+    if not get_current_class_context():
+        return None
+
+    if not is_feature_enabled(feature_name):
+        abort(404)
+    return None
+
 # Tolerance used to match RentPayment rows with their Transaction rows.
 # This guards against small timestamp drift without weakening ownership checks.
 RENT_PAYMENT_MATCH_TOLERANCE_SECONDS = 300
@@ -373,19 +395,17 @@ def _get_rent_coverage_window(settings, coverage_due_date):
 
 
 def get_banking_settings_for_context(context):
-    """Return banking settings scoped strictly to the current class join_code."""
+    """Return banking settings scoped strictly to the current class_id."""
     if not context:
         return None
 
-    teacher_id = context.get('teacher_id')
-    join_code = context.get('join_code')
+    class_id = context.get('class_id')
     current_block = (context.get('block') or '').strip().upper()
-    if not teacher_id or not join_code:
+    if not class_id:
         return None
 
     base_query = BankingSettings.query.filter(
-        BankingSettings.teacher_id == teacher_id,
-        BankingSettings.join_code == join_code,
+        BankingSettings.class_id == class_id,
     )
     if current_block:
         scoped = base_query.filter(func.upper(BankingSettings.block) == current_block).first()

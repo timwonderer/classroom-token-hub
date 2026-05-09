@@ -9,6 +9,9 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Changed
+- **Class-scoped feature authority and disabled-route behavior tightened** — Admin feature pages now enforce class-scoped feature toggles as the sole authority and render a dedicated disabled page with a direct link to feature settings; student feature-gated routes now return hard `404` when disabled. Feature settings UI is now per-period only.
+- **Runtime settings normalization toward `class_id` authority** — Payroll, analytics, student banking settings, rebalance activation, and admin settings cleanup paths were updated to resolve class scope and query settings rows by `class_id`, reducing reliance on teacher/global settings reads in active runtime paths.
+- **Class-scoped test fixtures aligned with clean-break semantics** — Rent waiver tests now seed canonical `RentSettings` scope (`class_id` + `join_code`) to match runtime authority.
 - **Wave 2 bootstrap migration squash started** - Archived 196 legacy Alembic revisions into `migrations/archive/v1_196_migrations/`, introduced `migrations/versions/0001_bootstrap.py` as the new baseline head (`down_revision = None`) to idempotently co-create legacy and canonical tables, and added `scripts/verify_migration_squash.py` to assert head/table expectations.
 - **V2 money authority model closed** — Student, admin, sysadmin, and redemption money paths now funnel through FEAT/domain services into `ledger_service`, with `Transaction(` construction restricted to `app/services/ledger_service.py` and enforced by structural guardrails.
 - **Admin-side authority extraction completed for money workflows** — Payroll runs, manual payroll adjustments, bonus/fine flows, insurance claim reimbursement, transaction void, and bug-reward issuance no longer create money rows inline in route handlers.

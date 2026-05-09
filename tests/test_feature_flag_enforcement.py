@@ -236,8 +236,8 @@ def setup_student_with_enabled_banking(client):
         description='Starting balance'
     )
     db.session.add(tx)
-    db.session.commit()
-
+    db.session.flush()
+    db.session.add(ClassFeature(class_id=economy.class_id, feature_name='banking'))
     db.session.commit()
 
     return {
@@ -365,6 +365,7 @@ def _create_admin_feature_scope(teacher, *, join_code, block, feature_name, enab
     if not enabled:
         for row in ClassFeature.query.filter_by(class_id=economy.class_id, feature_name=feature_name).all():
             db.session.delete(row)
+    return economy
 
 
 def test_admin_store_rejects_disabled_class_scope(client):
@@ -373,15 +374,18 @@ def test_admin_store_rejects_disabled_class_scope(client):
     db.session.commit()
 
     _create_admin_feature_scope(teacher, join_code="STORE1", block="1", feature_name="store", enabled=True)
-    _create_admin_feature_scope(teacher, join_code="STORE2", block="2", feature_name="store", enabled=False)
+    disabled_economy = _create_admin_feature_scope(teacher, join_code="STORE2", block="2", feature_name="store", enabled=False)
     db.session.commit()
 
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = teacher.id
+        sess['current_join_code'] = 'STORE2'
+        sess['current_class_id'] = disabled_economy.class_id
 
-    response = client.get('/admin/store?join_code=STORE2')
-    assert response.status_code == 404
+    response = client.get('/admin/store')
+    assert response.status_code == 200
+    assert b"is disabled for this class" in response.data
 
 
 def test_admin_hall_pass_rejects_disabled_class_scope(client):
@@ -390,15 +394,18 @@ def test_admin_hall_pass_rejects_disabled_class_scope(client):
     db.session.commit()
 
     _create_admin_feature_scope(teacher, join_code="HALL1", block="1", feature_name="hall_pass", enabled=True)
-    _create_admin_feature_scope(teacher, join_code="HALL2", block="2", feature_name="hall_pass", enabled=False)
+    disabled_economy = _create_admin_feature_scope(teacher, join_code="HALL2", block="2", feature_name="hall_pass", enabled=False)
     db.session.commit()
 
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = teacher.id
+        sess['current_join_code'] = 'HALL2'
+        sess['current_class_id'] = disabled_economy.class_id
 
-    response = client.get('/admin/hall-pass?join_code=HALL2')
-    assert response.status_code == 404
+    response = client.get('/admin/hall-pass')
+    assert response.status_code == 200
+    assert b"is disabled for this class" in response.data
 
 
 def test_admin_payroll_rejects_disabled_class_scope(client):
@@ -407,15 +414,18 @@ def test_admin_payroll_rejects_disabled_class_scope(client):
     db.session.commit()
 
     _create_admin_feature_scope(teacher, join_code="PAY1", block="1", feature_name="payroll", enabled=True)
-    _create_admin_feature_scope(teacher, join_code="PAY2", block="2", feature_name="payroll", enabled=False)
+    disabled_economy = _create_admin_feature_scope(teacher, join_code="PAY2", block="2", feature_name="payroll", enabled=False)
     db.session.commit()
 
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = teacher.id
+        sess['current_join_code'] = 'PAY2'
+        sess['current_class_id'] = disabled_economy.class_id
 
-    response = client.get('/admin/payroll?join_code=PAY2')
-    assert response.status_code == 404
+    response = client.get('/admin/payroll')
+    assert response.status_code == 200
+    assert b"is disabled for this class" in response.data
 
 
 def test_admin_payroll_reward_delete_rejects_disabled_class_scope(client):

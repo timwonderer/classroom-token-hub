@@ -439,14 +439,7 @@
           <span class="material-symbols-outlined" style="font-size: 2rem;">school</span>
           <div>
             <h6 class="mb-1 fw-bold">Configuring Rent Settings For:</h6>
-            <select class="form-select form-select-sm" id="settings_block_selector"
-              style="width: auto; min-width: 200px;">
-              {% for block in teacher_blocks %}
-              <option value="{{ block }}" {% if block==settings_block %}selected{% endif %}>
-                {{ class_labels_by_block.get(block, block) }}
-              </option>
-              {% endfor %}
-            </select>
+            <div class="small text-muted">{{ selected_feature_scope.label }}</div>
           </div>
         </div>
         <div class="form-check form-switch">
@@ -1301,16 +1294,6 @@
   const settingsBlockSelector = document.getElementById('settings_block_selector');
   const applyToAllCheckbox = document.getElementById('apply_to_all_checkbox');
   const applyToAllInput = document.getElementById('apply_to_all_input');
-
-  // Handle class selector change - reload page with new settings_block
-  if (settingsBlockSelector) {
-    settingsBlockSelector.addEventListener('change', function () {
-      const selectedBlock = this.value;
-      const url = new URL(window.location.href);
-      url.searchParams.set('settings_block', selectedBlock);
-      window.location.href = url.toString();
-    });
-  }
 
   // Handle apply to all checkbox
   if (applyToAllCheckbox && applyToAllInput) {
