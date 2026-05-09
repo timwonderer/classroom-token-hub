@@ -91,6 +91,7 @@ This file is the single active tracker for v2 migration execution. All prior tra
 - [ ] Wave 11 admin route decomposition (`app/routes/admin.py`)
 - [ ] Wave 11 invariant sweeps complete (INV-ARC-007, INV-ARC-014, INV-ARC-015 full repo pass)
 - [ ] Wave 11 `V2_CLASS_ID_INVARIANT_BACKLOG` closure
+- [ ] Complete single-context UI enforcement sweep: remove remaining page-level class selectors and request `join_code` context controls outside nav context switch
 - [ ] Wave 12 final schema/code/test validation gate (exact 44 tables, zero v1 runtime artifacts, clean suite)
 
 #### Deferred-but-tracked architecture items
@@ -505,6 +506,34 @@ Focused validation:
 - Result: `22 passed`
 - `pytest -q tests/test_insurance_security.py tests/test_scheduled_tasks_rent_cycle.py tests/test_add_rent_waiver_route.py tests/test_redemption_audit_log.py tests/test_redemption_rejection.py tests/test_scheduled_tasks_store_item_cleanup.py`
 - Result: `24 passed`
+
+### Status Update (2026-05-08): Wave 3C.12-C Single-Context Enforcement Sweep (Students/Hall Pass/Attendance)
+
+- Enforced single-context UI behavior on active admin pages:
+  - `templates/admin_students.html`
+    - removed page-level class-context mutation script (`/admin/current-class` post from block tabs)
+    - removed `join_code` query propagation from student detail/export links
+  - `templates/admin_hall_pass.html`
+    - removed page-level class selector (`join_code` GET switching)
+    - removed `join_code` query propagation in setup link and API calls
+    - removed period-level cross-context filter control from hall pass history panel
+- Enforced session/class context authority in backend read paths:
+  - `app/routes/admin.py`
+    - `/admin/hall-pass` and `/admin/hall-pass/setup` no longer resolve scope from request `join_code`/`block`
+  - `app/routes/api.py`
+    - `/api/hall-pass/settings` now resolves scope from `session.current_class_id/current_join_code` only
+    - `/api/hall-pass/history` explicitly filters by `session.current_class_id`
+    - `/api/attendance/history` explicitly filters by `session.current_class_id`
+
+Focused validation:
+
+- `python3 -m py_compile app/routes/admin.py app/routes/api.py`
+- `pytest -q tests/test_time_money_guardrails.py tests/test_scheduled_tasks_rent_cycle.py`
+- Result: `5 passed`
+
+Remaining follow-up (same sweep family):
+
+- remove remaining page-level class selectors and `join_code` query propagation on other admin templates (notably payroll/store/banking/support surfaces) while preserving existing visual design.
 
 ---
 

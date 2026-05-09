@@ -967,13 +967,10 @@
   async function voidTransaction(transactionId) {
     if (!confirm('Are you sure you want to void this transaction? This cannot be undone.')) return;
 
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
     try {
-      const resp = await fetch(`/admin/void-transaction/${transactionId}`, {
+      const resp = await window.AppCore.csrfFetch(`/admin/void-transaction/${transactionId}`, {
         method: 'POST',
         headers: {
-          'X-CSRFToken': csrfToken,
           'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest'
         }
@@ -993,11 +990,7 @@
 
   // Toast notification helper
   function showToast(message, type) {
-    if (window.toast) {
-      window.toast(message, type);
-    } else {
-      alert(message);
-    }
+    window.AppCore.toast(message, type);
   }
 </script>
 

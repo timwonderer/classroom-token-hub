@@ -265,6 +265,7 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ static_url('js/app-core.js') }}"></script>
     <script src="{{ static_url('js/timezone-utils.js') }}"></script>
     <script>
         function renderClassScopedTimes() {
@@ -309,19 +310,17 @@
             });
 
             const classSwitcher = document.getElementById('class-switcher-select');
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
             const errorBox = document.getElementById('class-switch-error');
             const errorText = document.querySelector('.class-switch-error-text');
 
             if (classSwitcher) {
                 classSwitcher.addEventListener('change', function () {
                     const classId = this.value;
-                    if (!classId || !csrfToken) return;
+                    if (!classId) return;
 
-                    fetch(`/student/switch-class/${classId}`, {
+                    window.AppCore.csrfFetch(`/student/switch-class/${classId}`, {
                         method: 'POST',
                         headers: {
-                            'X-CSRFToken': csrfToken,
                             'Content-Type': 'application/json'
                         }
                     }).then(async (response) => {

@@ -219,6 +219,9 @@
      */
     async function syncTimezoneToServer() {
         try {
+            if (sessionStorage.getItem('timezone_sent')) {
+                return true;
+            }
             const timezone = detectTimezone();
             
             // Validate timezone before sending to prevent malicious data
@@ -235,11 +238,11 @@
                 }
             }
             
-            const response = await fetch('/api/set-timezone', {
+            const fetchImpl = window.AppCore?.csrfFetch || window.fetch.bind(window);
+            const response = await fetchImpl('/api/set-timezone', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ timezone: timezone })
             });
@@ -247,6 +250,7 @@
             if (response.ok) {
                 const data = await response.json();
                 if (data.status === 'success') {
+                    sessionStorage.setItem('timezone_sent', 'true');
                     return true;
                 }
             }
@@ -293,5 +297,5 @@
     };
 
     // Auto-initialize with default options
-    init({ syncToServer: true });
+    init({ syncToServer: false });
 })();

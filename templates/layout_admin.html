@@ -355,6 +355,7 @@
         {{ get_flashed_messages(with_categories=true) | tojson }}
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ static_url('js/app-core.js') }}"></script>
     <script src="{{ static_url('js/timezone-utils.js') }}"></script>
     <script src="{{ static_url('js/sortable-table.js') }}"></script>
     <script src="{{ static_url('js/mobile-sidebar-toggle.js') }}"></script>
@@ -396,11 +397,10 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const classSwitcher = document.getElementById('admin-class-switcher-select');
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
             const errorBox = document.getElementById('admin-class-switch-error');
             const errorText = document.querySelector('.admin-class-switch-error-text');
 
-            if (!classSwitcher || !csrfToken) {
+            if (!classSwitcher) {
                 return;
             }
 
@@ -410,10 +410,9 @@
                     return;
                 }
 
-                fetch('{{ url_for("admin.set_current_class") }}', {
+                window.AppCore.csrfFetch('{{ url_for("admin.set_current_class") }}', {
                     method: 'POST',
                     headers: {
-                        'X-CSRFToken': csrfToken,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ class_id: classId })

@@ -2,22 +2,7 @@
 
 // Helper function for Bootstrap toast messages
 function createToast(message, isError = false) {
-  const toastContainer = document.getElementById("toast-container");
-  if (!toastContainer) return alert(message); // fallback if no toast container
-
-  const toast = document.createElement("div");
-  toast.className = `toast align-items-center text-white ${isError ? "bg-danger" : "bg-success"} border-0`;
-  toast.role = "alert";
-  toast.innerHTML = `
-    <div class="d-flex">
-      <div class="toast-body">${message}</div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-    </div>`;
-  toastContainer.appendChild(toast);
-
-  const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
-  bsToast.show();
-  toast.addEventListener("hidden.bs.toast", () => toast.remove());
+  window.AppCore.toast(message, isError ? "error" : "success");
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -97,9 +82,9 @@ function performTap(period, action, pin, reason = null) {
     payload.reason = reason;
   }
 
-  fetch("/api/tap", {
+  window.AppCore.csrfFetch("/api/tap", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-CSRFToken": document.querySelector('meta[name="csrf-token"]').getAttribute('content') },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   })
     .then(r => {
@@ -303,12 +288,9 @@ function cancelHallPass(passId, period) {
     return;
   }
 
-  fetch(`/api/hall-pass/cancel/${passId}`, {
+  window.AppCore.csrfFetch(`/api/hall-pass/cancel/${passId}`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-    }
+    headers: { 'Content-Type': 'application/json' }
   })
     .then(r => r.json())
     .then(data => {
@@ -330,12 +312,9 @@ function checkOutHallPass(passId, period) {
     return;
   }
 
-  fetch('/api/hall-pass/checkout', {
+  window.AppCore.csrfFetch('/api/hall-pass/checkout', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pass_id: passId })
   })
     .then(r => r.json())
@@ -358,12 +337,9 @@ function checkInHallPass(passId, period) {
     return;
   }
 
-  fetch('/api/hall-pass/checkin', {
+  window.AppCore.csrfFetch('/api/hall-pass/checkin', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pass_id: passId })
   })
     .then(r => r.json())

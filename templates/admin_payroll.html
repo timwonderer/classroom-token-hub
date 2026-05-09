@@ -1876,14 +1876,12 @@
 
   // Run Payroll
   document.getElementById('runPayrollBtn')?.addEventListener('click', async function () {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     try {
-      const resp = await fetch('{{ url_for("admin.run_payroll") }}', {
+      const resp = await window.AppCore.csrfFetch('{{ url_for("admin.run_payroll") }}', {
         method: 'POST',
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrfToken
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           join_code: {{ selected_feature_scope.join_code|tojson }}
@@ -2188,11 +2186,7 @@
 
   // Toast notification helper
   function showToast(message, type) {
-    if (window.toast) {
-      window.toast(message, type);
-    } else {
-      alert(message);
-    }
+    window.AppCore.toast(message, type);
   }
 </script>
 
