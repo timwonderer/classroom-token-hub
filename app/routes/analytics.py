@@ -13,7 +13,7 @@ Key Principles:
 
 from datetime import datetime, timedelta
 from app.utils.time import utc_now, ensure_utc, day_bounds_utc
-from flask import Blueprint, session, jsonify, request, flash, redirect, url_for
+from flask import Blueprint, session, jsonify, request, flash, redirect, url_for, g
 from sqlalchemy import desc
 
 from app.extensions import db, limiter
@@ -244,8 +244,12 @@ def dashboard():
     # Initialize analytics engine
     engine = AnalyticsEngine(teacher_id, join_code)
     
-    # Get or create snapshot for this window
-    snapshot = engine.get_or_create_snapshot(window_type, window_start, window_end)
+    # INV-ARC-007: analytics GET must be read-only.
+    snapshot = (
+        engine.get_snapshot_read_only(window_type, window_start, window_end)
+        if getattr(g, "read_only", False)
+        else engine.get_or_create_snapshot(window_type, window_start, window_end)
+    )
     
     # Get active alerts
     active_alerts = AnalyticsAlert.query.filter(
@@ -312,8 +316,12 @@ def api_snapshot(window_type):
     # Initialize analytics engine
     engine = AnalyticsEngine(teacher_id, join_code)
     
-    # Get or create snapshot
-    snapshot = engine.get_or_create_snapshot(window_type, window_start, window_end)
+    # INV-ARC-007: analytics GET must be read-only.
+    snapshot = (
+        engine.get_snapshot_read_only(window_type, window_start, window_end)
+        if getattr(g, "read_only", False)
+        else engine.get_or_create_snapshot(window_type, window_start, window_end)
+    )
     
     # Convert to JSON-serializable format
     snapshot_data = {

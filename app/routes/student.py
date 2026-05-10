@@ -3890,7 +3890,7 @@ def login():
         session['student_id'] = student.id
         session['login_time'] = utc_now().isoformat()
         session['last_activity'] = session['login_time']
-        sync_student_session_context(student)
+        sync_student_session_context(student, allow_writes=True)
         _prime_student_teacher_display_name_cache(student.id)
 
 

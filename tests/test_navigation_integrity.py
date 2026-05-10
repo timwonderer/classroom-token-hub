@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from app.extensions import db
 from app.models import TeacherOnboarding, Student, StudentTeacher, TeacherBlock
 from app.hash_utils import get_random_salt, hash_username
+from app.utils.economy_policy import replace_enabled_class_features
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from tests.helpers.class_scope import create_class_scope
 from tests.helpers.navigation_traversal import NavigationTester
@@ -20,6 +21,7 @@ def integrity_tester(client):
             "/download",
             "/export",
             "/static",
+            "/admin/banking",
         ]
     )
 
@@ -43,6 +45,37 @@ def test_teacher_navigation_integrity(client, integrity_tester):
         block="A",
         create_student_membership=False,
         create_seat=False
+    )
+    salt = get_random_salt()
+    student = Student(
+        first_name="Nav",
+        last_initial="T",
+        block="A",
+        salt=salt,
+        username_hash=hash_username("nav_teacher_student", salt),
+    )
+    db.session.add(student)
+    db.session.flush()
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=admin.id))
+    db.session.add(
+        TeacherBlock(
+            teacher_id=admin.id,
+            class_id=class_row.class_id,
+            block="A",
+            first_name="Nav",
+            last_initial="T",
+            last_name_hash_by_part=["hash"],
+            dob_sum_hash=None,
+            salt=os.urandom(16),
+            first_half_hash="hash",
+            join_code="NAVTECH1",
+            student_id=student.id,
+            is_claimed=True,
+        )
+    )
+    replace_enabled_class_features(
+        class_row.class_id,
+        {"insurance", "banking", "rent", "hall_pass", "store"},
     )
     db.session.commit()
 
@@ -85,6 +118,7 @@ def test_student_navigation_integrity(client, integrity_tester):
 
     seat = TeacherBlock(
         teacher_id=teacher.id,
+        class_id=class_row.class_id,
         block="A",
         first_name="Nav",
         last_initial="S",

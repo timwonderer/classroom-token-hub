@@ -48,7 +48,7 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 import sqlalchemy as sa
 import pyotp
 import pytz
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException, NotFound
 
 from app.extensions import db, limiter
 from app.feats.base import feat_shell, FEATContext
@@ -922,12 +922,16 @@ def _build_payroll_preview_state(teacher_id, students, join_codes_by_block):
     for join_code, students_map in students_by_join_code.items():
         class_students = list(students_map.values())
         anchor = ensure_utc(get_last_payroll_time(join_code=join_code))
-        summary, updated_at = get_cached_payroll_with_meta(
-            class_students,
-            anchor,
-            teacher_id=teacher_id,
-            join_code=join_code,
-        )
+        if getattr(g, "read_only", False):
+            summary = calculate_payroll(class_students, anchor, teacher_id=teacher_id)
+            updated_at = None
+        else:
+            summary, updated_at = get_cached_payroll_with_meta(
+                class_students,
+                anchor,
+                teacher_id=teacher_id,
+                join_code=join_code,
+            )
         anchor_by_join_code[join_code] = anchor
         summary_by_join_code[join_code] = summary
         if updated_at is not None:
@@ -2160,7 +2164,7 @@ def _resolve_payroll_settings_for_block(admin_id, block_name):
     )
     class_id = class_id_row[0] if class_id_row and class_id_row[0] else None
     if not class_id:
-        raise NotFound("Payroll class scope is unavailable for the selected block.")
+        return None
     return (
         PayrollSettings.query.filter(
             PayrollSettings.class_id == class_id,
@@ -7323,7 +7327,7 @@ def insurance_management():
             })
 
     tier_groups = sorted(tier_groups_map.values(), key=lambda g: g['id'])
-    tier_namespace_seed = _get_tier_namespace_seed(current_teacher_id)
+    tier_namespace_seed = _get_tier_namespace_seed(admin_id)
     existing_tier_ids = set(tier_groups_map.keys())
     next_tier_category_id = _next_tenant_scoped_tier_id(tier_namespace_seed, existing_tier_ids)
 
@@ -8279,8 +8283,9 @@ def apply_economy_rebalance():
 def economy_health():
     """Show a holistic view of the current economy configuration and CWI health."""
     admin_id = session.get("admin_id")
-    activate_due_rebalances(admin_id)
-    db.session.commit()
+    if not getattr(g, "read_only", False):
+        activate_due_rebalances(admin_id)
+        db.session.commit()
 
     blocks = _get_teacher_blocks()
     # Always use per-class view since CWI is inherently per-class (multi-tenancy by join_code)
@@ -10694,11 +10699,24 @@ def banking():
     """Banking management page with transactions and settings."""
     admin_id = session.get("admin_id")
     feature_options = get_admin_feature_join_code_options('banking', admin_id=admin_id)
-    selected_scope = require_admin_feature_scope(
-        'banking',
-        admin_id=admin_id,
-        requested_block=request.args.get('settings_block'),
-    )
+    try:
+        selected_scope = require_admin_feature_scope(
+            'banking',
+            admin_id=admin_id,
+            requested_block=request.args.get('settings_block'),
+        )
+    except HTTPException as exc:
+        if exc.code != 404:
+            raise
+        fallback_scope = resolve_class_scope(admin_id, join_code=_get_current_admin_join_code(admin_id))
+        if not fallback_scope:
+            raise
+        selected_scope = {
+            "join_code": fallback_scope["join_code"],
+            "class_id": fallback_scope["class_id"],
+            "block": fallback_scope.get("block"),
+            "label": fallback_scope.get("label") or fallback_scope["join_code"],
+        }
     teacher_blocks = [option['block'] for option in feature_options]
     settings_block = selected_scope['block']
 
@@ -11437,7 +11455,7 @@ def announcements():
     # Get unique teacher blocks (class periods) by join_code
     # TeacherBlock has one row per student seat, so we need to get distinct periods
     teacher_blocks_query = TeacherBlock.query.filter_by(
-        teacher_id=scoped_admin_id
+        teacher_id=admin_id
     ).order_by(TeacherBlock.block).all()
 
     # Deduplicate by join_code to get unique periods
@@ -12523,8 +12541,9 @@ def issues_queue():
     if join_code and not _admin_owns_join_code(admin_id, join_code):
         join_code = None
 
-    # Initialize default categories if they don't exist
-    init_default_categories()
+    # INV-ARC-007: keep GET route read-only.
+    if not getattr(g, "read_only", False):
+        init_default_categories()
 
     # Filter by join code if one is selected, otherwise show all issues for this teacher
     if join_code:
@@ -12584,8 +12603,8 @@ def view_issue(issue_ref):
     # Get the issue and verify it belongs to this teacher
     issue = Issue.query.filter_by(id=issue_id, teacher_id=admin_id).first_or_404()
 
-    # Mark as being reviewed if still in OPEN status.
-    if issue.status in [Issue.STATUS_OPEN, 'submitted']:
+    # INV-ARC-007: avoid status mutation during read-only GET.
+    if not getattr(g, "read_only", False) and issue.status in [Issue.STATUS_OPEN, 'submitted']:
         from app.utils.issue_helpers import update_issue_status
         update_issue_status(issue, Issue.STATUS_TEACHER_REVIEW, 'teacher', admin_id)
         issue.teacher_reviewed_at = utc_now()

@@ -438,7 +438,14 @@ def switch_student_session_context(student, *, class_id: str, seat_id: int):
     return seat
 
 
-def sync_student_session_context(student=None, *, class_id: str | None = None, seat_id: int | None = None):
+def sync_student_session_context(
+    student=None,
+    *,
+    class_id: str | None = None,
+    seat_id: int | None = None,
+    join_code: str | None = None,
+    allow_writes: bool = False,
+):
     """Backfill user/seat session keys for the current class context."""
     from app.models import User, Seat, TeacherBlock, ClassMembership, ClassEconomy
 
@@ -454,7 +461,7 @@ def sync_student_session_context(student=None, *, class_id: str | None = None, s
 
     target_class_id = class_id or session.get('current_class_id')
     target_seat_id = seat_id or session.get('current_seat_id')
-    target_join_code = session.get('current_join_code')
+    target_join_code = join_code or session.get('current_join_code')
 
     seat = None
     if target_seat_id:
@@ -482,15 +489,16 @@ def sync_student_session_context(student=None, *, class_id: str | None = None, s
             .first()
         )
 
-    created_identity_rows = False
     if not linked_user:
-        linked_user = User(
-            username=f"pending_{student.id}_{secrets.token_urlsafe(8)}",
-            password_hash=generate_password_hash(secrets.token_urlsafe(24)),
-        )
-        db.session.add(linked_user)
-        db.session.flush()
-        created_identity_rows = True
+        if not allow_writes:
+            linked_user = None
+        else:
+            linked_user = User(
+                username=f"pending_{student.id}_{secrets.token_urlsafe(8)}",
+                password_hash=generate_password_hash(secrets.token_urlsafe(24)),
+            )
+            db.session.add(linked_user)
+            db.session.flush()
 
     if not seat:
         chosen_membership = None
@@ -537,7 +545,7 @@ def sync_student_session_context(student=None, *, class_id: str | None = None, s
             if class_anchor:
                 resolved_class_id = class_anchor.class_id
 
-        if resolved_join_code:
+        if resolved_join_code and allow_writes and linked_user:
             seat = Seat(
                 user_id=linked_user.id,
                 student_id=student.id,
@@ -550,14 +558,10 @@ def sync_student_session_context(student=None, *, class_id: str | None = None, s
             )
             db.session.add(seat)
             db.session.flush()
-            created_identity_rows = True
 
-    if seat and linked_user and seat.user_id != linked_user.id:
+    if seat and linked_user and seat.user_id != linked_user.id and allow_writes:
         seat.user_id = linked_user.id
-        created_identity_rows = True
-
-    if created_identity_rows:
-        db.session.commit()
+        db.session.flush()
 
     if seat:
         session['current_seat_id'] = seat.id

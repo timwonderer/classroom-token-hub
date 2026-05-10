@@ -684,3 +684,61 @@ class AnalyticsEngine:
         # Create new snapshot
         is_complete = window_end <= utc_now()
         return self.create_snapshot(window_type, window_start, window_end, is_complete)
+
+    def get_snapshot_read_only(
+        self,
+        window_type: str,
+        window_start: datetime,
+        window_end: datetime,
+    ) -> AnalyticsSnapshot:
+        """Return an existing snapshot or an in-memory preview without DB writes."""
+        snapshot = AnalyticsSnapshot.query.filter(
+            AnalyticsSnapshot.join_code == self.join_code,
+            AnalyticsSnapshot.window_type == window_type,
+            AnalyticsSnapshot.window_start == window_start,
+            AnalyticsSnapshot.window_end == window_end,
+        ).first()
+        if snapshot:
+            return snapshot
+
+        health_metrics = self.compute_system_health(window_start, window_end)
+        previous_snapshot = AnalyticsSnapshot.query.filter(
+            AnalyticsSnapshot.join_code == self.join_code,
+            AnalyticsSnapshot.window_type == window_type,
+            AnalyticsSnapshot.window_start < window_start,
+            AnalyticsSnapshot.is_complete == True,
+        ).order_by(AnalyticsSnapshot.window_start.desc()).first()
+        trends = self.compute_trends(health_metrics, previous_snapshot)
+        total_transactions = Transaction.query.filter(
+            Transaction.join_code == self.join_code,
+            Transaction.timestamp >= window_start,
+            Transaction.timestamp < window_end,
+            Transaction.is_void.is_(False),
+        ).count()
+        students = self._get_enrolled_students()
+        total_balance = sum(
+            float(s.get_checking_balance(teacher_id=self.teacher_id, join_code=self.join_code) or 0)
+            for s in students
+        )
+        avg_balance = total_balance / len(students) if students else 0.0
+
+        return AnalyticsSnapshot(
+            teacher_id=self.teacher_id,
+            join_code=self.join_code,
+            window_type=window_type,
+            window_start=window_start,
+            window_end=window_end,
+            participation_rate=health_metrics.participation_rate,
+            money_velocity=health_metrics.money_velocity,
+            cwi_deviation_within_20pct=health_metrics.cwi_deviation_within_20pct,
+            budget_survival_pass_rate=health_metrics.budget_survival_pass_rate,
+            cwi_value=health_metrics.cwi_value,
+            avg_student_balance=avg_balance,
+            balance_trend=trends.balance_trend,
+            velocity_trend=trends.velocity_trend,
+            participation_trend=trends.participation_trend,
+            total_students=health_metrics.total_students,
+            active_students=health_metrics.active_students,
+            total_transactions=total_transactions,
+            is_complete=(window_end <= utc_now()),
+        )
