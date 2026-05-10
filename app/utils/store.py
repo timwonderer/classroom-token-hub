@@ -93,7 +93,7 @@ from app.feats.base import feat_shell
 
 
 @feat_shell("FEAT-STOR-003")
-def process_expired_collective_goals(teacher_id):
+def process_expired_collective_goals(teacher_id, correlation_id=None, idempotency_key=None):
     """
     Find all expired collective goals for a teacher, refund pending purchases,
     and deactivate the items. Commits to the database if any items are processed.
@@ -131,5 +131,5 @@ def process_expired_collective_goals(teacher_id):
         refund_pending_collective_purchases(item, description_suffix="Collective Goal Expired")
         item.is_active = False
 
-    db.session.commit()  # FEAT-AUTHORIZED-SHELL
+    db.session.flush()  # FEAT-LEGACY-WRAP: commit removed
     return len(expired_items)

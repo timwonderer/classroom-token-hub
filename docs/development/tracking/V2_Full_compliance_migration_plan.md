@@ -642,6 +642,39 @@ Focused validation:
 - `pytest -q tests/test_class_deletion.py tests/test_add_rent_waiver_route.py tests/test_feature_flag_enforcement.py tests/test_feature_settings.py -k "deletion or rent or feature"`
 - Result: `39 passed`
 
+### Status Update (2026-05-09): Wave 3C.12-I Store GET Purity (INV-ARC-007 Hardening)
+
+- Eliminated residual write-on-read behavior from admin store page load:
+  - `app/routes/admin.py`
+    - removed lazy call to `process_expired_collective_goals(...)` from `GET /admin/store`
+    - removed unused import of `process_expired_collective_goals`
+- This keeps `/admin/store` GET path pure (no reconciliation mutation side effects on page render) and aligns with FEAT constitutional read/write separation.
+
+Focused validation:
+
+- `python3 -m py_compile app/routes/admin.py`
+- `pytest -q tests/test_v2_authority_guardrails.py -k "not transaction_constructor_is_only_used_in_ledger_service"`
+- `pytest -q tests/test_dashboard_rendering.py tests/test_feature_flag_enforcement.py -k "store"`
+- Result: `23 passed` + `2 passed`
+
+### Status Update (2026-05-09): Wave 3C.12-J Store Mutation FEAT Wrapping (Admin Surface)
+
+- Wrapped remaining admin store mutation paths in FEAT contexts with deterministic idempotency keys:
+  - `app/routes/admin.py`
+    - `POST /admin/store` (create item) now executes in `FEATContext("FEAT-STOR-001", ...)`
+    - `POST /admin/store/edit/<item_id>` now executes in `FEATContext("FEAT-STOR-001", ...)`
+    - `POST /admin/store/delete/<item_id>` / `/item/deactivate/<item_id>` now execute in `FEATContext("FEAT-STOR-003", ...)`
+  - Removed direct route-level commit ownership from these handlers (FEAT orchestrator owns transaction boundary).
+- Atomicity follow-up:
+  - `app/utils/store.py`
+    - `process_expired_collective_goals` shell path now uses `db.session.flush()` instead of direct `commit()` to respect FEAT commit ownership.
+
+Focused validation:
+
+- `python3 -m py_compile app/routes/admin.py app/utils/store.py`
+- `pytest -q tests/test_dashboard_rendering.py tests/test_feature_flag_enforcement.py -k "store"`
+- Result: `2 passed`
+
 ---
 
 ## Wave 4 — Class Configuration Domain (DOM-CLASS-001)

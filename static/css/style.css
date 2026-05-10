@@ -476,7 +476,7 @@ a:hover {
 
 /* ─── Navigation (Sidebar) ─── */
 .sidebar {
-    width: 260px;
+    width: 280px;
     background-color: var(--primary);
     color: white;
     min-height: 100vh;
@@ -486,6 +486,7 @@ a:hover {
     bottom: 0;
     padding: 1.5rem;
     overflow-y: auto;
+    scrollbar-gutter: stable;
     z-index: 1000;
     transition: transform 0.3s ease;
 }
@@ -494,7 +495,7 @@ a:hover {
     color: rgba(255, 255, 255, 0.85);
     display: flex;
     align-items: center;
-    padding: 0.75rem 1rem;
+    padding: 0.62rem 0.85rem;
     border-radius: var(--radius-sm);
     margin-bottom: 0.25rem;
     font-weight: 500;
@@ -515,11 +516,12 @@ a:hover {
 
 .nav-accordion-btn {
     background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.22);
+    border: none;
     color: rgba(255, 255, 255, 0.95);
     border-radius: var(--radius-sm);
-    padding: 0.6rem 0.75rem;
+    padding: 0.5rem 0.68rem;
     font-weight: 600;
+    font-size: 0.95rem;
     box-shadow: none;
 }
 
@@ -527,7 +529,6 @@ a:hover {
 .nav-accordion-btn:focus {
     background: rgba(255, 255, 255, 0.16);
     color: #fff;
-    border-color: rgba(255, 255, 255, 0.36);
 }
 
 .nav-accordion-btn.dropdown-toggle::after {
@@ -540,9 +541,9 @@ a:hover {
 
 .sidebar .nav-sub-link {
     margin-left: 0.5rem;
-    padding-left: 0.75rem;
+    padding-left: 0.6rem;
     font-weight: 500;
-    font-size: 0.95rem;
+    font-size: 0.92rem;
 }
 
 .sidebar .nav-sub-link.active {
@@ -577,13 +578,16 @@ a:hover {
 }
 
 .sidebar-scope-time {
-    font-size: 0.68rem;
+    font-size: 0.66rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: rgba(255, 255, 255, 0.72);
-    margin-bottom: 0.8rem;
-    line-height: 1.5;
+    margin-bottom: 0.72rem;
+    line-height: 1.25;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
 }
 
 .sidebar-scope-name {
@@ -601,12 +605,27 @@ a:hover {
     margin-top: 0.35rem;
 }
 
+.sidebar-scope-class-line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.42rem;
+    flex-wrap: wrap;
+}
+
 .sidebar-scope-meta {
     color: rgba(255, 255, 255, 0.72);
     font-size: 0.76rem;
     font-weight: 700;
     margin-top: 0.18rem;
     letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.sidebar-scope-meta-inline {
+    color: rgba(255, 255, 255, 0.74);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
 }
 
@@ -630,9 +649,15 @@ a:hover {
 
 .sidebar-switcher .form-select {
     background-color: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.25);
+    border: none;
     color: #fff;
     font-weight: 600;
+}
+
+.sidebar-switcher .form-select:hover,
+.sidebar-switcher .form-select:focus {
+    background-color: rgba(255, 255, 255, 0.16);
+    box-shadow: none;
 }
 
 .sidebar-switcher .form-select option {
@@ -668,7 +693,15 @@ a:hover {
 
 .nav-support-link {
     background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.16);
+    border: none;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.68rem !important;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.nav-support-link .material-symbols-outlined {
+    font-size: 20px;
 }
 
 /* ─── Student Shell Specifics ─── */
@@ -764,10 +797,10 @@ a:hover {
 }
 
 .student-main {
-    margin-left: 260px;
+    margin-left: 280px;
     padding: 2rem 1.5rem;
     min-height: 100vh;
-    width: calc(100% - 260px);
+    width: calc(100% - 280px);
 }
 
 .student-content {
@@ -1024,7 +1057,7 @@ body.sysadmin-shell .eyebrow {
 
 .content-wrapper,
 .main-content {
-    margin-left: 260px;
+    margin-left: 280px;
     padding: 2rem;
     min-height: 100vh;
 }

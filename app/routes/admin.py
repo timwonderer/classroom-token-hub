@@ -71,7 +71,7 @@ from app.forms import (
 )
 # Import utility functions
 from app.utils.helpers import is_safe_url, format_utc_iso, generate_anonymous_code, render_template_with_fallback as render_template
-from app.utils.store import refund_pending_collective_purchases, process_expired_collective_goals
+from app.utils.store import refund_pending_collective_purchases
 from app.utils.join_code import generate_join_code
 from app.utils.economy_balance import EconomyBalanceChecker
 from app.utils.economy_policy import (
@@ -5599,8 +5599,6 @@ def store_management():
     )
     selected_join_code = selected_scope['join_code']
     selected_block = selected_scope['block']
-    # Lazily expire collective goals whose deadline has passed, refunding pending purchases.
-    process_expired_collective_goals(admin_id)
     student_ids_subq = _student_scope_subquery_for_join_code(selected_join_code)
     form = StoreItemForm()
 
@@ -5616,51 +5614,69 @@ def store_management():
         enabled_blocks = {block for block in blocks if block}
         if submitted_blocks and not submitted_blocks.issubset(enabled_blocks):
             abort(404)
-        new_item = StoreItem(
-            teacher_id=admin_id,
-            join_code=selected_scope['join_code'],
-            class_id=selected_scope['class_id'],
-            name=form.name.data,
-            description=form.description.data,
-            price=form.price.data,
-            tier=form.tier.data if form.tier.data else None,
-            item_type=form.item_type.data,
-            inventory=form.inventory.data,
-            limit_per_student=form.limit_per_student.data,
-            auto_delist_date=form.auto_delist_date.data,
-            auto_expiry_days=form.auto_expiry_days.data,
-            is_active=form.is_active.data,
-            is_long_term_goal=form.is_long_term_goal.data,
-            bypass_cwi_warnings=form.bypass_cwi_warnings.data,
-            # Bundle settings
-            is_bundle=form.is_bundle.data,
-            bundle_quantity=form.bundle_quantity.data if form.is_bundle.data else None,
-            # Bulk discount settings
-            bulk_discount_enabled=form.bulk_discount_enabled.data,
-            bulk_discount_quantity=form.bulk_discount_quantity.data if form.bulk_discount_enabled.data else None,
-            bulk_discount_percentage=form.bulk_discount_percentage.data if form.bulk_discount_enabled.data else None,
-            # Collective goal settings
-            collective_goal_type=form.collective_goal_type.data if form.item_type.data == 'collective' else None,
-            collective_goal_target=form.collective_goal_target.data if form.item_type.data == 'collective' else None,
-            collective_goal_expires_at=(
-                _end_of_day_utc(form.collective_goal_expires_at.data)
-                if form.item_type.data == 'collective'
-                else None
-            ),
-            collective_goal_instance_code=(
-                generate_collective_goal_instance_code()
-                if form.item_type.data == 'collective' and form.is_active.data
-                else None
-            ),
-            # Redemption prompt
-            redemption_prompt=form.redemption_prompt.data if form.redemption_prompt.data else None
-        )
-        db.session.add(new_item)
-        db.session.flush()  # Get the ID for the item before adding blocks
-        # Set blocks using many-to-many relationship
-        if form.blocks.data:
-            new_item.set_blocks(form.blocks.data)
-        db.session.commit()
+        payload_hash = hashlib.sha256(
+            json.dumps(
+                {
+                    "class_id": selected_scope["class_id"],
+                    "join_code": selected_scope["join_code"],
+                    "name": form.name.data,
+                    "item_type": form.item_type.data,
+                    "price": str(form.price.data),
+                    "is_active": bool(form.is_active.data),
+                    "blocks": sorted(submitted_blocks),
+                },
+                sort_keys=True,
+                default=str,
+            ).encode("utf-8")
+        ).hexdigest()[:16]
+        idempotency_key = f"feat:store:item-create:{selected_scope['class_id']}:{payload_hash}"
+
+        db.session.rollback()
+        with FEATContext("FEAT-STOR-001", idempotency_key=idempotency_key):
+            new_item = StoreItem(
+                teacher_id=admin_id,
+                join_code=selected_scope['join_code'],
+                class_id=selected_scope['class_id'],
+                name=form.name.data,
+                description=form.description.data,
+                price=form.price.data,
+                tier=form.tier.data if form.tier.data else None,
+                item_type=form.item_type.data,
+                inventory=form.inventory.data,
+                limit_per_student=form.limit_per_student.data,
+                auto_delist_date=form.auto_delist_date.data,
+                auto_expiry_days=form.auto_expiry_days.data,
+                is_active=form.is_active.data,
+                is_long_term_goal=form.is_long_term_goal.data,
+                bypass_cwi_warnings=form.bypass_cwi_warnings.data,
+                # Bundle settings
+                is_bundle=form.is_bundle.data,
+                bundle_quantity=form.bundle_quantity.data if form.is_bundle.data else None,
+                # Bulk discount settings
+                bulk_discount_enabled=form.bulk_discount_enabled.data,
+                bulk_discount_quantity=form.bulk_discount_quantity.data if form.bulk_discount_enabled.data else None,
+                bulk_discount_percentage=form.bulk_discount_percentage.data if form.bulk_discount_enabled.data else None,
+                # Collective goal settings
+                collective_goal_type=form.collective_goal_type.data if form.item_type.data == 'collective' else None,
+                collective_goal_target=form.collective_goal_target.data if form.item_type.data == 'collective' else None,
+                collective_goal_expires_at=(
+                    _end_of_day_utc(form.collective_goal_expires_at.data)
+                    if form.item_type.data == 'collective'
+                    else None
+                ),
+                collective_goal_instance_code=(
+                    generate_collective_goal_instance_code()
+                    if form.item_type.data == 'collective' and form.is_active.data
+                    else None
+                ),
+                # Redemption prompt
+                redemption_prompt=form.redemption_prompt.data if form.redemption_prompt.data else None
+            )
+            db.session.add(new_item)
+            db.session.flush()  # Get the ID for the item before adding blocks
+            # Set blocks using many-to-many relationship
+            if form.blocks.data:
+                new_item.set_blocks(form.blocks.data)
         flash(f"'{new_item.name}' has been added to the store.", "success")
         return redirect(url_for('admin.store_management'))
 
@@ -6001,27 +6017,44 @@ def edit_store_item(item_id):
         enabled_blocks = {block for block in blocks if block}
         if submitted_blocks and not submitted_blocks.issubset(enabled_blocks):
             abort(404)
-        
-        was_active = item.is_active
-        
-        # Populate other fields first
-        form.populate_obj(item)
-        # Set blocks using many-to-many relationship
-        item.set_blocks(form.blocks.data if form.blocks.data else [])
-        
-        item.collective_goal_expires_at = (
-            _end_of_day_utc(form.collective_goal_expires_at.data)
-            if item.item_type == 'collective'
-            else None
-        )
+        payload_hash = hashlib.sha256(
+            json.dumps(
+                {
+                    "item_id": item.id,
+                    "class_id": selected_scope["class_id"],
+                    "name": form.name.data,
+                    "item_type": form.item_type.data,
+                    "price": str(form.price.data),
+                    "is_active": bool(form.is_active.data),
+                    "blocks": sorted(submitted_blocks),
+                },
+                sort_keys=True,
+                default=str,
+            ).encode("utf-8")
+        ).hexdigest()[:16]
+        idempotency_key = f"feat:store:item-edit:{selected_scope['class_id']}:{item.id}:{payload_hash}"
 
-        # Rotate instance code if reviving an inactive collective goal or changing to collective
-        if item.item_type == 'collective' and form.is_active.data:
-            if not was_active or not item.collective_goal_instance_code:
-                # Issue new instance code
-                item.collective_goal_instance_code = generate_collective_goal_instance_code()
+        db.session.rollback()
+        with FEATContext("FEAT-STOR-001", idempotency_key=idempotency_key):
+            item = StoreItem.query.filter_by(id=item_id, class_id=selected_scope['class_id']).first_or_404()
+            was_active = item.is_active
 
-        db.session.commit()
+            # Populate other fields first
+            form.populate_obj(item)
+            # Set blocks using many-to-many relationship
+            item.set_blocks(form.blocks.data if form.blocks.data else [])
+
+            item.collective_goal_expires_at = (
+                _end_of_day_utc(form.collective_goal_expires_at.data)
+                if item.item_type == 'collective'
+                else None
+            )
+
+            # Rotate instance code if reviving an inactive collective goal or changing to collective
+            if item.item_type == 'collective' and form.is_active.data:
+                if not was_active or not item.collective_goal_instance_code:
+                    # Issue new instance code
+                    item.collective_goal_instance_code = generate_collective_goal_instance_code()
         flash(f"'{item.name}' has been updated.", "success")
         return redirect(url_for('admin.store_management'))
     payroll_settings = PayrollSettings.query.filter_by(class_id=selected_scope['class_id'], is_active=True).first()
@@ -6049,18 +6082,23 @@ def delete_store_item(item_id):
 
     # For active collective items, refund any pending purchases before deactivating
     # so students are not left with purchased but unredeemable items.
-    if item.item_type == 'collective' and item.is_active:
-        refunded = refund_pending_collective_purchases(item, description_suffix="Item Removed by Teacher")
-        if refunded:
-            flash(
-                f"{refunded} pending purchase(s) for '{item.name}' have been refunded automatically.",
-                "info",
-            )
+    idempotency_key = f"feat:store:item-deactivate:{selected_scope['class_id']}:{item.id}"
+    db.session.rollback()
+    with FEATContext("FEAT-STOR-003", idempotency_key=idempotency_key):
+        item = StoreItem.query.filter_by(id=item_id, class_id=selected_scope['class_id']).first_or_404()
+        refunded = 0
+        if item.item_type == 'collective' and item.is_active:
+            refunded = refund_pending_collective_purchases(item, description_suffix="Item Removed by Teacher")
 
-    # To preserve history, we'll just deactivate it instead of a hard delete
-    # A hard delete would be: db.session.delete(item)
-    item.is_active = False
-    db.session.commit()
+        # To preserve history, we'll just deactivate it instead of a hard delete
+        # A hard delete would be: db.session.delete(item)
+        item.is_active = False
+
+    if refunded:
+        flash(
+            f"{refunded} pending purchase(s) for '{item.name}' have been refunded automatically.",
+            "info",
+        )
     flash(f"'{item.name}' has been deactivated and removed from the store.", "success")
     return redirect(url_for('admin.store_management'))
 
@@ -9098,23 +9136,39 @@ def payroll_settings():
         if not target_blocks:
             abort(404)
 
-        for block_value in target_blocks:
-            class_id = class_id_by_block.get(block_value)
-            if not class_id:
-                abort(404)
+        payload_hash = hashlib.sha256(
+            json.dumps(
+                {
+                    "settings_mode": settings_mode,
+                    "apply_to": apply_to,
+                    "target_blocks": sorted(target_blocks),
+                    "selected_scope_class_id": selected_scope["class_id"],
+                },
+                sort_keys=True,
+                default=str,
+            ).encode("utf-8")
+        ).hexdigest()[:16]
+        idempotency_key = (
+            f"feat:class:payroll-settings:update:{selected_scope['class_id']}:{payload_hash}"
+        )
 
-            setting = PayrollSettings.query.filter_by(class_id=class_id, block=block_value).first()
-            if not setting:
-                setting = PayrollSettings(teacher_id=admin_id, class_id=class_id, block=block_value)
+        db.session.rollback()
+        with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
+            for block_value in target_blocks:
+                class_id = class_id_by_block.get(block_value)
+                if not class_id:
+                    abort(404)
 
-            # Update all fields
-            for key, value in settings_data.items():
-                setattr(setting, key, value)
+                setting = PayrollSettings.query.filter_by(class_id=class_id, block=block_value).first()
+                if not setting:
+                    setting = PayrollSettings(teacher_id=admin_id, class_id=class_id, block=block_value)
 
-            setting.updated_at = utc_now()
-            db.session.add(setting)
+                # Update all fields
+                for key, value in settings_data.items():
+                    setattr(setting, key, value)
 
-        db.session.commit()
+                setting.updated_at = utc_now()
+                db.session.add(setting)
 
         if apply_to == 'all' or not selected_blocks:
             flash(f'Payroll settings ({settings_mode} mode) applied to all periods successfully!', 'success')
@@ -9153,63 +9207,79 @@ def update_expected_weekly_hours():
             flash('Expected weekly hours must be between 0.25 and 80.', 'error')
             return redirect(url_for('admin.payroll', cwi_block=cwi_block))
 
-        if apply_to_all:
-            # Update all existing payroll settings
-            class_ids = [class_id_by_block[block] for block in enabled_blocks if block in class_id_by_block]
-            settings_to_update = (
-                PayrollSettings.query
-                .filter(
-                    PayrollSettings.class_id.in_(class_ids),
-                    PayrollSettings.block.in_(enabled_blocks),
-                )
-                .all()
-            )
+        payload_hash = hashlib.sha256(
+            json.dumps(
+                {
+                    "expected_weekly_hours": str(expected_weekly_hours),
+                    "cwi_block": cwi_block,
+                    "apply_to_all": apply_to_all,
+                },
+                sort_keys=True,
+                default=str,
+            ).encode("utf-8")
+        ).hexdigest()[:16]
+        idempotency_key = (
+            f"feat:class:payroll-expected-hours:update:{selected_scope['class_id']}:{payload_hash}"
+        )
 
-            if settings_to_update:
-                for setting in settings_to_update:
-                    setting.expected_weekly_hours = expected_weekly_hours
-                flash_message = f'Expected weekly hours updated to {expected_weekly_hours} hours/week for all classes.'
+        db.session.rollback()
+        with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
+            if apply_to_all:
+                # Update all existing payroll settings
+                class_ids = [class_id_by_block[block] for block in enabled_blocks if block in class_id_by_block]
+                settings_to_update = (
+                    PayrollSettings.query
+                    .filter(
+                        PayrollSettings.class_id.in_(class_ids),
+                        PayrollSettings.block.in_(enabled_blocks),
+                    )
+                    .all()
+                )
+
+                if settings_to_update:
+                    for setting in settings_to_update:
+                        setting.expected_weekly_hours = expected_weekly_hours
+                    flash_message = f'Expected weekly hours updated to {expected_weekly_hours} hours/week for all classes.'
+                else:
+                    # No settings exist - create a default one for the selected block
+                    class_id = class_id_by_block.get(cwi_block)
+                    if not class_id:
+                        abort(404)
+                    new_setting = PayrollSettings(
+                        teacher_id=admin_id,
+                        class_id=class_id,
+                        block=cwi_block,
+                        pay_rate=0.25,  # Default $0.25/min = $15/hour
+                        expected_weekly_hours=expected_weekly_hours,
+                        payroll_frequency_days=14,
+                        settings_mode='simple'
+                    )
+                    db.session.add(new_setting)
+                    flash_message = f'Expected weekly hours set to {expected_weekly_hours} hours/week for all classes.'
             else:
-                # No settings exist - create a default one for the selected block
+                # Update only the selected block
                 class_id = class_id_by_block.get(cwi_block)
                 if not class_id:
                     abort(404)
-                new_setting = PayrollSettings(
-                    teacher_id=admin_id,
-                    class_id=class_id,
-                    block=cwi_block,
-                    pay_rate=0.25,  # Default $0.25/min = $15/hour
-                    expected_weekly_hours=expected_weekly_hours,
-                    payroll_frequency_days=14,
-                    settings_mode='simple'
-                )
-                db.session.add(new_setting)
-                flash_message = f'Expected weekly hours set to {expected_weekly_hours} hours/week for all classes.'
-        else:
-            # Update only the selected block
-            class_id = class_id_by_block.get(cwi_block)
-            if not class_id:
-                abort(404)
-            block_setting = PayrollSettings.query.filter_by(class_id=class_id, block=cwi_block).first()
+                block_setting = PayrollSettings.query.filter_by(class_id=class_id, block=cwi_block).first()
 
-            if block_setting:
-                block_setting.expected_weekly_hours = expected_weekly_hours
-                flash_message = f'Expected weekly hours updated to {expected_weekly_hours} hours/week for {cwi_block}.'
-            else:
-                # Create new setting for this block
-                new_setting = PayrollSettings(
-                    teacher_id=admin_id,
-                    class_id=class_id,
-                    block=cwi_block,
-                    pay_rate=0.25,  # Default $0.25/min = $15/hour
-                    expected_weekly_hours=expected_weekly_hours,
-                    payroll_frequency_days=14,
-                    settings_mode='simple'
-                )
-                db.session.add(new_setting)
-                flash_message = f'Expected weekly hours set to {expected_weekly_hours} hours/week for {cwi_block}.'
+                if block_setting:
+                    block_setting.expected_weekly_hours = expected_weekly_hours
+                    flash_message = f'Expected weekly hours updated to {expected_weekly_hours} hours/week for {cwi_block}.'
+                else:
+                    # Create new setting for this block
+                    new_setting = PayrollSettings(
+                        teacher_id=admin_id,
+                        class_id=class_id,
+                        block=cwi_block,
+                        pay_rate=0.25,  # Default $0.25/min = $15/hour
+                        expected_weekly_hours=expected_weekly_hours,
+                        payroll_frequency_days=14,
+                        settings_mode='simple'
+                    )
+                    db.session.add(new_setting)
+                    flash_message = f'Expected weekly hours set to {expected_weekly_hours} hours/week for {cwi_block}.'
 
-        db.session.commit()
         flash(flash_message, 'success')
 
     except ValueError:
@@ -9239,16 +9309,32 @@ def payroll_add_reward():
 
     if form.validate_on_submit():
         try:
-            reward = PayrollReward(
-                teacher_id=admin_id,
-                class_id=selected_scope['class_id'],
-                name=form.name.data,
-                description=form.description.data,
-                amount=form.amount.data,
-                is_active=form.is_active.data
+            payload_hash = hashlib.sha256(
+                json.dumps(
+                    {
+                        "class_id": selected_scope["class_id"],
+                        "name": form.name.data,
+                        "amount": str(form.amount.data),
+                        "is_active": bool(form.is_active.data),
+                    },
+                    sort_keys=True,
+                    default=str,
+                ).encode("utf-8")
+            ).hexdigest()[:16]
+            idempotency_key = (
+                f"feat:class:payroll-reward:add:{selected_scope['class_id']}:{payload_hash}"
             )
-            db.session.add(reward)
-            db.session.commit()
+            db.session.rollback()
+            with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
+                reward = PayrollReward(
+                    teacher_id=admin_id,
+                    class_id=selected_scope['class_id'],
+                    name=form.name.data,
+                    description=form.description.data,
+                    amount=form.amount.data,
+                    is_active=form.is_active.data
+                )
+                db.session.add(reward)
             flash(f'Reward "{reward.name}" created successfully!', 'success')
         except Exception as e:
             db.session.rollback()
@@ -9272,8 +9358,15 @@ def payroll_delete_reward(reward_id):
             teacher_id=admin_id,
             class_id=selected_scope['class_id'],
         ).first_or_404()
-        db.session.delete(reward)
-        db.session.commit()
+        idempotency_key = f"feat:class:payroll-reward:delete:{selected_scope['class_id']}:{reward.id}"
+        db.session.rollback()
+        with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
+            reward = PayrollReward.query.filter_by(
+                id=reward_id,
+                teacher_id=admin_id,
+                class_id=selected_scope['class_id'],
+            ).first_or_404()
+            db.session.delete(reward)
         return jsonify({'success': True, 'message': 'Reward deleted successfully'})
     except HTTPException:
         raise
@@ -9293,16 +9386,32 @@ def payroll_add_fine():
 
     if form.validate_on_submit():
         try:
-            fine = PayrollFine(
-                teacher_id=admin_id,
-                class_id=selected_scope['class_id'],
-                name=form.name.data,
-                description=form.description.data,
-                amount=form.amount.data,
-                is_active=form.is_active.data
+            payload_hash = hashlib.sha256(
+                json.dumps(
+                    {
+                        "class_id": selected_scope["class_id"],
+                        "name": form.name.data,
+                        "amount": str(form.amount.data),
+                        "is_active": bool(form.is_active.data),
+                    },
+                    sort_keys=True,
+                    default=str,
+                ).encode("utf-8")
+            ).hexdigest()[:16]
+            idempotency_key = (
+                f"feat:class:payroll-fine:add:{selected_scope['class_id']}:{payload_hash}"
             )
-            db.session.add(fine)
-            db.session.commit()
+            db.session.rollback()
+            with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
+                fine = PayrollFine(
+                    teacher_id=admin_id,
+                    class_id=selected_scope['class_id'],
+                    name=form.name.data,
+                    description=form.description.data,
+                    amount=form.amount.data,
+                    is_active=form.is_active.data
+                )
+                db.session.add(fine)
             flash(f'Fine "{fine.name}" created successfully!', 'success')
         except Exception as e:
             db.session.rollback()
@@ -9326,8 +9435,15 @@ def payroll_delete_fine(fine_id):
             teacher_id=admin_id,
             class_id=selected_scope['class_id'],
         ).first_or_404()
-        db.session.delete(fine)
-        db.session.commit()
+        idempotency_key = f"feat:class:payroll-fine:delete:{selected_scope['class_id']}:{fine.id}"
+        db.session.rollback()
+        with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
+            fine = PayrollFine.query.filter_by(
+                id=fine_id,
+                teacher_id=admin_id,
+                class_id=selected_scope['class_id'],
+            ).first_or_404()
+            db.session.delete(fine)
         return jsonify({'success': True, 'message': 'Fine deleted successfully'})
     except HTTPException:
         raise
@@ -9352,12 +9468,23 @@ def payroll_edit_reward(reward_id):
         ).first_or_404()
         data = request.get_json()
 
-        reward.name = data.get('name', reward.name)
-        reward.description = data.get('description', reward.description)
-        reward.amount = _quantize_currency(data.get('amount', str(reward.amount)))
-        reward.is_active = data.get('is_active', reward.is_active)
-
-        db.session.commit()
+        payload_hash = hashlib.sha256(
+            json.dumps(data, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()[:16]
+        idempotency_key = (
+            f"feat:class:payroll-reward:edit:{selected_scope['class_id']}:{reward.id}:{payload_hash}"
+        )
+        db.session.rollback()
+        with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
+            reward = PayrollReward.query.filter_by(
+                id=reward_id,
+                teacher_id=admin_id,
+                class_id=selected_scope['class_id'],
+            ).first_or_404()
+            reward.name = data.get('name', reward.name)
+            reward.description = data.get('description', reward.description)
+            reward.amount = _quantize_currency(data.get('amount', str(reward.amount)))
+            reward.is_active = data.get('is_active', reward.is_active)
         return jsonify({'success': True, 'message': 'Reward updated successfully'})
     except HTTPException:
         raise
@@ -9382,12 +9509,23 @@ def payroll_edit_fine(fine_id):
         ).first_or_404()
         data = request.get_json()
 
-        fine.name = data.get('name', fine.name)
-        fine.description = data.get('description', fine.description)
-        fine.amount = _quantize_currency(data.get('amount', str(fine.amount)))
-        fine.is_active = data.get('is_active', fine.is_active)
-
-        db.session.commit()
+        payload_hash = hashlib.sha256(
+            json.dumps(data, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()[:16]
+        idempotency_key = (
+            f"feat:class:payroll-fine:edit:{selected_scope['class_id']}:{fine.id}:{payload_hash}"
+        )
+        db.session.rollback()
+        with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
+            fine = PayrollFine.query.filter_by(
+                id=fine_id,
+                teacher_id=admin_id,
+                class_id=selected_scope['class_id'],
+            ).first_or_404()
+            fine.name = data.get('name', fine.name)
+            fine.description = data.get('description', fine.description)
+            fine.amount = _quantize_currency(data.get('amount', str(fine.amount)))
+            fine.is_active = data.get('is_active', fine.is_active)
         return jsonify({'success': True, 'message': 'Fine updated successfully'})
     except HTTPException:
         raise
@@ -9415,9 +9553,24 @@ def void_payroll_transaction(transaction_id):
         if transaction.is_void:
             return jsonify({'success': False, 'message': 'Transaction is already voided'}), 400
 
-        execute_void_transaction(transaction)
+        idempotency_key = (
+            f"feat:led:payroll-void:{selected_scope['class_id']}:{selected_scope['join_code']}:{transaction.id}"
+        )
+        db.session.rollback()
+        with FEATContext("FEAT-LED-004", idempotency_key=idempotency_key):
+            transaction = (
+                Transaction.query
+                .join(Student, Transaction.student_id == Student.id)
+                .filter(Transaction.id == transaction_id)
+                .filter(Student.id.in_(sa.select(_student_scope_subquery_for_join_code(selected_scope['join_code']))))
+                .filter(Transaction.join_code == selected_scope['join_code'])
+                .first_or_404()
+            )
 
-        db.session.commit()
+            if transaction.is_void:
+                return jsonify({'success': False, 'message': 'Transaction is already voided'}), 400
+
+            execute_void_transaction(transaction)
 
         return jsonify({'success': True, 'message': 'Transaction voided successfully'})
     except HTTPException:
@@ -9441,21 +9594,36 @@ def void_transactions_bulk():
             return jsonify({'success': False, 'message': 'No transactions selected'}), 400
 
         student_ids_subq = _student_scope_subquery_for_join_code(selected_scope['join_code'])
-        count = 0
-        for tx_id in transaction_ids:
-            transaction = (
-                Transaction.query
-                .join(Student, Transaction.student_id == Student.id)
-                .filter(Transaction.id == int(tx_id))
-                .filter(Student.id.in_(sa.select(student_ids_subq)))
-                .filter(Transaction.join_code == selected_scope['join_code'])
-                .first()
-            )
-            if transaction and not transaction.is_void:
-                execute_void_transaction(transaction)
-                count += 1
+        payload_hash = hashlib.sha256(
+            json.dumps(
+                {
+                    "class_id": selected_scope["class_id"],
+                    "join_code": selected_scope["join_code"],
+                    "transaction_ids": [int(tx_id) for tx_id in transaction_ids],
+                },
+                sort_keys=True,
+                default=str,
+            ).encode("utf-8")
+        ).hexdigest()[:16]
+        idempotency_key = (
+            f"feat:led:payroll-void-bulk:{selected_scope['class_id']}:{payload_hash}"
+        )
 
-        db.session.commit()
+        count = 0
+        db.session.rollback()
+        with FEATContext("FEAT-LED-004", idempotency_key=idempotency_key):
+            for tx_id in transaction_ids:
+                transaction = (
+                    Transaction.query
+                    .join(Student, Transaction.student_id == Student.id)
+                    .filter(Transaction.id == int(tx_id))
+                    .filter(Student.id.in_(sa.select(student_ids_subq)))
+                    .filter(Transaction.join_code == selected_scope['join_code'])
+                    .first()
+                )
+                if transaction and not transaction.is_void:
+                    execute_void_transaction(transaction)
+                    count += 1
         return jsonify({'success': True, 'message': f'{count} transaction(s) voided successfully'})
     except HTTPException:
         raise
@@ -11090,12 +11258,21 @@ def feature_settings():
     """
     admin_id = session.get('admin_id')
 
-    # Get all periods for this teacher
-    students = _scoped_students().all()
-    periods = sorted(set(
-        b.strip().upper() for s in students
-        for b in (s.block or '').split(',') if b.strip()
-    ))
+    # Get all configured periods for this teacher from class roster anchors.
+    # Do not depend on claimed student rows; unclaimed seats still define a valid period.
+    teacher_block_rows = (
+        TeacherBlock.query.with_entities(TeacherBlock.block)
+        .filter(
+            TeacherBlock.teacher_id == admin_id,
+            TeacherBlock.block.isnot(None),
+        )
+        .all()
+    )
+    periods = sorted({
+        (block or '').strip().upper()
+        for (block,) in teacher_block_rows
+        if (block or '').strip()
+    })
     join_codes_by_period = _get_join_codes_by_block(admin_id, periods)
 
     period_settings = {}
@@ -11147,8 +11324,15 @@ def update_period_feature_settings(period):
                 else:
                     enabled_features.discard(feature_name)
 
-        replace_enabled_class_features(scope["class_id"], enabled_features)
-        db.session.commit()
+        payload_hash = hashlib.sha256(
+            json.dumps({"period": period, "data": data}, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()[:16]
+        idempotency_key = f"feat:class:feature-settings:update:{scope['class_id']}:{payload_hash}"
+
+        # Ensure FEAT owns transaction boundary for feature-toggle writes.
+        db.session.rollback()
+        with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
+            replace_enabled_class_features(scope["class_id"], enabled_features)
 
         return jsonify({
             'status': 'success',
@@ -11188,30 +11372,43 @@ def copy_feature_settings():
             }), 400
         source_dict = get_class_feature_settings(admin_id, block=source_period)["features"]
 
+        payload_hash = hashlib.sha256(
+            json.dumps(
+                {"source_period": source_period, "target_periods": target_periods},
+                sort_keys=True,
+                default=str,
+            ).encode("utf-8")
+        ).hexdigest()[:16]
+        idempotency_key = (
+            f"feat:class:feature-settings:copy:{source_scope['class_id']}:{payload_hash}"
+        )
+
+        # Ensure FEAT owns transaction boundary for feature-toggle writes.
+        db.session.rollback()
+
         # Copy to target periods
         copied_count = 0
-        for period in target_periods:
-            if period == source_period:
-                continue  # Skip copying to self
+        with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
+            for period in target_periods:
+                if period == source_period:
+                    continue  # Skip copying to self
 
-            target_scope = resolve_class_scope(admin_id, block=period)
-            if not target_scope:
-                return jsonify({
-                    'status': 'error',
-                    'message': f'Class scope not found for period {period}.'
-                }), 400
+                target_scope = resolve_class_scope(admin_id, block=period)
+                if not target_scope:
+                    return jsonify({
+                        'status': 'error',
+                        'message': f'Class scope not found for period {period}.'
+                    }), 400
 
-            replace_enabled_class_features(
-                target_scope["class_id"],
-                {
-                    feature_name
-                    for feature_name in ('payroll', 'insurance', 'banking', 'rent', 'hall_pass', 'store')
-                    if source_dict.get(f'{feature_name}_enabled')
-                },
-            )
-            copied_count += 1
-
-        db.session.commit()
+                replace_enabled_class_features(
+                    target_scope["class_id"],
+                    {
+                        feature_name
+                        for feature_name in ('payroll', 'insurance', 'banking', 'rent', 'hall_pass', 'store')
+                        if source_dict.get(f'{feature_name}_enabled')
+                    },
+                )
+                copied_count += 1
 
         return jsonify({
             'status': 'success',

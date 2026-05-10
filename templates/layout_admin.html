@@ -102,8 +102,10 @@
             <div class="sidebar-scope-name">{{ (current_admin_display_name or current_admin.get_display_name())|upper }}</div>
             {% endif %}
             {% if admin_current_class_context %}
-            <div class="sidebar-scope-context">{{ admin_current_class_context.class_identifier }}</div>
-            <div class="sidebar-scope-meta">{{ admin_current_class_context.join_code }}</div>
+            <div class="sidebar-scope-context sidebar-scope-class-line">
+                <span>{{ admin_current_class_context.class_identifier }}</span>
+                <span class="sidebar-scope-meta-inline">{{ admin_current_class_context.join_code }}</span>
+            </div>
             {% else %}
             <div class="sidebar-scope-context">No classes created yet</div>
             {% endif %}
@@ -387,8 +389,10 @@
                     timeZone: timezone,
                     timeZoneName: 'short',
                 };
-                timeElement.textContent = now.toLocaleDateString('en-US', optionsDate) + ' ' +
-                    now.toLocaleTimeString('en-US', optionsTime);
+                timeElement.innerHTML = `
+                    <span>${now.toLocaleDateString('en-US', optionsDate)}</span>
+                    <span>${now.toLocaleTimeString('en-US', optionsTime)}</span>
+                `;
             });
         }
         setInterval(renderClassScopedTimes, 30000);
