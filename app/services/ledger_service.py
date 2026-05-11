@@ -7,7 +7,13 @@ from app.models import BalanceCache, Transaction, TransactionStatus, ClassEconom
 from app.utils.seat_scope import get_seat_ids_for_student_join, transaction_scope_filter
 from app.utils.time import ensure_utc, utc_now
 from app.utils.transaction_idempotency import create_idempotent_transaction
-from app.feats.base import feat_shell
+from app.feats.base import feat_shell, audit_protected
+
+# Protected fields captured in the audit payload for every ledger write
+_TRANSACTION_AUDIT_FIELDS = [
+    "amount", "account_type", "type", "status",
+    "class_id", "seat_id", "description", "correlation_id",
+]
 
 
 def _non_void_filter():
@@ -139,6 +145,10 @@ def create_pending_transaction(
         policy_id=policy_id,
     )
     db.session.add(transaction)
+    db.session.flush()  # populate transaction.id before audit event
+
+    audit_protected("transaction", transaction, "INSERT", _TRANSACTION_AUDIT_FIELDS)
+
     return transaction
 
 

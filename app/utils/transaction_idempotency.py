@@ -75,9 +75,15 @@ def get_idempotent_transaction(idempotency_key, join_code=None, class_id=None, s
     return query.first()
 
 
+_TRANSACTION_AUDIT_FIELDS = [
+    "amount", "account_type", "type", "status",
+    "class_id", "seat_id", "description", "correlation_id",
+]
+
+
 def create_idempotent_transaction(*, idempotency_key, **transaction_kwargs):
-    from app.feats.base import get_active_feat_name
-    
+    from app.feats.base import get_active_feat_name, audit_protected
+
     transaction_type = transaction_kwargs.get("type")
     if transaction_type not in IDEMPOTENT_TRANSACTION_TYPES:
         raise ValueError(f"Transaction type '{transaction_type}' is not enabled for idempotent creation.")
@@ -91,12 +97,12 @@ def create_idempotent_transaction(*, idempotency_key, **transaction_kwargs):
     feat_code = get_active_feat_name()
 
     existing = get_idempotent_transaction(
-        idempotency_key, 
+        idempotency_key,
         join_code=transaction_kwargs.get("join_code"),
         class_id=transaction_kwargs.get("class_id"),
         seat_id=transaction_kwargs.get("seat_id"),
         type=transaction_type,
-        feat_code=feat_code
+        feat_code=feat_code,
     )
     if existing:
         return existing, False
@@ -106,16 +112,17 @@ def create_idempotent_transaction(*, idempotency_key, **transaction_kwargs):
         with db.session.begin_nested():
             db.session.add(new_txn)
             db.session.flush()
+        # Emit audit event after successful creation (id is now populated)
+        audit_protected("transaction", new_txn, "INSERT", _TRANSACTION_AUDIT_FIELDS)
         return new_txn, True
     except IntegrityError:
-        # Double-check if it was created by a concurrent request
         existing = get_idempotent_transaction(
-            idempotency_key, 
+            idempotency_key,
             join_code=transaction_kwargs.get("join_code"),
             class_id=transaction_kwargs.get("class_id"),
             seat_id=transaction_kwargs.get("seat_id"),
             type=transaction_type,
-            feat_code=feat_code
+            feat_code=feat_code,
         )
         if existing:
             return existing, False

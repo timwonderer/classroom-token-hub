@@ -28,6 +28,7 @@ os.environ.setdefault("RATELIMIT_STORAGE_URI", "memory://")
 # Use valid Fernet keys (32 url-safe base64-encoded bytes)
 os.environ.setdefault("ENCRYPTION_KEY", "jhe53bcYZI4_MZS4Kb8hu8-xnQHHvwqSX8LN4sDtzbw=")
 os.environ.setdefault("PEPPER_KEY", "tKiXIAgaPqsOOhR1PqvdEQo4BelrN5SP3cpWxVYrsHk=")
+os.environ.setdefault("AUDIT_HMAC_KEY", "test-audit-hmac-key-for-tests-only-not-for-production")
 
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))

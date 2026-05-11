@@ -15,6 +15,15 @@ logger = logging.getLogger(__name__)
 # Thread-local storage for FEAT context
 _feat_context = threading.local()
 
+# Thread-local flag set by audit_service.system_audit_authority().
+# Allows the audit infrastructure to flush/commit without a FEAT context.
+_system_audit_ctx = threading.local()
+
+
+def is_system_audit_authority() -> bool:
+    """Return True if system_audit_authority context is active in this thread."""
+    return getattr(_system_audit_ctx, "active", False)
+
 def generate_correlation_id() -> str:
     """Generate a unique correlation ID for cross-domain tracking."""
     import uuid
@@ -315,6 +324,51 @@ class FEATBypass:
             return False
         return self._ctx.__exit__(exc_type, exc_val, exc_tb)
 
+def audit_protected(
+    table_name: str,
+    row,
+    operation: str,
+    fields: list[str],
+    *,
+    actor_type: str | None = None,
+    actor_id_hash: str | None = None,
+) -> None:
+    """Emit an AuditEvent for a protected row write and attach lineage fields.
+
+    Must be called after db.session.flush() (so row.id is populated) and
+    before the owning FEAT commits. Does nothing if AUDIT_HMAC_KEY is absent
+    (dev/test without the key configured — CI enforces the key in production).
+    """
+    try:
+        from app.services.audit_service import emit_audit_event, AuditContextError
+    except ImportError:
+        logger.warning("audit_service not available — audit lineage skipped")
+        return
+
+    try:
+        event = emit_audit_event(
+            table_name=table_name,
+            row_pk=str(row.id),
+            operation=operation,
+            protected_fields={f: getattr(row, f, None) for f in fields},
+            class_id=getattr(row, "class_id", None),
+            seat_id=getattr(row, "seat_id", None),
+            teacher_id=getattr(row, "teacher_id", None),
+            actor_type=actor_type,
+            actor_id_hash=actor_id_hash,
+        )
+        if hasattr(row, "lineage_event_id"):
+            row.lineage_event_id = event.id
+            row.lineage_token = event.hmac_signature
+            row.lineage_version = event.signature_version
+    except AuditContextError as exc:
+        logger.error(f"AUDIT-LINEAGE-FAILURE: {exc}")
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"AUDIT-LINEAGE-ERROR: unexpected error emitting audit event for {table_name}:{getattr(row, 'id', '?')} — {exc}")
+        raise
+
+
 def requires_feat_context(feat_name: str):
     """
     Decorator to ensure a function is executed within a FEAT context.
@@ -382,7 +436,9 @@ def init_feat_enforcement(app):
         Prevents session flushes (SQL emission) outside a FEAT context.
         """
         is_bypass = get_active_feat_name() == "FEAT-BYPASS-LEGACY"
-        if not is_bypass and (not is_feat_active() or not session.info.get("feat_context_active")):
+        if is_bypass or is_system_audit_authority():
+            pass  # allowed paths
+        elif not is_feat_active() or not session.info.get("feat_context_active"):
             if session.new or session.dirty or session.deleted:
                 raise FEATContextError(
                     "MANDATORY FEAT CONSTITUTIONAL VIOLATION (FLUSH): "
@@ -399,7 +455,9 @@ def init_feat_enforcement(app):
         Prevents commits outside a FEAT context, even if flush has not executed yet.
         """
         is_bypass = get_active_feat_name() == "FEAT-BYPASS-LEGACY"
-        if not is_bypass and (not is_feat_active() or not session.info.get("feat_context_active")):
+        if is_bypass or is_system_audit_authority():
+            pass  # allowed paths
+        elif not is_feat_active() or not session.info.get("feat_context_active"):
             if session.new or session.dirty or session.deleted:
                 raise FEATContextError(
                     "MANDATORY FEAT CONSTITUTIONAL VIOLATION (COMMIT): "
@@ -410,6 +468,7 @@ def init_feat_enforcement(app):
         # Hard atomicity rule: only FEAT orchestrator may commit.
         if (
             not is_bypass
+            and not is_system_audit_authority()
             and is_feat_active()
             and session.info.get("feat_context_active")
             and not session.info.get("feat_orchestrator_commit")

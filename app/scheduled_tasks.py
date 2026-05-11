@@ -286,6 +286,37 @@ def run_rent_cycle_scheduler(execution_time=None):
     return outcomes
 
 
+def run_audit_invariant_check_job():
+    """Nightly audit chain integrity verification.
+
+    Walks all active class chains and the system chain, recomputing HMAC
+    signatures and verifying hash continuity. Writes the aggregate result to
+    IntegrityStatus, which is exposed by /health/deep.
+    """
+    logger = logging.getLogger('scheduled_tasks')
+    logger.info("Starting nightly audit invariant check")
+    try:
+        from app.utils.audit_verifier import run_full_invariant_check, update_integrity_status
+        results = run_full_invariant_check()
+        update_integrity_status(results)
+
+        passing = all(r.state == "VERIFIED" for r in results)
+        if passing:
+            logger.info(
+                "Audit invariant check passed: %d chain(s) verified", len(results)
+            )
+        else:
+            failed = [r for r in results if r.state != "VERIFIED"]
+            logger.error(
+                "Audit invariant check FAILED: %d/%d chain(s) invalid — %s",
+                len(failed),
+                len(results),
+                [{"scope": r.chain_scope, "type": r.failure_type} for r in failed],
+            )
+    except Exception:
+        logger.exception("Audit invariant check job encountered an unhandled error")
+
+
 def init_scheduled_tasks(app):
     """
     Initialize and start scheduled tasks.
@@ -310,6 +341,10 @@ def init_scheduled_tasks(app):
     def run_scheduled_rent_cycles():
         with app.app_context():
             run_rent_cycle_scheduler()
+
+    def run_audit_invariant_check():
+        with app.app_context():
+            run_audit_invariant_check_job()
 
     if not scheduler.running:
         # Add the auto tap-out enforcement job to run every hour
@@ -346,7 +381,23 @@ def init_scheduled_tasks(app):
             max_instances=1
         )
 
+        # Nightly audit chain integrity check — runs at 3 AM UTC (after maintenance)
+        scheduler.add_job(
+            func=run_audit_invariant_check,
+            trigger='cron',
+            hour=3,
+            minute=0,
+            id='audit_invariant_check',
+            name='Nightly audit chain integrity verification',
+            replace_existing=True,
+            max_instances=1
+        )
+
         scheduler.start()
-        logger.info("Scheduled tasks initialized: auto tap-out (hourly), database maintenance (2 AM UTC daily), rent cycles (hourly)")
+        logger.info(
+            "Scheduled tasks initialized: auto tap-out (hourly), "
+            "database maintenance (2 AM UTC), rent cycles (hourly), "
+            "audit invariant check (3 AM UTC)"
+        )
     else:
         logger.info("Scheduler already running")

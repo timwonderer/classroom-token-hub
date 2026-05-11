@@ -119,6 +119,32 @@ def health_check_deep():
         checks['hall_pass_logs_table'] = 'not_accessible'
         # Don't mark as degraded - this might be expected due to RLS
 
+    # Audit lineage integrity check (reads IntegrityStatus — never runs verifier inline)
+    try:
+        from app.models import IntegrityStatus
+        integrity = IntegrityStatus.query.first()
+        if integrity is None:
+            checks['audit_lineage'] = 'not_initialized'
+            checks['audit_lineage_last_checked'] = None
+        elif integrity.passing:
+            checks['audit_lineage'] = 'passing'
+            checks['audit_lineage_last_checked'] = (
+                integrity.last_checked_utc.isoformat() if integrity.last_checked_utc else None
+            )
+        else:
+            checks['audit_lineage'] = 'failing'
+            checks['audit_lineage_last_checked'] = (
+                integrity.last_checked_utc.isoformat() if integrity.last_checked_utc else None
+            )
+            checks['audit_lineage_degraded_since'] = (
+                integrity.degraded_since.isoformat() if integrity.degraded_since else None
+            )
+            overall_status = 'degraded'
+    except Exception:
+        current_app.logger.exception('Audit lineage status check failed')
+        checks['audit_lineage'] = 'error'
+        overall_status = 'degraded'
+
     # Return 200 if at least database is working, 500 if database is down
     if checks.get('database') == 'connected':
         return jsonify({

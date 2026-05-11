@@ -334,6 +334,137 @@ def check_tap_event_null_scope(path: pathlib.Path, text: str) -> list[Finding]:
     return findings
 
 
+_AUDIT_EVENT_MUTATE_RE = re.compile(r"\bAuditEvent\s*\.\s*query\s*\.\s*(update|delete)\s*\(")
+_LINEAGE_TOKEN_ASSIGN_RE = re.compile(r"\blineage_token\s*=")
+_EMIT_AUDIT_CALL_RE = re.compile(r"\bemit_audit_event\s*\(")
+
+# Tables treated as class-scoped by the audit system
+_CLASS_SCOPED_AUDIT_TABLES = {
+    "transaction", "payroll_settings", "rent_settings",
+    "banking_settings", "feature_settings", "hall_pass_settings",
+}
+# Paths where direct lineage token assignment is legitimate
+_LINEAGE_TOKEN_ALLOWLIST = {
+    "app/feats/base.py",
+    "app/services/audit_service.py",
+}
+
+
+def check_no_audit_update_delete(path: pathlib.Path, text: str) -> list[Finding]:
+    """Detect AuditEvent.query.update/delete calls anywhere in app/."""
+    if "app" not in path.parts:
+        return []
+    findings = []
+    for i, line in enumerate(text.splitlines(), 1):
+        if _AUDIT_EVENT_MUTATE_RE.search(line):
+            findings.append(Finding(
+                "NO_AUDIT_UPDATE_DELETE", path, i,
+                "AuditEvent rows must never be updated or deleted via application code"
+            ))
+    return findings
+
+
+def check_no_lineage_backfill_on_read(path: pathlib.Path, tree: ast.AST, text: str) -> list[Finding]:
+    """Flag emit_audit_event() calls inside GET route handlers."""
+    if not str(path).endswith(".py"):
+        return []
+    if "routes" not in path.parts:
+        return []
+
+    findings = []
+    lines = text.splitlines()
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        # Check for Flask GET method decorator
+        is_get_only = False
+        for dec in node.decorator_list:
+            dec_src = ast.unparse(dec) if hasattr(ast, "unparse") else ""
+            if "methods" in dec_src and "GET" in dec_src and "POST" not in dec_src:
+                is_get_only = True
+                break
+            # route with no methods= defaults to GET only
+            if ".route(" in dec_src and "methods" not in dec_src:
+                is_get_only = True
+                break
+
+        if not is_get_only:
+            continue
+
+        for child in ast.walk(node):
+            if isinstance(child, ast.Call):
+                func = child.func
+                func_name = (
+                    func.id if isinstance(func, ast.Name) else
+                    func.attr if isinstance(func, ast.Attribute) else ""
+                )
+                if func_name == "emit_audit_event":
+                    findings.append(Finding(
+                        "NO_LINEAGE_BACKFILL_ON_READ", path, child.lineno,
+                        "emit_audit_event must not be called inside a GET route handler"
+                    ))
+    return findings
+
+
+def check_no_direct_lineage_token_assignment(path: pathlib.Path, text: str) -> list[Finding]:
+    """Flag direct lineage_token = ... assignments outside allowlisted paths."""
+    rel_path = str(path.relative_to(ROOT)).replace("\\", "/")
+    if any(rel_path.endswith(allowed) for allowed in _LINEAGE_TOKEN_ALLOWLIST):
+        return []
+    findings = []
+    for i, line in enumerate(text.splitlines(), 1):
+        # Skip SQLAlchemy column declarations (model definitions, not runtime assignments)
+        if "db.Column" in line or "sa.Column" in line:
+            continue
+        if _LINEAGE_TOKEN_ASSIGN_RE.search(line):
+            findings.append(Finding(
+                "NO_DIRECT_LINEAGE_TOKEN_ASSIGNMENT", path, i,
+                "lineage_token must only be written by audit_service.py or feats/base.py"
+            ))
+    return findings
+
+
+def check_no_unscoped_audit_emit(path: pathlib.Path, tree: ast.AST, text: str) -> list[Finding]:
+    """Flag emit_audit_event() calls for class-scoped tables that omit class_id=."""
+    if "audit_service" in str(path):
+        return []  # the service itself is exempt
+
+    findings = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Call,)):
+            continue
+        func = node.func
+        func_name = (
+            func.id if isinstance(func, ast.Name) else
+            func.attr if isinstance(func, ast.Attribute) else ""
+        )
+        if func_name != "emit_audit_event":
+            continue
+
+        # Check if table_name arg refers to a class-scoped table
+        table_name_val: str | None = None
+        if node.args:
+            arg0 = node.args[0]
+            if isinstance(arg0, ast.Constant) and isinstance(arg0.value, str):
+                table_name_val = arg0.value
+        for kw in node.keywords:
+            if kw.arg == "table_name" and isinstance(kw.value, ast.Constant):
+                table_name_val = kw.value.value
+
+        if table_name_val not in _CLASS_SCOPED_AUDIT_TABLES:
+            continue
+
+        # Verify class_id= keyword is present
+        has_class_id = any(kw.arg == "class_id" for kw in node.keywords)
+        if not has_class_id:
+            findings.append(Finding(
+                "NO_UNSCOPED_AUDIT_EMIT", path, node.lineno,
+                f"emit_audit_event for class-scoped table '{table_name_val}' must include class_id="
+            ))
+    return findings
+
+
 def run_checks(no_waivers: bool, diff_base: str | None, diff_head: str) -> tuple[list[Finding], list[str]]:
     findings: list[Finding] = []
     warnings: list[str] = []
@@ -354,6 +485,10 @@ def run_checks(no_waivers: bool, diff_base: str | None, diff_head: str) -> tuple
         path_findings.extend(check_student_context_fallback(path, tree))
         path_findings.extend(check_feat_shell_commit(path, tree, text))
         path_findings.extend(check_tap_event_null_scope(path, text))
+        path_findings.extend(check_no_audit_update_delete(path, text))
+        path_findings.extend(check_no_lineage_backfill_on_read(path, tree, text))
+        path_findings.extend(check_no_direct_lineage_token_assignment(path, text))
+        path_findings.extend(check_no_unscoped_audit_emit(path, tree, text))
 
         waivers = collect_waivers(path, text)
         path_changed_lines = line_map.get(path) if line_map is not None else None

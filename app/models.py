@@ -872,6 +872,14 @@ class Transaction(db.Model):
     # All times stored as UTC
     date_funds_available = db.Column(db.DateTime(timezone=True), default=utc_now)
 
+    # Audit lineage — proof that this row entered through a lawful CTH execution path.
+    # lineage_token is a fast provenance pointer (copy of AuditEvent.hmac_signature).
+    # Canonical proof requires: payload digest match + valid chain continuity via verifier.
+    # NULL means the row predates lineage rollout (UNVERIFIED state, not INVALID).
+    lineage_event_id = db.Column(db.Integer, db.ForeignKey('audit_events.id'), nullable=True, index=True)
+    lineage_token    = db.Column(db.String(64), nullable=True)
+    lineage_version  = db.Column(db.Integer, nullable=True, default=1)
+
     # Relationship to track which teacher created this transaction
     teacher = db.relationship('Admin', backref=db.backref('transactions', lazy='dynamic'))
     seat = db.relationship('Seat', backref=db.backref('transactions', lazy='dynamic'))
