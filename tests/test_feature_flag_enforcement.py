@@ -9,7 +9,7 @@ from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
-from app.models import Student, Admin, Transaction, TeacherBlock, ClassEconomy, ClassFeature, ClassMembership, PayrollReward, StoreItem
+from app.models import Student, Admin, Transaction, TeacherBlock, ClassEconomy, ClassFeature, ClassMembership, PayrollReward, StoreItem, Seat
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 from tests.helpers.admin_context import login_admin
@@ -64,11 +64,21 @@ def setup_student_with_disabled_banking(client):
         salt=salt,
         first_half_hash="hash1",
         join_code=join_code,
+        class_id=economy.class_id,
         student_id=student.id,
         is_claimed=True,
         claimed_at=datetime.now(timezone.utc)
     )
     db.session.add(seat)
+    db.session.add(Seat(
+        class_id=economy.class_id,
+        role='student',
+        join_code=join_code,
+        student_id=student.id,
+        block="Period1",
+        block_identifier="Period1",
+        claimed_at=datetime.now(timezone.utc),
+    ))
     db.session.commit()
 
     # Add some money to checking account
@@ -218,11 +228,21 @@ def setup_student_with_enabled_banking(client):
         salt=salt,
         first_half_hash="hash2",
         join_code=join_code,
+        class_id=economy.class_id,
         student_id=student.id,
         is_claimed=True,
         claimed_at=datetime.now(timezone.utc)
     )
     db.session.add(seat)
+    db.session.add(Seat(
+        class_id=economy.class_id,
+        role='student',
+        join_code=join_code,
+        student_id=student.id,
+        block="Period2",
+        block_identifier="Period2",
+        claimed_at=datetime.now(timezone.utc),
+    ))
     db.session.commit()
 
     # Add some money to checking account

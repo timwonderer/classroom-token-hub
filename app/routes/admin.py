@@ -3710,7 +3710,7 @@ def _invalidate_all_recovery_codes(student_codes):
     for sc in student_codes:
         sc.code_hash = None
         sc.verified_at = None
-    db.session.commit()
+    db.session.flush()  # FEAT-LEGACY-WRAP: commit removed
     current_app.logger.info(f"Invalidated {len(student_codes)} recovery codes - students must regenerate")
 
 
@@ -6350,25 +6350,11 @@ def rent_settings():
     admin_id = session.get("admin_id")
     student_ids_subq = _student_scope_subquery()
     feature_options = get_admin_feature_join_code_options('rent', admin_id=admin_id)
-    requested_block = request.values.get('settings_block')
-    try:
-        selected_scope = require_admin_feature_scope(
-            'rent',
-            admin_id=admin_id,
-            requested_block=requested_block,
-        )
-    except HTTPException:
-        # Fallback for legacy/test flows where feature rows are not yet seeded.
-        context = _resolve_admin_class_context(admin_id)
-        if not context:
-            raise
-        fallback_block = (requested_block or context.get('block') or '').strip().upper() or None
-        selected_scope = {
-            'join_code': context.get('join_code'),
-            'class_id': context.get('class_id'),
-            'block': fallback_block,
-            'label': f"Period {fallback_block}" if fallback_block else (context.get('join_code') or 'Class'),
-        }
+    selected_scope = require_admin_feature_scope(
+        'rent',
+        admin_id=admin_id,
+        requested_block=request.values.get('settings_block'),
+    )
     payroll_settings = PayrollSettings.query.filter_by(
         class_id=selected_scope['class_id'],
         is_active=True,
@@ -6380,15 +6366,6 @@ def rent_settings():
     settings = None
     if settings_block:
         settings = RentSettings.query.filter_by(class_id=selected_scope['class_id'], block=settings_block).first()
-        if not settings:
-            settings = RentSettings(
-                teacher_id=admin_id,
-                class_id=selected_scope['class_id'],
-                join_code=selected_scope['join_code'],
-                block=settings_block,
-            )
-            db.session.add(settings)
-            db.session.commit()
 
     if request.method == 'POST':
         apply_to_all = request.form.get('apply_to_all') == 'true'
@@ -6405,61 +6382,78 @@ def rent_settings():
                 if join_code and not join_code_map.get(block):
                     join_code_map[block] = join_code
 
-        for block in blocks_to_update:
-            scope_for_block = require_admin_feature_scope('rent', admin_id=admin_id, requested_block=block, allow_default=False)
-            # Get or create settings for this class
-            block_settings = RentSettings.query.filter_by(class_id=scope_for_block['class_id'], block=block).first()
-            if not block_settings:
-                block_settings = RentSettings(
-                    teacher_id=admin_id,
-                    class_id=scope_for_block['class_id'],
-                    join_code=scope_for_block['join_code'],
-                    block=block,
-                )
-                db.session.add(block_settings)
+        payload_hash = hashlib.sha256(
+            json.dumps(
+                {
+                    "class_id": selected_scope["class_id"],
+                    "settings_block": settings_block,
+                    "apply_to_all": apply_to_all,
+                    "blocks_to_update": sorted([b for b in blocks_to_update if b]),
+                    "form_keys": sorted(request.form.keys()),
+                },
+                sort_keys=True,
+                default=str,
+            ).encode("utf-8")
+        ).hexdigest()[:16]
+        idempotency_key = (
+            f"feat:rent:settings-update:{selected_scope['class_id']}:{payload_hash}"
+        )
 
-            # Main toggle
-            block_settings.is_enabled = request.form.get('is_enabled') == 'on'
+        db.session.rollback()
+        with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
+            for block in blocks_to_update:
+                scope_for_block = require_admin_feature_scope('rent', admin_id=admin_id, requested_block=block, allow_default=False)
+                # Get or create settings for this class
+                block_settings = RentSettings.query.filter_by(class_id=scope_for_block['class_id'], block=block).first()
+                if not block_settings:
+                    block_settings = RentSettings(
+                        teacher_id=admin_id,
+                        class_id=scope_for_block['class_id'],
+                        join_code=scope_for_block['join_code'],
+                        block=block,
+                    )
+                    db.session.add(block_settings)
 
-            # Rent amount and frequency
-            from app.models import _quantize_currency
-            block_settings.rent_amount = _quantize_currency(request.form.get('rent_amount', '50.0'))
-            block_settings.frequency_type = request.form.get('frequency_type', 'monthly')
+                # Main toggle
+                block_settings.is_enabled = request.form.get('is_enabled') == 'on'
 
-            if block_settings.frequency_type == 'custom':
-                block_settings.custom_frequency_value = int(request.form.get('custom_frequency_value', 1))
-                block_settings.custom_frequency_unit = request.form.get('custom_frequency_unit', 'days')
-            else:
-                block_settings.custom_frequency_value = None
-                block_settings.custom_frequency_unit = None
+                # Rent amount and frequency
+                from app.models import _quantize_currency
+                block_settings.rent_amount = _quantize_currency(request.form.get('rent_amount', '50.0'))
+                block_settings.frequency_type = request.form.get('frequency_type', 'monthly')
 
-            # Due date settings
-            first_due_date_str = request.form.get('first_rent_due_date')
-            if first_due_date_str:
-                block_settings.first_rent_due_date = datetime.strptime(first_due_date_str, '%Y-%m-%d')
-            else:
-                block_settings.first_rent_due_date = None
+                if block_settings.frequency_type == 'custom':
+                    block_settings.custom_frequency_value = int(request.form.get('custom_frequency_value', 1))
+                    block_settings.custom_frequency_unit = request.form.get('custom_frequency_unit', 'days')
+                else:
+                    block_settings.custom_frequency_value = None
+                    block_settings.custom_frequency_unit = None
 
-            block_settings.due_day_of_month = int(request.form.get('due_day_of_month', 1))
+                # Due date settings
+                first_due_date_str = request.form.get('first_rent_due_date')
+                if first_due_date_str:
+                    block_settings.first_rent_due_date = datetime.strptime(first_due_date_str, '%Y-%m-%d')
+                else:
+                    block_settings.first_rent_due_date = None
 
-            # Grace period and late penalties
-            block_settings.grace_period_days = int(request.form.get('grace_period_days', 3))
-            block_settings.late_penalty_amount = _quantize_currency(request.form.get('late_penalty_amount', '10.0'))
-            block_settings.late_penalty_type = request.form.get('late_penalty_type', 'once')
+                block_settings.due_day_of_month = int(request.form.get('due_day_of_month', 1))
 
-            if block_settings.late_penalty_type == 'recurring':
-                block_settings.late_penalty_frequency_days = int(request.form.get('late_penalty_frequency_days', 7))
-            else:
-                block_settings.late_penalty_frequency_days = None
+                # Grace period and late penalties
+                block_settings.grace_period_days = int(request.form.get('grace_period_days', 3))
+                block_settings.late_penalty_amount = _quantize_currency(request.form.get('late_penalty_amount', '10.0'))
+                block_settings.late_penalty_type = request.form.get('late_penalty_type', 'once')
 
-            # Student payment options
-            block_settings.bill_preview_enabled = request.form.get('bill_preview_enabled') == 'on'
-            block_settings.bill_preview_days = int(request.form.get('bill_preview_days', 7))
-            block_settings.allow_incremental_payment = request.form.get('allow_incremental_payment') == 'on'
-            block_settings.prevent_purchase_when_late = request.form.get('prevent_purchase_when_late') == 'on'
-            block_settings.bypass_cwi_warnings = request.form.get('bypass_cwi_warnings') == 'on'
+                if block_settings.late_penalty_type == 'recurring':
+                    block_settings.late_penalty_frequency_days = int(request.form.get('late_penalty_frequency_days', 7))
+                else:
+                    block_settings.late_penalty_frequency_days = None
 
-        db.session.commit()
+                # Student payment options
+                block_settings.bill_preview_enabled = request.form.get('bill_preview_enabled') == 'on'
+                block_settings.bill_preview_days = int(request.form.get('bill_preview_days', 7))
+                block_settings.allow_incremental_payment = request.form.get('allow_incremental_payment') == 'on'
+                block_settings.prevent_purchase_when_late = request.form.get('prevent_purchase_when_late') == 'on'
+                block_settings.bypass_cwi_warnings = request.form.get('bypass_cwi_warnings') == 'on'
 
         # Handle rent items (for all blocks in blocks_to_update)
         # Parse rent items from form once
@@ -6541,106 +6535,104 @@ def rent_settings():
         
         # Apply parsed items to each block
         for block in blocks_to_update:
-            # Re-fetch settings for this block to ensure we have the object attached to session
-            scope_for_block = require_admin_feature_scope('rent', admin_id=admin_id, requested_block=block, allow_default=False)
-            block_settings = RentSettings.query.filter_by(class_id=scope_for_block['class_id'], block=block).first()
-            if not block_settings:
-                continue
+                # Re-fetch settings for this block to ensure we have the object attached to session
+                scope_for_block = require_admin_feature_scope('rent', admin_id=admin_id, requested_block=block, allow_default=False)
+                block_settings = RentSettings.query.filter_by(class_id=scope_for_block['class_id'], block=block).first()
+                if not block_settings:
+                    continue
 
-            existing_items = block_settings.rent_items.all()
-            existing_map = {}
+                existing_items = block_settings.rent_items.all()
+                existing_map = {}
 
-            # For the original block, we map by ID to preserve precise identity
-            # For other blocks, we map by Name to attempt to sync updates across classes
-            if block == settings_block:
-                existing_map = {str(item.id): item for item in existing_items}
-            else:
-                existing_map = {item.name: item for item in existing_items}
-
-            processed_items = set()
-
-            # Mid-period lock: detect if any student has paid rent for current coverage period
-            mid_period_locked = False
-            block_join_code = join_code_map.get(block)
-            if block in blocks_with_rows:
-                from app.routes.student import _calculate_rent_coverage_due_date
-                now = utc_now()
-                coverage_due = _calculate_rent_coverage_due_date(block_settings, now)
-                if coverage_due:
-                    paid_query = RentPayment.query.filter_by(
-                        class_id=block_settings.class_id,
-                        coverage_month=coverage_due.month,
-                        coverage_year=coverage_due.year
-                    )
-                    paid_count = paid_query.count()
-                    if paid_count > 0:
-                        mid_period_locked = True
-
-            for item_data in parsed_items:
-                target_item = None
-
-                # Try to find matching existing item
+                # For the original block, we map by ID to preserve precise identity
+                # For other blocks, we map by Name to attempt to sync updates across classes
                 if block == settings_block:
-                    target_item = existing_map.get(item_data['id'])
+                    existing_map = {str(item.id): item for item in existing_items}
                 else:
-                    target_item = existing_map.get(item_data['name'])
+                    existing_map = {item.name: item for item in existing_items}
 
-                if target_item:
-                    # Update existing - always allow cosmetic fields
-                    target_item.name = item_data['name']
-                    target_item.description = item_data['description'] if item_data['description'] else None
-                    target_item.order_index = item_data['order_index']
-                    target_item.store_price = item_data['store_price']
-                    if item_data['purchase_duration'] is not None:
-                        target_item.purchase_duration = item_data['purchase_duration']
+                processed_items = set()
 
-                    if mid_period_locked:
-                        # Semantic fields locked: rent_item_type, use_limit, hall_pass_count
-                        # Only allow is_available_in_store change for privilege items
-                        if target_item.rent_item_type == 'privilege':
-                            target_item.is_available_in_store = item_data['is_available']
+                # Mid-period lock: detect if any student has paid rent for current coverage period
+                mid_period_locked = False
+                block_join_code = join_code_map.get(block)
+                if block in blocks_with_rows:
+                    from app.routes.student import _calculate_rent_coverage_due_date
+                    now = utc_now()
+                    coverage_due = _calculate_rent_coverage_due_date(block_settings, now)
+                    if coverage_due:
+                        paid_query = RentPayment.query.filter_by(
+                            class_id=block_settings.class_id,
+                            coverage_month=coverage_due.month,
+                            coverage_year=coverage_due.year
+                        )
+                        paid_count = paid_query.count()
+                        if paid_count > 0:
+                            mid_period_locked = True
+
+                for item_data in parsed_items:
+                    target_item = None
+
+                    # Try to find matching existing item
+                    if block == settings_block:
+                        target_item = existing_map.get(item_data['id'])
                     else:
-                        # No lock - update all fields freely
-                        target_item.is_available_in_store = item_data['is_available']
-                        target_item.rent_item_type = item_data['rent_item_type']
-                        target_item.use_limit = item_data['use_limit']
-                        target_item.hall_pass_count = item_data['hall_pass_count']
-                    processed_items.add(target_item)
-                else:
-                    # Create new
-                    new_item = RentItem(
-                        rent_setting_id=block_settings.id,
-                        name=item_data['name'],
-                        description=item_data['description'] if item_data['description'] else None,
-                        order_index=item_data['order_index'],
-                        is_available_in_store=item_data['is_available'],
-                        store_price=item_data['store_price'],
-                        purchase_duration=item_data['purchase_duration'] or 'per_use',
-                        rent_item_type=item_data['rent_item_type'],
-                        use_limit=item_data['use_limit'],
-                        hall_pass_count=item_data['hall_pass_count']
-                    )
-                    db.session.add(new_item)
-                    # No need to add to processed_items as it's new
-            
-            # Delete items that were not in the form (and thus not processed)
-            for item in existing_items:
-                if item not in processed_items:
-                    # If this item had a linked store item, deactivate it
-                    if item.store_item_id:
-                        store_item = db.session.get(StoreItem, item.store_item_id)
-                        if store_item:
-                            store_item.is_active = False
-                    db.session.delete(item)
-            
-            db.session.commit()
+                        target_item = existing_map.get(item_data['name'])
 
-            # Sync to store
-            _sync_rent_items_to_store(block_settings, admin_id, block)
+                    if target_item:
+                        # Update existing - always allow cosmetic fields
+                        target_item.name = item_data['name']
+                        target_item.description = item_data['description'] if item_data['description'] else None
+                        target_item.order_index = item_data['order_index']
+                        target_item.store_price = item_data['store_price']
+                        if item_data['purchase_duration'] is not None:
+                            target_item.purchase_duration = item_data['purchase_duration']
 
-            if mid_period_locked and block == settings_block:
-                flash("Some changes are locked because students have already paid rent this period. "
-                      "Item type, use limits, and hall pass counts will apply next period.", "warning")
+                        if mid_period_locked:
+                            # Semantic fields locked: rent_item_type, use_limit, hall_pass_count
+                            # Only allow is_available_in_store change for privilege items
+                            if target_item.rent_item_type == 'privilege':
+                                target_item.is_available_in_store = item_data['is_available']
+                        else:
+                            # No lock - update all fields freely
+                            target_item.is_available_in_store = item_data['is_available']
+                            target_item.rent_item_type = item_data['rent_item_type']
+                            target_item.use_limit = item_data['use_limit']
+                            target_item.hall_pass_count = item_data['hall_pass_count']
+                        processed_items.add(target_item)
+                    else:
+                        # Create new
+                        new_item = RentItem(
+                            rent_setting_id=block_settings.id,
+                            name=item_data['name'],
+                            description=item_data['description'] if item_data['description'] else None,
+                            order_index=item_data['order_index'],
+                            is_available_in_store=item_data['is_available'],
+                            store_price=item_data['store_price'],
+                            purchase_duration=item_data['purchase_duration'] or 'per_use',
+                            rent_item_type=item_data['rent_item_type'],
+                            use_limit=item_data['use_limit'],
+                            hall_pass_count=item_data['hall_pass_count']
+                        )
+                        db.session.add(new_item)
+                        # No need to add to processed_items as it's new
+
+                # Delete items that were not in the form (and thus not processed)
+                for item in existing_items:
+                    if item not in processed_items:
+                        # If this item had a linked store item, deactivate it
+                        if item.store_item_id:
+                            store_item = db.session.get(StoreItem, item.store_item_id)
+                            if store_item:
+                                store_item.is_active = False
+                        db.session.delete(item)
+
+                # Sync to store
+                _sync_rent_items_to_store(block_settings, admin_id, block)
+
+                if mid_period_locked and block == settings_block:
+                    flash("Some changes are locked because students have already paid rent this period. "
+                          "Item type, use limits, and hall pass counts will apply next period.", "warning")
 
         if apply_to_all:
             flash(f"Rent settings applied to all {len(blocks_to_update)} classes!", "success")
@@ -10699,24 +10691,11 @@ def banking():
     """Banking management page with transactions and settings."""
     admin_id = session.get("admin_id")
     feature_options = get_admin_feature_join_code_options('banking', admin_id=admin_id)
-    try:
-        selected_scope = require_admin_feature_scope(
-            'banking',
-            admin_id=admin_id,
-            requested_block=request.args.get('settings_block'),
-        )
-    except HTTPException as exc:
-        if exc.code != 404:
-            raise
-        fallback_scope = resolve_class_scope(admin_id, join_code=_get_current_admin_join_code(admin_id))
-        if not fallback_scope:
-            raise
-        selected_scope = {
-            "join_code": fallback_scope["join_code"],
-            "class_id": fallback_scope["class_id"],
-            "block": fallback_scope.get("block"),
-            "label": fallback_scope.get("label") or fallback_scope["join_code"],
-        }
+    selected_scope = require_admin_feature_scope(
+        'banking',
+        admin_id=admin_id,
+        requested_block=request.args.get('settings_block'),
+    )
     teacher_blocks = [option['block'] for option in feature_options]
     settings_block = selected_scope['block']
 
@@ -10727,16 +10706,6 @@ def banking():
             class_id=selected_scope['class_id'],
             block=settings_block,
         ).first()
-        if not settings:
-            # Create default settings for this class
-            settings = BankingSettings(
-                teacher_id=admin_id,
-                class_id=selected_scope['class_id'],
-                join_code=selected_scope['join_code'],
-                block=settings_block,
-            )
-            db.session.add(settings)
-            db.session.commit()
 
     # Create form and populate with existing data
     form = BankingSettingsForm()
@@ -10942,51 +10911,77 @@ def banking_settings_update():
         enabled_blocks = [option['block'] for option in feature_options if option.get('block')]
         blocks_to_update = enabled_blocks if apply_to_all else [settings_block]
 
-        for block in blocks_to_update:
-            scope_for_block = require_admin_feature_scope(
-                'banking',
-                admin_id=admin_id,
-                requested_block=block,
-                allow_default=False,
-            )
-            # Get or create settings for this class
-            settings = BankingSettings.query.filter_by(
-                class_id=scope_for_block['class_id'],
-                block=block,
-            ).first()
-            if not settings:
-                settings = BankingSettings(
-                    teacher_id=admin_id,
-                    class_id=scope_for_block['class_id'],
-                    join_code=scope_for_block['join_code'],
-                    block=block,
-                )
-                db.session.add(settings)
-
-            # Update settings from form
-            settings.savings_apy = Decimal(str(form.savings_apy.data or 0)).quantize(Decimal('0.000001'))
-            settings.savings_monthly_rate = Decimal(str(form.savings_monthly_rate.data or 0)).quantize(Decimal('0.000001'))
-            settings.interest_calculation_type = form.interest_calculation_type.data or 'simple'
-            settings.compound_frequency = form.compound_frequency.data or 'monthly'
-            settings.interest_schedule_type = form.interest_schedule_type.data
-            settings.interest_schedule_cycle_days = form.interest_schedule_cycle_days.data or 30
-            settings.interest_payout_start_date = form.interest_payout_start_date.data
-            settings.overdraft_protection_enabled = form.overdraft_protection_enabled.data
-            settings.overdraft_fee_enabled = form.overdraft_fee_enabled.data
-            settings.overdraft_fee_type = form.overdraft_fee_type.data
-            settings.overdraft_fee_flat_amount = _quantize_currency(form.overdraft_fee_flat_amount.data or Decimal('0.00'))
-            settings.overdraft_fee_progressive_1 = _quantize_currency(form.overdraft_fee_progressive_1.data or Decimal('0.00'))
-            settings.overdraft_fee_progressive_2 = _quantize_currency(form.overdraft_fee_progressive_2.data or Decimal('0.00'))
-            settings.overdraft_fee_progressive_3 = _quantize_currency(form.overdraft_fee_progressive_3.data or Decimal('0.00'))
-            settings.overdraft_fee_progressive_cap = (
-                _quantize_currency(form.overdraft_fee_progressive_cap.data)
-                if form.overdraft_fee_progressive_cap.data is not None
-                else None
-            )
-            settings.updated_at = utc_now()
-
         try:
-            db.session.commit()
+            payload_hash = hashlib.sha256(
+                json.dumps(
+                    {
+                        "class_id": selected_scope["class_id"],
+                        "settings_block": settings_block,
+                        "apply_to_all": apply_to_all,
+                        "blocks_to_update": sorted([b for b in blocks_to_update if b]),
+                        "savings_apy": str(form.savings_apy.data or 0),
+                        "savings_monthly_rate": str(form.savings_monthly_rate.data or 0),
+                        "interest_calculation_type": form.interest_calculation_type.data or 'simple',
+                        "compound_frequency": form.compound_frequency.data or 'monthly',
+                        "interest_schedule_type": form.interest_schedule_type.data,
+                        "interest_schedule_cycle_days": form.interest_schedule_cycle_days.data or 30,
+                        "overdraft_protection_enabled": bool(form.overdraft_protection_enabled.data),
+                        "overdraft_fee_enabled": bool(form.overdraft_fee_enabled.data),
+                        "overdraft_fee_type": form.overdraft_fee_type.data,
+                    },
+                    sort_keys=True,
+                    default=str,
+                ).encode("utf-8")
+            ).hexdigest()[:16]
+            idempotency_key = (
+                f"feat:banking:settings-update:{selected_scope['class_id']}:{payload_hash}"
+            )
+
+            db.session.rollback()
+            with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
+                for block in blocks_to_update:
+                    scope_for_block = require_admin_feature_scope(
+                        'banking',
+                        admin_id=admin_id,
+                        requested_block=block,
+                        allow_default=False,
+                    )
+                    # Get or create settings for this class
+                    settings = BankingSettings.query.filter_by(
+                        class_id=scope_for_block['class_id'],
+                        block=block,
+                    ).first()
+                    if not settings:
+                        settings = BankingSettings(
+                            teacher_id=admin_id,
+                            class_id=scope_for_block['class_id'],
+                            join_code=scope_for_block['join_code'],
+                            block=block,
+                        )
+                        db.session.add(settings)
+
+                    # Update settings from form
+                    settings.savings_apy = Decimal(str(form.savings_apy.data or 0)).quantize(Decimal('0.000001'))
+                    settings.savings_monthly_rate = Decimal(str(form.savings_monthly_rate.data or 0)).quantize(Decimal('0.000001'))
+                    settings.interest_calculation_type = form.interest_calculation_type.data or 'simple'
+                    settings.compound_frequency = form.compound_frequency.data or 'monthly'
+                    settings.interest_schedule_type = form.interest_schedule_type.data
+                    settings.interest_schedule_cycle_days = form.interest_schedule_cycle_days.data or 30
+                    settings.interest_payout_start_date = form.interest_payout_start_date.data
+                    settings.overdraft_protection_enabled = form.overdraft_protection_enabled.data
+                    settings.overdraft_fee_enabled = form.overdraft_fee_enabled.data
+                    settings.overdraft_fee_type = form.overdraft_fee_type.data
+                    settings.overdraft_fee_flat_amount = _quantize_currency(form.overdraft_fee_flat_amount.data or Decimal('0.00'))
+                    settings.overdraft_fee_progressive_1 = _quantize_currency(form.overdraft_fee_progressive_1.data or Decimal('0.00'))
+                    settings.overdraft_fee_progressive_2 = _quantize_currency(form.overdraft_fee_progressive_2.data or Decimal('0.00'))
+                    settings.overdraft_fee_progressive_3 = _quantize_currency(form.overdraft_fee_progressive_3.data or Decimal('0.00'))
+                    settings.overdraft_fee_progressive_cap = (
+                        _quantize_currency(form.overdraft_fee_progressive_cap.data)
+                        if form.overdraft_fee_progressive_cap.data is not None
+                        else None
+                    )
+                    settings.updated_at = utc_now()
+
             if apply_to_all:
                 flash(f'Banking settings applied to all {len(blocks_to_update)} classes!', 'success')
             else:
@@ -12602,13 +12597,6 @@ def view_issue(issue_ref):
 
     # Get the issue and verify it belongs to this teacher
     issue = Issue.query.filter_by(id=issue_id, teacher_id=admin_id).first_or_404()
-
-    # INV-ARC-007: avoid status mutation during read-only GET.
-    if not getattr(g, "read_only", False) and issue.status in [Issue.STATUS_OPEN, 'submitted']:
-        from app.utils.issue_helpers import update_issue_status
-        update_issue_status(issue, Issue.STATUS_TEACHER_REVIEW, 'teacher', admin_id)
-        issue.teacher_reviewed_at = utc_now()
-        db.session.commit()
 
     return render_template('admin_view_issue.html',
                          current_page='issues',

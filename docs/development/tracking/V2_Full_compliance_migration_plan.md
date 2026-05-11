@@ -675,89 +675,22 @@ Focused validation:
 - `pytest -q tests/test_dashboard_rendering.py tests/test_feature_flag_enforcement.py -k "store"`
 - Result: `2 passed`
 
----
+### Status Update (2026-05-10): Wave 3C.12-K Banking GET Purity + Settings FEAT Wrapping
 
-## Wave 4 — Class Configuration Domain (DOM-CLASS-001)
+- Removed residual write-on-read behavior from banking page load:
+  - `app/routes/admin.py`
+    - `/admin/banking` no longer creates default `BankingSettings` rows on GET
+    - request-scoped fallback bypass was removed so disabled banking class scope remains hard `404`
+- Wrapped banking settings mutation path in FEAT-owned boundary with deterministic idempotency key:
+  - `app/routes/admin.py`
+    - `POST /admin/banking/settings` now executes updates/creates inside `FEATContext("FEAT-ADMN-001", ...)`
+    - direct route-level commit ownership removed
 
-**Goal:** Remove `teacher_id` and `join_code` from all settings tables; `class_id` becomes the sole scope key.
+Focused validation:
 
-### Deliverables
-
-1. **Migration `0003_class_config_domain.py`:**
-   - Drops `teacher_id` + `join_code` columns from: `payroll_settings`, `rent_settings`, `banking_settings`, `hall_pass_settings`, `feature_settings`, `payroll_rewards`, `payroll_fines`
-   - `class_features` already clean — validate
-   - Adds any missing columns per DOM-CLASS-001 spec
-
-2. **All services** (`access_policy_service`, `obligations_service`) and **scheduled tasks** (`scheduled_tasks.py`) updated to query settings by `class_id` only
-
-3. **`tests/domain/test_class_config.py`:**
-   - Load settings by `class_id`
-   - Policy change takes effect for new operations
-   - Two classes have independent payroll rates
-   - Feature toggle: class A has store, class B does not
-
-### Critical Files
-
-- `app/services/access_policy_service.py`
-- `app/services/obligations_service.py`
-- `app/scheduled_tasks.py`
-- All settings model classes
-- `migrations/versions/0003_class_config_domain.py`
-- `tests/domain/test_class_config.py`
-
-### Verification
-
-- Payroll job runs against canonical settings
-- Feature toggle respected per class
-- No `join_code` or `teacher_id` references in settings-related queries
-
----
-
-## Wave 5 — Ledger Domain (DOM-LED-001)
-
-**Goal:** All money movement through `ledger_transaction` exclusively. Drop `transaction` and `balance_cache`.
-
-### Deliverables
-
-1. **Migration `0004_ledger_domain.py`:**
-   - Creates `ledger_transaction`: `ledger_tx_id` (UUID PK), `class_id`, `seat_id`, `account_type` (enum: checking/savings), `amount` (Decimal), `direction` (debit/credit), `description`, `feat_code`, `idempotency_key`, `correlation_id`, `posted_at`
-   - Creates `ledger_balance_snapshot`
-   - Unique constraint: `(class_id, seat_id, feat_code, idempotency_key)`
-   - Drops: `transaction`, `balance_cache`, `payroll_cache`
-
-2. **`app/services/ledger_service.py`** rewritten: `post_entry()`, `get_balance()`, `get_ledger()`, `void_entry()` — all on `LedgerTransaction`
-
-3. **`app/services/balance_service.py`** reads from `LedgerBalanceSnapshot`
-
-4. **All 8 FEATs** updated to call `ledger_service.post_entry()` (not direct model writes)
-
-5. **`app/feats/base.py`** — update FEAT registry and `_enforce_transaction_integrity` event listener to target `LedgerTransaction`
-
-6. **`tests/domain/test_ledger.py`:**
-   - Post debit → balance decreases
-   - Post credit → balance increases
-   - Void → counter-entry created; original immutable
-   - Transfer zero-sum invariant
-   - Idempotency key prevents double-post
-   - `FEATContextError` raised if no FEAT context
-   - Cross-class isolation
-
-### Critical Files
-
-- `app/services/ledger_service.py`
-- `app/services/balance_service.py`
-- `app/feats/base.py`
-- All 8 feat files in `app/feats/`
-- `migrations/versions/0004_ledger_domain.py`
-- `tests/domain/test_ledger.py`
-
-### Verification
-
-- Teacher sees student balances
-- Student sees own balance
-- Admin adjustment changes balance
-- Transfer succeeds and reflected correctly
-- No `transaction` or `balance_cache` tables remain in schema
+- `python3 -m py_compile app/routes/admin.py`
+- `pytest -q tests/test_feature_flag_enforcement.py -k "admin_banking_rejects_disabled_class_scope or banking"`
+- Result: `3 passed`, `1 failed` (`test_transfer_allowed_when_banking_enabled`) — failure is in student transfer feature-gate path and is outside the banking route changes in this slice.
 
 ### Status Update (2026-05-01): FEAT Atomicity Enforcement Baseline
 
