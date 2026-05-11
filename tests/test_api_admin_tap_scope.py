@@ -2,14 +2,19 @@ from datetime import datetime, timezone
 
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
-from app.models import Admin, ClassEconomy, ClassMembership, Student, StudentTeacher, TapEvent
+from app.models import Admin, ClassEconomy, ClassMembership, Seat, Student, StudentTeacher, TapEvent, TeacherBlock
 
 
 def _login_admin(client, admin_id, join_code):
+    economy = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=admin_id).first()
     with client.session_transaction() as sess:
         sess["is_admin"] = True
         sess["admin_id"] = admin_id
         sess["current_join_code"] = join_code
+        if economy and economy.class_id:
+            sess["current_class_id"] = economy.class_id
+        else:
+            sess.pop("current_class_id", None)
         sess["last_activity"] = datetime.now(timezone.utc).isoformat()
 
 
@@ -23,20 +28,61 @@ def _setup_shared_student_with_split_membership():
     db.session.add(student)
     db.session.flush()
 
+    class_a = ClassEconomy(join_code="TAPA01", teacher_id=admin_a.id, status="active", created_by_admin_id=admin_a.id)
+    class_b = ClassEconomy(join_code="TAPB01", teacher_id=admin_b.id, status="active", created_by_admin_id=admin_b.id)
+    db.session.add_all([class_a, class_b])
+    db.session.flush()
+
     # Shared student-teacher association but student class membership only in TAPB01.
     db.session.add_all([
         StudentTeacher(student_id=student.id, teacher_id=admin_a.id),
         StudentTeacher(student_id=student.id, teacher_id=admin_b.id),
-        ClassEconomy(join_code="TAPA01", teacher_id=admin_a.id, status="active", created_by_admin_id=admin_a.id),
-        ClassEconomy(join_code="TAPB01", teacher_id=admin_b.id, status="active", created_by_admin_id=admin_b.id),
-        ClassMembership(join_code="TAPA01", admin_id=admin_a.id, role="admin"),
-        ClassMembership(join_code="TAPB01", admin_id=admin_b.id, role="admin"),
-        ClassMembership(join_code="TAPB01", student_id=student.id, role="student"),
+        ClassMembership(join_code="TAPA01", class_id=class_a.class_id, admin_id=admin_a.id, role="admin"),
+        ClassMembership(join_code="TAPB01", class_id=class_b.class_id, admin_id=admin_b.id, role="admin"),
+        ClassMembership(join_code="TAPB01", class_id=class_b.class_id, student_id=student.id, role="student"),
     ])
     db.session.flush()
+    seat = TeacherBlock.query.filter_by(
+        teacher_id=admin_b.id,
+        student_id=student.id,
+        join_code="TAPB01",
+    ).first()
+    if not seat:
+        seat = TeacherBlock(
+            teacher_id=admin_b.id,
+            block="A",
+            class_label="A",
+            first_name=student.first_name,
+            last_initial=student.last_initial,
+            last_name_hash_by_part=None,
+            dob_sum_hash=None,
+            salt=b"seat-salt",
+            first_half_hash=f"hash-{admin_b.id}-{student.id}-TAPB01",
+            join_code="TAPB01",
+            class_id=class_b.class_id,
+            student_id=student.id,
+            is_claimed=True,
+        )
+        db.session.add(seat)
+        db.session.flush()
+
+    seat_row = Seat.query.filter_by(student_id=student.id, class_id=seat.class_id).first()
+    if not seat_row:
+        seat_row = Seat(
+            student_id=student.id,
+            class_id=seat.class_id,
+            join_code="TAPB01",
+            role="student",
+            block_identifier="A",
+            block="A",
+        )
+        db.session.add(seat_row)
+        db.session.flush()
 
     tap_event = TapEvent(
         student_id=student.id,
+        seat_id=seat_row.id,
+        class_id=seat.class_id,
         period="A",
         status="active",
         join_code="TAPB01",

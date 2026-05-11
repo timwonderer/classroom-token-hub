@@ -67,13 +67,10 @@ def resolve_current_join_code(teacher_id: int):
     available_classes = get_teacher_class_options(teacher_id)
     valid_join_codes = {c['join_code'] for c in available_classes}
 
-    requested_join_code = (request.args.get('join_code') or '').strip()
     session_join_code = session.get('current_join_code')
     selected_join_code = None
 
-    if requested_join_code and requested_join_code in valid_join_codes:
-        selected_join_code = requested_join_code
-    elif session_join_code in valid_join_codes:
+    if session_join_code in valid_join_codes:
         selected_join_code = session_join_code
     elif available_classes:
         selected_join_code = available_classes[0]['join_code']

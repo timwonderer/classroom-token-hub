@@ -1238,6 +1238,12 @@ def _sync_tap_event_seat(_mapper, connection, target):
         if seat_class_id:
             target.class_id = str(seat_class_id)
 
+    # V2 hard invariant: tap events cannot exist outside class/seat scope.
+    if not getattr(target, "class_id", None):
+        raise ValueError("TapEvent invariant violation: class_id is required.")
+    if not getattr(target, "seat_id", None):
+        raise ValueError("TapEvent invariant violation: seat_id is required.")
+
 
 # ---- Hall Pass Log Model ----
 class HallPassLog(db.Model):
@@ -3342,6 +3348,96 @@ class AnalyticsEvent(db.Model):
     
     def __repr__(self):
         return f'<AnalyticsEvent {self.event_type} on {self.event_date.date()} for {self.join_code}>'
+
+
+# -------------------- AUDIT LINEAGE MODELS --------------------
+
+
+class AuditEvent(db.Model):
+    """Append-only tamper-evident chain entry for all protected writes.
+
+    Each row proves a specific mutation occurred through a lawful CTH execution
+    path. Rows must never be updated or deleted by application code.
+
+    Chain scope: "class:<class_id>" for class-scoped entities, "system" for
+    platform/sysadmin events.
+    """
+    __tablename__ = "audit_events"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    chain_scope      = db.Column(db.String(64), nullable=False)
+    sequence_number  = db.Column(db.Integer, nullable=False)
+    previous_hash    = db.Column(db.String(64), nullable=False)
+    event_hash       = db.Column(db.String(64), nullable=False, unique=True)
+
+    table_name       = db.Column(db.String(64), nullable=False)
+    row_pk           = db.Column(db.String(64), nullable=False)
+    operation        = db.Column(db.String(16), nullable=False)
+
+    actor_type       = db.Column(db.String(32), nullable=True)
+    actor_id_hash    = db.Column(db.String(64), nullable=True)
+    class_id         = db.Column(db.String(36), nullable=True)
+    seat_id          = db.Column(db.Integer, nullable=True)
+    teacher_id       = db.Column(db.Integer, nullable=True)
+    feat_id          = db.Column(db.String(32), nullable=True)
+    idempotency_key  = db.Column(db.String(128), nullable=True)
+    correlation_id   = db.Column(db.String(64), nullable=True)
+    request_id       = db.Column(db.String(64), nullable=True)
+
+    payload_digest   = db.Column(db.String(64), nullable=False)
+    context_digest   = db.Column(db.String(64), nullable=False)
+    created_at_utc   = db.Column(db.DateTime(timezone=True), nullable=False)
+    signer_key_id    = db.Column(db.String(16), nullable=False, default="v1")
+    signature_version = db.Column(db.Integer, nullable=False, default=1)
+    hmac_signature   = db.Column(db.String(64), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("chain_scope", "sequence_number", name="uq_audit_chain_position"),
+        db.Index("ix_audit_events_chain_scope", "chain_scope"),
+        db.Index("ix_audit_events_class_id", "class_id"),
+        db.Index("ix_audit_events_correlation_id", "correlation_id"),
+        db.Index("ix_audit_events_table_row", "table_name", "row_pk"),
+    )
+
+    def __repr__(self):
+        return f'<AuditEvent {self.chain_scope}#{self.sequence_number} {self.operation} {self.table_name}:{self.row_pk}>'
+
+
+class ChainHead(db.Model):
+    """One row per chain scope — tracks the latest hash and sequence number.
+
+    Updated atomically (SELECT FOR UPDATE) with each AuditEvent insert so the
+    chain never forks. Genesis rows use hash="genesis" and sequence=0.
+    """
+    __tablename__ = "chain_heads"
+
+    chain_scope      = db.Column(db.String(64), primary_key=True)
+    latest_hash      = db.Column(db.String(64), nullable=False)
+    latest_sequence  = db.Column(db.Integer, nullable=False, default=0)
+    event_count      = db.Column(db.Integer, nullable=False, default=0)
+    last_updated_utc = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    def __repr__(self):
+        return f'<ChainHead {self.chain_scope} seq={self.latest_sequence}>'
+
+
+class IntegrityStatus(db.Model):
+    """Single-row system-wide lineage verification state.
+
+    Updated by the nightly verifier job. Read by /health/deep and the sysadmin
+    dashboard. Never read by business logic — only for operator visibility.
+    """
+    __tablename__ = "integrity_status"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    passing          = db.Column(db.Boolean, nullable=False, default=True)
+    last_checked_utc = db.Column(db.DateTime(timezone=True), nullable=True)
+    failure_detail   = db.Column(db.Text, nullable=True)
+    degraded_since   = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    def __repr__(self):
+        state = "PASSING" if self.passing else "DEGRADED"
+        return f'<IntegrityStatus {state} checked={self.last_checked_utc}>'
 
 
 def _normalize_initial(value):

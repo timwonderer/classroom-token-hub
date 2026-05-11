@@ -310,6 +310,30 @@ def check_feat_shell_commit(path: pathlib.Path, tree: ast.AST, text: str) -> lis
     return findings
 
 
+def check_tap_event_null_scope(path: pathlib.Path, text: str) -> list[Finding]:
+    findings: list[Finding] = []
+    if rel(path) != "app/models.py":
+        return findings
+    if "class TapEvent" not in text:
+        return findings
+    lines = text.splitlines()
+    in_tap_event = False
+    for i, line in enumerate(lines, start=1):
+        if line.startswith("class TapEvent"):
+            in_tap_event = True
+            continue
+        if in_tap_event and line.startswith("class ") and not line.startswith("class TapEvent"):
+            break
+        if not in_tap_event:
+            continue
+        norm = line.replace(" ", "")
+        if norm.startswith("class_id=db.Column(") and "nullable=True" in norm:
+            findings.append(Finding("TAP_SCOPE_NONNULL", path, i, "TapEvent.class_id must not be nullable"))
+        if norm.startswith("seat_id=db.Column(") and "nullable=True" in norm:
+            findings.append(Finding("TAP_SCOPE_NONNULL", path, i, "TapEvent.seat_id must not be nullable"))
+    return findings
+
+
 def run_checks(no_waivers: bool, diff_base: str | None, diff_head: str) -> tuple[list[Finding], list[str]]:
     findings: list[Finding] = []
     warnings: list[str] = []
@@ -329,6 +353,7 @@ def run_checks(no_waivers: bool, diff_base: str | None, diff_head: str) -> tuple
         path_findings.extend(check_scope_fallback(path, text))
         path_findings.extend(check_student_context_fallback(path, tree))
         path_findings.extend(check_feat_shell_commit(path, tree, text))
+        path_findings.extend(check_tap_event_null_scope(path, text))
 
         waivers = collect_waivers(path, text)
         path_changed_lines = line_map.get(path) if line_map is not None else None

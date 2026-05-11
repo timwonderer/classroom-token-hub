@@ -14,6 +14,7 @@ from app.models import (
     ClassEconomy,
     ClassMembership,
     HallPassSettings,
+    Seat,
     Student,
     StudentBlock,
     StudentTeacher,
@@ -74,19 +75,41 @@ def _login_admin(client, admin: Admin, secret: str):
         follow_redirects=False,
     )
     with client.session_transaction() as sess:
-        sess.setdefault("is_admin", True)
-        sess.setdefault("admin_id", admin.id)
+        sess["is_admin"] = True
+        sess["admin_id"] = admin.id
+        if not sess.get("current_join_code"):
+            first_membership = (
+                ClassMembership.query.filter_by(admin_id=admin.id, role="admin")
+                .order_by(ClassMembership.id.asc())
+                .first()
+            )
+            if first_membership and first_membership.join_code:
+                sess["current_join_code"] = first_membership.join_code
+        current_join_code = sess.get("current_join_code")
+        if current_join_code:
+            class_row = ClassEconomy.query.filter_by(join_code=current_join_code, teacher_id=admin.id).first()
+            if class_row and class_row.class_id:
+                sess["current_class_id"] = class_row.class_id
+            else:
+                sess.pop("current_class_id", None)
         sess["last_activity"] = datetime.now(timezone.utc).isoformat()
     return response
 
 
-def _create_tap_event(student: Student, status: str = "active"):
-    """Create a tap event for testing."""
+def _create_tap_event(student: Student, teacher: Admin, join_code: str, status: str = "active", period: str = "1"):
+    """Create a canonical v2 tap event for testing."""
+    _create_class_scope(teacher, student, join_code)
+    class_row = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=teacher.id).first()
+    assert class_row is not None and class_row.class_id, "Expected class scope to exist before tap event creation"
+    seat = _get_or_create_student_seat(student, class_row.class_id, join_code)
     tap = TapEvent(
         student_id=student.id,
-        period="1",
+        seat_id=seat.id,
+        class_id=class_row.class_id,
+        period=period,
         status=status,
-        timestamp=datetime.now(timezone.utc)
+        join_code=join_code,
+        timestamp=datetime.now(timezone.utc),
     )
     db.session.add(tap)
     db.session.commit()
@@ -121,6 +144,23 @@ def _create_claimed_seat(teacher: Admin, student: Student, join_code: str, block
     return seat
 
 
+def _get_or_create_student_seat(student: Student, class_id: str, join_code: str):
+    seat = Seat.query.filter_by(student_id=student.id, class_id=class_id).first()
+    if seat:
+        return seat
+    seat = Seat(
+        student_id=student.id,
+        class_id=class_id,
+        join_code=join_code,
+        role="student",
+        block_identifier="A",
+        block="A",
+    )
+    db.session.add(seat)
+    db.session.flush()
+    return seat
+
+
 def _create_class_scope(teacher: Admin, student: Student, join_code: str):
     """Create the v2 class economy and memberships for a teacher/student pair."""
     if not db.session.query(ClassMembership.id).filter_by(
@@ -140,8 +180,10 @@ def _create_class_scope(teacher: Admin, student: Student, join_code: str):
         student_id=student.id,
         role="student",
     ).first():
+        class_row = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=teacher.id).first()
         db.session.add(ClassMembership(
             join_code=join_code,
+            class_id=class_row.class_id if class_row else None,
             student_id=student.id,
             role="student",
         ))
@@ -168,8 +210,8 @@ def test_attendance_history_api_scoped_to_teacher(client):
     student_b = _create_student("StudentB", primary_teacher=teacher_b)
     
     # Create tap events for both students
-    tap_a = _create_tap_event(student_a, status="active")
-    tap_b = _create_tap_event(student_b, status="active")
+    tap_a = _create_tap_event(student_a, teacher_a, "ATTEND_A", status="active")
+    tap_b = _create_tap_event(student_b, teacher_b, "ATTEND_B", status="active")
     
     # Login as teacher A
     _login_admin(client, teacher_a, secret_a)
@@ -200,9 +242,10 @@ def test_attendance_history_api_includes_shared_students(client):
     exclusive_b = _create_student("ExclusiveB", primary_teacher=teacher_b)
     
     # Create tap events
-    tap_shared = _create_tap_event(shared_student)
-    tap_a = _create_tap_event(exclusive_a)
-    tap_b = _create_tap_event(exclusive_b)
+    tap_shared = _create_tap_event(shared_student, teacher_a, "SHARED_A")
+    _create_class_scope(teacher_b, shared_student, "SHARED_B")
+    tap_a = _create_tap_event(exclusive_a, teacher_a, "EXCL_A")
+    tap_b = _create_tap_event(exclusive_b, teacher_b, "EXCL_B")
     
     # Login as teacher A
     _login_admin(client, teacher_a, secret_a)
@@ -213,10 +256,11 @@ def test_attendance_history_api_includes_shared_students(client):
     assert response.status_code == 200
     data = response.get_json()
     
-    # Should see shared student and exclusive A, but not exclusive B
+    # Class-scoped view: current class context is SHARED_A.
+    # Taps from other class scopes must not appear.
     record_ids = [r["id"] for r in data["records"]]
     assert tap_shared.id in record_ids
-    assert tap_a.id in record_ids
+    assert tap_a.id not in record_ids
     assert tap_b.id not in record_ids
 
 
@@ -235,9 +279,18 @@ def test_attendance_history_api_filters_work_with_scoping(client):
     db.session.commit()
     
     # Create tap events
-    tap_a1 = TapEvent(student_id=student_a1.id, period="1", status="active", timestamp=datetime.now(timezone.utc))
-    tap_a2 = TapEvent(student_id=student_a2.id, period="2", status="active", timestamp=datetime.now(timezone.utc))
-    tap_b = TapEvent(student_id=student_b.id, period="1", status="active", timestamp=datetime.now(timezone.utc))
+    _create_class_scope(teacher_a, student_a1, "FILTER_A1")
+    _create_class_scope(teacher_a, student_a2, "FILTER_A2")
+    _create_class_scope(teacher_b, student_b, "FILTER_B1")
+    class_a1 = ClassEconomy.query.filter_by(join_code="FILTER_A1", teacher_id=teacher_a.id).first()
+    class_a2 = ClassEconomy.query.filter_by(join_code="FILTER_A2", teacher_id=teacher_a.id).first()
+    class_b = ClassEconomy.query.filter_by(join_code="FILTER_B1", teacher_id=teacher_b.id).first()
+    seat_a1 = _get_or_create_student_seat(student_a1, class_a1.class_id, "FILTER_A1")
+    seat_a2 = _get_or_create_student_seat(student_a2, class_a2.class_id, "FILTER_A2")
+    seat_b = _get_or_create_student_seat(student_b, class_b.class_id, "FILTER_B1")
+    tap_a1 = TapEvent(student_id=student_a1.id, seat_id=seat_a1.id, class_id=class_a1.class_id, join_code="FILTER_A1", period="1", status="active", timestamp=datetime.now(timezone.utc))
+    tap_a2 = TapEvent(student_id=student_a2.id, seat_id=seat_a2.id, class_id=class_a2.class_id, join_code="FILTER_A2", period="2", status="active", timestamp=datetime.now(timezone.utc))
+    tap_b = TapEvent(student_id=student_b.id, seat_id=seat_b.id, class_id=class_b.class_id, join_code="FILTER_B1", period="1", status="active", timestamp=datetime.now(timezone.utc))
     db.session.add_all([tap_a1, tap_a2, tap_b])
     db.session.commit()
     
@@ -275,8 +328,8 @@ def test_attendance_history_api_system_admin_sees_all(client):
     student_b = _create_student("StudentB", primary_teacher=teacher_b)
     
     # Create tap events
-    tap_a = _create_tap_event(student_a)
-    tap_b = _create_tap_event(student_b)
+    tap_a = _create_tap_event(student_a, teacher_a, "SYS_A")
+    tap_b = _create_tap_event(student_b, teacher_b, "SYS_B")
     
     # Login as system admin
     client.post(
@@ -302,11 +355,15 @@ def test_admin_tap_entries_scoped_by_join_code(client):
     )
     _create_class_scope(teacher_a, shared_student, "JOIN_A")
     _create_class_scope(teacher_b, shared_student, "JOIN_B")
-    _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
-    _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="B")
+    seat_a = _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
+    seat_b = _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="B")
+    user_seat_a = _get_or_create_student_seat(shared_student, seat_a.class_id, "JOIN_A")
+    user_seat_b = _get_or_create_student_seat(shared_student, seat_b.class_id, "JOIN_B")
 
     tap_a = TapEvent(
         student_id=shared_student.id,
+        seat_id=user_seat_a.id,
+        class_id=seat_a.class_id,
         period="A",
         status="active",
         timestamp=datetime.now(timezone.utc),
@@ -314,6 +371,8 @@ def test_admin_tap_entries_scoped_by_join_code(client):
     )
     tap_b = TapEvent(
         student_id=shared_student.id,
+        seat_id=user_seat_b.id,
+        class_id=seat_b.class_id,
         period="B",
         status="active",
         timestamp=datetime.now(timezone.utc),
@@ -348,11 +407,15 @@ def test_admin_delete_tap_entry_enforces_join_code_scope(client):
     )
     _create_class_scope(teacher_a, shared_student, "JOIN_A")
     _create_class_scope(teacher_b, shared_student, "JOIN_B")
-    _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
-    _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="B")
+    seat_a = _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
+    seat_b = _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="B")
+    user_seat_a = _get_or_create_student_seat(shared_student, seat_a.class_id, "JOIN_A")
+    user_seat_b = _get_or_create_student_seat(shared_student, seat_b.class_id, "JOIN_B")
 
     tap_a = TapEvent(
         student_id=shared_student.id,
+        seat_id=user_seat_a.id,
+        class_id=seat_a.class_id,
         period="A",
         status="active",
         timestamp=datetime.now(timezone.utc),
@@ -360,6 +423,8 @@ def test_admin_delete_tap_entry_enforces_join_code_scope(client):
     )
     tap_b = TapEvent(
         student_id=shared_student.id,
+        seat_id=user_seat_b.id,
+        class_id=seat_b.class_id,
         period="B",
         status="active",
         timestamp=datetime.now(timezone.utc),
@@ -374,7 +439,7 @@ def test_admin_delete_tap_entry_enforces_join_code_scope(client):
         f"/api/admin/tap-entries/{tap_b.id}",
         headers={"X-CSRFToken": "test"},
     )
-    assert deny_response.status_code == 404
+    assert deny_response.status_code == 403
     db.session.refresh(tap_b)
     assert tap_b.is_deleted is False
 
@@ -511,7 +576,7 @@ def test_admin_block_tap_settings_post_preserves_out_of_scope_join_code_row(clie
         headers={"X-CSRFToken": "test"},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 404
     db.session.refresh(foreign_row)
     assert foreign_row.tap_enabled is True
 

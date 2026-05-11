@@ -799,6 +799,7 @@ def claim_account():
 
 
 @student_bp.route('/create-username', methods=['GET', 'POST'])
+@feat_shell("FEAT-IDEN-002")
 def create_username():
     """PAGE 2: Create Username - Generate themed username."""
     # Only allow if claimed
@@ -851,7 +852,7 @@ def create_username():
         student.username_hash = hash_username(username, student.salt)
         student.username_lookup_hash = hash_username_lookup(username)
         try:
-            db.session.commit()
+            db.session.flush()
         except IntegrityError:
             db.session.rollback()
             flash("That username is unavailable. Please try another word.", "setup")
@@ -1149,17 +1150,6 @@ def dashboard():
             flash(exc.message, "error")
             return redirect(url_for('student.login'))
 
-        class_row = ClassEconomy.query.filter_by(join_code=selected_join_code).first()
-        if class_row is None and legacy_tb.teacher_id:
-            class_row = ClassEconomy(
-                join_code=selected_join_code,
-                teacher_id=legacy_tb.teacher_id,
-                created_by_admin_id=legacy_tb.teacher_id,
-                display_name=legacy_tb.block,
-            )
-            db.session.add(class_row)
-            db.session.flush()
-
         legacy_seat = Seat.query.filter_by(
             student_id=student.id,
             join_code=selected_join_code,
@@ -1170,7 +1160,7 @@ def dashboard():
             teacher_id = legacy_tb.teacher_id
             block = legacy_tb.block or student.block or "A"
             seat_id = legacy_seat.id if legacy_seat else None
-            class_id = class_row.class_id if class_row else None
+            class_id = None
 
         scope = LegacyScope()
     except access_policy_service.AccessPolicyDenied as exc:
@@ -1821,8 +1811,6 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
         join_code=context.get('join_code'),
         annual_rate=annual_rate,
     )
-    if interest_tx is not None:
-        db.session.commit()
     return interest_tx
 
 
@@ -3920,6 +3908,7 @@ def logout():
 
 @student_bp.route('/switch-class/<class_id>', methods=['POST'])
 @login_required
+@feat_shell("FEAT-IDEN-001")
 def switch_class(class_id):
     """Switch to a different class using class_id as the stable backend reference."""
     from app.models import TeacherBlock, Admin
@@ -3941,8 +3930,6 @@ def switch_class(class_id):
         student.id,
         linked_user.id if linked_user else None,
     )
-    db.session.commit()
-    
     # Use canonical session context switch (Logs: SESSION-CONTEXT-SWITCH)
     from app.auth import switch_student_session_context
     switch_student_session_context(
@@ -4041,8 +4028,6 @@ def _switch_to_teacher_scope(*, teacher_id: int):
 def setup_complete():
     """Setup completion confirmation page."""
     student = get_logged_in_student()
-    student.has_completed_setup = True
-    db.session.commit()
     return render_template('student_setup_complete.html', student_name=student.first_name)
 
 

@@ -87,9 +87,7 @@ from app.feats.base import feat_shell
 @feat_shell("FEAT-IDEN-002")
 def generate_reset_code(*args, **kwargs):
     """FEAT-Shell for recovery code generation."""
-    res = _generate_reset_code_legacy(*args, **kwargs)
-    db.session.commit() # FEAT-AUTHORIZED-SHELL
-    return res
+    return _generate_reset_code_legacy(*args, **kwargs)
 
 def _generate_reset_code_legacy(student_id):
     """
@@ -140,9 +138,7 @@ def landing():
 @feat_shell("FEAT-IDEN-002")
 def account_lookup(*args, **kwargs):
     """FEAT-Shell for student account lookup."""
-    res = _account_lookup_legacy(*args, **kwargs)
-    db.session.commit() # FEAT-AUTHORIZED-SHELL
-    return res
+    return _account_lookup_legacy(*args, **kwargs)
 
 def _account_lookup_legacy():
     """

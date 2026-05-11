@@ -7,7 +7,6 @@ debug endpoints, and public hall pass verification.
 
 import unicodedata
 from datetime import timezone
-
 from flask import Blueprint, redirect, url_for, jsonify, current_app, session, request
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -52,7 +51,8 @@ def home():
 def health_check():
     """Simple health check endpoint for uptime monitoring."""
     try:
-        db.session.execute(text('SELECT 1'))
+        with db.engine.connect() as conn:
+            conn.execute(text('SELECT 1'))
         return 'ok', 200
     except SQLAlchemyError as e:
         current_app.logger.exception('Health check failed')
@@ -78,7 +78,8 @@ def health_check_deep():
 
     # Check database connectivity
     try:
-        db.session.execute(text('SELECT 1'))
+        with db.engine.connect() as conn:
+            conn.execute(text('SELECT 1'))
         checks['database'] = 'connected'
     except SQLAlchemyError as e:
         current_app.logger.exception('Database connectivity check failed')
@@ -87,9 +88,8 @@ def health_check_deep():
 
     # Check if student table is accessible
     try:
-        student_count = db.session.execute(
-            text('SELECT COUNT(*) FROM students')
-        ).scalar()
+        with db.engine.connect() as conn:
+            student_count = conn.execute(text('SELECT COUNT(*) FROM students')).scalar()
         checks['students_table'] = 'accessible'
         checks['student_count'] = student_count
     except SQLAlchemyError as e:
@@ -99,9 +99,8 @@ def health_check_deep():
 
     # Check if admin table is accessible
     try:
-        admin_count = db.session.execute(
-            text('SELECT COUNT(*) FROM teachers')
-        ).scalar()
+        with db.engine.connect() as conn:
+            admin_count = conn.execute(text('SELECT COUNT(*) FROM teachers')).scalar()
         checks['admins_table'] = 'accessible'
         checks['admin_count'] = admin_count
     except SQLAlchemyError as e:
@@ -111,9 +110,8 @@ def health_check_deep():
 
     # Check if hall pass logs table is accessible (may fail due to RLS/tenant context)
     try:
-        hall_pass_count = db.session.execute(
-            text('SELECT COUNT(*) FROM hall_pass_logs')
-        ).scalar()
+        with db.engine.connect() as conn:
+            hall_pass_count = conn.execute(text('SELECT COUNT(*) FROM hall_pass_logs')).scalar()
         checks['hall_pass_logs_table'] = 'accessible'
         checks['hall_pass_count'] = hall_pass_count
     except SQLAlchemyError as e:
@@ -402,7 +400,8 @@ def debug_admin_db_test():
     """
     try:
         admins = Admin.query.all()
-        invite_codes_count = db.session.execute(text('SELECT COUNT(*) FROM teacher_invite_codes')).scalar()
+        with db.engine.connect() as conn:
+            invite_codes_count = conn.execute(text('SELECT COUNT(*) FROM teacher_invite_codes')).scalar()
         return jsonify({
             "admin_count": len(admins),
             "invite_codes_count": invite_codes_count,

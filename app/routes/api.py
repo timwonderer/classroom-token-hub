@@ -1831,28 +1831,47 @@ def rotate_hall_pass_verify_token():
 @api_bp.route('/hall-pass/available-types', methods=['GET'])
 @login_required
 def get_available_hall_pass_types():
-    """Get available pass types for the current class or public teacher identity."""
-    join_code = (request.args.get('join_code') or '').strip().upper()
+    """Get available pass types for the current class or public teacher identity.
+
+    Authority: class_id is canonical. join_code is accepted only as alias input.
+    """
+    requested_class_id = (request.args.get('class_id') or '').strip() or None
+    requested_join_code = (request.args.get('join_code') or '').strip().upper()
     teacher_public_id = (request.args.get('teacher_public_id') or '').strip()
 
     resolved_teacher_id = None
     resolved_class_id = None
     context = get_current_class_context()
+    join_code = requested_join_code
 
-    if join_code:
+    # Public lookup mode still requires explicit class selector; do not infer from session context.
+    if teacher_public_id and not requested_class_id and not requested_join_code:
+        return jsonify({
+            "status": "error",
+            "message": "class_id or join_code is required"
+        }), 400
+
+    if context:
+        # Session class context is authoritative for logged-in student/admin flows.
+        resolved_teacher_id = context.get('teacher_id')
+        resolved_class_id = context.get('class_id')
+        if requested_class_id and requested_class_id != resolved_class_id:
+            return jsonify({"status": "error", "message": "class_id is out of scope for this session"}), 403
+        if join_code and context.get('join_code') != join_code:
+            return jsonify({"status": "error", "message": "join_code is out of scope for this session"}), 403
+    elif requested_class_id:
+        class_row = ClassEconomy.query.filter_by(class_id=requested_class_id).first()
+        if class_row:
+            resolved_teacher_id = class_row.teacher_id
+            resolved_class_id = class_row.class_id
+            join_code = class_row.join_code
+    elif join_code:
         if context:
-            if context.get('join_code') != join_code:
-                return jsonify({"status": "error", "message": "join_code is out of scope for this session"}), 403
-            if not get_feature_settings_for_student().get("hall_pass_enabled", True):
-                return jsonify({"status": "error", "message": "Hall pass is disabled for this class"}), 403
-            resolved_teacher_id = context.get('teacher_id')
-            resolved_class_id = context.get('class_id')
-        else:
-            from app.models import ClassEconomy
-            economy = ClassEconomy.query.filter_by(join_code=join_code).first()
-            if economy:
-                resolved_teacher_id = economy.teacher_id
-                resolved_class_id = economy.class_id
+            return jsonify({"status": "error", "message": "join_code is out of scope for this session"}), 403
+        economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+        if economy:
+            resolved_teacher_id = economy.teacher_id
+            resolved_class_id = economy.class_id
 
     if not resolved_teacher_id and teacher_public_id:
         teacher = Admin.query.filter_by(teacher_public_id=teacher_public_id).first()
@@ -1862,24 +1881,16 @@ def get_available_hall_pass_types():
     if not resolved_teacher_id:
         return jsonify({
             "status": "error",
-            "message": "join_code or teacher_public_id is required"
+            "message": "class_id, join_code, or teacher_public_id is required"
         }), 400
 
     settings = None
-    if join_code:
-        if not resolved_class_id:
-            from app.models import ClassEconomy
-            class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
-            resolved_class_id = class_row.class_id if class_row else None
-        if resolved_class_id:
-            settings = HallPassSettings.query.filter_by(
-                class_id=resolved_class_id,
-                join_code=join_code,
-            ).first()
+    if resolved_class_id:
+        settings = HallPassSettings.query.filter_by(class_id=resolved_class_id).first()
     elif teacher_public_id:
         return jsonify({
             "status": "error",
-            "message": "join_code is required"
+            "message": "class_id or join_code is required"
         }), 400
 
     if not settings:
@@ -2503,7 +2514,7 @@ def handle_tap():
     rate_per_second = get_pay_rate_for_block(block_lookup.get(period, period))
     projected_pay = duration * rate_per_second
 
-    db.session.commit() # FEAT-AUTHORIZED-SHELL
+    db.session.flush()
     return jsonify({
         "status": "ok",
         "active": is_active,
@@ -2530,42 +2541,31 @@ def get_tap_entries(student_id):
     if not student:
         return jsonify({"error": "Student not found or access denied"}), 404
 
-    current_join_code = (session.get("current_join_code") or "").strip()
-    if current_join_code:
-        from app.models import ClassEconomy
-        economy = ClassEconomy.query.filter_by(join_code=current_join_code).first()
-        class_id = economy.class_id if economy else None
-        
-        has_class_scope = _admin_has_class_scope(admin.id, class_id)
-        if not has_class_scope:
-            return jsonify({"error": "Student not found or access denied"}), 404
+    active_class_id = get_current_class_id()
+    if not active_class_id:
+        return jsonify({"error": "Class context unavailable"}), 404
 
-        # V2 Identity Resolution
-        from app.utils.seat_scope import get_seat_id_for_class
-        seat_id = get_seat_id_for_class(student_id, class_id)
-        if not seat_id:
-            return jsonify({"error": "Student not found or access denied"}), 404
+    has_class_scope = _admin_has_class_scope(admin.id, active_class_id)
+    if not has_class_scope:
+        return jsonify({"error": "Student not found or access denied"}), 404
 
-        has_student_membership = db.session.query(
-            sa.exists().where(
-                sa.and_(
-                    ClassMembership.class_id == class_id,
-                    ClassMembership.student_id == student_id,
-                    ClassMembership.role == 'student',
-                )
+    has_student_membership = db.session.query(
+        sa.exists().where(
+            sa.and_(
+                ClassMembership.class_id == active_class_id,
+                ClassMembership.student_id == student_id,
+                ClassMembership.role == 'student',
             )
-        ).scalar()
-        if not has_student_membership:
-            return jsonify({"error": "Student not found or access denied"}), 404
+        )
+    ).scalar()
+    if not has_student_membership:
+        return jsonify({"error": "Student not found or access denied"}), 404
 
     accessible_student_ids_query = get_admin_student_query(include_unassigned=False).with_entities(Student.id)
 
-    # Get all tap events for this student, scoped by teacher class_id when available.
+    # Get all tap events for this student in active class scope.
     query = TapEvent.query
-    if current_join_code:
-        query = query.filter(TapEvent.seat_id == seat_id, TapEvent.class_id == class_id)
-    else:
-        query = query.filter(TapEvent.student_id == student_id)
+    query = query.filter(TapEvent.student_id == student_id, TapEvent.class_id == active_class_id)
 
     events = (
         _apply_admin_class_scope(
@@ -2644,13 +2644,14 @@ def delete_tap_entry(event_id):
     if not event:
         return jsonify({"error": "Tap entry not found"}), 404
 
-    current_join_code = (session.get("current_join_code") or "").strip()
-    if current_join_code:
-        from app.models import ClassEconomy
-        economy = ClassEconomy.query.filter_by(join_code=current_join_code).first()
-        class_id = economy.class_id if economy else None
-        if event.class_id != class_id:
-            return jsonify({"error": "Access denied"}), 403
+    active_class_id = get_current_class_id()
+    if not active_class_id:
+        return jsonify({"error": "Class context unavailable"}), 404
+
+    if not event.class_id:
+        return jsonify({"error": "Tap entry not found"}), 404
+    if event.class_id != active_class_id:
+        return jsonify({"error": "Access denied"}), 403
 
     if not _admin_has_class_scope(admin.id, event.class_id):
         return jsonify({"error": "Tap entry not found"}), 404
@@ -2665,7 +2666,7 @@ def delete_tap_entry(event_id):
     event.deleted_at = utc_now()
     event.deleted_by = admin.id
 
-    db.session.commit() # FEAT-AUTHORIZED-SHELL
+    db.session.flush()
 
     current_app.logger.info(f"Admin {admin.id} deleted tap entry {event_id} for student {event.student_id}")
 
@@ -2734,7 +2735,7 @@ def update_student_block_settings():
     else:
         student_block.tap_enabled = tap_enabled
 
-    db.session.commit() # FEAT-AUTHORIZED-SHELL
+    db.session.flush()
 
     current_app.logger.info(f"Admin {admin.id} set tap_enabled={tap_enabled} for student {student_id} period {period}")
 

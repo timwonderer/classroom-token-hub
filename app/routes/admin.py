@@ -998,16 +998,10 @@ def _get_claimed_teacher_block_for_join_code(student_id: int, teacher_id: int, j
 
 def _require_payroll_feature_scope_from_request(admin_id: int, *, allow_default: bool = True) -> dict:
     """Resolve the canonical payroll class scope from request data."""
-    requested_join_code = None
-    if request.is_json:
-        payload = request.get_json(silent=True) or {}
-        requested_join_code = payload.get('join_code')
-    if not requested_join_code:
-        requested_join_code = request.values.get('join_code')
     return require_admin_feature_scope(
         'payroll',
         admin_id=admin_id,
-        requested_join_code=requested_join_code,
+        requested_join_code=None,
         requested_block=request.values.get('cwi_block') or request.values.get('block'),
         allow_default=allow_default,
     )
@@ -2136,14 +2130,10 @@ def _get_frozen_economy_analysis_payload(
     )
 
     if join_code and expected_weekly_hours is None:
-        snapshot = _build_economy_snapshot_from_analysis(join_code, checker, analysis)
-        snapshot.analysis_payload = _serialize_economy_analysis_payload(analysis, snapshot=snapshot, frozen=True)
-        db.session.add(snapshot)
-        db.session.commit()
-        payload = dict(snapshot.analysis_payload)
-        payload['analysis_schedule'] = _economy_analysis_schedule(snapshot, frozen=True)
+        payload = _serialize_economy_analysis_payload(analysis, frozen=True)
+        payload['analysis_schedule'] = _economy_analysis_schedule(None, frozen=False)
         payload['snapshot_cached'] = False
-        return payload, snapshot
+        return payload, None
 
     payload = _serialize_economy_analysis_payload(analysis, frozen=False)
     payload['snapshot_cached'] = False
@@ -3577,8 +3567,6 @@ def recovery_status():
     # Check if expired (handle timezone-naive datetimes from SQLite)
     expires_at = ensure_utc(recovery_request.expires_at)
     if expires_at < utc_now():
-        recovery_request.status = 'expired'
-        db.session.commit()
         flash("Your recovery request has expired. Please start a new recovery.", "error")
         session.pop('recovery_request_id', None)
         return redirect(url_for('admin.recover'))
@@ -4482,7 +4470,6 @@ def student_detail(student_id):
     """View detailed information for a specific student."""
     student = _get_student_or_404(student_id)
     teacher_id = session.get('admin_id')
-    requested_join_code = (request.args.get('join_code') or '').strip() or None
 
     # Resolve the effective class context for this student detail page.
     # This prevents stale `session['current_join_code']` values from hiding data
@@ -4497,27 +4484,24 @@ def student_detail(student_id):
     }
 
     join_code = None
-    if requested_join_code and requested_join_code in student_join_codes:
-        join_code = requested_join_code
-    else:
-        session_join_code = session.get('current_join_code')
-        if session_join_code in student_join_codes:
-            join_code = session_join_code
-        elif student_join_codes:
-            # Prefer the student's most recent transaction context, then a stable fallback.
-            latest_tx_join_code = (
-                Transaction.query.filter(
-                    Transaction.student_id == student.id,
-                    Transaction.join_code.in_(student_join_codes),
-                )
-                .order_by(Transaction.timestamp.desc())
-                .with_entities(Transaction.join_code)
-                .first()
+    session_join_code = session.get('current_join_code')
+    if session_join_code in student_join_codes:
+        join_code = session_join_code
+    elif student_join_codes:
+        # Prefer the student's most recent transaction context, then a stable fallback.
+        latest_tx_join_code = (
+            Transaction.query.filter(
+                Transaction.student_id == student.id,
+                Transaction.join_code.in_(student_join_codes),
             )
-            if latest_tx_join_code and latest_tx_join_code[0]:
-                join_code = latest_tx_join_code[0]
-            else:
-                join_code = sorted(student_join_codes)[0]
+            .order_by(Transaction.timestamp.desc())
+            .with_entities(Transaction.join_code)
+            .first()
+        )
+        if latest_tx_join_code and latest_tx_join_code[0]:
+            join_code = latest_tx_join_code[0]
+        else:
+            join_code = sorted(student_join_codes)[0]
 
     if join_code:
         session['current_join_code'] = join_code
@@ -4946,6 +4930,7 @@ def edit_student():
 @admin_bp.route('/student/archive', methods=['GET', 'POST'])
 @admin_bp.route('/student/delete', methods=['GET', 'POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def delete_student():
     """Remove a student from this teacher and delete fully if no links remain."""
     current_app.logger.info(f"Delete student route accessed. Method: {request.method}, Form data: {dict(request.form)}")
@@ -4978,7 +4963,6 @@ def delete_student():
 
     try:
         was_hard_deleted = _remove_student_from_teacher_scope(student, session.get('admin_id'))
-        db.session.commit()
         if was_hard_deleted:
             flash(f"Deleted {student_name}.", "success")
         else:
@@ -4994,6 +4978,7 @@ def delete_student():
 
 @admin_bp.route('/students/bulk-delete', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def bulk_delete_students():
     """Remove multiple students from this teacher and delete true orphans."""
     data = request.get_json(silent=True) or {}
@@ -5017,7 +5002,6 @@ def bulk_delete_students():
                 if was_hard_deleted:
                     deleted_count += 1
 
-        db.session.commit()
         return jsonify({
             "status": "success",
             "message": (
@@ -5033,6 +5017,7 @@ def bulk_delete_students():
 
 @admin_bp.route('/students/delete-block', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def delete_block():
     """Backwards-compatible block deletion wrapper that resolves to join-code deletion."""
     data = request.get_json(silent=True) or {}
@@ -5071,8 +5056,6 @@ def delete_block():
             TeacherBlock.block == block,
             TeacherBlock.student_id.is_(None)
         ).delete(synchronize_session=False)
-        db.session.commit()
-
         return jsonify({
             "status": "success",
             "message": f"Successfully deleted class Block {block} (join code {join_code}) and scoped records."
@@ -5086,6 +5069,7 @@ def delete_block():
 @admin_bp.route('/join-code/delete', methods=['POST'])
 @admin_bp.route('/join-code', methods=['DELETE'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def delete_join_code():
     """Hard-delete a class economy and all records scoped to the join code."""
     data = request.get_json(silent=True) or request.form
@@ -5112,7 +5096,6 @@ def delete_join_code():
 
     try:
         _hard_delete_join_code_scope(join_code, current_admin_id)
-        db.session.commit()
         return jsonify({
             "status": "success",
             "message": f"Join code {join_code} and all scoped records were permanently deleted."
@@ -5125,6 +5108,7 @@ def delete_join_code():
 
 @admin_bp.route('/pending-students/delete', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def delete_pending_student():
     """
     Delete a single pending student (unclaimed TeacherBlock entry).
@@ -5166,8 +5150,6 @@ def delete_pending_student():
         
         # Delete the TeacherBlock entry (this is the only record for unclaimed seats)
         db.session.delete(teacher_block)
-        db.session.commit()
-
         return jsonify({
             "status": "success",
             "message": f"Successfully deleted pending student {student_name}."
@@ -5180,6 +5162,7 @@ def delete_pending_student():
 
 @admin_bp.route('/pending-students/bulk-delete', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def bulk_delete_pending_students():
     """
     Delete multiple pending students (unclaimed TeacherBlock entries) at once.
@@ -5223,8 +5206,6 @@ def bulk_delete_pending_students():
                         db.session.delete(teacher_block)
                         deleted_count += 1
 
-        db.session.commit()
-        
         message = f"Successfully deleted {deleted_count} pending student(s)."
         if block:
             message = f"Successfully deleted {deleted_count} pending student(s) from Block {block}."
@@ -5242,6 +5223,7 @@ def bulk_delete_pending_students():
 
 @admin_bp.route('/legacy-unclaimed-students/bulk-delete', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def bulk_delete_legacy_unclaimed_students():
     """
     Delete multiple legacy unclaimed students (Student records without username_hash) at once.
@@ -5274,8 +5256,6 @@ def bulk_delete_legacy_unclaimed_students():
             removed_count += 1
             if was_hard_deleted:
                 deleted_count += 1
-
-        db.session.commit()
 
         message = (
             f"Successfully removed {removed_count} legacy unclaimed student(s) from Block {block}. "
@@ -5392,7 +5372,6 @@ def add_individual_student():
         )
         db.session.add(new_tb)
         
-        db.session.commit()
         if class_context.get('class_created'):
             _queue_pending_class_timezone_confirmation(class_context.get('class_row'))
 
@@ -5406,6 +5385,7 @@ def add_individual_student():
 
 @admin_bp.route('/student/add-manual', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def add_manual_student():
     """Add a student with full manual configuration (advanced mode)."""
     try:
@@ -5504,7 +5484,6 @@ def add_manual_student():
                         class_id=class_id,
                         block=block,
                     )
-                    db.session.commit()
                     if class_context.get('class_created'):
                         _queue_pending_class_timezone_confirmation(class_context.get('class_row'))
                 return redirect(url_for('admin.students'))
@@ -5565,7 +5544,6 @@ def add_manual_student():
         )
         db.session.add(new_tb)
         
-        db.session.commit()
         if class_context.get('class_created'):
             _queue_pending_class_timezone_confirmation(class_context.get('class_row'))
 
@@ -6937,6 +6915,7 @@ def rent_settings():
 
 @admin_bp.route('/rent-waiver/add', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def add_rent_waiver():
     """Add rent waiver for selected students."""
     from app.routes.student import (
@@ -7060,13 +7039,13 @@ def add_rent_waiver():
         ))
         count += 1
 
-    db.session.commit()
     flash(f"Rent waiver added for {count} student(s) covering: {scope_str}.", "success")
     return redirect(url_for('admin.rent_settings', settings_block=settings_block))
 
 
 @admin_bp.route('/rent-waiver/<int:waiver_id>/remove', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def remove_rent_waiver(waiver_id):
     """Remove a rent waiver."""
     waiver = db.get_or_404(RentWaiver, waiver_id)
@@ -7085,13 +7064,13 @@ def remove_rent_waiver(waiver_id):
             description=removal_description,
             created_by_admin=True,
         ))
-    db.session.commit()
     flash(f"Rent waiver removed for {student_name}.", "success")
     return redirect(url_for('admin.rent_settings'))
 
 
 @admin_bp.route('/rent/reverse-cycle-penalties', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def reverse_cycle_penalties():
     """Reverse misapplied rent late fees for the current cycle."""
     from app.routes.student import (
@@ -7203,7 +7182,6 @@ def reverse_cycle_penalties():
             total_refunded += refund_amount
 
     if students_fixed:
-        db.session.commit()
         flash(
             f"Reversed misapplied late fees for {students_fixed} student(s). Total refunded: ${total_refunded:.2f}.",
             "success",
@@ -7540,6 +7518,7 @@ def edit_insurance_policy(policy_id):
 
 @admin_bp.route('/insurance/deactivate/<int:policy_id>', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def deactivate_insurance_policy(policy_id):
     """Deactivate an insurance policy."""
     policy = db.get_or_404(InsurancePolicy, policy_id)
@@ -7549,7 +7528,6 @@ def deactivate_insurance_policy(policy_id):
         abort(403)
 
     policy.is_active = False
-    db.session.commit()
     flash(f"Insurance policy '{policy.title}' has been deactivated.", "success")
     return redirect(url_for('admin.insurance_management'))
 
@@ -7968,6 +7946,7 @@ def transactions():
 
 @admin_bp.route('/void-transaction/<int:transaction_id>', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def void_transaction(transaction_id):
     """Void a transaction."""
     is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
@@ -8002,7 +7981,6 @@ def void_transaction(transaction_id):
         )
         access_policy_service.assert_can_void_transaction(scope=scope, transaction=tx)
         execute_void_transaction(tx)
-        db.session.commit()
         current_app.logger.info(f"Transaction {transaction_id} voided")
     except (AccessScopeDenied, access_policy_service.AccessPolicyDenied) as e:
         db.session.rollback()
@@ -8085,13 +8063,6 @@ def hall_pass():
     # Lazily generate the hall pass verification token if needed
     teacher_id = admin_id
     teacher = db.session.get(Admin, teacher_id)
-    if teacher and not teacher.hall_pass_verify_token:
-        teacher.hall_pass_verify_token = Admin.generate_verify_token()
-        try:
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            teacher = db.session.get(Admin, teacher_id)
 
     verify_url = None
     if teacher and teacher.hall_pass_verify_token:
@@ -8133,6 +8104,7 @@ def hall_pass_setup():
 
 @admin_bp.route('/economy-policy', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def update_economy_policy():
     admin_id = session.get('admin_id')
     selected_block = (request.form.get('block') or '').strip().upper() or None
@@ -8147,7 +8119,6 @@ def update_economy_policy():
     settings_row.economy_policy_mode = policy_mode
     settings_row.economy_policy_updated_at = utc_now()
     settings_row.economy_pending_rebalance_json = None
-    db.session.commit()
     current_app.logger.info(
         "Economy policy mode changed teacher=%s block=%s mode=%s",
         admin_id,
@@ -8160,6 +8131,7 @@ def update_economy_policy():
 
 @admin_bp.route('/economy-policy/rebalance', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def apply_economy_rebalance():
     admin_id = session.get('admin_id')
     selected_block = (request.form.get('block') or '').strip().upper() or None
@@ -8242,7 +8214,6 @@ def apply_economy_rebalance():
             change_plan,
             activation_mode=REBALANCE_ACTIVATION_IMMEDIATE,
         )
-        db.session.commit()
         flash(f"Applied economy rebalance now for {len(applied_labels)} setting(s).", "success")
     else:
         scheduled_changes = prepare_scheduled_rebalance_changes(
@@ -8255,7 +8226,6 @@ def apply_economy_rebalance():
             'changes': scheduled_changes,
             'scheduled_at': utc_now().isoformat(),
         })
-        db.session.commit()
         current_app.logger.info(
             "Scheduled economy rebalance teacher=%s block=%s changes=%s",
             admin_id,
@@ -8275,9 +8245,6 @@ def apply_economy_rebalance():
 def economy_health():
     """Show a holistic view of the current economy configuration and CWI health."""
     admin_id = session.get("admin_id")
-    if not getattr(g, "read_only", False):
-        activate_due_rebalances(admin_id)
-        db.session.commit()
 
     blocks = _get_teacher_blocks()
     # Always use per-class view since CWI is inherently per-class (multi-tenancy by join_code)
@@ -10049,14 +10016,10 @@ def download_csv_template():
 def export_students():
     """Export all student data to CSV."""
     admin_id = session.get('admin_id')
-    requested_join_code = (request.args.get('join_code') or '').strip()
-    selected_join_code = None
     teacher_join_codes = _get_admin_owned_join_codes(admin_id)
-
-    if requested_join_code:
-        if requested_join_code not in teacher_join_codes:
-            return jsonify({"error": "Invalid class scope"}), 403
-        selected_join_code = requested_join_code
+    selected_join_code = (_get_current_admin_join_code(admin_id) or '').strip() or None
+    if selected_join_code and selected_join_code not in teacher_join_codes:
+        selected_join_code = None
 
     # Create CSV in memory
     output = io.StringIO()
@@ -10175,6 +10138,7 @@ def export_students():
 
 @admin_bp.route('/enforce-daily-limits', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def enforce_daily_limits():
     """
     Manually trigger auto tap-out for all students who have exceeded their daily limit.
@@ -10301,8 +10265,6 @@ def enforce_daily_limits():
             )
             continue
 
-    db.session.commit()
-
     message = f"Checked {checked} active students. Auto-tapped out {len(tapped_out)} student(s)."
 
     return jsonify({
@@ -10316,6 +10278,7 @@ def enforce_daily_limits():
 
 @admin_bp.route('/tap-out-students', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def tap_out_students():
     """
     Admin endpoint to tap out one or more students from a specific period.
@@ -10444,9 +10407,6 @@ def tap_out_students():
                 f"Admin tapped out student {student.id} ({student.full_name}) from period {period}, locked until midnight"
             )
 
-        # Commit all tap-outs
-        db.session.commit()
-
         # Build response message
         message_parts = []
         if tapped_out:
@@ -10475,6 +10435,7 @@ def tap_out_students():
 
 @admin_bp.route('/tap-in-students', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def tap_in_students():
     """
     Admin endpoint to tap in one or more students for a specific period.
@@ -10570,9 +10531,6 @@ def tap_in_students():
             current_app.logger.info(
                 f"Admin tapped in student {student.id} ({student.full_name}) for period {period}"
             )
-
-        # Commit all tap-ins
-        db.session.commit()
 
         # Build response message
         message_parts = []

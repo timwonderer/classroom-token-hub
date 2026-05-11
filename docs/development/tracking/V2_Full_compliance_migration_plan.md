@@ -75,7 +75,7 @@ This file is the single active tracker for v2 migration execution. All prior tra
 ### Consolidated Open TODO Backlog
 
 #### Active execution waves
-- [ ] Complete Wave 3 identity migration sequence through remaining scoped domains
+- [ ] Complete Wave 3 identity migration sequence through remaining scoped domains (strict exit criteria below; no legacy fallback permitted)
 - [ ] Complete Wave 4 class-configuration canonicalization and drop legacy settings columns
 - [ ] Complete Wave 5 ledger table migration and FEAT hook reassignment
 - [ ] Complete Wave 6 attendance table migration (`tap_events` lineage removal)
@@ -691,6 +691,59 @@ Focused validation:
 - `python3 -m py_compile app/routes/admin.py`
 - `pytest -q tests/test_feature_flag_enforcement.py -k "admin_banking_rejects_disabled_class_scope or banking"`
 - Result: `3 passed`, `1 failed` (`test_transfer_allowed_when_banking_enabled`) — failure is in student transfer feature-gate path and is outside the banking route changes in this slice.
+
+### Wave 3 Exit Criteria (Strict, No Legacy Fallback)
+
+Wave 3 is considered complete only when all conditions below are true:
+
+1. **No scope fallback paths** in identity/scope-critical route surfaces (`admin`, `student`, `api`) including `except HTTPException` fallback-to-resolver patterns.
+2. **Feature toggle authority is sole gate** for class-scoped feature routes:
+   - teacher sees disabled page with link to `/admin/feature-settings`
+   - student receives hard `404` for disabled feature routes (no feature disclosure)
+3. **Single-context authority**:
+   - no page-level class switching controls outside global nav class switcher
+   - no request-level `join_code` class switching on admin pages
+4. **Read/write boundary compliance in changed code**:
+   - guardrail CI passes for changed lines (no route-level commits in GET/read paths; no write-on-GET)
+5. **No legacy compatibility fallback reintroduction**:
+   - no runtime "legacy-safe" bypass behavior for missing canonical identity/scope rows
+   - fail-closed behavior is required when canonical class/scope context is absent
+
+### Status Update (2026-05-10): Wave 3 Exit-Bar Snapshot + Remaining Punch List
+
+Snapshot against the strict Wave 3 exit criteria:
+
+- `PASS`: Feature toggle authority + disabled-route UX already implemented (`3C.12-F`).
+- `PASS`: Guardrail CI framework landed (`scripts/policy_guardrails.py`, `.github/workflows/policy-guardrails.yml`) and blocks new violations on changed lines.
+- `PARTIAL`: Single-context enforcement is advanced but not fully closed in all remaining admin/analytics surfaces.
+- `OPEN`: Full legacy scope-switch cleanup is not yet complete in all route families.
+
+Concrete remaining punch list before checking off Wave 3:
+
+- Remove remaining request-level class switch handling on analytics/admin surfaces still consuming request `join_code` for context switching (notably `app/routes/analytics.py`, selected admin handlers).
+- Finish template cleanup where page-level class selectors still exist outside nav switch context (remaining `settings_block`/selector UI fragments).
+- Eliminate remaining Wave-3-scope GET/write and route-commit hotspots in changed surfaces as they are touched by refactors, using FEAT-owned mutation boundaries only.
+- Re-run focused validation:
+  - `pytest -q tests/test_feature_flag_enforcement.py tests/test_feature_settings.py`
+  - `python3 scripts/policy_guardrails.py --git-diff-base origin/main --git-diff-head HEAD`
+
+### Status Update (2026-05-10): Wave 3 Exit Closure Slice — Request-Level Class Switch Removal (Analytics + Admin)
+
+- Removed request-driven class switching from analytics:
+  - `app/routes/analytics.py`
+    - `resolve_current_join_code(...)` no longer reads `request.args['join_code']`
+    - active class resolution is now session/nav-authoritative with deterministic fallback to teacher-owned class list
+- Removed additional admin request-level class switching:
+  - `app/routes/admin.py`
+    - `_require_payroll_feature_scope_from_request(...)` no longer consumes request `join_code` payload/query/form values
+    - `student_detail(...)` no longer accepts `?join_code=...` context override
+    - `export_students(...)` now scopes by active session/nav class context instead of request `join_code`
+
+Focused validation:
+
+- `python3 -m py_compile app/routes/analytics.py app/routes/admin.py`
+- `pytest -q tests/test_admin_payroll_scoped_balances.py tests/test_dashboard_rendering.py tests/test_feature_flag_enforcement.py -k "payroll or student_detail or export or feature"`
+- Result: `13 passed`, `3 deselected`
 
 ### Status Update (2026-05-01): FEAT Atomicity Enforcement Baseline
 

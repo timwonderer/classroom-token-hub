@@ -928,8 +928,7 @@
     compoundFrequencyField.style.display = calculationType.value === 'compound' ? 'block' : 'none';
   }
 
-  // -------------------- CLASS SELECTOR & APPLY TO ALL --------------------
-  const settingsBlockSelector = document.getElementById('settings_block_selector');
+  // -------------------- APPLY TO ALL --------------------
   const applyToAllCheckbox = document.getElementById('apply_to_all_checkbox');
   const applyToAllInput = document.getElementById('apply_to_all_input');
 
@@ -938,10 +937,6 @@
     applyToAllCheckbox.addEventListener('change', function () {
       applyToAllInput.value = this.checked ? 'true' : 'false';
 
-      // Disable class selector when apply to all is checked
-      if (settingsBlockSelector) {
-        settingsBlockSelector.disabled = this.checked;
-      }
     });
   }
 });
