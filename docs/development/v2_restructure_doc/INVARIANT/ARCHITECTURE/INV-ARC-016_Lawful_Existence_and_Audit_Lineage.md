@@ -1,0 +1,73 @@
+# INV-ARC-016 — Lawful Existence and Audit Lineage
+
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| INV-ARC-016      | 1.0     | 2026-05-10     | N/A        | Foundational    |
+
+## I. Purpose
+
+Define the principle of lawful existence: physical database persistence alone does not constitute a valid application entity. A protected row is lawful only if it was created through an authorized CTH execution path and carries verifiable audit lineage.
+
+## II. Scope
+
+Applies to all state mutation paths for protected tables. A protected table is any table whose row-level mutations must produce an `AuditEvent` chain entry, as declared in `DOM-OPS-002`.
+
+## III. Authority Level
+
+Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-006`.
+
+## IV. Dependencies
+
+- `INV-CORE-000_Core_Invariants.md`
+- `INV-ARC-006_Command_Boundary_for_Mutation.md`
+- `INV-ARC-007_GET_Must_Be_Pure.md`
+- `DOM-OPS-002_Audit_Lineage_Integrity.md`
+
+## V. Core Rule
+
+A row in a protected table that was written outside a lawful CTH execution path (an active FEAT context or `SystemAuditAuthority`) is not a valid application entity, regardless of its physical presence in the database.
+
+The auditor of a protected row's lawfulness is the HMAC-SHA256 chain maintained by `DOM-OPS-002`. A row is lawful if and only if:
+
+1. Its `lineage_event_id` references an `AuditEvent` whose `payload_digest` matches the row's current protected field values, and
+2. That `AuditEvent` sits within a continuous, unbroken chain for its scope.
+
+## VI. Lineage State Taxonomy
+
+Every protected row has exactly one of four lineage states. All code that reads, reports, or acts on lineage MUST use this taxonomy exclusively.
+
+| State | Meaning | Operational Response |
+|---|---|---|
+| `VERIFIED` | `lineage_event_id` set; current payload digest matches the linked `AuditEvent`; chain is continuous | Treat as lawful |
+| `UNVERIFIED` | `lineage_event_id` is NULL — row predates lineage rollout or sits in a table not yet covered by Phase 3b | Do not treat as `INVALID`. Log as coverage gap. Operators shall track toward zero over time. |
+| `INVALID` | Lineage present but payload mismatch, chain broken, or HMAC invalid | Reject in strict read paths. Trigger `IntegrityStatus` degraded. Treat as an incident. |
+| `DEGRADED` | Verifier infrastructure unhealthy (e.g., `ChainHead` missing, `AUDIT_HMAC_KEY` absent, DB error during chain walk) | Mark `IntegrityStatus` degraded with reason. Produce neither false `VERIFIED` nor false `INVALID` results. |
+
+`UNVERIFIED` is a transitional state expected for pre-rollout rows. `INVALID` is an incident. These states must never be conflated in code, logs, or operator-facing output.
+
+## VII. HMAC Key Requirement
+
+The `AUDIT_HMAC_KEY` environment variable is required at application startup. The application shall refuse to start if this variable is absent. It is separate from `PEPPER_KEY` and must never be shared between environments.
+
+## VIII. AuditEvent Immutability
+
+`AuditEvent` rows are append-only. No code path outside `emit_audit_event()` in `app/services/audit_service.py` may write to the `audit_events` table. `UPDATE` and `DELETE` on `audit_events` are prohibited in all environments.
+
+## IX. Lawful Write Paths
+
+Two write paths are lawful for producing `AuditEvent` chain entries:
+
+1. **Active FEAT context** — the business mutation path. `emit_audit_event()` is called inside an active FEAT via `audit_protected()` after `db.session.flush()`, before the FEAT's owning transaction commits.
+2. **`SystemAuditAuthority`** — the narrow system path for genesis bootstrap, verifier writes, and `IntegrityStatus` updates. `SystemAuditAuthority` carries no business actor fields; `actor_type` is always `"system"`. It is prohibited inside any business mutation path.
+
+## X. Rebuild Intent
+
+This invariant exists to make unauthorized or convenience-based database mutations visible and operationally embarrassing. Its goal is not to prevent all possible privileged compromise, but to ensure that any mutation outside the canonical execution path is detectable during the nightly chain walk and surfaces in `/health/deep` as a degraded state.
+
+## XI. Downstream Consequence
+
+`DOM-OPS-002` owns the schema, emission protocol, and verification logic that operationalizes this invariant. `FEAT` execution contracts must call `audit_protected()` for every write to a protected table. CI guardrails in `scripts/policy_guardrails.py` enforce this structurally.
+
+## XII. Amendment
+
+Revisions must preserve the distinction between `UNVERIFIED` and `INVALID`, the two-path lawful write model, and the HMAC key startup requirement.
