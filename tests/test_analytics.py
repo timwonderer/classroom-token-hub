@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import event
 from app import db
 from app.models import (
-    Admin, Student, StudentBlock, StudentTeacher, TeacherBlock,
+    Admin, Student, StudentBlock, StudentTeacher, TeacherBlock, ClassEconomy,
     Transaction, PayrollSettings, RentSettings, AnalyticsAlert
 )
 from app.routes.analytics import get_pay_cycle_days, get_rent_cycle_days
@@ -32,11 +32,20 @@ def setup_analytics_test(client):
     # Create join code
     join_code = "TEST123"
     block = "A"
+    class_row = ClassEconomy(
+        join_code=join_code,
+        teacher_id=admin.id,
+        status="active",
+        created_by_admin_id=admin.id,
+    )
+    db.session.add(class_row)
+    db.session.flush()
     
     # Create payroll settings
     # Note: PayrollSettings uses 'block' field, not 'join_code'
     payroll = PayrollSettings(
         teacher_id=admin.id,
+        class_id=class_row.class_id,
         join_code=join_code,
         block=block,
         pay_rate=0.25,  # $0.25/min = $15/hour
@@ -263,9 +272,18 @@ def test_multi_tenancy_scoping(client, setup_analytics_test):
     # Create a second join code with different data
     join_code2 = "TEST456"
     block2 = "B"
+    class_row2 = ClassEconomy(
+        join_code=join_code2,
+        teacher_id=admin.id,
+        status="active",
+        created_by_admin_id=admin.id,
+    )
+    db.session.add(class_row2)
+    db.session.flush()
     
     payroll2 = PayrollSettings(
         teacher_id=admin.id,
+        class_id=class_row2.class_id,
         join_code=join_code2,
         block=block2,
         pay_rate=0.30,
@@ -443,6 +461,13 @@ def test_analytics_pay_cycle_prefers_join_code_scoped_settings(client, setup_ana
 def test_analytics_pay_cycle_ignores_teacher_global_for_unscoped_join_code(client, setup_analytics_test):
     admin, join_code, block, students, payroll = setup_analytics_test
     join_code2 = "NOGLOBAL1"
+    class_row2 = ClassEconomy(
+        join_code=join_code2,
+        teacher_id=admin.id,
+        status="active",
+        created_by_admin_id=admin.id,
+    )
+    db.session.add(class_row2)
 
     db.session.add(TeacherBlock(
         teacher_id=admin.id,
@@ -475,6 +500,13 @@ def test_analytics_pay_cycle_ignores_teacher_global_for_unscoped_join_code(clien
 def test_analytics_rent_cycle_ignores_teacher_global_for_unscoped_join_code(client, setup_analytics_test):
     admin, join_code, block, students, payroll = setup_analytics_test
     join_code2 = "NORENTG1"
+    class_row2 = ClassEconomy(
+        join_code=join_code2,
+        teacher_id=admin.id,
+        status="active",
+        created_by_admin_id=admin.id,
+    )
+    db.session.add(class_row2)
 
     db.session.add(TeacherBlock(
         teacher_id=admin.id,

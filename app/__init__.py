@@ -689,7 +689,6 @@ def create_app():
             from app.auth import get_logged_in_student, get_current_seat, get_current_class_id, get_current_user
             from app.models import TeacherBlock, Admin, ClassEconomy
             from flask import session
-            from app.routes.student import get_current_class_context
             from app.utils.display_name_session import (
                 get_teacher_display_name_cache,
                 upsert_teacher_display_name_cache,
@@ -714,23 +713,32 @@ def create_app():
             if not claimed_seats:
                 return {'current_class_context': None, 'available_classes': []}
 
-            resolved_context = get_current_class_context()
-            resolved_class_id = get_current_class_id() or (resolved_context.get('class_id') if resolved_context else None)
+            claimed_class_ids = {seat.class_id for seat in claimed_seats if seat.class_id}
+            requested_class_id = (session.get('current_class_id') or '').strip()
+            resolved_class_id = (
+                requested_class_id
+                or get_current_class_id()
+            )
+            if resolved_class_id not in claimed_class_ids:
+                resolved_class_id = None
 
             # Class context is required whenever the student has at least one claimed seat.
             current_seat = next(
                 (seat for seat in claimed_seats if seat.class_id == resolved_class_id),
                 claimed_seats[0]
             )
-            if current_seat.class_id and session.get('current_class_id') != current_seat.class_id:
-                pass
-            if session.get('current_join_code') != current_seat.join_code:
-                pass
 
-            class_rows_by_join_code = {
-                row.join_code: row
+            # Keep session context aligned with canonical current seat scope.
+            session['current_seat_id'] = current_seat.id
+            session['seat_id'] = current_seat.id
+            session['current_class_id'] = current_seat.class_id
+            session['class_id'] = current_seat.class_id
+            session['current_join_code'] = current_seat.join_code
+
+            class_rows_by_class_id = {
+                row.class_id: row
                 for row in ClassEconomy.query.filter(
-                    ClassEconomy.join_code.in_([seat.join_code for seat in claimed_seats if seat.join_code])
+                    ClassEconomy.class_id.in_([seat.class_id for seat in claimed_seats if seat.class_id])
                 ).all()
             }
 
@@ -750,7 +758,7 @@ def create_app():
             available_classes = []
             for seat in claimed_seats:
                 teacher_name = teacher_name_cache.get(str(seat.teacher_id), 'Unknown')
-                class_row = class_rows_by_join_code.get(seat.join_code)
+                class_row = class_rows_by_class_id.get(seat.class_id)
                 available_classes.append({
                     'join_code': seat.join_code,
                     'class_id': getattr(class_row, 'class_id', None),
@@ -759,11 +767,11 @@ def create_app():
                     'teacher_name': teacher_name,
                     'block': seat.block,
                     'block_display': seat.get_class_label(),
-                    'is_current': getattr(class_row, 'class_id', None) == getattr(current_seat, 'class_id', None)
+                    'is_current': seat.class_id == current_seat.class_id
                 })
 
             # Build current class context from cache.
-            current_class_row = class_rows_by_join_code.get(current_seat.join_code)
+            current_class_row = class_rows_by_class_id.get(current_seat.class_id)
             current_class_context = {
                 'join_code': current_seat.join_code,
                 'class_id': getattr(current_class_row, 'class_id', None),

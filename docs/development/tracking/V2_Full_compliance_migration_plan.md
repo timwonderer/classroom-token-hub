@@ -745,6 +745,56 @@ Focused validation:
 - `pytest -q tests/test_admin_payroll_scoped_balances.py tests/test_dashboard_rendering.py tests/test_feature_flag_enforcement.py -k "payroll or student_detail or export or feature"`
 - Result: `13 passed`, `3 deselected`
 
+### Status Update (2026-05-11): Wave 3 Exit Closure Slice — Route Commit Elimination + FEAT Shell Coverage
+
+- Completed repo sweep for Wave-3-scope route mutation boundaries:
+  - Removed remaining route-level `db.session.commit()` ownership from:
+    - `app/routes/student.py`
+    - `app/routes/analytics.py`
+    - `app/routes/system_admin.py`
+    - `app/routes/api.py`
+  - Replaced route commits with `db.session.flush()` so FEAT/orchestrator transaction boundaries remain authoritative.
+- Expanded FEAT shell coverage for mutation routes touched in this slice:
+  - `app/routes/student.py`
+    - `claim_account` → `FEAT-IDEN-001`
+    - `setup_pin_passphrase` → `FEAT-IDEN-001`
+    - `add_class` → `FEAT-IDEN-001`
+    - `cancel_insurance` → `FEAT-OBL-001`
+    - `login` (lookup-hash write path) → `FEAT-IDEN-001`
+    - `verify_recovery` / `dismiss_recovery` → `FEAT-IDEN-002`
+  - `app/routes/analytics.py`
+    - `acknowledge_alert` → `FEAT-ANLY-001`
+- Guardrail status moved from outstanding route-commit debt to clean baseline:
+  - before slice: `30` `NO_ROUTE_COMMIT` violations (`api.py` + `system_admin.py`)
+  - after slice: `0` violations (`Policy guardrails: clean`)
+
+Focused validation:
+
+- `python3 scripts/policy_guardrails.py`
+- `pytest -q tests/test_tap_event_class_scope_invariant.py tests/test_api_admin_tap_scope.py tests/test_api_tenancy.py -k "tap_entries or delete_tap_entry or block_tap_settings or hall_pass_available_types or attendance_history_api"`
+- Result: `13 passed`, `7 deselected`
+
+### Status Update (2026-05-12): Wave 3 Exit Closure Slice — Class-Authority Sticky Context + V2 Claim Contract
+
+- Completed identity sticky-context enforcement using class authority first:
+  - durable pointer remains `users.last_active_class_id`
+  - runtime restoration now resolves `class_id` first, then resolves owned seat within that class (`class_id -> seats`)
+  - missing/invalid class context fails closed and routes through explicit class-context selection gate
+- Landed v2 student claim contract update (no DOB in claim flow):
+  - `/student/claim-account` now matches on `join_code + full first_name + last_name`
+  - optional dedupe code supported for same-name collisions
+  - DOB/first-initial credential checks removed from claim form and route contract
+- Canonicalized teacher identity spec document:
+  - `docs/development/specs/V2_TEACHER_IDENTITY_ARCHITECTURE.md` rewritten from transitional tracker format to canonical v2 architecture language
+  - document now explicitly states class-authority-first restoration (`last_active_class_id`) and seat resolution second
+- Migration safety verification (upgrade/downgrade loop) passed for current head:
+  - `flask db downgrade 53e7c7148fea`
+  - `flask db upgrade 8357d4036478`
+  - `SELECT version_num FROM alembic_version` => `8357d4036478`
+- Focused regression evidence after test remediation:
+  - `pytest -q tests/test_teacher_student_flow.py tests/test_class_context_and_switching.py tests/test_legacy_student_claim.py`
+  - Result: `21 passed`
+
 ### Status Update (2026-05-01): FEAT Atomicity Enforcement Baseline
 
 - Enforced FEAT-owned transaction boundaries as a runtime invariant:

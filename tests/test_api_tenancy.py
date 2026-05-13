@@ -125,6 +125,7 @@ def _create_claimed_seat(teacher: Admin, student: Student, join_code: str, block
     ).first():
         _create_class_scope(teacher, student, join_code)
 
+    class_row = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=teacher.id).first()
     seat = TeacherBlock(
         teacher_id=teacher.id,
         block=block,
@@ -135,11 +136,15 @@ def _create_claimed_seat(teacher: Admin, student: Student, join_code: str, block
         dob_sum_hash=None,
         salt=b"seat-salt",
         first_half_hash=f"hash-{teacher.id}-{student.id}-{join_code}",
+        class_id=class_row.class_id if class_row else None,
         join_code=join_code,
         student_id=student.id,
         is_claimed=True,
     )
     db.session.add(seat)
+    runtime_seat = _get_or_create_student_seat(student, class_row.class_id, join_code) if class_row else None
+    if runtime_seat and not runtime_seat.claimed_at:
+        runtime_seat.claimed_at = datetime.now(timezone.utc)
     db.session.commit()
     return seat
 
@@ -198,6 +203,9 @@ def _login_student(client, student: Student, join_code: str | None = None):
         sess["last_activity"] = now
         if join_code:
             sess["current_join_code"] = join_code
+            class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+            if class_row:
+                sess["current_class_id"] = class_row.class_id
 
 
 def test_attendance_history_api_scoped_to_teacher(client):
@@ -588,7 +596,7 @@ def test_admin_block_tap_settings_post_preserves_out_of_scope_join_code_row(clie
     assert scoped_row is None
 
 
-def test_hall_pass_available_types_accepts_join_code_without_teacher_id(client):
+def test_hall_pass_available_types_accepts_class_id_without_teacher_id(client):
     teacher, _ = _create_admin("teacher-hall-types")
     student = _create_student("JoinCodePassTypes", primary_teacher=teacher)
     _create_claimed_seat(teacher, student, "HALLA1", block="A")
@@ -608,7 +616,7 @@ def test_hall_pass_available_types_accepts_join_code_without_teacher_id(client):
     db.session.commit()
 
     _login_student(client, student, join_code="HALLA1")
-    response = client.get("/api/hall-pass/available-types?join_code=HALLA1")
+    response = client.get(f"/api/hall-pass/available-types?class_id={economy.class_id}")
 
     assert response.status_code == 200
     payload = response.get_json()
@@ -622,14 +630,22 @@ def test_hall_pass_available_types_rejects_out_of_scope_join_code(client):
     _create_claimed_seat(teacher, student, "HALLS1", block="A")
 
     _login_student(client, student, join_code="HALLS1")
-    response = client.get("/api/hall-pass/available-types?join_code=OTHER999")
+    other_scope = ClassEconomy(
+        join_code="OTHER999",
+        teacher_id=teacher.id,
+        status="active",
+        created_by_admin_id=teacher.id,
+    )
+    db.session.add(other_scope)
+    db.session.commit()
+    response = client.get(f"/api/hall-pass/available-types?class_id={other_scope.class_id}")
 
     assert response.status_code == 403
     payload = response.get_json()
     assert payload["status"] == "error"
 
 
-def test_hall_pass_available_types_requires_join_code(client):
+def test_hall_pass_available_types_requires_class_id(client):
     teacher, _ = _create_admin("teacher-hall-public")
     teacher.teacher_public_id = "crisp-otter-leaf"
     student = _create_student("PublicIdPassTypes", primary_teacher=teacher)

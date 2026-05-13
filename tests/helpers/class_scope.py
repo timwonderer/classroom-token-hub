@@ -1,5 +1,6 @@
 from app.extensions import db
 from app.models import ClassEconomy, ClassMembership, Seat, TeacherBlock
+from uuid import uuid4
 
 
 def create_class_scope(
@@ -20,7 +21,7 @@ def create_class_scope(
 ):
     """Create canonical class scope for tests under the v2 join-code model."""
     class_row = ClassEconomy(
-        class_id=join_code,
+        class_id=str(uuid4()),
         join_code=join_code,
         teacher_id=teacher.id,
         display_name=display_name,

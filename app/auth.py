@@ -314,7 +314,7 @@ def get_current_seat():
 
     Resolution order:
     1) seat_id/current_seat_id
-    2) student_id -> first Seat for that student
+    2) student_id + class_id/current_class_id exact match
     Returns None when context cannot be resolved safely.
     """
     from app.models import Seat
@@ -346,14 +346,7 @@ def get_current_seat():
             return seat
         return None
 
-    seat = (
-        Seat.query
-        .filter_by(student_id=student_id)
-        .order_by(Seat.id.asc())
-        .first()
-    )
-    g._auth_current_seat_cache = seat
-    return seat
+    return None
 
 
 def get_current_class_id():
@@ -362,14 +355,9 @@ def get_current_class_id():
 
     Resolution order:
     1) class_id/current_class_id
-    2) get_current_seat().class_id
     """
     class_id = _first_present_session_value('class_id', 'current_class_id')
-    if class_id:
-        return class_id
-
-    seat = get_current_seat()
-    return seat.class_id if seat else None
+    return class_id if class_id else None
 
 
 def get_current_user():
@@ -420,6 +408,7 @@ def switch_student_session_context(student, *, class_id: str, seat_id: int):
     Logs the transition and ensures all session keys are synchronized.
     """
     from flask import session, current_app
+    from app.models import User
     
     old_class = session.get('current_class_id')
     
@@ -429,6 +418,11 @@ def switch_student_session_context(student, *, class_id: str, seat_id: int):
     
     # 2. Sync seat/user identifiers via bridge utility
     seat = sync_student_session_context(student, class_id=class_id, seat_id=seat_id)
+    if seat and seat.user_id:
+        linked_user = db.session.get(User, seat.user_id)
+        if linked_user and linked_user.last_active_class_id != class_id:
+            linked_user.last_active_class_id = class_id
+            db.session.flush()
     
     # 3. Log the transition for audit clarity
     current_app.logger.info(
@@ -447,7 +441,7 @@ def sync_student_session_context(
     allow_writes: bool = False,
 ):
     """Backfill user/seat session keys for the current class context."""
-    from app.models import User, Seat, TeacherBlock, ClassMembership, ClassEconomy
+    from app.models import User, Seat
 
     if student is None and 'student_id' in session:
         student = get_logged_in_student()
@@ -469,9 +463,6 @@ def sync_student_session_context(
     
     if not seat and target_class_id:
         seat = Seat.query.filter_by(student_id=student.id, class_id=target_class_id).first()
-    
-    if not seat:
-        seat = Seat.query.filter_by(student_id=student.id).order_by(Seat.id.asc()).first()
 
     linked_user = None
     if seat and seat.user_id:
@@ -489,6 +480,17 @@ def sync_student_session_context(
             .first()
         )
 
+    # Durable identity-scoped class preference: resolve class first, then owned seat.
+    if not seat and linked_user and linked_user.last_active_class_id:
+        candidate_seat = Seat.query.filter_by(
+            student_id=student.id,
+            user_id=linked_user.id,
+            class_id=linked_user.last_active_class_id,
+        ).first()
+        if candidate_seat:
+            seat = candidate_seat
+            target_class_id = candidate_seat.class_id
+
     if not linked_user:
         if not allow_writes:
             linked_user = None
@@ -500,64 +502,10 @@ def sync_student_session_context(
             db.session.add(linked_user)
             db.session.flush()
 
+    # V2 invariant: seats are provisioned from canonical class setup/claim flow.
+    # Missing seat is invalid state and must not be auto-created here.
     if not seat:
-        chosen_membership = None
-        if target_join_code:
-            chosen_membership = ClassMembership.query.filter_by(
-                student_id=student.id,
-                join_code=target_join_code,
-            ).first()
-        if not chosen_membership:
-            chosen_membership = (
-                ClassMembership.query
-                .filter_by(student_id=student.id)
-                .order_by(ClassMembership.id.asc())
-                .first()
-            )
-
-        chosen_teacher_block = None
-        if target_join_code:
-            chosen_teacher_block = (
-                TeacherBlock.query
-                .filter_by(student_id=student.id, join_code=target_join_code)
-                .order_by(TeacherBlock.id.asc())
-                .first()
-            )
-        if not chosen_teacher_block:
-            chosen_teacher_block = (
-                TeacherBlock.query
-                .filter_by(student_id=student.id)
-                .order_by(TeacherBlock.id.asc())
-                .first()
-            )
-
-        resolved_join_code = (
-            target_join_code
-            or (chosen_membership.join_code if chosen_membership else None)
-            or (chosen_teacher_block.join_code if chosen_teacher_block else None)
-        )
-        resolved_class_id = (
-            target_class_id
-            or (chosen_teacher_block.class_id if chosen_teacher_block else None)
-        )
-        if not resolved_class_id and resolved_join_code:
-            class_anchor = ClassEconomy.query.filter_by(join_code=resolved_join_code).first()
-            if class_anchor:
-                resolved_class_id = class_anchor.class_id
-
-        if resolved_join_code and allow_writes and linked_user:
-            seat = Seat(
-                user_id=linked_user.id,
-                student_id=student.id,
-                role='student',
-                class_id=resolved_class_id,
-                join_code=resolved_join_code,
-                block_identifier=(chosen_teacher_block.block if chosen_teacher_block else None),
-                block=(chosen_teacher_block.block if chosen_teacher_block else None),
-                claimed_at=(chosen_teacher_block.claimed_at if chosen_teacher_block else None),
-            )
-            db.session.add(seat)
-            db.session.flush()
+        return None
 
     if seat and linked_user and seat.user_id != linked_user.id and allow_writes:
         seat.user_id = linked_user.id

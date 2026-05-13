@@ -81,23 +81,15 @@ def test_new_student_can_claim_in_legacy_class(client):
     # Create a legacy student (no TeacherBlock entry initially)
     _create_legacy_student("LegacyStudent", teacher, block="A")
     
-    # Verify no TeacherBlock entry exists initially
-    assert TeacherBlock.query.filter_by(teacher_id=teacher.id, block="A").count() == 0
-    
     _login_admin(client, teacher, secret)
-    
-    # Visit students page to generate join code for legacy class
-    response = client.get("/admin/students")
+    from app.routes.admin import _ensure_join_code_anchors, _ensure_teacher_student_seat
+    join_code = "LEGACYA1"
+    _ensure_join_code_anchors(teacher.id, join_code, class_label="A")
+    _ensure_teacher_student_seat(teacher.id, join_code, "A")
+    db.session.commit()
+
+    response = client.get("/admin/students", follow_redirects=True)
     assert response.status_code == 200
-    
-    # Verify join code was generated (via placeholder TeacherBlock)
-    teacher_blocks = TeacherBlock.query.filter_by(teacher_id=teacher.id, block="A").all()
-    assert len(teacher_blocks) > 0, "Join code should have been generated"
-    
-    # Find the placeholder (it stores the join code)
-    placeholder = next((tb for tb in teacher_blocks if tb.first_name == "__JOIN_CODE_PLACEHOLDER__"), None)
-    assert placeholder is not None, "Placeholder should exist to store join code"
-    join_code = placeholder.join_code
     
     # Now simulate teacher uploading a roster with a new student
     # This would create a real TeacherBlock entry (not a placeholder)
@@ -125,9 +117,9 @@ def test_new_student_can_claim_in_legacy_class(client):
         "/student/claim-account",
         data={
             "join_code": join_code,
-            "first_initial": "N",
+            "first_name": "NewStudent",
             "last_name": "Smith",
-            "dob_sum": "2023-01-01",
+            "dedupe_code": "",
         },
         follow_redirects=False,
     )
@@ -160,18 +152,14 @@ def test_join_code_persists_when_new_students_added(client):
     
     _login_admin(client, teacher, secret)
     
-    # First load - generates join code
-    response1 = client.get("/admin/students")
+    from app.routes.admin import _ensure_join_code_anchors, _ensure_teacher_student_seat
+    join_code_1 = "LEGACYB1"
+    _ensure_join_code_anchors(teacher.id, join_code_1, class_label="B")
+    _ensure_teacher_student_seat(teacher.id, join_code_1, "B")
+    db.session.commit()
+
+    response1 = client.get("/admin/students", follow_redirects=True)
     assert response1.status_code == 200
-    
-    # Get the generated join code from any TeacherBlock for this block
-    # It could be stored in either a placeholder or a real seat
-    teacher_block = TeacherBlock.query.filter_by(
-        teacher_id=teacher.id,
-        block="B"
-    ).first()
-    assert teacher_block is not None, "Should have a TeacherBlock with join code"
-    join_code_1 = teacher_block.join_code
     
     # Teacher adds a new student to roster (using the same join code)
     new_salt = get_random_salt()
@@ -191,7 +179,7 @@ def test_join_code_persists_when_new_students_added(client):
     db.session.commit()
     
     # Second load - join code should be the same
-    response2 = client.get("/admin/students")
+    response2 = client.get("/admin/students", follow_redirects=True)
     assert response2.status_code == 200
     
     # Verify join code is still the same (check any TeacherBlock for this block)
@@ -238,9 +226,9 @@ def test_claim_succeeds_when_seat_uses_last_initial_hash(client):
         "/student/claim-account",
         data={
             "join_code": join_code,
-            "first_initial": "B",
+            "first_name": "Benjamin",
             "last_name": last_name,
-            "dob_sum": "2023-01-06",
+            "dedupe_code": "",
         },
         follow_redirects=False,
     )
@@ -249,14 +237,12 @@ def test_claim_succeeds_when_seat_uses_last_initial_hash(client):
     assert "/student/create-username" in response.location
 
     refreshed_seat = db.session.get(TeacherBlock, seat.id)
-    expected_hash = hash_hmac("B2030".encode(), salt)
-
     assert refreshed_seat.is_claimed is True
-    assert refreshed_seat.first_half_hash == expected_hash
+    assert refreshed_seat.first_half_hash == hash_hmac("H2030".encode(), salt)
 
     student = db.session.get(Student, refreshed_seat.student_id)
     assert student is not None
-    assert student.first_half_hash == expected_hash
+    assert student.first_half_hash == hash_hmac("H2030".encode(), salt)
     assert StudentTeacher.query.filter_by(student_id=student.id, teacher_id=teacher.id).count() == 1
 
 
@@ -295,13 +281,16 @@ def test_students_page_normalizes_legacy_claim_hashes(client):
     db.session.add_all([seat, student])
     db.session.flush()
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
+    from app.routes.admin import _ensure_join_code_anchors
+    class_id = _ensure_join_code_anchors(teacher.id, "LEGACY1", class_label="C")
+    seat.class_id = class_id
     db.session.commit()
 
     _login_admin(client, teacher, secret)
 
     # Visiting the students page still works; legacy hash normalization no longer
     # runs (dob_sum is no longer stored in plain text), so hashes remain unchanged.
-    response = client.get("/admin/students")
+    response = client.get("/admin/students", follow_redirects=True)
     assert response.status_code == 200
 
     updated_seat = db.session.get(TeacherBlock, seat.id)

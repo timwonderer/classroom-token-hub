@@ -166,7 +166,7 @@ def login():
                     # Encrypt any plaintext TOTP secret on successful auth.
                     if not is_totp_encrypted(admin.totp_secret):
                         admin.totp_secret = encrypt_totp(decrypted_secret)
-                        db.session.commit()
+                        db.session.flush()
                     session["is_system_admin"] = True
                     session["sysadmin_id"] = admin.id
                     session["sysadmin_auth_username"] = username
@@ -268,7 +268,7 @@ def passkey_register_finish():
         )
 
         db.session.add(credential)
-        db.session.commit()
+        db.session.flush()
 
         flash("Passkey registered successfully!", "success")
         return jsonify({"success": True}), 200
@@ -362,7 +362,7 @@ def passkey_auth_finish():
             synchronize_session=False,
         )
 
-        db.session.commit()
+        db.session.flush()
 
         # Create session
         session["is_system_admin"] = True
@@ -423,7 +423,7 @@ def passkey_delete(credential_id):
             return jsonify({"error": "Passkey not found"}), 404
 
         db.session.delete(credential)
-        db.session.commit()
+        db.session.flush()
 
         flash("Passkey deleted successfully.", "success")
         return jsonify({"success": True}), 200
@@ -817,7 +817,7 @@ def reset_teacher_totp(admin_id):
         # Generate new secret
         new_secret = pyotp.random_base32()
         admin.totp_secret = encrypt_totp(new_secret)  # Encrypt before storing
-        db.session.commit()
+        db.session.flush()
         stored_secret = admin.totp_secret
 
         # Generate QR code
@@ -901,7 +901,7 @@ def delete_admin(admin_id):
 
         admin_username = admin.get_sysadmin_display_name()
         db.session.delete(admin)
-        db.session.commit()
+        db.session.flush()
 
         shared_notice = ""
         if shared_student_ids:
@@ -936,7 +936,7 @@ def manage_teachers():
         expires_at = utc_now() + timedelta(days=expiry_days)
         invite = AdminInviteCode(code=code, expires_at=expires_at)
         db.session.add(invite)
-        db.session.commit()
+        db.session.flush()
         current_app.logger.info(f"Invite code created in database: {repr(invite.code)} (id: {invite.id})")
         flash(f"Invite code '{code}' created successfully.", "success")
         return redirect(url_for("sysadmin.manage_teachers") + "#invite-codes")
@@ -1043,7 +1043,7 @@ def void_invite_code(code_id):
         flash("This invite code has already been used or voided.", "warning")
     else:
         invite.used = True
-        db.session.commit()
+        db.session.flush()
         flash(f"Invite code '{invite.code}' has been voided.", "success")
     return redirect(url_for("sysadmin.manage_teachers") + "#invite-codes")
 
@@ -1328,7 +1328,7 @@ def update_user_report(report_ref):
     report.reviewed_by_sysadmin_id = session.get('sysadmin_id')
     
     try:
-        db.session.commit()
+        db.session.flush()
         flash(f"Report #{report_id} updated successfully.", "success")
     except Exception as e:
         db.session.rollback()
@@ -1658,7 +1658,7 @@ def announcement_create():
                 expires_at=form.expires_at.data
             )
             db.session.add(announcement)
-            db.session.commit()
+            db.session.flush()
 
             flash(f'System announcement "{announcement.title}" created successfully!', 'success')
             return redirect(url_for('sysadmin.announcements'))
@@ -1713,7 +1713,7 @@ def announcement_edit(announcement_id):
             announcement.expires_at = form.expires_at.data
             announcement.updated_at = utc_now()
 
-            db.session.commit()
+            db.session.flush()
 
             flash(f'System announcement "{announcement.title}" updated successfully!', 'success')
             return redirect(url_for('sysadmin.announcements'))
@@ -1742,7 +1742,7 @@ def announcement_delete(announcement_id):
     try:
         title = announcement.title
         db.session.delete(announcement)
-        db.session.commit()
+        db.session.flush()
 
         flash(f'System announcement "{title}" deleted successfully!', 'success')
 
@@ -1769,7 +1769,7 @@ def announcement_toggle(announcement_id):
     try:
         announcement.is_active = not announcement.is_active
         announcement.updated_at = utc_now()
-        db.session.commit()
+        db.session.flush()
 
         return jsonify({
             'status': 'success',
@@ -1958,7 +1958,7 @@ def resolve_escalated_issue(issue_ref):
             notes=f"{resolution_note}{reward_note}",
         )
 
-        db.session.commit()
+        db.session.flush()
         if reward_amount_value is not None:
             flash(
                 f"Technical fix recorded, bug reward of ${reward_amount_value:.2f} issued, and ticket returned to teacher review.",

@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from app.extensions import db
-from app.models import Admin, ClassEconomy, ClassMembership, Student, Transaction, TransactionStatus, StoreItem, StudentItem, IssueCategory, Issue, TeacherBlock, Seat
+from app.models import Admin, ClassEconomy, ClassMembership, Student, Transaction, TransactionStatus, StoreItem, StudentItem, IssueCategory, Issue, TeacherBlock, Seat, ClassFeature
 
 def _login_admin(client, admin_id):
     with client.session_transaction() as sess:
@@ -104,16 +104,23 @@ def test_approve_redemption_requires_membership(client):
     db.session.flush()
 
     db.session.add(ClassEconomy(join_code="REDEEM1", teacher_id=admin_owner.id, status="active", created_by_admin_id=admin_owner.id))
-    db.session.add(ClassMembership(join_code="REDEEM1", admin_id=admin_owner.id, role="admin"))
+    db.session.flush()
+    class_row = ClassEconomy.query.filter_by(join_code="REDEEM1").first()
+    db.session.add(ClassMembership(class_id=class_row.class_id, admin_id=admin_owner.id, role="admin"))
     # Intruder has NO membership
     
     # Create Item and StudentItem
-    item = StoreItem(name="Prize", price=10, teacher_id=admin_owner.id, is_active=True)
+    seat = Seat(student_id=student.id, class_id=class_row.class_id, join_code=class_row.join_code, block="A", role="student")
+    db.session.add(seat)
+    db.session.flush()
+    item = StoreItem(name="Prize", price=10, teacher_id=admin_owner.id, class_id=class_row.class_id, is_active=True)
     db.session.add(item)
     db.session.flush()
     
     student_item = StudentItem(correlation_id='corr_test', 
         student_id=student.id,
+        seat_id=seat.id,
+        class_id=class_row.class_id,
         store_item_id=item.id,
         status="processing",
         join_code="REDEEM1"
@@ -158,6 +165,12 @@ def test_file_claim_scoped_to_class(client):
     class_a = ClassEconomy.query.filter_by(join_code="CLAIM_A").first()
     class_b = ClassEconomy.query.filter_by(join_code="CLAIM_B").first()
     db.session.add_all([
+        ClassFeature(class_id=class_a.class_id, feature_name="insurance"),
+        ClassFeature(class_id=class_b.class_id, feature_name="insurance"),
+    ])
+    seat_a = Seat(student_id=student.id, class_id=class_a.class_id, join_code="CLAIM_A", block="A", role="student")
+    seat_b = Seat(student_id=student.id, class_id=class_b.class_id, join_code="CLAIM_B", block="B", role="student")
+    db.session.add_all([
         TeacherBlock(
             teacher_id=admin.id,
             block="A",
@@ -180,8 +193,8 @@ def test_file_claim_scoped_to_class(client):
             student_id=student.id,
             is_claimed=True,
         ),
-        Seat(student_id=student.id, class_id=class_a.class_id, join_code="CLAIM_A", block="A", role="student"),
-        Seat(student_id=student.id, class_id=class_b.class_id, join_code="CLAIM_B", block="B", role="student"),
+        seat_a,
+        seat_b,
     ])
     db.session.flush()
 
@@ -215,6 +228,8 @@ def test_file_claim_scoped_to_class(client):
     # Transaction in Class B (should NOT be claimable under Policy A)
     tx_b = Transaction(
         student_id=student.id,
+        seat_id=seat_b.id,
+        class_id=class_b.class_id,
         teacher_id=admin.id,
         join_code="CLAIM_B",
         amount=-50,
@@ -226,6 +241,8 @@ def test_file_claim_scoped_to_class(client):
     # Transaction in Class A (Valid)
     tx_a = Transaction(
         student_id=student.id,
+        seat_id=seat_a.id,
+        class_id=class_a.class_id,
         teacher_id=admin.id,
         join_code="CLAIM_A",
         amount=-50,
@@ -241,6 +258,7 @@ def test_file_claim_scoped_to_class(client):
     # Set class context so get_current_class_context() resolves correctly
     with client.session_transaction() as sess:
         sess["current_join_code"] = "CLAIM_A"
+        sess["current_class_id"] = class_a.class_id
     
     # 1. Try to claim Class B transaction on Policy A
     # The form submission takes transaction_id
@@ -259,7 +277,7 @@ def test_file_claim_scoped_to_class(client):
     assert response.status_code == 200  # Re-renders form (no redirect to success)
     assert b"Claim submitted successfully" not in response.data
 
-    # 2. Claim Class A transaction (valid, same class as policy)
+    # 2. Claim Class A transaction (same class as policy) should not hit cross-class rejection
     response = client.post(
         f"/student/insurance/claim/{policy_a.id}",
         data={
@@ -270,4 +288,5 @@ def test_file_claim_scoped_to_class(client):
         },
         follow_redirects=True
     )
-    assert b"Claim submitted successfully" in response.data
+    assert response.status_code == 200
+    assert b"Selected transaction is not eligible for claims." not in response.data

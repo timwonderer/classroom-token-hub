@@ -1,5 +1,6 @@
 from functools import wraps
 
+import sqlalchemy as sa
 from app.extensions import db
 from app.models import TapEvent, Student, Transaction, PayrollSettings, ClassEconomy
 from datetime import datetime, timezone
@@ -236,15 +237,14 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
 def _get_batch_pay_rates(teacher_id):
     """Batch fetch pay rates for a teacher."""
     from decimal import Decimal
-    class_ids_subq = (
-        db.session.query(ClassEconomy.class_id)
+    class_ids_select = (
+        sa.select(ClassEconomy.class_id)
         .filter(ClassEconomy.teacher_id == teacher_id)
-        .subquery()
     )
     settings = (
         PayrollSettings.query
         .filter(
-            PayrollSettings.class_id.in_(class_ids_subq),
+            PayrollSettings.class_id.in_(class_ids_select),
             PayrollSettings.is_active.is_(True),
         )
         .all()

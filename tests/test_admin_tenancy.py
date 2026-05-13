@@ -4,7 +4,7 @@ import re
 from datetime import datetime, timezone, timedelta
 
 from app import db
-from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TapEvent, StudentBlock, PayrollSettings, User, Seat
+from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TapEvent, StudentBlock, PayrollSettings, User, Seat, ClassEconomy
 from app.hash_utils import get_random_salt, hash_username
 from tests.helpers.class_scope import create_class_scope
 
@@ -31,6 +31,17 @@ def _create_student(first_name: str, teacher: Admin) -> Student:
     db.session.flush()
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.commit()
+    create_class_scope(
+        teacher=teacher,
+        join_code=f"T{teacher.id}S{student.id}",
+        student=student,
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
+    db.session.commit()
     return student
 
 
@@ -43,6 +54,14 @@ def _login_admin(client, admin: Admin, secret: str):
     with client.session_transaction() as sess:
         sess.setdefault("is_admin", True)
         sess.setdefault("admin_id", admin.id)
+        class_row = (
+            db.session.query(ClassEconomy.class_id, ClassEconomy.join_code)
+            .filter(ClassEconomy.teacher_id == admin.id)
+            .first()
+        )
+        if class_row:
+            sess["current_class_id"] = class_row.class_id
+            sess["current_join_code"] = class_row.join_code
         sess["last_activity"] = datetime.now(timezone.utc).isoformat()
     return response
 
@@ -83,6 +102,16 @@ def test_shared_student_accessible_to_multiple_teachers(client):
 
     # Grant teacher B access to the shared student without changing the primary teacher
     db.session.add(StudentTeacher(student_id=shared_student.id, teacher_id=teacher_b.id))
+    create_class_scope(
+        teacher=teacher_b,
+        join_code=f"T{teacher_b.id}SHARED",
+        student=shared_student,
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
     db.session.commit()
 
     _login_admin(client, teacher_b, secret_b)
@@ -138,11 +167,11 @@ def test_student_detail_recovers_from_stale_class_context(client):
                 join_code="JOINA",
             ),
         )
-        db.session.commit()
+        db.session.flush()
 
     _login_admin(client, teacher, secret)
     with client.session_transaction() as sess:
-        sess["current_join_code"] = "JOINB"
+        sess["current_class_id"] = class_b.class_id
 
     response = client.get(f"/admin/students/{student_a.id}")
     body = response.get_data(as_text=True)
@@ -551,6 +580,7 @@ def test_enforce_daily_limits_taps_out_when_limit_reached_in_scope(client):
     with client.session_transaction() as sess:
         sess["is_admin"] = True
         sess["admin_id"] = teacher.id
+        sess["current_class_id"] = class_scope.class_id
         sess["last_activity"] = datetime.now(timezone.utc).isoformat()
     response = client.post("/admin/enforce-daily-limits")
     payload = response.get_json()
@@ -688,7 +718,7 @@ def test_edit_student_transfer_updates_transaction_seat_scope(client):
             description="pre-transfer",
         )
         db.session.add(tx)
-        db.session.commit()
+        db.session.flush()
 
     _login_admin(client, teacher, secret)
     response = client.post(

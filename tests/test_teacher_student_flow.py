@@ -59,9 +59,9 @@ def test_teacher_student_lifecycle(client, teacher, app):
         # 2. Claim the account (Step 1)
         response = client.post('/student/claim-account', data={
             'join_code': join_code,
-            'first_initial': 'T',
+            'first_name': 'Teacher',
             'last_name': 'Student',
-            'dob_sum': '2001-01-01'
+            'dedupe_code': ''
         }, follow_redirects=True)
 
         assert response.status_code == 200
@@ -313,9 +313,9 @@ def test_teacher_student_reuses_identity_across_join_codes(client, teacher, app)
         # Claim seat in class A
         response = client.post('/student/claim-account', data={
             'join_code': join_code_a,
-            'first_initial': 'T',
+            'first_name': 'Teacher',
             'last_name': 'Student',
-            'dob_sum': '2001-01-01'
+            'dedupe_code': ''
         }, follow_redirects=True)
         assert response.status_code == 200
 
@@ -350,9 +350,9 @@ def test_teacher_student_reuses_identity_across_join_codes(client, teacher, app)
         # Claim seat in class B (should reuse the existing teacher-shadow identity)
         response = client.post('/student/claim-account', data={
             'join_code': join_code_b,
-            'first_initial': 'T',
+            'first_name': 'Teacher',
             'last_name': 'Student',
-            'dob_sum': '2001-01-01'
+            'dedupe_code': ''
         }, follow_redirects=True)
         assert response.status_code == 200
 

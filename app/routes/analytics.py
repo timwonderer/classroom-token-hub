@@ -17,6 +17,7 @@ from flask import Blueprint, session, jsonify, request, flash, redirect, url_for
 from sqlalchemy import desc
 
 from app.extensions import db, limiter
+from app.feats.base import feat_shell
 from app.auth import admin_required
 from app.models import (
     Admin, AnalyticsAlert, AnalyticsEvent,
@@ -53,8 +54,15 @@ def get_teacher_class_options(teacher_id: int):
     for tb in teacher_blocks:
         if not tb.join_code or tb.join_code in seen_join_codes:
             continue
+        class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
+            teacher_id=teacher_id,
+            join_code=tb.join_code,
+        ).first()
+        if not class_row or not class_row[0]:
+            continue
         seen_join_codes.add(tb.join_code)
         options.append({
+            'class_id': class_row[0],
             'join_code': tb.join_code,
             'block': (tb.block or '').strip().upper(),
             'label': tb.get_class_label()
@@ -81,6 +89,31 @@ def resolve_current_join_code(teacher_id: int):
     return selected_join_code, available_classes
 
 
+def resolve_current_class_context(teacher_id: int):
+    """Resolve class context using class_id as authority; join_code is derived alias."""
+    available_classes = get_teacher_class_options(teacher_id)
+    by_class_id = {
+        (item.get('class_id') or ''): item
+        for item in available_classes
+        if item.get('class_id')
+    }
+
+    selected = None
+    session_class_id = (session.get('current_class_id') or '').strip()
+    if session_class_id:
+        selected = by_class_id.get(session_class_id)
+
+    if not selected and available_classes:
+        selected = available_classes[0]
+
+    if not selected:
+        return None, available_classes
+
+    session['current_class_id'] = selected['class_id']
+    session['current_join_code'] = selected['join_code']
+    return selected, available_classes
+
+
 def get_block_for_join_code(join_code: str):
     block_row = StudentBlock.query.with_entities(StudentBlock.period).filter(
         StudentBlock.join_code == join_code
@@ -91,18 +124,10 @@ def get_block_for_join_code(join_code: str):
     return None
 
 
-def _get_payroll_settings_for_join_code(teacher_id: int, join_code: str):
+def _get_payroll_settings_for_class_id(teacher_id: int, class_id: str):
     """Resolve payroll settings for a selected class via class_id authority."""
-    if not teacher_id or not join_code:
+    if not teacher_id or not class_id:
         return None
-
-    class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
-        teacher_id=teacher_id,
-        join_code=join_code,
-    ).first()
-    if not class_row or not class_row[0]:
-        return None
-    class_id = class_row[0]
 
     return (
         PayrollSettings.query.filter(
@@ -113,25 +138,23 @@ def _get_payroll_settings_for_join_code(teacher_id: int, join_code: str):
     )
 
 
-def get_pay_cycle_days(teacher_id: int, join_code: str) -> int:
-    payroll_settings = _get_payroll_settings_for_join_code(teacher_id, join_code)
+def get_pay_cycle_days(teacher_id: int, class_id: str | None = None, join_code: str | None = None) -> int:
+    if not class_id and join_code:
+        class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
+            teacher_id=teacher_id,
+            join_code=join_code,
+        ).first()
+        class_id = class_row[0] if class_row and class_row[0] else None
+    payroll_settings = _get_payroll_settings_for_class_id(teacher_id, class_id) if class_id else None
     if payroll_settings and payroll_settings.payroll_frequency_days:
         return payroll_settings.payroll_frequency_days
     return 7
 
 
-def _get_rent_settings_for_join_code(teacher_id: int, join_code: str):
+def _get_rent_settings_for_class_id(teacher_id: int, class_id: str):
     """Resolve rent settings for a selected class via class_id authority."""
-    if not teacher_id or not join_code:
+    if not teacher_id or not class_id:
         return None
-
-    class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
-        teacher_id=teacher_id,
-        join_code=join_code,
-    ).first()
-    if not class_row or not class_row[0]:
-        return None
-    class_id = class_row[0]
 
     return (
         RentSettings.query.filter(
@@ -142,8 +165,14 @@ def _get_rent_settings_for_join_code(teacher_id: int, join_code: str):
     )
 
 
-def get_rent_cycle_days(teacher_id: int, join_code: str) -> int:
-    rent_settings = _get_rent_settings_for_join_code(teacher_id, join_code)
+def get_rent_cycle_days(teacher_id: int, class_id: str | None = None, join_code: str | None = None) -> int:
+    if not class_id and join_code:
+        class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
+            teacher_id=teacher_id,
+            join_code=join_code,
+        ).first()
+        class_id = class_row[0] if class_row and class_row[0] else None
+    rent_settings = _get_rent_settings_for_class_id(teacher_id, class_id) if class_id else None
     if not rent_settings:
         return 30
     frequency_type = rent_settings.frequency_type or 'monthly'
@@ -165,7 +194,7 @@ def get_rent_cycle_days(teacher_id: int, join_code: str) -> int:
 def get_time_window(
     window_type: str,
     teacher_id: int,
-    join_code: str,
+    class_id: str,
     custom_start=None,
     custom_end=None
 ):
@@ -193,12 +222,12 @@ def get_time_window(
         window_end = anchored_end
     elif window_type == 'pay_cycle':
         # Based on payroll frequency (default 7 days)
-        pay_cycle_days = get_pay_cycle_days(teacher_id, join_code)
+        pay_cycle_days = get_pay_cycle_days(teacher_id, class_id=class_id)
         window_start = anchored_end - timedelta(days=pay_cycle_days)
         window_end = anchored_end
     elif window_type == 'rent_cycle':
         # Based on rent frequency (default monthly)
-        rent_cycle_days = get_rent_cycle_days(teacher_id, join_code)
+        rent_cycle_days = get_rent_cycle_days(teacher_id, class_id=class_id)
         window_start = anchored_end - timedelta(days=rent_cycle_days)
         window_end = anchored_end
     elif window_type == 'custom' and custom_start and custom_end:
@@ -225,18 +254,19 @@ def dashboard():
     - Auto-updating
     """
     teacher_id = session.get('admin_id')
-    join_code, available_classes = resolve_current_join_code(teacher_id)
-    
-    if not join_code:
+    selected_class, available_classes = resolve_current_class_context(teacher_id)
+    if not selected_class:
         flash('You need to set up class periods before viewing analytics.', 'warning')
         return redirect(url_for('admin.students'))
+    join_code = selected_class['join_code']
+    class_id = selected_class['class_id']
 
     # Get or set time window preference, validated against allowed values
     requested_window_type = request.args.get('window', 'week')
     window_type = requested_window_type if requested_window_type in ALLOWED_WINDOW_TYPES else 'week'
     
     # Calculate time window
-    window_start, window_end = get_time_window(window_type, teacher_id, join_code)
+    window_start, window_end = get_time_window(window_type, teacher_id, class_id)
     
     # Initialize analytics engine
     engine = AnalyticsEngine(teacher_id, join_code)
@@ -271,8 +301,6 @@ def dashboard():
     
     # Get teacher info for display
     teacher = db.session.get(Admin, teacher_id)
-    current_class = next((c for c in available_classes if c['join_code'] == join_code), None)
-    
     return render_template(
         'admin_analytics_dashboard.html',
         snapshot=snapshot,
@@ -284,7 +312,7 @@ def dashboard():
         teacher=teacher,
         join_code=join_code,
         available_classes=available_classes,
-        current_class_label=current_class['label'] if current_class else None,
+        current_class_label=selected_class['label'],
         current_page='analytics'
     )
 
@@ -299,16 +327,17 @@ def api_snapshot(window_type):
     Returns JSON with system health metrics.
     """
     teacher_id = session.get('admin_id')
-    join_code = session.get('current_join_code')
-    
-    if not join_code:
+    selected_class, _ = resolve_current_class_context(teacher_id)
+    if not selected_class:
         return jsonify({'error': 'No class period selected'}), 400
+    join_code = selected_class['join_code']
+    class_id = selected_class['class_id']
 
     if window_type not in ALLOWED_WINDOW_TYPES:
         return jsonify({'error': 'Invalid window type'}), 400
     
     # Calculate time window
-    window_start, window_end = get_time_window(window_type, teacher_id, join_code)
+    window_start, window_end = get_time_window(window_type, teacher_id, class_id)
     
     # Initialize analytics engine
     engine = AnalyticsEngine(teacher_id, join_code)
@@ -364,15 +393,16 @@ def api_alerts():
               id, type, severity, what_changed, why_it_matters, suggested_action,
               triggered_at, and acknowledged.
     """
-    join_code = session.get('current_join_code')
-    
-    if not join_code:
+    teacher_id = session.get('admin_id')
+    selected_class, _ = resolve_current_class_context(teacher_id)
+    if not selected_class:
         return jsonify({'error': 'No class period selected'}), 400
+    join_code = selected_class['join_code']
+    class_id = selected_class['class_id']
 
     requested_window_type = request.args.get('window', 'week')
     window_type = requested_window_type if requested_window_type in ALLOWED_WINDOW_TYPES else 'week'
-    teacher_id = session.get('admin_id')
-    window_start, window_end = get_time_window(window_type, teacher_id, join_code)
+    window_start, window_end = get_time_window(window_type, teacher_id, class_id)
     
     active_alerts = AnalyticsAlert.query.filter(
         AnalyticsAlert.join_code == join_code,
@@ -404,12 +434,17 @@ def api_alerts():
 
 @analytics_bp.route('/alert/<int:alert_id>/acknowledge', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ANLY-001")
 def acknowledge_alert(alert_id):
     """
     Mark an alert as acknowledged by the teacher.
     """
     teacher_id = session.get('admin_id')
-    join_code = session.get('current_join_code')
+    selected_class, _ = resolve_current_class_context(teacher_id)
+    if not selected_class:
+        flash('Alert not found.', 'danger')
+        return redirect(url_for('analytics.dashboard'))
+    join_code = selected_class['join_code']
     
     alert = AnalyticsAlert.query.filter(
         AnalyticsAlert.id == alert_id,
@@ -422,7 +457,7 @@ def acknowledge_alert(alert_id):
         return redirect(url_for('analytics.dashboard'))
     
     alert.acknowledge()
-    db.session.commit()
+    db.session.flush()
     flash('Alert acknowledged.', 'success')
     
     return redirect(url_for('analytics.dashboard'))
@@ -439,11 +474,11 @@ def events():
     - Provides context for understanding metric changes.
     """
     teacher_id = session.get('admin_id')
-    join_code, available_classes = resolve_current_join_code(teacher_id)
-    
-    if not join_code:
+    selected_class, available_classes = resolve_current_class_context(teacher_id)
+    if not selected_class:
         flash('You need to set up class periods before viewing analytics.', 'warning')
         return redirect(url_for('admin.students'))
+    join_code = selected_class['join_code']
     
     # Get all events for this class
     events_list = AnalyticsEvent.query.filter(
@@ -483,11 +518,11 @@ def student_drill_down(student_id):
     - Must explain why the metric matters
     """
     teacher_id = session.get('admin_id')
-    join_code, available_classes = resolve_current_join_code(teacher_id)
-    
-    if not join_code:
+    selected_class, available_classes = resolve_current_class_context(teacher_id)
+    if not selected_class:
         flash('You need to set up class periods before viewing analytics.', 'warning')
         return redirect(url_for('admin.students'))
+    join_code = selected_class['join_code']
     
     # Get student with scoping
     student = Student.query.join(

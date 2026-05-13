@@ -5,7 +5,7 @@ from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone, timedelta
 from app import app, db
-from app.models import Admin, Student, TapEvent, TapEventReasonCode, StudentTeacher
+from app.models import Admin, Student, TapEvent, TapEventReasonCode, StudentTeacher, ClassEconomy, ClassMembership, Seat
 from app.hash_utils import hash_username, get_random_salt
 from werkzeug.security import generate_password_hash
 
@@ -35,6 +35,24 @@ def admin_with_students(client):
     # CRITICAL FIX: Create StudentTeacher association for multi-tenancy
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=admin.id))
     db.session.flush()
+    class_row = ClassEconomy(
+        join_code="ATTEND_A",
+        teacher_id=admin.id,
+        status="active",
+        created_by_admin_id=admin.id,
+    )
+    db.session.add(class_row)
+    db.session.flush()
+    db.session.add(ClassMembership(class_id=class_row.class_id, admin_id=admin.id, role="admin"))
+    seat = Seat(
+        student_id=student.id,
+        class_id=class_row.class_id,
+        join_code=class_row.join_code,
+        block="A",
+        role="student",
+    )
+    db.session.add(seat)
+    db.session.flush()
 
     # Create some tap events for this student
     now_utc = datetime.now(timezone.utc)
@@ -42,6 +60,9 @@ def admin_with_students(client):
     # Tap in event (1 hour ago)
     tap_in = TapEvent(
         student_id=student.id,
+        seat_id=seat.id,
+        class_id=class_row.class_id,
+        join_code=class_row.join_code,
         period='A',
         status='active',
         timestamp=now_utc - timedelta(hours=1)
@@ -51,6 +72,9 @@ def admin_with_students(client):
     # Tap out event (30 minutes ago)
     tap_out = TapEvent(
         student_id=student.id,
+        seat_id=seat.id,
+        class_id=class_row.class_id,
+        join_code=class_row.join_code,
         period='A',
         status='inactive',
         timestamp=now_utc - timedelta(minutes=30),
@@ -63,6 +87,9 @@ def admin_with_students(client):
     return {
         'admin': admin,
         'student': student,
+        'seat': seat,
+        'class_id': class_row.class_id,
+        'join_code': class_row.join_code,
         'tap_events': [tap_in, tap_out]
     }
 
@@ -75,6 +102,8 @@ def test_attendance_history_returns_records(client, admin_with_students):
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin.id
+        sess['current_class_id'] = admin_with_students['class_id']
+        sess['current_join_code'] = admin_with_students['join_code']
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
     
     # Call the API endpoint
@@ -106,6 +135,8 @@ def test_attendance_history_with_date_filters(client, admin_with_students):
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin.id
+        sess['current_class_id'] = admin_with_students['class_id']
+        sess['current_join_code'] = admin_with_students['join_code']
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
     
     # Use the tap event date to avoid timezone-boundary flakiness.
@@ -168,18 +199,36 @@ def test_attendance_history_tenant_scoping(client):
     db.session.add(StudentTeacher(student_id=student1.id, teacher_id=admin1.id))
     db.session.add(StudentTeacher(student_id=student2.id, teacher_id=admin2.id))
     db.session.flush()
+    class1 = ClassEconomy(join_code="ATTEND_1", teacher_id=admin1.id, status="active", created_by_admin_id=admin1.id)
+    class2 = ClassEconomy(join_code="ATTEND_2", teacher_id=admin2.id, status="active", created_by_admin_id=admin2.id)
+    db.session.add_all([class1, class2])
+    db.session.flush()
+    db.session.add_all([
+        ClassMembership(class_id=class1.class_id, admin_id=admin1.id, role="admin"),
+        ClassMembership(class_id=class2.class_id, admin_id=admin2.id, role="admin"),
+    ])
+    seat1 = Seat(student_id=student1.id, class_id=class1.class_id, join_code=class1.join_code, block="A", role="student")
+    seat2 = Seat(student_id=student2.id, class_id=class2.class_id, join_code=class2.join_code, block="B", role="student")
+    db.session.add_all([seat1, seat2])
+    db.session.flush()
 
     # Create tap events for both students
     now_utc = datetime.now(timezone.utc)
     
     tap1 = TapEvent(
         student_id=student1.id,
+        seat_id=seat1.id,
+        class_id=class1.class_id,
+        join_code=class1.join_code,
         period='A',
         status='active',
         timestamp=now_utc
     )
     tap2 = TapEvent(
         student_id=student2.id,
+        seat_id=seat2.id,
+        class_id=class2.class_id,
+        join_code=class2.join_code,
         period='B',
         status='active',
         timestamp=now_utc
@@ -191,6 +240,8 @@ def test_attendance_history_tenant_scoping(client):
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin1.id
+        sess['current_class_id'] = class1.class_id
+        sess['current_join_code'] = class1.join_code
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
     
     # Call the API endpoint as admin1
@@ -203,7 +254,8 @@ def test_attendance_history_tenant_scoping(client):
     # Admin1 should only see student1's record, not student2's
     assert data['total'] == 1, f"Admin1 should see exactly 1 record, got {data['total']}"
     assert len(data['records']) == 1
-    assert data['records'][0]['student_id'] == student1.id
+    assert data['records'][0]['student_block'] == 'A'
+    assert data['records'][0]['student_name'].startswith('Student')
 
 
 def test_attendance_history_excludes_deleted_records(client, admin_with_students):
@@ -215,6 +267,9 @@ def test_attendance_history_excludes_deleted_records(client, admin_with_students
     now_utc = datetime.now(timezone.utc)
     deleted_tap = TapEvent(
         student_id=student.id,
+        seat_id=admin_with_students['seat'].id,
+        class_id=admin_with_students['class_id'],
+        join_code=admin_with_students['join_code'],
         period='B',
         status='active',
         timestamp=now_utc - timedelta(minutes=15),
@@ -229,6 +284,8 @@ def test_attendance_history_excludes_deleted_records(client, admin_with_students
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin.id
+        sess['current_class_id'] = admin_with_students['class_id']
+        sess['current_join_code'] = admin_with_students['join_code']
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
     
     # Call the API endpoint
@@ -258,27 +315,33 @@ def test_attendance_history_dedupes_duplicate_daily_limit_tapouts(client, admin_
     # Simulate duplicate inserts from concurrent workers.
     db.session.add(TapEvent(
         student_id=student.id,
+        seat_id=admin_with_students['seat'].id,
+        class_id=admin_with_students['class_id'],
+        join_code=admin_with_students['join_code'],
         period='A',
         status='inactive',
         timestamp=duplicate_ts,
         reason=reason,
         reason_code=TapEventReasonCode.DAILY_LIMIT,
-        join_code='TEST123'
     ))
     db.session.add(TapEvent(
         student_id=student.id,
+        seat_id=admin_with_students['seat'].id,
+        class_id=admin_with_students['class_id'],
+        join_code=admin_with_students['join_code'],
         period='A',
         status='inactive',
         timestamp=duplicate_ts,
         reason=reason,
         reason_code=TapEventReasonCode.DAILY_LIMIT,
-        join_code='TEST123'
     ))
     db.session.commit()
 
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin.id
+        sess['current_class_id'] = admin_with_students['class_id']
+        sess['current_join_code'] = admin_with_students['join_code']
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
 
     response = client.get('/api/attendance/history')

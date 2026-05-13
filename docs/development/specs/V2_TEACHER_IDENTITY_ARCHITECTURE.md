@@ -1,47 +1,114 @@
-# V2 Teacher Identity Architecture: Migration & Tracking
+# Classroom Token Hub (CTH) v2 Teacher Identity Architecture
 
-This document tracks the transitional state and migration TODOs for moving from the current v1 runtime (using `Admin`, `TeacherBlock`, etc.) to the pure v2 Identity model defined in `DOM-IDEN-001`, `DOM-IDEN-003`, and `DOM-IDEN-004`.
+## Purpose
 
-It specifies the "Current -> v2" paths that must be completed during Project 9.
+This document defines the canonical v2 identity model for teacher participation in CTH.
 
-## 1. Core Identity Migration (Project 9)
+This is a pure v2 architecture document. It is not a migration tracker, it does not define dual-runtime behavior, and it does not authorize legacy identity fallback.
 
-**Current Runtime:**
-- Active teacher identity lives in the `Admin` model (mapped to `teachers` table).
-- Teacher authentication and session management flow through `Admin`.
-- The `Seat` model exists only as scaffolding.
-- Passkeys are stored in the separate `AdminCredential` table.
+## Constitutional References
 
-**Target (v2) Migration:**
-- Cutover teacher identity to the `users` table (`user_role = 'teacher'`).
-- Migrate `Admin.totp_secret` to `users.totp_secret_encrypted`.
-- Merge `AdminCredential` records into `users.passkey_credential_id`.
-- Transition the session management to flow exclusively through `users`.
-- Drop the `teachers` and `AdminCredential` tables once migration is complete.
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_Core_Invariants.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-001_Scoped_Request_Context.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-013_Membership_by_Existence.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-IDEN-001_Identity_Class_Binding_Domain.md`
+- `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
 
-## 2. DOB Eradication (Project 9 Blocker)
+## Core Design Principle
 
-**Current Runtime:**
-- `Admin.dob_sum_hash` is still present in the schema.
-- Previously used as a factor in the teacher account recovery flow, it has been stripped from the runtime logic but the database column persists.
+Teacher identity follows the same three-layer model as student identity:
 
-**Target (v2) Migration:**
-- Delete the `dob_sum_hash` column from the `Admin` table in the next Alembic migration.
-- Ensure no code relies on or writes to this column.
-- The target model is strictly **PII-free**; no DOB should exist anywhere in the application.
+- `users`: global authentication/security identity
+- `seats`: class-local actor identity
+- `classes`: class universe boundary
 
-## 3. Account Recovery Refactor (Project 9)
+Economic and operational authority is never inferred from `user_id` alone. Scoped actions require a resolved teacher `seat_id` bound to the active `class_id`.
 
-**Current Runtime:**
-- The account recovery form resolves `(join_code, username)` pairs to establish identity.
-- This is currently implemented using the legacy `TeacherBlock` model:
-  `join_code → TeacherBlock rows → teacher_id + [student_id list] → username_lookup_hash within that set`.
-- The hop to identify the class scope is implicit through `TeacherBlock`.
-- `RecoveryRequest` model correctly uses an FK to the teacher, but it currently points to `Admin`.
+## Teacher Identity Layers
 
-**Target (v2) Migration:**
-- Replace `TeacherBlock` usage in recovery with the new `classes` and `seats` tables.
-- The resolution chain will become:
-  `join_code` → `classes` (via `join_code_token`) → `class_id` → `seats` (to get roster)
-- Update `RecoveryRequest.teacher_id` to point to `users.id` instead of `Admin.id`.
-- Drop `TeacherBlock` completely from the schema.
+### Users (Teacher Principal)
+
+Purpose: authentication, session security, recovery, and global account state.
+
+Required role law:
+
+- Teacher identity is a `users` row with `user_role='teacher'`.
+- Teacher credentials and recovery state live on `users`.
+- DOB and other forbidden claim-era PII are not part of teacher identity.
+
+Sticky context law:
+
+- `users.last_active_class_id` is the durable context pointer.
+- Context restoration resolves `class_id` first, then resolves an owned seat within that class.
+- If the class no longer has an owned seat for the user, context is invalid and explicit selection is required.
+
+### Seats (Teacher Actor)
+
+Purpose: represent a teacher as an actor in exactly one class universe.
+
+Rules:
+
+- A teacher seat belongs to exactly one `class_id`.
+- A teacher may own multiple seats across multiple classes.
+- A class has exactly one authoritative teacher seat owner for teacher-scoped mutation surfaces.
+- Teacher-scoped writes must be attributable to a teacher `seat_id`.
+
+### Classes (Teacher Universe Anchor)
+
+Purpose: authoritative class boundary for teacher scope.
+
+Rules:
+
+- Teacher dashboards, directives, and class-scoped navigation are resolved by `class_id`.
+- `join_code` is entry/display alias only; it is not authority.
+
+## Authority Rules
+
+1. Authentication authority:
+- `user_id` proves who is logged in.
+
+2. Scoped authority:
+- `seat_id` proves class-local actor authority.
+- `class_id` proves universe boundary.
+
+3. Request contract:
+- Global teacher routes may use authenticated `user_id` only.
+- Any class-scoped teacher operation must resolve and validate `seat_id + class_id` ownership.
+
+4. Membership by existence:
+- If a teacher seat exists for (`user_id`, `class_id`), membership exists.
+- No implied membership from legacy tables or duplicated denormalized markers.
+
+## Runtime Context Flow (Teacher)
+
+1. Teacher authenticates to one `users` row.
+2. Backend resolves available teacher seats for that user.
+3. Backend restores active context from `users.last_active_class_id` if still valid.
+4. Backend resolves the teacher-owned seat for that class (`class_id -> seats`).
+5. If invalid/absent, teacher explicitly selects a class context.
+6. Backend writes `current_class_id`, resolves `current_seat_id`, persists `last_active_class_id`.
+7. Class-scoped surfaces operate strictly in that resolved context.
+
+## Teacher Session Invariants
+
+- Context restoration must reject deleted/unowned seats.
+- Class switch is explicit and auditable.
+- Session context must not be reconstructed from `join_code` alone.
+- Any write without valid scoped context is rejected.
+
+## Cross-Domain Binding Requirements
+
+For teacher-initiated domain writes:
+
+- Actor identity: teacher `seat_id`
+- Scope boundary: `class_id`
+- Optional UI alias: `join_code`
+
+Domains must not accept teacher authority from `join_code` or `user_id` without seat-ownership validation.
+
+## Forbidden Patterns
+
+- Using legacy `Admin` rows as architectural identity authority.
+- Treating `join_code` as backend authority boundary.
+- Implicitly deriving active scope from unrelated session residue.
+- Writing class-scoped state when no teacher seat is resolved.

@@ -248,48 +248,68 @@ def _get_admin_class_context_redirect_endpoint() -> str:
     return 'admin.dashboard'
 
 
-def _get_requested_admin_join_code() -> str | None:
+def _get_requested_admin_class_id() -> str | None:
+    """Resolve request-scoped class_id (join_code may be provided only as input alias)."""
     if request.method == 'GET':
-        candidate = request.args.get('join_code')
+        class_candidate = request.args.get('class_id')
+        join_code_candidate = request.args.get('join_code')
     elif request.is_json:
         payload = request.get_json(silent=True) or {}
-        candidate = payload.get('join_code')
+        class_candidate = payload.get('class_id')
+        join_code_candidate = payload.get('join_code')
     else:
-        candidate = request.form.get('join_code')
+        class_candidate = request.form.get('class_id')
+        join_code_candidate = request.form.get('join_code')
 
-    normalized = (candidate or '').strip()
-    return normalized or None
+    normalized_class_id = (class_candidate or '').strip()
+    if normalized_class_id:
+        return normalized_class_id
+
+    normalized_join_code = (join_code_candidate or '').strip()
+    if not normalized_join_code:
+        return None
+
+    admin_id = session.get('admin_id')
+    class_row = (
+        ClassEconomy.query.with_entities(ClassEconomy.class_id)
+        .filter(
+            ClassEconomy.teacher_id == admin_id,
+            ClassEconomy.join_code == normalized_join_code,
+        )
+        .first()
+    )
+    return class_row.class_id if class_row and class_row.class_id else None
 
 
 def _admin_write_has_join_code_conflict(admin_id: int | None) -> bool:
     if not admin_id or request.method == 'GET':
         return False
 
-    requested_join_code = _get_requested_admin_join_code()
-    if not requested_join_code:
+    requested_class_id = _get_requested_admin_class_id()
+    if not requested_class_id:
         return False
 
-    session_join_code = _get_current_admin_join_code(admin_id)
-    if not session_join_code:
+    session_class_id = (session.get('current_class_id') or '').strip()
+    if not session_class_id:
         return True
 
-    return requested_join_code != session_join_code
+    return requested_class_id != session_class_id
 
 
 def _admin_request_has_join_code_conflict(admin_id: int | None) -> bool:
-    """Return True when request-supplied join_code disagrees with active nav/session class context."""
+    """Return True when request-supplied class selector disagrees with active class context."""
     if not admin_id:
         return False
 
-    requested_join_code = _get_requested_admin_join_code()
-    if not requested_join_code:
+    requested_class_id = _get_requested_admin_class_id()
+    if not requested_class_id:
         return False
 
-    session_join_code = _get_current_admin_join_code(admin_id)
-    if not session_join_code:
+    session_class_id = (session.get('current_class_id') or '').strip()
+    if not session_class_id:
         return True
 
-    return requested_join_code != session_join_code
+    return requested_class_id != session_class_id
 
 
 def _route_uses_admin_class_context() -> bool:
@@ -327,19 +347,7 @@ def _resolve_admin_class_context(admin_id: int | None) -> dict | None:
             .first()
         )
     else:
-        current_join_code = (_get_current_admin_join_code(admin_id) or '').strip()
-        if not current_join_code:
-            return None
-        class_row = (
-            ClassEconomy.query.with_entities(
-                ClassEconomy.class_id, ClassEconomy.join_code, ClassEconomy.teacher_id
-            )
-            .filter(
-                ClassEconomy.teacher_id == admin_id,
-                ClassEconomy.join_code == current_join_code,
-            )
-            .first()
-        )
+        return None
     if not class_row or class_row.teacher_id != admin_id:
         return None
 
@@ -363,7 +371,7 @@ def _handle_mismatched_admin_class_context():
             'method': request.method,
             'path': request.path,
             'session_join_code': _get_current_admin_join_code(scoped_admin_id),
-            'requested_join_code': _get_requested_admin_join_code(),
+            'requested_class_id': _get_requested_admin_class_id(),
         },
     )
 
@@ -516,34 +524,21 @@ def _get_current_admin_join_code(admin_id: int | None) -> str | None:
     if not admin_id:
         return None
     current_class_id = (session.get('current_class_id') or '').strip()
-    if current_class_id:
-        class_row = (
-            ClassEconomy.query.with_entities(ClassEconomy.join_code)
-            .filter(
-                ClassEconomy.teacher_id == admin_id,
-                ClassEconomy.class_id == current_class_id,
-            )
-            .first()
+    if not current_class_id:
+        return None
+    class_row = (
+        ClassEconomy.query.with_entities(ClassEconomy.join_code)
+        .filter(
+            ClassEconomy.teacher_id == admin_id,
+            ClassEconomy.class_id == current_class_id,
         )
-        if class_row and class_row.join_code:
-            if request.method != 'GET':
-                session['current_join_code'] = class_row.join_code
-            return class_row.join_code
-    join_code = (session.get('current_join_code') or '').strip()
-    if join_code and _admin_owns_join_code(admin_id, join_code):
-        class_row = (
-            ClassEconomy.query.with_entities(ClassEconomy.class_id)
-            .filter(
-                ClassEconomy.teacher_id == admin_id,
-                ClassEconomy.join_code == join_code,
-            )
-            .first()
-        )
-        if class_row and class_row.class_id:
-            if request.method != 'GET':
-                session['current_class_id'] = class_row.class_id
-        return join_code
-    return None
+        .first()
+    )
+    if not class_row or not class_row.join_code:
+        return None
+    if request.method != 'GET':
+        session['current_join_code'] = class_row.join_code
+    return class_row.join_code
 
 
 def get_admin_feature_settings_for_join_code(admin_id: int | None, join_code: str | None = None) -> dict:
@@ -2534,7 +2529,7 @@ def _get_or_create_onboarding(teacher_id):
     if not onboarding:
         onboarding = TeacherOnboarding(teacher_id=teacher_id)
         db.session.add(onboarding)
-        db.session.commit()
+        db.session.flush()
     return onboarding
 
 
@@ -2570,7 +2565,7 @@ def _check_onboarding_redirect():
                 completed_at=utc_now()
             )
             db.session.add(onboarding)
-            db.session.commit()
+            db.session.flush()
             return None
 
         # New teacher - no redirect, they'll see the Getting Started widget
@@ -2614,7 +2609,7 @@ def _normalize_claim_credentials_for_admin(admin_id: int) -> int:
 
     if updated:
         try:
-            db.session.commit()
+            db.session.flush()
         except Exception as exc:
             current_app.logger.error(
                 "Failed to normalize claim credentials for admin %s: %s", admin_id, exc
@@ -3049,7 +3044,7 @@ def backfill_transactions():
                 )
                 backfilled_count += 1
 
-            db.session.commit()
+            db.session.flush()
             flash(
                 f"Balances restored for {backfilled_count} student(s). "
                 "Past transactions are now correctly linked to your class period.",
@@ -3182,7 +3177,7 @@ def username_migration():
             admin.teacher_public_id = _generate_unique_teacher_public_id()
         if not admin.hall_pass_verify_token:
             admin.hall_pass_verify_token = Admin.generate_verify_token()
-        db.session.commit()
+        db.session.flush()
 
         session["admin_auth_username"] = chosen_username
         set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
@@ -3534,7 +3529,7 @@ def recover():
             )
             db.session.add(student_code)
 
-        db.session.commit()
+        db.session.flush()
 
         session['recovery_request_id'] = recovery_request.id
         current_app.logger.info(
@@ -3750,7 +3745,7 @@ def confirm_reset():
     recovery_request.status = 'verified'
     recovery_request.completed_at = utc_now()
 
-    db.session.commit()
+    db.session.flush()
 
     # Clear recovery session
     session.pop('reset_totp_secret', None)
@@ -3796,7 +3791,7 @@ def save_recovery_progress():
     recovery_request.partial_codes = entered_codes
     recovery_request.resume_pin_hash = resume_pin_hash
     recovery_request.resume_new_username = new_username
-    db.session.commit()
+    db.session.flush()
 
     current_app.logger.info(f"Admin recovery: saved partial progress for request {recovery_request.id}")
 
@@ -4661,7 +4656,7 @@ def set_hall_passes(student_id):
 
     if new_balance is not None and new_balance >= 0:
         student.hall_passes = new_balance
-        db.session.commit()
+        db.session.flush()
         flash(f"Successfully updated {student.full_name}'s hall pass balance to {new_balance}.", "success")
     else:
         flash("Invalid hall pass balance provided.", "error")
@@ -4906,7 +4901,7 @@ def edit_student():
             db.session.add(new_tb)
 
     try:
-        db.session.commit()
+        db.session.flush()
 
         # Build flash message with balance transfer info
         message = f"Successfully updated {student.full_name}'s information."
@@ -6265,7 +6260,7 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                 if other_refs == 0:
                     store_item.is_active = False
 
-    db.session.commit()
+    db.session.flush()
 
 
 def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, current_month: int) -> Decimal:
@@ -7323,7 +7318,7 @@ def insurance_management():
         _populate_policy_from_form(policy, form, next_tier_category_id=tier_category_id)
         db.session.add(policy)
         db.session.flush()  # Get the ID for the policy before adding blocks
-        db.session.commit()
+        db.session.flush()
         flash(f"Insurance policy '{policy.title}' created successfully!", "success")
         return redirect(url_for('admin.insurance_management'))
 
@@ -7485,7 +7480,7 @@ def edit_insurance_policy(policy_id):
     if request.method == 'POST' and form.validate_on_submit():
         _populate_policy_from_form(policy, form, next_tier_category_id=next_tier_category_id)
 
-        db.session.commit()
+        db.session.flush()
         flash(f"Insurance policy '{policy.title}' updated successfully!", "success")
         return redirect(url_for('admin.insurance_management'))
 
@@ -7593,7 +7588,7 @@ def delete_insurance_policy(policy_id):
 
         # Delete the policy itself
         db.session.delete(policy)
-        db.session.commit()
+        db.session.flush()
 
     except Exception as e:
         db.session.rollback()
@@ -7640,7 +7635,7 @@ def mass_remove_policy(policy_id):
             flash("Invalid student IDs provided.", "danger")
             return redirect(url_for('admin.insurance_management'))
 
-    db.session.commit()
+    db.session.flush()
 
     if student_ids_raw == 'all':
         flash(f"Cancelled policy '{policy.title}' for {count} students.", "success")
@@ -10612,7 +10607,7 @@ def bulk_update_hall_passes():
             )
 
         # Commit all updates
-        db.session.commit()
+        db.session.flush()
 
         # Build response message
         action_text = {
@@ -11010,7 +11005,7 @@ def account_delete():
         try:
             _hard_delete_teacher_account_scope(admin_id)
             db.session.delete(admin)
-            db.session.commit()
+            db.session.flush()
 
             session.pop("is_admin", None)
             session.pop("admin_id", None)
@@ -11177,7 +11172,7 @@ def help_support():
             )
 
             db.session.add(report)
-            db.session.commit()
+            db.session.flush()
 
             flash("Your support ticket has been submitted directly to system administration.", "success")
             return redirect(url_for('admin.help_support'))
@@ -11506,7 +11501,7 @@ def announcement_create():
                 db.session.add(announcement)
                 created_count += 1
 
-            db.session.commit()
+            db.session.flush()
 
             if created_count == 1:
                 flash(f'Announcement "{form.title.data}" created successfully!', 'success')
@@ -11567,7 +11562,7 @@ def announcement_edit(announcement_id):
             announcement.expires_at = form.expires_at.data
             announcement.updated_at = utc_now()
 
-            db.session.commit()
+            db.session.flush()
 
             flash(f'Announcement "{announcement.title}" updated successfully!', 'success')
             return redirect(url_for('admin.announcements'))
@@ -11608,7 +11603,7 @@ def announcement_delete(announcement_id):
     try:
         title = announcement.title
         db.session.delete(announcement)
-        db.session.commit()
+        db.session.flush()
 
         flash(f'Announcement "{title}" deleted successfully!', 'success')
 
@@ -11641,7 +11636,7 @@ def announcement_toggle(announcement_id):
     try:
         announcement.is_active = not announcement.is_active
         announcement.updated_at = utc_now()
-        db.session.commit()
+        db.session.flush()
 
         return jsonify({
             'status': 'success',
@@ -11823,7 +11818,7 @@ def onboarding_skip():
         db.session.add(onboarding_record)
 
     onboarding_record.skip_onboarding()
-    db.session.commit()
+    db.session.flush()
     return jsonify({'status': 'success'})
 
 
@@ -11849,7 +11844,7 @@ def onboarding_skip_task():
         # Mark widget task as skipped (counts as completed)
         onboarding_record.mark_widget_task_completed(task_name, status='skipped')
 
-        db.session.commit()
+        db.session.flush()
 
         return jsonify({
             'status': 'success',
@@ -11878,7 +11873,7 @@ def onboarding_dismiss_widget():
         # Dismiss the widget
         onboarding_record.dismiss_widget()
 
-        db.session.commit()
+        db.session.flush()
 
         return jsonify({
             'status': 'success',
@@ -11907,7 +11902,7 @@ def onboarding_undismiss_widget():
         # Un-dismiss the widget by setting widget_dismissed_at to None
         onboarding_record.widget_dismissed_at = None
 
-        db.session.commit()
+        db.session.flush()
 
         return jsonify({
             'status': 'success',
@@ -12294,7 +12289,7 @@ def passkey_register_finish():
         )
 
         db.session.add(credential)
-        db.session.commit()
+        db.session.flush()
 
         flash("Passkey registered successfully!", "success")
         return jsonify({"success": True}), 200
@@ -12386,7 +12381,7 @@ def passkey_auth_finish():
         AdminCredential.query.filter_by(teacher_id=admin_id).update({'last_used': now}, synchronize_session=False)
 
         admin.last_login = now
-        db.session.commit()
+        db.session.flush()
 
         # Create session
         auth_username = session.get('passkey_auth_username')
@@ -12448,7 +12443,7 @@ def passkey_delete(passkey_id):
             return jsonify({"error": "Passkey not found"}), 404
 
         db.session.delete(credential)
-        db.session.commit()
+        db.session.flush()
 
         flash("Passkey deleted successfully", "success")
         return jsonify({"success": True}), 200
@@ -12682,7 +12677,7 @@ def resolve_issue(issue_ref):
         issue.teacher_resolved_at = utc_now()
         issue.teacher_notes = teacher_notes
 
-        db.session.commit()
+        db.session.flush()
 
         flash("Issue moved to teacher final review. Close it after confirming classroom state.", "success")
         return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
@@ -12747,7 +12742,7 @@ def escalate_issue(issue_ref):
             notes=f"Escalated: {escalation_reason}",
         )
 
-        db.session.commit()
+        db.session.flush()
 
         flash("Issue escalated to developer successfully.", "success")
         return redirect(url_for('admin.issues_queue'))
@@ -12793,7 +12788,7 @@ def close_issue(issue_ref):
         issue.closed_at = utc_now()
         issue.closed_by_type = 'teacher'
         update_issue_status(issue, Issue.STATUS_CLOSED, 'teacher', admin_id, notes=resolution_summary)
-        db.session.commit()
+        db.session.flush()
         flash("Issue closed.", "success")
     except Exception:
         db.session.rollback()

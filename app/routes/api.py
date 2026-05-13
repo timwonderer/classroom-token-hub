@@ -946,7 +946,7 @@ def approve_redemption():
         if redemption_tx:
             redemption_tx.description = f"Redeemed: {student_item.store_item.name}"
 
-        db.session.commit()
+        db.session.flush()
         return jsonify({"status": "success", "message": "Redemption approved."})
     except (SQLAlchemyError, RuntimeError, ValueError) as e:
         db.session.rollback()
@@ -1063,7 +1063,7 @@ def reject_redemption():
         else:
             student_item.redemption_details = "Status: rejected"
 
-        db.session.commit()
+        db.session.flush()
         return jsonify({"status": "success", "message": "Redemption rejected and refunded."})
 
     except (SQLAlchemyError, RuntimeError, ValueError) as e:
@@ -1122,7 +1122,7 @@ def handle_hall_pass_action(pass_id, action):
             if student_block and student_block.rent_hall_passes > 0:
                 student_block.rent_hall_passes -= 1
 
-        db.session.commit()
+        db.session.flush()
         return jsonify({"status": "success", "message": "Pass approved."})
 
     elif action == 'reject':
@@ -1131,7 +1131,7 @@ def handle_hall_pass_action(pass_id, action):
 
         log_entry.status = 'rejected'
         log_entry.decision_time = now
-        db.session.commit()
+        db.session.flush()
         return jsonify({"status": "success", "message": "Pass rejected."})
 
     elif action == 'leave':
@@ -1152,7 +1152,7 @@ def handle_hall_pass_action(pass_id, action):
         log_entry.status = 'left'
         log_entry.left_time = now
         db.session.add(tap_out_event)
-        db.session.commit()
+        db.session.flush()
         return jsonify({"status": "success", "message": "Student has left the class."})
 
     elif action == 'return':
@@ -1173,7 +1173,7 @@ def handle_hall_pass_action(pass_id, action):
         log_entry.status = 'returned'
         log_entry.return_time = now
         db.session.add(tap_in_event)
-        db.session.commit()
+        db.session.flush()
         return jsonify({"status": "success", "message": "Student has returned."})
 
     return jsonify({"status": "error", "message": "Invalid action."}), 400
@@ -1298,7 +1298,7 @@ def cancel_hall_pass(pass_id):
     log_entry.status = 'rejected'
     log_entry.decision_time = utc_now()
 
-    db.session.commit()
+    db.session.flush()
     return jsonify({"status": "success", "message": "Hall pass request cancelled."})
 
 
@@ -1392,7 +1392,7 @@ def checkout_hall_pass():
     db.session.add(tap_out_event)
     
     try:
-        db.session.commit()
+        db.session.flush()
         return jsonify({
             "status": "success",
             "message": f"Checked out for {log_entry.reason}.",
@@ -1491,7 +1491,7 @@ def checkin_hall_pass():
     db.session.add(tap_in_event)
     
     try:
-        db.session.commit()
+        db.session.flush()
         return jsonify({
             "status": "success",
             "message": "Checked in successfully. Welcome back!",
@@ -1545,7 +1545,7 @@ def hall_pass_settings():
         settings.queue_limit = queue_limit
 
     settings.updated_at = utc_now()
-    db.session.commit()
+    db.session.flush()
 
     return jsonify({
         "status": "success",
@@ -1780,7 +1780,7 @@ def save_hall_pass_setup():
         settings.pass_types = pass_types
         settings.updated_at = utc_now()
 
-        db.session.commit()
+        db.session.flush()
 
         return jsonify({
             "status": "success",
@@ -1816,7 +1816,7 @@ def rotate_hall_pass_verify_token():
 
     teacher.hall_pass_verify_token = Admin.generate_verify_token()
     try:
-        db.session.commit()
+        db.session.flush()
     except SQLAlchemyError:
         db.session.rollback()
         current_app.logger.error("Failed to rotate hall pass verify token", exc_info=True)
@@ -1833,22 +1833,20 @@ def rotate_hall_pass_verify_token():
 def get_available_hall_pass_types():
     """Get available pass types for the current class or public teacher identity.
 
-    Authority: class_id is canonical. join_code is accepted only as alias input.
+    Authority: class_id is canonical and required.
     """
     requested_class_id = (request.args.get('class_id') or '').strip() or None
-    requested_join_code = (request.args.get('join_code') or '').strip().upper()
     teacher_public_id = (request.args.get('teacher_public_id') or '').strip()
 
     resolved_teacher_id = None
     resolved_class_id = None
     context = get_current_class_context()
-    join_code = requested_join_code
 
     # Public lookup mode still requires explicit class selector; do not infer from session context.
-    if teacher_public_id and not requested_class_id and not requested_join_code:
+    if teacher_public_id and not requested_class_id:
         return jsonify({
             "status": "error",
-            "message": "class_id or join_code is required"
+            "message": "class_id is required"
         }), 400
 
     if context:
@@ -1857,21 +1855,11 @@ def get_available_hall_pass_types():
         resolved_class_id = context.get('class_id')
         if requested_class_id and requested_class_id != resolved_class_id:
             return jsonify({"status": "error", "message": "class_id is out of scope for this session"}), 403
-        if join_code and context.get('join_code') != join_code:
-            return jsonify({"status": "error", "message": "join_code is out of scope for this session"}), 403
     elif requested_class_id:
         class_row = ClassEconomy.query.filter_by(class_id=requested_class_id).first()
         if class_row:
             resolved_teacher_id = class_row.teacher_id
             resolved_class_id = class_row.class_id
-            join_code = class_row.join_code
-    elif join_code:
-        if context:
-            return jsonify({"status": "error", "message": "join_code is out of scope for this session"}), 403
-        economy = ClassEconomy.query.filter_by(join_code=join_code).first()
-        if economy:
-            resolved_teacher_id = economy.teacher_id
-            resolved_class_id = economy.class_id
 
     if not resolved_teacher_id and teacher_public_id:
         teacher = Admin.query.filter_by(teacher_public_id=teacher_public_id).first()
@@ -1881,7 +1869,7 @@ def get_available_hall_pass_types():
     if not resolved_teacher_id:
         return jsonify({
             "status": "error",
-            "message": "class_id, join_code, or teacher_public_id is required"
+            "message": "class_id is required"
         }), 400
 
     settings = None
@@ -1890,7 +1878,7 @@ def get_available_hall_pass_types():
     elif teacher_public_id:
         return jsonify({
             "status": "error",
-            "message": "class_id or join_code is required"
+            "message": "class_id is required"
         }), 400
 
     if not settings:
@@ -2355,7 +2343,7 @@ def handle_tap():
             rate_per_second = get_pay_rate_for_block(block_lookup.get(period, period))
             projected_pay = duration * rate_per_second
 
-            db.session.commit() # FEAT-AUTHORIZED-SHELL
+            db.session.flush() # FEAT-AUTHORIZED-SHELL
             return jsonify({
                 "status": "ok",
                 "message": "Hall pass requested.",
@@ -2421,7 +2409,7 @@ def handle_tap():
             current_app.logger.info(f"Duplicate {action} ignored for seat {seat_id} in period {period}")
             last_payroll_time = get_last_payroll_time(seat_id=seat_id, class_id=class_id)
             duration = calculate_unpaid_attendance_seconds(seat_id, class_id, period, last_payroll_time)
-            db.session.commit() # FEAT-AUTHORIZED-SHELL
+            db.session.flush() # FEAT-AUTHORIZED-SHELL
             return jsonify({
                 "status": "ok",
                 "active": latest_event.status == "active",
@@ -2904,7 +2892,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
     # Commit all auto-tap-outs at once if requested
     if commit:
         try:
-            db.session.commit()
+            db.session.flush()
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Failed to auto-tap-out student {student.id}: {e}")
@@ -3138,7 +3126,7 @@ def update_block_tap_settings():
                 student_block.tap_enabled = tap_enabled
             updated_count += 1
         
-        db.session.commit()
+        db.session.flush()
         
         current_app.logger.info(
             f"Admin {admin.id} set tap_enabled={tap_enabled} for {updated_count} students in block {block}"

@@ -93,6 +93,32 @@ from app.utils.insurance_eligibility import (
     collect_reimbursed_source_tx_ids,
     resolve_claim_type,
 )
+
+
+def _get_identity_bound_seat_options(student: Student):
+    """Return class options for a student's identity-bound seats."""
+    seat_rows = (
+        db.session.query(Seat, ClassEconomy)
+        .join(ClassEconomy, ClassEconomy.class_id == Seat.class_id)
+        .filter(
+            Seat.student_id == student.id,
+            Seat.user_id.isnot(None),
+            Seat.claimed_at.isnot(None),
+            Seat.class_id.isnot(None),
+        )
+        .order_by(ClassEconomy.display_name.asc(), ClassEconomy.join_code.asc(), Seat.id.asc())
+        .all()
+    )
+    return [
+        {
+            "seat_id": seat.id,
+            "class_id": seat.class_id,
+            "join_code": seat.join_code,
+            "class_identifier": seat.block_identifier or seat.block or seat.join_code,
+            "class_name": class_row.display_name,
+        }
+        for seat, class_row in seat_rows
+    ]
 from app.utils.display_name_session import (
     get_teacher_display_name_cache,
     upsert_teacher_display_name_cache,
@@ -520,13 +546,15 @@ def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: in
 # -------------------- STUDENT ONBOARDING --------------------
 
 @student_bp.route('/claim-account', methods=['GET', 'POST'])
+@feat_shell("FEAT-IDEN-001")
 def claim_account():
     """
     PAGE 1: Claim Account - Verify identity using join code to begin setup.
 
     New join code-based flow:
-    1. Student enters join code (identifies their teacher-period)
-    2. Student enters name code + DOB sum
+    1. Student enters join code (resolves to class_id)
+    2. Student enters full first + last name
+    3. If multiple seats match, student enters optional dedupe code
     3. System finds matching unclaimed seat in TeacherBlock
     4. Creates Student record (or finds existing if student has other classes)
     5. Links TeacherBlock seat to Student
@@ -539,18 +567,9 @@ def claim_account():
 
     if form.validate_on_submit():
         join_code = format_join_code(form.join_code.data)
-        first_initial = form.first_initial.data.strip().upper()
+        first_name = (form.first_name.data or "").strip()
         last_name = form.last_name.data.strip()
-        dob_input = form.dob_sum.data
-
-        try:
-            if isinstance(dob_input, str):
-                dob_input = dob_input.strip()
-                dob_input = datetime.strptime(dob_input, "%Y-%m-%d").date()
-            dob_sum = dob_input.month + dob_input.day + dob_input.year
-        except (ValueError, AttributeError, TypeError):
-            flash("Please enter a valid birth date.", "claim")
-            return redirect(url_for('student.claim_account'))
+        dedupe_code = (form.dedupe_code.data or "").strip().upper()
 
         # Find all unclaimed seats with this join code
         unclaimed_seats = TeacherBlock.query.filter_by(
@@ -565,20 +584,16 @@ def claim_account():
             flash("Invalid join code or all seats already claimed. Check with your teacher.", "claim")
             return redirect(url_for('student.claim_account'))
 
-        # Try to find a matching seat
+        # Try to find matching seats by v2 claim identity:
+        # join_code + full first_name + full last_name (+ optional dedupe on collisions).
         from app.utils.name_utils import verify_last_name_parts
 
-        matched_seat = None
+        matched_seats = []
         match_attempts = []  # Track why each seat didn't match
 
         for seat in unclaimed_seats:
-            credential_matches, matched_primary, canonical_hash = match_claim_hash(
-                seat.first_half_hash,
-                first_initial,
-                seat.last_initial,
-                dob_sum,
-                seat.salt,
-            )
+            seat_first_name = (seat.first_name or "").strip()
+            first_name_matches = seat_first_name.casefold() == first_name.casefold()
 
             # Check last name with fuzzy matching
             last_name_matches = verify_last_name_parts(
@@ -586,34 +601,44 @@ def claim_account():
                 seat.last_name_hash_by_part,
                 seat.salt
             )
-
-            # Verify DOB sum via hash comparison
-            dob_sum_matches = (
-                seat.dob_sum_hash is not None
-                and hash_hmac(str(dob_sum).encode(), seat.salt) == seat.dob_sum_hash
-            )
             match_attempts.append({
                 'seat_id': seat.id,
-                'credential_matches': credential_matches,
+                'first_name_matches': first_name_matches,
                 'last_name_matches': last_name_matches,
-                'dob_sum_matches': dob_sum_matches,
             })
 
-            if credential_matches and last_name_matches and dob_sum_matches:
-                if canonical_hash and not matched_primary:
-                    seat.first_half_hash = canonical_hash
-                matched_seat = seat
-                break
+            if first_name_matches and last_name_matches:
+                matched_seats.append(seat)
 
-        if not matched_seat:
+        if not matched_seats:
             # Log detailed match failure information
             current_app.logger.warning(
                 f"Claim attempt failed for join_code={join_code}, "
-                f"first_initial={first_initial}, with last_name from input. "
+                f"first_name={first_name}, with last_name from input. "
                 f"Attempted {len(match_attempts)} seat(s). Match details: {match_attempts}"
             )
             flash("No matching account found. Please check your join code and credentials.", "claim")
             return redirect(url_for('student.claim_account'))
+
+        matched_seat = None
+        if len(matched_seats) == 1:
+            matched_seat = matched_seats[0]
+        else:
+            if not dedupe_code:
+                flash(
+                    "Multiple students in this class share that name. Enter your deduplication code from your teacher.",
+                    "claim",
+                )
+                return redirect(url_for('student.claim_account'))
+            dedupe_matches = [
+                seat
+                for seat in matched_seats
+                if ((seat.dedupe_key or "")[:8].upper() == dedupe_code)
+            ]
+            if len(dedupe_matches) != 1:
+                flash("Invalid deduplication code. Check with your teacher.", "claim")
+                return redirect(url_for('student.claim_account'))
+            matched_seat = dedupe_matches[0]
 
         # Check if this student already has an account (claiming from another teacher).
         # Use first_half_hash for matching — it stays set even after dob_sum is cleaned up
@@ -658,7 +683,7 @@ def claim_account():
                 linked_user.id if linked_user else None,
             )
 
-            db.session.commit()
+            db.session.flush()
 
             # Student already completed setup in another class, redirect to login
             if existing_student.has_completed_setup:
@@ -675,9 +700,9 @@ def claim_account():
                 return redirect(url_for('student.create_username'))
 
         # New student - create Student record
-        # Generate second_half_hash (DOB hash) for backward compatibility
+        # Generate an opaque credential hash value; DOB is no longer part of claim identity.
         _ensure_class_anchor_for_teacher_block(matched_seat)
-        second_half_hash = hash_hmac(str(dob_sum).encode(), matched_seat.salt)
+        second_half_hash = hash_hmac(secrets.token_bytes(16), matched_seat.salt)
 
         new_student = Student(
             first_name=matched_seat.first_name,
@@ -739,7 +764,7 @@ def claim_account():
                     linked_user.id if linked_user else None,
                 )
 
-                db.session.commit()
+                db.session.flush()
 
                 if existing_by_hash.has_completed_setup:
                     flash("This seat has been linked to your existing account. Please log in.", "claim")
@@ -783,7 +808,7 @@ def claim_account():
             new_student.id,
             linked_user.id if linked_user else None,
         )
-        db.session.commit()
+        db.session.flush()
 
         # Start setup flow
         session['claimed_student_id'] = new_student.id
@@ -866,6 +891,7 @@ def create_username():
 
 
 @student_bp.route('/setup-pin-passphrase', methods=['GET', 'POST'])
+@feat_shell("FEAT-IDEN-001")
 def setup_pin_passphrase():
     """PAGE 3: Setup PIN & Passphrase - Secure the account."""
     # Only allow if claimed and username generated
@@ -903,7 +929,7 @@ def setup_pin_passphrase():
         # Mark profile migration complete; claim verification data is stored only on seats.
         student.has_completed_profile_migration = True
 
-        db.session.commit()
+        db.session.flush()
         # Clear session onboarding keys
         session.pop('claimed_student_id', None)
         session.pop('claimed_seat_id', None)
@@ -918,6 +944,7 @@ def setup_pin_passphrase():
 
 @student_bp.route('/add-class', methods=['GET', 'POST'])
 @login_required
+@feat_shell("FEAT-IDEN-001")
 def add_class():
     """
     Allow logged-in students to add a new class by entering a join code.
@@ -1110,7 +1137,7 @@ def add_class():
             student.block = ','.join(sorted(current_blocks))
 
         try:
-            db.session.commit()
+            db.session.flush()
             flash(f"Successfully added to Block {new_block}! You can now access this class from your dashboard.", "success")
             return redirect(_get_return_target())
         except Exception as e:
@@ -2058,6 +2085,7 @@ def purchase_insurance(policy_id):
 
 @student_bp.route('/insurance/cancel/<int:enrollment_id>', methods=['POST'])
 @login_required
+@feat_shell("FEAT-OBL-001")
 def cancel_insurance(enrollment_id):
     """Cancel insurance policy."""
     student = get_logged_in_student()
@@ -2071,7 +2099,7 @@ def cancel_insurance(enrollment_id):
     enrollment.status = 'cancelled'
     enrollment.cancel_date = utc_now()
 
-    db.session.commit()
+    db.session.flush()
     flash(f"Insurance policy '{enrollment.contract_title}' has been cancelled.", "info")
     return redirect(url_for('student.student_insurance'))
 
@@ -3793,6 +3821,7 @@ def rent_pay(period):
 
 @student_bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit("60 per minute")
+@feat_shell("FEAT-IDEN-001")
 def login():
     """Student login with username and PIN."""
     form = StudentLoginForm()
@@ -3850,7 +3879,7 @@ def login():
 
             if not student.username_lookup_hash:
                 student.username_lookup_hash = lookup_hash
-                db.session.commit()
+                db.session.flush()
 
         except Exception as e:
             db.session.rollback()
@@ -3878,7 +3907,65 @@ def login():
         session['student_id'] = student.id
         session['login_time'] = utc_now().isoformat()
         session['last_activity'] = session['login_time']
-        sync_student_session_context(student, allow_writes=True)
+
+        linked_user = (
+            User.query
+            .join(Seat, Seat.user_id == User.id)
+            .filter(
+                Seat.student_id == student.id,
+                Seat.user_id.isnot(None),
+            )
+            .order_by(Seat.id.asc())
+            .first()
+        )
+
+        if linked_user and linked_user.last_active_class_id:
+            has_active_class_seat = Seat.query.filter_by(
+                student_id=student.id,
+                user_id=linked_user.id,
+                class_id=linked_user.last_active_class_id,
+            ).first()
+            if not has_active_class_seat:
+                linked_user.last_active_class_id = None
+                db.session.flush()
+
+        seat_options = _get_identity_bound_seat_options(student)
+        if linked_user and linked_user.last_active_class_id is None:
+            if seat_options:
+                return redirect(url_for('student.select_class_context'))
+            current_app.logger.critical(
+                "P0 INCIDENT: Student %s login has NULL last_active_class_id and no surviving seats.",
+                student.id,
+            )
+            session.pop('student_id', None)
+            session.pop('student_user_id', None)
+            session.pop('current_seat_id', None)
+            session.pop('current_class_id', None)
+            session.pop('current_join_code', None)
+            session.pop('seat_id', None)
+            session.pop('class_id', None)
+            session.pop('login_time', None)
+            session.pop('last_activity', None)
+            if is_json:
+                return jsonify(status="error", message="Account scope incident detected. Contact support immediately."), 500
+            flash("Account scope incident detected. Contact support immediately.", "error")
+            return redirect(url_for('student.login', next=request.args.get('next')))
+
+        seat = sync_student_session_context(student, allow_writes=True)
+        if seat is None:
+            session.pop('student_id', None)
+            session.pop('student_user_id', None)
+            session.pop('current_seat_id', None)
+            session.pop('current_class_id', None)
+            session.pop('current_join_code', None)
+            session.pop('seat_id', None)
+            session.pop('class_id', None)
+            session.pop('login_time', None)
+            session.pop('last_activity', None)
+            if is_json:
+                return jsonify(status="error", message="Account has no valid seat context."), 403
+            flash("Your account is missing class seat context. Contact your teacher.", "error")
+            return redirect(url_for('student.login', next=request.args.get('next')))
         _prime_student_teacher_display_name_cache(student.id)
 
 
@@ -3897,6 +3984,81 @@ def login():
     return render_template('student_login.html', setup_cta=setup_cta, form=form)
 
 
+@student_bp.route('/select-class-context', methods=['GET', 'POST'])
+@login_required
+@feat_shell("FEAT-IDEN-001")
+def select_class_context():
+    """Explicit class-selection gate when no durable class context exists."""
+    student = get_logged_in_student()
+    if not student:
+        return redirect(url_for('student.login'))
+
+    linked_user = (
+        User.query
+        .join(Seat, Seat.user_id == User.id)
+        .filter(
+            Seat.student_id == student.id,
+            Seat.user_id.isnot(None),
+        )
+        .order_by(Seat.id.asc())
+        .first()
+    )
+    if not linked_user:
+        current_app.logger.critical(
+            "P0 INCIDENT: Student %s has no identity-linked user during class-context gate.",
+            student.id,
+        )
+        session.clear()
+        flash("Account scope incident detected. Contact support immediately.", "error")
+        return redirect(url_for('student.login'))
+
+    seat_options = _get_identity_bound_seat_options(student)
+    if not seat_options:
+        current_app.logger.critical(
+            "P0 INCIDENT: Student %s has no surviving seats during class-context gate.",
+            student.id,
+        )
+        session.clear()
+        flash("Account scope incident detected. Contact support immediately.", "error")
+        return redirect(url_for('student.login'))
+
+    if request.method == 'POST':
+        selected_class_id = (request.form.get('class_id') or '').strip()
+        allowed_class_ids = {item["class_id"] for item in seat_options}
+        if selected_class_id not in allowed_class_ids:
+            flash("Invalid class selection.", "error")
+            return render_template('student_select_class_context.html', class_options=seat_options), 400
+
+        selected_seat = sync_student_session_context(student, class_id=selected_class_id)
+        if selected_seat is None:
+            current_app.logger.critical(
+                "P0 INCIDENT: Student %s selected class %s but seat context failed to resolve.",
+                student.id,
+                selected_class_id,
+            )
+            session.clear()
+            flash("Account scope incident detected. Contact support immediately.", "error")
+            return redirect(url_for('student.login'))
+
+        linked_user.last_active_class_id = selected_class_id
+        db.session.flush()
+
+        scope = resolve_scope(actor=student, actor_role="student")
+        if not scope or scope.class_id != selected_class_id:
+            current_app.logger.critical(
+                "P0 INCIDENT: Scope construction mismatch for student %s class %s.",
+                student.id,
+                selected_class_id,
+            )
+            session.clear()
+            flash("Account scope incident detected. Contact support immediately.", "error")
+            return redirect(url_for('student.login'))
+
+        return redirect(url_for('student.dashboard'))
+
+    return render_template('student_select_class_context.html', class_options=seat_options)
+
+
 @student_bp.route('/logout')
 @login_required
 def logout():
@@ -3911,7 +4073,7 @@ def logout():
 @feat_shell("FEAT-IDEN-001")
 def switch_class(class_id):
     """Switch to a different class using class_id as the stable backend reference."""
-    from app.models import TeacherBlock, Admin
+    from app.models import Seat, Admin
 
     student = get_logged_in_student()
     try:
@@ -3919,33 +4081,26 @@ def switch_class(class_id):
         access_policy_service.assert_can_switch_class(resolved_switch.scope)
     except (AccessScopeDenied, access_policy_service.AccessPolicyDenied) as exc:
         return jsonify(status="error", message="You don't have access to that class."), 403
-    seat = db.session.get(TeacherBlock, resolved_switch.teacher_block_id)
+    seat = db.session.get(Seat, resolved_switch.seat_id)
     if seat is None:
         return jsonify(status="error", message="You don't have access to that class."), 403
 
-    _ensure_class_anchor_for_teacher_block(seat)
-    linked_user = _get_or_create_setup_user_for_student(student.id)
-    bridge_seat = _get_or_create_bridge_seat_for_teacher_block(
-        seat,
-        student.id,
-        linked_user.id if linked_user else None,
-    )
     # Use canonical session context switch (Logs: SESSION-CONTEXT-SWITCH)
     from app.auth import switch_student_session_context
     switch_student_session_context(
         student, 
         class_id=resolved_switch.scope.class_id, 
-        join_code=resolved_switch.scope.join_code,
-        seat_id=bridge_seat.id if bridge_seat else None
+        seat_id=seat.id,
     )
 
     # Get teacher name for response
-    teacher = db.session.get(Admin, resolved_switch.scope.teacher_id)
+    teacher_id = resolved_switch.scope.teacher_id
+    teacher = db.session.get(Admin, teacher_id)
     teacher_cache = get_teacher_display_name_cache()
-    teacher_name = teacher_cache.get(str(seat.teacher_id))
+    teacher_name = teacher_cache.get(str(teacher_id))
     if not teacher_name and teacher:
         teacher_name = teacher.get_display_name()
-        upsert_teacher_display_name_cache({str(seat.teacher_id): teacher_name})
+        upsert_teacher_display_name_cache({str(teacher_id): teacher_name})
     if not teacher_name:
         teacher_name = "Unknown"
 
@@ -3988,7 +4143,8 @@ def switch_teacher(teacher_public_id):
 
 def _switch_to_teacher_scope(*, teacher_id: int):
     """Resolve a teacher switch to a concrete claimed seat/join_code for this student."""
-    from app.models import TeacherBlock, Admin
+    from app.models import Seat, Admin
+    from app.auth import switch_student_session_context
 
     student = get_logged_in_student()
     if not student:
@@ -4001,16 +4157,17 @@ def _switch_to_teacher_scope(*, teacher_id: int):
     except (AccessScopeDenied, access_policy_service.AccessPolicyDenied):
         flash("You don't have access to that class.", "error")
         return redirect(url_for('student.dashboard'))
-    target_seat = db.session.get(TeacherBlock, resolved_switch.teacher_block_id)
+    target_seat = db.session.get(Seat, resolved_switch.seat_id)
     if target_seat is None:
         flash("You don't have access to that class.", "error")
         return redirect(url_for('student.dashboard'))
 
-    session['current_class_id'] = resolved_switch.scope.class_id
-    session['current_join_code'] = resolved_switch.scope.join_code
-    # Kept for compatibility with older templates/routes that still inspect this session key.
+    switch_student_session_context(
+        student,
+        class_id=resolved_switch.scope.class_id,
+        seat_id=target_seat.id,
+    )
     session['current_teacher_id'] = teacher_id
-    sync_student_session_context(student, join_code=resolved_switch.scope.join_code)
 
     # Get teacher name for flash message
     teacher = db.session.get(Admin, teacher_id)
@@ -4241,6 +4398,7 @@ def report_tap_event_issue(tap_event_id):
 
 @student_bp.route('/verify-recovery/<int:code_id>', methods=['GET', 'POST'])
 @login_required
+@feat_shell("FEAT-IDEN-002")
 def verify_recovery(code_id):
     """
     Student verification page for teacher account recovery.
@@ -4293,7 +4451,7 @@ def verify_recovery(code_id):
         # Hash and store the code
         recovery_code.code_hash = hash_hmac(code.encode(), b'')
         recovery_code.verified_at = utc_now()
-        db.session.commit()
+        db.session.flush()
 
         current_app.logger.info(f"Student {student.id} verified recovery request {recovery_code.recovery_request_id}")
 
@@ -4310,6 +4468,7 @@ def verify_recovery(code_id):
 
 @student_bp.route('/dismiss-recovery/<int:code_id>', methods=['POST'])
 @login_required
+@feat_shell("FEAT-IDEN-002")
 def dismiss_recovery(code_id):
     """
     Dismiss the recovery notification banner.
@@ -4327,7 +4486,7 @@ def dismiss_recovery(code_id):
 
     # Mark as dismissed
     recovery_code.dismissed = True
-    db.session.commit()
+    db.session.flush()
 
     flash("Recovery notification dismissed. You can still verify later from your notifications.", "info")
     return redirect(url_for('student.dashboard'))

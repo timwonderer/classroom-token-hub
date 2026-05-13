@@ -9,6 +9,7 @@ Ensures that:
 
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import os
+from datetime import datetime, timezone
 import pytest
 from flask import session
 from app.models import Student, Admin, TeacherBlock, ClassEconomy, ClassMembership, Seat
@@ -56,24 +57,25 @@ def setup_multi_class_student(client):
     db.session.commit()
 
     # Create Class Economies
-    db.session.add(ClassEconomy(join_code="TEACHER1A", teacher_id=teacher1.id, created_by_admin_id=teacher1.id, display_name="Class 1A"))
-    db.session.add(ClassEconomy(join_code="TEACHER2B", teacher_id=teacher2.id, created_by_admin_id=teacher2.id, display_name="Class 2B"))
-    db.session.add(ClassEconomy(join_code="TEACHER3C", teacher_id=teacher3.id, created_by_admin_id=teacher3.id, display_name="Class 3C"))
-    db.session.add(ClassEconomy(join_code="UNCLAIMEDZ", teacher_id=teacher1.id, created_by_admin_id=teacher1.id, display_name="Unclaimed Z"))
+    class_1a = ClassEconomy(join_code="TEACHER1A", teacher_id=teacher1.id, created_by_admin_id=teacher1.id, display_name="Class 1A")
+    class_2b = ClassEconomy(join_code="TEACHER2B", teacher_id=teacher2.id, created_by_admin_id=teacher2.id, display_name="Class 2B")
+    class_3c = ClassEconomy(join_code="TEACHER3C", teacher_id=teacher3.id, created_by_admin_id=teacher3.id, display_name="Class 3C")
+    class_unclaimed = ClassEconomy(join_code="UNCLAIMEDZ", teacher_id=teacher1.id, created_by_admin_id=teacher1.id, display_name="Unclaimed Z")
+    db.session.add_all([class_1a, class_2b, class_3c, class_unclaimed])
     db.session.commit()
 
     # Create ClassMemberships
     # Admin memberships
-    db.session.add(ClassMembership(join_code="TEACHER1A", admin_id=teacher1.id, role='admin'))
-    db.session.add(ClassMembership(join_code="TEACHER2B", admin_id=teacher2.id, role='admin'))
-    db.session.add(ClassMembership(join_code="TEACHER3C", admin_id=teacher3.id, role='admin'))
+    db.session.add(ClassMembership(class_id=class_1a.class_id, join_code="TEACHER1A", admin_id=teacher1.id, role='admin'))
+    db.session.add(ClassMembership(class_id=class_2b.class_id, join_code="TEACHER2B", admin_id=teacher2.id, role='admin'))
+    db.session.add(ClassMembership(class_id=class_3c.class_id, join_code="TEACHER3C", admin_id=teacher3.id, role='admin'))
     # Student memberships
-    db.session.add(ClassMembership(join_code="TEACHER1A", student_id=student.id, role='student'))
-    db.session.add(ClassMembership(join_code="TEACHER2B", student_id=student.id, role='student'))
-    db.session.add(ClassMembership(join_code="TEACHER3C", student_id=student.id, role='student'))
+    db.session.add(ClassMembership(class_id=class_1a.class_id, join_code="TEACHER1A", student_id=student.id, role='student'))
+    db.session.add(ClassMembership(class_id=class_2b.class_id, join_code="TEACHER2B", student_id=student.id, role='student'))
+    db.session.add(ClassMembership(class_id=class_3c.class_id, join_code="TEACHER3C", student_id=student.id, role='student'))
     db.session.commit()
 
-    # Create claimed seats for the student in multiple classes
+    # Create claimed roster blocks and runtime seats for the student in multiple classes
     seat1 = TeacherBlock(
         teacher_id=teacher1.id,
         block="A",
@@ -83,6 +85,7 @@ def setup_multi_class_student(client):
         dob_sum_hash=None,
         salt=os.urandom(16),
         first_half_hash='test_hash_1',
+        class_id=class_1a.class_id,
         join_code="TEACHER1A",
         student_id=student.id,
         is_claimed=True
@@ -96,6 +99,7 @@ def setup_multi_class_student(client):
         dob_sum_hash=None,
         salt=os.urandom(16),
         first_half_hash='test_hash_2',
+        class_id=class_2b.class_id,
         join_code="TEACHER2B",
         student_id=student.id,
         is_claimed=True
@@ -109,17 +113,54 @@ def setup_multi_class_student(client):
         dob_sum_hash=None,
         salt=os.urandom(16),
         first_half_hash='test_hash_3',
+        class_id=class_3c.class_id,
         join_code="TEACHER3C",
         student_id=student.id,
         is_claimed=True
     )
     db.session.add_all([seat1, seat2, seat3])
+    db.session.flush()
+    db.session.add_all([
+        Seat(
+            student_id=student.id,
+            class_id=class_1a.class_id,
+            join_code="TEACHER1A",
+            block="A",
+            block_identifier="A",
+            role="student",
+            claimed_at=datetime.now(timezone.utc),
+        ),
+        Seat(
+            student_id=student.id,
+            class_id=class_2b.class_id,
+            join_code="TEACHER2B",
+            block="B",
+            block_identifier="B",
+            role="student",
+            claimed_at=datetime.now(timezone.utc),
+        ),
+        Seat(
+            student_id=student.id,
+            class_id=class_3c.class_id,
+            join_code="TEACHER3C",
+            block="C",
+            block_identifier="C",
+            role="student",
+            claimed_at=datetime.now(timezone.utc),
+        ),
+    ])
     db.session.commit()
 
     return {
         'student': student,
         'teachers': [teacher1, teacher2, teacher3],
-        'seats': [seat1, seat2, seat3]
+        'seats': [seat1, seat2, seat3],
+        'classes': {
+            "TEACHER1A": class_1a,
+            "TEACHER2B": class_2b,
+            "TEACHER3C": class_3c,
+            "UNCLAIMEDZ": class_unclaimed,
+        },
     }
 
 
@@ -148,12 +189,13 @@ def setup_single_class_student(client):
     db.session.commit()
 
     # Create Class Economy
-    db.session.add(ClassEconomy(join_code="SINGLED", teacher_id=teacher.id, created_by_admin_id=teacher.id, display_name="Single D"))
+    class_single = ClassEconomy(join_code="SINGLED", teacher_id=teacher.id, created_by_admin_id=teacher.id, display_name="Single D")
+    db.session.add(class_single)
     db.session.commit()
 
     # Create ClassMemberships
-    db.session.add(ClassMembership(join_code="SINGLED", admin_id=teacher.id, role='admin'))
-    db.session.add(ClassMembership(join_code="SINGLED", student_id=student.id, role='student'))
+    db.session.add(ClassMembership(class_id=class_single.class_id, join_code="SINGLED", admin_id=teacher.id, role='admin'))
+    db.session.add(ClassMembership(class_id=class_single.class_id, join_code="SINGLED", student_id=student.id, role='student'))
     db.session.commit()
 
     seat = TeacherBlock(
@@ -165,11 +207,22 @@ def setup_single_class_student(client):
         dob_sum_hash=None,
         salt=os.urandom(16),
         first_half_hash='test_hash_single',
+        class_id=class_single.class_id,
         join_code="SINGLED",
         student_id=student.id,
         is_claimed=True
     )
     db.session.add(seat)
+    db.session.flush()
+    db.session.add(Seat(
+        student_id=student.id,
+        class_id=class_single.class_id,
+        join_code="SINGLED",
+        block="D",
+        block_identifier="D",
+        role="student",
+        claimed_at=datetime.now(timezone.utc),
+    ))
     db.session.commit()
 
     return {
@@ -245,7 +298,8 @@ def test_inject_class_context_uses_session_join_code(client, setup_multi_class_s
     
     with client.application.test_request_context('/'):
         session['student_id'] = student.id
-        session['current_join_code'] = "TEACHER2B"
+        class_row = ClassEconomy.query.filter_by(join_code="TEACHER2B").first()
+        session['current_class_id'] = class_row.class_id
         
         ctx_processor = _get_inject_class_context_processor(client)
         context = ctx_processor()
@@ -265,7 +319,8 @@ def test_inject_class_context_available_classes_list(client, setup_multi_class_s
     
     with client.application.test_request_context('/'):
         session['student_id'] = student.id
-        session['current_join_code'] = "TEACHER2B"
+        class_row = ClassEconomy.query.filter_by(join_code="TEACHER2B").first()
+        session['current_class_id'] = class_row.class_id
         
         ctx_processor = _get_inject_class_context_processor(client)
         context = ctx_processor()
@@ -344,11 +399,13 @@ def test_switch_class_success(client, setup_multi_class_student):
     
     with client.session_transaction() as sess:
         sess['student_id'] = student.id
-        sess['current_join_code'] = "TEACHER1A"
+        class_row = ClassEconomy.query.filter_by(join_code="TEACHER1A").first()
+        sess['current_class_id'] = class_row.class_id
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
     
     # Switch to TEACHER2B
-    response = client.post('/student/switch-class/TEACHER2B')
+    target_class_id = data['classes']["TEACHER2B"].class_id
+    response = client.post(f'/student/switch-class/{target_class_id}')
     
     assert response.status_code == 200
     data = response.get_json()
@@ -362,8 +419,8 @@ def test_switch_class_success(client, setup_multi_class_student):
         assert sess['current_join_code'] == 'TEACHER2B'
 
 
-def test_switch_class_materializes_bridge_seat_when_missing(client, setup_multi_class_student):
-    """Switching classes should create the seat bridge if only TeacherBlock exists."""
+def test_switch_class_rejects_missing_runtime_seat(client, setup_multi_class_student):
+    """Switching classes should fail when runtime seat rows are missing."""
     from datetime import datetime, timezone
     data = setup_multi_class_student
     student = data['student']
@@ -373,18 +430,14 @@ def test_switch_class_materializes_bridge_seat_when_missing(client, setup_multi_
 
     with client.session_transaction() as sess:
         sess['student_id'] = student.id
-        sess['current_join_code'] = "TEACHER1A"
+        class_row = ClassEconomy.query.filter_by(join_code="TEACHER1A").first()
+        sess['current_class_id'] = class_row.class_id
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
 
-    response = client.post('/student/switch-class/TEACHER2B')
+    target_class_id = data['classes']["TEACHER2B"].class_id
+    response = client.post(f'/student/switch-class/{target_class_id}')
 
-    assert response.status_code == 200
-    with client.session_transaction() as sess:
-        assert sess['current_join_code'] == 'TEACHER2B'
-        assert sess.get('current_seat_id') is not None
-
-    bridge_seat = Seat.query.filter_by(student_id=student.id, join_code='TEACHER2B').first()
-    assert bridge_seat is not None
+    assert response.status_code == 403
 
 
 def test_switch_class_unauthorized(client, setup_multi_class_student):
@@ -398,7 +451,7 @@ def test_switch_class_unauthorized(client, setup_multi_class_student):
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
     
     # Try to switch to a class the student doesn't have access to
-    response = client.post('/student/switch-class/INVALIDCODE')
+    response = client.post('/student/switch-class/invalid-class-id')
     
     assert response.status_code == 403
     data = response.get_json()
@@ -409,7 +462,7 @@ def test_switch_class_unauthorized(client, setup_multi_class_student):
 def test_switch_class_not_logged_in(client):
     """Test that switch_class requires login."""
     # Try to switch without being logged in
-    response = client.post('/student/switch-class/ANYCODE')
+    response = client.post('/student/switch-class/any-class-id')
     
     # Should redirect to login
     assert response.status_code == 302
@@ -427,7 +480,7 @@ def test_switch_class_nonexistent_join_code(client, setup_multi_class_student):
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
     
     # Try to switch to non-existent join code
-    response = client.post('/student/switch-class/NOTEXIST')
+    response = client.post('/student/switch-class/not-a-real-class')
     
     assert response.status_code == 403
 
@@ -449,6 +502,7 @@ def test_switch_class_unclaimed_seat(client, setup_multi_class_student):
         dob_sum_hash=None,
         salt=os.urandom(16),
         first_half_hash='test_hash_unclaimed',
+        class_id=data['classes']["UNCLAIMEDZ"].class_id,
         join_code="UNCLAIMEDZ",
         student_id=student.id,
         is_claimed=False  # Not claimed!
@@ -461,7 +515,8 @@ def test_switch_class_unclaimed_seat(client, setup_multi_class_student):
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
     
     # Try to switch to unclaimed seat
-    response = client.post('/student/switch-class/UNCLAIMEDZ')
+    unclaimed_class_id = data['classes']["UNCLAIMEDZ"].class_id
+    response = client.post(f'/student/switch-class/{unclaimed_class_id}')
     
     assert response.status_code == 403
     data = response.get_json()
@@ -478,7 +533,8 @@ def test_switch_class_proper_response_structure(client, setup_multi_class_studen
         sess['student_id'] = student.id
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
     
-    response = client.post('/student/switch-class/TEACHER3C')
+    target_class_id = data['classes']["TEACHER3C"].class_id
+    response = client.post(f'/student/switch-class/{target_class_id}')
     
     assert response.status_code == 200
     response_data = response.get_json()
@@ -512,7 +568,8 @@ def test_switch_class_between_all_classes(client, setup_multi_class_student):
         ("TEACHER3C", "teacher3", "C"),
         ("TEACHER1A", "teacher1", "A"),  # Switch back to first
     ]:
-        response = client.post(f'/student/switch-class/{join_code}')
+        class_id = data['classes'][join_code].class_id
+        response = client.post(f'/student/switch-class/{class_id}')
         assert response.status_code == 200
         
         response_data = response.get_json()

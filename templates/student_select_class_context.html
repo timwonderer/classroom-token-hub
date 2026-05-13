@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Select your class</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="bg-light">
+  <main class="container py-5" style="max-width: 720px;">
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <h1 class="h4 mb-0">Select Your Class</h1>
+      </div>
+      <div class="card-body">
+        <p class="mb-3">We are having trouble finding the last class you were in.</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ 'danger' if category == 'error' else category }}" role="alert">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <form method="post" action="{{ url_for('student.select_class_context') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label for="class_id" class="form-label">Available Classes</label>
+            <select id="class_id" name="class_id" class="form-select" required>
+              <option value="" disabled selected>Select class</option>
+              {% for option in class_options %}
+                <option value="{{ option.class_id }}">
+                  {{ option.join_code }} - {{ option.class_identifier }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <small class="text-muted">
+              We have found the following classes that you have previously joined. If you don't see your class, please ask your teacher for the join code and try again.
+            </small>
+            <ul class="mt-2 mb-0">
+              {% for option in class_options %}
+                {% if option.class_name %}
+                  <li><strong>{{ option.join_code }} - {{ option.class_identifier }}</strong>: {{ option.class_name }}</li>
+                {% endif %}
+              {% endfor %}
+            </ul>
+          </div>
+          <button type="submit" class="btn btn-primary">Continue</button>
+        </form>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
