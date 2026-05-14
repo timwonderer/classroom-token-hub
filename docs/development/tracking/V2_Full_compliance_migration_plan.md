@@ -1101,6 +1101,10 @@ Constraint:
   - `run_phase1.sh` now executes runtime battery and regenerates `runtime_attacks_report.json`
   - Evidence bundle manifest now includes `runtime_attacks_report.json`
   - Scorecard now reports runtime battery status/violation counts
+- Established sanitized evidence documentation protocol:
+  - `scripts/adversarial/build_evidence_bundle.py` now emits commit-safe summaries under `artifacts/adversarial/sanitized/<run_id>/`
+  - protocol spec: `docs/development/specs/V2_ADVERSARIAL_EVIDENCE_DOCUMENTATION_PROTOCOL.md`
+  - intent: always document results without committing raw engagement payload files
 - Fixed adversarial replay reliability issues discovered during rerun:
   - `scripts/adversarial/inject_impossible_state.py` now bootstraps a compliant `balance_cache` row when the seed topology has none, then performs class mismatch injection
   - bootstrap write is FEAT-owned (`FEAT-ADMN-001`)
