@@ -1086,6 +1086,45 @@ Constraint:
 - Admin routes functional after decomposition; all URL paths respond correctly
 - All readiness matrix items marked `done`
 
+### Status Update (2026-05-13): Wave 11 Adversarial Harness Restoration + INV-ARC-007 Attendance Read/Write Split
+
+- Restored adversarial Phase 1 source harness on `codex/v2.0`:
+  - `scripts/adversarial/phase1_seed_and_snapshot.sh`
+  - `scripts/adversarial/run_phase1.sh`
+  - `scripts/adversarial/verify_cross_class_isolation.py`
+  - `scripts/adversarial/verify_lineage_lawfulness.py`
+  - `scripts/adversarial/render_constitutional_scorecard.py`
+  - `scripts/adversarial/build_evidence_bundle.py`
+  - snapshot/reset utilities under `scripts/adversarial/`
+- Reintroduced runtime attack reporting as first-class evidence output:
+  - Added `scripts/adversarial/verify_runtime_session_attacks.py`
+  - `run_phase1.sh` now executes runtime battery and regenerates `runtime_attacks_report.json`
+  - Evidence bundle manifest now includes `runtime_attacks_report.json`
+  - Scorecard now reports runtime battery status/violation counts
+- Fixed adversarial replay reliability issues discovered during rerun:
+  - `scripts/adversarial/inject_impossible_state.py` now bootstraps a compliant `balance_cache` row when the seed topology has none, then performs class mismatch injection
+  - bootstrap write is FEAT-owned (`FEAT-ADMN-001`)
+  - `scripts/adversarial/reset_db.py` tolerates known `pg_restore` compatibility warning (`transaction_timeout`) in mixed Postgres tool/server versions
+  - `app/feats/base.py` top-level FEAT entry now safely falls back to `begin_nested()` on scoped-session `InvalidRequestError`
+- Completed another `INV-ARC-007` rewrite slice in attendance polling:
+  - `GET /api/student-status` is now read-only
+  - New explicit mutation endpoint: `POST /api/student-status/reconcile` (FEAT-wrapped)
+  - `static/js/attendance.js` now reconciles via POST before status polling reads
+  - Added targeted regression coverage in `tests/test_tap_flow.py` for GET read-only vs POST reconcile mutation behavior
+
+Validation snapshot after clean seeded baseline and injected replay:
+
+- Baseline (pre-injection): cross-class `PASS(0)`, lineage `PASS(0)`, runtime `PASS(0)`
+- Injected replay: cross-class `FAIL(1)` (expected synthetic corruption detection), lineage `PASS(0)`, runtime `PASS(0)`
+- Scorecard remains non-terminal overall due to:
+  - expected injected cross-class failure in replay mode
+  - remaining GET mutation detector findings (`INV-ARC-007`) outside this slice
+
+Wave impact:
+
+- Advances Wave 11 item **6. INV-ARC-007 final sweep** by removing additional write-on-GET behavior from live student polling path.
+- Re-establishes adversarial evidence generation as a stable standing gate for ongoing v2 rewrite waves.
+
 ---
 
 ## Wave 12 — Final Validation
