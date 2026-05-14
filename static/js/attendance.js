@@ -116,9 +116,17 @@ function performTap(period, action, pin, reason = null) {
     });
 }
 
+function reconcileStudentStatus() {
+  return window.AppCore.csrfFetch("/api/student-status/reconcile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}"
+  }).catch(() => null);
+}
+
 // Poll the server every 10 seconds to refresh block status
 setInterval(() => {
-  fetch("/api/student-status")
+  reconcileStudentStatus().then(() => fetch("/api/student-status"))
     .then(r => {
       // If session expired, redirect to login
       if (r.status === 401) {
@@ -269,7 +277,7 @@ function updateHallPassOverlay(period, hallPass) {
 }
 
 function refreshUi(period, refreshQueue = false) {
-  fetch("/api/student-status")
+  reconcileStudentStatus().then(() => fetch("/api/student-status"))
     .then(r => r.json())
     .then(statusData => {
       if (statusData.status === 'ok' && statusData.periods && statusData.periods[period]) {

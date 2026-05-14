@@ -270,3 +270,64 @@ def test_auto_tapout_skips_when_join_code_missing(client, caplog):
         f"TapEvent ID is {legacy_event.id}" in record.message
         for record in caplog.records
     ), f"Expected warning about missing join_code was not logged. Records: {[r.message for r in caplog.records]}"
+
+
+def test_student_status_get_is_read_only_and_reconcile_is_explicit_mutation(client, monkeypatch):
+    from datetime import datetime, timezone
+    from app.models import Admin, StudentTeacher, ClassEconomy, Seat
+    import pyotp
+    from app.routes import api as api_routes
+
+    teacher = make_admin("status_teacher", pyotp.random_base32())
+    db.session.add(teacher)
+    db.session.flush()
+
+    salt = get_random_salt()
+    username = "status_student"
+    stu = Student(
+        first_name="Status",
+        last_initial="R",
+        block="A",
+        salt=salt,
+        username_hash=hash_username(username, salt),
+        pin_hash=generate_password_hash("0000"),
+    )
+    db.session.add(stu)
+    db.session.flush()
+
+    db.session.add(StudentTeacher(student_id=stu.id, teacher_id=teacher.id))
+    create_claimed_seat(teacher.id, stu.id, "A", "JOIN-A", salt)
+    db.session.commit()
+    class_row = ClassEconomy.query.filter_by(join_code="JOIN-A").first()
+    seat = Seat.query.filter_by(student_id=stu.id, class_id=class_row.class_id).first()
+    assert class_row is not None
+    assert seat is not None
+    if not seat.claimed_at:
+        seat.claimed_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+    with client.session_transaction() as sess:
+        now = datetime.now(timezone.utc).isoformat()
+        sess["student_id"] = stu.id
+        sess["current_seat_id"] = seat.id
+        sess["seat_id"] = seat.id
+        sess["current_class_id"] = class_row.class_id
+        sess["class_id"] = class_row.class_id
+        sess["current_join_code"] = "JOIN-A"
+        sess["login_time"] = now
+        sess["last_activity"] = now
+
+    called = {"count": 0}
+
+    def _fake_auto_tapout(student, commit=True):
+        called["count"] += 1
+
+    monkeypatch.setattr(api_routes, "check_and_auto_tapout_if_limit_reached", _fake_auto_tapout)
+
+    get_resp = client.get("/api/student-status")
+    assert get_resp.status_code == 200
+    assert called["count"] == 0
+
+    post_resp = client.post("/api/student-status/reconcile")
+    assert post_resp.status_code == 200
+    assert called["count"] == 1

@@ -2924,9 +2924,6 @@ def student_status():
     if not context:
         return jsonify({"status": "error", "message": "No class selected."}), 400
 
-    # Check and auto-tap-out if daily limit reached
-    check_and_auto_tapout_if_limit_reached(student)
-
     period_states = get_all_block_statuses(student, join_code=context['join_code'])
 
     # Convert Decimal values to float for JSON serialization
@@ -2938,6 +2935,25 @@ def student_status():
         "status": "ok",
         "periods": period_states
     })
+
+
+@api_bp.route('/student-status/reconcile', methods=['POST'])
+@login_required
+@feat_shell("FEAT-ATTN-002")
+def reconcile_student_status():
+    """Apply attendance-side mutations (daily-limit auto tap-out) explicitly via POST."""
+    from app.routes.student import get_current_class_context
+
+    student = get_logged_in_student()
+    if not student:
+        return jsonify({"status": "error", "message": "Student not found."}), 404
+
+    context = get_current_class_context()
+    if not context:
+        return jsonify({"status": "error", "message": "No class selected."}), 400
+
+    check_and_auto_tapout_if_limit_reached(student, commit=True)
+    return jsonify({"status": "ok"})
 
 
 # -------------------- UTILITY API --------------------
