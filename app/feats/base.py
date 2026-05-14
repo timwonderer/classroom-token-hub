@@ -7,6 +7,7 @@ import logging
 import os
 from datetime import datetime
 from enum import Enum, auto
+from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy import event
 from app.extensions import db
 
@@ -197,7 +198,11 @@ class FEATContext:
         self._owns_transaction = not is_nested_feat()
         if self._owns_transaction:
             session_has_txn = bool(getattr(db.session, "in_transaction", lambda: False)())
-            self._transaction_ctx = db.session.begin_nested() if session_has_txn else db.session.begin()
+            try:
+                self._transaction_ctx = db.session.begin_nested() if session_has_txn else db.session.begin()
+            except InvalidRequestError:
+                # Some scoped-session states may report no active transaction but still reject begin().
+                self._transaction_ctx = db.session.begin_nested()
             self._transaction_ctx.__enter__()
         
         self.log_event("FEAT-ENTRY", {
