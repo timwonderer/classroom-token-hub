@@ -196,7 +196,8 @@ class FEATContext:
         # FEAT is the transaction boundary: top-level FEAT owns exactly one DB transaction.
         self._owns_transaction = not is_nested_feat()
         if self._owns_transaction:
-            self._transaction_ctx = db.session.begin()
+            session_has_txn = bool(getattr(db.session, "in_transaction", lambda: False)())
+            self._transaction_ctx = db.session.begin_nested() if session_has_txn else db.session.begin()
             self._transaction_ctx.__enter__()
         
         self.log_event("FEAT-ENTRY", {

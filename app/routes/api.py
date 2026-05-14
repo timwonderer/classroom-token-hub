@@ -1873,13 +1873,28 @@ def get_available_hall_pass_types():
         }), 400
 
     settings = None
+    resolved_join_code = None
     if resolved_class_id:
+        class_row = ClassEconomy.query.filter_by(class_id=resolved_class_id).first()
+        resolved_join_code = class_row.join_code if class_row else None
         settings = HallPassSettings.query.filter_by(class_id=resolved_class_id).first()
     elif teacher_public_id:
         return jsonify({
             "status": "error",
             "message": "class_id is required"
         }), 400
+
+    feature_scope = resolve_feature_class(
+        resolved_teacher_id,
+        'hall_pass',
+        block=(settings.block if settings else None),
+        join_code=resolved_join_code,
+    )
+    if not feature_scope or not feature_scope.get("enabled"):
+        return jsonify({
+            "status": "error",
+            "message": "Hall pass is disabled for this class",
+        }), 403
 
     if not settings:
         # Return defaults if not configured

@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from app import app, db
 from app.models import (
     Admin,
+    ClassFeature,
     ClassEconomy,
     ClassMembership,
     HallPassSettings,
@@ -613,6 +614,7 @@ def test_hall_pass_available_types_accepts_class_id_without_teacher_id(client):
             {"name": "Nurse", "enabled": True},
         ],
     ))
+    db.session.add(ClassFeature(class_id=economy.class_id, feature_name="hall_pass"))
     db.session.commit()
 
     _login_student(client, student, join_code="HALLA1")
@@ -622,6 +624,29 @@ def test_hall_pass_available_types_accepts_class_id_without_teacher_id(client):
     payload = response.get_json()
     assert payload["status"] == "success"
     assert payload["pass_types"] == [{"name": "Bathroom"}, {"name": "Nurse"}]
+
+
+def test_hall_pass_available_types_rejects_when_feature_disabled_for_class(client):
+    teacher, _ = _create_admin("teacher-hall-disabled")
+    student = _create_student("HallDisabled", primary_teacher=teacher)
+    _create_claimed_seat(teacher, student, "HALLD1", block="A")
+
+    economy = ClassEconomy.query.filter_by(join_code="HALLD1").first()
+    db.session.add(HallPassSettings(
+        teacher_id=teacher.id,
+        join_code="HALLD1",
+        class_id=economy.class_id,
+        block="A",
+        pass_types=[{"name": "Bathroom", "enabled": True}],
+    ))
+    db.session.commit()
+
+    _login_student(client, student, join_code="HALLD1")
+    response = client.get(f"/api/hall-pass/available-types?class_id={economy.class_id}")
+
+    assert response.status_code == 403
+    payload = response.get_json()
+    assert payload["status"] == "error"
 
 
 def test_hall_pass_available_types_rejects_out_of_scope_join_code(client):
@@ -643,6 +668,59 @@ def test_hall_pass_available_types_rejects_out_of_scope_join_code(client):
     assert response.status_code == 403
     payload = response.get_json()
     assert payload["status"] == "error"
+
+
+def test_student_seat_context_rejects_unclaimed_seat(client):
+    teacher, _ = _create_admin("teacher-seat-unclaimed")
+    student = _create_student("UnclaimedSeat", primary_teacher=teacher)
+    _create_class_scope(teacher, student, "UNCL1")
+    class_row = ClassEconomy.query.filter_by(join_code="UNCL1", teacher_id=teacher.id).first()
+    unclaimed = Seat(
+        student_id=student.id,
+        class_id=class_row.class_id,
+        join_code="UNCL1",
+        role="student",
+        block_identifier="A",
+        block="A",
+        claimed_at=None,
+    )
+    db.session.add(unclaimed)
+    db.session.commit()
+
+    _login_student(client, student, join_code="UNCL1")
+    with client.session_transaction() as sess:
+        sess["current_seat_id"] = unclaimed.id
+
+    response = client.get("/student/payroll", follow_redirects=False)
+    assert response.status_code != 200
+
+
+def test_student_seat_context_rejects_cross_user_seat_id(client):
+    teacher_a, _ = _create_admin("teacher-seat-injection-a")
+    teacher_b, _ = _create_admin("teacher-seat-injection-b")
+    alice = _create_student("SeatAlice", primary_teacher=teacher_a)
+    bob = _create_student("SeatBob", primary_teacher=teacher_b)
+    _create_claimed_seat(teacher_a, alice, "SEATA1", block="A")
+    _create_claimed_seat(teacher_b, bob, "SEATB1", block="A")
+
+    bob_class = ClassEconomy.query.filter_by(join_code="SEATB1", teacher_id=teacher_b.id).first()
+    bob_seat = Seat.query.filter_by(student_id=bob.id, class_id=bob_class.class_id).first()
+    assert bob_seat is not None and bob_seat.claimed_at is not None
+    assert bob_seat.student_id != alice.id
+
+    from flask import session
+    from app.auth import get_current_seat, get_current_student_seat
+
+    with app.test_request_context("/student/payroll"):
+        session["student_id"] = alice.id
+        session["current_seat_id"] = bob_seat.id
+        session["seat_id"] = bob_seat.id
+        session["current_class_id"] = bob_class.class_id
+        session["class_id"] = bob_class.class_id
+        session["current_join_code"] = "SEATB1"
+
+        assert get_current_student_seat() is None
+        assert get_current_seat() is None
 
 
 def test_hall_pass_available_types_requires_class_id(client):

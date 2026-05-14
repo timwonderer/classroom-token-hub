@@ -181,7 +181,23 @@ def login_required(f):
             return redirect(url_for('student.login'))
 
         session['last_activity'] = utc_now().isoformat()
-        sync_student_session_context(student)
+        had_explicit_seat = bool(session.get('current_seat_id'))
+        seat = sync_student_session_context(student)
+        if had_explicit_seat and seat is None:
+            session.pop('student_id', None)
+            session.pop('student_user_id', None)
+            session.pop('current_seat_id', None)
+            session.pop('seat_id', None)
+            session.pop('class_id', None)
+            session.pop('current_class_id', None)
+            session.pop('current_join_code', None)
+            session.pop('login_time', None)
+            session.pop('last_activity', None)
+            session.pop('teacher_display_name_cache', None)
+            if request.path.startswith('/api/'):
+                return jsonify({"status": "error", "error": "Account claim is required for this class context."}), 403
+            flash("Account claim is required before accessing class resources.", "error")
+            return redirect(url_for('student.login'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -286,7 +302,18 @@ def get_current_student_seat():
     seat_id = session.get('current_seat_id')
     if not seat_id:
         return None
-    return db.session.get(Seat, seat_id)
+    seat = db.session.get(Seat, seat_id)
+    if not seat:
+        return None
+
+    student_id = session.get('student_id')
+    if student_id and seat.student_id != student_id:
+        return None
+
+    if not getattr(seat, "claimed_at", None):
+        return None
+
+    return seat
 
 
 def _first_present_session_value(*keys):
@@ -322,14 +349,14 @@ def get_current_seat():
     if hasattr(g, "_auth_current_seat_cache"):
         return g._auth_current_seat_cache
 
+    student_id = _safe_int_id(_first_present_session_value('student_id'))
     seat_id = _safe_int_id(_first_present_session_value('seat_id', 'current_seat_id'))
     if seat_id:
         seat = db.session.get(Seat, seat_id)
-        if seat:
+        if seat and (not student_id or seat.student_id == student_id) and getattr(seat, "claimed_at", None):
             g._auth_current_seat_cache = seat
             return seat
 
-    student_id = _safe_int_id(_first_present_session_value('student_id'))
     if not student_id:
         return None
 
@@ -341,7 +368,7 @@ def get_current_seat():
             .order_by(Seat.id.asc())
             .first()
         )
-        if seat:
+        if seat and getattr(seat, "claimed_at", None):
             g._auth_current_seat_cache = seat
             return seat
         return None
@@ -458,11 +485,33 @@ def sync_student_session_context(
     target_join_code = join_code or session.get('current_join_code')
 
     seat = None
+    explicit_seat_requested = bool(target_seat_id)
     if target_seat_id:
         seat = db.session.get(Seat, target_seat_id)
     
     if not seat and target_class_id:
         seat = Seat.query.filter_by(student_id=student.id, class_id=target_class_id).first()
+
+    if seat and seat.student_id != student.id:
+        current_app.logger.warning(
+            "STUDENT-SCOPE-INCIDENT: rejecting seat_id=%s for student_id=%s (seat belongs to student_id=%s)",
+            getattr(seat, "id", None),
+            student.id,
+            seat.student_id,
+        )
+        seat = None
+
+    if seat and not getattr(seat, "claimed_at", None):
+        current_app.logger.info(
+            "STUDENT-CLAIM-GATE: rejecting unclaimed seat_id=%s for student_id=%s",
+            getattr(seat, "id", None),
+            student.id,
+        )
+        seat = None
+
+    # Fail closed when an explicit seat anchor is present but invalid.
+    if explicit_seat_requested and seat is None:
+        return None
 
     linked_user = None
     if seat and seat.user_id:
