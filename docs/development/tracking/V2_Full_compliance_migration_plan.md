@@ -823,6 +823,23 @@ Focused validation:
 - `pytest -q tests/test_feature_flag_enforcement.py tests/test_feature_settings.py`
   - Result: `29 passed`
 
+### Status Update (2026-05-14): Wave 3 Exit Closure Slice — Admin Feature-Scope Helper Simplification
+
+- Removed obsolete request-level `requested_join_code` compatibility path from admin feature-scope helpers:
+  - `app/routes/admin.py`
+    - `resolve_admin_feature_join_code(...)` no longer accepts `requested_join_code`
+    - `require_admin_feature_scope(...)` no longer accepts `requested_join_code`
+  - Updated dependent payroll/hall-pass scope callsites to stay class/block/session-authoritative only.
+
+Focused validation:
+
+- `python3 -m py_compile app/routes/admin.py app/routes/analytics.py`
+  - Result: pass
+- `python3 scripts/policy_guardrails.py --git-diff-base origin/main --git-diff-head HEAD`
+  - Result: `Policy guardrails: clean`
+- `pytest -q tests/test_feature_flag_enforcement.py tests/test_feature_settings.py`
+  - Result: `29 passed`
+
 ### Status Update (2026-05-01): FEAT Atomicity Enforcement Baseline
 
 - Enforced FEAT-owned transaction boundaries as a runtime invariant:
