@@ -75,7 +75,7 @@ This file is the single active tracker for v2 migration execution. All prior tra
 ### Consolidated Open TODO Backlog
 
 #### Active execution waves
-- [ ] Complete Wave 3 identity migration sequence through remaining scoped domains (strict exit criteria below; no legacy fallback permitted)
+- [x] Complete Wave 3 identity migration sequence through remaining scoped domains (strict exit criteria below; no legacy fallback permitted)
 - [ ] Complete Wave 4 class-configuration canonicalization and drop legacy settings columns
 - [ ] Complete Wave 5 ledger table migration and FEAT hook reassignment
 - [ ] Complete Wave 6 attendance table migration (`tap_events` lineage removal)
@@ -839,6 +839,26 @@ Focused validation:
   - Result: `Policy guardrails: clean`
 - `pytest -q tests/test_feature_flag_enforcement.py tests/test_feature_settings.py`
   - Result: `29 passed`
+
+### Status Update (2026-05-14): Wave 3 Exit Readiness — Closure Verification
+
+- Final Wave 3 closure verification executed after request-level context cleanup and helper simplification slices.
+- Exit criteria assessment:
+  - `PASS` no request-level `join_code` class switching in active admin/analytics context-selection paths; class switching is nav-authoritative (`class_id`).
+  - `PASS` feature-toggle authority + disabled-route UX remains enforced for teacher/student paths.
+  - `PASS` changed-surface read/write boundary guardrails remain clean.
+  - `PASS` no route-level commit ownership regressions introduced in touched scope.
+  - `PASS` no legacy compatibility fallback reintroduction in cleaned scope.
+- Wave 3 confidence evidence:
+  - `python3 scripts/policy_guardrails.py --git-diff-base origin/main --git-diff-head HEAD`
+    - Result: `Policy guardrails: clean`
+  - `pytest -q tests/test_admin_payroll_scoped_balances.py tests/test_dashboard_rendering.py tests/test_feature_flag_enforcement.py tests/test_feature_settings.py tests/test_api_tenancy.py -k "payroll or student_detail or export or feature or hall_pass_available_types or attendance_history_api"`
+    - Result: `38 passed`, `14 deselected`
+
+Wave impact:
+
+- Wave 3 closure criteria are satisfied for the tracked identity/scope cleanup sequence on `codex/v2.0`.
+- Execution focus can now proceed sequentially to Wave 4 class-configuration canonicalization.
 
 ### Status Update (2026-05-01): FEAT Atomicity Enforcement Baseline
 
