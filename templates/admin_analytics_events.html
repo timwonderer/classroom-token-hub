@@ -13,14 +13,14 @@
       data-switch-url="{{ url_for('analytics.events') }}"
     >
       {% for class_option in available_classes %}
-      <option value="{{ class_option.join_code }}" {% if class_option.join_code == join_code %}selected{% endif %}>
+      <option value="{{ class_option.class_id }}" {% if class_option.class_id and class_option.class_id == session.get('current_class_id') %}selected{% endif %}>
         {{ class_option.label }} ({{ class_option.block }})
       </option>
       {% endfor %}
     </select>
   </div>
   {% endif %}
-  <a href="{{ url_for('analytics.dashboard', join_code=join_code) }}" class="btn btn-outline-primary">
+  <a href="{{ url_for('analytics.dashboard') }}" class="btn btn-outline-primary">
     <span class="material-symbols-outlined">arrow_back</span> Back to Dashboard
   </a>
 </div>
@@ -138,8 +138,20 @@
 
     const baseUrl = target.dataset.switchUrl || "{{ url_for('analytics.events') }}";
     const targetUrl = new URL(baseUrl, window.location.origin);
-    targetUrl.searchParams.set('join_code', target.value);
-    window.location.assign(targetUrl.toString());
+    const classId = (target.value || '').trim();
+    if (!classId) {
+      return;
+    }
+
+    window.AppCore.csrfFetch('{{ url_for("admin.set_current_class") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ class_id: classId })
+    }).then((response) => {
+      if (response.ok) {
+        window.location.assign(targetUrl.toString());
+      }
+    }).catch(() => {});
   });
 </script>
 {% endblock %}

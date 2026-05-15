@@ -264,7 +264,7 @@
                   {% endif %}
                 </td>
                 <td>
-                  <a href="{{ url_for('admin.student_detail', student_id=tx.student_id, join_code=join_codes_by_block.get(tx.student_block, '')) }}">
+                  <a href="{{ url_for('admin.student_detail', student_id=tx.student_id) }}">
                     {{ tx.student_name }}
                   </a>
                 </td>
@@ -399,7 +399,7 @@
                   {% endif %}
                 </td>
                 <td>
-                  <a href="{{ url_for('admin.student_detail', student_id=tx.student_id, join_code=join_codes_by_block.get(tx.student_block, '')) }}">
+                  <a href="{{ url_for('admin.student_detail', student_id=tx.student_id) }}">
                     {{ tx.student_name }}
                   </a>
                 </td>

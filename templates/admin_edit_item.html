@@ -27,7 +27,7 @@
         <h5 class="mb-0"><span class="material-symbols-outlined me-2">edit</span>Edit: {{ item.name }}</h5>
     </div>
     <div class="card-body">
-        <form method="POST" action="{{ url_for('admin.edit_store_item', item_id=item.id, join_code=selected_feature_scope.join_code) }}">
+        <form method="POST" action="{{ url_for('admin.edit_store_item', item_id=item.id) }}">
             {{ form.hidden_tag() }}
 
             <!-- Basic Information -->

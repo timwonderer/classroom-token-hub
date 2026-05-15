@@ -17,7 +17,6 @@
 
                     <form method="POST" action="{{ url_for('admin.help_support') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="join_code" value="{{ selected_join_code }}">
                         <div class="mb-3">
                             <label class="form-label">This issue applies to:</label>
                             <div class="form-control bg-light">

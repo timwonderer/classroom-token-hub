@@ -71,24 +71,6 @@ def get_teacher_class_options(teacher_id: int):
     return options
 
 
-def resolve_current_join_code(teacher_id: int):
-    available_classes = get_teacher_class_options(teacher_id)
-    valid_join_codes = {c['join_code'] for c in available_classes}
-
-    session_join_code = session.get('current_join_code')
-    selected_join_code = None
-
-    if session_join_code in valid_join_codes:
-        selected_join_code = session_join_code
-    elif available_classes:
-        selected_join_code = available_classes[0]['join_code']
-
-    if selected_join_code:
-        session['current_join_code'] = selected_join_code
-
-    return selected_join_code, available_classes
-
-
 def resolve_current_class_context(teacher_id: int):
     """Resolve class context using class_id as authority; join_code is derived alias."""
     available_classes = get_teacher_class_options(teacher_id)

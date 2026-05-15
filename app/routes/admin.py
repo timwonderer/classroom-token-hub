@@ -249,36 +249,17 @@ def _get_admin_class_context_redirect_endpoint() -> str:
 
 
 def _get_requested_admin_class_id() -> str | None:
-    """Resolve request-scoped class_id (join_code may be provided only as input alias)."""
+    """Resolve request-scoped class_id from explicit class_id only."""
     if request.method == 'GET':
         class_candidate = request.args.get('class_id')
-        join_code_candidate = request.args.get('join_code')
     elif request.is_json:
         payload = request.get_json(silent=True) or {}
         class_candidate = payload.get('class_id')
-        join_code_candidate = payload.get('join_code')
     else:
         class_candidate = request.form.get('class_id')
-        join_code_candidate = request.form.get('join_code')
 
     normalized_class_id = (class_candidate or '').strip()
-    if normalized_class_id:
-        return normalized_class_id
-
-    normalized_join_code = (join_code_candidate or '').strip()
-    if not normalized_join_code:
-        return None
-
-    admin_id = session.get('admin_id')
-    class_row = (
-        ClassEconomy.query.with_entities(ClassEconomy.class_id)
-        .filter(
-            ClassEconomy.teacher_id == admin_id,
-            ClassEconomy.join_code == normalized_join_code,
-        )
-        .first()
-    )
-    return class_row.class_id if class_row and class_row.class_id else None
+    return normalized_class_id or None
 
 
 def _admin_write_has_join_code_conflict(admin_id: int | None) -> bool:

@@ -12,7 +12,7 @@
         data-bs-toggle="dropdown" aria-expanded="false">
         {% set selected_class = namespace(found=False) %}
         {% for class_option in available_classes %}
-        {% if class_option.join_code == join_code %}
+        {% if class_option.class_id and class_option.class_id == session.get('current_class_id') %}
         {{ class_option.label }} ({{ class_option.block }})
         {% set selected_class.found = True %}
         {% endif %}
@@ -21,8 +21,10 @@
       </button>
       <ul class="dropdown-menu" aria-labelledby="classDropdownButton">
         {% for class_option in available_classes %}
-        <li><a class="dropdown-item {% if class_option.join_code == join_code %}active{% endif %}"
-            href="{{ url_for('analytics.dashboard', window=window_type, join_code=class_option.join_code) }}">
+        <li><a class="dropdown-item analytics-class-switch {% if class_option.class_id and class_option.class_id == session.get('current_class_id') %}active{% endif %}"
+            href="#"
+            data-class-id="{{ class_option.class_id }}"
+            data-next-url="{{ url_for('analytics.dashboard', window=window_type) }}">
             {{ class_option.label }} ({{ class_option.block }})
           </a></li>
         {% endfor %}
@@ -32,11 +34,11 @@
   {% endif %}
 
   <div class="btn-group" role="group">
-    <a href="{{ url_for('analytics.dashboard', window='week', join_code=join_code) }}"
+    <a href="{{ url_for('analytics.dashboard', window='week') }}"
       class="btn {% if window_type == 'week' %}btn-primary{% else %}btn-outline-primary{% endif %}">
       Week
     </a>
-    <a href="{{ url_for('analytics.dashboard', window='month', join_code=join_code) }}"
+    <a href="{{ url_for('analytics.dashboard', window='month') }}"
       class="btn {% if window_type == 'month' %}btn-primary{% else %}btn-outline-primary{% endif %}">
       Month
     </a>
@@ -48,6 +50,31 @@
   <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
 </button>
 </div>
+
+<script>
+  document.addEventListener('click', async (event) => {
+    const link = event.target.closest('.analytics-class-switch');
+    if (!link) return;
+    event.preventDefault();
+
+    const classId = (link.dataset.classId || '').trim();
+    const nextUrl = link.dataset.nextUrl || "{{ url_for('analytics.dashboard') }}";
+    if (!classId) return;
+
+    try {
+      const response = await window.AppCore.csrfFetch('{{ url_for("admin.set_current_class") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ class_id: classId })
+      });
+      if (response.ok) {
+        window.location.assign(nextUrl);
+      }
+    } catch (_err) {
+      // Keep failure silent; nav class switcher already exposes visible errors globally.
+    }
+  });
+</script>
 {% endblock %}
 
 {% block content %}
