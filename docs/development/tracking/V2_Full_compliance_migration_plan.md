@@ -795,6 +795,34 @@ Focused validation:
   - `pytest -q tests/test_teacher_student_flow.py tests/test_class_context_and_switching.py tests/test_legacy_student_claim.py`
   - Result: `21 passed`
 
+### Status Update (2026-05-14): Wave 3 Exit Closure Slice — Request-Level Context Propagation Cleanup (Admin + Analytics Templates)
+
+- Removed additional request-level class context propagation from active admin and analytics surfaces:
+  - `app/routes/admin.py`
+    - `_get_requested_admin_class_id()` now resolves explicit request `class_id` only; request `join_code` alias resolution removed.
+  - `app/routes/analytics.py`
+    - removed legacy `resolve_current_join_code(...)` helper; class context remains `class_id`-authoritative via `resolve_current_class_context(...)`.
+  - Analytics templates migrated off request `join_code` switching:
+    - `templates/admin_analytics_dashboard.html`
+    - `templates/admin_analytics_events.html`
+    - `templates/admin_analytics_student_detail.html`
+    - class switching now posts `class_id` through the existing nav-authoritative `admin.set_current_class` flow.
+  - Removed remaining `join_code` propagation on student-detail/admin actions in touched templates:
+    - `templates/admin_banking.html`
+    - `templates/admin_rent_settings.html`
+    - `templates/admin_payroll.html`
+    - `templates/admin_payroll_history.html`
+    - `templates/admin_view_student_policy.html`
+    - `templates/admin_edit_item.html`
+    - `templates/admin_support_tickets.html` (removed unused hidden `join_code` field)
+
+Focused validation:
+
+- `python3 scripts/policy_guardrails.py --git-diff-base origin/main --git-diff-head HEAD`
+  - Result: `Policy guardrails: clean`
+- `pytest -q tests/test_feature_flag_enforcement.py tests/test_feature_settings.py`
+  - Result: `29 passed`
+
 ### Status Update (2026-05-01): FEAT Atomicity Enforcement Baseline
 
 - Enforced FEAT-owned transaction boundaries as a runtime invariant:
