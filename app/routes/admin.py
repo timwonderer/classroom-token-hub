@@ -591,17 +591,13 @@ def get_admin_feature_join_code_options(feature_name: str, admin_id: int | None 
     return options
 
 
-def resolve_admin_feature_join_code(feature_name: str, admin_id: int | None = None, requested_join_code: str | None = None) -> str | None:
+def resolve_admin_feature_join_code(feature_name: str, admin_id: int | None = None) -> str | None:
     resolved_admin_id = admin_id or session.get('admin_id')
     if not resolved_admin_id:
         return None
 
     options = get_admin_feature_join_code_options(feature_name, admin_id=resolved_admin_id)
     enabled_join_codes = {option['join_code'] for option in options}
-    requested = (requested_join_code or '').strip()
-    if requested and requested in enabled_join_codes:
-        return requested
-
     current_join_code = _get_current_admin_join_code(resolved_admin_id)
     if current_join_code and current_join_code in enabled_join_codes:
         return current_join_code
@@ -613,7 +609,6 @@ def require_admin_feature_scope(
     feature_name: str,
     *,
     admin_id: int | None = None,
-    requested_join_code: str | None = None,
     requested_block: str | None = None,
     allow_default: bool = True,
 ) -> dict:
@@ -622,17 +617,9 @@ def require_admin_feature_scope(
     if not options:
         abort(404)
 
-    options_by_join_code = {option['join_code']: option for option in options}
     options_by_block = {option['block']: option for option in options if option.get('block')}
 
-    normalized_join_code = (requested_join_code or '').strip()
     normalized_block = (requested_block or '').strip().upper()
-
-    if normalized_join_code:
-        option = options_by_join_code.get(normalized_join_code)
-        if not option:
-            abort(404)
-        return option
 
     if normalized_block:
         option = options_by_block.get(normalized_block)
@@ -977,7 +964,6 @@ def _require_payroll_feature_scope_from_request(admin_id: int, *, allow_default:
     return require_admin_feature_scope(
         'payroll',
         admin_id=admin_id,
-        requested_join_code=None,
         requested_block=request.values.get('cwi_block') or request.values.get('block'),
         allow_default=allow_default,
     )
@@ -7988,7 +7974,6 @@ def hall_pass():
     selected_scope = require_admin_feature_scope(
         'hall_pass',
         admin_id=admin_id,
-        requested_join_code=None,
         requested_block=None,
     )
     selected_join_code = selected_scope['join_code']
@@ -8066,7 +8051,6 @@ def hall_pass_setup():
     selected_scope = require_admin_feature_scope(
         'hall_pass',
         admin_id=admin_id,
-        requested_join_code=None,
     )
     return render_template(
         'hall_pass_setup.html',
