@@ -2,6 +2,12 @@
 set -euo pipefail
 
 : "${ADVERSARIAL_RUN_ID:=current}"
+: "${ADVERSARIAL_ARTIFACT_DIR:=artifacts/adversarial}"
+
+RUN_DIR="${ADVERSARIAL_ARTIFACT_DIR}/${ADVERSARIAL_RUN_ID}"
+mkdir -p "$RUN_DIR"
+# Keep per-run scorecards deterministic by resetting mutable violation output.
+: > "$RUN_DIR/violations.jsonl"
 
 python3 scripts/adversarial/inject_impossible_state.py
 python3 scripts/adversarial/verify_cross_class_isolation.py || true

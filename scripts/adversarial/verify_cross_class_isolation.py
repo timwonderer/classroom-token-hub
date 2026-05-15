@@ -21,10 +21,19 @@ def artifact_path(filename: str) -> Path:
     return root / filename
 
 
+def read_json(path: Path) -> dict | None:
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def main() -> int:
     app = create_app()
     with app.app_context():
         violations: list[dict] = []
+        expected_violations: list[dict] = []
+        injection = read_json(artifact_path("injection_report.json")) or {}
+        injected_balance_cache_row_id = injection.get("row_id") if injection.get("injection") == "balance_cache_class_mismatch" else None
 
         tx_rows = (
             Transaction.query.join(Seat, Seat.id == Transaction.seat_id)
@@ -51,16 +60,19 @@ def main() -> int:
         )
         for bc_id, bc_class_id, seat_id, seat_class_id in bc_rows:
             if str(bc_class_id) != str(seat_class_id):
-                violations.append(
-                    {
-                        "table": "balance_cache",
-                        "row_id": bc_id,
-                        "seat_id": seat_id,
-                        "row_class_id": str(bc_class_id),
-                        "seat_class_id": str(seat_class_id),
-                        "invariant": "INV-ARC-004",
-                    }
-                )
+                finding = {
+                    "table": "balance_cache",
+                    "row_id": bc_id,
+                    "seat_id": seat_id,
+                    "row_class_id": str(bc_class_id),
+                    "seat_class_id": str(seat_class_id),
+                    "invariant": "INV-ARC-004",
+                }
+                if injected_balance_cache_row_id and int(bc_id) == int(injected_balance_cache_row_id):
+                    finding["classification"] = "expected_synthetic_injection"
+                    expected_violations.append(finding)
+                else:
+                    violations.append(finding)
 
         report = {
             "generated_at": now_iso(),
@@ -68,9 +80,19 @@ def main() -> int:
             "status": "FAIL" if violations else "PASS",
             "violation_count": len(violations),
             "violations": violations,
+            "expected_injection_count": len(expected_violations),
+            "expected_injection_violations": expected_violations,
         }
         artifact_path("cross_class_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-        print(json.dumps({"status": report["status"], "violation_count": len(violations)}))
+        print(
+            json.dumps(
+                {
+                    "status": report["status"],
+                    "violation_count": len(violations),
+                    "expected_injection_count": len(expected_violations),
+                }
+            )
+        )
         return 1 if violations else 0
 
 
