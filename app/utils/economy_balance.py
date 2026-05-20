@@ -18,6 +18,7 @@ from decimal import Decimal
 
 from app.utils.economy_policy import (
     get_active_policy_mode,
+    get_active_policy_mode_for_class,
     get_policy_profile,
     get_price_recommendation_context,
     normalize_policy_mode,
@@ -129,7 +130,13 @@ class EconomyBalanceChecker:
     MINOR_DEVIATION_THRESHOLD = 0.15  # 15% deviation = warning
     MAJOR_DEVIATION_THRESHOLD = 0.30  # 30% deviation = critical
 
-    def __init__(self, teacher_id: int, block: Optional[str] = None, policy_mode: Optional[str] = None):
+    def __init__(
+        self,
+        teacher_id: int,
+        block: Optional[str] = None,
+        policy_mode: Optional[str] = None,
+        class_id: Optional[str] = None,
+    ):
         """
         Initialize checker for a specific teacher and optional block.
 
@@ -139,7 +146,13 @@ class EconomyBalanceChecker:
         """
         self.teacher_id = teacher_id
         self.block = block
-        resolved_mode = normalize_policy_mode(policy_mode or get_active_policy_mode(teacher_id, block))
+        self.class_id = class_id
+        resolved_mode_source = policy_mode
+        if resolved_mode_source is None and class_id:
+            resolved_mode_source = get_active_policy_mode_for_class(class_id)
+        if resolved_mode_source is None:
+            resolved_mode_source = get_active_policy_mode(teacher_id, block)
+        resolved_mode = normalize_policy_mode(resolved_mode_source)
         self.policy_mode = resolved_mode
         self.policy_profile = get_policy_profile(resolved_mode)
 

@@ -21,16 +21,21 @@ from datetime import datetime, timezone
 from app.utils.time import utc_now
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
-from sqlalchemy import and_, or_, true
+from sqlalchemy import true
 import sqlalchemy as sa
 
 from app.extensions import db
 from app.models import (
-    Student, Transaction, TapEvent, StudentBlock, PayrollSettings,
-    RentSettings, AnalyticsSnapshot, AnalyticsAlert, TeacherBlock, ClassEconomy,
-    StudentTeacher
+    Student, Transaction, TapEvent, PayrollSettings,
+    RentSettings, AnalyticsSnapshot, AnalyticsAlert, ClassEconomy,
+    ClassMembership, ClassMembershipRole, Seat
 )
 from app.utils.economy_balance import EconomyBalanceChecker
+from app.utils.economy_policy import (
+    get_active_policy_mode_for_class,
+    get_analytics_policy,
+    get_policy_profile,
+)
 import logging
 
 
@@ -65,14 +70,6 @@ class AnalyticsEngine:
     - Bias toward actionable interpretation
     """
     
-    # Thresholds per spec section 6.1
-    CWI_DEVIATION_WARNING_THRESHOLD = 0.20  # >20% of students outside ±20% CWI
-    VELOCITY_DROP_WARNING_THRESHOLD = 0.30  # >30% drop week-over-week
-    PARTICIPATION_WARNING_THRESHOLD = 0.70  # <70% participation
-    
-    # CWI deviation bands (per spec section 3.2)
-    CWI_DEVIATION_BAND = 0.20  # ±20% is "within expected"
-    
     def __init__(self, teacher_id: int, join_code: str):
         """
         Initialize analytics engine for a specific class economy.
@@ -83,89 +80,61 @@ class AnalyticsEngine:
         """
         self.teacher_id = teacher_id
         self.join_code = join_code
-        self.economy_checker = EconomyBalanceChecker(teacher_id)
-
-    def _get_block_for_join_code(self) -> Optional[str]:
-        """Resolve the period/block for a join code scoped to the current teacher."""
-        block_row = TeacherBlock.query.with_entities(TeacherBlock.block).filter(
-            TeacherBlock.teacher_id == self.teacher_id,
-            TeacherBlock.join_code == self.join_code
-        ).first()
-        if not block_row:
-            block_row = (
-                StudentBlock.query.with_entities(StudentBlock.period)
-                .join(Student, Student.id == StudentBlock.student_id)
-                .join(StudentTeacher, StudentTeacher.student_id == Student.id)
-                .filter(
-                    StudentBlock.join_code == self.join_code,
-                    StudentTeacher.teacher_id == self.teacher_id,
-                )
-                .first()
-            )
-        if block_row and block_row[0]:
-            return block_row[0].strip().upper()
-        return None
-    
-    def _get_enrolled_students(self) -> List[Student]:
-        """Get all students enrolled in this class period."""
-        query = (
-            Student.query
-            .join(StudentTeacher, StudentTeacher.student_id == Student.id)
-            .filter(StudentTeacher.teacher_id == self.teacher_id)
+        self.class_id = self._resolve_class_id()
+        self.policy_mode = get_active_policy_mode_for_class(self.class_id)
+        self.policy_profile = get_policy_profile(self.policy_mode)
+        self.analytics_policy = get_analytics_policy(self.policy_mode)
+        self.economy_checker = EconomyBalanceChecker(
+            teacher_id,
+            policy_mode=self.policy_mode,
+            class_id=self.class_id,
         )
 
-        block = self._get_block_for_join_code()
-
-        teacherblock_ids = (
-            TeacherBlock.query.with_entities(TeacherBlock.student_id)
-            .filter(
-                TeacherBlock.teacher_id == self.teacher_id,
-                TeacherBlock.join_code == self.join_code,
-                TeacherBlock.is_claimed.is_(True),
-                TeacherBlock.student_id.isnot(None)
-            )
-        )
-
-        studentblock_filters = [StudentBlock.join_code == self.join_code]
-        if block:
-            studentblock_filters.append(and_(
-                StudentBlock.join_code.is_(None),
-                StudentBlock.period == block
-            ))
-
-        studentblock_ids = (
-            StudentBlock.query.with_entities(StudentBlock.student_id)
-            .filter(or_(*studentblock_filters))
-        )
-
-        scoped_student_ids = teacherblock_ids.union(studentblock_ids).subquery()
-
-        enrolled_student_ids = (
-            query
-            .with_entities(Student.id)
-            .filter(Student.id.in_(sa.select(scoped_student_ids)))
-            .filter(Student.is_teacher == False)
-            .distinct()
-            .subquery()
-        )
-
-        return Student.query.filter(
-            Student.id.in_(sa.select(enrolled_student_ids))
-        ).all()
-    
-    def _get_cwi(self) -> float:
-        """Calculate current CWI for this class."""
+    def _resolve_class_id(self) -> Optional[str]:
         class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
             teacher_id=self.teacher_id,
             join_code=self.join_code,
         ).first()
         if not class_row or not class_row[0]:
+            return None
+        return class_row[0]
+
+    def _get_enrolled_students(self) -> List[Student]:
+        """Get all students enrolled in this class period via canonical class membership."""
+        if not self.class_id:
+            return []
+        return (
+            Student.query
+            .join(ClassMembership, ClassMembership.student_id == Student.id)
+            .filter(
+                ClassMembership.class_id == self.class_id,
+                ClassMembership.role == ClassMembershipRole.STUDENT.value,
+                Student.is_teacher.is_(False),
+            )
+            .all()
+        )
+
+    def _get_seat_id_by_student(self, student_ids: List[int]) -> Dict[int, int]:
+        if not self.class_id or not student_ids:
+            return {}
+        rows = (
+            Seat.query.with_entities(Seat.student_id, Seat.id)
+            .filter(
+                Seat.class_id == self.class_id,
+                Seat.student_id.in_(student_ids),
+            )
+            .all()
+        )
+        return {student_id: seat_id for student_id, seat_id in rows if student_id and seat_id}
+    
+    def _get_cwi(self) -> float:
+        """Calculate current CWI for this class."""
+        if not self.class_id:
             return 0.0
-        class_id = class_row[0]
 
         payroll_settings = (
             PayrollSettings.query.filter(
-                PayrollSettings.class_id == class_id,
+                PayrollSettings.class_id == self.class_id,
             )
             .order_by(sa.desc(PayrollSettings.block.isnot(None)))
             .first()
@@ -190,6 +159,9 @@ class AnalyticsEngine:
         """
         students = self._get_enrolled_students()
         total_students = len(students)
+        seat_id_by_student = self._get_seat_id_by_student([s.id for s in students])
+        if len(seat_id_by_student) != total_students:
+            raise ValueError("Missing canonical seat_id for one or more enrolled students.")
         
         if total_students == 0:
             return 0.0, 0, 0
@@ -201,7 +173,7 @@ class AnalyticsEngine:
         transaction_student_rows = (
             Transaction.query.with_entities(Transaction.student_id)
             .filter(
-                Transaction.join_code == self.join_code,
+                Transaction.class_id == self.class_id,
                 Transaction.timestamp >= window_start,
                 Transaction.timestamp < window_end,
             )
@@ -215,7 +187,7 @@ class AnalyticsEngine:
         tap_event_student_rows = (
             TapEvent.query.with_entities(TapEvent.student_id)
             .filter(
-                TapEvent.join_code == self.join_code,
+                TapEvent.class_id == self.class_id,
                 TapEvent.timestamp >= window_start,
                 TapEvent.timestamp < window_end,
             )
@@ -257,7 +229,7 @@ class AnalyticsEngine:
             return 0.0
         days = duration_seconds / 86400.0
         transaction_count = Transaction.query.filter(
-            Transaction.join_code == self.join_code,
+            Transaction.class_id == self.class_id,
             Transaction.timestamp >= window_start,
             Transaction.timestamp < window_end,
             ~Transaction.is_void
@@ -286,7 +258,10 @@ class AnalyticsEngine:
         """
         students = self._get_enrolled_students()
         total_students = len(students)
-        
+        seat_id_by_student = self._get_seat_id_by_student([s.id for s in students])
+        if len(seat_id_by_student) != total_students:
+            raise ValueError("Missing canonical seat_id for one or more enrolled students.")
+
         if total_students == 0 or cwi == 0:
             return 0.0
         
@@ -301,8 +276,8 @@ class AnalyticsEngine:
         
         for student in students:
             current_balance = student.get_checking_balance(
-                teacher_id=self.teacher_id,
-                join_code=self.join_code
+                class_id=self.class_id,
+                seat_id=seat_id_by_student[student.id],
             )
 
             # Convert Decimal to float for arithmetic operations
@@ -311,7 +286,7 @@ class AnalyticsEngine:
             # Calculate deviation
             if expected_balance > 0:
                 deviation = abs(current_balance - expected_balance) / expected_balance
-                if deviation <= self.CWI_DEVIATION_BAND:
+                if deviation <= self.analytics_policy["cwi_deviation_band"]:
                     within_band += 1
             elif current_balance == 0:
                 # If expected is 0 and actual is 0, that's within band
@@ -324,39 +299,45 @@ class AnalyticsEngine:
         """
         Calculate % of students passing budget survival test.
         
-        Per spec and economy_balance.py:
-        - Students with perfect attendance must be able to save ≥10% of CWI
+        Per DOM-ECON-000 and economy policy modes:
+        - Students with perfect attendance must meet policy-mode minimum savings ratio of CWI
         - This tests if economy is balanced
         """
 
         students = self._get_enrolled_students()
         total_students = len(students)
+        seat_id_by_student = self._get_seat_id_by_student([s.id for s in students])
+        if len(seat_id_by_student) != total_students:
+            raise ValueError("Missing canonical seat_id for one or more enrolled students.")
         if total_students == 0:
             return 0.0
         
         if cwi <= 0:
             logging.warning(
-                "Invalid CWI (%s) for teacher_id=%s, join_code=%s. "
+                "Invalid CWI (%s) for teacher_id=%s, class_id=%s. "
                 "Check PayrollSettings configuration.",
                 cwi,
                 self.teacher_id,
-                self.join_code,
+                self.class_id,
             )
             return 0.0
 
+        savings_ratio = float(
+            self.policy_profile.get("ratios", {}).get("savings_weekly", {}).get("min", 0.10)
+        )
         passing_students = 0
         
         for student in students:
             balance = student.get_checking_balance(
-                teacher_id=self.teacher_id,
-                join_code=self.join_code
+                class_id=self.class_id,
+                seat_id=seat_id_by_student[student.id],
             )
 
             # Convert Decimal to float for arithmetic comparison
             balance = float(balance) if balance is not None else 0.0
 
-            # Check if the student can save at least 10% of CWI
-            if balance >= 0.1 * cwi:
+            # Check if the student can save at least the policy-governed CWI minimum.
+            if balance >= savings_ratio * cwi:
                 passing_students += 1
         
         percentage = (passing_students / total_students) * 100
@@ -491,7 +472,7 @@ class AnalyticsEngine:
         alerts = []
         
         # Alert: Low participation
-        if metrics.participation_rate < (self.PARTICIPATION_WARNING_THRESHOLD * 100):
+        if metrics.participation_rate < (self.analytics_policy["participation_warning_threshold"] * 100):
             alerts.append({
                 'alert_key': 'participation_low',
                 'severity': 'warning',
@@ -501,7 +482,7 @@ class AnalyticsEngine:
             })
         
         # Alert: CWI deviation
-        if metrics.cwi_deviation_within_20pct < (100 * (1 - self.CWI_DEVIATION_WARNING_THRESHOLD)):
+        if metrics.cwi_deviation_within_20pct < (100 * (1 - self.analytics_policy["cwi_deviation_warning_threshold"])):
             alerts.append({
                 'alert_key': 'cwi_deviation',
                 'severity': 'warning',
@@ -550,12 +531,15 @@ class AnalyticsEngine:
         - Cached by time window
         - Resilient to partial data
         """
+        if not self.class_id:
+            raise ValueError("AnalyticsEngine requires canonical class_id context.")
+
         # Compute metrics
         health_metrics = self.compute_system_health(window_start, window_end)
         
         # Get previous snapshot for trend calculation
         previous_snapshot = AnalyticsSnapshot.query.filter(
-            AnalyticsSnapshot.join_code == self.join_code,
+            AnalyticsSnapshot.class_id == self.class_id,
             AnalyticsSnapshot.window_type == window_type,
             AnalyticsSnapshot.window_start < window_start,
             AnalyticsSnapshot.is_complete == True
@@ -565,7 +549,7 @@ class AnalyticsEngine:
         
         # Count transactions
         total_transactions = Transaction.query.filter(
-            Transaction.join_code == self.join_code,
+            Transaction.class_id == self.class_id,
             Transaction.timestamp >= window_start,
             Transaction.timestamp < window_end,
             Transaction.is_void.is_(False)
@@ -573,8 +557,11 @@ class AnalyticsEngine:
         
         # Calculate average balance (for CWI comparison only, not for ranking)
         students = self._get_enrolled_students()
+        seat_id_by_student = self._get_seat_id_by_student([s.id for s in students])
+        if len(seat_id_by_student) != len(students):
+            raise ValueError("Missing canonical seat_id for one or more enrolled students.")
         total_balance = sum(
-            float(s.get_checking_balance(teacher_id=self.teacher_id, join_code=self.join_code) or 0)
+            float(s.get_checking_balance(class_id=self.class_id, seat_id=seat_id_by_student[s.id]) or 0)
             for s in students
         )
         avg_balance = total_balance / len(students) if students else 0.0
@@ -582,6 +569,7 @@ class AnalyticsEngine:
         # Create snapshot
         snapshot = AnalyticsSnapshot(
             teacher_id=self.teacher_id,
+            class_id=self.class_id,
             join_code=self.join_code,
             window_type=window_type,
             window_start=window_start,
@@ -615,7 +603,7 @@ class AnalyticsEngine:
             # Check if alert already exists for this window
             existing_alert = AnalyticsAlert.query.filter(
                 AnalyticsAlert.alert_key == alert_key,
-                AnalyticsAlert.join_code == self.join_code,
+                AnalyticsAlert.class_id == self.class_id,
                 AnalyticsAlert.window_type == window_type,
                 AnalyticsAlert.window_start == window_start,
                 AnalyticsAlert.window_end == window_end
@@ -625,6 +613,7 @@ class AnalyticsEngine:
             if not existing_alert:
                 alert = AnalyticsAlert(
                     alert_key=alert_key,
+                    class_id=self.class_id,
                     join_code=self.join_code,
                     window_type=window_type,
                     window_start=window_start,
@@ -643,7 +632,7 @@ class AnalyticsEngine:
 
         # Resolve alerts from this window that no longer apply
         stale_alerts = AnalyticsAlert.query.filter(
-            AnalyticsAlert.join_code == self.join_code,
+            AnalyticsAlert.class_id == self.class_id,
             AnalyticsAlert.window_type == window_type,
             AnalyticsAlert.window_start == window_start,
             AnalyticsAlert.window_end == window_end,
@@ -669,9 +658,12 @@ class AnalyticsEngine:
         
         Implements caching strategy per spec section 10.
         """
+        if not self.class_id:
+            raise ValueError("AnalyticsEngine requires canonical class_id context.")
+
         # Check for existing snapshot
         snapshot = AnalyticsSnapshot.query.filter(
-            AnalyticsSnapshot.join_code == self.join_code,
+            AnalyticsSnapshot.class_id == self.class_id,
             AnalyticsSnapshot.window_type == window_type,
             AnalyticsSnapshot.window_start == window_start,
             AnalyticsSnapshot.window_end == window_end
@@ -692,8 +684,11 @@ class AnalyticsEngine:
         window_end: datetime,
     ) -> AnalyticsSnapshot:
         """Return an existing snapshot or an in-memory preview without DB writes."""
+        if not self.class_id:
+            raise ValueError("AnalyticsEngine requires canonical class_id context.")
+
         snapshot = AnalyticsSnapshot.query.filter(
-            AnalyticsSnapshot.join_code == self.join_code,
+            AnalyticsSnapshot.class_id == self.class_id,
             AnalyticsSnapshot.window_type == window_type,
             AnalyticsSnapshot.window_start == window_start,
             AnalyticsSnapshot.window_end == window_end,
@@ -703,27 +698,31 @@ class AnalyticsEngine:
 
         health_metrics = self.compute_system_health(window_start, window_end)
         previous_snapshot = AnalyticsSnapshot.query.filter(
-            AnalyticsSnapshot.join_code == self.join_code,
+            AnalyticsSnapshot.class_id == self.class_id,
             AnalyticsSnapshot.window_type == window_type,
             AnalyticsSnapshot.window_start < window_start,
             AnalyticsSnapshot.is_complete == True,
         ).order_by(AnalyticsSnapshot.window_start.desc()).first()
         trends = self.compute_trends(health_metrics, previous_snapshot)
         total_transactions = Transaction.query.filter(
-            Transaction.join_code == self.join_code,
+            Transaction.class_id == self.class_id,
             Transaction.timestamp >= window_start,
             Transaction.timestamp < window_end,
             Transaction.is_void.is_(False),
         ).count()
         students = self._get_enrolled_students()
+        seat_id_by_student = self._get_seat_id_by_student([s.id for s in students])
+        if len(seat_id_by_student) != len(students):
+            raise ValueError("Missing canonical seat_id for one or more enrolled students.")
         total_balance = sum(
-            float(s.get_checking_balance(teacher_id=self.teacher_id, join_code=self.join_code) or 0)
+            float(s.get_checking_balance(class_id=self.class_id, seat_id=seat_id_by_student[s.id]) or 0)
             for s in students
         )
         avg_balance = total_balance / len(students) if students else 0.0
 
         return AnalyticsSnapshot(
             teacher_id=self.teacher_id,
+            class_id=self.class_id,
             join_code=self.join_code,
             window_type=window_type,
             window_start=window_start,

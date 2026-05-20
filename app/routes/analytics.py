@@ -21,7 +21,7 @@ from app.feats.base import feat_shell
 from app.auth import admin_required
 from app.models import (
     Admin, AnalyticsAlert, AnalyticsEvent,
-    PayrollSettings, RentSettings, Student, StudentBlock, TeacherBlock, ClassEconomy
+    PayrollSettings, RentSettings, Student, StudentBlock, TeacherBlock, ClassEconomy, Seat
 )
 from app.models import Transaction
 
@@ -547,11 +547,18 @@ def student_drill_down(student_id):
     # Initialize analytics engine
     engine = AnalyticsEngine(teacher_id, join_code)
     cwi = engine._get_cwi()
+    class_id = engine.class_id
+    if not class_id:
+        return jsonify({'error': 'Missing canonical class scope'}), 400
+
+    seat = Seat.query.filter_by(student_id=student.id, class_id=class_id).first()
+    if not seat:
+        return jsonify({'error': 'Student has no canonical seat in selected class'}), 400
     
     # Get student balance
     current_balance = student.get_checking_balance(
-        teacher_id=teacher_id,
-        join_code=join_code
+        class_id=class_id,
+        seat_id=seat.id,
     )
     
     # Calculate expected balance based on CWI

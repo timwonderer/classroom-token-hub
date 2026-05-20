@@ -1,0 +1,23 @@
+{
+  "run_id": "current",
+  "generated_at": "2026-05-15T02:17:22.138225+00:00",
+  "code_sha": "unknown",
+  "checks": {
+    "cross_class": {
+      "status": "FAIL",
+      "violation_count": 1
+    },
+    "lineage": {
+      "status": "FAIL",
+      "violation_count": 5
+    },
+    "runtime_attacks": {
+      "status": "PASS",
+      "violation_count": 0
+    },
+    "injection_step": {
+      "status": "PASS",
+      "violation_count": 0
+    }
+  }
+}

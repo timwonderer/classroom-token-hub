@@ -146,6 +146,7 @@ from app.attendance import (
 )
 from app.services.balance_service import get_batch_balances
 from app.services import access_policy_service, ledger_service
+from app.services import operational_event_service
 from app.services.ledger_service import get_available_balances
 from app.utils.insurance_eligibility import (
     collect_reimbursed_source_tx_ids,
@@ -868,6 +869,7 @@ def _get_join_codes_by_block(admin_id, blocks):
 def _build_payroll_preview_state(teacher_id, students, join_codes_by_block):
     """Aggregate payroll preview data from class-scoped payroll anchors."""
     students_by_join_code: dict[str, dict[int, Student]] = defaultdict(dict)
+
     for student in students:
         for raw_block in (student.block or "").split(","):
             block = raw_block.strip()
@@ -2425,7 +2427,7 @@ def _build_insurance_recommendation_context(admin_id, *, block=None, charge_freq
     if not payroll_settings:
         return None
 
-    checker = EconomyBalanceChecker(admin_id, block)
+    checker = EconomyBalanceChecker(admin_id, block, class_id=getattr(payroll_settings, "class_id", None))
     cwi_calc = checker.calculate_cwi(payroll_settings)
     return get_insurance_premium_recommendation(
         checker.policy_mode,
@@ -4528,8 +4530,12 @@ def student_detail(student_id):
     # Fetch most recent TapEvent for this student
     latest_tap_event = latest_tap_event_query.order_by(TapEvent.timestamp.desc()).first()
 
+    class_row = ClassEconomy.query.filter_by(join_code=join_code).first() if join_code else None
+    class_id = class_row.class_id if class_row else None
+    scoped_seat = Seat.query.filter_by(student_id=student.id, class_id=class_id).first() if class_id else None
+
     # Get student's active insurance policy scoped to current class.
-    active_insurance = student.get_active_insurance(class_id=join_code, teacher_id=teacher_id)
+    active_insurance = student.get_active_insurance(class_id=class_id, teacher_id=teacher_id)
 
     # Get all blocks for the edit modal
     all_students = _scoped_students().all()
@@ -4556,25 +4562,23 @@ def student_detail(student_id):
             'done_for_day_date': student_block.done_for_day_date if student_block else None
         }
 
-    # CRITICAL: Get scoped balances for current join_code to prevent multi-tenancy violations
-    # Teacher clicked from a specific class tab, so show balances for that period only
+    # CRITICAL: Get scoped balances for current class_id + seat_id only.
     scoped_checking_balance = 0
     scoped_savings_balance = 0
     scoped_total_earnings = 0
 
-    if join_code:
-        scoped_checking_balance = student.get_checking_balance(join_code=join_code)
-        scoped_savings_balance = student.get_savings_balance(join_code=join_code)
+    if class_id and scoped_seat:
+        scoped_checking_balance = student.get_checking_balance(class_id=class_id, seat_id=scoped_seat.id)
+        scoped_savings_balance = student.get_savings_balance(class_id=class_id, seat_id=scoped_seat.id)
         scoped_total_earnings = student.get_total_earnings(join_code=join_code)
     else:
-        # Fallback: Log a warning and show $0 balances if no join_code is available.
-        # This prevents accidentally showing aggregated data.
         current_app.logger.warning(
-            f"No join_code in session for student_detail view for student {student.id}. Displaying $0 balances."
+            "Missing canonical class/seat scope for student_detail student=%s join_code=%s.",
+            student.id,
+            join_code,
         )
 
     # Get active rent privileges (per-period items)
-    class_row = ClassEconomy.query.filter_by(join_code=join_code).first() if join_code else None
     rent_privileges = _get_rent_privileges_for_student(student, class_row.class_id if class_row else None, join_code)
 
     # CRITICAL: Fetch Join Codes for student's blocks (for Account Recovery display)
@@ -8126,7 +8130,7 @@ def apply_economy_rebalance():
         flash("Payroll settings are required before a rebalance can be applied.", "warning")
         return redirect(url_for('admin.economy_health', block=effective_block, review_rebalance=1))
 
-    checker = EconomyBalanceChecker(admin_id, effective_block)
+    checker = EconomyBalanceChecker(admin_id, effective_block, class_id=getattr(payroll_settings, "class_id", None))
     effective_join_code = _resolve_join_code_for_block(admin_id, effective_block)
     effective_class = ClassEconomy.query.filter_by(join_code=effective_join_code).first() if effective_join_code else None
     scoped_store_items = (
@@ -8274,7 +8278,7 @@ def economy_health():
     pay_rate_per_minute = payroll_settings.pay_rate if payroll_settings else None
 
     if payroll_settings:
-        checker = EconomyBalanceChecker(admin_id, selected_block)
+        checker = EconomyBalanceChecker(admin_id, selected_block, class_id=getattr(payroll_settings, "class_id", None))
         payload, snapshot = _get_frozen_economy_analysis_payload(
             admin_id,
             selected_block,
@@ -8313,7 +8317,12 @@ def economy_health():
     rebalance_preview = []
     show_rebalance_review = request.args.get('review_rebalance') == '1'
     if payroll_settings and show_rebalance_review and cwi_calc:
-        checker = EconomyBalanceChecker(admin_id, selected_block, policy_mode=policy_summary['mode'])
+        checker = EconomyBalanceChecker(
+            admin_id,
+            selected_block,
+            policy_mode=policy_summary['mode'],
+            class_id=getattr(payroll_settings, "class_id", None),
+        )
         rebalance_preview = _build_rebalance_preview(
             admin_id,
             selected_block,
@@ -10062,8 +10071,13 @@ def export_students():
         insurance_name = active_insurance.policy.title if active_insurance else 'None'
 
         if selected_join_code:
-            checking_balance = student.get_checking_balance(join_code=selected_join_code)
-            savings_balance = student.get_savings_balance(join_code=selected_join_code)
+            export_seat = Seat.query.filter_by(student_id=student.id, class_id=export_class_id).first() if export_class_id else None
+            if not export_seat:
+                raise ValueError(
+                    f"Missing canonical seat scope for export student_id={student.id} class_id={export_class_id}"
+                )
+            checking_balance = student.get_checking_balance(class_id=export_class_id, seat_id=export_seat.id)
+            savings_balance = student.get_savings_balance(class_id=export_class_id, seat_id=export_seat.id)
             total_earnings = Decimal(str(student.get_total_earnings(join_code=selected_join_code)))
         else:
             scoped_balances = scoped_balances_by_student.get(student.id, {})
@@ -12006,16 +12020,37 @@ def api_economy_analyze():
         data = request.get_json() or {}
         block = data.get('block')
 
-        # Get or create checker
-        checker = EconomyBalanceChecker(admin_id, block)
-
-        payroll_settings = _resolve_admin_payroll_settings_for_block(admin_id, block)
+        try:
+            payroll_settings = _resolve_admin_payroll_settings_for_block(admin_id, block)
+        except NotFound:
+            from app.feats.base import get_correlation_id
+            operational_event_service.record(
+                event_type="INVALID_CLASS_SCOPE",
+                severity="warning",
+                domain="economy",
+                route=request.path,
+                actor_id=admin_id,
+                class_id=None,
+                correlation_id=get_correlation_id(),
+                details={
+                    "reason": "missing_or_unresolvable_class_scope",
+                    "endpoint": "economy_analyze",
+                    "provided_class_id": (data or {}).get("class_id"),
+                    "provided_join_code": (data or {}).get("join_code"),
+                    "resolution_path": "denied",
+                },
+            )
+            return jsonify({
+                'status': 'error',
+                'message': 'Please configure payroll settings first to calculate CWI.'
+            }), 400
 
         if not payroll_settings:
             return jsonify({
                 'status': 'error',
                 'message': 'Please configure payroll settings first to calculate CWI.'
             }), 400
+        checker = EconomyBalanceChecker(admin_id, block, class_id=getattr(payroll_settings, "class_id", None))
 
         # Get other economy features
         rent_settings = RentSettings.query.filter_by(
@@ -12123,7 +12158,33 @@ def api_economy_validate(feature):
                 'message': f"Invalid feature type. Must be one of: {', '.join(valid_features)}"
             }), 400
 
-        payroll_settings = _resolve_admin_payroll_settings_for_block(admin_id, block)
+        try:
+            payroll_settings = _resolve_admin_payroll_settings_for_block(admin_id, block)
+        except NotFound:
+            from app.feats.base import get_correlation_id
+            operational_event_service.record(
+                event_type="INVALID_CLASS_SCOPE",
+                severity="warning",
+                domain="economy",
+                route=request.path,
+                actor_id=admin_id,
+                class_id=None,
+                correlation_id=get_correlation_id(),
+                details={
+                    "reason": "missing_or_unresolvable_class_scope",
+                    "endpoint": "economy_validate",
+                    "provided_class_id": (data or {}).get("class_id"),
+                    "provided_join_code": (data or {}).get("join_code"),
+                    "resolution_path": "denied",
+                    "feature": feature,
+                },
+            )
+            return jsonify({
+                'status': 'warning',
+                'message': 'Configure payroll first to get recommendations.',
+                'is_valid': True,
+                'warnings': []
+            })
 
         if not payroll_settings:
             return jsonify({
@@ -12134,7 +12195,7 @@ def api_economy_validate(feature):
             })
 
         # Calculate CWI
-        checker = EconomyBalanceChecker(admin_id, block)
+        checker = EconomyBalanceChecker(admin_id, block, class_id=getattr(payroll_settings, "class_id", None))
         # Use expected_weekly_hours from payroll_settings, not from request
         cwi_calc = checker.calculate_cwi(payroll_settings)
         cwi = cwi_calc.cwi

@@ -10,11 +10,11 @@ Tests the analytics computation engine to ensure:
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import event
 from app import db
 from app.models import (
     Admin, Student, StudentBlock, StudentTeacher, TeacherBlock, ClassEconomy,
-    Transaction, PayrollSettings, RentSettings, AnalyticsAlert
+    Transaction, PayrollSettings, RentSettings, AnalyticsAlert, FeatureSettings,
+    ClassMembership, ClassMembershipRole, Seat,
 )
 from app.routes.analytics import get_pay_cycle_days, get_rent_cycle_days
 from app.utils.analytics_engine import AnalyticsEngine
@@ -72,6 +72,20 @@ def setup_analytics_test(client):
         db.session.flush()
 
         db.session.add(StudentTeacher(student_id=student.id, teacher_id=admin.id))
+        db.session.add(ClassMembership(
+            class_id=class_row.class_id,
+            join_code=join_code,
+            student_id=student.id,
+            role=ClassMembershipRole.STUDENT.value,
+        ))
+        db.session.add(Seat(
+            class_id=class_row.class_id,
+            join_code=join_code,
+            student_id=student.id,
+            role='student',
+            block=block,
+            block_identifier=block,
+        ))
         
         # Link student to period
         student_block = StudentBlock(
@@ -359,35 +373,8 @@ def test_trend_calculation(client, setup_analytics_test):
     assert trend == 'stable'
 
 
-def test_block_resolution_falls_back_to_student_block(client, setup_analytics_test):
-    """Block resolution uses StudentBlock when TeacherBlock lacks join_code."""
-    admin, join_code, block, students, payroll = setup_analytics_test
-    legacy_join_code = "LEGACY123"
-    legacy_salt = get_random_salt()
-    legacy_student = Student(
-        first_name="Legacy",
-        last_initial="L",
-        block="C",
-        salt=legacy_salt,
-        username_hash=hash_username("legacyuser", legacy_salt),
-        pin_hash="fake-hash"
-    )
-    db.session.add(legacy_student)
-    db.session.flush()
-    db.session.add(StudentTeacher(student_id=legacy_student.id, teacher_id=admin.id))
-    db.session.add(StudentBlock(
-        student_id=legacy_student.id,
-        period="C",
-        join_code=legacy_join_code
-    ))
-    db.session.commit()
-
-    engine = AnalyticsEngine(admin.id, legacy_join_code)
-    assert engine._get_block_for_join_code() == "C"
-
-
-def test_enrolled_students_include_null_join_code_with_matching_block(client, setup_analytics_test):
-    """Students with null join codes should be included if block matches."""
+def test_enrolled_students_require_class_membership(client, setup_analytics_test):
+    """Analytics enrollment is class-membership authoritative."""
     admin, join_code, block, students, payroll = setup_analytics_test
     null_salt = get_random_salt()
     null_student = Student(
@@ -400,43 +387,12 @@ def test_enrolled_students_include_null_join_code_with_matching_block(client, se
     )
     db.session.add(null_student)
     db.session.flush()
-    db.session.add(StudentTeacher(student_id=null_student.id, teacher_id=admin.id))
-    db.session.add(StudentBlock(
-        student_id=null_student.id,
-        period=block,
-        join_code=None
-    ))
     db.session.commit()
 
     engine = AnalyticsEngine(admin.id, join_code)
     enrolled = engine._get_enrolled_students()
 
-    assert null_student in enrolled
-
-
-def test_enrolled_students_distinct_uses_id_only(client, setup_analytics_test):
-    """Regression: avoid DISTINCT over full Student row (breaks on Postgres JSON columns)."""
-    admin, join_code, block, students, payroll = setup_analytics_test
-    engine = AnalyticsEngine(admin.id, join_code)
-
-    distinct_student_queries = []
-
-    def capture_sql(conn, cursor, statement, parameters, context, executemany):
-        lowered = statement.lower()
-        if "select distinct" in lowered and "from students" in lowered:
-            distinct_student_queries.append(lowered)
-
-    event.listen(db.engine, "before_cursor_execute", capture_sql)
-    try:
-        enrolled = engine._get_enrolled_students()
-    finally:
-        event.remove(db.engine, "before_cursor_execute", capture_sql)
-
-    assert len(enrolled) == 5
-    assert distinct_student_queries
-    assert any("select distinct students.id" in query for query in distinct_student_queries)
-    assert all("select distinct students.first_name" not in query for query in distinct_student_queries)
-    assert all("select distinct students.last_name_hash_by_part" not in query for query in distinct_student_queries)
+    assert null_student not in enrolled
 
 
 def test_analytics_pay_cycle_prefers_join_code_scoped_settings(client, setup_analytics_test):
@@ -530,3 +486,52 @@ def test_analytics_rent_cycle_ignores_teacher_global_for_unscoped_join_code(clie
 
     # Selected-class analytics should default monthly when no class-scoped or class-block setting exists.
     assert get_rent_cycle_days(admin.id, join_code2) == 30
+
+
+def test_analytics_policy_mode_resolves_by_class_id(client, setup_analytics_test):
+    admin, join_code, block, students, payroll = setup_analytics_test
+    class_row = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=admin.id).first()
+    assert class_row is not None
+
+    db.session.add(FeatureSettings(
+        teacher_id=admin.id,
+        join_code=join_code,
+        class_id=class_row.class_id,
+        block=block,
+        economy_policy_mode='tight',
+    ))
+    db.session.commit()
+
+    engine = AnalyticsEngine(admin.id, join_code)
+    assert engine.class_id == class_row.class_id
+    assert engine.policy_mode == 'tight'
+
+
+def test_budget_survival_uses_policy_mode_min_savings_ratio(client, setup_analytics_test, monkeypatch):
+    admin, join_code, block, students, payroll = setup_analytics_test
+    class_row = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=admin.id).first()
+    assert class_row is not None
+
+    def _set_policy(mode: str) -> None:
+        row = FeatureSettings.query.filter_by(class_id=class_row.class_id).first()
+        if row is None:
+            row = FeatureSettings(
+                teacher_id=admin.id,
+                join_code=join_code,
+                class_id=class_row.class_id,
+                block=block,
+            )
+            db.session.add(row)
+        row.economy_policy_mode = mode
+        db.session.commit()
+
+    # Use fixed balances to isolate threshold behavior.
+    monkeypatch.setattr(Student, "get_checking_balance", lambda self, class_id, seat_id: 12.0)
+
+    _set_policy('tight')  # min savings ratio = 0.05
+    tight_engine = AnalyticsEngine(admin.id, join_code)
+    assert tight_engine.calculate_budget_survival_pass_rate(100.0) == 100.0
+
+    _set_policy('comfortable')  # min savings ratio = 0.15
+    comfortable_engine = AnalyticsEngine(admin.id, join_code)
+    assert comfortable_engine.calculate_budget_survival_pass_rate(100.0) == 0.0

@@ -1,0 +1,15 @@
+{
+  "run_id": "current",
+  "created_at": "2026-05-15T02:17:22.138935+00:00",
+  "source_run_dir": "artifacts/adversarial/current",
+  "generated_files": [
+    {
+      "name": "summary.json",
+      "sha256": "bc60f169a41ef1f2e13c35614857ca032c9db9ecc9fa9a412cf922b1cfd29652"
+    },
+    {
+      "name": "scorecard_sanitized.md",
+      "sha256": "72db5ced873016cb407b805c3fb8052bf8633aa96c9ab5c57c773e35e08366b1"
+    }
+  ]
+}

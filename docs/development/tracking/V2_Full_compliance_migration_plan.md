@@ -83,6 +83,7 @@ This file is the single active tracker for v2 migration execution. All prior tra
 - [ ] Complete Wave 8 store schema migration and remove remaining teacher-scoped enforcement remnants
 - [ ] Complete Wave 9 operations + interpretation canonical migration
 - [ ] Complete Wave 10 support domain canonical migration
+- [ ] Integrate `DOM-ECON-000_ECONOMY_GOVERNANCE_FOUNDATION.md` into Waves 4-9 implementation scope (policy config, ledger/solvency math, timezone-safe recurring execution, and aggregate analytics) without creating a parallel migration track
 
 #### Post-launch hardening and readiness
 - [ ] Wave 11 backup/restore rehearsal evidence
@@ -99,14 +100,23 @@ This file is the single active tracker for v2 migration execution. All prior tra
 - [ ] Backwards compatibility cleanup execution (`V2_BACKWARDS_COMPATIBILITY_CLEANUP.md` scope, when explicitly re-opened)
 - [ ] Remaining docs-platform migration phases from `V2_DOCS_PLATFORM_SPLIT.md` (Phases 2–4)
 
+#### DOM-ECON-000 Integrated Execution Checklist (Wave-aligned)
+- [ ] Wave 4 (Class Config): encode policy modes, CWI inputs, and ratio-band configuration in canonical class settings ownership
+- [ ] Wave 5 (Ledger): centralize CWI-relative solvency and pricing calculation primitives with FEAT-safe ledger integration
+- [ ] Wave 6-7 (Attendance + Obligations): enforce attendance-dominance and class-timezone temporal windows in recurring economy execution
+- [ ] Wave 8-9 (Store + Interpretation): align store tier pricing and aggregate economy-health analytics/drift metrics to DOM-ECON-000 formulas
+- [ ] Verification gates: add invariant tests proving deterministic shared calculations and no duplicated formula paths across validators/recommenders/analytics
+
 ### Build Specs Index (Authoritative Specs in `docs/development/specs/`)
 
 - `V2_ADMIN_ROUTE_REFACTOR.md`
 - `V2_AUTHORITY_EXTRACTION_PLAN.md`
 - `V2_BANKING_LEDGER_SETTLEMENT_PLAN.md`
+- `V2_BALANCE_SCOPE_AND_SETTLEMENT_CONTRACT.md`
 - `V2_CAPABILITY-BASED_ARCHITECTURE_REBUILD.md`
 - `V2_CLASS_ID_INVARIANT_BACKLOG.md`
 - `V2_Class_Scope_Normalization_Target.md`
+- `DOM-ECON-000_ECONOMY_GOVERNANCE_FOUNDATION.md`
 - `V2_DOCS_PLATFORM_SPLIT.md`
 - `V2_SESSION_MUTATION_SAFETY.md`
 - `V2_STUDENT_BLOCKS_REDESIGN_NOTE.md`
@@ -859,6 +869,105 @@ Wave impact:
 
 - Wave 3 closure criteria are satisfied for the tracked identity/scope cleanup sequence on `codex/v2.0`.
 - Execution focus can now proceed sequentially to Wave 4 class-configuration canonicalization.
+
+### Status Update (2026-05-20): Wave 4 Resume Slice — Analytics Enrollment Class Scope
+
+- Resumed v2 rebuild execution with a Wave-4-aligned class-scope hardening slice in analytics:
+  - `app/utils/analytics_engine.py`
+    - added canonical `class_id` resolution on engine initialization
+    - switched primary enrolled-student resolution to `ClassMembership` scoped by `class_id` + `role=student`
+    - retained transitional fallback to legacy teacher/block roster resolution only when canonical membership rows are absent
+    - updated CWI lookup path to reuse resolved `class_id`
+- Validation:
+  - `python3 -m py_compile app/utils/analytics_engine.py` → pass
+  - `pytest -q tests/test_analytics.py` → `16 passed`
+
+### Status Update (2026-05-20): Wave 4 Resume Slice — DOM-ECON-000 Governance in Analytics
+
+- Extended analytics governance alignment to DOM-ECON-000 policy semantics:
+  - `app/utils/analytics_engine.py`
+    - resolves active policy mode using canonical `class_id` at engine initialization
+    - initializes `EconomyBalanceChecker` with resolved policy mode (avoids implicit default drift)
+    - updates budget-survival metric threshold from fixed `10%` to policy-governed `savings_weekly.min` ratio per mode
+  - `app/utils/economy_policy.py`
+    - adds `get_active_policy_mode_for_class(class_id)` helper to keep policy authority class-id-native
+- Validation:
+  - `python3 -m py_compile app/utils/analytics_engine.py` → pass
+  - `pytest -q tests/test_analytics.py` → `16 passed`
+
+### Status Update (2026-05-20): Wave 4 Resume Slice — DOM-ECON Analytics Governance Tests
+
+- Added regression coverage to keep analytics governed by canonical economy policy rules:
+  - `tests/test_analytics.py`
+    - verifies policy mode resolution is class-authoritative (`class_id`) via `FeatureSettings`
+    - verifies budget-survival pass-rate threshold uses mode-specific `savings_weekly.min` (tight vs comfortable) instead of fixed 10%
+- Validation:
+  - `python3 -m py_compile tests/test_analytics.py` → pass
+  - `pytest -q tests/test_analytics.py` → `18 passed`
+
+### Status Update (2026-05-20): Wave 4 Resume Slice — Backend-Only Analytics Authority Hardening
+
+- Enforced backend single-authority semantics in analytics with no legacy fallback path:
+  - `app/utils/analytics_engine.py`
+    - removed legacy enrollment fallback chain (`StudentTeacher` / `TeacherBlock` / `StudentBlock` inference)
+    - enrollment now resolves only through canonical `ClassMembership` scoped by `class_id`
+    - moved analytics warning/band thresholds off engine constants into policy accessor (`get_analytics_policy(...)`)
+  - `app/utils/economy_policy.py`
+    - added `ANALYTICS_POLICY_DEFAULTS` and `get_analytics_policy(mode)` so analytics thresholds are policy-sourced server-side
+- Regression coverage updated for canonical enrollment authority:
+  - `tests/test_analytics.py`
+    - fixture now seeds canonical `ClassMembership` rows
+    - removed fallback-only tests and added class-membership-authoritative enrollment assertion
+- Validation:
+  - `python3 -m py_compile app/utils/economy_policy.py app/utils/analytics_engine.py tests/test_analytics.py` → pass
+  - `pytest -q tests/test_analytics.py` → `16 passed`
+
+### Status Update (2026-05-20): Wave 4 Resume Slice — Analytics Activity Queries Canonicalized to `class_id`
+
+- Completed analytics query-scope migration from `join_code` to canonical `class_id` for core activity and cache surfaces:
+  - `app/utils/analytics_engine.py`
+    - `Transaction` activity queries now filter by `Transaction.class_id`
+    - `TapEvent` activity queries now filter by `TapEvent.class_id`
+    - snapshot lookup/history queries now filter by `AnalyticsSnapshot.class_id`
+    - alert lookup/lifecycle queries now filter by `AnalyticsAlert.class_id`
+    - created snapshots/alerts now persist `class_id` on write
+    - added fail-closed guards: snapshot create/read APIs now require canonical `class_id` context
+- Validation:
+  - `python3 -m py_compile app/utils/analytics_engine.py tests/test_analytics.py` → pass
+  - `pytest -q tests/test_analytics.py` → `16 passed`
+
+### Status Update (2026-05-20): Wave 4 Resume Slice — Balance Scope Invariant Enforcement (`class_id + seat_id`)
+
+- Enforced strict scope invariants for student balance reads:
+  - `app/models.py`
+    - `Student.get_checking_balance(...)` now requires both `class_id` and `seat_id`
+    - `Student.get_savings_balance(...)` now requires both `class_id` and `seat_id`
+    - removed legacy `kwargs` / `join_code` fallback semantics from both helpers
+- Updated analytics and related backend callsites to pass canonical scope explicitly:
+  - `app/utils/analytics_engine.py`
+    - resolved seat IDs from canonical `seats` table per `class_id`
+    - all balance reads now call with explicit `class_id + seat_id`
+  - `app/routes/analytics.py`
+    - student detail analytics now resolves canonical class/seat scope before balance reads
+  - `app/utils/issue_helpers.py`
+    - issue context snapshot now resolves canonical class/seat scope before balance reads
+  - `app/routes/admin.py`
+    - student detail and student export scoped balance reads now use explicit `class_id + seat_id`
+- Validation:
+  - `python3 -m py_compile app/models.py app/utils/analytics_engine.py app/routes/analytics.py app/routes/admin.py app/utils/issue_helpers.py tests/test_analytics.py` → pass
+  - `pytest -q tests/test_analytics.py` → `16 passed`
+
+### Status Update (2026-05-20): Spec Coverage Audit — Banking/Balance/Overdraft/Rent Touchpoints
+
+- Confirmed existing v2 spec coverage for touched features:
+  - `V2_BANKING_LEDGER_SETTLEMENT_PLAN.md`
+  - `DOM-CLASS-001_Class_Configuration_Domain.md`
+  - `FEAT-LED-001_Post_Ledger_Transaction.md`
+  - `FEAT-OBLI-001_Assess_Obligation.md`
+  - `FEAT-STOR-001_Store_Purchase.md`
+- Added missing focused implementation contract doc for the exact touched helper+settlement boundary:
+  - `V2_BALANCE_SCOPE_AND_SETTLEMENT_CONTRACT.md`
+  - documents current runtime logic and explicit risk against v2 rules where transitional behavior remains
 
 ### Status Update (2026-05-01): FEAT Atomicity Enforcement Baseline
 

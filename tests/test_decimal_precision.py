@@ -17,6 +17,23 @@ from app.extensions import db
 from app.utils.overdraft import charge_overdraft_fee_if_needed
 
 
+def _attach_class_scope(teacher, student, join_code, block='A'):
+    economy = ClassEconomy(join_code=join_code, teacher_id=teacher.id, created_by_admin_id=teacher.id)
+    db.session.add(economy)
+    db.session.flush()
+    seat = Seat(
+        student_id=student.id,
+        class_id=economy.class_id,
+        join_code=join_code,
+        block=block,
+        role='student',
+        claimed_at=datetime.now(timezone.utc),
+    )
+    db.session.add(seat)
+    db.session.flush()
+    return economy.class_id, seat.id
+
+
 class TestDecimalPrecision:
     """Test that Decimal types fix floating-point rounding bugs."""
 
@@ -89,12 +106,14 @@ class TestDecimalPrecision:
             join_code=join_code
         )
         db.session.add(student_block)
+        class_id, seat_id = _attach_class_scope(teacher, student, join_code, block='A')
         db.session.commit()
 
         # Give student $100.00 in checking
         initial_deposit = Transaction(
             student_id=student.id,
             teacher_id=teacher.id,
+            class_id=class_id,
             join_code=join_code,
             amount=Decimal('100.00'),
             account_type='checking',
@@ -105,7 +124,7 @@ class TestDecimalPrecision:
         db.session.commit()
 
         # Verify initial balance
-        checking_balance = student.get_checking_balance(join_code=join_code)
+        checking_balance = student.get_checking_balance(class_id=class_id, seat_id=seat_id)
         assert checking_balance == Decimal('100.00')
 
         # Transfer EXACT balance to savings (this was triggering the bug)
@@ -115,6 +134,7 @@ class TestDecimalPrecision:
         withdrawal_tx = Transaction(
             student_id=student.id,
             teacher_id=teacher.id,
+            class_id=class_id,
             join_code=join_code,
             amount=-transfer_amount,
             account_type='checking',
@@ -127,6 +147,7 @@ class TestDecimalPrecision:
         deposit_tx = Transaction(
             student_id=student.id,
             teacher_id=teacher.id,
+            class_id=class_id,
             join_code=join_code,
             amount=transfer_amount,
             account_type='savings',
@@ -137,8 +158,8 @@ class TestDecimalPrecision:
         db.session.commit()
 
         # Check balance after transfer
-        checking_balance_after = student.get_checking_balance(join_code=join_code)
-        savings_balance_after = student.get_savings_balance(join_code=join_code)
+        checking_balance_after = student.get_checking_balance(class_id=class_id, seat_id=seat_id)
+        savings_balance_after = student.get_savings_balance(class_id=class_id, seat_id=seat_id)
 
         # CRITICAL: Balance should be exactly 0.00, not -0.00
         assert checking_balance_after == Decimal('0.00')
@@ -146,10 +167,8 @@ class TestDecimalPrecision:
 
         # CRITICAL: No overdraft fee should be charged
         fee_charged, fee_amount = charge_overdraft_fee_if_needed(
-            student,
+            db.session.get(Seat, seat_id),
             banking_settings,
-            teacher_id=teacher.id,
-            join_code=join_code,
             force=False
         )
 
@@ -165,7 +184,7 @@ class TestDecimalPrecision:
         assert len(overdraft_txs) == 0
 
         # Final balance should still be 0.00
-        final_checking = student.get_checking_balance(join_code=join_code)
+        final_checking = student.get_checking_balance(class_id=class_id, seat_id=seat_id)
         assert final_checking == Decimal('0.00')
 
     def test_partial_rent_payment_rounding(self, client):
@@ -224,11 +243,13 @@ class TestDecimalPrecision:
             join_code=join_code
         )
         db.session.add(student_block)
+        class_id, seat_id = _attach_class_scope(teacher, student, join_code, block='A')
 
         # Give student money to pay rent
         initial_deposit = Transaction(
             student_id=student.id,
             teacher_id=teacher.id,
+            class_id=class_id,
             join_code=join_code,
             amount=Decimal('60.00'),
             account_type='checking',
@@ -260,6 +281,7 @@ class TestDecimalPrecision:
         rent_tx1 = Transaction(
             student_id=student.id,
             teacher_id=teacher.id,
+            class_id=class_id,
             join_code=join_code,
             amount=-payment1_amount,
             account_type='checking',
@@ -294,6 +316,7 @@ class TestDecimalPrecision:
         rent_tx2 = Transaction(
             student_id=student.id,
             teacher_id=teacher.id,
+            class_id=class_id,
             join_code=join_code,
             amount=-payment2_amount,
             account_type='checking',
@@ -322,7 +345,7 @@ class TestDecimalPrecision:
         assert remaining_final == Decimal('0.00')
 
         # Student should have exactly $10.00 left in checking (60 - 50)
-        final_checking = student.get_checking_balance(join_code=join_code)
+        final_checking = student.get_checking_balance(class_id=class_id, seat_id=seat_id)
         assert final_checking == Decimal('10.00')
 
     def test_near_zero_balance_normalization(self, client):
@@ -373,6 +396,7 @@ class TestDecimalPrecision:
             join_code=join_code
         )
         db.session.add(student_block)
+        class_id, seat_id = _attach_class_scope(teacher, student, join_code, block='A')
         db.session.commit()
 
         # Test various near-zero balances
@@ -390,6 +414,7 @@ class TestDecimalPrecision:
             tx = Transaction(
                 student_id=student.id,
                 teacher_id=teacher.id,
+                class_id=class_id,
                 join_code=join_code,
                 amount=near_zero_amount,
                 account_type='checking',
@@ -400,14 +425,12 @@ class TestDecimalPrecision:
             db.session.commit()
 
             # Get balance
-            balance = student.get_checking_balance(join_code=join_code)
+            balance = student.get_checking_balance(class_id=class_id, seat_id=seat_id)
 
             # Near-zero balances should NOT trigger overdraft fee
             fee_charged, fee_amount = charge_overdraft_fee_if_needed(
-                student,
+                db.session.get(Seat, seat_id),
                 banking_settings,
-                teacher_id=teacher.id,
-                join_code=join_code,
                 force=False
             )
 
@@ -466,11 +489,13 @@ class TestDecimalPrecision:
             join_code=join_code
         )
         db.session.add(student_block)
+        class_id, seat_id = _attach_class_scope(teacher, student, join_code, block='A')
 
         # Create a genuinely negative balance (-$10.00)
         negative_tx = Transaction(
             student_id=student.id,
             teacher_id=teacher.id,
+            class_id=class_id,
             join_code=join_code,
             amount=Decimal('-10.00'),
             account_type='checking',
@@ -481,15 +506,13 @@ class TestDecimalPrecision:
         db.session.commit()
 
         # Check balance
-        balance = student.get_checking_balance(join_code=join_code)
+        balance = student.get_checking_balance(class_id=class_id, seat_id=seat_id)
         assert balance == Decimal('-10.00')
 
         # SHOULD trigger overdraft fee
         fee_charged, fee_amount = charge_overdraft_fee_if_needed(
-            student,
+            db.session.get(Seat, seat_id),
             banking_settings,
-            teacher_id=teacher.id,
-            join_code=join_code,
             force=False
         )
         # The overdraft function only flushes, we need to commit
@@ -508,7 +531,7 @@ class TestDecimalPrecision:
         assert overdraft_txs[0].amount == Decimal('-35.00')
 
         # Final balance should be -$45.00 (-10 - 35)
-        final_balance = student.get_checking_balance(join_code=join_code)
+        final_balance = student.get_checking_balance(class_id=class_id, seat_id=seat_id)
         assert final_balance == Decimal('-45.00')
 
     def test_partial_late_rent_payment_quantizes_allocated_late_fee_before_storage(self, client):
@@ -553,6 +576,7 @@ class TestDecimalPrecision:
         db.session.add(RentSettings(
             teacher_id=teacher.id,
             join_code=join_code,
+            class_id=economy.class_id,
             block='A',
             is_enabled=True,
             rent_amount=Decimal('570.00'),
@@ -569,14 +593,29 @@ class TestDecimalPrecision:
             period='A',
             join_code=join_code
         ))
-        db.session.add(Seat(student_id=student.id, class_id=economy.class_id, join_code=join_code, block='A', role='student'))
+        db.session.add(
+            Seat(
+                student_id=student.id,
+                class_id=economy.class_id,
+                join_code=join_code,
+                block='A',
+                role='student',
+                claimed_at=datetime.now(timezone.utc),
+            )
+        )
         db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
+        db.session.flush()
+        seat = Seat.query.filter_by(student_id=student.id, class_id=economy.class_id).first()
+        assert seat is not None
         db.session.add(Transaction(
+            seat_id=seat.id,
             student_id=student.id,
             teacher_id=teacher.id,
+            class_id=economy.class_id,
             join_code=join_code,
             amount=Decimal('600.00'),
             account_type='checking',
+            status='posted',
             type='Initial Deposit',
             description='Starting balance'
         ))
@@ -585,6 +624,8 @@ class TestDecimalPrecision:
         with client.session_transaction() as sess:
             sess['student_id'] = student.id
             sess['current_join_code'] = join_code
+            sess['current_class_id'] = economy.class_id
+            sess['current_seat_id'] = seat.id
             sess['login_time'] = datetime.now(timezone.utc).isoformat()
             sess['last_activity'] = datetime.now(timezone.utc).isoformat()
 

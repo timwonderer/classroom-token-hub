@@ -488,35 +488,19 @@ class Student(db.Model):
             return query.filter(InsurancePolicy.teacher_id == teacher_id).first()
         return None
 
-    def get_checking_balance(self, class_id: str | None = None, seat_id: int | None = None, **kwargs):
+    def get_checking_balance(self, class_id: str, seat_id: int):
         """Authoritative checking balance lookup via ledger service."""
         from app.services.ledger_service import get_available_balance
-        cid = class_id or kwargs.get('join_code')
-        sid = seat_id
-        if not sid and cid:
-            from app.models import Seat
-            seat = Seat.query.filter_by(student_id=self.id, class_id=cid).first()
-            sid = seat.id if seat else None
-        
-        if not cid or not sid:
-            return Decimal('0.00')
-        
-        return get_available_balance(sid, cid, 'checking')
+        if not class_id or not seat_id:
+            raise ValueError("get_checking_balance requires class_id and seat_id.")
+        return get_available_balance(seat_id, class_id, 'checking')
 
-    def get_savings_balance(self, class_id: str | None = None, seat_id: int | None = None, **kwargs):
+    def get_savings_balance(self, class_id: str, seat_id: int):
         """Authoritative savings balance lookup via ledger service."""
         from app.services.ledger_service import get_available_balance
-        cid = class_id or kwargs.get('join_code')
-        sid = seat_id
-        if not sid and cid:
-            from app.models import Seat
-            seat = Seat.query.filter_by(student_id=self.id, class_id=cid).first()
-            sid = seat.id if seat else None
-        
-        if not cid or not sid:
-            return Decimal('0.00')
-        
-        return get_available_balance(sid, cid, 'savings')
+        if not class_id or not seat_id:
+            raise ValueError("get_savings_balance requires class_id and seat_id.")
+        return get_available_balance(seat_id, class_id, 'savings')
 
     def get_total_earnings(self, teacher_id=None, join_code=None):
         """

@@ -3,7 +3,7 @@ import logging
 from flask import g
 from sqlalchemy.exc import IntegrityError
 from app import db
-from app.models import Transaction, TransactionStatus, BalanceCache, AccountType
+from app.models import Transaction, TransactionStatus, BalanceCache, AccountType, ClassEconomy, Seat
 from app.utils.time import utc_now
 from app.utils.seat_scope import get_seat_ids_for_student_join, transaction_scope_filter
 
@@ -15,9 +15,7 @@ from app.feats.base import feat_shell
 @feat_shell("FEAT-LED-003")
 def settle_pending_transaction_contexts(*args, **kwargs):
     """FEAT-Shell for transaction settlement sweep."""
-    res = _settle_pending_transaction_contexts_legacy(*args, **kwargs)
-    db.session.commit() # FEAT-AUTHORIZED-SHELL
-    return res
+    return _settle_pending_transaction_contexts_legacy(*args, **kwargs)
 
 def _settle_pending_transaction_contexts_legacy(limit: int | None = None) -> dict[str, int]:
     """
@@ -93,6 +91,22 @@ def settle_balances(student_id: int, join_code: str) -> None:
 
     try:
         seat_ids = get_seat_ids_for_student_join(student_id, join_code)
+        class_id = None
+        if seat_ids:
+            seat_row = (
+                Seat.query.with_entities(Seat.class_id)
+                .filter(
+                    Seat.id.in_(seat_ids),
+                    Seat.class_id.isnot(None),
+                )
+                .first()
+            )
+            class_id = seat_row[0] if seat_row and seat_row[0] else None
+        if not class_id:
+            class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(join_code=join_code).first()
+            class_id = class_row[0] if class_row and class_row[0] else None
+        if not class_id:
+            raise ValueError(f"settle_balances requires canonical class_id for join_code={join_code}")
         scope_filter = transaction_scope_filter(Transaction, student_id, seat_ids)
 
         cache_was_created = False
@@ -105,7 +119,7 @@ def settle_balances(student_id: int, join_code: str) -> None:
             cache = (
                 BalanceCache.query
                 .filter(
-                    BalanceCache.join_code == join_code,
+                    BalanceCache.class_id == class_id,
                     BalanceCache.seat_id.in_(seat_ids),
                 )
                 .with_for_update()
@@ -114,36 +128,22 @@ def settle_balances(student_id: int, join_code: str) -> None:
         if not cache:
             cache = (
                 BalanceCache.query
-                .filter_by(student_id=student_id, join_code=join_code)
+                .filter_by(student_id=student_id, class_id=class_id)
                 .with_for_update()
                 .first()
             )
         
         if not cache:
             # If cache doesn't exist (e.g. new student), create it.
-            # We assume unique constraint protects against race condition insert
-            # but usually we're inside a transaction so this insert blocks others.
-            try:
-                with db.session.begin_nested():
-                    cache = BalanceCache(
-                        student_id=student_id,
-                        seat_id=(seat_ids[0] if seat_ids else None),
-                        join_code=join_code,
-                    )
-                    db.session.add(cache)
-                    db.session.flush() # Persist to get ID and lock
-                    cache_was_created = True
-            except IntegrityError as e:
-                # Handle duplicate row races without rolling back the outer transaction.
-                logger.warning(f"Race condition creating BalanceCache, retrying fetch: {e}")
-                cache = (
-                    BalanceCache.query
-                    .filter_by(student_id=student_id, join_code=join_code)
-                    .with_for_update()
-                    .first()
-                )
-                if not cache:
-                    raise
+            cache = BalanceCache(
+                student_id=student_id,
+                seat_id=(seat_ids[0] if seat_ids else None),
+                class_id=class_id,
+                join_code=join_code,
+            )
+            db.session.add(cache)
+            db.session.flush() # Persist to get ID and lock
+            cache_was_created = True
 
         # 2. Fetch PENDING transactions
         # ---------------------------------------------------------
@@ -151,7 +151,7 @@ def settle_balances(student_id: int, join_code: str) -> None:
             Transaction.query
             .filter(
                 scope_filter,
-                Transaction.join_code == join_code,
+                Transaction.class_id == class_id,
                 Transaction.status == TransactionStatus.PENDING,
             )
             .order_by(Transaction.timestamp)
@@ -167,7 +167,7 @@ def settle_balances(student_id: int, join_code: str) -> None:
                 Transaction.query
                 .filter(
                     scope_filter,
-                    Transaction.join_code == join_code,
+                    Transaction.class_id == class_id,
                     Transaction.status == TransactionStatus.POSTED,
                 )
                 .filter(
@@ -185,13 +185,13 @@ def settle_balances(student_id: int, join_code: str) -> None:
             seed_time = utc_now()
             all_checking = db.session.query(db.func.sum(Transaction.amount)).filter(
                 scope_filter,
-                Transaction.join_code == join_code,
+                Transaction.class_id == class_id,
                 Transaction.account_type == 'checking',
                 Transaction.is_void == False,
             ).scalar() or Decimal('0.00')
             pending_checking = db.session.query(db.func.sum(Transaction.amount)).filter(
                 scope_filter,
-                Transaction.join_code == join_code,
+                Transaction.class_id == class_id,
                 Transaction.status == TransactionStatus.PENDING,
                 Transaction.account_type == 'checking',
                 Transaction.is_void == False,
@@ -199,13 +199,13 @@ def settle_balances(student_id: int, join_code: str) -> None:
 
             all_savings = db.session.query(db.func.sum(Transaction.amount)).filter(
                 scope_filter,
-                Transaction.join_code == join_code,
+                Transaction.class_id == class_id,
                 Transaction.account_type == 'savings',
                 Transaction.is_void == False,
             ).scalar() or Decimal('0.00')
             pending_savings = db.session.query(db.func.sum(Transaction.amount)).filter(
                 scope_filter,
-                Transaction.join_code == join_code,
+                Transaction.class_id == class_id,
                 Transaction.status == TransactionStatus.PENDING,
                 Transaction.account_type == 'savings',
                 Transaction.is_void == False,
@@ -219,7 +219,7 @@ def settle_balances(student_id: int, join_code: str) -> None:
                 Transaction.query
                 .filter(
                     scope_filter,
-                    Transaction.join_code == join_code,
+                    Transaction.class_id == class_id,
                     Transaction.status == TransactionStatus.POSTED,
                 )
                 .filter(

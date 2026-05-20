@@ -72,6 +72,13 @@ FEATURE_FLAGS = {
     "store",
 }
 
+ANALYTICS_POLICY_DEFAULTS: Dict[str, float] = {
+    "cwi_deviation_band": 0.20,
+    "cwi_deviation_warning_threshold": 0.20,
+    "velocity_drop_warning_threshold": 0.30,
+    "participation_warning_threshold": 0.70,
+}
+
 POLICY_MODES: Dict[str, Dict[str, Any]] = {
     "tight": {
         "label": "Tight",
@@ -579,3 +586,24 @@ def get_active_policy_mode(teacher_id: int, block: Optional[str] = None, join_co
     if not row:
         return POLICY_MODE_DEFAULT
     return normalize_policy_mode(getattr(row, "economy_policy_mode", POLICY_MODE_DEFAULT))
+
+
+def get_active_policy_mode_for_class(class_id: Optional[str]) -> str:
+    if not has_app_context() or not class_id:
+        return POLICY_MODE_DEFAULT
+
+    from app.models import FeatureSettings
+
+    row = FeatureSettings.query.filter_by(class_id=class_id).first()
+    if not row:
+        return POLICY_MODE_DEFAULT
+    return normalize_policy_mode(getattr(row, "economy_policy_mode", POLICY_MODE_DEFAULT))
+
+
+def get_analytics_policy(mode: Optional[str]) -> Dict[str, float]:
+    profile = get_policy_profile(mode)
+    configured = profile.get("analytics", {})
+    return {
+        key: float(configured.get(key, default_value))
+        for key, default_value in ANALYTICS_POLICY_DEFAULTS.items()
+    }

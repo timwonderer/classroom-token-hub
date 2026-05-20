@@ -18,6 +18,13 @@ def _attach_seat(student, teacher, join_code, block="A"):
     db.session.commit()
     return seat
 
+
+def _scope_for_student(student, join_code):
+    seat = Seat.query.filter_by(student_id=student.id, join_code=join_code).first()
+    assert seat is not None
+    assert seat.class_id is not None
+    return seat.class_id, seat.id
+
 def test_ledger_flow(client):
     """Test full flow: Create PENDING -> Settle -> Verify Cache."""
     # Setup
@@ -30,11 +37,13 @@ def test_ledger_flow(client):
     
     join_code = "MATH101"
     _attach_seat(student, teacher, join_code)
+    class_id, seat_id = _scope_for_student(student, join_code)
 
     # 1. Create Transaction (PENDING)
     tx = Transaction(
         student_id=student.id,
         teacher_id=teacher.id,
+        class_id=class_id,
         join_code=join_code,
         amount=Decimal('10.50'),
         account_type='checking',
@@ -50,7 +59,7 @@ def test_ledger_flow(client):
     
     # 2. Verify Balance Read
     # Student.get_checking_balance NO LONGER calls settle_balances (Write-on-Read fix)
-    bal = student.get_checking_balance(join_code=join_code)
+    bal = student.get_checking_balance(class_id=class_id, seat_id=seat_id)
     assert bal == Decimal('10.50')
 
     # Trigger explicit settlement for test purposes
@@ -79,11 +88,13 @@ def test_void_pending(client):
     
     join_code = "SCI202"
     _attach_seat(student, teacher, join_code, block="B")
+    class_id, seat_id = _scope_for_student(student, join_code)
     
     # 1. Create PENDING
     tx = Transaction(
         student_id=student.id,
         teacher_id=teacher.id,
+        class_id=class_id,
         join_code=join_code,
         amount=Decimal('50.00'),
         status=TransactionStatus.PENDING
@@ -97,7 +108,7 @@ def test_void_pending(client):
     db.session.commit()
     
     # 3. Read Balance
-    bal = student.get_checking_balance(join_code=join_code)
+    bal = student.get_checking_balance(class_id=class_id, seat_id=seat_id)
     
     # Should be 0.00 (settlement ignores VOID pending)
     assert bal == Decimal('0.00')
@@ -133,11 +144,13 @@ def test_void_posted_with_reversal(client):
     
     join_code = "ENG303"
     _attach_seat(student, teacher, join_code, block="C")
+    class_id, seat_id = _scope_for_student(student, join_code)
     
     # 1. Create PENDING then Settle -> POSTED
     tx = Transaction(
         student_id=student.id,
         teacher_id=teacher.id,
+        class_id=class_id,
         join_code=join_code,
         amount=Decimal('100.00'),
         status=TransactionStatus.PENDING
@@ -163,6 +176,7 @@ def test_void_posted_with_reversal(client):
     reversal = Transaction(
         student_id=student.id,
         teacher_id=teacher.id,
+        class_id=class_id,
         join_code=join_code,
         amount=-tx.amount,
         status=TransactionStatus.PENDING,
@@ -173,7 +187,7 @@ def test_void_posted_with_reversal(client):
     
     # 3. Read Balance (Should be 0)
     # 100 (POSTED) + (-100) (PENDING) = 0
-    bal_after_void = student.get_checking_balance(join_code=join_code)
+    bal_after_void = student.get_checking_balance(class_id=class_id, seat_id=seat_id)
     assert bal_after_void == Decimal('0.00')
     
     # 4. Trigger Settlement again (processes Reversal)
@@ -198,11 +212,14 @@ def test_settlement_sweep_processes_each_pending_context_once(client):
     db.session.commit()
     _attach_seat(student_one, teacher, "SWEEP-A", block="A")
     _attach_seat(student_two, teacher, "SWEEP-B", block="B")
+    class_id_one, _seat_id_one = _scope_for_student(student_one, "SWEEP-A")
+    class_id_two, _seat_id_two = _scope_for_student(student_two, "SWEEP-B")
 
     db.session.add_all([
         Transaction(
             student_id=student_one.id,
             teacher_id=teacher.id,
+            class_id=class_id_one,
             join_code="SWEEP-A",
             amount=Decimal('12.34'),
             account_type='checking',
@@ -213,6 +230,7 @@ def test_settlement_sweep_processes_each_pending_context_once(client):
         Transaction(
             student_id=student_one.id,
             teacher_id=teacher.id,
+            class_id=class_id_one,
             join_code="SWEEP-A",
             amount=Decimal('1.66'),
             account_type='savings',
@@ -223,6 +241,7 @@ def test_settlement_sweep_processes_each_pending_context_once(client):
         Transaction(
             student_id=student_two.id,
             teacher_id=teacher.id,
+            class_id=class_id_two,
             join_code="SWEEP-B",
             amount=Decimal('9.99'),
             account_type='checking',

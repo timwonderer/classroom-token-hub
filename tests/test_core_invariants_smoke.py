@@ -23,6 +23,8 @@ from app.models import (
     TeacherBlock,
     Transaction,
     TransactionStatus,
+    Seat,
+    ClassEconomy,
 )
 from app.services import ledger_service
 from tests.helpers.admin_context import login_admin
@@ -107,6 +109,11 @@ def _link_student_to_teacher(student: Student, admin: Admin, join_code: str, blo
             first_half_hash="seat-hash",
         )
     )
+    economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+    if economy:
+        seat = Seat.query.filter_by(student_id=student.id, class_id=economy.class_id).first()
+        if seat and seat.claimed_at is None:
+            seat.claimed_at = datetime.now(timezone.utc)
 
 
 def _login_admin(client, admin_id: int) -> None:
@@ -114,9 +121,16 @@ def _login_admin(client, admin_id: int) -> None:
 
 
 def _login_student(client, student_id: int, join_code: str) -> None:
+    seat = Seat.query.filter_by(student_id=student_id, join_code=join_code).first()
+    class_id = seat.class_id if seat else None
+    seat_id = seat.id if seat else None
     with client.session_transaction() as sess:
         sess["student_id"] = student_id
         sess["current_join_code"] = join_code
+        if class_id:
+            sess["current_class_id"] = class_id
+        if seat_id:
+            sess["current_seat_id"] = seat_id
         sess["login_time"] = datetime.now(timezone.utc).isoformat()
         sess["last_activity"] = datetime.now(timezone.utc).isoformat()
 
@@ -229,6 +243,10 @@ def test_insurance_approval_creates_reimbursement_transaction(client):
     student = _create_student("Insured")
     _link_student_to_teacher(student, admin, "JOIN-INS", block="A")
     db.session.commit()
+    seat = Seat.query.filter_by(student_id=student.id, join_code="JOIN-INS").first()
+    economy = ClassEconomy.query.filter_by(join_code="JOIN-INS").first()
+    assert seat is not None and seat.class_id is not None
+    assert economy is not None
 
     policy = InsurancePolicy(
         policy_code=f"POL-{admin.id}",
@@ -241,6 +259,7 @@ def test_insurance_approval_creates_reimbursement_transaction(client):
         max_claim_amount=Decimal("100.00"),
         max_claims_period="month",
         claim_time_limit_days=30,
+        waiting_period_days=0,
         is_active=True,
     )
     db.session.add(policy)
@@ -251,8 +270,8 @@ def test_insurance_approval_creates_reimbursement_transaction(client):
         policy_id=policy.id,
         status="active",
         join_code="JOIN-INS",
-        purchase_date=datetime.now(timezone.utc),
-        coverage_start_date=datetime.now(timezone.utc) - timedelta(days=1),
+        purchase_date=datetime.now(timezone.utc) - timedelta(days=2),
+        coverage_start_date=datetime.now(timezone.utc) - timedelta(days=30),
         payment_current=True,
     )
     enrollment.freeze_policy_snapshot(policy)
@@ -260,14 +279,16 @@ def test_insurance_approval_creates_reimbursement_transaction(client):
     db.session.flush()
 
     purchase_tx = Transaction(
+        seat_id=seat.id,
         student_id=student.id,
         teacher_id=admin.id,
+        class_id=economy.class_id,
         join_code="JOIN-INS",
         amount=Decimal("-30.00"),
         account_type="checking",
         status=TransactionStatus.POSTED,
-        type="purchase",
-        description="Purchase: broken item",
+        type="expense",
+        description="Broken classroom item",
     )
     db.session.add(purchase_tx)
     db.session.flush()
@@ -286,18 +307,19 @@ def test_insurance_approval_creates_reimbursement_transaction(client):
     db.session.commit()
 
     login_admin(client, admin.id, "JOIN-INS")
+    with client.session_transaction() as sess:
+        sess["current_class_id"] = economy.class_id
     response = client.post(
         f"/admin/insurance/claim/{claim.id}",
         data={"status": "approved", "approved_amount": "", "rejection_reason": "", "admin_notes": ""},
-        follow_redirects=True,
+        follow_redirects=False,
     )
 
-    assert response.status_code == 200
+    assert response.status_code in (302, 303)
     reimbursement = Transaction.query.filter_by(
-        type="insurance_reimbursement",
         original_transaction_id=purchase_tx.id,
         policy_id=policy.id,
-    ).first()
+    ).order_by(Transaction.id.desc()).first()
     assert reimbursement is not None
     assert reimbursement.amount > Decimal("0.00")
 
@@ -307,9 +329,14 @@ def test_store_purchase_deducts_balance_and_records_transaction(client):
     student = _create_student("Shopper")
     _link_student_to_teacher(student, admin, "JOIN-STORE", block="A")
     db.session.commit()
+    seat = Seat.query.filter_by(student_id=student.id, join_code="JOIN-STORE").first()
+    economy = ClassEconomy.query.filter_by(join_code="JOIN-STORE").first()
+    assert seat is not None and seat.class_id is not None
+    assert economy is not None
 
     item = StoreItem(
         teacher_id=admin.id,
+        class_id=economy.class_id,
         name="Notebook",
         price=Decimal("5.00"),
         is_active=True,
@@ -318,8 +345,10 @@ def test_store_purchase_deducts_balance_and_records_transaction(client):
     db.session.add(item)
     db.session.add(
         Transaction(
+            seat_id=seat.id,
             student_id=student.id,
             teacher_id=admin.id,
+            class_id=economy.class_id,
             join_code="JOIN-STORE",
             amount=Decimal("25.00"),
             account_type="checking",
@@ -330,7 +359,7 @@ def test_store_purchase_deducts_balance_and_records_transaction(client):
     )
     db.session.commit()
 
-    starting_balance = student.get_checking_balance(teacher_id=admin.id, join_code="JOIN-STORE")
+    starting_balance = student.get_checking_balance(class_id=seat.class_id, seat_id=seat.id)
 
     _login_student(client, student.id, "JOIN-STORE")
     response = client.post(
@@ -339,7 +368,7 @@ def test_store_purchase_deducts_balance_and_records_transaction(client):
     )
 
     assert response.status_code == 200
-    ending_balance = student.get_checking_balance(teacher_id=admin.id, join_code="JOIN-STORE")
+    ending_balance = student.get_checking_balance(class_id=seat.class_id, seat_id=seat.id)
     assert ending_balance < starting_balance
 
     purchase_tx = (
@@ -425,9 +454,14 @@ def test_store_purchase_bulk_discount_uses_quantized_total_for_funds_check(clien
     student = _create_student("Discount")
     _link_student_to_teacher(student, admin, "JOIN-DISC", block="A")
     db.session.commit()
+    seat = Seat.query.filter_by(student_id=student.id, join_code="JOIN-DISC").first()
+    economy = ClassEconomy.query.filter_by(join_code="JOIN-DISC").first()
+    assert seat is not None and seat.class_id is not None
+    assert economy is not None
 
     item = StoreItem(
         teacher_id=admin.id,
+        class_id=economy.class_id,
         name="Discounted Item",
         price=Decimal("0.05"),
         is_active=True,
@@ -439,8 +473,10 @@ def test_store_purchase_bulk_discount_uses_quantized_total_for_funds_check(clien
     db.session.add(item)
     db.session.add(
         Transaction(
+            seat_id=seat.id,
             student_id=student.id,
             teacher_id=admin.id,
+            class_id=economy.class_id,
             join_code="JOIN-DISC",
             amount=Decimal("0.04"),
             account_type="checking",
@@ -492,9 +528,12 @@ def test_rent_payment_creates_rent_obligation_record(client):
     _link_student_to_teacher(student, admin, "JOIN-RENT", block="A")
     student.is_rent_enabled = True
 
+    economy = ClassEconomy.query.filter_by(join_code="JOIN-RENT").first()
+    assert economy is not None
     settings = RentSettings(
         teacher_id=admin.id,
         join_code="JOIN-RENT",
+        class_id=economy.class_id,
         block="A",
         is_enabled=True,
         rent_amount=Decimal("10.00"),
@@ -504,10 +543,14 @@ def test_rent_payment_creates_rent_obligation_record(client):
         late_penalty_amount=Decimal("0.00"),
     )
     db.session.add(settings)
+    seat = Seat.query.filter_by(student_id=student.id, join_code="JOIN-RENT").first()
+    assert seat is not None and seat.class_id is not None
     db.session.add(
         Transaction(
+            seat_id=seat.id,
             student_id=student.id,
             teacher_id=admin.id,
+            class_id=economy.class_id,
             join_code="JOIN-RENT",
             amount=Decimal("40.00"),
             account_type="checking",

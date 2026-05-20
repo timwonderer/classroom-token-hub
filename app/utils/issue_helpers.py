@@ -20,6 +20,8 @@ from app.models import (
     Transaction,
     Student,
     StudentBlock,
+    ClassEconomy,
+    Seat,
 )
 from app.utils.helpers import generate_anonymous_code
 from app.utils.ip_handler import get_real_ip
@@ -61,10 +63,18 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
         'ip_address': get_real_ip() if request else None,
     }
 
-    # Get current balances (scoped by join_code)
+    class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(join_code=join_code).first()
+    class_id = class_row[0] if class_row and class_row[0] else None
+    if not class_id:
+        raise ValueError("create_context_snapshot requires canonical class_id scope.")
+    seat = Seat.query.filter_by(student_id=student.id, class_id=class_id).first()
+    if not seat:
+        raise ValueError("create_context_snapshot requires canonical seat_id scope.")
+
+    # Get current balances (scoped by class_id + seat_id)
     # Convert Decimal to float for JSON serialization (db.JSON column)
-    checking_balance = student.get_checking_balance(join_code=join_code)
-    savings_balance = student.get_savings_balance(join_code=join_code)
+    checking_balance = student.get_checking_balance(class_id=class_id, seat_id=seat.id)
+    savings_balance = student.get_savings_balance(class_id=class_id, seat_id=seat.id)
     snapshot['balances'] = {
         'checking': float(checking_balance),
         'savings': float(savings_balance),
