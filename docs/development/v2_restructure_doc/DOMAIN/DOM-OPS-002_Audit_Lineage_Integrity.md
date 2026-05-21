@@ -8,13 +8,15 @@
 
 ## I. Purpose
 
-Define the Operations domain's authority over the tamper-evident audit lineage system: the schema, emission protocol, chain verification logic, and integrity status reporting that operationalize `INV-ARC-016`.
+Define the Operations domain's authority over the tamper-evident audit lineage system: the schema, emission protocol, chain verification logic, integrity status reporting, and execution evidence model that operationalize `INV-ARC-016`.
 
 ---
 
 ## II. Scope
 
-Governs the `audit_events`, `chain_heads`, and `integrity_status` tables and all code paths that read from or write to them. Applies to every protected table whose mutations must produce an `AuditEvent` chain entry.
+Governs the `audit_events`, `chain_heads`, and `integrity_status` tables and all code paths that read from or write to them.
+
+Applies to every protected table whose mutations must produce an `AuditEvent` chain entry, including constitutional economic policy lineage objects.
 
 ---
 
@@ -47,6 +49,7 @@ Constitutional. Subordinate to `INV-ARC-016` and `DOM-OPS-001`. Supersedes any p
 ### DOM-OPS-002 Explicitly DOES NOT Own
 
 - Business domain truth (balances, attendance, purchases)
+- Constitutional economic policy truth (owned by DOM-CLASS / DOM-ECON governance)
 - Feature enablement policy
 - General operational telemetry and structured logs (owned by `DOM-OPS-001`)
 - Incident lifecycle management (owned by `DOM-OPS-001`)
@@ -116,6 +119,8 @@ Only the following code paths may write to tables owned by this domain:
 | `audit_events` | `app/services/audit_service.py` → `emit_audit_event()` |
 | `chain_heads` | `app/services/audit_service.py` → `emit_audit_event()` |
 | `integrity_status` | `app/utils/audit_verifier.py` → `update_integrity_status()` under `SystemAuditAuthority` |
+
+Protected constitutional economic policy objects (`policy_versions`, `policy_transitions`) SHALL emit lineage exclusively through lawful FEAT-orchestrated execution paths.
 
 ---
 
@@ -232,6 +237,8 @@ The event hash is `HMAC-SHA256(AUDIT_HMAC_KEY, message)` where `message` is pipe
 | Table | Protected Fields |
 |---|---|
 | `transactions` | `amount`, `account_type`, `type`, `status`, `class_id`, `seat_id`, `description`, `correlation_id` |
+| `policy_versions` | `class_id`, `domain`, `version_number`, `policy_payload_json`, `activated_at`, `is_active` |
+| `policy_transitions` | `class_id`, `domain`, `source_policy_version_id`, `target_policy_version_id`, `activation_mode`, `status`, `correlation_id` |
 
 Additional tables shall be added to this registry in coordination with each Phase 3b migration.
 
@@ -261,6 +268,7 @@ caller enters FEAT context
           → AuditEvent flushed
           → ChainHead updated atomically
           → row.lineage_event_id, lineage_token, lineage_version set
+          → policy transition lineage activation recorded if applicable
   → FEAT transaction commits
 ```
 
@@ -314,15 +322,17 @@ This taxonomy is defined as canonical in `INV-ARC-016`. The operational semantic
 
 7. **Payload digest mismatch is a tampered row.** If a protected row's current field values do not hash to the `payload_digest` on its linked `AuditEvent`, the row was mutated outside the canonical write path.
 
-8. **UTC normalization is mandatory for HMAC recomputation.** `emit_audit_event()` computes the event hash using `datetime.now(timezone.utc).isoformat()` which yields `+00:00`. PostgreSQL/SQLAlchemy may return stored `TIMESTAMPTZ` values in the local session timezone. The verifier shall normalize all retrieved datetimes to UTC before recomputation.
+8. Constitutional economic policy lineage is protected state. `policy_versions` and `policy_transitions` are protected constitutional objects and are subject to the same lawful-lineage verification requirements as monetary truth.
 
-9. **No HMAC reuse across scopes.** The chain scope is a field in the HMAC message, ensuring that an event from one class chain cannot be replayed into another.
+9. **UTC normalization is mandatory for HMAC recomputation.** `emit_audit_event()` computes the event hash using `datetime.now(timezone.utc).isoformat()` which yields `+00:00`. PostgreSQL/SQLAlchemy may return stored `TIMESTAMPTZ` values in the local session timezone. The verifier shall normalize all retrieved datetimes to UTC before recomputation.
 
-10. **One emit per row creation.** `audit_protected()` shall be called exactly once per protected row creation, immediately after `flush()` and before the owning transaction commits. Re-invocations for the same row without a state change are prohibited.
+10. **No HMAC reuse across scopes.** The chain scope is a field in the HMAC message, ensuring that an event from one class chain cannot be replayed into another.
 
-11. **`lineage_version` tracks schema evolution.** When the HMAC schema or canonical payload format changes, `signature_version` and `signer_key_id` enable the verifier to apply the correct recomputation logic per event.
+11. **One emit per row creation.** `audit_protected()` shall be called exactly once per protected row creation, immediately after `flush()` and before the owning transaction commits. Re-invocations for the same row without a state change are prohibited.
 
-12. **`IntegrityStatus.degraded_since` is set on first failure.** If a new `IntegrityStatus` row is created in a failing state, `degraded_since` shall be set to the current UTC time. If an existing passing row transitions to failing, `degraded_since` shall be set. If the row recovers, `degraded_since` shall be cleared to `None`.
+12. **`lineage_version` tracks schema evolution.** When the HMAC schema or canonical payload format changes, `signature_version` and `signer_key_id` enable the verifier to apply the correct recomputation logic per event.
+
+13. **`IntegrityStatus.degraded_since` is set on first failure.** If a new `IntegrityStatus` row is created in a failing state, `degraded_since` shall be set to the current UTC time. If an existing passing row transitions to failing, `degraded_since` shall be set. If the row recovers, `degraded_since` shall be cleared to `None`.
 
 ---
 

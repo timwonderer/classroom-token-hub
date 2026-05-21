@@ -24,6 +24,8 @@ This domain is the sole schema and mutation authority over:
 - `payroll_rewards`
 - `payroll_fines`
 - `banking_settings`
+- `policy_versions`
+- `policy_transitions`
 
 It returns persisted settings only. FEAT or the owning operational domain interprets them.
 
@@ -63,6 +65,18 @@ Teacher-defined fine presets for payroll deduction events.
 
 Savings interest, overdraft protection, and transfer behavior configuration for a class.
 
+### 9. `policy_versions`
+
+Immutable economic policy lineage records for a class.
+
+Represents constitutional economic policy truth and historical policy replay state.
+
+### 10. `policy_transitions`
+
+Append-only economic policy transition lineage for a class.
+
+Represents future economic law, activation intent, supersession lineage, and transition state.
+
 ## VII. Schema Contract
 
 ### 1. `class_features`
@@ -92,13 +106,15 @@ Key fields:
 - `economy_policy_updated_at`
 - `economy_last_rebalanced_at`
 - `economy_last_rebalanced_by` — `user_id` of the actor who triggered the rebalance
-- `economy_pending_rebalance_json`
+- `economy_pending_rebalance_json` — deprecated transitional compatibility field
 
 Rules:
 
 - One record per class. Created when the class is first configured.
-- `economy_policy_mode` controls how the payroll engine interprets rates.
-  It is read-only to all domains except Class Configuration.
+- `economy_policy_mode` controls how economy governance interprets rebalance and solvency semantics.
+- `economy_pending_rebalance_json` exists only for transitional compatibility and MUST NOT be used by constitutional policy-governance systems.
+- Active economic policy truth is governed through `policy_versions` and `policy_transitions`.
+- `feature_settings` stores active operational policy projection state only.
 
 ### 3. `hall_pass_settings`
 
@@ -241,9 +257,57 @@ Rules:
 - Interest computation and overdraft fee application live in FEAT/Ledger;
   this table provides the configuration inputs only.
 
+### 9. `policy_versions`
+
+Key fields:
+
+- `id`
+- `class_id` — FK to `classes` (CASCADE)
+- `domain`
+- `version_number`
+- `policy_payload_json`
+- `created_at`
+- `activated_at`
+- `created_by_transition_id`
+- `is_active`
+
+Rules:
+
+- Represents immutable constitutional economic policy truth.
+- Historical policy versions MUST remain immutable.
+- Exactly one active version per `(class_id, domain)` is permitted.
+- This table defines constitutional economic policy lineage.
+- Operational execution domains consume active policy state but do not own policy lineage.
+
+### 10. `policy_transitions`
+
+Key fields:
+
+- `id`
+- `class_id` — FK to `classes` (CASCADE)
+- `domain`
+- `source_policy_version_id`
+- `target_policy_version_id`
+- `activation_mode`
+- `status`
+- `created_at`
+- `created_by`
+- `applied_at`
+- `correlation_id`
+- `superseded_by_transition_id`
+- `cancelled_at`
+
+Rules:
+
+- Represents append-only economic policy evolution lineage.
+- Pending transitions represent publicly visible future economic law.
+- Policy transitions MUST remain replayable and auditable.
+- Historical transitions MUST NOT be deleted.
+- Operational domains determine lawful activation boundaries but MUST NOT directly mutate transition lineage.
+
 ## VIII. Constraints
 
-- This domain stores configuration; it does not compute operational outcomes.
+- This domain stores constitutional policy objects and active operational configuration projection state; it does not compute operational outcomes.
 - It does not mutate ledger, attendance, obligations, store, or identity tables.
 - All settings tables are scoped by `class_id` (from `classes`) as the primary
   class identity anchor. `join_code` is carried explicitly per `INV-CORE-000`.
@@ -251,6 +315,9 @@ Rules:
   the scope boundary, not the teacher.
 - Missing row vs existing row semantics are part of persisted configuration truth
   and must remain explicit.
+- Economic policy evolution MUST occur through append-only `policy_transitions` lineage.
+- Direct mutation of constitutional economic policy history is prohibited.
+- Operational domains MAY consume active projected policy state but MUST NOT own policy lineage.
 
 ## IX. Derived / Cross-Domain Rules
 
@@ -260,6 +327,9 @@ Rules:
   does not own those rows.
 - Ledger reads `banking_settings` for interest and overdraft policy but does not own
   that configuration.
+- Economic governance consumes `policy_versions` and `policy_transitions` as constitutional policy lineage.
+- Operational domains consume active projected configuration state from settings tables.
+- FEAT orchestrates lawful activation and projection updates but does not own policy truth.
 - Class identity (`classes.class_id`, `classes.join_code_token`) is owned by Identity.
   This domain reads `class_id` as a FK but does not own the class record.
 

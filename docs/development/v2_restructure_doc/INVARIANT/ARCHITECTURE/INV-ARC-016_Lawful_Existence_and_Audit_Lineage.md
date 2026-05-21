@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-016      | 1.0     | 2026-05-10     | N/A        | Foundational    |
+| INV-ARC-016      | 2.0     | 2026-05-20     | N/A        | Foundational    |
 
 ## I. Purpose
 
@@ -10,7 +10,15 @@ Define the principle of lawful existence: physical database persistence alone do
 
 ## II. Scope
 
-Applies to all state mutation paths for protected tables. A protected table is any table whose row-level mutations must produce an `AuditEvent` chain entry, as declared in `DOM-OPS-002`.
+Applies to all state mutation paths for protected tables.
+
+A protected table is any table whose row-level mutations must produce an `AuditEvent` chain entry, as declared in `DOM-OPS-002`.
+
+Protected tables include:
+- monetary truth lineage,
+- operational lineage,
+- constitutional economic policy lineage,
+- and other constitutionally protected mutation surfaces.
 
 ## III. Authority Level
 
@@ -22,15 +30,29 @@ Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-006`.
 - `INV-ARC-006_Command_Boundary_for_Mutation.md`
 - `INV-ARC-007_GET_Must_Be_Pure.md`
 - `DOM-OPS-002_Audit_Lineage_Integrity.md`
+- `DOM-ECON-003_Economic_Policy_Governance_and_Transition_Constitution.md`
 
 ## V. Core Rule
 
 A row in a protected table that was written outside a lawful CTH execution path (an active FEAT context or `SystemAuditAuthority`) is not a valid application entity, regardless of its physical presence in the database.
 
+This invariant applies equally to:
+- monetary truth,
+- operational truth,
+- constitutional economic policy truth,
+- policy transition lineage,
+- and future economic law objects.
+
 The auditor of a protected row's lawfulness is the HMAC-SHA256 chain maintained by `DOM-OPS-002`. A row is lawful if and only if:
 
 1. Its `lineage_event_id` references an `AuditEvent` whose `payload_digest` matches the row's current protected field values, and
 2. That `AuditEvent` sits within a continuous, unbroken chain for its scope.
+
+Constitutional economic policy objects include:
+- `policy_versions`
+- `policy_transitions`
+
+Future economic law that lacks lawful lineage is constitutionally invalid regardless of physical persistence.
 
 ## VI. Lineage State Taxonomy
 
@@ -60,13 +82,35 @@ Two write paths are lawful for producing `AuditEvent` chain entries:
 1. **Active FEAT context** — the business mutation path. `emit_audit_event()` is called inside an active FEAT via `audit_protected()` after `db.session.flush()`, before the FEAT's owning transaction commits.
 2. **`SystemAuditAuthority`** — the narrow system path for genesis bootstrap, verifier writes, and `IntegrityStatus` updates. `SystemAuditAuthority` carries no business actor fields; `actor_type` is always `"system"`. It is prohibited inside any business mutation path.
 
+### Economic Policy Governance Clarification
+
+Economic policy evolution MUST occur through lawful append-only policy transition lineage.
+
+The following are prohibited:
+- direct mutation of immutable historical policy versions,
+- hidden delayed economic mutation,
+- orphaned future economic state,
+- policy activation without lawful lineage.
+
+Immediate economic policy changes and delayed economic policy changes are equally subject to lawful lineage requirements.
+
 ## X. Rebuild Intent
 
-This invariant exists to make unauthorized or convenience-based database mutations visible and operationally embarrassing. Its goal is not to prevent all possible privileged compromise, but to ensure that any mutation outside the canonical execution path is detectable during the nightly chain walk and surfaces in `/health/deep` as a degraded state.
+This invariant exists to make unauthorized, hidden, or convenience-based database mutations visible and operationally embarrassing. Its goal is not to prevent all possible privileged compromise, but to ensure that any mutation outside the canonical execution path is detectable during the nightly chain walk and surfaces in `/health/deep` as a degraded state.
+
+This includes hidden future economic law, delayed policy mutation outside lawful transition lineage, and constitutional economic state that bypasses canonical policy governance.
 
 ## XI. Downstream Consequence
 
-`DOM-OPS-002` owns the schema, emission protocol, and verification logic that operationalizes this invariant. `FEAT` execution contracts must call `audit_protected()` for every write to a protected table. CI guardrails in `scripts/policy_guardrails.py` enforce this structurally.
+`DOM-OPS-002` owns the schema, emission protocol, and verification logic that operationalizes this invariant.
+
+`FEAT` execution contracts must call `audit_protected()` for every write to a protected table.
+
+Protected constitutional economic policy objects include:
+- `policy_versions`
+- `policy_transitions`
+
+CI guardrails in `scripts/policy_guardrails.py` enforce this structurally.
 
 ## XII. Amendment
 
