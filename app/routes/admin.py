@@ -1860,12 +1860,13 @@ def _resolve_join_code_for_block(admin_id, block_name):
     return row[0] if row and row[0] else None
 
 
-def _build_economy_snapshot_from_analysis(join_code, checker, analysis):
+def _build_economy_snapshot_from_analysis(class_id, join_code, checker, analysis):
     recommendations = analysis.recommendations or {}
     rent = recommendations.get('rent') or {}
     insurance = recommendations.get('insurance_premium_weekly') or {}
     store_tiers = recommendations.get('store_tiers') or {}
     return EconomySnapshot(
+        class_id=class_id,
         join_code=join_code,
         policy_mode=checker.policy_mode,
         pay_rate=Decimal(str(analysis.cwi.pay_rate_per_minute or 0)),
@@ -2057,22 +2058,24 @@ def _get_frozen_economy_analysis_payload(
     fines=None,
     store_items=None,
     expected_weekly_hours=None,
+    persist_snapshot=False,
 ):
     expected_inputs = _current_economy_snapshot_inputs(
         checker,
         payroll_settings,
         expected_weekly_hours=expected_weekly_hours,
     )
+    class_id = getattr(payroll_settings, "class_id", None)
     join_code = _resolve_join_code_for_block(admin_id, block)
     weekly_window_start, _next_weekly_refresh = _economy_weekly_refresh_bounds()
     weekly_window_start_db = normalize_for_db(weekly_window_start)
     latest_snapshot = None
 
-    if join_code and expected_weekly_hours is None:
+    if class_id and expected_weekly_hours is None:
         latest_snapshot = (
             EconomySnapshot.query
             .filter(
-                EconomySnapshot.join_code == join_code,
+                EconomySnapshot.class_id == class_id,
                 EconomySnapshot.effective_at >= weekly_window_start_db,
             )
             .order_by(EconomySnapshot.effective_at.desc(), EconomySnapshot.id.desc())
@@ -2093,7 +2096,15 @@ def _get_frozen_economy_analysis_payload(
         expected_weekly_hours=float(expected_inputs['expected_hours']),
     )
 
-    if join_code and expected_weekly_hours is None:
+    if class_id and expected_weekly_hours is None:
+        if persist_snapshot:
+            snapshot = _build_economy_snapshot_from_analysis(class_id, join_code, checker, analysis)
+            db.session.add(snapshot)
+            db.session.commit()
+            payload = _serialize_economy_analysis_payload(analysis, snapshot=snapshot, frozen=True)
+            payload['snapshot_cached'] = False
+            return payload, snapshot
+
         payload = _serialize_economy_analysis_payload(analysis, frozen=True)
         payload['analysis_schedule'] = _economy_analysis_schedule(None, frozen=False)
         payload['snapshot_cached'] = False
@@ -12120,6 +12131,7 @@ def api_economy_analyze():
             fines=fines,
             store_items=store_items,
             expected_weekly_hours=expected_weekly_hours,
+            persist_snapshot=True,
         )
         return jsonify(payload)
 

@@ -13,6 +13,7 @@ from app.models import (
     PayrollSettings,
     RentPayment,
     RentSettings,
+    Seat,
     Student,
     TeacherBlock,
     Transaction,
@@ -36,21 +37,43 @@ from app.utils.economy_rebalance import (
 )
 
 
-def _login_admin(client, admin_id):
+def _login_admin(client, admin_id, *, join_code=None, class_id=None):
+    resolved_join_code = join_code
+    resolved_class_id = class_id
+    if not resolved_join_code:
+        block_row = (
+            TeacherBlock.query.with_entities(TeacherBlock.join_code)
+            .filter(TeacherBlock.teacher_id == admin_id, TeacherBlock.join_code.isnot(None))
+            .order_by(TeacherBlock.id.asc())
+            .first()
+        )
+        resolved_join_code = block_row[0] if block_row and block_row[0] else None
+    if not resolved_class_id and resolved_join_code:
+        class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
+            join_code=resolved_join_code,
+            teacher_id=admin_id,
+        ).first()
+        resolved_class_id = class_row[0] if class_row and class_row[0] else None
+
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin_id
         sess['is_system_admin'] = False
+        if resolved_join_code:
+            sess['current_join_code'] = resolved_join_code
+        if resolved_class_id:
+            sess['current_class_id'] = resolved_class_id
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
 
 
-def _create_teacher_block(admin_id, block='A', join_code='JOINPOLA'):
+def _create_teacher_block(admin_id, block='A', join_code='JOINPOLA', class_id=None):
     identity = IdentityProfile(profile_type='student', first_name='Policy', last_initial='S')
     db.session.add(identity)
     db.session.flush()
 
     teacher_block = TeacherBlock(
         teacher_id=admin_id,
+        class_id=class_id,
         block=block,
         first_name='Policy',
         last_initial='S',
@@ -80,11 +103,12 @@ def _create_admin_with_block(block='A', join_code='JOINPOLA'):
     db.session.add(economy)
     db.session.flush()
 
-    _create_teacher_block(admin.id, block=block, join_code=join_code)
+    _create_teacher_block(admin.id, block=block, join_code=join_code, class_id=economy.class_id)
 
     payroll_settings = PayrollSettings(
         teacher_id=admin.id,
         join_code=join_code,
+        class_id=economy.class_id,
         block=block,
         pay_rate=Decimal('0.25'),
         expected_weekly_hours=5.0,
@@ -95,6 +119,7 @@ def _create_admin_with_block(block='A', join_code='JOINPOLA'):
     rent_settings = RentSettings(
         teacher_id=admin.id,
         join_code=join_code,
+        class_id=economy.class_id,
         block=block,
         is_enabled=True,
         rent_amount=Decimal('500.00'),
@@ -105,9 +130,10 @@ def _create_admin_with_block(block='A', join_code='JOINPOLA'):
     return admin, payroll_settings, rent_settings, economy
 
 
-def _create_insurance_policy(admin_id, title, premium, block='A'):
-    join_code = f"JOIN{block}{admin_id}"
-    if not ClassEconomy.query.filter_by(join_code=join_code).first():
+def _create_insurance_policy(admin_id, title, premium, block='A', join_code=None):
+    join_code = join_code or f"JOIN{block}{admin_id}"
+    class_row = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=admin_id).first()
+    if not class_row:
         db.session.add(ClassEconomy(
             join_code=join_code,
             teacher_id=admin_id,
@@ -115,9 +141,11 @@ def _create_insurance_policy(admin_id, title, premium, block='A'):
             display_name=f'Period {block}',
         ))
         db.session.flush()
+        class_row = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=admin_id).first()
     policy = InsurancePolicy(
         teacher_id=admin_id,
         join_code=join_code,
+        class_id=class_row.class_id if class_row else None,
         policy_code=f"{title[:3].upper()}{admin_id}",
         title=title,
         premium=Decimal(str(premium)),
@@ -233,7 +261,7 @@ def test_convert_weekly_amount_to_frequency_supports_custom_schedules(client):
 
 def test_edit_insurance_policy_renders_shared_recommendation_text(client):
     admin, _, _, _ = _create_admin_with_block()
-    policy = _create_insurance_policy(admin.id, 'Coverage', Decimal('40.00'), block='A')
+    policy = _create_insurance_policy(admin.id, 'Coverage', Decimal('40.00'), block='A', join_code='JOINPOLA')
     _login_admin(client, admin.id)
 
     response = client.get(f'/admin/insurance/edit/{policy.id}')
@@ -310,8 +338,13 @@ def test_immediate_rebalance_updates_rent_setting(client):
     })
 
     assert response.status_code == 302
-    db.session.refresh(rent_settings)
-    assert rent_settings.rent_amount == expected_rent
+    scoped_rent = RentSettings.query.filter_by(
+        teacher_id=admin.id,
+        class_id=economy.class_id,
+        block='A',
+    ).first()
+    assert scoped_rent is not None
+    assert scoped_rent.rent_amount == expected_rent
 
 
 def test_rebalanced_rent_amount_does_not_backdate_current_coverage_due(client):
@@ -336,6 +369,14 @@ def test_rebalanced_rent_amount_does_not_backdate_current_coverage_due(client):
 def test_join_code_cycle_locks_rent_rate_after_first_payment(client):
     admin, _, rent_settings, _ = _create_admin_with_block()
     join_code = "LOCKA1"
+    lock_class = ClassEconomy(
+        join_code=join_code,
+        teacher_id=admin.id,
+        created_by_admin_id=admin.id,
+        display_name='Period A Lock',
+    )
+    db.session.add(lock_class)
+    db.session.flush()
     coverage_due_date = datetime(2026, 3, 1, 0, 0, tzinfo=timezone.utc)
 
     salt = get_random_salt()
@@ -349,10 +390,22 @@ def test_join_code_cycle_locks_rent_rate_after_first_payment(client):
     )
     db.session.add(payer)
     db.session.flush()
+    seat = Seat(
+        student_id=payer.id,
+        class_id=lock_class.class_id,
+        join_code=join_code,
+        block='A',
+        role='student',
+        claimed_at=datetime.now(timezone.utc),
+    )
+    db.session.add(seat)
+    db.session.flush()
 
     payment_date = datetime(2026, 3, 5, 8, 0, tzinfo=timezone.utc)
     db.session.add(RentPayment(
         student_id=payer.id,
+        seat_id=seat.id,
+        class_id=lock_class.class_id,
         period="A",
         join_code=join_code,
         amount_paid=Decimal("500.00"),
@@ -362,8 +415,10 @@ def test_join_code_cycle_locks_rent_rate_after_first_payment(client):
         coverage_year=coverage_due_date.year,
     ))
     db.session.add(Transaction(
+        seat_id=seat.id,
         student_id=payer.id,
         teacher_id=admin.id,
+        class_id=lock_class.class_id,
         join_code=join_code,
         type="Rent Payment",
         amount=Decimal("-500.00"),
@@ -451,7 +506,7 @@ def test_run_payroll_applies_scheduled_rebalance(client):
     db.session.add(settings_row)
     db.session.commit()
 
-    response = client.post('/admin/run-payroll')
+    response = client.post('/admin/run_payroll')
 
     assert response.status_code == 302
     db.session.refresh(rent_settings)
