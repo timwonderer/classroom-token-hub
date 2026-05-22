@@ -62,6 +62,30 @@ This specification does NOT define:
 - scheduler implementation,
 - route-layer mechanics.
 
+## Supersession Boundary
+
+This specification supersedes `DOM-ECON-000` with respect to:
+- Policy transition governance semantics
+- Hidden delayed mutation patterns (prohibited by `ECON-CONST-001`)
+- Mutable singleton policy truth (prohibited by `ECON-CONST-006`)
+- Any implicit write-on-read or GET-triggered policy activation behavior
+
+`DOM-ECON-000` remains authoritative for:
+- Classroom Wage Index (CWI) definition and canonical derivation formulas
+- Policy mode ratio bands (tight / default / comfortable) and economic climate definitions
+- Savings and interest philosophy, compound growth formulas, and doubling-time constraints
+- Solvency validation formulas (budget survival test, catastrophe stability rule)
+- Analytics categories and canonical metrics
+- Canonical normalization rules (monthly → weekly, semester → weekly, daily → weekly)
+
+Implementations MUST NOT treat `DOM-ECON-000` ratio bands and CWI formulas as superseded. Only the policy mutation and transition governance model is superseded by this document.
+
+## Related Documents
+
+- `DOM-ECON-000_ECONOMY_GOVERNANCE_FOUNDATION.md` — CWI, ratio bands, solvency rules (remains authoritative)
+- `DOM-ECON-004_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE_SPECIFICATION.md` — pending policy visibility requirements
+- `FEAT-ECON-001_ECONOMIC_POLICY_TRANSITION_EXECUTION_AND_ACTIVATION_ORCHESTRATION.md` — FEAT-layer execution
+
 ---
 
 # IV. Constitutional Principles

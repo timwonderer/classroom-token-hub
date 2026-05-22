@@ -176,6 +176,13 @@ The `AUDIT_HMAC_KEY` environment variable shall be present at application startu
 
 Events for class-scoped protected tables shall use chain scope `"class:{class_id}"`. System-level events shall use chain scope `"system"`. Cross-scope chain references are prohibited.
 
+Class-scoped protected tables include, and are not limited to:
+- `transactions` — scoped by `class_id`
+- `policy_versions` — scoped by `class_id`; chain scope MUST be `"class:{class_id}"` for all policy version events
+- `policy_transitions` — scoped by `class_id`; chain scope MUST be `"class:{class_id}"` for all transition events
+
+Any audit event for `policy_versions` or `policy_transitions` that does not carry a valid `class_id` is a chain integrity violation.
+
 ### INV-OPS-018: UTC Normalization Requirement
 
 All datetime values used in HMAC computation shall be normalized to UTC (`+00:00`) before `isoformat()` is called. The verifier shall apply the same normalization when recomputing event hashes. Mismatched timezone representations are an `INVALID` chain condition.
@@ -250,6 +257,8 @@ class_id absent   →  "system"
 ```
 
 Per-class `ChainHead` rows are bootstrapped lazily on first emit for that class.
+
+**Constitutional economic policy objects** (`policy_versions`, `policy_transitions`) are class-scoped. Their audit chain scope is always `"class:{class_id}"`. There is no system-scoped chain for policy lineage objects. If a `policy_versions` or `policy_transitions` row is emitted without a `class_id`, it is an `INVALID` chain condition and MUST be surfaced in `IntegrityStatus`.
 
 ---
 

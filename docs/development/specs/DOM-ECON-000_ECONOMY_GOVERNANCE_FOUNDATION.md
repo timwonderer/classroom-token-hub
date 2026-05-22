@@ -787,11 +787,33 @@ The following are prohibited:
 
 ---
 
-# XV. Amendment
+# XV. Delegation to DOM-ECON-003
+
+Policy transition governance — including the mechanics of creating, activating, superseding, and cancelling economic policy transitions — is delegated to `DOM-ECON-003_ECONOMIC_POLICY_AND_TRANSITION.md`.
+
+`DOM-ECON-003` supersedes this document with respect to:
+- Policy transition creation, activation, and supersession semantics
+- Hidden delayed mutation patterns (prohibited)
+- Mutable singleton policy truth (prohibited)
+
+This document remains sole authority for:
+- Classroom Wage Index (CWI) definition and canonical derivation
+- Policy mode ratio bands (tight / default / comfortable)
+- Savings and interest formulas and doubling-time constraints
+- Solvency validation rules
+- Analytics categories and canonical metrics
+- Canonical normalization rules
+
+Implementations requiring policy transition behavior MUST consult `DOM-ECON-003`, not this document.
+
+---
+
+# XVI. Amendment
 
 Revisions to this document SHALL:
 1. increment the version number,
 2. update the Effective Date,
 3. preserve constitutional compatibility,
 4. maintain consistency with higher-authority invariant documents,
-5. and preserve deterministic economy governance semantics.
+5. maintain consistency with `DOM-ECON-003` for transition governance boundaries,
+6. and preserve deterministic economy governance semantics.

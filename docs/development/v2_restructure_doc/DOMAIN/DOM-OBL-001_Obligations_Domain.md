@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OBL-001 | 2.1 | 2026-04-22 | 2.0 | Constitutional |
+| DOM-OBL-001 | 2.2 | 2026-05-21 | 2.1 | Constitutional |
 
 ---
 
@@ -16,10 +16,13 @@ This domain governs the runtime execution and lifecycle of **seat-scoped obligat
 
 **Obligations operates on seat-scoped economic actors, not global identities.** All runtime state is anchored to `seat_id`. Debts and perks are class-bound; they shall not follow a `student_id` across different class universes.
 
+**Obligations is the sole authority over rent cycle legality and insurance renewal legality.** When a lawful rent cycle boundary or insurance renewal boundary occurs, Obligations determines whether the boundary is valid. Obligations MAY request policy transition activation at a lawful boundary, but MUST NOT mutate policy lineage directly. Policy lineage remains owned by `DOM-CLASS-001` and governed by `DOM-ECON-003`.
+
 This domain does not own:
 - **Global Identity**: Owned by `Identity`.
 - **Obligation Policy**: Owned by `Class Configuration`. Obligations is an execution domain that reads policies as directives.
 - **Currency Balances**: Owned by `Ledger`.
+- **Economic Policy Lineage**: Owned by `DOM-CLASS-001`. Obligations may signal a lawful boundary but does not own `policy_versions` or `policy_transitions`.
 
 ## III. Authority Level
 
@@ -30,6 +33,7 @@ Tier 1 — Constitutional. This document defines structural enforcement mechanis
 - `INV-CORE-000_Core_Invariants.md`
 - `DOM-CORE-000_Domain_Foundation.md`
 - `DOM-CLASS-001_Class_Configuration_Domain.md` (Policy Source)
+- `DOM-ECON-003_ECONOMIC_POLICY_AND_TRANSITION.md` (Operational boundary activation protocol)
 
 ## V. Schema Authority Declaration
 
@@ -120,9 +124,27 @@ Append-only stream of obligation-linked perks (e.g., hall pass quota).
 - **Consumption Flow**: Attendance emits `ConsumptionIntent`. Obligations validates against the derived balance and records the `CONSUMPTION` event.
 - **Ledger Coordination**: All assessment and satisfaction events shall emit `PostingRequests` to Ledger via FEAT. Obligations does not own ledger rows.
 
-## X. Amendment
+## X. Operational Boundary Authority
+
+Obligations is the sole lawful authority for determining:
+
+- **Rent cycle boundary legality**: Whether a rent cycle has closed and a new assessment period has begun.
+- **Insurance renewal boundary legality**: Whether an insurance policy period has expired and renewal is required.
+
+When a lawful boundary is detected, Obligations SHALL:
+1. Determine boundary validity using `ClassTimeZone` and the active policy snapshot.
+2. Emit a boundary event via the FEAT layer if a pending policy transition exists for the affected domain.
+3. NOT directly mutate `policy_versions` or `policy_transitions`. These tables are owned by `DOM-CLASS-001`.
+4. NOT activate policy transitions independently. Activation is orchestrated by `FEAT-ECON-001` upon boundary request from Obligations.
+
+This authority is referenced by `DOM-ECON-003` and `FEAT-ECON-001` as "Rent domain determines rent cycle closure" and "Insurance domain determines renewal legality." Both phrases refer to this domain.
+
+No other domain, FEAT, OPS job, GET handler, or request-time path may determine rent cycle or insurance renewal legality.
+
+## XI. Amendment
 
 Revisions to this document must:
 1. Increment the version number.
 2. Update the Effective Date.
 3. Maintain consistency with `INV-CORE-000`.
+4. Maintain consistency with `DOM-ECON-003` for operational boundary activation protocol.

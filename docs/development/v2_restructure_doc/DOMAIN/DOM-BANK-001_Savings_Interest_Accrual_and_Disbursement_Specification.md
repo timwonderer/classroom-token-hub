@@ -1,21 +1,24 @@
 # DOM-BANK-001 — Savings Interest Accrual and Disbursement Specification
 
-## Status
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| DOM-BANK-001 | 1.0 | 2026-05-21 | Draft | Constitutional |
 
-Draft
+## III. Authority Level
 
-## Authority Level
+Tier 1 — Constitutional. This document defines structural enforcement mechanisms and domain-specific constraints that operationalize Foundational invariants. It is subordinate to `INV-CORE-000`, `INV-CORE-001`, and `INV-ARC-015`.
 
-Domain Specification
+**Banking domain is the sole authority over accrual rollover legality.** When a lawful accrual boundary occurs (e.g., end of a daily or monthly accrual window in class timezone), Banking determines whether the boundary is valid and may request policy transition activation from `FEAT-ECON-001`. Banking MUST NOT mutate `policy_versions` or `policy_transitions` directly. Those tables are owned by `DOM-CLASS-001` and governed by `DOM-ECON-003`.
 
-## Depends On
+## IV. Dependencies
 
-- INV-CORE-000 — Core Invariants
-- INV-CORE-001 — Capability-Based Architecture and Authority Model
-- INV-ARC-000 — Execution Model
-- INV-ARC-015 — Temporal Model and Boundary Enforcement
-- DOM-LED-001 — Ledger Domain Authority
-- FEAT-CORE-000 — Feature Execution Constitutional Directive
+- `INV-CORE-000` — Core Invariants
+- `INV-CORE-001` — Capability-Based Architecture and Authority Model
+- `INV-ARC-000` — Execution Model
+- `INV-ARC-015` — Temporal Model and Boundary Enforcement
+- `DOM-LED-001` — Ledger Domain Authority
+- `FEAT-CORE-000` — Feature Execution Constitutional Directive
+- `DOM-ECON-003` — Economic Policy and Transition (operational boundary activation protocol)
 
 ---
 
@@ -386,3 +389,43 @@ The recommended canonical banking model for CTH is:
 | Settlement Boundary | Canonical class midnight |
 
 This mirrors common real-world savings account behavior while preserving deterministic replayability.
+
+---
+
+## 14. Operational Boundary Authority
+
+Banking domain is the sole authority over **accrual rollover legality** within CTH.
+
+This authority is referenced by `DOM-ECON-003` (ECON-CONST-004) and `FEAT-ECON-001` (§VIII) as "Banking domain owns accrual rollover legality." Both phrases refer to this domain.
+
+### 14.1 Boundary Determination
+
+When the scheduled accrual settlement job fires, Banking SHALL:
+
+1. Resolve the canonical class-time boundary using `class_id` and class timezone (per INV-ARC-015).
+2. Determine whether the accrual window has closed since the last settled period.
+3. Execute interest payout through `FEAT-CORE-000`-compliant FEAT orchestration.
+4. If a pending banking policy transition exists and the accrual boundary is lawful, signal `FEAT-ECON-001` to activate the transition.
+
+### 14.2 Policy Transition Activation Protocol
+
+Banking MAY request policy transition activation at a lawful accrual boundary.
+
+Banking MUST NOT:
+- Directly mutate `policy_versions` or `policy_transitions`
+- Activate policy transitions outside `FEAT-ECON-001` orchestration
+- Determine supersession legality
+- Perform activation inside a GET handler or read path
+
+Policy lineage remains owned by `DOM-CLASS-001`. Activation is orchestrated by `FEAT-ECON-001`.
+
+---
+
+## 15. Amendment
+
+Revisions to this document SHALL:
+1. Increment the version number.
+2. Update the Effective Date.
+3. Maintain consistency with `INV-CORE-000` and `INV-ARC-015`.
+4. Maintain consistency with `DOM-ECON-003` for operational boundary activation protocol.
+5. Preserve deterministic, replayable accrual semantics.

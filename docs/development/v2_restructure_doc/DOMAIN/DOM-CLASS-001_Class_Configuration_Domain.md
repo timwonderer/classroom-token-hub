@@ -2,6 +2,8 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
+| DOM-CLASS-001 | 2.0 | 2026-05-20 | prior class configuration conventions | Constitutional |
+
 ## III. Authority Level
 
 Tier 1 — Constitutional. This document defines structural enforcement mechanisms and domain-specific constraints that operationalize Foundational invariants. It is subordinate to `INV-CORE-000` and `INV-CORE-001`.
@@ -106,15 +108,16 @@ Key fields:
 - `economy_policy_updated_at`
 - `economy_last_rebalanced_at`
 - `economy_last_rebalanced_by` — `user_id` of the actor who triggered the rebalance
-- `economy_pending_rebalance_json` — deprecated transitional compatibility field
+- `economy_pending_rebalance_json` — **DEPRECATED. Scheduled for removal at Wave 4.** Transitional compatibility field only.
 
 Rules:
 
 - One record per class. Created when the class is first configured.
 - `economy_policy_mode` controls how economy governance interprets rebalance and solvency semantics.
-- `economy_pending_rebalance_json` exists only for transitional compatibility and MUST NOT be used by constitutional policy-governance systems.
+- `economy_pending_rebalance_json` exists only for transitional compatibility and MUST NOT be used by constitutional policy-governance systems. Any callsite that reads or writes this field outside a Wave 3 compatibility shim is a constitutional violation. This field MUST be removed and all callsites migrated to `policy_versions` / `policy_transitions` no later than Wave 4 of the v2 migration plan.
 - Active economic policy truth is governed through `policy_versions` and `policy_transitions`.
 - `feature_settings` stores active operational policy projection state only.
+- `activate_due_rebalances()` or any equivalent function that mutates `economy_pending_rebalance_json` inside a GET handler or outside FEAT orchestration is a live violation of `INV-ARC-007` and `DOM-ECON-003`. This path is retired by the policy transition system and MUST NOT be called in new code.
 
 ### 3. `hall_pass_settings`
 
@@ -318,6 +321,18 @@ Rules:
 - Economic policy evolution MUST occur through append-only `policy_transitions` lineage.
 - Direct mutation of constitutional economic policy history is prohibited.
 - Operational domains MAY consume active projected policy state but MUST NOT own policy lineage.
+
+### Deprecated Transitional Fields
+
+The following fields in `feature_settings` are retired by the policy transition system and are subject to removal at the specified migration wave:
+
+| Field | Status | Removal Gate | Successor |
+|---|---|---|---|
+| `economy_pending_rebalance_json` | **DEPRECATED** | Wave 4 | `policy_versions` + `policy_transitions` |
+
+**`activate_due_rebalances()` and equivalent GET-path activation functions are retired.** These functions mutate `economy_pending_rebalance_json` outside FEAT orchestration, constituting a live violation of `INV-ARC-007` (no write-on-read) and `DOM-ECON-003` (append-only evolution). No new code may call these functions. Existing callsites MUST be migrated to the policy transition system no later than Wave 4.
+
+`economy_policy_mode` in `feature_settings` is a transitional operational projection field. It reflects the active policy mode derived from `policy_versions` and has no independent authority. Its continued presence after Wave 4 migration is subject to review.
 
 ## IX. Derived / Cross-Domain Rules
 

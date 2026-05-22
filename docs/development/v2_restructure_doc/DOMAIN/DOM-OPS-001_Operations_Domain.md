@@ -1,6 +1,6 @@
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001      | 2.1     | 2026-04-22     | 2.0        | Normative       |
+| DOM-OPS-001      | 2.2     | 2026-05-21     | 2.1        | Normative       |
 
 ## 1. Domain Authority
 
@@ -25,6 +25,8 @@ The Operations domain is the single authority over the **Operational Truth** of 
 *   **Attendance Facts**: It does not own the tap logs or session status.
 *   **Obligation Facts**: It does not own debt or assessment logic.
 *   **Entitlement Balances**: It does not own the count of perks or items.
+*   **Economic Policy Truth**: It does not own `policy_versions` or `policy_transitions`. These are owned by `DOM-CLASS-001` and governed by `DOM-ECON-003`.
+*   **Operational Boundary Legality**: It does not determine whether a rent cycle has closed, an insurance period has expired, or an accrual rollover is lawful. Those determinations belong to the owning operational domain (see §8).
 
 ### Interactions:
 *   **Reads From**: All domains (Identity, Ledger, Obligations, Attendance, Store, Class Config) to evaluate invariants and health.
@@ -244,3 +246,40 @@ The Operations domain is the single authority over the **Operational Truth** of 
 ## 7. Identity & Trace Model Alignment
 
 *   `user_id`, `seat_id`, `class_id`, `correlation_id` must all be preserved in operational records and never collapsed.
+
+---
+
+## 8. Scheduled Activation Infrastructure
+
+Operations owns the **execution evidence** of scheduled policy activation jobs. It does NOT own policy truth or boundary legality.
+
+### 8.1 Activation Sequence
+
+When a scheduled OPS job fires that may trigger pending policy transition activation, the lawful sequence is:
+
+1. **OPS job fires** — Records a `STARTED` event in `job_events`. Carries a stable `correlation_id`.
+2. **Operational domain checks boundary legality** — The owning domain (`DOM-OBL-001` for rent/insurance, `DOM-BANK-001` for accrual rollover) determines whether a lawful boundary has occurred. OPS does not make this determination.
+3. **If boundary is lawful** — The operational domain signals `FEAT-ECON-001` to validate the pending transition and execute the activation sequence.
+4. **FEAT-ECON-001 orchestrates activation** — Creates target policy version as active, marks prior version inactive, marks transition applied, supersedes conflicting pending transitions. All within a single transaction boundary.
+5. **DOM-CLASS-001 receives the activated state** — `policy_versions` and `policy_transitions` reflect the new constitutional state.
+6. **DOM-OPS records execution evidence** — Appends `SUCCESS` (or `FAILED`) to `job_events`. Appends audit event with `correlation_id`, `class_id`, `domain`, and transition reference.
+
+### 8.2 Prohibited OPS Activation Patterns
+
+The following are constitutionally prohibited:
+
+- OPS job directly mutating `policy_versions` or `policy_transitions`
+- OPS job determining rent cycle legality or insurance renewal legality
+- OPS job calling GET-style handlers to trigger policy activation as a side effect
+- OPS job bypassing `FEAT-ECON-001` to activate transitions directly
+- OPS job activating transitions without recording execution evidence in `job_events`
+
+### 8.3 Activation Evidence Requirements
+
+For every scheduled policy activation attempt, OPS MUST record:
+
+- `job_events`: `STARTED`, and `SUCCESS` or `FAILED`
+- `audit_log`: activation action with `before`/`after` state reference, `class_id`, `domain`, `correlation_id`
+- Any `FAILED` event MUST include the failure reason in `payload`
+
+OPS evidence does not constitute policy truth. Policy truth remains in `policy_versions` under `DOM-CLASS-001` authority.
