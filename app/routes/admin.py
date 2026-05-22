@@ -6247,6 +6247,7 @@ def rent_settings():
     if settings and settings.is_enabled:
         now_utc = utc_now()
         from app.routes.student import (
+            _build_rent_coverage_context,
             _calculate_rent_coverage_due_date,
             _calculate_rent_deadlines,
             _calculate_upcoming_rent_due_date,
@@ -6305,6 +6306,8 @@ def rent_settings():
                 Student.id.in_(student_ids),
                 Student.is_rent_enabled == True
             ).order_by(Student.first_name).all()
+            class_student_ids = [student.id for student in class_students]
+            coverage_context_cache = {}
 
             for student in class_students:
                 unpaid_due_dates = []
@@ -6312,12 +6315,23 @@ def rent_settings():
                 for _ in range(24):
                     if first_due and cursor < first_due:
                         break
+                    cursor_key = ensure_utc(cursor).isoformat()
+                    if cursor_key not in coverage_context_cache:
+                        coverage_context_cache[cursor_key] = _build_rent_coverage_context(
+                            block_settings,
+                            join_code=join_code,
+                            period=block_name,
+                            student_ids=class_student_ids,
+                            coverage_due_date=cursor,
+                            include_waivers=True,
+                        )
                     is_paid = _is_student_coverage_period_paid(
                         block_settings,
                         student.id,
                         block_name,
                         join_code,
                         cursor,
+                        coverage_context=coverage_context_cache.get(cursor_key),
                     )
                     if is_paid:
                         break
