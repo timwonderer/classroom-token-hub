@@ -83,7 +83,7 @@ Implementations MUST NOT treat `DOM-ECON-000` ratio bands and CWI formulas as su
 ## Related Documents
 
 - `DOM-ECON-000_ECONOMY_GOVERNANCE_FOUNDATION.md` — CWI, ratio bands, solvency rules (remains authoritative)
-- `DOM-ECON-004_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE_SPECIFICIATION.md` — pending policy visibility requirements
+- `DOM-ECON-004_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE_SPECIFICATION.md` — pending policy visibility requirements
 - `FEAT-ECON-001_ECONOMIC_POLICY_TRANSITION_EXECUTION_AND_ACTIVATION_ORCHESTRATION.md` — FEAT-layer execution
 
 ---
