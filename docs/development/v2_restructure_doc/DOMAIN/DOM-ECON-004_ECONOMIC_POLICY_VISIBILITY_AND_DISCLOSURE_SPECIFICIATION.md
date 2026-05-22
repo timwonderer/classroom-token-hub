@@ -168,7 +168,11 @@ Displayed information MUST include:
 
 Example:
 
-text id="jlwm501" Current Rent: $1000 Pending Next-Cycle Rent: $1200 Effective: next rent cycle 
+```
+Current Rent:          $1,000
+Pending Next-Cycle Rent: $1,200  (Effective: next rent cycle)
+```
+
 
 ---
 
@@ -186,7 +190,11 @@ Displayed information MUST include:
 
 Example:
 
-text id="jlwm502" Current Premium: $150 Pending Renewal Premium: $180 Effective: next renewal boundary 
+```
+Current Premium:          $150
+Pending Renewal Premium:  $180  (Effective: next renewal boundary)
+```
+
 
 ---
 

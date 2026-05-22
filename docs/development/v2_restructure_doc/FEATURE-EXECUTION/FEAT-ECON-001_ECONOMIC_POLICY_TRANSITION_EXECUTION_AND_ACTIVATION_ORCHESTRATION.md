@@ -18,7 +18,8 @@ This specification defines lawful FEAT-layer orchestration for:
 This specification governs execution behavior only.
 
 Economic governance law remains defined by:
-text id="jlwm401" DOM-ECON-003 
+`DOM-ECON-003`
+
 
 ---
 
@@ -72,7 +73,13 @@ FEAT layer MUST NOT define:
 All policy transition execution MUST be idempotent.
 
 Execution MUST include:
-text id="jlwm402" correlation_id idempotency_key feat_id class_id 
+
+```
+correlation_id
+idempotency_key
+feat_id
+class_id
+```
 
 Duplicate execution MUST NOT produce duplicate policy activation.
 
@@ -124,14 +131,14 @@ Teacher selects:
 
 ### Step 2 — FEAT Creates Policy Transitions
 
-Each selected economic change SHALL create an independent:
-text id="jlwm403" policy_transition 
+Each selected economic change SHALL create an independent `policy_transition`.
 
 Grouped teacher rebalance actions MUST NOT collapse multiple domains into shared mutable pending state.
 
 Example:
-
-text id="jlwm404" rent transition insurance transition banking transition 
+- rent transition
+- insurance transition
+- banking transition
 
 Each transition remains independently executable.
 
@@ -152,8 +159,7 @@ FEAT SHALL:
 
 ### Immediate Activation
 
-If:
-text id="jlwm405" activation_mode = immediate 
+If `activation_mode = immediate`:
 
 FEAT SHALL:
 - activate target policy version immediately,
@@ -179,8 +185,7 @@ Direct mutation of active policy state is prohibited.
 
 ### Pending Transition Creation
 
-If:
-text id="jlwm406" activation_mode = next_boundary 
+If `activation_mode = next_boundary`:
 
 FEAT SHALL:
 - create pending transition,
@@ -231,7 +236,9 @@ FEAT SHALL:
 
 If newer lawful transition conflicts with existing pending transition:
 
-text id="jlwm407" new_transition.created_at > existing_pending_transition.created_at 
+```
+new_transition.created_at > existing_pending_transition.created_at
+```
 
 FEAT SHALL:
 - mark older transition superseded,

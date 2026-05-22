@@ -30,7 +30,7 @@ Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-006`.
 - `INV-ARC-006_Command_Boundary_for_Mutation.md`
 - `INV-ARC-007_GET_Must_Be_Pure.md`
 - `DOM-OPS-002_Audit_Lineage_Integrity.md`
-- `DOM-ECON-003_Economic_Policy_Governance_and_Transition_Constitution.md`
+- `DOM-ECON-003_ECONOMIC_POLICY_AND_TRANSITION.md`
 
 ## V. Core Rule
 

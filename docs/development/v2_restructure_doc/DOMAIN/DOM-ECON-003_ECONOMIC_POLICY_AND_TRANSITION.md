@@ -83,7 +83,7 @@ Implementations MUST NOT treat `DOM-ECON-000` ratio bands and CWI formulas as su
 ## Related Documents
 
 - `DOM-ECON-000_ECONOMY_GOVERNANCE_FOUNDATION.md` — CWI, ratio bands, solvency rules (remains authoritative)
-- `DOM-ECON-004_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE_SPECIFICATION.md` — pending policy visibility requirements
+- `DOM-ECON-004_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE_SPECIFICIATION.md` — pending policy visibility requirements
 - `FEAT-ECON-001_ECONOMIC_POLICY_TRANSITION_EXECUTION_AND_ACTIVATION_ORCHESTRATION.md` — FEAT-layer execution
 
 ---
@@ -184,13 +184,26 @@ Policy activation behavior MUST NOT depend on:
 Represents immutable constitutional economic policy truth.
 
 A policy version defines the exact economic rules active for a:
-text id="jlwm301" (class_id, domain) 
+
+```
+(class_id, domain)
+```
 
 during a given operational period.
 
 Example fields:
 
-text id="jlwm302" id class_id domain version_number policy_payload_json created_at activated_at created_by_transition_id is_active 
+```
+id
+class_id
+domain
+version_number
+policy_payload_json
+created_at
+activated_at
+created_by_transition_id
+is_active
+```
 
 Constraints:
 - exactly one active policy version per (class_id, domain)
@@ -211,7 +224,22 @@ A policy transition defines:
 
 Example fields:
 
-text id="jlwm303" id class_id domain source_policy_version_id target_policy_version_id activation_mode status created_at created_by applied_at correlation_id superseded_by_transition_id cancelled_at 
+```
+id
+class_id
+domain
+source_policy_version_id
+target_policy_version_id
+activation_mode
+status
+created_at
+created_by
+applied_at
+correlation_id
+superseded_by_transition_id
+cancelled_at
+```
+
 
 ---
 
@@ -219,7 +247,9 @@ text id="jlwm303" id class_id domain source_policy_version_id target_policy_vers
 
 Allowed transition states:
 
-text id="jlwm304" pending applied cancelled superseded failed 
+```
+pending | applied | cancelled | superseded | failed
+```
 
 Definitions:
 
@@ -239,7 +269,9 @@ Economic governance MAY store abstract activation intent.
 
 Allowed activation modes:
 
-text id="jlwm305" immediate next_boundary manual 
+```
+immediate | next_boundary | manual
+```
 
 Definitions:
 
@@ -261,11 +293,11 @@ Economic governance MUST NOT encode:
 
 If a newer lawful transition conflicts with an existing pending transition:
 
-text id="jlwm306" new_transition.created_at > existing_pending_transition.created_at 
+```
+new_transition.created_at > existing_pending_transition.created_at
+```
 
-the older transition MUST become:
-
-text id="jlwm307" superseded 
+the older transition MUST become `superseded`.
 
 The newer lawful transition becomes authoritative.
 
@@ -285,7 +317,9 @@ Operationally:
 - rebalance execution SHALL NOT collapse multiple domains into single mutable state.
 
 Examples:
-text id="jlwm308" rent transition insurance transition banking transition 
+- rent transition
+- insurance transition
+- banking transition
 
 Each transition remains independently governed.
 
@@ -320,7 +354,7 @@ The following patterns are constitutionally prohibited.
 Future economic state MUST NOT exist exclusively inside hidden delayed payloads.
 
 Examples:
-text id="jlwm309" economy_pending_rebalance_json 
+- `economy_pending_rebalance_json` 
 
 ---
 
