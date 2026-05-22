@@ -9,6 +9,7 @@ import json
 import random
 import secrets
 import re
+from collections import defaultdict
 from calendar import monthrange
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
@@ -2958,7 +2959,13 @@ def _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date):
     return None
 
 
-def _get_effective_rent_amount_for_coverage_period(settings, payments, coverage_due_date, join_code=None):
+def _get_effective_rent_amount_for_coverage_period(
+    settings,
+    payments,
+    coverage_due_date,
+    join_code=None,
+    locked_amount=None,
+):
     """
     Return the effective base rent for the coverage period.
 
@@ -2968,7 +2975,8 @@ def _get_effective_rent_amount_for_coverage_period(settings, payments, coverage_
     """
     current_amount = settings.rent_amount or Decimal('0.00')
 
-    locked_amount = _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date)
+    if locked_amount is None:
+        locked_amount = _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date)
     if locked_amount is not None:
         return locked_amount
 
@@ -2987,6 +2995,32 @@ def _get_effective_rent_amount_for_coverage_period(settings, payments, coverage_
                         return base_paid
 
     return current_amount
+
+
+def _match_valid_rent_payments(payments, candidate_txns):
+    """Match payments to non-void rent transactions using existing tolerance rules."""
+    if not payments:
+        return []
+    txns_by_amount = {}
+    for txn in candidate_txns:
+        txns_by_amount.setdefault(txn.amount, []).append(txn)
+
+    used_txn_ids = set()
+    valid_payments = []
+    for payment in payments:
+        candidates = txns_by_amount.get(-payment.amount_paid, [])
+        for txn in candidates:
+            if txn.id in used_txn_ids or txn.is_void:
+                continue
+            if not txn.timestamp or not payment.payment_date:
+                continue
+            if abs((ensure_utc(txn.timestamp) - ensure_utc(payment.payment_date)).total_seconds()) > RENT_PAYMENT_MATCH_TOLERANCE_SECONDS:
+                continue
+            used_txn_ids.add(txn.id)
+            valid_payments.append(payment)
+            break
+
+    return valid_payments
 
 
 def _filter_valid_rent_payments(payments, student_id, join_code, seat_ids=None):
@@ -3018,29 +3052,122 @@ def _filter_valid_rent_payments(payments, student_id, join_code, seat_ids=None):
     txn_query = txn_query.filter(Transaction.join_code == join_code)
 
     candidate_txns = txn_query.all()
-    txns_by_amount = {}
-    for txn in candidate_txns:
-        txns_by_amount.setdefault(txn.amount, []).append(txn)
-
-    used_txn_ids = set()
-    valid_payments = []
-    for payment in payments:
-        candidates = txns_by_amount.get(-payment.amount_paid, [])
-        for txn in candidates:
-            if txn.id in used_txn_ids or txn.is_void:
-                continue
-            if not txn.timestamp or not payment.payment_date:
-                continue
-            if abs((ensure_utc(txn.timestamp) - ensure_utc(payment.payment_date)).total_seconds()) > RENT_PAYMENT_MATCH_TOLERANCE_SECONDS:
-                continue
-            used_txn_ids.add(txn.id)
-            valid_payments.append(payment)
-            break
-
-    return valid_payments
+    return _match_valid_rent_payments(payments, candidate_txns)
 
 
-def _is_coverage_period_paid(settings, valid_payments, coverage_due_date, include_late_fee=True, join_code=None):
+def _build_rent_coverage_context(
+    settings,
+    *,
+    class_id,
+    seat_ids,
+    coverage_due_date,
+    include_waivers=True,
+):
+    """
+    Preload rent facts for a single class + coverage period.
+
+    Callers can pass this to _is_student_coverage_period_paid(...) to avoid
+    repeating equivalent queries for every student in the same request.
+    """
+    if not settings or not class_id or not coverage_due_date or not seat_ids:
+        return None
+
+    class_row = db.session.get(ClassEconomy, class_id)
+    join_code = class_row.join_code if class_row else None
+    if not join_code:
+        return None
+
+    seat_rows = (
+        db.session.query(Seat.id, Seat.student_id)
+        .filter(Seat.class_id == class_id, Seat.id.in_(seat_ids))
+        .all()
+    )
+    student_id_by_seat = {seat_id: student_id for seat_id, student_id in seat_rows}
+    valid_seat_ids = list(student_id_by_seat.keys())
+    if not valid_seat_ids:
+        return None
+
+    waived_seat_ids = set()
+    if include_waivers:
+        waiver_rows = (
+            RentWaiver.query
+            .filter(
+                RentWaiver.class_id == class_id,
+                RentWaiver.seat_id.in_(valid_seat_ids),
+                RentWaiver.waiver_start_date <= coverage_due_date,
+                RentWaiver.waiver_end_date >= coverage_due_date,
+            )
+            .all()
+        )
+        waived_seat_ids = {row.seat_id for row in waiver_rows if row.seat_id}
+
+    coverage_start, coverage_end = _get_rent_coverage_window(settings, coverage_due_date)
+    payments_query = RentPayment.query.filter(
+        RentPayment.class_id == class_id,
+        RentPayment.seat_id.in_(valid_seat_ids),
+        RentPayment.coverage_month == coverage_due_date.month,
+        RentPayment.coverage_year == coverage_due_date.year,
+    )
+    if coverage_start and coverage_end:
+        payments_query = payments_query.filter(
+            RentPayment.payment_date >= coverage_start,
+            RentPayment.payment_date < coverage_end,
+        )
+    coverage_payments = payments_query.all()
+
+    payments_by_seat = defaultdict(list)
+    for payment in coverage_payments:
+        if payment.seat_id:
+            payments_by_seat[payment.seat_id].append(payment)
+
+    # Preload candidate rent transactions once and reuse the same matching rules.
+    payment_dates = [p.payment_date for p in coverage_payments if p.payment_date]
+    payment_amounts = {-(p.amount_paid) for p in coverage_payments if p.amount_paid is not None}
+    txns_by_student = defaultdict(list)
+    if payment_dates and payment_amounts:
+        window_start = min(payment_dates) - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS)
+        window_end = max(payment_dates) + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS)
+        candidate_txns = Transaction.query.filter(
+            Transaction.student_id.in_(list(student_id_by_seat.values())),
+            Transaction.type == 'Rent Payment',
+            Transaction.join_code == join_code,
+            Transaction.timestamp >= window_start,
+            Transaction.timestamp <= window_end,
+            Transaction.amount.in_(payment_amounts),
+        ).all()
+        for txn in candidate_txns:
+            txns_by_student[txn.student_id].append(txn)
+
+    valid_payments_by_seat = {}
+    for seat_id, payments in payments_by_seat.items():
+        student_id = student_id_by_seat.get(seat_id)
+        if not student_id:
+            valid_payments_by_seat[seat_id] = []
+            continue
+        valid_payments_by_seat[seat_id] = _match_valid_rent_payments(
+            payments,
+            txns_by_student.get(student_id, []),
+        )
+
+    return {
+        "class_id": class_id,
+        "coverage_due_date": ensure_utc(coverage_due_date),
+        "join_code": join_code,
+        "student_id_by_seat": student_id_by_seat,
+        "waived_seat_ids": waived_seat_ids,
+        "valid_payments_by_seat": valid_payments_by_seat,
+        "locked_rent_amount": _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date),
+    }
+
+
+def _is_coverage_period_paid(
+    settings,
+    valid_payments,
+    coverage_due_date,
+    include_late_fee=True,
+    join_code=None,
+    locked_amount=None,
+):
     """
     Return True when a coverage period is fully paid.
 
@@ -3055,6 +3182,7 @@ def _is_coverage_period_paid(settings, valid_payments, coverage_due_date, includ
         valid_payments,
         coverage_due_date,
         join_code=join_code,
+        locked_amount=locked_amount,
     )
     if effective_rent_amount <= Decimal('0.00'):
         return True
@@ -3198,57 +3326,78 @@ def _is_student_coverage_period_paid(
     coverage_due_date,
     include_late_fee=True,
     include_waivers=True,
+    coverage_context=None,
 ):
     """
     Return True when a student's specific coverage period is fully paid or waived.
     """
     if not settings:
         return False
-    join_code = None
-    student_id = None
-    if class_id:
-        class_row = db.session.get(ClassEconomy, class_id)
-        join_code = class_row.join_code if class_row else None
-    if seat_id:
-        seat = db.session.get(Seat, seat_id)
-        student_id = seat.student_id if seat else None
-
     if not coverage_due_date or not class_id:
         return False
 
-    if include_waivers:
-        if _has_active_rent_waiver_v2(seat_id, class_id, coverage_due_date):
-            return True
-
-    coverage_start, coverage_end = _get_rent_coverage_window(settings, coverage_due_date)
-    coverage_payments_query = RentPayment.query.filter(
-        RentPayment.coverage_month == coverage_due_date.month,
-        RentPayment.coverage_year == coverage_due_date.year,
-    )
-    if coverage_start and coverage_end:
-        coverage_payments_query = coverage_payments_query.filter(
-            RentPayment.payment_date >= coverage_start,
-            RentPayment.payment_date < coverage_end,
+    context_applies = False
+    if coverage_context:
+        context_class_id = coverage_context.get("class_id")
+        context_coverage_due = ensure_utc(coverage_context.get("coverage_due_date"))
+        context_applies = (
+            context_class_id == class_id
+            and context_coverage_due == ensure_utc(coverage_due_date)
         )
-    coverage_payments_query = coverage_payments_query.filter(
-        RentPayment.seat_id == seat_id,
-        RentPayment.class_id == class_id,
-    )
-    coverage_payments = coverage_payments_query.all()
 
-    seat_ids = [seat_id] if seat_id else []
-    valid_payments = _filter_valid_rent_payments(
-        coverage_payments,
-        student_id,
-        join_code,
-        seat_ids=seat_ids,
-    )
+    join_code = None
+    student_id = None
+    locked_amount = None
+    if context_applies:
+        join_code = coverage_context.get("join_code")
+        student_id = (coverage_context.get("student_id_by_seat") or {}).get(seat_id)
+        locked_amount = coverage_context.get("locked_rent_amount")
+        if include_waivers and seat_id in (coverage_context.get("waived_seat_ids") or set()):
+            return True
+    else:
+        if class_id:
+            class_row = db.session.get(ClassEconomy, class_id)
+            join_code = class_row.join_code if class_row else None
+        if seat_id:
+            seat = db.session.get(Seat, seat_id)
+            student_id = seat.student_id if seat else None
+        if include_waivers:
+            if _has_active_rent_waiver_v2(seat_id, class_id, coverage_due_date):
+                return True
+
+    if context_applies:
+        valid_payments = (coverage_context.get("valid_payments_by_seat") or {}).get(seat_id, [])
+    else:
+        coverage_start, coverage_end = _get_rent_coverage_window(settings, coverage_due_date)
+        coverage_payments_query = RentPayment.query.filter(
+            RentPayment.coverage_month == coverage_due_date.month,
+            RentPayment.coverage_year == coverage_due_date.year,
+        )
+        if coverage_start and coverage_end:
+            coverage_payments_query = coverage_payments_query.filter(
+                RentPayment.payment_date >= coverage_start,
+                RentPayment.payment_date < coverage_end,
+            )
+        coverage_payments_query = coverage_payments_query.filter(
+            RentPayment.seat_id == seat_id,
+            RentPayment.class_id == class_id,
+        )
+        coverage_payments = coverage_payments_query.all()
+
+        seat_ids = [seat_id] if seat_id else []
+        valid_payments = _filter_valid_rent_payments(
+            coverage_payments,
+            student_id,
+            join_code,
+            seat_ids=seat_ids,
+        )
     return _is_coverage_period_paid(
         settings,
         valid_payments,
         coverage_due_date,
         include_late_fee=include_late_fee,
         join_code=join_code,
+        locked_amount=locked_amount,
     )
 
 

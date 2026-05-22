@@ -6671,6 +6671,7 @@ def rent_settings():
     if settings and settings.is_enabled:
         now_utc = utc_now()
         from app.routes.student import (
+            _build_rent_coverage_context,
             _calculate_rent_coverage_due_date,
             _calculate_rent_deadlines,
             _calculate_upcoming_rent_due_date,
@@ -6730,19 +6731,41 @@ def rent_settings():
                 Student.id.in_(student_ids),
                 Student.is_rent_enabled == True
             ).order_by(Student.first_name).all()
+            class_student_ids = [student.id for student in class_students]
+            class_seat_rows = (
+                db.session.query(Seat.id, Seat.student_id)
+                .filter(
+                    Seat.class_id == class_id,
+                    Seat.student_id.in_(class_student_ids),
+                )
+                .all()
+            )
+            seat_id_by_student = {student_id: seat_id for seat_id, student_id in class_seat_rows}
+            class_seat_ids = [seat_id for seat_id, _student_id in class_seat_rows]
+            coverage_context_cache = {}
 
             for student in class_students:
                 unpaid_due_dates = []
                 cursor = coverage_due_date
-                seat_id = get_seat_id_for_class(student.id, class_id)
+                seat_id = seat_id_by_student.get(student.id)
                 for _ in range(24):
                     if first_due and cursor < first_due:
                         break
+                    cursor_key = ensure_utc(cursor).isoformat()
+                    if cursor_key not in coverage_context_cache:
+                        coverage_context_cache[cursor_key] = _build_rent_coverage_context(
+                            block_settings,
+                            class_id=class_id,
+                            seat_ids=class_seat_ids,
+                            coverage_due_date=cursor,
+                            include_waivers=True,
+                        )
                     is_paid = _is_student_coverage_period_paid(
                         block_settings,
                         seat_id,
                         class_id,
                         cursor,
+                        coverage_context=coverage_context_cache.get(cursor_key),
                     )
                     if is_paid:
                         break
