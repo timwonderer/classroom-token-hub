@@ -957,6 +957,22 @@ Wave impact:
   - `python3 -m py_compile app/models.py app/utils/analytics_engine.py app/routes/analytics.py app/routes/admin.py app/utils/issue_helpers.py tests/test_analytics.py` → pass
   - `pytest -q tests/test_analytics.py` → `16 passed`
 
+### Status Update (2026-05-22): Wave 4 Resume Slice — Scheduled Rebalance Class-Authority Hardening
+
+- Hardened scheduled rebalance activation to enforce canonical class boundary authority from `FeatureSettings.class_id`:
+  - `app/utils/economy_rebalance.py`
+    - removed payload-driven class resolution during activation (`join_code` / `block` no longer influence mutation target)
+    - rent rebalance application now resolves `RentSettings` by `settings_row.class_id` only
+    - insurance rebalance application now resolves `InsurancePolicy` by `settings_row.class_id` only
+    - `activate_due_rebalances(...)` now increments activation counts only when at least one scoped change is actually applied
+- Added regression coverage for cross-class payload tampering cases:
+  - `tests/test_economy_policy_mode.py`
+    - verifies rent changes cannot be redirected to a different class via payload `block` / `join_code`
+    - verifies insurance changes cannot mutate a policy in another class for the same teacher
+- Validation:
+  - `python3 -m py_compile app/utils/economy_rebalance.py tests/test_economy_policy_mode.py` → pass
+  - `pytest -q tests/test_economy_policy_mode.py -k "activate_due_rebalances or run_payroll_applies_scheduled_rebalance"` → `4 passed`, `16 deselected`
+
 ### Status Update (2026-05-20): Spec Coverage Audit — Banking/Balance/Overdraft/Rent Touchpoints
 
 - Confirmed existing v2 spec coverage for touched features:

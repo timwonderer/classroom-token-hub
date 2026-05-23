@@ -64,31 +64,7 @@ def prepare_scheduled_rebalance_changes(change_plan, *, rent_settings=None, insu
     return scheduled_changes
 
 
-def _resolve_class_id(*, teacher_id: int, join_code: str | None = None, block: str | None = None) -> str | None:
-    if join_code:
-        class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
-            teacher_id=teacher_id,
-            join_code=join_code,
-        ).first()
-        if class_row and class_row[0]:
-            return class_row[0]
-    if block:
-        class_row = (
-            ClassEconomy.query.with_entities(ClassEconomy.class_id)
-            .join(FeatureSettings, FeatureSettings.class_id == ClassEconomy.class_id)
-            .filter(
-                ClassEconomy.teacher_id == teacher_id,
-                FeatureSettings.block == block,
-            )
-            .first()
-        )
-        if class_row and class_row[0]:
-            return class_row[0]
-    return None
-
-
-def _get_effective_rent_settings(teacher_id, block=None, *, join_code=None):
-    class_id = _resolve_class_id(teacher_id=teacher_id, join_code=join_code, block=block)
+def _get_effective_rent_settings(class_id: str | None):
     if not class_id:
         return None
     return (
@@ -104,21 +80,18 @@ def _get_effective_rent_settings(teacher_id, block=None, *, join_code=None):
 def _apply_change_list(teacher_id, settings_row, changes, activation_mode, *, reference_time=None):
     reference_time = ensure_utc(reference_time) if reference_time else utc_now()
     applied_labels = []
+    class_id = getattr(settings_row, "class_id", None)
 
     for change in changes:
         change_type = change.get("type")
         if change_type == "rent":
-            rent_settings = _get_effective_rent_settings(
-                teacher_id,
-                change.get("block"),
-                join_code=change.get("join_code"),
-            )
+            rent_settings = _get_effective_rent_settings(class_id)
             if rent_settings:
                 rent_settings.rent_amount = Decimal(str(change.get("new_value")))
                 applied_labels.append("Rent")
         elif change_type == "insurance":
             policy = InsurancePolicy.query.filter_by(
-                teacher_id=teacher_id,
+                class_id=class_id,
                 id=change.get("policy_id"),
                 is_active=True,
             ).first()
@@ -194,16 +167,16 @@ def activate_due_rebalances(teacher_id, *, block=None, reference_time=None, rene
                 future_changes.append(change)
 
         if due_changes:
-            applied_labels.extend(
-                _apply_change_list(
-                    teacher_id,
-                    settings_row,
-                    due_changes,
-                    activation_mode,
-                    reference_time=reference_time,
-                )
+            applied_now = _apply_change_list(
+                teacher_id,
+                settings_row,
+                due_changes,
+                activation_mode,
+                reference_time=reference_time,
             )
-            activated += 1
+            if applied_now:
+                applied_labels.extend(applied_now)
+                activated += 1
 
         if future_changes:
             payload["changes"] = future_changes

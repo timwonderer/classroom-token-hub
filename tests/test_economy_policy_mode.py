@@ -578,6 +578,107 @@ def test_activate_due_rebalances_applies_past_due_rent_change(client):
     assert settings_row.economy_pending_rebalance_json is None
 
 
+def test_activate_due_rebalances_keeps_rent_mutation_in_settings_row_class(client):
+    admin, _, rent_settings_a, economy_a = _create_admin_with_block('A', 'JOINPOLA')
+
+    economy_b = ClassEconomy(
+        join_code='JOINPOLB',
+        teacher_id=admin.id,
+        created_by_admin_id=admin.id,
+        display_name='Period B',
+    )
+    db.session.add(economy_b)
+    db.session.flush()
+    _create_teacher_block(admin.id, block='B', join_code='JOINPOLB', class_id=economy_b.class_id)
+
+    rent_settings_b = RentSettings(
+        teacher_id=admin.id,
+        join_code='JOINPOLB',
+        class_id=economy_b.class_id,
+        block='B',
+        is_enabled=True,
+        rent_amount=Decimal('700.00'),
+        frequency_type='monthly',
+    )
+    settings_row = FeatureSettings(
+        teacher_id=admin.id,
+        join_code='JOINPOLA',
+        class_id=economy_a.class_id,
+        block='A',
+        economy_policy_mode='tight',
+        economy_pending_rebalance_json=json.dumps({
+            'activation_mode': 'next_payroll',
+            'changes': [
+                {
+                    'type': 'rent',
+                    # Malicious/mismatched payload scope should not redirect class mutation.
+                    'block': 'B',
+                    'join_code': 'JOINPOLB',
+                    'current_value': '500.00',
+                    'new_value': '610.00',
+                }
+            ],
+        }),
+    )
+    db.session.add_all([rent_settings_b, settings_row])
+    db.session.commit()
+
+    activated, labels = activate_due_rebalances(
+        admin.id,
+        reference_time=datetime(2026, 4, 1, tzinfo=timezone.utc),
+    )
+    db.session.commit()
+
+    db.session.refresh(rent_settings_a)
+    db.session.refresh(rent_settings_b)
+    db.session.refresh(settings_row)
+    assert activated == 1
+    assert labels == ['Rent']
+    assert rent_settings_a.rent_amount == Decimal('610.00')
+    assert rent_settings_b.rent_amount == Decimal('700.00')
+    assert settings_row.economy_pending_rebalance_json is None
+
+
+def test_activate_due_rebalances_does_not_mutate_cross_class_insurance_policy(client):
+    admin, _, _, economy_a = _create_admin_with_block('A', 'JOINPOLA')
+    policy_b = _create_insurance_policy(admin.id, 'Cross Class Policy', '99.00', block='B', join_code='JOINPOLB')
+
+    settings_row = FeatureSettings(
+        teacher_id=admin.id,
+        join_code='JOINPOLA',
+        class_id=economy_a.class_id,
+        block='A',
+        economy_policy_mode='tight',
+        economy_pending_rebalance_json=json.dumps({
+            'activation_mode': 'next_payroll',
+            'changes': [
+                {
+                    'type': 'insurance',
+                    # Policy from another class for the same teacher.
+                    'policy_id': policy_b.id,
+                    'current_value': '99.00',
+                    'new_value': '130.00',
+                }
+            ],
+        }),
+    )
+    db.session.add(settings_row)
+    db.session.commit()
+
+    activated, labels = activate_due_rebalances(
+        admin.id,
+        reference_time=datetime(2026, 4, 1, tzinfo=timezone.utc),
+    )
+    db.session.commit()
+
+    db.session.refresh(policy_b)
+    db.session.refresh(settings_row)
+    assert activated == 0
+    assert labels == []
+    assert policy_b.premium == Decimal('99.00')
+    assert settings_row.economy_pending_rebalance_json is None
+
+
 def test_prepare_scheduled_rebalance_changes_sets_rent_effective_at(client):
     admin, _, rent_settings, _ = _create_admin_with_block()
 
