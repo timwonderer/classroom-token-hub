@@ -1037,6 +1037,20 @@ Wave impact:
   - `python3 -m py_compile app/routes/admin.py app/utils/economy_rebalance.py tests/test_economy_policy_mode.py` → pass
   - `pytest -q tests/test_economy_policy_mode.py -k "next_renewal_rebalance_schedules_rent_for_next_cycle or activate_due_rebalances_applies_pending_policy_transition_without_legacy_payload or run_payroll_applies_scheduled_rebalance"` → `3 passed`, `18 deselected`
 
+### Status Update (2026-05-23): Wave 4 Resume Slice — Legacy Pending-Payload Activation Fallback Retirement
+
+- Retired legacy pending JSON compatibility path from scheduled activation:
+  - `app/utils/economy_rebalance.py`
+    - `activate_due_rebalances(...)` no longer falls back to `FeatureSettings.economy_pending_rebalance_json` when a class has no pending transitions
+    - classes without pending `policy_transitions` now no-op in activation flow
+- Migrated scheduled-activation regression coverage fully to transition-native fixtures:
+  - `tests/test_economy_policy_mode.py`
+    - replaced legacy JSON-seeded scheduled activation/payroll tests with `PolicyVersion` + `PolicyTransition` setup
+    - removed legacy JSON field assertions from transition-path tests
+    - added shared helper for pending transition fixture creation to keep tests consistent and class-scoped
+- Validation:
+  - `pytest -q tests/test_economy_policy_mode.py -k "activate_due_rebalances or next_renewal_rebalance or run_payroll_applies_scheduled_rebalance"` → `6 passed`, `15 deselected`
+
 ### Status Update (2026-05-20): Spec Coverage Audit — Banking/Balance/Overdraft/Rent Touchpoints
 
 - Confirmed existing v2 spec coverage for touched features:

@@ -483,65 +483,8 @@ def activate_due_rebalances(teacher_id, *, block=None, reference_time=None, rene
 
             continue
 
-        if not settings_row.economy_pending_rebalance_json:
-            continue
-
-        try:
-            payload = json.loads(settings_row.economy_pending_rebalance_json or "{}")
-        except json.JSONDecodeError:
-            settings_row.economy_pending_rebalance_json = None
-            continue
-
-        activation_mode = payload.get("activation_mode") or REBALANCE_ACTIVATION_LEGACY_NEXT_PAYROLL
-        changes = payload.get("changes") or []
-        if not changes:
-            settings_row.economy_pending_rebalance_json = None
-            continue
-
-        due_changes = []
-        future_changes = []
-        for change in changes:
-            activation_event = change.get("activation_event")
-            activation_policy_id = change.get("activation_policy_id")
-            effective_at = _parse_dt(change.get("effective_at"))
-            if activation_event == REBALANCE_TRIGGER_INSURANCE_RENEWAL:
-                if renewal_policy_id is not None and str(activation_policy_id) == str(renewal_policy_id):
-                    due_changes.append(change)
-                else:
-                    future_changes.append(change)
-            elif activation_mode == REBALANCE_ACTIVATION_LEGACY_NEXT_PAYROLL and effective_at is None:
-                due_changes.append(change)
-            elif effective_at is not None and effective_at <= reference_time:
-                due_changes.append(change)
-            else:
-                future_changes.append(change)
-
-        if due_changes:
-            applied_now, applied_changes = _apply_change_list(
-                teacher_id,
-                settings_row,
-                due_changes,
-                activation_mode,
-                reference_time=reference_time,
-            )
-            if applied_changes:
-                applied_labels.extend(applied_now)
-                activated += 1
-                _create_policy_transitions_for_changes(
-                    settings_row,
-                    applied_changes,
-                    activation_mode=activation_mode,
-                    created_by=teacher_id,
-                    status=POLICY_TRANSITION_STATUS_APPLIED,
-                    reference_time=reference_time,
-                    applied_at=reference_time,
-                )
-
-        if future_changes:
-            payload["changes"] = future_changes
-            settings_row.economy_pending_rebalance_json = json.dumps(payload)
-        else:
-            settings_row.economy_pending_rebalance_json = None
+        # No pending policy transitions for this class; legacy JSON fallback has been retired.
+        continue
 
     return activated, applied_labels
 

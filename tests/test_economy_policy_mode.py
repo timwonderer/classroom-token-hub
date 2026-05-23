@@ -167,6 +167,68 @@ def _create_insurance_policy(admin_id, title, premium, block='A', join_code=None
     return policy
 
 
+def _create_pending_policy_transition(
+    *,
+    class_id,
+    domain,
+    change_payload,
+    created_by,
+    activation_mode='next_payroll',
+    created_at=None,
+):
+    created_at = created_at or datetime.now(timezone.utc)
+    latest_version = (
+        PolicyVersion.query.filter_by(class_id=class_id, domain=domain)
+        .order_by(PolicyVersion.version_number.desc(), PolicyVersion.id.desc())
+        .first()
+    )
+    next_version_number = (latest_version.version_number if latest_version else 0) + 1
+
+    source_payload = {
+        'type': change_payload.get('type'),
+        'new_value': str(change_payload.get('current_value') or change_payload.get('new_value')),
+    }
+    if change_payload.get('policy_id') is not None:
+        source_payload['policy_id'] = change_payload['policy_id']
+
+    source_version = PolicyVersion(
+        class_id=class_id,
+        domain=domain,
+        version_number=next_version_number,
+        policy_payload_json=json.dumps(source_payload),
+        is_active=True,
+        created_at=created_at,
+        activated_at=created_at,
+    )
+    db.session.add(source_version)
+    db.session.flush()
+
+    target_version = PolicyVersion(
+        class_id=class_id,
+        domain=domain,
+        version_number=next_version_number + 1,
+        policy_payload_json=json.dumps(change_payload),
+        is_active=False,
+        created_at=created_at,
+    )
+    db.session.add(target_version)
+    db.session.flush()
+
+    transition = PolicyTransition(
+        class_id=class_id,
+        domain=domain,
+        source_policy_version_id=source_version.id,
+        target_policy_version_id=target_version.id,
+        activation_mode=activation_mode,
+        status='pending',
+        created_at=created_at,
+        created_by=created_by,
+    )
+    db.session.add(transition)
+    db.session.flush()
+    return transition
+
+
 def test_checker_uses_feature_policy_mode_for_recommendations(client):
     admin, payroll_settings, _, economy = _create_admin_with_block()
 
@@ -486,35 +548,33 @@ def test_run_payroll_applies_scheduled_rebalance(client):
     admin, _, rent_settings, economy = _create_admin_with_block()
     _login_admin(client, admin.id)
 
-    settings_row = FeatureSettings(
+    db.session.add(FeatureSettings(
         teacher_id=admin.id,
         join_code='JOINPOLA',
         class_id=economy.class_id,
         block='A',
         economy_policy_mode='tight',
-        economy_pending_rebalance_json=json.dumps({
-            'activation_mode': 'next_payroll',
-            'changes': [
-                {
-                    'type': 'rent',
-                    'block': 'A',
-                    'join_code': 'JOINPOLA',
-                    'current_value': '500.00',
-                    'new_value': '610.00',
-                }
-            ],
-        }),
+    ))
+    _create_pending_policy_transition(
+        class_id=economy.class_id,
+        domain='rent',
+        change_payload={
+            'type': 'rent',
+            'block': 'A',
+            'join_code': 'JOINPOLA',
+            'current_value': '500.00',
+            'new_value': '610.00',
+        },
+        created_by=admin.id,
+        activation_mode='next_payroll',
     )
-    db.session.add(settings_row)
     db.session.commit()
 
     response = client.post('/admin/run_payroll')
 
     assert response.status_code == 302
     db.session.refresh(rent_settings)
-    db.session.refresh(settings_row)
     assert rent_settings.rent_amount == Decimal('610.00')
-    assert settings_row.economy_pending_rebalance_json is None
 
 
 def test_next_renewal_rebalance_schedules_rent_for_next_cycle(client):
@@ -529,7 +589,6 @@ def test_next_renewal_rebalance_schedules_rent_for_next_cycle(client):
         'selected_changes': ['rent'],
     })
 
-    settings_row = FeatureSettings.query.filter_by(teacher_id=admin.id, block='A').first()
     pending_transition = PolicyTransition.query.filter_by(
         class_id=economy.class_id,
         status='pending',
@@ -539,7 +598,6 @@ def test_next_renewal_rebalance_schedules_rent_for_next_cycle(client):
     target_payload = json.loads(target_version.policy_payload_json) if target_version else {}
 
     assert response.status_code == 302
-    assert settings_row.economy_pending_rebalance_json is None
     assert pending_transition is not None
     assert pending_transition.activation_mode == REBALANCE_ACTIVATION_NEXT_RENEWAL
     assert target_version is not None
@@ -551,27 +609,28 @@ def test_next_renewal_rebalance_schedules_rent_for_next_cycle(client):
 
 def test_activate_due_rebalances_applies_past_due_rent_change(client):
     admin, _, rent_settings, economy = _create_admin_with_block()
-    settings_row = FeatureSettings(
+    db.session.add(FeatureSettings(
         teacher_id=admin.id,
         join_code='JOINPOLA',
         class_id=economy.class_id,
         block='A',
         economy_policy_mode='tight',
-        economy_pending_rebalance_json=json.dumps({
-            'activation_mode': REBALANCE_ACTIVATION_NEXT_RENEWAL,
-            'changes': [
-                {
-                    'type': 'rent',
-                    'block': 'A',
-                    'join_code': 'JOINPOLA',
-                    'current_value': '500.00',
-                    'new_value': '610.00',
-                    'effective_at': '2026-03-01T00:00:00+00:00',
-                }
-            ],
-        }),
+    ))
+    _create_pending_policy_transition(
+        class_id=economy.class_id,
+        domain='rent',
+        change_payload={
+            'type': 'rent',
+            'block': 'A',
+            'join_code': 'JOINPOLA',
+            'current_value': '500.00',
+            'new_value': '610.00',
+            'effective_at': '2026-03-01T00:00:00+00:00',
+        },
+        created_by=admin.id,
+        activation_mode=REBALANCE_ACTIVATION_NEXT_RENEWAL,
+        created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
     )
-    db.session.add(settings_row)
     db.session.commit()
 
     activated, labels = activate_due_rebalances(
@@ -581,11 +640,9 @@ def test_activate_due_rebalances_applies_past_due_rent_change(client):
     db.session.commit()
 
     db.session.refresh(rent_settings)
-    db.session.refresh(settings_row)
     assert activated == 1
     assert labels == ['Rent']
     assert rent_settings.rent_amount == Decimal('610.00')
-    assert settings_row.economy_pending_rebalance_json is None
 
 
 def test_activate_due_rebalances_keeps_rent_mutation_in_settings_row_class(client):
@@ -610,27 +667,28 @@ def test_activate_due_rebalances_keeps_rent_mutation_in_settings_row_class(clien
         rent_amount=Decimal('700.00'),
         frequency_type='monthly',
     )
-    settings_row = FeatureSettings(
+    db.session.add(FeatureSettings(
         teacher_id=admin.id,
         join_code='JOINPOLA',
         class_id=economy_a.class_id,
         block='A',
         economy_policy_mode='tight',
-        economy_pending_rebalance_json=json.dumps({
-            'activation_mode': 'next_payroll',
-            'changes': [
-                {
-                    'type': 'rent',
-                    # Malicious/mismatched payload scope should not redirect class mutation.
-                    'block': 'B',
-                    'join_code': 'JOINPOLB',
-                    'current_value': '500.00',
-                    'new_value': '610.00',
-                }
-            ],
-        }),
+    ))
+    _create_pending_policy_transition(
+        class_id=economy_a.class_id,
+        domain='rent',
+        change_payload={
+            'type': 'rent',
+            # Malicious/mismatched payload scope should not redirect class mutation.
+            'block': 'B',
+            'join_code': 'JOINPOLB',
+            'current_value': '500.00',
+            'new_value': '610.00',
+        },
+        created_by=admin.id,
+        activation_mode='next_payroll',
     )
-    db.session.add_all([rent_settings_b, settings_row])
+    db.session.add(rent_settings_b)
     db.session.commit()
 
     activated, labels = activate_due_rebalances(
@@ -641,38 +699,36 @@ def test_activate_due_rebalances_keeps_rent_mutation_in_settings_row_class(clien
 
     db.session.refresh(rent_settings_a)
     db.session.refresh(rent_settings_b)
-    db.session.refresh(settings_row)
     assert activated == 1
     assert labels == ['Rent']
     assert rent_settings_a.rent_amount == Decimal('610.00')
     assert rent_settings_b.rent_amount == Decimal('700.00')
-    assert settings_row.economy_pending_rebalance_json is None
 
 
 def test_activate_due_rebalances_does_not_mutate_cross_class_insurance_policy(client):
     admin, _, _, economy_a = _create_admin_with_block('A', 'JOINPOLA')
     policy_b = _create_insurance_policy(admin.id, 'Cross Class Policy', '99.00', block='B', join_code='JOINPOLB')
 
-    settings_row = FeatureSettings(
+    db.session.add(FeatureSettings(
         teacher_id=admin.id,
         join_code='JOINPOLA',
         class_id=economy_a.class_id,
         block='A',
         economy_policy_mode='tight',
-        economy_pending_rebalance_json=json.dumps({
-            'activation_mode': 'next_payroll',
-            'changes': [
-                {
-                    'type': 'insurance',
-                    # Policy from another class for the same teacher.
-                    'policy_id': policy_b.id,
-                    'current_value': '99.00',
-                    'new_value': '130.00',
-                }
-            ],
-        }),
+    ))
+    _create_pending_policy_transition(
+        class_id=economy_a.class_id,
+        domain='insurance',
+        change_payload={
+            'type': 'insurance',
+            # Policy from another class for the same teacher.
+            'policy_id': policy_b.id,
+            'current_value': '99.00',
+            'new_value': '130.00',
+        },
+        created_by=admin.id,
+        activation_mode='next_payroll',
     )
-    db.session.add(settings_row)
     db.session.commit()
 
     activated, labels = activate_due_rebalances(
@@ -682,11 +738,9 @@ def test_activate_due_rebalances_does_not_mutate_cross_class_insurance_policy(cl
     db.session.commit()
 
     db.session.refresh(policy_b)
-    db.session.refresh(settings_row)
     assert activated == 0
     assert labels == []
     assert policy_b.premium == Decimal('99.00')
-    assert settings_row.economy_pending_rebalance_json is None
 
 
 def test_prepare_scheduled_rebalance_changes_sets_rent_effective_at(client):
@@ -721,7 +775,6 @@ def test_activate_due_rebalances_applies_pending_policy_transition_without_legac
         )
         db.session.add(settings_row)
         db.session.flush()
-    settings_row.economy_pending_rebalance_json = None
 
     source_version = PolicyVersion(
         class_id=economy.class_id,
@@ -773,7 +826,6 @@ def test_activate_due_rebalances_applies_pending_policy_transition_without_legac
     db.session.refresh(source_version)
     db.session.refresh(target_version)
     db.session.refresh(transition)
-    db.session.refresh(settings_row)
 
     assert activated == 1
     assert labels == ['Rent']
@@ -781,4 +833,3 @@ def test_activate_due_rebalances_applies_pending_policy_transition_without_legac
     assert source_version.is_active is False
     assert target_version.is_active is True
     assert transition.status == 'applied'
-    assert settings_row.economy_pending_rebalance_json is None
