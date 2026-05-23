@@ -10,6 +10,8 @@ from app.models import (
     FeatureSettings,
     IdentityProfile,
     InsurancePolicy,
+    PolicyTransition,
+    PolicyVersion,
     PayrollSettings,
     RentPayment,
     RentSettings,
@@ -530,11 +532,21 @@ def test_next_renewal_rebalance_schedules_rent_for_next_cycle(client):
     settings_row = FeatureSettings.query.filter_by(teacher_id=admin.id, block='A').first()
     payload = json.loads(settings_row.economy_pending_rebalance_json)
     scheduled_change = payload['changes'][0]
+    pending_transition = PolicyTransition.query.filter_by(
+        class_id=economy.class_id,
+        status='pending',
+        domain='rent',
+    ).first()
+    target_version = db.session.get(PolicyVersion, pending_transition.target_policy_version_id) if pending_transition else None
 
     assert response.status_code == 302
     assert payload['activation_mode'] == REBALANCE_ACTIVATION_NEXT_RENEWAL
     assert scheduled_change['type'] == 'rent'
     assert scheduled_change['effective_at'] is not None
+    assert pending_transition is not None
+    assert pending_transition.activation_mode == REBALANCE_ACTIVATION_NEXT_RENEWAL
+    assert target_version is not None
+    assert json.loads(target_version.policy_payload_json)['type'] == 'rent'
     db.session.refresh(rent_settings)
     assert rent_settings.rent_amount == Decimal('500.00')
 
@@ -696,3 +708,79 @@ def test_prepare_scheduled_rebalance_changes_sets_rent_effective_at(client):
 
     assert len(changes) == 1
     assert changes[0]['effective_at'] is not None
+
+
+def test_activate_due_rebalances_applies_pending_policy_transition_without_legacy_payload(client):
+    admin, _, rent_settings, economy = _create_admin_with_block()
+    settings_row = FeatureSettings.query.filter_by(teacher_id=admin.id, class_id=economy.class_id, block='A').first()
+    if settings_row is None:
+        settings_row = FeatureSettings(
+            teacher_id=admin.id,
+            join_code='JOINPOLA',
+            class_id=economy.class_id,
+            block='A',
+            economy_policy_mode='default',
+        )
+        db.session.add(settings_row)
+        db.session.flush()
+    settings_row.economy_pending_rebalance_json = None
+
+    source_version = PolicyVersion(
+        class_id=economy.class_id,
+        domain='rent',
+        version_number=1,
+        policy_payload_json=json.dumps({'type': 'rent', 'new_value': '500.00'}),
+        is_active=True,
+        created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+        activated_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+    )
+    db.session.add(source_version)
+    db.session.flush()
+
+    target_version = PolicyVersion(
+        class_id=economy.class_id,
+        domain='rent',
+        version_number=2,
+        policy_payload_json=json.dumps({
+            'type': 'rent',
+            'new_value': '650.00',
+            'effective_at': '2026-03-15T00:00:00+00:00',
+        }),
+        is_active=False,
+        created_at=datetime(2026, 3, 10, tzinfo=timezone.utc),
+    )
+    db.session.add(target_version)
+    db.session.flush()
+
+    transition = PolicyTransition(
+        class_id=economy.class_id,
+        domain='rent',
+        source_policy_version_id=source_version.id,
+        target_policy_version_id=target_version.id,
+        activation_mode=REBALANCE_ACTIVATION_NEXT_RENEWAL,
+        status='pending',
+        created_at=datetime(2026, 3, 10, tzinfo=timezone.utc),
+        created_by=admin.id,
+    )
+    db.session.add(transition)
+    db.session.commit()
+
+    activated, labels = activate_due_rebalances(
+        admin.id,
+        reference_time=datetime(2026, 4, 1, tzinfo=timezone.utc),
+    )
+    db.session.commit()
+
+    db.session.refresh(rent_settings)
+    db.session.refresh(source_version)
+    db.session.refresh(target_version)
+    db.session.refresh(transition)
+    db.session.refresh(settings_row)
+
+    assert activated == 1
+    assert labels == ['Rent']
+    assert rent_settings.rent_amount == Decimal('650.00')
+    assert source_version.is_active is False
+    assert target_version.is_active is True
+    assert transition.status == 'applied'
+    assert settings_row.economy_pending_rebalance_json is None

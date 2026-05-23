@@ -995,6 +995,28 @@ Wave impact:
   - `flask db heads` → `c4e36a4ab2f1 (head)`
   - `pytest -q tests/test_economy_policy_mode.py -k "activate_due_rebalances"` → `3 passed`, `17 deselected`
 
+### Status Update (2026-05-22): Wave 4 Resume Slice — FEAT-ECON Dual-Write Activation Cutover
+
+- Shifted scheduled rebalance activation to policy-lineage-first while retaining transitional JSON compatibility:
+  - `app/utils/economy_rebalance.py`
+    - added class-scoped policy lineage writers for rebalance changes (`policy_versions`, `policy_transitions`)
+    - immediate rebalance apply now writes `applied` transitions/versions in parallel
+    - scheduled rebalance queue now writes `pending` transitions/versions in parallel
+    - `activate_due_rebalances(...)` now processes pending `policy_transitions` as primary source and falls back to legacy `economy_pending_rebalance_json` only when no pending transitions exist for the class
+    - pending transition supersession/cancellation/apply state updates are now tracked in `policy_transitions`
+  - `app/routes/admin.py`
+    - scheduled rebalance route now queues policy transitions during schedule flow
+    - economy-policy update now cancels pending transitions for the class scope
+    - pending effective-at UI lookup now resolves from `policy_transitions` first, then legacy JSON fallback
+- Added regression coverage for dual-write and transition-driven activation:
+  - `tests/test_economy_policy_mode.py`
+    - next-renewal schedule test now asserts pending policy transition/version creation
+    - added activation test proving pending transition can apply without any legacy JSON payload
+- Validation:
+  - `python3 -m py_compile app/utils/economy_rebalance.py app/routes/admin.py tests/test_economy_policy_mode.py` → pass
+  - `pytest -q tests/test_economy_policy_mode.py -k "activate_due_rebalances or next_renewal_rebalance"` → `5 passed`, `16 deselected`
+  - `pytest -q tests/test_economy_policy_mode.py` → `21 passed`
+
 ### Status Update (2026-05-20): Spec Coverage Audit — Banking/Balance/Overdraft/Rent Touchpoints
 
 - Confirmed existing v2 spec coverage for touched features:

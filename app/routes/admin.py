@@ -92,7 +92,10 @@ from app.utils.economy_rebalance import (
     REBALANCE_ACTIVATION_NEXT_RENEWAL,
     activate_due_rebalances,
     apply_rebalance_changes,
+    cancel_pending_policy_transitions,
+    get_pending_policy_transition_effective_at,
     prepare_scheduled_rebalance_changes,
+    queue_scheduled_policy_transitions,
 )
 from app.utils.claim_credentials import (
     compute_primary_claim_hash,
@@ -2344,6 +2347,12 @@ def _build_policy_summary(admin_id, selected_block, analysis, rent_settings, ins
 
 def _extract_pending_rebalance_effective_at(policy_summary: dict) -> datetime | None:
     """Return the next known effective timestamp for a pending rebalance payload."""
+    settings_row = policy_summary.get('settings_row')
+    class_id = getattr(settings_row, 'class_id', None) if settings_row else None
+    policy_transition_effective_at = get_pending_policy_transition_effective_at(class_id)
+    if policy_transition_effective_at:
+        return policy_transition_effective_at
+
     pending_payload = policy_summary.get('pending_rebalance_json')
     if not pending_payload:
         return None
@@ -8117,6 +8126,7 @@ def update_economy_policy():
     settings_row.economy_policy_mode = policy_mode
     settings_row.economy_policy_updated_at = utc_now()
     settings_row.economy_pending_rebalance_json = None
+    cancel_pending_policy_transitions(settings_row.class_id, actor_id=admin_id)
     current_app.logger.info(
         "Economy policy mode changed teacher=%s block=%s mode=%s",
         admin_id,
@@ -8219,6 +8229,12 @@ def apply_economy_rebalance():
             rent_settings=rent_settings,
             insurance_policies=insurance_policies,
         )
+        queued_transition_count = queue_scheduled_policy_transitions(
+            admin_id,
+            settings_row,
+            scheduled_changes,
+            activation_mode=REBALANCE_ACTIVATION_NEXT_RENEWAL,
+        )
         settings_row.economy_pending_rebalance_json = json.dumps({
             'activation_mode': REBALANCE_ACTIVATION_NEXT_RENEWAL,
             'changes': scheduled_changes,
@@ -8231,7 +8247,7 @@ def apply_economy_rebalance():
             [change.get('type') for change in change_plan],
         )
         flash(
-            f"Scheduled economy rebalance for the renewal after the upcoming bill ({len(change_plan)} setting(s)).",
+            f"Scheduled economy rebalance for the renewal after the upcoming bill ({len(change_plan)} setting(s), {queued_transition_count} policy transition(s)).",
             "success",
         )
 
