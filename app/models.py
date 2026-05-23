@@ -2979,7 +2979,6 @@ class FeatureSettings(db.Model):
     economy_policy_alignment_status = db.Column(db.String(32), nullable=True)
     economy_last_rebalanced_at = db.Column(db.DateTime(timezone=True), nullable=True)
     economy_last_rebalanced_by = db.Column(db.Integer, nullable=True)
-    economy_pending_rebalance_json = db.Column(db.Text, nullable=True)
 
     # Timestamps
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)

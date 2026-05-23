@@ -1051,6 +1051,21 @@ Wave impact:
 - Validation:
   - `pytest -q tests/test_economy_policy_mode.py -k "activate_due_rebalances or next_renewal_rebalance or run_payroll_applies_scheduled_rebalance"` → `6 passed`, `15 deselected`
 
+### Status Update (2026-05-23): Wave 4 Resume Slice — FeatureSettings Legacy Rebalance Column Drop
+
+- Removed the final runtime schema artifact for legacy pending-rebalance payload storage:
+  - `app/models.py`
+    - dropped `FeatureSettings.economy_pending_rebalance_json` from runtime ORM model
+  - `migrations/versions/d2f9f1d9be2e_drop_legacy_pending_rebalance_json.py`
+    - idempotent schema migration drops `feature_settings.economy_pending_rebalance_json`
+    - downgrade safely restores nullable `TEXT` column
+- Scope note:
+  - This completes the scheduled-rebalance payload cutover path from JSON storage to policy lineage (`policy_versions` / `policy_transitions`) for runtime model/schema ownership.
+- Validation:
+  - `python3 -m py_compile app/models.py migrations/versions/d2f9f1d9be2e_drop_legacy_pending_rebalance_json.py` → pass
+  - `python3 scripts/lint_migrations.py migrations/versions/d2f9f1d9be2e_drop_legacy_pending_rebalance_json.py` → pass
+  - `pytest -q tests/test_economy_policy_mode.py -k "activate_due_rebalances or next_renewal_rebalance or run_payroll_applies_scheduled_rebalance"` → `6 passed`, `15 deselected`
+
 ### Status Update (2026-05-20): Spec Coverage Audit — Banking/Balance/Overdraft/Rent Touchpoints
 
 - Confirmed existing v2 spec coverage for touched features:
