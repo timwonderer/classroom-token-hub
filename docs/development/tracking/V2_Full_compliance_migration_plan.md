@@ -973,6 +973,28 @@ Wave impact:
   - `python3 -m py_compile app/utils/economy_rebalance.py tests/test_economy_policy_mode.py` → pass
   - `pytest -q tests/test_economy_policy_mode.py -k "activate_due_rebalances or run_payroll_applies_scheduled_rebalance"` → `4 passed`, `16 deselected`
 
+### Status Update (2026-05-22): Wave 4 Resume Slice — Policy Lineage Schema Scaffolding
+
+- Added policy-lineage scaffolding for class-configuration economic governance:
+  - `app/models.py`
+    - introduced `PolicyVersion` (`policy_versions`) and `PolicyTransition` (`policy_transitions`) ORM classes
+    - class-scoped ownership via `class_id` FK, unique `(class_id, domain, version_number)` lineage key, and class/domain/state indexes
+  - `app/models_canonical.py`
+    - added canonical model stubs for `policy_versions` and `policy_transitions`
+  - `migrations/versions/c4e36a4ab2f1_add_policy_lineage_tables.py`
+    - idempotent creation of both tables, FK wiring, and supporting indexes
+    - downgrade uses dynamic FK discovery (no hardcoded FK-name dependency)
+- Scope note:
+  - This slice is schema/model scaffolding only. Runtime rebalance execution remains on transitional `FeatureSettings` fields until FEAT cutover slices land.
+- Validation:
+  - `python3 -m py_compile app/models.py app/models_canonical.py migrations/versions/c4e36a4ab2f1_add_policy_lineage_tables.py` → pass
+  - `python3 scripts/lint_migrations.py migrations/versions/c4e36a4ab2f1_add_policy_lineage_tables.py` → pass (0 warnings)
+  - `flask db upgrade` → pass
+  - `flask db downgrade 8357d4036478` → pass
+  - `flask db upgrade` → pass
+  - `flask db heads` → `c4e36a4ab2f1 (head)`
+  - `pytest -q tests/test_economy_policy_mode.py -k "activate_due_rebalances"` → `3 passed`, `17 deselected`
+
 ### Status Update (2026-05-20): Spec Coverage Audit — Banking/Balance/Overdraft/Rent Touchpoints
 
 - Confirmed existing v2 spec coverage for touched features:

@@ -3006,6 +3006,66 @@ class FeatureSettings(db.Model):
         return ClassFeature.defaults_dict()
 
 
+class PolicyVersion(db.Model):
+    """Immutable class-scoped economic policy version lineage."""
+
+    __tablename__ = 'policy_versions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    class_id = db.Column(
+        db.String(36),
+        db.ForeignKey('classes.class_id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    domain = db.Column(db.String(32), nullable=False)
+    version_number = db.Column(db.Integer, nullable=False)
+    policy_payload_json = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    activated_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_by_transition_id = db.Column(db.Integer, db.ForeignKey('policy_transitions.id'), nullable=True)
+    is_active = db.Column(db.Boolean, default=False, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'class_id',
+            'domain',
+            'version_number',
+            name='uq_policy_versions_class_domain_version',
+        ),
+        db.Index('ix_policy_versions_class_domain_active', 'class_id', 'domain', 'is_active'),
+    )
+
+
+class PolicyTransition(db.Model):
+    """Append-only class-scoped economic policy transition lineage."""
+
+    __tablename__ = 'policy_transitions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    class_id = db.Column(
+        db.String(36),
+        db.ForeignKey('classes.class_id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    domain = db.Column(db.String(32), nullable=False)
+    source_policy_version_id = db.Column(db.Integer, db.ForeignKey('policy_versions.id'), nullable=True)
+    target_policy_version_id = db.Column(db.Integer, db.ForeignKey('policy_versions.id'), nullable=False)
+    activation_mode = db.Column(db.String(32), nullable=False)
+    status = db.Column(db.String(32), nullable=False, default='pending')
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    created_by = db.Column(db.Integer, nullable=True)
+    applied_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    correlation_id = db.Column(db.String(64), nullable=True, index=True)
+    superseded_by_transition_id = db.Column(db.Integer, db.ForeignKey('policy_transitions.id'), nullable=True)
+    cancelled_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        db.Index('ix_policy_transitions_class_domain_status', 'class_id', 'domain', 'status'),
+    )
+
+
 @event.listens_for(ClassEconomy, 'after_insert')
 def _seed_default_class_features(mapper, connection, target):
     """New classes start with payroll enabled and all other features disabled."""

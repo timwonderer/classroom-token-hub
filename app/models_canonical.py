@@ -61,6 +61,16 @@ class FeatureSetting(Base, TimestampMixin):
     id = sa.Column(sa.Integer, primary_key=True)
 
 
+class PolicyVersion(Base, TimestampMixin):
+    __tablename__ = "policy_versions"
+    id = sa.Column(sa.Integer, primary_key=True)
+
+
+class PolicyTransition(Base, TimestampMixin):
+    __tablename__ = "policy_transitions"
+    id = sa.Column(sa.Integer, primary_key=True)
+
+
 class HallPassSetting(Base, TimestampMixin):
     __tablename__ = "hall_pass_settings"
     id = sa.Column(sa.Integer, primary_key=True)
@@ -250,6 +260,8 @@ __all__ = [
     "UserRecoveryToken",
     "ClassFeature",
     "FeatureSetting",
+    "PolicyVersion",
+    "PolicyTransition",
     "HallPassSetting",
     "RentSetting",
     "PayrollSetting",
