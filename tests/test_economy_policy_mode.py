@@ -530,23 +530,21 @@ def test_next_renewal_rebalance_schedules_rent_for_next_cycle(client):
     })
 
     settings_row = FeatureSettings.query.filter_by(teacher_id=admin.id, block='A').first()
-    payload = json.loads(settings_row.economy_pending_rebalance_json)
-    scheduled_change = payload['changes'][0]
     pending_transition = PolicyTransition.query.filter_by(
         class_id=economy.class_id,
         status='pending',
         domain='rent',
     ).first()
     target_version = db.session.get(PolicyVersion, pending_transition.target_policy_version_id) if pending_transition else None
+    target_payload = json.loads(target_version.policy_payload_json) if target_version else {}
 
     assert response.status_code == 302
-    assert payload['activation_mode'] == REBALANCE_ACTIVATION_NEXT_RENEWAL
-    assert scheduled_change['type'] == 'rent'
-    assert scheduled_change['effective_at'] is not None
+    assert settings_row.economy_pending_rebalance_json is None
     assert pending_transition is not None
     assert pending_transition.activation_mode == REBALANCE_ACTIVATION_NEXT_RENEWAL
     assert target_version is not None
-    assert json.loads(target_version.policy_payload_json)['type'] == 'rent'
+    assert target_payload['type'] == 'rent'
+    assert target_payload.get('effective_at') is not None
     db.session.refresh(rent_settings)
     assert rent_settings.rent_amount == Decimal('500.00')
 

@@ -1017,6 +1017,26 @@ Wave impact:
   - `pytest -q tests/test_economy_policy_mode.py -k "activate_due_rebalances or next_renewal_rebalance"` → `5 passed`, `16 deselected`
   - `pytest -q tests/test_economy_policy_mode.py` → `21 passed`
 
+### Status Update (2026-05-22): Wave 4 Resume Slice — Legacy Pending-Payload Write Removal (Route/UI Path)
+
+- Removed legacy pending-rebalance JSON writes from active rebalance route flows now that pending-state UI is transition-backed:
+  - `app/routes/admin.py`
+    - `update_economy_policy()` no longer mutates `FeatureSettings.economy_pending_rebalance_json`; pending transition cancellation remains class-scoped
+    - `apply_economy_rebalance()` scheduled branch no longer serializes pending payload JSON; policy transitions are the sole scheduled-state write path
+    - policy summary now exposes transition-backed flag (`has_pending_policy_transition`) instead of legacy payload presence
+    - pending effective date resolution now reads only from `policy_transitions`
+  - `templates/admin_economy_health.html`
+    - scheduled badge/render gate switched from legacy payload presence to transition-backed `has_pending_policy_transition`
+  - `app/utils/economy_rebalance.py`
+    - immediate apply path no longer writes/clears `economy_pending_rebalance_json`
+    - transition-driven activation path no longer writes legacy payload cleanup rows; legacy JSON writes remain only inside fallback compatibility handling for pre-existing payload data
+- Regression updates:
+  - `tests/test_economy_policy_mode.py`
+    - next-renewal scheduling test now asserts no legacy JSON write while validating transition/target payload creation
+- Validation:
+  - `python3 -m py_compile app/routes/admin.py app/utils/economy_rebalance.py tests/test_economy_policy_mode.py` → pass
+  - `pytest -q tests/test_economy_policy_mode.py -k "next_renewal_rebalance_schedules_rent_for_next_cycle or activate_due_rebalances_applies_pending_policy_transition_without_legacy_payload or run_payroll_applies_scheduled_rebalance"` → `3 passed`, `18 deselected`
+
 ### Status Update (2026-05-20): Spec Coverage Audit — Banking/Balance/Overdraft/Rent Touchpoints
 
 - Confirmed existing v2 spec coverage for touched features:

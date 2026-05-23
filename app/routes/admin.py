@@ -93,6 +93,7 @@ from app.utils.economy_rebalance import (
     activate_due_rebalances,
     apply_rebalance_changes,
     cancel_pending_policy_transitions,
+    get_pending_policy_transition_count,
     get_pending_policy_transition_effective_at,
     prepare_scheduled_rebalance_changes,
     queue_scheduled_policy_transitions,
@@ -2341,48 +2342,15 @@ def _build_policy_summary(admin_id, selected_block, analysis, rent_settings, ins
         'overall_status': overall_status,
         'is_aligned': overall_status == 'aligned',
         'updated_at': getattr(settings_row, 'economy_policy_updated_at', None),
-        'pending_rebalance_json': getattr(settings_row, 'economy_pending_rebalance_json', None),
+        'has_pending_policy_transition': bool(get_pending_policy_transition_count(getattr(settings_row, 'class_id', None))),
     }
 
 
 def _extract_pending_rebalance_effective_at(policy_summary: dict) -> datetime | None:
-    """Return the next known effective timestamp for a pending rebalance payload."""
+    """Return the next known effective timestamp for a pending policy transition."""
     settings_row = policy_summary.get('settings_row')
     class_id = getattr(settings_row, 'class_id', None) if settings_row else None
-    policy_transition_effective_at = get_pending_policy_transition_effective_at(class_id)
-    if policy_transition_effective_at:
-        return policy_transition_effective_at
-
-    pending_payload = policy_summary.get('pending_rebalance_json')
-    if not pending_payload:
-        return None
-
-    try:
-        payload = json.loads(pending_payload)
-    except (TypeError, ValueError, json.JSONDecodeError):
-        return None
-
-    changes = payload.get('changes') or []
-    effective_candidates: list[datetime] = []
-    for change in changes:
-        effective_at_raw = change.get('effective_at')
-        if not effective_at_raw:
-            continue
-        try:
-            effective_candidates.append(ensure_utc(datetime.fromisoformat(effective_at_raw)))
-        except (TypeError, ValueError):
-            continue
-
-    if effective_candidates:
-        return min(effective_candidates)
-
-    scheduled_at_raw = payload.get('scheduled_at')
-    if not scheduled_at_raw:
-        return None
-    try:
-        return ensure_utc(datetime.fromisoformat(scheduled_at_raw))
-    except (TypeError, ValueError):
-        return None
+    return get_pending_policy_transition_effective_at(class_id)
 
 
 def _build_rebalance_preview(admin_id, selected_block, checker, cwi, rent_settings, insurance_policies):
@@ -8125,7 +8093,6 @@ def update_economy_policy():
         return redirect(url_for('admin.economy_health', block=selected_block))
     settings_row.economy_policy_mode = policy_mode
     settings_row.economy_policy_updated_at = utc_now()
-    settings_row.economy_pending_rebalance_json = None
     cancel_pending_policy_transitions(settings_row.class_id, actor_id=admin_id)
     current_app.logger.info(
         "Economy policy mode changed teacher=%s block=%s mode=%s",
@@ -8235,11 +8202,6 @@ def apply_economy_rebalance():
             scheduled_changes,
             activation_mode=REBALANCE_ACTIVATION_NEXT_RENEWAL,
         )
-        settings_row.economy_pending_rebalance_json = json.dumps({
-            'activation_mode': REBALANCE_ACTIVATION_NEXT_RENEWAL,
-            'changes': scheduled_changes,
-            'scheduled_at': utc_now().isoformat(),
-        })
         current_app.logger.info(
             "Scheduled economy rebalance teacher=%s block=%s changes=%s",
             admin_id,

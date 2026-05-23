@@ -297,6 +297,20 @@ def _get_pending_policy_transitions_for_class(class_id: str | None):
     )
 
 
+def get_pending_policy_transition_count(class_id: str | None) -> int:
+    if not class_id:
+        return 0
+    return (
+        db.session.query(sa.func.count(PolicyTransition.id))
+        .filter(
+            PolicyTransition.class_id == class_id,
+            PolicyTransition.status == POLICY_TRANSITION_STATUS_PENDING,
+        )
+        .scalar()
+        or 0
+    )
+
+
 def get_pending_policy_transition_effective_at(class_id: str | None) -> datetime | None:
     pending = _get_pending_policy_transitions_for_class(class_id)
     effective_candidates: list[datetime] = []
@@ -384,7 +398,6 @@ def apply_rebalance_changes(teacher_id, settings_row, change_plan, activation_mo
             reference_time=reference_time,
             applied_at=reference_time,
         )
-    settings_row.economy_pending_rebalance_json = None
     return applied_labels
 
 
@@ -468,8 +481,6 @@ def activate_due_rebalances(teacher_id, *, block=None, reference_time=None, rene
                     transition.cancelled_at = reference_time
                     transition.applied_at = reference_time
 
-            # Lineage path now owns pending activation; legacy payload is retained only as fallback compatibility.
-            settings_row.economy_pending_rebalance_json = None
             continue
 
         if not settings_row.economy_pending_rebalance_json:
