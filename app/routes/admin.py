@@ -54,12 +54,12 @@ from app.extensions import db, limiter
 from app.feats.base import feat_shell, FEATContext
 from app.access import AccessScopeDenied, resolve_scope
 from app.models import (
-    Student, Admin, ClassEconomy, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
+    Student, Admin, ClassEconomy, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock,
-    UserReport, FeatureSettings, TeacherOnboarding, StudentBlock,
-    Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
+    UserReport, FeatureSettings, StudentBlock,
+    Announcement, RedemptionAuditLog, RedemptionAuditAction,
     RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent, Seat,
     BalanceCache, ClassMembership, ClassEconomy, EconomySnapshot, _quantize_currency,
 )
@@ -152,6 +152,22 @@ from app.services.balance_service import get_batch_balances
 from app.services import access_policy_service, ledger_service
 from app.services import operational_event_service
 from app.services.ledger_service import get_available_balances
+from app.services.admin_identity_bridge_service import (
+    admin_has_passkeys,
+    create_admin_credential,
+    create_legacy_completed_teacher_onboarding,
+    delete_admin_credential,
+    delete_admin_credentials_for_teacher,
+    delete_teacher_onboarding_for_teacher,
+    get_admin_credential,
+    get_or_create_teacher_onboarding,
+    get_teacher_onboarding,
+    list_admin_credentials,
+    set_teacher_onboarding_skipped,
+    set_teacher_onboarding_widget_dismissed,
+    set_teacher_onboarding_widget_task_status,
+    touch_admin_credentials_last_used,
+)
 from app.services.recovery_bridge_service import (
     create_recovery_request_with_students,
     delete_recovery_rows_for_teacher,
@@ -1309,8 +1325,8 @@ def _delete_teacher_issue_rows(teacher_id):
 def _delete_teacher_recovery_and_credentials_rows(teacher_id):
     """Delete teacher recovery, credential, and onboarding rows."""
     delete_recovery_rows_for_teacher(teacher_id)
-    AdminCredential.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
-    TeacherOnboarding.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    delete_admin_credentials_for_teacher(teacher_id)
+    delete_teacher_onboarding_for_teacher(teacher_id)
 
 
 def _delete_teacher_store_rows(teacher_id):
@@ -2485,14 +2501,9 @@ def _get_or_create_onboarding(teacher_id):
         teacher_id: The teacher's admin ID
 
     Returns:
-        TeacherOnboarding: The onboarding record
+        Teacher onboarding record view
     """
-    onboarding = TeacherOnboarding.query.filter_by(teacher_id=teacher_id).first()
-    if not onboarding:
-        onboarding = TeacherOnboarding(teacher_id=teacher_id)
-        db.session.add(onboarding)
-        db.session.flush()
-    return onboarding
+    return get_or_create_teacher_onboarding(teacher_id, utc_now())
 
 
 def _check_onboarding_redirect():
@@ -2511,7 +2522,7 @@ def _check_onboarding_redirect():
         return None
 
     # Check if teacher has completed or skipped onboarding
-    onboarding = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
+    onboarding = get_teacher_onboarding(admin_id)
 
     # If no onboarding record exists, teacher needs onboarding
     if not onboarding:
@@ -2520,14 +2531,7 @@ def _check_onboarding_redirect():
         admin = db.session.get(Admin, admin_id)
         if admin and admin.has_assigned_students:
             # Legacy teacher - create completed onboarding record
-            onboarding = TeacherOnboarding(
-                teacher_id=admin_id,
-                is_completed=True,
-                is_skipped=True,
-                completed_at=utc_now()
-            )
-            db.session.add(onboarding)
-            db.session.flush()
+            create_legacy_completed_teacher_onboarding(admin_id, utc_now())
             return None
 
         # New teacher - no redirect, they'll see the Getting Started widget
@@ -2789,7 +2793,7 @@ def dashboard():
 
     # Prompt legacy teachers to upgrade insurance policies to the new tiered design
     show_insurance_tier_prompt = False
-    onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=session['admin_id']).first()
+    onboarding_record = get_teacher_onboarding(session['admin_id'])
     if onboarding_record and onboarding_record.steps_completed and onboarding_record.steps_completed.get("needs_insurance_tier_upgrade"):
         class_ids_subq = (
             db.session.query(ClassEconomy.class_id)
@@ -11661,7 +11665,7 @@ def onboarding_status():
 
     try:
         # GET endpoint must remain read-only: do not create records here.
-        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
+        onboarding_record = get_teacher_onboarding(admin_id)
 
         # Check if widget is dismissed
         if onboarding_record and onboarding_record.widget_dismissed:
@@ -11773,7 +11777,7 @@ def onboarding_status():
         data_completed['personalization'] = has_label
 
         # Passkey: check if at least one credential exists OR marked complete
-        has_passkey = AdminCredential.query.filter_by(teacher_id=admin_id).first() is not None
+        has_passkey = admin_has_passkeys(admin_id)
         data_completed['passkey'] = has_passkey
 
         for task_name in completion.keys():
@@ -11812,12 +11816,8 @@ def onboarding_skip():
     if not admin_id:
         return jsonify({'status': 'error', 'message': 'Not authenticated'}), 401
 
-    onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
-    if not onboarding_record:
-        onboarding_record = TeacherOnboarding(teacher_id=admin_id)
-        db.session.add(onboarding_record)
-
-    onboarding_record.skip_onboarding()
+    get_or_create_teacher_onboarding(admin_id, utc_now())
+    set_teacher_onboarding_skipped(admin_id, utc_now())
     db.session.flush()
     return jsonify({'status': 'success'})
 
@@ -11836,13 +11836,12 @@ def onboarding_skip_task():
             return jsonify({'status': 'error', 'message': 'Task name required'}), 400
 
         # Get or create onboarding record
-        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
-        if not onboarding_record:
-            onboarding_record = TeacherOnboarding(teacher_id=admin_id)
-            db.session.add(onboarding_record)
-
-        # Mark widget task as skipped (counts as completed)
-        onboarding_record.mark_widget_task_completed(task_name, status='skipped')
+        set_teacher_onboarding_widget_task_status(
+            admin_id,
+            task_name=task_name,
+            status='skipped',
+            now=utc_now(),
+        )
 
         db.session.flush()
 
@@ -11865,13 +11864,7 @@ def onboarding_dismiss_widget():
 
     try:
         # Get or create onboarding record
-        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
-        if not onboarding_record:
-            onboarding_record = TeacherOnboarding(teacher_id=admin_id)
-            db.session.add(onboarding_record)
-
-        # Dismiss the widget
-        onboarding_record.dismiss_widget()
+        set_teacher_onboarding_widget_dismissed(admin_id, dismissed=True, now=utc_now())
 
         db.session.flush()
 
@@ -11894,13 +11887,7 @@ def onboarding_undismiss_widget():
 
     try:
         # Get onboarding record
-        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
-        if not onboarding_record:
-            onboarding_record = TeacherOnboarding(teacher_id=admin_id)
-            db.session.add(onboarding_record)
-
-        # Un-dismiss the widget by setting widget_dismissed_at to None
-        onboarding_record.widget_dismissed_at = None
+        set_teacher_onboarding_widget_dismissed(admin_id, dismissed=False, now=utc_now())
 
         db.session.flush()
 
@@ -12332,13 +12319,11 @@ def passkey_register_finish():
         authenticator_name = data.get('authenticatorName', 'Unnamed Passkey')
 
         # Save credential metadata (credential_id is optional, stored on passwordless.dev)
-        credential = AdminCredential(
+        create_admin_credential(
             teacher_id=admin_id,
             credential_id=None,  # Not needed - stored on passwordless.dev servers
-            authenticator_name=authenticator_name
+            authenticator_name=authenticator_name,
         )
-
-        db.session.add(credential)
         db.session.flush()
 
         flash("Passkey registered successfully!", "success")
@@ -12375,7 +12360,7 @@ def passkey_auth_start():
         session['passkey_auth_username'] = username
 
         # Check if user has passkeys
-        has_passkeys = AdminCredential.query.filter_by(teacher_id=admin.id).first() is not None
+        has_passkeys = admin_has_passkeys(admin.id)
         if not has_passkeys:
             return jsonify({"error": "Invalid credentials"}), 401
 
@@ -12428,7 +12413,7 @@ def passkey_auth_finish():
         # Credentials are stored without credential_id (managed by passwordless.dev),
         # so update last_used for all credentials belonging to this admin.
         now = utc_now()
-        AdminCredential.query.filter_by(teacher_id=admin_id).update({'last_used': now}, synchronize_session=False)
+        touch_admin_credentials_last_used(admin_id, now)
 
         admin.last_login = now
         db.session.flush()
@@ -12464,7 +12449,7 @@ def passkey_list():
     """List all passkeys for current teacher."""
     try:
         admin_id = session.get('admin_id')
-        credentials = AdminCredential.query.filter_by(teacher_id=admin_id).order_by(AdminCredential.created_at.desc()).all()
+        credentials = list_admin_credentials(admin_id)
 
         return jsonify({
             "passkeys": [{
@@ -12487,12 +12472,12 @@ def passkey_delete(passkey_id):
     """Delete a passkey."""
     try:
         admin_id = session.get('admin_id')
-        credential = AdminCredential.query.filter_by(id=passkey_id, teacher_id=admin_id).first()
+        credential = get_admin_credential(passkey_id, admin_id)
 
         if not credential:
             return jsonify({"error": "Passkey not found"}), 404
 
-        db.session.delete(credential)
+        delete_admin_credential(passkey_id, admin_id)
         db.session.flush()
 
         flash("Passkey deleted successfully", "success")
@@ -12510,7 +12495,7 @@ def passkey_settings():
     """Passkey management page."""
     admin_id = session.get('admin_id')
     admin = db.get_or_404(Admin, admin_id)
-    credentials = AdminCredential.query.filter_by(teacher_id=admin_id).order_by(AdminCredential.created_at.desc()).all()
+    credentials = list_admin_credentials(admin_id)
 
     return render_template('admin_passkey_settings.html',
                          admin=admin,

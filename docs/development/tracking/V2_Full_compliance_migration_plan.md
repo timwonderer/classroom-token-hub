@@ -942,6 +942,50 @@ Focused validation:
 - `python3 scripts/wave3_identity_drop_surface_guardrail.py`
   - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
 
+### Status Update (2026-05-24): Wave 3 Structural Deferment Unblocking — Passkey + Onboarding Symbol Decoupling
+
+- Landed the next major identity reduction slice by removing `AdminCredential` and `TeacherOnboarding` symbol dependencies from route/runtime code:
+  - Added `app/services/admin_identity_bridge_service.py` with table-level bridge operations for:
+    - teacher onboarding lifecycle and widget state
+    - admin passkey credential lifecycle
+  - Rewired `app/routes/admin.py` passkey and onboarding endpoints/helpers to the bridge service.
+  - Rewired teacher-deletion helper path in `app/routes/admin.py` to bridge deletion for passkeys/onboarding.
+  - Removed unused `TeacherOnboarding` import dependency from `app/routes/system_admin.py`.
+  - Added targeted bridge coverage: `tests/test_admin_identity_bridge_service.py`.
+- Surface reduction applied and baseline re-cut:
+  - `symbols.AdminCredential`: removed `app/routes/admin.py` coupling.
+  - `symbols.TeacherOnboarding`: removed `app/routes/admin.py` and `app/routes/system_admin.py` couplings.
+  - Baseline refreshed in `docs/development/tracking/wave3_identity_drop_surface_baseline.json`.
+
+Focused validation:
+
+- `python3 -m py_compile app/services/admin_identity_bridge_service.py app/routes/admin.py app/routes/system_admin.py tests/test_admin_identity_bridge_service.py`
+  - Result: pass
+- `pytest -q tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result: `10 passed`
+- `python3 scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
+
+### Status Update (2026-05-24): Wave 3 Structural Deferment Unblocking — Invite-Code Symbol Decoupling
+
+- Landed the next identity reduction slice by removing `AdminInviteCode` route/runtime symbol dependencies:
+  - extended `app/services/admin_identity_bridge_service.py` with invite-code bridge operations (count/create/list/get/void).
+  - rewired `app/routes/system_admin.py` invite-code surfaces (`dashboard`, `manage_teachers`, `void_invite_code`) to bridge operations.
+  - removed legacy `AdminInviteCode` import dependency from `app/routes/admin.py` and `app/routes/system_admin.py`.
+  - extended coverage in `tests/test_admin_identity_bridge_service.py` for invite-code lifecycle behavior.
+- Surface reduction applied and baseline re-cut:
+  - `symbols.AdminInviteCode`: removed `app/routes/admin.py` and `app/routes/system_admin.py` couplings.
+  - Baseline refreshed in `docs/development/tracking/wave3_identity_drop_surface_baseline.json`.
+
+Focused validation:
+
+- `python3 -m py_compile app/services/admin_identity_bridge_service.py app/routes/system_admin.py tests/test_admin_identity_bridge_service.py app/routes/admin.py`
+  - Result: pass
+- `pytest -q tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result: `11 passed`
+- `python3 scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
+
 ### Status Update (2026-05-20): Wave 4 Resume Slice — Analytics Enrollment Class Scope
 
 - Resumed v2 rebuild execution with a Wave-4-aligned class-scope hardening slice in analytics:

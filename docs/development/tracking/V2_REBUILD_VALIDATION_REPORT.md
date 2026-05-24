@@ -27,6 +27,16 @@
   - `app/utils/student_deletion.py` recovery-code cleanup now routes through bridge service
   - targeted validation: `pytest -q tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py` → `6 passed`
   - baseline re-cut confirms `RecoveryRequest` and `StudentRecoveryCode` runtime symbol couplings are removed from `app/**`
+- Landed passkey/onboarding decoupling slice:
+  - `app/routes/admin.py` now routes passkey credential and onboarding lifecycle operations through `app/services/admin_identity_bridge_service.py`
+  - `app/routes/system_admin.py` no longer carries `TeacherOnboarding` symbol dependency
+  - targeted validation: `pytest -q tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py` → `10 passed`
+  - baseline re-cut confirms `AdminCredential` and `TeacherOnboarding` runtime symbol couplings are removed from `app/**`
+- Landed invite-code decoupling slice:
+  - `app/routes/system_admin.py` invite-code management now routes through `app/services/admin_identity_bridge_service.py`
+  - `app/routes/admin.py` and `app/routes/system_admin.py` no longer carry `AdminInviteCode` symbol dependencies
+  - targeted validation: `pytest -q tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py` → `11 passed`
+  - baseline re-cut confirms `AdminInviteCode` runtime symbol couplings are removed from `app/**`
 
 ---
 

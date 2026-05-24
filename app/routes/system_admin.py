@@ -26,10 +26,10 @@ import pyotp
 
 from app.extensions import db, limiter
 from app.models import (
-    SystemAdmin, SystemAdminCredential, Admin, Student, AdminInviteCode, ErrorLog,
+    SystemAdmin, SystemAdminCredential, Admin, Student, ErrorLog,
     Transaction, TransactionStatus, TapEvent, HallPassLog, StudentItem, RentPayment,
     StudentInsurance, InsuranceClaim, StudentTeacher, TeacherBlock, StudentBlock, UserReport,
-    FeatureSettings, TeacherOnboarding, RentSettings, BankingSettings,
+    FeatureSettings, RentSettings, BankingSettings,
     HallPassSettings, PayrollFine, PayrollReward,
     PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory, IssueResolutionAction
 )
@@ -52,6 +52,13 @@ from app.utils.passwordless_client import (
 )
 from app.utils.auth_username import normalize_auth_username
 from app.utils.opaque_refs import make_opaque_ref, resolve_opaque_ref
+from app.services.admin_identity_bridge_service import (
+    count_active_admin_invite_codes,
+    create_admin_invite_code,
+    get_admin_invite_code_by_id,
+    list_admin_invite_codes,
+    mark_admin_invite_code_used,
+)
 
 # Create blueprint
 sysadmin_bp = Blueprint('sysadmin', __name__, url_prefix='/sysadmin')
@@ -459,7 +466,7 @@ def dashboard():
     # Gather statistics
     total_teachers = Admin.query.count()
     total_students = Student.query.count()
-    active_invites = AdminInviteCode.query.filter_by(used=False).count()
+    active_invites = count_active_admin_invite_codes()
     system_admin_count = SystemAdmin.query.count()
 
     # Open tickets = new user reports + pending/in-review escalated issues
@@ -934,15 +941,14 @@ def manage_teachers():
         current_app.logger.info(f"Creating invite code: {repr(code)} (length: {len(code)})")
         expiry_days = request.form.get('expiry_days', 30, type=int)
         expires_at = utc_now() + timedelta(days=expiry_days)
-        invite = AdminInviteCode(code=code, expires_at=expires_at)
-        db.session.add(invite)
+        invite = create_admin_invite_code(code=code, expires_at=expires_at)
         db.session.flush()
         current_app.logger.info(f"Invite code created in database: {repr(invite.code)} (id: {invite.id})")
         flash(f"Invite code '{code}' created successfully.", "success")
         return redirect(url_for("sysadmin.manage_teachers") + "#invite-codes")
 
     # Get all invite codes and categorize them
-    all_invites = AdminInviteCode.query.order_by(AdminInviteCode.created_at.desc()).all()
+    all_invites = list_admin_invite_codes()
     
     # Categorize invites: active, expired, or used
     active_invites = []
@@ -1038,11 +1044,13 @@ def manage_teachers():
 @system_admin_required
 def void_invite_code(code_id):
     """Void (mark as used) an unused invite code so it can no longer be claimed."""
-    invite = db.get_or_404(AdminInviteCode, code_id)
+    invite = get_admin_invite_code_by_id(code_id)
+    if not invite:
+        raise NotFound("Invite code not found")
     if invite.used:
         flash("This invite code has already been used or voided.", "warning")
     else:
-        invite.used = True
+        mark_admin_invite_code_used(code_id)
         db.session.flush()
         flash(f"Invite code '{invite.code}' has been voided.", "success")
     return redirect(url_for("sysadmin.manage_teachers") + "#invite-codes")

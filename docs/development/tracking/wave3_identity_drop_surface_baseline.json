@@ -52,13 +52,8 @@
       "app/routes/student.py",
       "app/routes/system_admin.py"
     ],
-    "AdminCredential": [
-      "app/routes/admin.py"
-    ],
-    "AdminInviteCode": [
-      "app/routes/admin.py",
-      "app/routes/system_admin.py"
-    ],
+    "AdminCredential": [],
+    "AdminInviteCode": [],
     "RecoveryRequest": [],
     "Student": [
       "app/__init__.py",
@@ -127,9 +122,6 @@
       "app/utils/issue_helpers.py",
       "app/utils/student_deletion.py"
     ],
-    "TeacherOnboarding": [
-      "app/routes/admin.py",
-      "app/routes/system_admin.py"
-    ]
+    "TeacherOnboarding": []
   }
 }
