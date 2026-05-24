@@ -13,6 +13,11 @@
   - analyze endpoint error path now explicitly calls `db.session.rollback()` before returning `500`
 - Validation:
   - `pytest -q tests/test_economy_api.py -k "analyze_endpoint_"` → `7 passed`
+- Added explicit guardrail coverage for the deferred Wave 3 structural table drops:
+  - `scripts/wave3_identity_drop_surface_guardrail.py`
+  - `docs/development/tracking/wave3_identity_drop_surface_baseline.json`
+  - `tests/test_wave3_identity_drop_surface_guardrail.py`
+  - baseline-census confirms current deferred coupling is explicit and now blocked from expansion unless baseline is intentionally re-cut after approved reductions
 
 ---
 

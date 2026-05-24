@@ -870,6 +870,34 @@ Wave impact:
 - Wave 3 closure criteria are satisfied for the tracked identity/scope cleanup sequence on `codex/v2.0`.
 - Execution focus can now proceed sequentially to Wave 4 class-configuration canonicalization.
 
+### Status Update (2026-05-24): Wave 3 Structural Deferment Unblocking — Legacy Auth Surface Freeze
+
+- Addressed the deferred Wave 3 table-drop risk by making the remaining coupling surface explicit and machine-enforced:
+  - Added `scripts/wave3_identity_drop_surface_guardrail.py`
+    - scans `app/**/*.py` (excluding model definition files) for legacy auth symbols and legacy session-principal keys
+    - compares current coupling surface to a checked-in baseline and fails only when the surface expands
+  - Added baseline: `docs/development/tracking/wave3_identity_drop_surface_baseline.json`
+  - Added CI test: `tests/test_wave3_identity_drop_surface_guardrail.py`
+- Baseline snapshot (current deferred surface):
+  - Legacy symbol file counts:
+    - `Student` 20, `TeacherBlock` 19, `StudentTeacher` 10, `StudentBlock` 9
+    - `Admin` 8, `StudentRecoveryCode` 3, `RecoveryRequest` 2, `TeacherOnboarding` 2, `AdminInviteCode` 2, `AdminCredential` 1
+  - Legacy session-principal key file counts:
+    - `admin_id` 12, `is_system_admin` 8, `is_admin` 6, `student_id` 6
+- Unblocking sequence this enables:
+  1. Keep surface non-expanding while runtime slices remove dependencies subsystem-by-subsystem.
+  2. Re-cut baseline only after each approved reduction slice (never for expansions).
+  3. Execute `0002_identity_domain.py` drop migration only after symbol/session surfaces reach zero for targeted legacy auth constructs.
+
+Focused validation:
+
+- `python3 -m py_compile scripts/wave3_identity_drop_surface_guardrail.py tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result: pass
+- `python3 scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
+- `pytest -q tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result: `1 passed`
+
 ### Status Update (2026-05-20): Wave 4 Resume Slice — Analytics Enrollment Class Scope
 
 - Resumed v2 rebuild execution with a Wave-4-aligned class-scope hardening slice in analytics:
