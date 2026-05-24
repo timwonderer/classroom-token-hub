@@ -5,6 +5,15 @@
 **Against:** `V2_Full_compliance_migration_plan.md`  
 **Methodology:** Direct code inspection, migration chain analysis, model audit, service/FEAT write-path tracing
 
+### Post-Report Update (2026-05-24, `codex/v2.0`)
+
+- Closed the FEAT compliance finding for economy snapshot persistence:
+  - `app/routes/admin.py` `/api/economy/analyze` is now wrapped in `@feat_shell("FEAT-ADMN-001")`
+  - `_get_frozen_economy_analysis_payload(...)` no longer calls `db.session.commit()`; it uses `db.session.flush()` and relies on FEAT transaction ownership
+  - analyze endpoint error path now explicitly calls `db.session.rollback()` before returning `500`
+- Validation:
+  - `pytest -q tests/test_economy_api.py -k "analyze_endpoint_"` → `7 passed`
+
 ---
 
 ## Executive Summary

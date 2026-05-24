@@ -2104,7 +2104,7 @@ def _get_frozen_economy_analysis_payload(
         if persist_snapshot:
             snapshot = _build_economy_snapshot_from_analysis(class_id, join_code, checker, analysis)
             db.session.add(snapshot)
-            db.session.commit()
+            db.session.flush()
             payload = _serialize_economy_analysis_payload(analysis, snapshot=snapshot, frozen=True)
             payload['snapshot_cached'] = False
             return payload, snapshot
@@ -12046,6 +12046,7 @@ def _resolve_admin_payroll_settings_for_block(admin_id: int, block: str | None):
 
 @admin_bp.route('/api/economy/analyze', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def api_economy_analyze():
     """
     Perform comprehensive economy balance analysis.
@@ -12162,6 +12163,7 @@ def api_economy_analyze():
         return jsonify(payload)
 
     except Exception as e:
+        db.session.rollback()
         current_app.logger.error(f"Error analyzing economy: {e}")
         return jsonify({'status': 'error', 'message': 'An internal error occurred while analyzing the economy.'}), 500
 
