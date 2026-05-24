@@ -26,7 +26,7 @@ markdown==3.10.2
 MarkupSafe==2.1.5
 packaging==26.2
 pluggy==1.6.0
-psycopg2-binary==2.9.11
+psycopg2-binary==2.9.12
 Pygments==2.20.0
 pyotp==2.9.0
 pytest==9.0.3
