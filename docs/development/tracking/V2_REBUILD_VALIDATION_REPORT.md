@@ -22,6 +22,11 @@
   - `app/routes/student.py` no longer directly references `RecoveryRequest` / `StudentRecoveryCode`; student recovery accesses were routed through `app/services/recovery_bridge_service.py`
   - targeted validation: `pytest -q tests/test_recovery_bridge_service.py` → `3 passed`
   - baseline re-cut in `wave3_identity_drop_surface_baseline.json` after verified reductions
+- Landed major follow-on reduction slice on admin/runtime recovery paths:
+  - `app/routes/admin.py` recovery flow now uses `app/services/recovery_bridge_service.py` for recovery-request/code lifecycle operations instead of direct `RecoveryRequest` / `StudentRecoveryCode` symbol access
+  - `app/utils/student_deletion.py` recovery-code cleanup now routes through bridge service
+  - targeted validation: `pytest -q tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py` → `6 passed`
+  - baseline re-cut confirms `RecoveryRequest` and `StudentRecoveryCode` runtime symbol couplings are removed from `app/**`
 
 ---
 

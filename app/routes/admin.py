@@ -58,7 +58,7 @@ from app.models import (
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock,
-    UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
+    UserReport, FeatureSettings, TeacherOnboarding, StudentBlock,
     Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
     RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent, Seat,
     BalanceCache, ClassMembership, ClassEconomy, EconomySnapshot, _quantize_currency,
@@ -152,6 +152,17 @@ from app.services.balance_service import get_batch_balances
 from app.services import access_policy_service, ledger_service
 from app.services import operational_event_service
 from app.services.ledger_service import get_available_balances
+from app.services.recovery_bridge_service import (
+    create_recovery_request_with_students,
+    delete_recovery_rows_for_teacher,
+    find_recovery_request_by_resume_pin,
+    get_active_recovery_request_for_teacher,
+    get_recovery_request_by_id,
+    invalidate_recovery_codes,
+    list_recovery_codes_for_request,
+    mark_recovery_request_verified,
+    save_recovery_progress,
+)
 from app.utils.insurance_eligibility import (
     collect_reimbursed_source_tx_ids,
     compute_waiting_end_class_for_enrollment,
@@ -1297,13 +1308,7 @@ def _delete_teacher_issue_rows(teacher_id):
 
 def _delete_teacher_recovery_and_credentials_rows(teacher_id):
     """Delete teacher recovery, credential, and onboarding rows."""
-    recovery_ids_subq = db.session.query(RecoveryRequest.id).filter(
-        RecoveryRequest.teacher_id == teacher_id
-    ).subquery()
-    StudentRecoveryCode.query.filter(
-        StudentRecoveryCode.recovery_request_id.in_(sa.select(recovery_ids_subq))
-    ).delete(synchronize_session=False)
-    RecoveryRequest.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    delete_recovery_rows_for_teacher(teacher_id)
     AdminCredential.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
     TeacherOnboarding.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
 
@@ -3455,12 +3460,7 @@ def recover():
         # ----------------------------------------------------------------
         # Step 4: Check for existing active recovery request
         # ----------------------------------------------------------------
-        existing_request = RecoveryRequest.query.filter_by(
-            teacher_id=teacher.id,
-            status='pending'
-        ).filter(
-            RecoveryRequest.expires_at > utc_now()
-        ).first()
+        existing_request = get_active_recovery_request_for_teacher(teacher.id, utc_now())
 
         if existing_request:
             flash("You already have an active recovery request. Please check back or wait for it to expire.", "info")
@@ -3471,22 +3471,11 @@ def recover():
         # Step 4: Create recovery request (5-day expiration)
         # ----------------------------------------------------------------
         expires_at = utc_now() + timedelta(days=5)
-        recovery_request = RecoveryRequest(
+        recovery_request = create_recovery_request_with_students(
             teacher_id=teacher.id,
-            status='pending',
-            expires_at=expires_at
+            student_ids=[student.id for student in resolved_students.values()],
+            expires_at=expires_at,
         )
-        db.session.add(recovery_request)
-        db.session.flush()  # Get the ID
-
-        for student in resolved_students.values():
-            student_code = StudentRecoveryCode(
-                recovery_request_id=recovery_request.id,
-                student_id=student.id
-            )
-            db.session.add(student_code)
-
-        db.session.flush()
 
         session['recovery_request_id'] = recovery_request.id
         current_app.logger.info(
@@ -3510,7 +3499,7 @@ def recovery_status():
         flash("No active recovery request found.", "error")
         return redirect(url_for('admin.recover'))
 
-    recovery_request = db.session.get(RecoveryRequest, recovery_request_id)
+    recovery_request = get_recovery_request_by_id(recovery_request_id)
     if not recovery_request:
         flash("Recovery request not found.", "error")
         session.pop('recovery_request_id', None)
@@ -3524,7 +3513,7 @@ def recovery_status():
         return redirect(url_for('admin.recover'))
 
     # Get verification codes
-    codes = StudentRecoveryCode.query.filter_by(recovery_request_id=recovery_request.id).all()
+    codes = list_recovery_codes_for_request(recovery_request.id)
     verified_count = sum(1 for c in codes if c.code_hash is not None)
     total_count = len(codes)
 
@@ -3552,7 +3541,7 @@ def reset_credentials():
         flash("No active recovery request found.", "error")
         return redirect(url_for('admin.recover'))
 
-    recovery_request = db.session.get(RecoveryRequest, recovery_request_id)
+    recovery_request = get_recovery_request_by_id(recovery_request_id)
     if not recovery_request or recovery_request.status != 'pending':
         flash("Invalid or expired recovery request.", "error")
         return redirect(url_for('admin.recover'))
@@ -3565,9 +3554,7 @@ def reset_credentials():
         new_username = form.new_username.data.strip()
 
         # Get all student recovery codes for this request
-        student_codes = StudentRecoveryCode.query.filter_by(
-            recovery_request_id=recovery_request.id
-        ).all()
+        student_codes = list_recovery_codes_for_request(recovery_request.id)
 
         # Verify all students have generated codes
         if any(sc.code_hash is None for sc in student_codes):
@@ -3578,7 +3565,7 @@ def reset_credentials():
         if len(entered_codes) != len(student_codes):
             current_app.logger.warning(f"Admin recovery: code count mismatch for request {recovery_request.id} - expected {len(student_codes)}, got {len(entered_codes)}")
             # Invalidate ALL codes
-            _invalidate_all_recovery_codes(student_codes)
+            _invalidate_all_recovery_codes(recovery_request.id)
             flash(f"Wrong number of codes entered. All codes have been invalidated. Your students must generate new codes.", "error")
             return redirect(url_for('admin.recovery_status'))
 
@@ -3588,7 +3575,7 @@ def reset_credentials():
             # Validate format
             if not code.isdigit() or len(code) != 6:
                 current_app.logger.warning(f"Admin recovery: invalid code format for request {recovery_request.id}")
-                _invalidate_all_recovery_codes(student_codes)
+                _invalidate_all_recovery_codes(recovery_request.id)
                 flash("Invalid code format detected. All codes have been invalidated. Your students must generate new codes.", "error")
                 return redirect(url_for('admin.recovery_status'))
             # Hash the entered code (no salt for recovery codes - they're already random)
@@ -3600,7 +3587,7 @@ def reset_credentials():
         if entered_hashes != stored_hashes:
             current_app.logger.warning(f"Admin recovery: code mismatch for request {recovery_request.id}")
             # Invalidate ALL codes on failed attempt
-            _invalidate_all_recovery_codes(student_codes)
+            _invalidate_all_recovery_codes(recovery_request.id)
             flash("Recovery codes do not match. All codes have been invalidated. Your students must generate new codes.", "error")
             return redirect(url_for('admin.recovery_status'))
 
@@ -3642,16 +3629,16 @@ def reset_credentials():
                          saved_username=saved_username)
 
 
-def _invalidate_all_recovery_codes(student_codes):
+def _invalidate_all_recovery_codes(recovery_request_id: int):
     """
     Invalidate all recovery codes forcing students to regenerate new ones.
     This prevents attackers from testing codes individually.
     """
-    for sc in student_codes:
-        sc.code_hash = None
-        sc.verified_at = None
+    invalidated_count = invalidate_recovery_codes(recovery_request_id)
     db.session.flush()  # FEAT-LEGACY-WRAP: commit removed
-    current_app.logger.info(f"Invalidated {len(student_codes)} recovery codes - students must regenerate")
+    current_app.logger.info(
+        f"Invalidated {invalidated_count} recovery codes - students must regenerate"
+    )
 
 
 @admin_bp.route('/confirm-reset', methods=['POST'])
@@ -3666,7 +3653,7 @@ def confirm_reset():
         flash("Invalid recovery session.", "error")
         return redirect(url_for('admin.recover'))
 
-    recovery_request = db.session.get(RecoveryRequest, recovery_request_id)
+    recovery_request = get_recovery_request_by_id(recovery_request_id)
     if not recovery_request:
         flash("Invalid recovery session.", "error")
         return redirect(url_for('admin.recover'))
@@ -3699,8 +3686,7 @@ def confirm_reset():
     teacher.totp_secret = encrypt_totp(totp_secret)  # Encrypt before storing
 
     # Mark recovery request as completed
-    recovery_request.status = 'verified'
-    recovery_request.completed_at = utc_now()
+    mark_recovery_request_verified(recovery_request.id, utc_now())
 
     db.session.flush()
 
@@ -3724,7 +3710,7 @@ def save_recovery_progress():
         flash("No active recovery request found.", "error")
         return redirect(url_for('admin.recover'))
 
-    recovery_request = db.session.get(RecoveryRequest, recovery_request_id)
+    recovery_request = get_recovery_request_by_id(recovery_request_id)
     if not recovery_request or recovery_request.status != 'pending':
         flash("Invalid or expired recovery request.", "error")
         return redirect(url_for('admin.recover'))
@@ -3745,9 +3731,12 @@ def save_recovery_progress():
     resume_pin_hash = hash_hmac(resume_pin.encode(), b'')
 
     # Save partial progress
-    recovery_request.partial_codes = entered_codes
-    recovery_request.resume_pin_hash = resume_pin_hash
-    recovery_request.resume_new_username = new_username
+    save_recovery_progress(
+        recovery_request.id,
+        partial_codes=entered_codes,
+        resume_pin_hash=resume_pin_hash,
+        resume_new_username=new_username,
+    )
     db.session.flush()
 
     current_app.logger.info(f"Admin recovery: saved partial progress for request {recovery_request.id}")
@@ -3779,12 +3768,7 @@ def resume_credentials():
     # Find recovery request with matching PIN
     resume_pin_hash = hash_hmac(resume_pin.encode(), b'')
 
-    recovery_request = RecoveryRequest.query.filter_by(
-        resume_pin_hash=resume_pin_hash,
-        status='pending'
-    ).filter(
-        RecoveryRequest.expires_at > utc_now()
-    ).first()
+    recovery_request = find_recovery_request_by_resume_pin(resume_pin_hash, utc_now())
 
     if not recovery_request:
         current_app.logger.warning("Admin recovery: invalid resume PIN attempt")

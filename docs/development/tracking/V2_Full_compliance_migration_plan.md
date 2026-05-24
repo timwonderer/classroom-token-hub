@@ -921,6 +921,27 @@ Focused validation:
 - `python3 scripts/wave3_identity_drop_surface_guardrail.py`
   - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
 
+### Status Update (2026-05-24): Wave 3 Structural Deferment Unblocking — Recovery Admin-Path Decoupling
+
+- Landed a major recovery-domain reduction slice to remove legacy recovery table symbols from admin/runtime surfaces:
+  - expanded `app/services/recovery_bridge_service.py` with admin lifecycle operations (create/list/find/invalidate/save-progress/complete/delete) on recovery tables via table-level access.
+  - rewired `app/routes/admin.py` recovery flow (`/recover`, `/recovery-status`, `/reset-credentials`, `/confirm-reset`, `/save-recovery-progress`, `/resume-credentials`) to use bridge-service operations instead of direct `RecoveryRequest` / `StudentRecoveryCode` model references.
+  - rewired `app/utils/student_deletion.py` to use bridge-service deletion for student recovery-code cleanup.
+  - extended coverage in `tests/test_recovery_bridge_service.py` for admin lifecycle operations and helper behavior.
+- Surface reduction applied and baseline re-cut:
+  - `symbols.RecoveryRequest`: removed `app/routes/admin.py` coupling (now 0 runtime symbol references in `app/**`).
+  - `symbols.StudentRecoveryCode`: removed `app/routes/admin.py` and `app/utils/student_deletion.py` couplings (now 0 runtime symbol references in `app/**`).
+  - Baseline refreshed in `docs/development/tracking/wave3_identity_drop_surface_baseline.json`.
+
+Focused validation:
+
+- `python3 -m py_compile app/services/recovery_bridge_service.py app/routes/admin.py app/routes/student.py app/utils/student_deletion.py tests/test_recovery_bridge_service.py`
+  - Result: pass
+- `pytest -q tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result: `6 passed`
+- `python3 scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
+
 ### Status Update (2026-05-20): Wave 4 Resume Slice — Analytics Enrollment Class Scope
 
 - Resumed v2 rebuild execution with a Wave-4-aligned class-scope hardening slice in analytics:
