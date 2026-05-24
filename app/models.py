@@ -2988,7 +2988,6 @@ class FeatureSettings(db.Model):
     teacher = db.relationship('Admin', backref=db.backref('feature_settings', lazy='dynamic', passive_deletes=True))
 
     __table_args__ = (
-        db.UniqueConstraint('teacher_id', 'join_code', 'block', name='uq_feature_settings_teacher_join_code_block'),
         db.Index('ix_feature_settings_teacher_id', 'teacher_id'),
     )
 

@@ -1066,6 +1066,22 @@ Wave impact:
   - `python3 scripts/lint_migrations.py migrations/versions/d2f9f1d9be2e_drop_legacy_pending_rebalance_json.py` → pass
   - `pytest -q tests/test_economy_policy_mode.py -k "activate_due_rebalances or next_renewal_rebalance or run_payroll_applies_scheduled_rebalance"` → `6 passed`, `15 deselected`
 
+### Status Update (2026-05-23): Wave 4 Resume Slice — FeatureSettings Legacy Scope Uniqueness Removal
+
+- Removed legacy uniqueness enforcement keyed to teacher/block alias scope:
+  - `app/models.py`
+    - dropped `uq_feature_settings_teacher_join_code_block` from `FeatureSettings.__table_args__`
+    - canonical row uniqueness remains anchored on `FeatureSettings.class_id`
+  - `migrations/versions/f84c7ad2c1aa_drop_feature_settings_legacy_scope_unique.py`
+    - idempotent migration drops `uq_feature_settings_teacher_join_code_block` when present
+    - downgrade recreates the legacy unique constraint
+- Scope note:
+  - This advances Wave 4 legacy-column-contract cleanup by removing a remaining legacy-key uniqueness contract while preserving runtime behavior.
+- Validation:
+  - `python3 -m py_compile app/models.py migrations/versions/f84c7ad2c1aa_drop_feature_settings_legacy_scope_unique.py` → pass
+  - `python3 scripts/lint_migrations.py migrations/versions/f84c7ad2c1aa_drop_feature_settings_legacy_scope_unique.py` → pass
+  - `pytest -q tests/test_economy_policy_mode.py -k "get_feature_settings_row_requires_scoped_class_resolution or update_economy_policy_creates_block_scoped_settings"` → `2 passed`, `19 deselected`
+
 ### Status Update (2026-05-20): Spec Coverage Audit — Banking/Balance/Overdraft/Rent Touchpoints
 
 - Confirmed existing v2 spec coverage for touched features:
