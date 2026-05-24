@@ -18,6 +18,10 @@
   - `docs/development/tracking/wave3_identity_drop_surface_baseline.json`
   - `tests/test_wave3_identity_drop_surface_guardrail.py`
   - baseline-census confirms current deferred coupling is explicit and now blocked from expansion unless baseline is intentionally re-cut after approved reductions
+- Landed first approved reduction slice and refreshed baseline:
+  - `app/routes/student.py` no longer directly references `RecoveryRequest` / `StudentRecoveryCode`; student recovery accesses were routed through `app/services/recovery_bridge_service.py`
+  - targeted validation: `pytest -q tests/test_recovery_bridge_service.py` → `3 passed`
+  - baseline re-cut in `wave3_identity_drop_surface_baseline.json` after verified reductions
 
 ---
 

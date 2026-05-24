@@ -60,8 +60,7 @@
       "app/routes/system_admin.py"
     ],
     "RecoveryRequest": [
-      "app/routes/admin.py",
-      "app/routes/student.py"
+      "app/routes/admin.py"
     ],
     "Student": [
       "app/__init__.py",
@@ -98,7 +97,6 @@
     ],
     "StudentRecoveryCode": [
       "app/routes/admin.py",
-      "app/routes/student.py",
       "app/utils/student_deletion.py"
     ],
     "StudentTeacher": [

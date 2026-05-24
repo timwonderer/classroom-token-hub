@@ -898,6 +898,29 @@ Focused validation:
 - `pytest -q tests/test_wave3_identity_drop_surface_guardrail.py`
   - Result: `1 passed`
 
+### Status Update (2026-05-24): Wave 3 Structural Deferment Unblocking — Recovery Student-Route Decoupling
+
+- Landed the first dependency-reduction slice under the Wave 3 legacy-auth surface freeze:
+  - Added `app/services/recovery_bridge_service.py` to isolate student recovery reads/writes against recovery tables via table-level access.
+  - `app/routes/student.py` no longer directly references `RecoveryRequest` / `StudentRecoveryCode` symbols for:
+    - dashboard pending-recovery banner lookup
+    - `/student/verify-recovery/<code_id>` lookup/update path
+    - `/student/dismiss-recovery/<code_id>` lookup/update path
+  - Added targeted service coverage: `tests/test_recovery_bridge_service.py`.
+- Surface reduction applied and baseline re-cut:
+  - `symbols.RecoveryRequest`: removed `app/routes/student.py` coupling
+  - `symbols.StudentRecoveryCode`: removed `app/routes/student.py` coupling
+  - Baseline refreshed in `docs/development/tracking/wave3_identity_drop_surface_baseline.json`
+
+Focused validation:
+
+- `python3 -m py_compile app/services/recovery_bridge_service.py app/routes/student.py tests/test_recovery_bridge_service.py`
+  - Result: pass
+- `pytest -q tests/test_recovery_bridge_service.py`
+  - Result: `3 passed`
+- `python3 scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
+
 ### Status Update (2026-05-20): Wave 4 Resume Slice — Analytics Enrollment Class Scope
 
 - Resumed v2 rebuild execution with a Wave-4-aligned class-scope hardening slice in analytics:
