@@ -1080,7 +1080,70 @@ Wave impact:
 - Validation:
   - `python3 -m py_compile app/models.py migrations/versions/f84c7ad2c1aa_drop_feature_settings_legacy_scope_unique.py` → pass
   - `python3 scripts/lint_migrations.py migrations/versions/f84c7ad2c1aa_drop_feature_settings_legacy_scope_unique.py` → pass
-  - `pytest -q tests/test_economy_policy_mode.py -k "get_feature_settings_row_requires_scoped_class_resolution or update_economy_policy_creates_block_scoped_settings"` → `2 passed`, `19 deselected`
+  - `pytest -q tests/test_economy_policy_mode.py -k "get_feature_settings_row_for_class_requires_explicit_class_scope or update_economy_policy_creates_block_scoped_settings"` → `2 passed`, `19 deselected`
+
+### Status Update (2026-05-23): Wave 4 Resume Slice — Scheduled Activation Block Scope Canonicalization
+
+- Removed runtime dependence on legacy `FeatureSettings.block` and removed inferred scope resolution (`teacher_id + block -> class_id`) from scheduled rebalance activation:
+  - `app/utils/economy_rebalance.py`
+    - activation scope now accepts explicit canonical `class_id` context
+    - pending `FeatureSettings` rows are filtered by explicit `class_id`
+    - removed payload-level block gating in activation loop so transition application remains class-authoritative
+  - `app/routes/admin.py`
+    - payroll-triggered activation now passes `selected_scope['class_id']` (already resolved canonical scope) into activation
+- Added regression coverage:
+  - `tests/test_economy_policy_mode.py`
+    - new test confirms explicit class-scoped activation still applies even when `FeatureSettings.block` contains stale legacy data
+- Validation:
+  - `python3 -m py_compile app/utils/economy_rebalance.py app/routes/admin.py tests/test_economy_policy_mode.py` → pass
+  - `pytest -q tests/test_economy_policy_mode.py -k "activate_due_rebalances"` → `5 passed`, `17 deselected`
+
+### Status Update (2026-05-23): Wave 4 Resume Slice — FeatureSettings Class-Authoritative Resolution
+
+- Replaced inferred FeatureSettings scope resolution in active economy-policy paths with explicit canonical class context:
+  - `app/utils/economy_policy.py`
+    - added `get_feature_settings_row_for_class(class_id, ...)` as explicit `class_id` lookup/create helper
+    - legacy create fields (`teacher_id`, `join_code`, `block`) are now write-through only when explicitly provided by already-resolved scope
+  - `app/routes/admin.py`
+    - `update_economy_policy()` now resolves scope via `require_admin_feature_scope(...)` and reads/writes `FeatureSettings` by explicit `class_id`
+    - `apply_economy_rebalance()` now resolves scope via `require_admin_feature_scope(...)` and reads/writes `FeatureSettings` by explicit `class_id`
+    - `economy_health()` now anchors class-scoped fine/store queries and policy summary on explicit scope `class_id` instead of deriving class via join-code lookup chain
+- Regression updates:
+  - `tests/test_economy_policy_mode.py`
+    - updated policy-setting creation assertion to query by `class_id`
+    - renamed helper contract test to `test_get_feature_settings_row_for_class_requires_explicit_class_scope`
+- Validation:
+  - `python3 -m py_compile app/utils/economy_policy.py app/routes/admin.py app/utils/economy_rebalance.py tests/test_economy_policy_mode.py` → pass
+  - `pytest -q tests/test_economy_policy_mode.py` → `22 passed`
+  - `pytest -q tests/test_analytics.py -k "policy_mode_resolves_by_class_id or budget_survival_uses_policy_mode_min_savings_ratio"` → `2 passed`, `14 deselected`
+
+### Status Update (2026-05-24): Wave 4 Resume Slice — FeatureSettings Legacy Column Retirement
+
+- Removed legacy scope columns from runtime `FeatureSettings` contract:
+  - `app/models.py`
+    - dropped `FeatureSettings.teacher_id`, `FeatureSettings.join_code`, and `FeatureSettings.block`
+    - removed legacy `teacher` relationship/index and simplified repr to `class_id` authority
+  - `app/utils/economy_policy.py`
+    - simplified `get_feature_settings_row_for_class(...)` create path to class-authoritative row creation (no legacy write-through fields)
+    - compatibility wrapper `get_feature_settings_row(...)` still resolves class scope, then delegates to class-authoritative helper
+  - `app/routes/admin.py`
+    - removed remaining legacy-create args for policy update/rebalance settings-row creation
+    - rebalance apply logging now records canonical `class_id` instead of legacy `block` field from settings rows
+- Added migration to retire schema columns:
+  - `migrations/versions/a91cf11e8b2d_drop_feature_settings_legacy_scope_columns.py`
+    - drops `feature_settings.teacher_id`, `feature_settings.join_code`, `feature_settings.block`, and legacy teacher index
+    - idempotent downgrade restores columns/index/FK as nullable compatibility fields
+- Updated tests to canonical row creation/query semantics:
+  - `tests/test_economy_policy_mode.py`
+  - `tests/test_analytics.py`
+  - `tests/test_feature_settings.py`
+- Validation:
+  - `python3 -m py_compile app/models.py app/utils/economy_policy.py app/routes/admin.py tests/test_economy_policy_mode.py tests/test_analytics.py tests/test_feature_settings.py migrations/versions/a91cf11e8b2d_drop_feature_settings_legacy_scope_columns.py` → pass
+  - `python3 scripts/lint_migrations.py migrations/versions/a91cf11e8b2d_drop_feature_settings_legacy_scope_columns.py` → pass
+  - `pytest -q tests/test_economy_policy_mode.py` → `22 passed`
+  - `pytest -q tests/test_economy_policy_mode.py -k "activate_due_rebalances"` → `5 passed`, `17 deselected`
+  - `pytest -q tests/test_analytics.py -k "policy_mode_resolves_by_class_id or budget_survival_uses_policy_mode_min_savings_ratio"` → `2 passed`, `14 deselected`
+  - `pytest -q tests/test_feature_settings.py -k "feature_settings_to_dict_reads_class_features or class_feature_defaults"` → `2 passed`, `15 deselected`
 
 ### Status Update (2026-05-20): Spec Coverage Audit — Banking/Balance/Overdraft/Rent Touchpoints
 

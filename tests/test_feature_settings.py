@@ -59,10 +59,7 @@ class TestClassFeatures:
         """Policy rows expose feature state from class_features."""
         economy = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
         settings = FeatureSettings(
-            teacher_id=test_admin.id,
-            join_code='JOIN_A',
             class_id=economy.class_id,
-            block='A',
         )
         db.session.add(settings)
         for row in ClassFeature.query.filter_by(class_id=economy.class_id).all():

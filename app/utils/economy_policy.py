@@ -553,25 +553,36 @@ def get_feature_settings_row(
     if not has_app_context():
         return None
 
-    from app.extensions import db
-    from app.models import FeatureSettings
-
     scope = resolve_class_scope(teacher_id, block=block, join_code=join_code)
     if not scope:
         return None
+    return get_feature_settings_row_for_class(
+        scope["class_id"],
+        create=create,
+    )
 
-    row = FeatureSettings.query.filter_by(
-        teacher_id=teacher_id,
-        class_id=scope["class_id"],
-    ).first()
+
+def get_feature_settings_row_for_class(
+    class_id: str | None,
+    *,
+    create: bool = False,
+):
+    """Resolve feature settings by explicit canonical class_id context.
+
+    This helper is class-authoritative and never infers scope from legacy keys.
+    """
+    if not has_app_context() or not class_id:
+        return None
+
+    from app.extensions import db
+    from app.models import FeatureSettings
+
+    row = FeatureSettings.query.filter_by(class_id=class_id).first()
     if row or not create:
         return row
 
     row = FeatureSettings(
-        teacher_id=teacher_id,
-        join_code=scope["join_code"],
-        class_id=scope["class_id"],
-        block=scope["block"],
+        class_id=class_id,
     )
     db.session.add(row)
     db.session.flush()

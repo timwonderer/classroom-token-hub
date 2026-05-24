@@ -2968,10 +2968,7 @@ class FeatureSettings(db.Model):
     """
     __tablename__ = 'feature_settings'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
-    join_code = db.Column(db.String(20), nullable=False, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
-    block = db.Column(db.String(10), nullable=False)
 
     # Economy policy and rebalance tracking
     economy_policy_mode = db.Column(db.String(20), default='default', nullable=False)
@@ -2984,15 +2981,8 @@ class FeatureSettings(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
-    # Relationships
-    teacher = db.relationship('Admin', backref=db.backref('feature_settings', lazy='dynamic', passive_deletes=True))
-
-    __table_args__ = (
-        db.Index('ix_feature_settings_teacher_id', 'teacher_id'),
-    )
-
     def __repr__(self):
-        return f'<FeatureSettings teacher={self.teacher_id} join={self.join_code} block={self.block}>'
+        return f'<FeatureSettings class_id={self.class_id}>'
 
     def to_dict(self):
         """Return enabled class features as a dictionary."""

@@ -494,10 +494,7 @@ def test_analytics_policy_mode_resolves_by_class_id(client, setup_analytics_test
     assert class_row is not None
 
     db.session.add(FeatureSettings(
-        teacher_id=admin.id,
-        join_code=join_code,
         class_id=class_row.class_id,
-        block=block,
         economy_policy_mode='tight',
     ))
     db.session.commit()
@@ -516,10 +513,7 @@ def test_budget_survival_uses_policy_mode_min_savings_ratio(client, setup_analyt
         row = FeatureSettings.query.filter_by(class_id=class_row.class_id).first()
         if row is None:
             row = FeatureSettings(
-                teacher_id=admin.id,
-                join_code=join_code,
                 class_id=class_row.class_id,
-                block=block,
             )
             db.session.add(row)
         row.economy_policy_mode = mode

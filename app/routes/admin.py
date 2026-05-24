@@ -79,7 +79,7 @@ from app.utils.economy_policy import (
     convert_weekly_amount_to_frequency,
     get_insurance_premium_recommendation,
     get_class_feature_settings,
-    get_feature_settings_row,
+    get_feature_settings_row_for_class,
     get_price_recommendation_context,
     normalize_policy_mode,
     replace_enabled_class_features,
@@ -2307,8 +2307,8 @@ def _filter_economy_health_warnings(analysis, rent_settings, insurance_policies,
     return filtered, warnings_by_level, warnings_by_feature, summary_rows
 
 
-def _build_policy_summary(admin_id, selected_block, analysis, rent_settings, insurance_policies, fines, *, warnings=None):
-    settings_row = get_feature_settings_row(admin_id, block=selected_block, create=False)
+def _build_policy_summary(class_scope, analysis, rent_settings, insurance_policies, fines, *, warnings=None):
+    settings_row = get_feature_settings_row_for_class(class_scope.get('class_id'), create=False)
     policy_mode = normalize_policy_mode(getattr(settings_row, 'economy_policy_mode', 'default'))
 
     categories = []
@@ -2463,9 +2463,9 @@ def _load_economy_rebalance_context(admin_id, selected_block):
 def _apply_rebalance_plan(admin_id, settings_row, change_plan, activation_mode):
     applied_labels = apply_rebalance_changes(admin_id, settings_row, change_plan, activation_mode)
     current_app.logger.info(
-        "Applied economy rebalance for teacher=%s block=%s activation=%s changes=%s",
+        "Applied economy rebalance for teacher=%s class_id=%s activation=%s changes=%s",
         admin_id,
-        settings_row.block,
+        settings_row.class_id,
         activation_mode,
         applied_labels,
     )
@@ -8086,22 +8086,31 @@ def update_economy_policy():
     if not selected_block:
         flash("Select a class period before updating economy policy.", "warning")
         return redirect(url_for('admin.economy_health'))
+    selected_scope = require_admin_feature_scope(
+        'payroll',
+        admin_id=admin_id,
+        requested_block=selected_block,
+        allow_default=False,
+    )
     policy_mode = normalize_policy_mode(request.form.get('policy_mode'))
-    settings_row = get_feature_settings_row(admin_id, block=selected_block, create=True)
+    settings_row = get_feature_settings_row_for_class(
+        selected_scope['class_id'],
+        create=True,
+    )
     if not settings_row:
         flash("Class scope not found for the selected period.", "warning")
-        return redirect(url_for('admin.economy_health', block=selected_block))
+        return redirect(url_for('admin.economy_health', block=selected_scope['block']))
     settings_row.economy_policy_mode = policy_mode
     settings_row.economy_policy_updated_at = utc_now()
     cancel_pending_policy_transitions(settings_row.class_id, actor_id=admin_id)
     current_app.logger.info(
         "Economy policy mode changed teacher=%s block=%s mode=%s",
         admin_id,
-        selected_block,
+        selected_scope['block'],
         policy_mode,
     )
     flash(f"Economy policy updated to {POLICY_MODES[policy_mode]['label']}.", "success")
-    return redirect(url_for('admin.economy_health', block=selected_block, review_rebalance=1))
+    return redirect(url_for('admin.economy_health', block=selected_scope['block'], review_rebalance=1))
 
 
 @admin_bp.route('/economy-policy/rebalance', methods=['POST'])
@@ -8113,12 +8122,21 @@ def apply_economy_rebalance():
     if not selected_block:
         flash("Select a class period before applying a rebalance.", "warning")
         return redirect(url_for('admin.economy_health'))
+    selected_scope = require_admin_feature_scope(
+        'payroll',
+        admin_id=admin_id,
+        requested_block=selected_block,
+        allow_default=False,
+    )
     activation_mode = (request.form.get('activation_mode') or REBALANCE_ACTIVATION_NEXT_RENEWAL).strip().lower()
     selected_keys = set(request.form.getlist('selected_changes'))
-    settings_row = get_feature_settings_row(admin_id, block=selected_block, create=True)
+    settings_row = get_feature_settings_row_for_class(
+        selected_scope['class_id'],
+        create=True,
+    )
     if not settings_row:
         flash("Class scope not found for the selected period.", "warning")
-        return redirect(url_for('admin.economy_health', block=selected_block, review_rebalance=1))
+        return redirect(url_for('admin.economy_health', block=selected_scope['block'], review_rebalance=1))
     allowed_activation_modes = {
         REBALANCE_ACTIVATION_IMMEDIATE,
         REBALANCE_ACTIVATION_NEXT_RENEWAL,
@@ -8130,11 +8148,11 @@ def apply_economy_rebalance():
 
     if activation_mode not in allowed_activation_modes:
         flash("Invalid rebalance activation mode.", "warning")
-        return redirect(url_for('admin.economy_health', block=selected_block, review_rebalance=1))
+        return redirect(url_for('admin.economy_health', block=selected_scope['block'], review_rebalance=1))
 
     effective_block, payroll_settings, rent_settings, insurance_policies, _all_payroll_settings = _load_economy_rebalance_context(
         admin_id,
-        selected_block,
+        selected_scope['block'],
     )
 
     if not payroll_settings:
@@ -8221,10 +8239,16 @@ def apply_economy_rebalance():
 def economy_health():
     """Show a holistic view of the current economy configuration and CWI health."""
     admin_id = session.get("admin_id")
+    requested_block = (request.args.get('block') or '').strip().upper() or None
+    selected_scope = require_admin_feature_scope(
+        'payroll',
+        admin_id=admin_id,
+        requested_block=requested_block,
+    )
 
     blocks = _get_teacher_blocks()
     # Always use per-class view since CWI is inherently per-class (multi-tenancy by join_code)
-    selected_block = request.args.get('block') or (blocks[0] if blocks else None)
+    selected_block = selected_scope['block']
 
     selected_block, payroll_settings, rent_settings, insurance_policies, all_payroll_settings = _load_economy_rebalance_context(
         admin_id,
@@ -8232,15 +8256,14 @@ def economy_health():
     )
     has_payroll_settings = len(all_payroll_settings) > 0
 
-    selected_join_code = _resolve_join_code_for_block(admin_id, selected_block) if selected_block else None
-    selected_class = ClassEconomy.query.filter_by(join_code=selected_join_code).first() if selected_join_code else None
+    selected_class_id = selected_scope['class_id']
     fines = (
-        PayrollFine.query.filter_by(class_id=selected_class.class_id, is_active=True).all()
-        if selected_class else []
+        PayrollFine.query.filter_by(class_id=selected_class_id, is_active=True).all()
+        if selected_class_id else []
     )
     store_items = (
-        StoreItem.query.filter_by(class_id=selected_class.class_id, is_active=True).all()
-        if selected_class else []
+        StoreItem.query.filter_by(class_id=selected_class_id, is_active=True).all()
+        if selected_class_id else []
     )
 
     banking_settings = _resolve_banking_settings_for_block(admin_id, selected_block) if selected_block else None
@@ -8317,8 +8340,7 @@ def economy_health():
         )
 
     policy_summary = _build_policy_summary(
-        admin_id,
-        selected_block,
+        selected_scope,
         analysis,
         rent_settings,
         insurance_policies,
@@ -8552,7 +8574,10 @@ def _run_payroll_legacy():
  
         result = execute_admin_adjustments(adjustments=adjustments)
  
-        scheduled_rebalances_applied, _scheduled_labels = activate_due_rebalances(current_admin_id)
+        scheduled_rebalances_applied, _scheduled_labels = activate_due_rebalances(
+            current_admin_id,
+            class_id=selected_scope['class_id'],
+        )
         db.session.flush() # FEAT-LEGACY-WRAP: commit removed
         current_app.logger.info(f"Payroll complete. Created {result.applied_count} transactions.")
 

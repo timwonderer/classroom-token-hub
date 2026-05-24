@@ -401,7 +401,7 @@ def apply_rebalance_changes(teacher_id, settings_row, change_plan, activation_mo
     return applied_labels
 
 
-def activate_due_rebalances(teacher_id, *, block=None, reference_time=None, renewal_policy_id=None):
+def activate_due_rebalances(teacher_id, *, class_id=None, reference_time=None, renewal_policy_id=None):
     reference_time = ensure_utc(reference_time) if reference_time else utc_now()
     class_ids_subq = (
         db.session.query(ClassEconomy.class_id)
@@ -409,8 +409,8 @@ def activate_due_rebalances(teacher_id, *, block=None, reference_time=None, rene
         .subquery()
     )
     pending_rows_query = FeatureSettings.query.filter(FeatureSettings.class_id.in_(sa.select(class_ids_subq)))
-    if block:
-        pending_rows_query = pending_rows_query.filter(FeatureSettings.block == block)
+    if class_id:
+        pending_rows_query = pending_rows_query.filter(FeatureSettings.class_id == class_id)
 
     activated = 0
     applied_labels = []
@@ -430,9 +430,6 @@ def activate_due_rebalances(teacher_id, *, block=None, reference_time=None, rene
                     transition.status = POLICY_TRANSITION_STATUS_CANCELLED
                     transition.cancelled_at = reference_time
                     continue
-                if block and (change.get("block") or "").upper() != (block or "").upper():
-                    continue
-
                 activation_mode = transition.activation_mode or REBALANCE_ACTIVATION_LEGACY_NEXT_PAYROLL
                 activation_event = change.get("activation_event")
                 activation_policy_id = change.get("activation_policy_id")

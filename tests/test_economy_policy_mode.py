@@ -28,7 +28,7 @@ from app.routes.student import (
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 from app.utils.economy_policy import (
     convert_weekly_amount_to_frequency,
-    get_feature_settings_row,
+    get_feature_settings_row_for_class,
     get_insurance_premium_recommendation,
     get_price_recommendation_context,
 )
@@ -235,7 +235,7 @@ def test_checker_uses_feature_policy_mode_for_recommendations(client):
     default_checker = EconomyBalanceChecker(admin.id, 'A', policy_mode='default')
     default_recommendations = default_checker.analyze_economy(payroll_settings).recommendations
 
-    db.session.add(FeatureSettings(teacher_id=admin.id, join_code='JOINPOLA', class_id=economy.class_id, block='A', economy_policy_mode='tight'))
+    db.session.add(FeatureSettings(class_id=economy.class_id, economy_policy_mode='tight'))
     db.session.commit()
 
     tight_checker = EconomyBalanceChecker(admin.id, 'A')
@@ -337,7 +337,7 @@ def test_edit_insurance_policy_renders_shared_recommendation_text(client):
 
 
 def test_update_economy_policy_creates_block_scoped_settings(client):
-    admin, _, _, _ = _create_admin_with_block()
+    admin, _, _, economy = _create_admin_with_block()
     _login_admin(client, admin.id)
 
     response = client.post('/admin/economy-policy', data={
@@ -348,22 +348,23 @@ def test_update_economy_policy_creates_block_scoped_settings(client):
     assert response.status_code == 302
     assert 'review_rebalance=1' in response.location
 
-    settings_row = FeatureSettings.query.filter_by(teacher_id=admin.id, block='A').first()
+    settings_row = FeatureSettings.query.filter_by(class_id=economy.class_id).first()
     assert settings_row is not None
-    assert settings_row.join_code == 'JOINPOLA'
     assert settings_row.economy_policy_mode == 'comfortable'
 
 
-def test_get_feature_settings_row_requires_scoped_class_resolution(client):
-    admin, _, _, _ = _create_admin_with_block()
-    read_row = get_feature_settings_row(admin.id, block='A', create=False)
-    created_row = get_feature_settings_row(admin.id, block='A', create=True)
+def test_get_feature_settings_row_for_class_requires_explicit_class_scope(client):
+    admin, _, _, economy = _create_admin_with_block()
+    read_row = get_feature_settings_row_for_class(economy.class_id, create=False)
+    created_row = get_feature_settings_row_for_class(
+        economy.class_id,
+        create=True,
+    )
     db.session.commit()
 
     assert read_row is None
     assert created_row is not None
-    assert created_row.block == 'A'
-    assert created_row.join_code == 'JOINPOLA'
+    assert created_row.class_id == economy.class_id
 
 
 def test_rent_warnings_report_single_monthly_conversion(client):
@@ -388,7 +389,7 @@ def test_rent_warnings_report_single_monthly_conversion(client):
 def test_immediate_rebalance_updates_rent_setting(client):
     admin, payroll_settings, rent_settings, economy = _create_admin_with_block()
     _login_admin(client, admin.id)
-    db.session.add(FeatureSettings(teacher_id=admin.id, join_code='JOINPOLA', class_id=economy.class_id, block='A', economy_policy_mode='tight'))
+    db.session.add(FeatureSettings(class_id=economy.class_id, economy_policy_mode='tight'))
     db.session.commit()
 
     checker = EconomyBalanceChecker(admin.id, 'A', policy_mode='tight')
@@ -507,7 +508,7 @@ def test_join_code_cycle_locks_rent_rate_after_first_payment(client):
 def test_invalid_activation_mode_is_rejected(client):
     admin, _, rent_settings, economy = _create_admin_with_block()
     _login_admin(client, admin.id)
-    db.session.add(FeatureSettings(teacher_id=admin.id, join_code='JOINPOLA', class_id=economy.class_id, block='A', economy_policy_mode='tight'))
+    db.session.add(FeatureSettings(class_id=economy.class_id, economy_policy_mode='tight'))
     db.session.commit()
 
     response = client.post('/admin/economy-policy/rebalance', data={
@@ -527,7 +528,7 @@ def test_rebalance_ignores_cross_teacher_selected_ids(client):
     policy_a = _create_insurance_policy(admin_a.id, 'Teacher A Policy', '20.00', block='A')
     policy_b = _create_insurance_policy(admin_b.id, 'Teacher B Policy', '99.00', block='B')
     _login_admin(client, admin_a.id)
-    db.session.add(FeatureSettings(teacher_id=admin_a.id, join_code='JOINPOLA', class_id=economy_a.class_id, block='A', economy_policy_mode='tight'))
+    db.session.add(FeatureSettings(class_id=economy_a.class_id, economy_policy_mode='tight'))
     db.session.commit()
 
     response = client.post('/admin/economy-policy/rebalance', data={
@@ -549,10 +550,7 @@ def test_run_payroll_applies_scheduled_rebalance(client):
     _login_admin(client, admin.id)
 
     db.session.add(FeatureSettings(
-        teacher_id=admin.id,
-        join_code='JOINPOLA',
         class_id=economy.class_id,
-        block='A',
         economy_policy_mode='tight',
     ))
     _create_pending_policy_transition(
@@ -580,7 +578,7 @@ def test_run_payroll_applies_scheduled_rebalance(client):
 def test_next_renewal_rebalance_schedules_rent_for_next_cycle(client):
     admin, _, rent_settings, economy = _create_admin_with_block()
     _login_admin(client, admin.id)
-    db.session.add(FeatureSettings(teacher_id=admin.id, join_code='JOINPOLA', class_id=economy.class_id, block='A', economy_policy_mode='tight'))
+    db.session.add(FeatureSettings(class_id=economy.class_id, economy_policy_mode='tight'))
     db.session.commit()
 
     response = client.post('/admin/economy-policy/rebalance', data={
@@ -610,10 +608,7 @@ def test_next_renewal_rebalance_schedules_rent_for_next_cycle(client):
 def test_activate_due_rebalances_applies_past_due_rent_change(client):
     admin, _, rent_settings, economy = _create_admin_with_block()
     db.session.add(FeatureSettings(
-        teacher_id=admin.id,
-        join_code='JOINPOLA',
         class_id=economy.class_id,
-        block='A',
         economy_policy_mode='tight',
     ))
     _create_pending_policy_transition(
@@ -645,6 +640,42 @@ def test_activate_due_rebalances_applies_past_due_rent_change(client):
     assert rent_settings.rent_amount == Decimal('610.00')
 
 
+def test_activate_due_rebalances_explicit_class_scope_applies_due_transition(client):
+    admin, _, rent_settings, economy = _create_admin_with_block()
+    db.session.add(FeatureSettings(
+        class_id=economy.class_id,
+        economy_policy_mode='tight',
+    ))
+    _create_pending_policy_transition(
+        class_id=economy.class_id,
+        domain='rent',
+        change_payload={
+            'type': 'rent',
+            'block': 'A',
+            'join_code': 'JOINPOLA',
+            'current_value': '500.00',
+            'new_value': '615.00',
+            'effective_at': '2026-03-01T00:00:00+00:00',
+        },
+        created_by=admin.id,
+        activation_mode=REBALANCE_ACTIVATION_NEXT_RENEWAL,
+        created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+    )
+    db.session.commit()
+
+    activated, labels = activate_due_rebalances(
+        admin.id,
+        class_id=economy.class_id,
+        reference_time=datetime(2026, 4, 1, tzinfo=timezone.utc),
+    )
+    db.session.commit()
+
+    db.session.refresh(rent_settings)
+    assert activated == 1
+    assert labels == ['Rent']
+    assert rent_settings.rent_amount == Decimal('615.00')
+
+
 def test_activate_due_rebalances_keeps_rent_mutation_in_settings_row_class(client):
     admin, _, rent_settings_a, economy_a = _create_admin_with_block('A', 'JOINPOLA')
 
@@ -668,10 +699,7 @@ def test_activate_due_rebalances_keeps_rent_mutation_in_settings_row_class(clien
         frequency_type='monthly',
     )
     db.session.add(FeatureSettings(
-        teacher_id=admin.id,
-        join_code='JOINPOLA',
         class_id=economy_a.class_id,
-        block='A',
         economy_policy_mode='tight',
     ))
     _create_pending_policy_transition(
@@ -710,10 +738,7 @@ def test_activate_due_rebalances_does_not_mutate_cross_class_insurance_policy(cl
     policy_b = _create_insurance_policy(admin.id, 'Cross Class Policy', '99.00', block='B', join_code='JOINPOLB')
 
     db.session.add(FeatureSettings(
-        teacher_id=admin.id,
-        join_code='JOINPOLA',
         class_id=economy_a.class_id,
-        block='A',
         economy_policy_mode='tight',
     ))
     _create_pending_policy_transition(
@@ -764,13 +789,10 @@ def test_prepare_scheduled_rebalance_changes_sets_rent_effective_at(client):
 
 def test_activate_due_rebalances_applies_pending_policy_transition_without_legacy_payload(client):
     admin, _, rent_settings, economy = _create_admin_with_block()
-    settings_row = FeatureSettings.query.filter_by(teacher_id=admin.id, class_id=economy.class_id, block='A').first()
+    settings_row = FeatureSettings.query.filter_by(class_id=economy.class_id).first()
     if settings_row is None:
         settings_row = FeatureSettings(
-            teacher_id=admin.id,
-            join_code='JOINPOLA',
             class_id=economy.class_id,
-            block='A',
             economy_policy_mode='default',
         )
         db.session.add(settings_row)
