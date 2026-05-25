@@ -1,9 +1,9 @@
-# V2 Rebuild Validation Report — Revision 2
+# V2 Rebuild Validation Report — Revision 3
 
 **Generated:** 2026-05-25  
 **Branch:** `claude/wonderful-shannon-aQa0v`  
 **Against:** `V2_Full_compliance_migration_plan.md`  
-**Methodology:** Direct code inspection (multi-pass), migration chain analysis, model column audit, service/FEAT write-path tracing, test coverage enumeration, CI infrastructure review, adversarial scorecard analysis, INV compliance sweep
+**Methodology:** Direct code inspection (multi-pass), migration chain analysis, model column audit, service/FEAT write-path tracing, test coverage enumeration, CI infrastructure review, adversarial scorecard analysis, INV compliance sweep, auth-path and session-bridge verification (Revision 3 additions)
 
 ---
 
@@ -103,7 +103,7 @@ Wave 3 was re-scoped during execution from the full structural auth migration (a
 
 | Original Deliverable | Status |
 |---|---|
-| `User` activated as primary auth principal | ❌ NOT DONE — admin login resolves `Admin` model via session `admin_id`; student login resolves `Student` model |
+| `User` activated as primary auth principal | ❌ NOT DONE — admin login resolves `Admin` model (via session `admin_id`; legacy `teachers` table); student login authenticates via `Student` model then bridges to `User`/`Seat` via `sync_student_session_context()` at `student.py:4103`; bridge is fail-closed (returns `None` → session cleared → login rejected if no valid claimed `Seat` found) |
 | `0002_identity_domain.py` migration (drop legacy auth tables) | ❌ DOES NOT EXIST |
 | Legacy tables dropped: `teachers`, `students`, `student_teachers`, `student_blocks`, `teacher_blocks`, `class_memberships`, `recovery_requests`, `student_recovery_codes`, `teacher_onboarding`, `teacher_credentials` | ❌ ALL STILL IN SCHEMA AND STILL USED |
 | `tests/domain/test_identity.py` | ❌ DOES NOT EXIST |
@@ -128,7 +128,7 @@ Significant number of `filter_by(join_code=...)` and `filter(*.join_code ==...)`
 
 `V2_CLASS_ID_INVARIANT_BACKLOG.md` explicitly tracks this as a deferred cleanup target: "Revisit settings models that still act like `teacher_id + block` is a durable ownership boundary."
 
-**Wave 3 Exit Criterion 1 revisited:** The criterion states "No scope fallback paths in identity/scope-critical route surfaces." `get_current_seat()` in `auth.py` (lines 338–376) does fall back to `student_id`-based seat lookup when `seat_id` is not in session. This was accepted as part of the dual-identity transitional state, not a violation under the re-scoped exit criteria — but it means the canonical seat-first identity path is not fully enforced end-to-end.
+**Wave 3 Exit Criterion 1 revisited:** The criterion states "No scope fallback paths in identity/scope-critical route surfaces." `get_current_seat()` in `auth.py` (lines 338–376) does fall back to `student_id`-based seat lookup when `seat_id` is not in session. **Precision correction (Rev 3):** This fallback is double-gated — it requires BOTH `student_id` (line 360) AND a `class_id`/`current_class_id` value (line 363) in session before attempting the lookup; if `class_id` is absent, the function returns `None` immediately (line 376) rather than falling back to an unscoped query. The fallback cannot produce a cross-class result. This makes it more defensible than the phrase "scope fallback" implies. That said, the canonical seat-first identity path (seat_id in session → direct lookup) is not fully enforced end-to-end, which is the root reason Wave 3B structural work is deferred.
 
 ---
 
@@ -183,7 +183,7 @@ The first validation report characterized this as "NOT STARTED." The deeper anal
 | Check | Status |
 |---|---|
 | `ledger_service.py` still imports `Transaction` (legacy table name) | ❌ — writes to table `transaction`, not `ledger_transaction` |
-| `balance_service.py` still imports `BalanceCache` (legacy table name) | ❌ — reads from `balance_cache`, not `ledger_balance_snapshot` |
+| `balance_service.py` still imports `BalanceCache` (legacy table name) | ❌ — reads from `balance_cache`, not `ledger_balance_snapshot`; **and** uses `(student_id, join_code)` as the composite lookup key throughout (`get_batch_balances()` filters by `BalanceCache.student_id.in_()` + `BalanceCache.join_code.in_()`). The canonical `seat_id` and `class_id` columns on `BalanceCache` are populated by the enforcement hook but are never read by this service. Wave 5 must update the service interface to use `(class_id, seat_id)` tuples. |
 | Migration to rename/replace ledger tables | ❌ DOES NOT EXIST |
 | `LedgerTransaction` / `LedgerBalanceSnapshot` used at runtime | ❌ — stub-only in `models_canonical.py` |
 | `ClassEconomy` import in `ledger_service.py` | ⚠️ — `ClassEconomy` now maps to `classes` table (migration done), so this is functional but semantically confusing |
@@ -464,6 +464,12 @@ The first report contained several characterizations that this deeper analysis r
 
 5. **FEAT atomicity model** — First report did not distinguish FEAT-commits vs service-flushes. The correct model is confirmed: FEAT context owns the commit; services only flush. This is working correctly.
 
+6. **Student login auth bridge (Revision 3)** — Second report stated student login "resolves `Student` model" without capturing the post-auth bridge. The precise flow is: `Student` model authenticates the PIN, then `sync_student_session_context(student, allow_writes=True)` at `student.py:4103` bridges to `User`/`Seat`. The bridge is fail-closed: if no valid claimed `Seat` is found, the session is cleared and login is rejected rather than proceeding with a legacy-only session.
+
+7. **`get_current_seat()` fallback precision (Revision 3)** — Second report described this as "falls back to `student_id`-based seat lookup" without capturing the double-gating. The fallback actually requires `class_id` also present in session (lines 363–374 in `auth.py`). A `student_id`-only session cannot use the fallback path; it returns `None` at line 376. Cross-class seat resolution via this path is not possible.
+
+8. **`balance_service.py` interface gap (Revision 3)** — Second report noted `balance_service.py` reads legacy tables but did not document the interface mismatch. The service uses `(student_id, join_code)` as composite keys throughout its batch queries, and never reads `BalanceCache.seat_id` or `BalanceCache.class_id` even though those columns are populated by the enforcement hook. Wave 5 must change the service's public interface, not just the table name.
+
 ---
 
 ## Recommended Next Steps (Updated Priority Order)
@@ -492,4 +498,4 @@ The first report contained several characterizations that this deeper analysis r
 
 ---
 
-*This report (Revision 2) supersedes the prior version. Produced by multi-pass direct code inspection on 2026-05-25.*
+*This report (Revision 3) supersedes all prior versions. Revisions 1 and 2 were produced by multi-pass direct code inspection on 2026-05-25. Revision 3 adds three precision corrections from auth-path and session-bridge verification: the student login hybrid bridge via `sync_student_session_context()`, the double-gated nature of `get_current_seat()` fallback (requires both `student_id` + `class_id` in session), and the `balance_service.py` interface gap (uses `(student_id, join_code)` composite key, not `(class_id, seat_id)`).*
