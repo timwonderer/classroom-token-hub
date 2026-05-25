@@ -70,6 +70,12 @@ from app.services.ledger_service import (
     get_available_balances,
 )
 from app.services import access_policy_service, identity_service, store_service
+from app.services.recovery_bridge_service import (
+    dismiss_recovery_code as dismiss_recovery_code_row,
+    get_pending_recovery_code_for_student,
+    get_recovery_code_for_student,
+    set_recovery_code_verified,
+)
 from app.feats.base import feat_shell
 from app.feats.rent_payment_feat import execute_rent_payment
 from app.feats.transfer_feat import execute_account_transfer
@@ -1370,16 +1376,7 @@ def dashboard():
     feature_settings = get_feature_settings_for_student()
 
     # --- Check for pending recovery request ---
-    from app.models import StudentRecoveryCode, RecoveryRequest
-    pending_recovery_code = StudentRecoveryCode.query.join(
-        RecoveryRequest
-    ).filter(
-        StudentRecoveryCode.student_id == student.id,
-        StudentRecoveryCode.dismissed == False,
-        StudentRecoveryCode.code_hash == None,  # Not yet verified
-        RecoveryRequest.status == 'pending',
-        RecoveryRequest.expires_at > utc_now()
-    ).first()
+    pending_recovery_code = get_pending_recovery_code_for_student(student.id, utc_now())
 
     # --- Calculate weekly/monthly analytics ---
     from app.models import TapEvent
@@ -4556,11 +4553,8 @@ def verify_recovery(code_id):
     student = get_logged_in_student()
 
     # Get the recovery code request
-    from app.models import StudentRecoveryCode, RecoveryRequest
-    recovery_code = db.get_or_404(StudentRecoveryCode, code_id)
-
-    # Verify this is for the logged-in student
-    if recovery_code.student_id != student.id:
+    recovery_code = get_recovery_code_for_student(code_id, student.id)
+    if recovery_code is None:
         flash("Invalid recovery request.", "error")
         return redirect(url_for('student.dashboard'))
 
@@ -4598,8 +4592,10 @@ def verify_recovery(code_id):
         code = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
 
         # Hash and store the code
-        recovery_code.code_hash = hash_hmac(code.encode(), b'')
-        recovery_code.verified_at = utc_now()
+        verified_at = utc_now()
+        set_recovery_code_verified(code_id, hash_hmac(code.encode(), b''), verified_at)
+        recovery_code.code_hash = "verified"
+        recovery_code.verified_at = verified_at
         db.session.flush()
 
         current_app.logger.info(f"Student {student.id} verified recovery request {recovery_code.recovery_request_id}")
@@ -4625,16 +4621,13 @@ def dismiss_recovery(code_id):
     student = get_logged_in_student()
 
     # Get the recovery code request
-    from app.models import StudentRecoveryCode
-    recovery_code = db.get_or_404(StudentRecoveryCode, code_id)
-
-    # Verify this is for the logged-in student
-    if recovery_code.student_id != student.id:
+    recovery_code = get_recovery_code_for_student(code_id, student.id)
+    if recovery_code is None:
         flash("Invalid recovery request.", "error")
         return redirect(url_for('student.dashboard'))
 
     # Mark as dismissed
-    recovery_code.dismissed = True
+    dismiss_recovery_code_row(code_id)
     db.session.flush()
 
     flash("Recovery notification dismissed. You can still verify later from your notifications.", "info")

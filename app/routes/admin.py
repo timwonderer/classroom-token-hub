@@ -54,12 +54,12 @@ from app.extensions import db, limiter
 from app.feats.base import feat_shell, FEATContext
 from app.access import AccessScopeDenied, resolve_scope
 from app.models import (
-    Student, Admin, ClassEconomy, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
+    Student, Admin, ClassEconomy, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock,
-    UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
-    Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
+    UserReport, FeatureSettings, StudentBlock,
+    Announcement, RedemptionAuditLog, RedemptionAuditAction,
     RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent, Seat,
     BalanceCache, ClassMembership, ClassEconomy, EconomySnapshot, _quantize_currency,
 )
@@ -152,6 +152,33 @@ from app.services.balance_service import get_batch_balances
 from app.services import access_policy_service, ledger_service
 from app.services import operational_event_service
 from app.services.ledger_service import get_available_balances
+from app.services.admin_identity_bridge_service import (
+    admin_has_passkeys,
+    create_admin_credential,
+    create_legacy_completed_teacher_onboarding,
+    delete_admin_credential,
+    delete_admin_credentials_for_teacher,
+    delete_teacher_onboarding_for_teacher,
+    get_admin_credential,
+    get_or_create_teacher_onboarding,
+    get_teacher_onboarding,
+    list_admin_credentials,
+    set_teacher_onboarding_skipped,
+    set_teacher_onboarding_widget_dismissed,
+    set_teacher_onboarding_widget_task_status,
+    touch_admin_credentials_last_used,
+)
+from app.services.recovery_bridge_service import (
+    create_recovery_request_with_students,
+    delete_recovery_rows_for_teacher,
+    find_recovery_request_by_resume_pin,
+    get_active_recovery_request_for_teacher,
+    get_recovery_request_by_id,
+    invalidate_recovery_codes,
+    list_recovery_codes_for_request,
+    mark_recovery_request_verified,
+    save_recovery_progress,
+)
 from app.utils.insurance_eligibility import (
     collect_reimbursed_source_tx_ids,
     compute_waiting_end_class_for_enrollment,
@@ -1297,15 +1324,9 @@ def _delete_teacher_issue_rows(teacher_id):
 
 def _delete_teacher_recovery_and_credentials_rows(teacher_id):
     """Delete teacher recovery, credential, and onboarding rows."""
-    recovery_ids_subq = db.session.query(RecoveryRequest.id).filter(
-        RecoveryRequest.teacher_id == teacher_id
-    ).subquery()
-    StudentRecoveryCode.query.filter(
-        StudentRecoveryCode.recovery_request_id.in_(sa.select(recovery_ids_subq))
-    ).delete(synchronize_session=False)
-    RecoveryRequest.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
-    AdminCredential.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
-    TeacherOnboarding.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    delete_recovery_rows_for_teacher(teacher_id)
+    delete_admin_credentials_for_teacher(teacher_id)
+    delete_teacher_onboarding_for_teacher(teacher_id)
 
 
 def _delete_teacher_store_rows(teacher_id):
@@ -2104,7 +2125,7 @@ def _get_frozen_economy_analysis_payload(
         if persist_snapshot:
             snapshot = _build_economy_snapshot_from_analysis(class_id, join_code, checker, analysis)
             db.session.add(snapshot)
-            db.session.commit()
+            db.session.flush()
             payload = _serialize_economy_analysis_payload(analysis, snapshot=snapshot, frozen=True)
             payload['snapshot_cached'] = False
             return payload, snapshot
@@ -2480,14 +2501,9 @@ def _get_or_create_onboarding(teacher_id):
         teacher_id: The teacher's admin ID
 
     Returns:
-        TeacherOnboarding: The onboarding record
+        Teacher onboarding record view
     """
-    onboarding = TeacherOnboarding.query.filter_by(teacher_id=teacher_id).first()
-    if not onboarding:
-        onboarding = TeacherOnboarding(teacher_id=teacher_id)
-        db.session.add(onboarding)
-        db.session.flush()
-    return onboarding
+    return get_or_create_teacher_onboarding(teacher_id, utc_now())
 
 
 def _check_onboarding_redirect():
@@ -2506,7 +2522,7 @@ def _check_onboarding_redirect():
         return None
 
     # Check if teacher has completed or skipped onboarding
-    onboarding = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
+    onboarding = get_teacher_onboarding(admin_id)
 
     # If no onboarding record exists, teacher needs onboarding
     if not onboarding:
@@ -2515,14 +2531,7 @@ def _check_onboarding_redirect():
         admin = db.session.get(Admin, admin_id)
         if admin and admin.has_assigned_students:
             # Legacy teacher - create completed onboarding record
-            onboarding = TeacherOnboarding(
-                teacher_id=admin_id,
-                is_completed=True,
-                is_skipped=True,
-                completed_at=utc_now()
-            )
-            db.session.add(onboarding)
-            db.session.flush()
+            create_legacy_completed_teacher_onboarding(admin_id, utc_now())
             return None
 
         # New teacher - no redirect, they'll see the Getting Started widget
@@ -2784,7 +2793,7 @@ def dashboard():
 
     # Prompt legacy teachers to upgrade insurance policies to the new tiered design
     show_insurance_tier_prompt = False
-    onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=session['admin_id']).first()
+    onboarding_record = get_teacher_onboarding(session['admin_id'])
     if onboarding_record and onboarding_record.steps_completed and onboarding_record.steps_completed.get("needs_insurance_tier_upgrade"):
         class_ids_subq = (
             db.session.query(ClassEconomy.class_id)
@@ -3455,12 +3464,7 @@ def recover():
         # ----------------------------------------------------------------
         # Step 4: Check for existing active recovery request
         # ----------------------------------------------------------------
-        existing_request = RecoveryRequest.query.filter_by(
-            teacher_id=teacher.id,
-            status='pending'
-        ).filter(
-            RecoveryRequest.expires_at > utc_now()
-        ).first()
+        existing_request = get_active_recovery_request_for_teacher(teacher.id, utc_now())
 
         if existing_request:
             flash("You already have an active recovery request. Please check back or wait for it to expire.", "info")
@@ -3471,22 +3475,11 @@ def recover():
         # Step 4: Create recovery request (5-day expiration)
         # ----------------------------------------------------------------
         expires_at = utc_now() + timedelta(days=5)
-        recovery_request = RecoveryRequest(
+        recovery_request = create_recovery_request_with_students(
             teacher_id=teacher.id,
-            status='pending',
-            expires_at=expires_at
+            student_ids=[student.id for student in resolved_students.values()],
+            expires_at=expires_at,
         )
-        db.session.add(recovery_request)
-        db.session.flush()  # Get the ID
-
-        for student in resolved_students.values():
-            student_code = StudentRecoveryCode(
-                recovery_request_id=recovery_request.id,
-                student_id=student.id
-            )
-            db.session.add(student_code)
-
-        db.session.flush()
 
         session['recovery_request_id'] = recovery_request.id
         current_app.logger.info(
@@ -3510,7 +3503,7 @@ def recovery_status():
         flash("No active recovery request found.", "error")
         return redirect(url_for('admin.recover'))
 
-    recovery_request = db.session.get(RecoveryRequest, recovery_request_id)
+    recovery_request = get_recovery_request_by_id(recovery_request_id)
     if not recovery_request:
         flash("Recovery request not found.", "error")
         session.pop('recovery_request_id', None)
@@ -3524,7 +3517,7 @@ def recovery_status():
         return redirect(url_for('admin.recover'))
 
     # Get verification codes
-    codes = StudentRecoveryCode.query.filter_by(recovery_request_id=recovery_request.id).all()
+    codes = list_recovery_codes_for_request(recovery_request.id)
     verified_count = sum(1 for c in codes if c.code_hash is not None)
     total_count = len(codes)
 
@@ -3552,7 +3545,7 @@ def reset_credentials():
         flash("No active recovery request found.", "error")
         return redirect(url_for('admin.recover'))
 
-    recovery_request = db.session.get(RecoveryRequest, recovery_request_id)
+    recovery_request = get_recovery_request_by_id(recovery_request_id)
     if not recovery_request or recovery_request.status != 'pending':
         flash("Invalid or expired recovery request.", "error")
         return redirect(url_for('admin.recover'))
@@ -3565,9 +3558,7 @@ def reset_credentials():
         new_username = form.new_username.data.strip()
 
         # Get all student recovery codes for this request
-        student_codes = StudentRecoveryCode.query.filter_by(
-            recovery_request_id=recovery_request.id
-        ).all()
+        student_codes = list_recovery_codes_for_request(recovery_request.id)
 
         # Verify all students have generated codes
         if any(sc.code_hash is None for sc in student_codes):
@@ -3578,7 +3569,7 @@ def reset_credentials():
         if len(entered_codes) != len(student_codes):
             current_app.logger.warning(f"Admin recovery: code count mismatch for request {recovery_request.id} - expected {len(student_codes)}, got {len(entered_codes)}")
             # Invalidate ALL codes
-            _invalidate_all_recovery_codes(student_codes)
+            _invalidate_all_recovery_codes(recovery_request.id)
             flash(f"Wrong number of codes entered. All codes have been invalidated. Your students must generate new codes.", "error")
             return redirect(url_for('admin.recovery_status'))
 
@@ -3588,7 +3579,7 @@ def reset_credentials():
             # Validate format
             if not code.isdigit() or len(code) != 6:
                 current_app.logger.warning(f"Admin recovery: invalid code format for request {recovery_request.id}")
-                _invalidate_all_recovery_codes(student_codes)
+                _invalidate_all_recovery_codes(recovery_request.id)
                 flash("Invalid code format detected. All codes have been invalidated. Your students must generate new codes.", "error")
                 return redirect(url_for('admin.recovery_status'))
             # Hash the entered code (no salt for recovery codes - they're already random)
@@ -3600,7 +3591,7 @@ def reset_credentials():
         if entered_hashes != stored_hashes:
             current_app.logger.warning(f"Admin recovery: code mismatch for request {recovery_request.id}")
             # Invalidate ALL codes on failed attempt
-            _invalidate_all_recovery_codes(student_codes)
+            _invalidate_all_recovery_codes(recovery_request.id)
             flash("Recovery codes do not match. All codes have been invalidated. Your students must generate new codes.", "error")
             return redirect(url_for('admin.recovery_status'))
 
@@ -3642,16 +3633,16 @@ def reset_credentials():
                          saved_username=saved_username)
 
 
-def _invalidate_all_recovery_codes(student_codes):
+def _invalidate_all_recovery_codes(recovery_request_id: int):
     """
     Invalidate all recovery codes forcing students to regenerate new ones.
     This prevents attackers from testing codes individually.
     """
-    for sc in student_codes:
-        sc.code_hash = None
-        sc.verified_at = None
+    invalidated_count = invalidate_recovery_codes(recovery_request_id)
     db.session.flush()  # FEAT-LEGACY-WRAP: commit removed
-    current_app.logger.info(f"Invalidated {len(student_codes)} recovery codes - students must regenerate")
+    current_app.logger.info(
+        f"Invalidated {invalidated_count} recovery codes - students must regenerate"
+    )
 
 
 @admin_bp.route('/confirm-reset', methods=['POST'])
@@ -3666,7 +3657,7 @@ def confirm_reset():
         flash("Invalid recovery session.", "error")
         return redirect(url_for('admin.recover'))
 
-    recovery_request = db.session.get(RecoveryRequest, recovery_request_id)
+    recovery_request = get_recovery_request_by_id(recovery_request_id)
     if not recovery_request:
         flash("Invalid recovery session.", "error")
         return redirect(url_for('admin.recover'))
@@ -3699,8 +3690,7 @@ def confirm_reset():
     teacher.totp_secret = encrypt_totp(totp_secret)  # Encrypt before storing
 
     # Mark recovery request as completed
-    recovery_request.status = 'verified'
-    recovery_request.completed_at = utc_now()
+    mark_recovery_request_verified(recovery_request.id, utc_now())
 
     db.session.flush()
 
@@ -3724,7 +3714,7 @@ def save_recovery_progress():
         flash("No active recovery request found.", "error")
         return redirect(url_for('admin.recover'))
 
-    recovery_request = db.session.get(RecoveryRequest, recovery_request_id)
+    recovery_request = get_recovery_request_by_id(recovery_request_id)
     if not recovery_request or recovery_request.status != 'pending':
         flash("Invalid or expired recovery request.", "error")
         return redirect(url_for('admin.recover'))
@@ -3745,9 +3735,12 @@ def save_recovery_progress():
     resume_pin_hash = hash_hmac(resume_pin.encode(), b'')
 
     # Save partial progress
-    recovery_request.partial_codes = entered_codes
-    recovery_request.resume_pin_hash = resume_pin_hash
-    recovery_request.resume_new_username = new_username
+    save_recovery_progress(
+        recovery_request.id,
+        partial_codes=entered_codes,
+        resume_pin_hash=resume_pin_hash,
+        resume_new_username=new_username,
+    )
     db.session.flush()
 
     current_app.logger.info(f"Admin recovery: saved partial progress for request {recovery_request.id}")
@@ -3779,12 +3772,7 @@ def resume_credentials():
     # Find recovery request with matching PIN
     resume_pin_hash = hash_hmac(resume_pin.encode(), b'')
 
-    recovery_request = RecoveryRequest.query.filter_by(
-        resume_pin_hash=resume_pin_hash,
-        status='pending'
-    ).filter(
-        RecoveryRequest.expires_at > utc_now()
-    ).first()
+    recovery_request = find_recovery_request_by_resume_pin(resume_pin_hash, utc_now())
 
     if not recovery_request:
         current_app.logger.warning("Admin recovery: invalid resume PIN attempt")
@@ -11677,7 +11665,7 @@ def onboarding_status():
 
     try:
         # GET endpoint must remain read-only: do not create records here.
-        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
+        onboarding_record = get_teacher_onboarding(admin_id)
 
         # Check if widget is dismissed
         if onboarding_record and onboarding_record.widget_dismissed:
@@ -11789,7 +11777,7 @@ def onboarding_status():
         data_completed['personalization'] = has_label
 
         # Passkey: check if at least one credential exists OR marked complete
-        has_passkey = AdminCredential.query.filter_by(teacher_id=admin_id).first() is not None
+        has_passkey = admin_has_passkeys(admin_id)
         data_completed['passkey'] = has_passkey
 
         for task_name in completion.keys():
@@ -11828,12 +11816,8 @@ def onboarding_skip():
     if not admin_id:
         return jsonify({'status': 'error', 'message': 'Not authenticated'}), 401
 
-    onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
-    if not onboarding_record:
-        onboarding_record = TeacherOnboarding(teacher_id=admin_id)
-        db.session.add(onboarding_record)
-
-    onboarding_record.skip_onboarding()
+    get_or_create_teacher_onboarding(admin_id, utc_now())
+    set_teacher_onboarding_skipped(admin_id, utc_now())
     db.session.flush()
     return jsonify({'status': 'success'})
 
@@ -11852,13 +11836,12 @@ def onboarding_skip_task():
             return jsonify({'status': 'error', 'message': 'Task name required'}), 400
 
         # Get or create onboarding record
-        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
-        if not onboarding_record:
-            onboarding_record = TeacherOnboarding(teacher_id=admin_id)
-            db.session.add(onboarding_record)
-
-        # Mark widget task as skipped (counts as completed)
-        onboarding_record.mark_widget_task_completed(task_name, status='skipped')
+        set_teacher_onboarding_widget_task_status(
+            admin_id,
+            task_name=task_name,
+            status='skipped',
+            now=utc_now(),
+        )
 
         db.session.flush()
 
@@ -11881,13 +11864,7 @@ def onboarding_dismiss_widget():
 
     try:
         # Get or create onboarding record
-        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
-        if not onboarding_record:
-            onboarding_record = TeacherOnboarding(teacher_id=admin_id)
-            db.session.add(onboarding_record)
-
-        # Dismiss the widget
-        onboarding_record.dismiss_widget()
+        set_teacher_onboarding_widget_dismissed(admin_id, dismissed=True, now=utc_now())
 
         db.session.flush()
 
@@ -11910,13 +11887,7 @@ def onboarding_undismiss_widget():
 
     try:
         # Get onboarding record
-        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
-        if not onboarding_record:
-            onboarding_record = TeacherOnboarding(teacher_id=admin_id)
-            db.session.add(onboarding_record)
-
-        # Un-dismiss the widget by setting widget_dismissed_at to None
-        onboarding_record.widget_dismissed_at = None
+        set_teacher_onboarding_widget_dismissed(admin_id, dismissed=False, now=utc_now())
 
         db.session.flush()
 
@@ -12046,6 +12017,7 @@ def _resolve_admin_payroll_settings_for_block(admin_id: int, block: str | None):
 
 @admin_bp.route('/api/economy/analyze', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ADMN-001")
 def api_economy_analyze():
     """
     Perform comprehensive economy balance analysis.
@@ -12162,6 +12134,7 @@ def api_economy_analyze():
         return jsonify(payload)
 
     except Exception as e:
+        db.session.rollback()
         current_app.logger.error(f"Error analyzing economy: {e}")
         return jsonify({'status': 'error', 'message': 'An internal error occurred while analyzing the economy.'}), 500
 
@@ -12346,13 +12319,11 @@ def passkey_register_finish():
         authenticator_name = data.get('authenticatorName', 'Unnamed Passkey')
 
         # Save credential metadata (credential_id is optional, stored on passwordless.dev)
-        credential = AdminCredential(
+        create_admin_credential(
             teacher_id=admin_id,
             credential_id=None,  # Not needed - stored on passwordless.dev servers
-            authenticator_name=authenticator_name
+            authenticator_name=authenticator_name,
         )
-
-        db.session.add(credential)
         db.session.flush()
 
         flash("Passkey registered successfully!", "success")
@@ -12389,7 +12360,7 @@ def passkey_auth_start():
         session['passkey_auth_username'] = username
 
         # Check if user has passkeys
-        has_passkeys = AdminCredential.query.filter_by(teacher_id=admin.id).first() is not None
+        has_passkeys = admin_has_passkeys(admin.id)
         if not has_passkeys:
             return jsonify({"error": "Invalid credentials"}), 401
 
@@ -12442,7 +12413,7 @@ def passkey_auth_finish():
         # Credentials are stored without credential_id (managed by passwordless.dev),
         # so update last_used for all credentials belonging to this admin.
         now = utc_now()
-        AdminCredential.query.filter_by(teacher_id=admin_id).update({'last_used': now}, synchronize_session=False)
+        touch_admin_credentials_last_used(admin_id, now)
 
         admin.last_login = now
         db.session.flush()
@@ -12478,7 +12449,7 @@ def passkey_list():
     """List all passkeys for current teacher."""
     try:
         admin_id = session.get('admin_id')
-        credentials = AdminCredential.query.filter_by(teacher_id=admin_id).order_by(AdminCredential.created_at.desc()).all()
+        credentials = list_admin_credentials(admin_id)
 
         return jsonify({
             "passkeys": [{
@@ -12501,12 +12472,12 @@ def passkey_delete(passkey_id):
     """Delete a passkey."""
     try:
         admin_id = session.get('admin_id')
-        credential = AdminCredential.query.filter_by(id=passkey_id, teacher_id=admin_id).first()
+        credential = get_admin_credential(passkey_id, admin_id)
 
         if not credential:
             return jsonify({"error": "Passkey not found"}), 404
 
-        db.session.delete(credential)
+        delete_admin_credential(passkey_id, admin_id)
         db.session.flush()
 
         flash("Passkey deleted successfully", "success")
@@ -12524,7 +12495,7 @@ def passkey_settings():
     """Passkey management page."""
     admin_id = session.get('admin_id')
     admin = db.get_or_404(Admin, admin_id)
-    credentials = AdminCredential.query.filter_by(teacher_id=admin_id).order_by(AdminCredential.created_at.desc()).all()
+    credentials = list_admin_credentials(admin_id)
 
     return render_template('admin_passkey_settings.html',
                          admin=admin,

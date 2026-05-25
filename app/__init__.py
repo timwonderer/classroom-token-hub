@@ -449,15 +449,20 @@ def create_app():
         #   MAINTENANCE_SYSADMIN_BYPASS= true|1|yes|on   (allow system admin session)
         #   MAINTENANCE_BYPASS_TOKEN= <string>           (query param maintenance_bypass=<token>)
         #
-        # System admin detection relies on session['is_system_admin'] being set
-        # by authentication logic elsewhere.
+        # System admin detection is resolver-backed so session flags alone are not
+        # treated as authoritative.
         sysadmin_bypass_enabled = os.getenv("MAINTENANCE_SYSADMIN_BYPASS", "").lower() in {"1","true","yes","on"}
         bypass_token = os.getenv("MAINTENANCE_BYPASS_TOKEN", "")
         provided_token = request.args.get("maintenance_bypass")
 
         # Persistent session bypass for admin-enabled testing across other roles.
         global_bypass = session.get("maintenance_global_bypass") is True
-        is_sysadmin = session.get("is_system_admin") is True
+        try:
+            from app.auth import get_current_system_admin
+
+            is_sysadmin = get_current_system_admin() is not None
+        except Exception:
+            is_sysadmin = False
         token_valid = bool(bypass_token and provided_token and provided_token == bypass_token)
 
         # Allow if sysadmin bypass on and user is sysadmin
@@ -910,12 +915,10 @@ def create_app():
     def inject_current_sysadmin():
         """Inject current system admin object into all templates."""
         try:
-            from app.models import SystemAdmin
-            from flask import session
+            from app.auth import get_current_system_admin
 
-            sysadmin_id = session.get('sysadmin_id')
-            if sysadmin_id:
-                sysadmin = db.session.get(SystemAdmin, sysadmin_id)
+            sysadmin = get_current_system_admin()
+            if sysadmin:
                 return {'current_sysadmin': sysadmin}
             return {'current_sysadmin': None}
         except Exception as e:

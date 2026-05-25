@@ -5,7 +5,8 @@ def test_docs_url_for_prefers_local_routes_for_authenticated_sessions(app):
     with app.test_request_context("/admin/"):
         from flask import session
 
-        session["admin_id"] = 123
+        session["is_system_admin"] = True
+        session["sysadmin_id"] = 1
         app.config["EXTERNAL_DOCS_BASE_URL"] = "https://docs.classroomtokenhub.com"
 
         assert docs_url_for("user-guides/diagnostics/teacher") == "/docs/user-guides/diagnostics/teacher"
@@ -33,8 +34,8 @@ def test_authenticated_docs_stay_in_app_when_external_site_is_configured(client,
     app.config["EXTERNAL_DOCS_BASE_URL"] = "https://docs.classroomtokenhub.com"
 
     with client.session_transaction() as sess:
-        sess["admin_id"] = 1
-        sess["is_admin"] = True
+        sess["is_system_admin"] = True
+        sess["sysadmin_id"] = 1
 
     response = client.get("/docs/user-guides/teacher_manual", follow_redirects=False)
 

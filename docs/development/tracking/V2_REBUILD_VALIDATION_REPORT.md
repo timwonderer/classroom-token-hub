@@ -5,6 +5,61 @@
 **Against:** `V2_Full_compliance_migration_plan.md`  
 **Methodology:** Direct code inspection (multi-pass), migration chain analysis, model column audit, service/FEAT write-path tracing, test coverage enumeration, CI infrastructure review, adversarial scorecard analysis, INV compliance sweep, auth-path and session-bridge verification (Revision 3 additions)
 
+### Post-Report Update (2026-05-24, `codex/v2.0`)
+
+- Closed the FEAT compliance finding for economy snapshot persistence:
+  - `app/routes/admin.py` `/api/economy/analyze` is now wrapped in `@feat_shell("FEAT-ADMN-001")`
+  - `_get_frozen_economy_analysis_payload(...)` no longer calls `db.session.commit()`; it uses `db.session.flush()` and relies on FEAT transaction ownership
+  - analyze endpoint error path now explicitly calls `db.session.rollback()` before returning `500`
+- Validation:
+  - `pytest -q tests/test_economy_api.py -k "analyze_endpoint_"` → `7 passed`
+- Added explicit guardrail coverage for the deferred Wave 3 structural table drops:
+  - `scripts/wave3_identity_drop_surface_guardrail.py`
+  - `docs/development/tracking/wave3_identity_drop_surface_baseline.json`
+  - `tests/test_wave3_identity_drop_surface_guardrail.py`
+  - baseline-census confirms current deferred coupling is explicit and now blocked from expansion unless baseline is intentionally re-cut after approved reductions
+- Landed first approved reduction slice and refreshed baseline:
+  - `app/routes/student.py` no longer directly references `RecoveryRequest` / `StudentRecoveryCode`; student recovery accesses were routed through `app/services/recovery_bridge_service.py`
+  - targeted validation: `pytest -q tests/test_recovery_bridge_service.py` → `3 passed`
+  - baseline re-cut in `wave3_identity_drop_surface_baseline.json` after verified reductions
+- Landed major follow-on reduction slice on admin/runtime recovery paths:
+  - `app/routes/admin.py` recovery flow now uses `app/services/recovery_bridge_service.py` for recovery-request/code lifecycle operations instead of direct `RecoveryRequest` / `StudentRecoveryCode` symbol access
+  - `app/utils/student_deletion.py` recovery-code cleanup now routes through bridge service
+  - targeted validation: `pytest -q tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py` → `6 passed`
+  - baseline re-cut confirms `RecoveryRequest` and `StudentRecoveryCode` runtime symbol couplings are removed from `app/**`
+- Landed passkey/onboarding decoupling slice:
+  - `app/routes/admin.py` now routes passkey credential and onboarding lifecycle operations through `app/services/admin_identity_bridge_service.py`
+  - `app/routes/system_admin.py` no longer carries `TeacherOnboarding` symbol dependency
+  - targeted validation: `pytest -q tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py` → `10 passed`
+  - baseline re-cut confirms `AdminCredential` and `TeacherOnboarding` runtime symbol couplings are removed from `app/**`
+- Landed invite-code decoupling slice:
+  - `app/routes/system_admin.py` invite-code management now routes through `app/services/admin_identity_bridge_service.py`
+  - `app/routes/admin.py` and `app/routes/system_admin.py` no longer carry `AdminInviteCode` symbol dependencies
+  - targeted validation: `pytest -q tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py` → `11 passed`
+  - baseline re-cut confirms `AdminInviteCode` runtime symbol couplings are removed from `app/**`
+- Landed low-risk session principal key reduction slice on docs/main surfaces:
+  - `app/routes/main.py` removed direct `session` fallback checks for `is_admin` / `admin_id` / `student_id` in home redirect flow; routing now uses explicit resolver checks (`get_current_admin`, `get_current_seat`)
+  - `app/routes/docs.py` removed direct `admin_id` / `student_id` fallback checks in docs audience and user-role resolution paths; sysadmin context now requires both `is_system_admin` and `sysadmin_id`
+  - `app/utils/helpers.py` `has_internal_docs_session()` now resolves internal-auth state through auth resolvers instead of direct `admin_id` / `student_id` key checks
+  - targeted validation: `pytest -q tests/test_docs_platform_split.py tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py` → `18 passed`
+  - guardrail confirms reductions:
+    - `session_keys.admin_id` reduced from `app/routes/docs.py`, `app/routes/main.py`, `app/utils/helpers.py`
+    - `session_keys.student_id` reduced from `app/routes/docs.py`, `app/routes/main.py`, `app/utils/helpers.py`
+    - `session_keys.is_admin` reduced from `app/routes/main.py`
+- Landed session principal key reduction slice on API/TLCP/sysadmin resolver surfaces:
+  - added `get_current_system_admin()` in `app/auth.py` so sysadmin context is explicitly resolved (flag + id + row), not inferred from raw keys
+  - `app/routes/api.py` no longer performs direct `is_admin` / `admin_id` / `is_system_admin` checks for `/api/set-timezone`; `/api/attendance/history` no longer falls back to raw `admin_id`
+  - `app/services/tlcp.py` actor context now resolves student/admin/sysadmin identity through explicit auth helpers rather than direct principal-key checks
+  - `app/__init__.py` maintenance bypass sysadmin detection and current-sysadmin template injection now use resolver-backed sysadmin context
+  - targeted validation:
+    - `python3 -m py_compile app/auth.py app/routes/api.py app/services/tlcp.py app/__init__.py` → pass
+    - `pytest -q tests/test_tlcp_actor_context_resolution.py tests/test_timezone_fix.py tests/test_api_fixes.py tests/test_api_attendance_history.py tests/test_maintenance_bypass.py tests/test_docs_platform_split.py tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py` → `41 passed`
+  - guardrail confirms reductions:
+    - `session_keys.admin_id` reduced from `app/routes/api.py`, `app/services/tlcp.py`
+    - `session_keys.is_admin` reduced from `app/routes/api.py`, `app/services/tlcp.py`
+    - `session_keys.is_system_admin` reduced from `app/__init__.py`, `app/routes/api.py`, `app/services/tlcp.py`
+    - `session_keys.student_id` reduced from `app/services/tlcp.py`
+
 ---
 
 ## Executive Summary

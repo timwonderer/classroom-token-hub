@@ -17,13 +17,13 @@ from app.models import (
     StudentBlock,
     StudentInsurance,
     StudentItem,
-    StudentRecoveryCode,
     StudentTeacher,
     TapEvent,
     TeacherBlock,
     Transaction,
     UserReport,
 )
+from app.services.recovery_bridge_service import delete_recovery_codes_for_student
 
 
 def _collect_related_ids(student_id):
@@ -116,7 +116,7 @@ def _delete_student_scoped_rows(student_id, student_item_ids, issue_ids, insuran
     Issue.query.filter(Issue.student_id == student_id).delete(synchronize_session=False)
     StudentInsurance.query.filter(StudentInsurance.student_id == student_id).delete(synchronize_session=False)
     UserReport.query.filter(UserReport._student_id == student_id).delete(synchronize_session=False)
-    StudentRecoveryCode.query.filter(StudentRecoveryCode.student_id == student_id).delete(synchronize_session=False)
+    delete_recovery_codes_for_student(student_id)
     Transaction.query.filter(Transaction.student_id == student_id).delete(synchronize_session=False)
     TapEvent.query.filter(TapEvent.student_id == student_id).delete(synchronize_session=False)
     HallPassLog.query.filter(HallPassLog.student_id == student_id).delete(synchronize_session=False)

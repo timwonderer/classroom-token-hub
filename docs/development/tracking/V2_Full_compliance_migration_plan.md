@@ -870,6 +870,168 @@ Wave impact:
 - Wave 3 closure criteria are satisfied for the tracked identity/scope cleanup sequence on `codex/v2.0`.
 - Execution focus can now proceed sequentially to Wave 4 class-configuration canonicalization.
 
+### Status Update (2026-05-24): Wave 3 Structural Deferment Unblocking — Legacy Auth Surface Freeze
+
+- Addressed the deferred Wave 3 table-drop risk by making the remaining coupling surface explicit and machine-enforced:
+  - Added `scripts/wave3_identity_drop_surface_guardrail.py`
+    - scans `app/**/*.py` (excluding model definition files) for legacy auth symbols and legacy session-principal keys
+    - compares current coupling surface to a checked-in baseline and fails only when the surface expands
+  - Added baseline: `docs/development/tracking/wave3_identity_drop_surface_baseline.json`
+  - Added CI test: `tests/test_wave3_identity_drop_surface_guardrail.py`
+- Baseline snapshot (current deferred surface):
+  - Legacy symbol file counts:
+    - `Student` 20, `TeacherBlock` 19, `StudentTeacher` 10, `StudentBlock` 9
+    - `Admin` 8, `StudentRecoveryCode` 3, `RecoveryRequest` 2, `TeacherOnboarding` 2, `AdminInviteCode` 2, `AdminCredential` 1
+  - Legacy session-principal key file counts:
+    - `admin_id` 12, `is_system_admin` 8, `is_admin` 6, `student_id` 6
+- Unblocking sequence this enables:
+  1. Keep surface non-expanding while runtime slices remove dependencies subsystem-by-subsystem.
+  2. Re-cut baseline only after each approved reduction slice (never for expansions).
+  3. Execute `0002_identity_domain.py` drop migration only after symbol/session surfaces reach zero for targeted legacy auth constructs.
+
+Focused validation:
+
+- `python3 -m py_compile scripts/wave3_identity_drop_surface_guardrail.py tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result: pass
+- `python3 scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
+- `pytest -q tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result: `1 passed`
+
+### Status Update (2026-05-24): Wave 3 Structural Deferment Unblocking — Recovery Student-Route Decoupling
+
+- Landed the first dependency-reduction slice under the Wave 3 legacy-auth surface freeze:
+  - Added `app/services/recovery_bridge_service.py` to isolate student recovery reads/writes against recovery tables via table-level access.
+  - `app/routes/student.py` no longer directly references `RecoveryRequest` / `StudentRecoveryCode` symbols for:
+    - dashboard pending-recovery banner lookup
+    - `/student/verify-recovery/<code_id>` lookup/update path
+    - `/student/dismiss-recovery/<code_id>` lookup/update path
+  - Added targeted service coverage: `tests/test_recovery_bridge_service.py`.
+- Surface reduction applied and baseline re-cut:
+  - `symbols.RecoveryRequest`: removed `app/routes/student.py` coupling
+  - `symbols.StudentRecoveryCode`: removed `app/routes/student.py` coupling
+  - Baseline refreshed in `docs/development/tracking/wave3_identity_drop_surface_baseline.json`
+
+Focused validation:
+
+- `python3 -m py_compile app/services/recovery_bridge_service.py app/routes/student.py tests/test_recovery_bridge_service.py`
+  - Result: pass
+- `pytest -q tests/test_recovery_bridge_service.py`
+  - Result: `3 passed`
+- `python3 scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
+
+### Status Update (2026-05-24): Wave 3 Structural Deferment Unblocking — Recovery Admin-Path Decoupling
+
+- Landed a major recovery-domain reduction slice to remove legacy recovery table symbols from admin/runtime surfaces:
+  - expanded `app/services/recovery_bridge_service.py` with admin lifecycle operations (create/list/find/invalidate/save-progress/complete/delete) on recovery tables via table-level access.
+  - rewired `app/routes/admin.py` recovery flow (`/recover`, `/recovery-status`, `/reset-credentials`, `/confirm-reset`, `/save-recovery-progress`, `/resume-credentials`) to use bridge-service operations instead of direct `RecoveryRequest` / `StudentRecoveryCode` model references.
+  - rewired `app/utils/student_deletion.py` to use bridge-service deletion for student recovery-code cleanup.
+  - extended coverage in `tests/test_recovery_bridge_service.py` for admin lifecycle operations and helper behavior.
+- Surface reduction applied and baseline re-cut:
+  - `symbols.RecoveryRequest`: removed `app/routes/admin.py` coupling (now 0 runtime symbol references in `app/**`).
+  - `symbols.StudentRecoveryCode`: removed `app/routes/admin.py` and `app/utils/student_deletion.py` couplings (now 0 runtime symbol references in `app/**`).
+  - Baseline refreshed in `docs/development/tracking/wave3_identity_drop_surface_baseline.json`.
+
+Focused validation:
+
+- `python3 -m py_compile app/services/recovery_bridge_service.py app/routes/admin.py app/routes/student.py app/utils/student_deletion.py tests/test_recovery_bridge_service.py`
+  - Result: pass
+- `pytest -q tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result: `6 passed`
+- `python3 scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
+
+### Status Update (2026-05-24): Wave 3 Structural Deferment Unblocking — Passkey + Onboarding Symbol Decoupling
+
+- Landed the next major identity reduction slice by removing `AdminCredential` and `TeacherOnboarding` symbol dependencies from route/runtime code:
+  - Added `app/services/admin_identity_bridge_service.py` with table-level bridge operations for:
+    - teacher onboarding lifecycle and widget state
+    - admin passkey credential lifecycle
+  - Rewired `app/routes/admin.py` passkey and onboarding endpoints/helpers to the bridge service.
+  - Rewired teacher-deletion helper path in `app/routes/admin.py` to bridge deletion for passkeys/onboarding.
+  - Removed unused `TeacherOnboarding` import dependency from `app/routes/system_admin.py`.
+  - Added targeted bridge coverage: `tests/test_admin_identity_bridge_service.py`.
+- Surface reduction applied and baseline re-cut:
+  - `symbols.AdminCredential`: removed `app/routes/admin.py` coupling.
+  - `symbols.TeacherOnboarding`: removed `app/routes/admin.py` and `app/routes/system_admin.py` couplings.
+  - Baseline refreshed in `docs/development/tracking/wave3_identity_drop_surface_baseline.json`.
+
+Focused validation:
+
+- `python3 -m py_compile app/services/admin_identity_bridge_service.py app/routes/admin.py app/routes/system_admin.py tests/test_admin_identity_bridge_service.py`
+  - Result: pass
+- `pytest -q tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result: `10 passed`
+- `python3 scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
+
+### Status Update (2026-05-24): Wave 3 Structural Deferment Unblocking — Invite-Code Symbol Decoupling
+
+- Landed the next identity reduction slice by removing `AdminInviteCode` route/runtime symbol dependencies:
+  - extended `app/services/admin_identity_bridge_service.py` with invite-code bridge operations (count/create/list/get/void).
+  - rewired `app/routes/system_admin.py` invite-code surfaces (`dashboard`, `manage_teachers`, `void_invite_code`) to bridge operations.
+  - removed legacy `AdminInviteCode` import dependency from `app/routes/admin.py` and `app/routes/system_admin.py`.
+  - extended coverage in `tests/test_admin_identity_bridge_service.py` for invite-code lifecycle behavior.
+- Surface reduction applied and baseline re-cut:
+  - `symbols.AdminInviteCode`: removed `app/routes/admin.py` and `app/routes/system_admin.py` couplings.
+  - Baseline refreshed in `docs/development/tracking/wave3_identity_drop_surface_baseline.json`.
+
+Focused validation:
+
+- `python3 -m py_compile app/services/admin_identity_bridge_service.py app/routes/system_admin.py tests/test_admin_identity_bridge_service.py app/routes/admin.py`
+  - Result: pass
+- `pytest -q tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result: `11 passed`
+- `python3 scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
+
+### Status Update (2026-05-24): Wave 3 Structural Deferment Unblocking — Session Principal Key Reduction (Docs/Main)
+
+- Landed the next low-risk reduction slice by removing direct legacy session-principal checks from public/docs route surfaces:
+  - `app/routes/main.py` home redirect logic now uses explicit resolver checks (`get_current_admin()`, `get_current_seat()`) instead of direct `session['is_admin'/'admin_id'/'student_id']` fallback checks.
+  - `app/routes/docs.py` audience and role determination now uses explicit resolver checks (`get_current_admin()`, `get_current_seat()`, `get_current_user()`) and only treats sysadmin context as valid when both `is_system_admin` and `sysadmin_id` are present.
+  - `app/utils/helpers.py` `has_internal_docs_session()` now resolves authenticated state through explicit auth resolvers rather than direct `admin_id` / `student_id` session-key checks.
+  - Updated `tests/test_docs_platform_split.py` authentication setup to stay aligned with explicit resolver behavior for internal docs routing.
+- Surface reduction applied and baseline re-cut:
+  - `session_keys.admin_id`: removed `app/routes/docs.py`, `app/routes/main.py`, `app/utils/helpers.py` couplings.
+  - `session_keys.student_id`: removed `app/routes/docs.py`, `app/routes/main.py`, `app/utils/helpers.py` couplings.
+  - `session_keys.is_admin`: removed `app/routes/main.py` coupling.
+  - Baseline refreshed in `docs/development/tracking/wave3_identity_drop_surface_baseline.json`.
+
+Focused validation:
+
+- `pytest -q tests/test_docs_platform_split.py tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result: `18 passed`
+- `python3 scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
+
+### Status Update (2026-05-24): Wave 3 Structural Deferment Unblocking — Session Principal Key Reduction (API/TLCP/Sysadmin Resolver)
+
+- Landed the next high-impact reduction slice by removing direct legacy session-principal checks from API utility and TLCP actor-resolution surfaces:
+  - Added explicit resolver helper `get_current_system_admin()` in `app/auth.py` (session flag + id + row resolution; no raw key trust).
+  - `app/routes/api.py`:
+    - `/api/attendance/history` no longer falls back to `session['admin_id']`; it uses `get_current_admin()` as authoritative context.
+    - `/api/set-timezone` now authenticates admin/sysadmin/student paths via explicit resolver checks (`get_current_admin`, `get_current_system_admin`, `get_logged_in_student`) instead of direct `is_admin`/`admin_id`/`is_system_admin` checks.
+  - `app/services/tlcp.py` `resolve_actor_context()` now resolves actor identity from explicit auth helpers (`get_current_seat`, `get_logged_in_student`, `get_current_admin`, `get_current_system_admin`) rather than direct principal-key inference.
+  - `app/__init__.py` maintenance bypass and `current_sysadmin` template context now use `get_current_system_admin()` rather than trusting raw sysadmin session keys.
+  - Added targeted coverage in `tests/test_tlcp_actor_context_resolution.py` for student/admin/sysadmin actor-context resolution.
+- Surface reduction applied and baseline re-cut:
+  - `session_keys.admin_id`: removed `app/routes/api.py`, `app/services/tlcp.py` couplings.
+  - `session_keys.is_admin`: removed `app/routes/api.py`, `app/services/tlcp.py` couplings.
+  - `session_keys.is_system_admin`: removed `app/__init__.py`, `app/routes/api.py`, `app/services/tlcp.py` couplings.
+  - `session_keys.student_id`: removed `app/services/tlcp.py` coupling.
+  - Baseline refreshed in `docs/development/tracking/wave3_identity_drop_surface_baseline.json`.
+
+Focused validation:
+
+- `python3 -m py_compile app/auth.py app/routes/api.py app/services/tlcp.py app/__init__.py`
+  - Result: pass
+- `pytest -q tests/test_tlcp_actor_context_resolution.py tests/test_timezone_fix.py tests/test_api_fixes.py tests/test_api_attendance_history.py tests/test_maintenance_bypass.py tests/test_docs_platform_split.py tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result: `41 passed`
+- `python3 scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
+
 ### Status Update (2026-05-20): Wave 4 Resume Slice — Analytics Enrollment Class Scope
 
 - Resumed v2 rebuild execution with a Wave-4-aligned class-scope hardening slice in analytics:

@@ -1,0 +1,112 @@
+{
+  "session_keys": {
+    "admin_id": [
+      "app/__init__.py",
+      "app/auth.py",
+      "app/payroll.py",
+      "app/routes/admin.py",
+      "app/routes/analytics.py",
+      "app/routes/recovery.py",
+      "app/services/operational_event_service.py"
+    ],
+    "is_admin": [
+      "app/__init__.py",
+      "app/auth.py",
+      "app/routes/admin.py"
+    ],
+    "is_system_admin": [
+      "app/auth.py",
+      "app/routes/docs.py",
+      "app/routes/main.py",
+      "app/routes/system_admin.py",
+      "app/utils/helpers.py"
+    ],
+    "student_id": [
+      "app/auth.py",
+      "app/routes/student.py"
+    ]
+  },
+  "symbols": {
+    "Admin": [
+      "app/__init__.py",
+      "app/auth.py",
+      "app/routes/admin.py",
+      "app/routes/analytics.py",
+      "app/routes/api.py",
+      "app/routes/main.py",
+      "app/routes/student.py",
+      "app/routes/system_admin.py"
+    ],
+    "AdminCredential": [],
+    "AdminInviteCode": [],
+    "RecoveryRequest": [],
+    "Student": [
+      "app/__init__.py",
+      "app/attendance.py",
+      "app/auth.py",
+      "app/cli_commands.py",
+      "app/payroll.py",
+      "app/routes/admin.py",
+      "app/routes/analytics.py",
+      "app/routes/api.py",
+      "app/routes/recovery.py",
+      "app/routes/student.py",
+      "app/routes/system_admin.py",
+      "app/scheduled_tasks.py",
+      "app/services/identity_service.py",
+      "app/services/store_service.py",
+      "app/services/tlcp.py",
+      "app/utils/analytics_engine.py",
+      "app/utils/deletion.py",
+      "app/utils/issue_helpers.py",
+      "app/utils/money_guard.py",
+      "app/utils/student_deletion.py"
+    ],
+    "StudentBlock": [
+      "app/attendance.py",
+      "app/routes/admin.py",
+      "app/routes/analytics.py",
+      "app/routes/api.py",
+      "app/routes/system_admin.py",
+      "app/services/identity_service.py",
+      "app/utils/deletion.py",
+      "app/utils/issue_helpers.py",
+      "app/utils/student_deletion.py"
+    ],
+    "StudentRecoveryCode": [],
+    "StudentTeacher": [
+      "app/attendance.py",
+      "app/auth.py",
+      "app/cli_commands.py",
+      "app/routes/admin.py",
+      "app/routes/api.py",
+      "app/routes/student.py",
+      "app/routes/system_admin.py",
+      "app/services/attendance_service.py",
+      "app/utils/deletion.py",
+      "app/utils/student_deletion.py"
+    ],
+    "TeacherBlock": [
+      "app/__init__.py",
+      "app/attendance.py",
+      "app/cli_commands.py",
+      "app/payroll.py",
+      "app/routes/admin.py",
+      "app/routes/analytics.py",
+      "app/routes/api.py",
+      "app/routes/main.py",
+      "app/routes/recovery.py",
+      "app/routes/student.py",
+      "app/routes/system_admin.py",
+      "app/scheduled_tasks.py",
+      "app/services/attendance_service.py",
+      "app/services/store_service.py",
+      "app/utils/attendance_helpers.py",
+      "app/utils/deletion.py",
+      "app/utils/economy_policy.py",
+      "app/utils/issue_helpers.py",
+      "app/utils/student_deletion.py"
+    ],
+    "TeacherOnboarding": []
+  }
+}
