@@ -1,4 +1,4 @@
-# V2 Rebuild Validation Report — Revision 3
+# V2 Rebuild Validation Report — Revision 4
 
 **Generated:** 2026-05-25  
 **Branch:** `claude/wonderful-shannon-aQa0v`  
@@ -158,7 +158,7 @@ Wave 3 was re-scoped during execution from the full structural auth migration (a
 
 | Original Deliverable | Status |
 |---|---|
-| `User` activated as primary auth principal | ❌ NOT DONE — admin login resolves `Admin` model (via session `admin_id`; legacy `teachers` table); student login authenticates via `Student` model then bridges to `User`/`Seat` via `sync_student_session_context()` at `student.py:4103`; bridge is fail-closed (returns `None` → session cleared → login rejected if no valid claimed `Seat` found) |
+| `User` activated as primary auth principal | ❌ NOT DONE — admin login resolves `Admin` model (via session `admin_id`; legacy `teachers` table); student login authenticates via `Student` model then bridges to `User`/`Seat` via `sync_student_session_context()` at `student.py:4100`; bridge is fail-closed (returns `None` → session cleared → login rejected if no valid claimed `Seat` found) |
 | `0002_identity_domain.py` migration (drop legacy auth tables) | ❌ DOES NOT EXIST |
 | Legacy tables dropped: `teachers`, `students`, `student_teachers`, `student_blocks`, `teacher_blocks`, `class_memberships`, `recovery_requests`, `student_recovery_codes`, `teacher_onboarding`, `teacher_credentials` | ❌ ALL STILL IN SCHEMA AND STILL USED |
 | `tests/domain/test_identity.py` | ❌ DOES NOT EXIST |
@@ -389,7 +389,8 @@ These serve legitimate purposes and are class_id-scoped, but they are additions 
 | Sanitized evidence export protocol | ✅ COMPLETE |
 | Phase 1 adversarial scorecard — claimed PASS (2026-05-14) | ⚠️ SEE NOTE BELOW |
 | INV-ARC-007: `GET /api/student-status` split into GET + `POST /reconcile` | ✅ COMPLETE |
-| INV-ARC-007: remaining violation in `admin.py:2107` | ❌ OPEN — `db.session.commit()` in GET handler (economy snapshot persistence), no FEAT context |
+| INV-ARC-007: GET-path snapshot commit | ✅ RESOLVED — `_get_frozen_economy_analysis_payload()` commit was guarded by `persist_snapshot=True` and only reachable from the POST route, not any GET handler; confirmed fully non-GET-path from the start. INV-ARC-007 fully closed. |
+| FEAT bypass: `api_economy_analyze()` not FEAT-wrapped | ✅ RESOLVED — Post-report update (2026-05-24): `@feat_shell("FEAT-ADMN-001")` added at `admin.py:12020`; `_get_frozen_economy_analysis_payload()` replaced `db.session.commit()` with `flush()`; FEAT context owns the commit. Zero `db.session.commit()` remain in `admin.py`. |
 | `admin.py` decomposition into sub-blueprints | ❌ NOT DONE — 12,862 lines; no `admin_roster.py`, `admin_finance.py`, etc. exist |
 | Backup/restore rehearsal | ❌ NOT DONE |
 | Operator sign-off flow (`user_invite_tokens`) | ❌ NOT DONE |
@@ -449,7 +450,7 @@ The FEAT execution layer is the most thoroughly completed component. Revised ass
 | Store mutations (create, edit, delete) FEAT-wrapped | ✅ VERIFIED | `admin.py:5571` (FEAT-STOR-001), `5974` (FEAT-STOR-001), `6023` (FEAT-STOR-003) |
 | Banking settings update FEAT-wrapped | ✅ VERIFIED | `admin.py:10910` (FEAT-ADMN-001) |
 | `db.session.commit()` in `student.py`, `analytics.py`, `api.py`, `system_admin.py` | ✅ 0 violations | Confirmed |
-| `db.session.commit()` in `admin.py` | ❌ 1 violation | `admin.py:2107` — GET-path economy snapshot persistence |
+| `db.session.commit()` in `admin.py` | ✅ 0 violations | Post-report update (2026-05-24): `@feat_shell("FEAT-ADMN-001")` added to `api_economy_analyze()` at `admin.py:12020`; `admin.py:2107` is now `.first()` read — commit replaced by flush under FEAT ownership. Violation type was FEAT bypass (POST path), not GET-path (INV-ARC-007 was never violated). |
 | `audit_protected()` writes to cryptographic chain | ✅ FUNCTIONAL | Targets `audit_events` table (lineage chain), not canonical `audit_log` |
 | Transaction enforcement hook mandates FEAT context | ✅ `models.py:903–1062` — `FEATContextError` if ledger mutation outside FEAT |
 
@@ -495,11 +496,11 @@ The FEAT execution layer is the most thoroughly completed component. Revised ass
 
 | Invariant | Status | Notes |
 |---|---|---|
-| **INV-ARC-007** (no write-on-GET) | ⚠️ 1 OPEN violation | `admin.py:2107` — GET-path snapshot commit |
-| **INV-ARC-007** (student-status endpoint) | ✅ FIXED | GET/POST reconcile split at `api.py:2940` |
+| **INV-ARC-007** (no write-on-GET) | ✅ FULLY CLOSED | No GET-path commits remain. `admin.py:2107` was only reachable from POST route — INV-ARC-007 was never violated at that site. GET/POST reconcile split complete at `api.py:2940` (`def reconcile_student_status` at `api.py:2943`). |
+| **FEAT bypass** (POST `/api/economy/analyze`) | ✅ RESOLVED | Post-report update (2026-05-24): `@feat_shell("FEAT-ADMN-001")` added at `admin.py:12020`; `db.session.commit()` replaced with flush. Zero bare commits remain in `admin.py`. |
 | **INV-ARC-014** (no label-based routing) | ❌ NOT CLOSED | `block` still used as scope key in `RentSettings` queries and admin route scope resolution; tracked in `V2_CLASS_ID_INVARIANT_BACKLOG.md` |
 | **INV-ARC-015** (class-local time everywhere) | ✅ SUBSTANTIALLY COMPLETE | All critical paths (rent, insurance, attendance, analytics) use class-local time helpers |
-| **INV-CORE** (FEAT-only mutation) | ✅ ENFORCED RUNTIME | Before-flush/before-commit hooks active; one remaining route-level commit in admin.py |
+| **INV-CORE** (FEAT-only mutation) | ✅ ENFORCED RUNTIME | Before-flush/before-commit hooks active; no remaining route-level commits in admin/student/analytics/api/system_admin route surfaces. |
 | **INV-ARC-011** (phantom scope access) | ❌ NOT AUDITED | Wave 11 sysadmin audit not done |
 | **INV-ARC-013** (archived class behavior) | ❌ NOT DEFINED | Class lifecycle not yet specified |
 
@@ -519,11 +520,13 @@ The first report contained several characterizations that this deeper analysis r
 
 5. **FEAT atomicity model** — First report did not distinguish FEAT-commits vs service-flushes. The correct model is confirmed: FEAT context owns the commit; services only flush. This is working correctly.
 
-6. **Student login auth bridge (Revision 3)** — Second report stated student login "resolves `Student` model" without capturing the post-auth bridge. The precise flow is: `Student` model authenticates the PIN, then `sync_student_session_context(student, allow_writes=True)` at `student.py:4103` bridges to `User`/`Seat`. The bridge is fail-closed: if no valid claimed `Seat` is found, the session is cleared and login is rejected rather than proceeding with a legacy-only session.
+6. **Student login auth bridge (Revision 3)** — Second report stated student login "resolves `Student` model" without capturing the post-auth bridge. The precise flow is: `Student` model authenticates the PIN, then `sync_student_session_context(student, allow_writes=True)` at `student.py:4100` bridges to `User`/`Seat`. The bridge is fail-closed: if no valid claimed `Seat` is found, the session is cleared and login is rejected rather than proceeding with a legacy-only session.
 
 7. **`get_current_seat()` fallback precision (Revision 3)** — Second report described this as "falls back to `student_id`-based seat lookup" without capturing the double-gating. The fallback actually requires `class_id` also present in session (lines 363–374 in `auth.py`). A `student_id`-only session cannot use the fallback path; it returns `None` at line 376. Cross-class seat resolution via this path is not possible.
 
 8. **`balance_service.py` interface gap (Revision 3)** — Second report noted `balance_service.py` reads legacy tables but did not document the interface mismatch. The service uses `(student_id, join_code)` as composite keys throughout its batch queries, and never reads `BalanceCache.seat_id` or `BalanceCache.class_id` even though those columns are populated by the enforcement hook. Wave 5 must change the service's public interface, not just the table name.
+
+9. **INV-ARC-007 / FEAT violation reclassification and closure (Revision 4)** — Prior versions mischaracterized the `admin.py:2107` commit as a "GET-path write (INV-ARC-007)." Code inspection confirms the commit was inside `_get_frozen_economy_analysis_payload()` guarded by `persist_snapshot=True`, and the only caller passing that flag was the POST route `api_economy_analyze()`. The GET `economy_health` route never triggers the commit branch — INV-ARC-007 was never violated at this site. The actual issue was a FEAT bypass on the POST endpoint. Per the post-report update (2026-05-24), this FEAT bypass is also now resolved: `@feat_shell("FEAT-ADMN-001")` added at `admin.py:12020`, commit replaced with flush. All FEAT and INV-ARC-007 items are fully closed with 0 `db.session.commit()` remaining in `admin.py`.
 
 ---
 
@@ -531,7 +534,7 @@ The first report contained several characterizations that this deeper analysis r
 
 1. **Re-run adversarial harness against clean seeded state** — confirm or refute the May 15 scorecard's cross-class and lineage failures. This is the highest-urgency validation gap.
 
-2. **Fix `admin.py:2107`** — wrap the economy snapshot persistence in a FEAT context (small change, closes the only remaining FEAT violation).
+2. ~~**Wrap `/api/economy/analyze` in a FEAT context**~~ — **RESOLVED** (2026-05-24): `@feat_shell("FEAT-ADMN-001")` added at `admin.py:12020`; `_get_frozen_economy_analysis_payload()` commit replaced with flush. Zero bare commits remain in `admin.py`. All FEAT and INV-ARC-007 items are now closed.
 
 3. **Execute Wave 5 (Ledger table rename)** — the behavioral model is already correct; this is primarily a table rename + service import update + formal migration. Lower risk than it appears.
 
@@ -553,4 +556,4 @@ The first report contained several characterizations that this deeper analysis r
 
 ---
 
-*This report (Revision 3) supersedes all prior versions. Revisions 1 and 2 were produced by multi-pass direct code inspection on 2026-05-25. Revision 3 adds three precision corrections from auth-path and session-bridge verification: the student login hybrid bridge via `sync_student_session_context()`, the double-gated nature of `get_current_seat()` fallback (requires both `student_id` + `class_id` in session), and the `balance_service.py` interface gap (uses `(student_id, join_code)` composite key, not `(class_id, seat_id)`).*
+*This report (Revision 4) supersedes all prior versions. Revision 4 corrects a material misclassification: the `admin.py:2107` site was NOT a GET-path write (INV-ARC-007) — it was a POST-path FEAT bypass. INV-ARC-007 is fully closed. The FEAT bypass on `api_economy_analyze()` was subsequently fixed per the post-report update (2026-05-24): `@feat_shell("FEAT-ADMN-001")` at `admin.py:12020`, commit replaced with flush. All FEAT and INV-ARC-007 items are fully resolved. The `api.py` reconcile citation is updated to include both the route decorator line (2940) and function definition (2943) for precision.*
