@@ -37,6 +37,15 @@
   - `app/routes/admin.py` and `app/routes/system_admin.py` no longer carry `AdminInviteCode` symbol dependencies
   - targeted validation: `pytest -q tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py` → `11 passed`
   - baseline re-cut confirms `AdminInviteCode` runtime symbol couplings are removed from `app/**`
+- Landed low-risk session principal key reduction slice on docs/main surfaces:
+  - `app/routes/main.py` removed direct `session` fallback checks for `is_admin` / `admin_id` / `student_id` in home redirect flow; routing now uses explicit resolver checks (`get_current_admin`, `get_current_seat`)
+  - `app/routes/docs.py` removed direct `admin_id` / `student_id` fallback checks in docs audience and user-role resolution paths; sysadmin context now requires both `is_system_admin` and `sysadmin_id`
+  - `app/utils/helpers.py` `has_internal_docs_session()` now resolves internal-auth state through auth resolvers instead of direct `admin_id` / `student_id` key checks
+  - targeted validation: `pytest -q tests/test_docs_platform_split.py tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py` → `18 passed`
+  - guardrail confirms reductions:
+    - `session_keys.admin_id` reduced from `app/routes/docs.py`, `app/routes/main.py`, `app/utils/helpers.py`
+    - `session_keys.student_id` reduced from `app/routes/docs.py`, `app/routes/main.py`, `app/utils/helpers.py`
+    - `session_keys.is_admin` reduced from `app/routes/main.py`
 
 ---
 

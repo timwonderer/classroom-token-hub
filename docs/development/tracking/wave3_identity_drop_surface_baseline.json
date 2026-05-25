@@ -7,19 +7,15 @@
       "app/routes/admin.py",
       "app/routes/analytics.py",
       "app/routes/api.py",
-      "app/routes/docs.py",
-      "app/routes/main.py",
       "app/routes/recovery.py",
       "app/services/operational_event_service.py",
-      "app/services/tlcp.py",
-      "app/utils/helpers.py"
+      "app/services/tlcp.py"
     ],
     "is_admin": [
       "app/__init__.py",
       "app/auth.py",
       "app/routes/admin.py",
       "app/routes/api.py",
-      "app/routes/main.py",
       "app/services/tlcp.py"
     ],
     "is_system_admin": [
@@ -34,11 +30,8 @@
     ],
     "student_id": [
       "app/auth.py",
-      "app/routes/docs.py",
-      "app/routes/main.py",
       "app/routes/student.py",
-      "app/services/tlcp.py",
-      "app/utils/helpers.py"
+      "app/services/tlcp.py"
     ]
   },
   "symbols": {

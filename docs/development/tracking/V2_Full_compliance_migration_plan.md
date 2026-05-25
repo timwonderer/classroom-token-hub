@@ -986,6 +986,26 @@ Focused validation:
 - `python3 scripts/wave3_identity_drop_surface_guardrail.py`
   - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
 
+### Status Update (2026-05-24): Wave 3 Structural Deferment Unblocking — Session Principal Key Reduction (Docs/Main)
+
+- Landed the next low-risk reduction slice by removing direct legacy session-principal checks from public/docs route surfaces:
+  - `app/routes/main.py` home redirect logic now uses explicit resolver checks (`get_current_admin()`, `get_current_seat()`) instead of direct `session['is_admin'/'admin_id'/'student_id']` fallback checks.
+  - `app/routes/docs.py` audience and role determination now uses explicit resolver checks (`get_current_admin()`, `get_current_seat()`, `get_current_user()`) and only treats sysadmin context as valid when both `is_system_admin` and `sysadmin_id` are present.
+  - `app/utils/helpers.py` `has_internal_docs_session()` now resolves authenticated state through explicit auth resolvers rather than direct `admin_id` / `student_id` session-key checks.
+  - Updated `tests/test_docs_platform_split.py` authentication setup to stay aligned with explicit resolver behavior for internal docs routing.
+- Surface reduction applied and baseline re-cut:
+  - `session_keys.admin_id`: removed `app/routes/docs.py`, `app/routes/main.py`, `app/utils/helpers.py` couplings.
+  - `session_keys.student_id`: removed `app/routes/docs.py`, `app/routes/main.py`, `app/utils/helpers.py` couplings.
+  - `session_keys.is_admin`: removed `app/routes/main.py` coupling.
+  - Baseline refreshed in `docs/development/tracking/wave3_identity_drop_surface_baseline.json`.
+
+Focused validation:
+
+- `pytest -q tests/test_docs_platform_split.py tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result: `18 passed`
+- `python3 scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
+
 ### Status Update (2026-05-20): Wave 4 Resume Slice — Analytics Enrollment Class Scope
 
 - Resumed v2 rebuild execution with a Wave-4-aligned class-scope hardening slice in analytics:

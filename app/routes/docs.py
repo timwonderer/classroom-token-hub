@@ -341,10 +341,14 @@ def build_breadcrumbs(doc_path, docs_root):
 
 def get_docs_audience():
     """Determine the documentation audience ('user' or 'devops') for the current request."""
-    from app.auth import get_current_seat, get_current_user
+    from app.auth import get_current_admin, get_current_seat, get_current_user
 
     # Active teacher/student session enforces 'user' mode
-    if get_current_seat() is not None or get_current_user() is not None or session.get('student_id') or session.get('admin_id'):
+    if (
+        get_current_admin() is not None
+        or get_current_seat() is not None
+        or get_current_user() is not None
+    ):
         return 'user'
     
     # Otherwise respect the chosen cookie
@@ -353,7 +357,7 @@ def get_docs_audience():
         return audience
         
     # Sysadmins default to 'devops'
-    if session.get('is_system_admin'):
+    if session.get('is_system_admin') and session.get('sysadmin_id'):
         return 'devops'
         
     # Default public audience
@@ -586,16 +590,16 @@ def view_doc(doc_path):
         # Note: Role-based filtering is for UI display only, not access control.
         # All documentation is accessible to all users. The 'roles' metadata
         # is used for contextual highlighting and navigation suggestions.
-        from app.auth import get_current_seat, get_current_user
+        from app.auth import get_current_admin, get_current_seat
 
         user_role = None
-        current_user = get_current_user()
+        current_admin = get_current_admin()
         current_seat = get_current_seat()
-        if current_user is not None or session.get('admin_id'):
+        if current_admin is not None:
             user_role = 'teacher'
-        elif current_seat is not None or session.get('student_id'):
+        elif current_seat is not None:
             user_role = 'student'
-        elif session.get('is_system_admin'):
+        elif session.get('is_system_admin') and session.get('sysadmin_id'):
             user_role = 'sysadmin'
 
         audience = get_docs_audience()

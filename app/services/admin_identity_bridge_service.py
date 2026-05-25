@@ -6,6 +6,7 @@ from datetime import datetime
 import sqlalchemy as sa
 
 from app.extensions import db
+from app.utils.time import utc_now
 
 
 @dataclass
@@ -297,9 +298,20 @@ def delete_admin_credentials_for_teacher(teacher_id: int) -> None:
     db.session.execute(sa.delete(credentials).where(credentials.c.teacher_id == teacher_id))
 
 
-def count_active_admin_invite_codes() -> int:
+def count_active_admin_invite_codes(*, now: datetime | None = None) -> int:
     _onboarding, _credentials, invites = _tables()
-    stmt = sa.select(sa.func.count()).select_from(invites).where(invites.c.used.is_(False))
+    effective_now = now or utc_now()
+    stmt = (
+        sa.select(sa.func.count())
+        .select_from(invites)
+        .where(
+            invites.c.used.is_(False),
+            sa.or_(
+                invites.c.expires_at.is_(None),
+                invites.c.expires_at >= effective_now,
+            ),
+        )
+    )
     return int(db.session.execute(stmt).scalar_one())
 
 

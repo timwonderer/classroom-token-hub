@@ -32,13 +32,13 @@ def home():
     - If not logged in -> Redirect to Marketing Site (classroomtokenhub.com)
     """
     # Check for user session and redirect accordingly
-    from app.auth import get_current_seat, get_current_user
+    from app.auth import get_current_admin, get_current_seat
 
     if session.get('is_system_admin') and session.get('sysadmin_id'):
         return redirect(url_for('sysadmin.dashboard'))
-    elif session.get('is_admin') and (get_current_user() is not None or session.get('admin_id')):
+    elif get_current_admin() is not None:
         return redirect(url_for('admin.dashboard'))
-    elif get_current_seat() is not None or session.get('student_id'):
+    elif get_current_seat() is not None:
         return redirect(url_for('student.dashboard'))
     else:
         # Default: Redirect to marketing site

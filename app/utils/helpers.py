@@ -78,10 +78,13 @@ def render_template_with_fallback(template_name, **context):
 
 def has_internal_docs_session():
     """Return True when docs should stay inside the Flask app shell."""
+    from app.auth import get_current_admin, get_current_seat, get_current_user
+
     return bool(
-        session.get("student_id")
-        or session.get("admin_id")
-        or session.get("is_system_admin")
+        get_current_admin() is not None
+        or get_current_seat() is not None
+        or get_current_user() is not None
+        or (session.get("is_system_admin") and session.get("sysadmin_id"))
     )
 
 

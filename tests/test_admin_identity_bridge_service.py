@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 from app.extensions import db
 from app.services.admin_identity_bridge_service import (
     admin_has_passkeys,
@@ -119,7 +121,7 @@ def test_admin_identity_bridge_bulk_deletes(client):
 def test_admin_invite_code_bridge_lifecycle(client):
     assert count_active_admin_invite_codes() == 0
 
-    invite = create_admin_invite_code("test-code", expires_at=utc_now())
+    invite = create_admin_invite_code("test-code", expires_at=utc_now() + timedelta(days=1))
     db.session.flush()
 
     assert invite.code == "test-code"
@@ -143,3 +145,13 @@ def test_admin_invite_code_bridge_lifecycle(client):
     refreshed = get_admin_invite_code_by_id(invite.id)
     assert refreshed is not None
     assert refreshed.used is True
+
+
+def test_active_invite_count_excludes_expired_codes(client):
+    now = utc_now()
+    create_admin_invite_code("expired-code", expires_at=now - timedelta(days=1))
+    create_admin_invite_code("future-code", expires_at=now + timedelta(days=1))
+    create_admin_invite_code("no-expiry-code", expires_at=None)
+    db.session.flush()
+
+    assert count_active_admin_invite_codes(now=now) == 2
