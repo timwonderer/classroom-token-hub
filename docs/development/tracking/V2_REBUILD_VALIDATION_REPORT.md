@@ -46,6 +46,19 @@
     - `session_keys.admin_id` reduced from `app/routes/docs.py`, `app/routes/main.py`, `app/utils/helpers.py`
     - `session_keys.student_id` reduced from `app/routes/docs.py`, `app/routes/main.py`, `app/utils/helpers.py`
     - `session_keys.is_admin` reduced from `app/routes/main.py`
+- Landed session principal key reduction slice on API/TLCP/sysadmin resolver surfaces:
+  - added `get_current_system_admin()` in `app/auth.py` so sysadmin context is explicitly resolved (flag + id + row), not inferred from raw keys
+  - `app/routes/api.py` no longer performs direct `is_admin` / `admin_id` / `is_system_admin` checks for `/api/set-timezone`; `/api/attendance/history` no longer falls back to raw `admin_id`
+  - `app/services/tlcp.py` actor context now resolves student/admin/sysadmin identity through explicit auth helpers rather than direct principal-key checks
+  - `app/__init__.py` maintenance bypass sysadmin detection and current-sysadmin template injection now use resolver-backed sysadmin context
+  - targeted validation:
+    - `python3 -m py_compile app/auth.py app/routes/api.py app/services/tlcp.py app/__init__.py` → pass
+    - `pytest -q tests/test_tlcp_actor_context_resolution.py tests/test_timezone_fix.py tests/test_api_fixes.py tests/test_api_attendance_history.py tests/test_maintenance_bypass.py tests/test_docs_platform_split.py tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py` → `41 passed`
+  - guardrail confirms reductions:
+    - `session_keys.admin_id` reduced from `app/routes/api.py`, `app/services/tlcp.py`
+    - `session_keys.is_admin` reduced from `app/routes/api.py`, `app/services/tlcp.py`
+    - `session_keys.is_system_admin` reduced from `app/__init__.py`, `app/routes/api.py`, `app/services/tlcp.py`
+    - `session_keys.student_id` reduced from `app/services/tlcp.py`
 
 ---
 

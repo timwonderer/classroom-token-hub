@@ -32,6 +32,7 @@ from app.auth import (
     get_current_seat,
     get_logged_in_student,
     get_current_admin,
+    get_current_system_admin,
     get_current_user,
     get_current_class_id,
     SESSION_TIMEOUT_MINUTES,
@@ -1972,7 +1973,9 @@ def attendance_history():
         from app.auth import get_admin_student_query
         
         current_admin = get_current_admin()
-        scoped_admin_id = current_admin.id if current_admin else session.get("admin_id")
+        if current_admin is None:
+            return jsonify({"status": "error", "message": "Unauthorized"}), 401
+        scoped_admin_id = current_admin.id
 
         # Get student IDs that the current admin can access (tenant-scoped)
         accessible_student_ids_query = get_admin_student_query(include_unassigned=False).with_entities(Student.id)
@@ -2966,7 +2969,7 @@ def set_timezone():
     now = utc_now()
 
     # Check Admin Session
-    if session.get('is_admin') and session.get('admin_id'):
+    if get_current_admin() is not None:
         last_activity = session.get('last_activity')
         if last_activity:
             try:
@@ -2983,7 +2986,7 @@ def set_timezone():
              session['last_activity'] = now.isoformat()
 
     # Check System Admin Session (if not already authenticated)
-    if not is_authenticated and session.get('is_system_admin') and session.get('sysadmin_id'):
+    if not is_authenticated and get_current_system_admin() is not None:
         last_activity = session.get('last_activity')
         if last_activity:
             try:
@@ -2999,7 +3002,7 @@ def set_timezone():
             session['last_activity'] = now.isoformat()
 
     # Check Student Session (if not already authenticated as admin or sysadmin)
-    if not is_authenticated and 'student_id' in session:
+    if not is_authenticated and get_logged_in_student() is not None:
         login_time_str = session.get('login_time')
         if login_time_str:
             try:

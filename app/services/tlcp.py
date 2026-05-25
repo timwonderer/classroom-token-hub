@@ -10,6 +10,12 @@ from datetime import timedelta
 import sqlalchemy as sa
 from flask import has_request_context, request, session
 
+from app.auth import (
+    get_current_admin,
+    get_current_seat,
+    get_current_system_admin,
+    get_logged_in_student,
+)
 from app.extensions import db
 from app.models import ActorRequestTrace, ErrorEvent, ClassEconomy, Student, TicketCorrelationPack
 from app.utils.helpers import generate_anonymous_code
@@ -79,24 +85,28 @@ def resolve_actor_context() -> dict | None:
     join_code = None
     class_id = None
 
-    if session.get("student_id"):
+    current_seat = get_current_seat()
+    if current_seat and current_seat.student_id:
         actor_type = "student"
-        actor_id = session.get("student_id")
-        join_code = session.get("current_join_code")
-        class_id = _resolve_class_id(join_code)
-        if not class_id and actor_id:
-            student = db.session.get(Student, actor_id)
-            class_id = student.class_id if student else None
+        actor_id = current_seat.student_id
+        join_code = current_seat.join_code or session.get("current_join_code")
+        class_id = current_seat.class_id or session.get("current_class_id") or _resolve_class_id(join_code)
         actor_opaque_id = generate_anonymous_code(f"student_issue:{actor_id}")
-    elif session.get("is_admin") and session.get("admin_id"):
+    elif (student := get_logged_in_student()) is not None:
+        actor_type = "student"
+        actor_id = student.id
+        join_code = session.get("current_join_code")
+        class_id = session.get("current_class_id") or _resolve_class_id(join_code) or student.class_id
+        actor_opaque_id = generate_anonymous_code(f"student_issue:{actor_id}")
+    elif (admin := get_current_admin()) is not None:
         actor_type = "teacher"
-        actor_id = session.get("admin_id")
+        actor_id = admin.id
         join_code = session.get("current_join_code")
         class_id = _resolve_class_id(join_code)
         actor_opaque_id = generate_anonymous_code(f"teacher:{actor_id}")
-    elif session.get("is_system_admin") and session.get("sysadmin_id"):
+    elif (sysadmin := get_current_system_admin()) is not None:
         actor_type = "sysadmin"
-        actor_id = session.get("sysadmin_id")
+        actor_id = sysadmin.id
         actor_opaque_id = generate_anonymous_code(f"sysadmin:{actor_id}")
     else:
         return None

@@ -607,6 +607,25 @@ def get_current_admin():
     return db.session.get(Admin, admin_id)
 
 
+def get_current_system_admin():
+    """Return the logged-in system admin based on the session state."""
+    if hasattr(g, "_auth_current_system_admin_cache"):
+        return g._auth_current_system_admin_cache
+
+    if not session.get("is_system_admin"):
+        return None
+
+    sysadmin_id = _safe_int_id(session.get("sysadmin_id"))
+    if not sysadmin_id:
+        return None
+
+    from app.models import SystemAdmin  # Imported lazily to avoid circular import
+    sysadmin = db.session.get(SystemAdmin, sysadmin_id)
+    if sysadmin:
+        g._auth_current_system_admin_cache = sysadmin
+    return sysadmin
+
+
 def ensure_admin_join_code(admin_id):
     """Ensure an admin has a current join code selected in session."""
     from app.models import ClassEconomy  # Imported lazily to avoid circular import

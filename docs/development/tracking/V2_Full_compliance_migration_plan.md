@@ -1006,6 +1006,32 @@ Focused validation:
 - `python3 scripts/wave3_identity_drop_surface_guardrail.py`
   - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
 
+### Status Update (2026-05-24): Wave 3 Structural Deferment Unblocking — Session Principal Key Reduction (API/TLCP/Sysadmin Resolver)
+
+- Landed the next high-impact reduction slice by removing direct legacy session-principal checks from API utility and TLCP actor-resolution surfaces:
+  - Added explicit resolver helper `get_current_system_admin()` in `app/auth.py` (session flag + id + row resolution; no raw key trust).
+  - `app/routes/api.py`:
+    - `/api/attendance/history` no longer falls back to `session['admin_id']`; it uses `get_current_admin()` as authoritative context.
+    - `/api/set-timezone` now authenticates admin/sysadmin/student paths via explicit resolver checks (`get_current_admin`, `get_current_system_admin`, `get_logged_in_student`) instead of direct `is_admin`/`admin_id`/`is_system_admin` checks.
+  - `app/services/tlcp.py` `resolve_actor_context()` now resolves actor identity from explicit auth helpers (`get_current_seat`, `get_logged_in_student`, `get_current_admin`, `get_current_system_admin`) rather than direct principal-key inference.
+  - `app/__init__.py` maintenance bypass and `current_sysadmin` template context now use `get_current_system_admin()` rather than trusting raw sysadmin session keys.
+  - Added targeted coverage in `tests/test_tlcp_actor_context_resolution.py` for student/admin/sysadmin actor-context resolution.
+- Surface reduction applied and baseline re-cut:
+  - `session_keys.admin_id`: removed `app/routes/api.py`, `app/services/tlcp.py` couplings.
+  - `session_keys.is_admin`: removed `app/routes/api.py`, `app/services/tlcp.py` couplings.
+  - `session_keys.is_system_admin`: removed `app/__init__.py`, `app/routes/api.py`, `app/services/tlcp.py` couplings.
+  - `session_keys.student_id`: removed `app/services/tlcp.py` coupling.
+  - Baseline refreshed in `docs/development/tracking/wave3_identity_drop_surface_baseline.json`.
+
+Focused validation:
+
+- `python3 -m py_compile app/auth.py app/routes/api.py app/services/tlcp.py app/__init__.py`
+  - Result: pass
+- `pytest -q tests/test_tlcp_actor_context_resolution.py tests/test_timezone_fix.py tests/test_api_fixes.py tests/test_api_attendance_history.py tests/test_maintenance_bypass.py tests/test_docs_platform_split.py tests/test_admin_identity_bridge_service.py tests/test_recovery_bridge_service.py tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result: `41 passed`
+- `python3 scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
+
 ### Status Update (2026-05-20): Wave 4 Resume Slice — Analytics Enrollment Class Scope
 
 - Resumed v2 rebuild execution with a Wave-4-aligned class-scope hardening slice in analytics:

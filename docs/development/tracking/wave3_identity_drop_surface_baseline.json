@@ -6,32 +6,24 @@
       "app/payroll.py",
       "app/routes/admin.py",
       "app/routes/analytics.py",
-      "app/routes/api.py",
       "app/routes/recovery.py",
-      "app/services/operational_event_service.py",
-      "app/services/tlcp.py"
+      "app/services/operational_event_service.py"
     ],
     "is_admin": [
       "app/__init__.py",
       "app/auth.py",
-      "app/routes/admin.py",
-      "app/routes/api.py",
-      "app/services/tlcp.py"
+      "app/routes/admin.py"
     ],
     "is_system_admin": [
-      "app/__init__.py",
       "app/auth.py",
-      "app/routes/api.py",
       "app/routes/docs.py",
       "app/routes/main.py",
       "app/routes/system_admin.py",
-      "app/services/tlcp.py",
       "app/utils/helpers.py"
     ],
     "student_id": [
       "app/auth.py",
-      "app/routes/student.py",
-      "app/services/tlcp.py"
+      "app/routes/student.py"
     ]
   },
   "symbols": {
