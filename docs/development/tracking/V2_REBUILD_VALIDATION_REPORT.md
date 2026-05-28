@@ -1,7 +1,7 @@
-# V2 Rebuild Validation Report — Revision 4
+# V2 Rebuild Validation Report — Revision 11
 
-**Generated:** 2026-05-25  
-**Branch:** `claude/wonderful-shannon-aQa0v`  
+**Generated:** 2026-05-26  
+**Branch:** `codex/v2.0`  
 **Against:** `V2_Full_compliance_migration_plan.md`  
 **Methodology:** Direct code inspection (multi-pass), migration chain analysis, model column audit, service/FEAT write-path tracing, test coverage enumeration, CI infrastructure review, adversarial scorecard analysis, INV compliance sweep, auth-path and session-bridge verification (Revision 3 additions)
 
@@ -59,6 +59,70 @@
     - `session_keys.is_admin` reduced from `app/routes/api.py`, `app/services/tlcp.py`
     - `session_keys.is_system_admin` reduced from `app/__init__.py`, `app/routes/api.py`, `app/services/tlcp.py`
     - `session_keys.student_id` reduced from `app/services/tlcp.py`
+- Adversarial rerun checkpoint (2026-05-25, clean seeded snapshot restore + full Phase 1 run):
+  - DB reset and seed replay completed:
+    - `bash scripts/adversarial/phase1_seed_and_snapshot.sh .env.redteam.local` → pass
+    - `venv/bin/python scripts/adversarial/reset_db.py --snapshot-dir artifacts/adversarial/snapshots/seeded_base --database-url "$DATABASE_URL"` → pass
+  - Harness compatibility fix landed:
+    - `scripts/adversarial/inject_impossible_state.py` now selects an alternate class that does not collide on `(seat_id, class_id)` in `balance_cache`, avoiding `uq_balance_cache_seat_universe` failures during synthetic injection.
+  - Full run outcome (`bash scripts/adversarial/run_phase1.sh`):
+    - `cross_class_report.json` → `PASS (0)` unexpected + `expected_injection_count=1` (synthetic mismatch isolated)
+    - `lineage_report.json` → `PASS (0)`
+    - `runtime_attacks_report.json` → `PASS (0)`
+    - rendered sanitized scorecard (`artifacts/adversarial/sanitized/current/scorecard_sanitized.md`) reflects:
+      - `Cross-Class Isolation: PASS (0)`
+      - `Lineage Verifier: PASS (0)`
+      - `Runtime Session Attacks: PASS (0)`
+      - `Synthetic Injection Step: PASS (0)`
+- Landed Wave 5 balance-scope modernization slice (2026-05-25):
+  - `app/services/balance_service.py` now exposes canonical batch APIs:
+    - `get_batch_balances_by_class_seat(...)` keyed by `(class_id, seat_id)`
+    - `get_batch_balances_by_student_class(...)` keyed by `(student_id, class_id)`
+  - `app/routes/admin.py` dashboard/students/payroll/export balance batching no longer keys by `(student_id, join_code)` and now reads through class-scoped batching.
+  - legacy `get_batch_balances(join_codes, student_ids)` compatibility wrapper has now been removed; admin/runtime callers are canonical-only.
+  - targeted validation:
+    - `pytest -q tests/test_admin_export_students_scoping.py tests/test_admin_payroll_scoped_balances.py` → `2 passed`
+    - `pytest -q tests/test_admin_tenancy.py -k "student_listing_scoped_to_teacher or shared_student_accessible_to_multiple_teachers"` → `2 passed`
+- Landed Wave 5 ledger table-consolidation slice (2026-05-26):
+  - Added migration `migrations/versions/b1c2d3e4f5a6_rename_ledger_tables.py` to rename:
+    - `transaction` → `ledger_transaction`
+    - `balance_cache` → `ledger_balance_snapshot`
+  - Updated runtime table bindings in `app/models.py` and related FK targets (`StudentItem.purchase_transaction_id`, `InsuranceClaim.transaction_id`, `Issue.related_transaction_id`, `IssueResolutionAction.related_transaction_id`) to `ledger_transaction`.
+  - Updated lineage/audit table-name emissions to `ledger_transaction` in:
+    - `app/services/ledger_service.py`
+    - `app/utils/transaction_idempotency.py`
+  - Preserved verifier compatibility for historical events by accepting both `transaction` and `ledger_transaction` in `app/utils/audit_verifier.py`.
+- Updated lineage test fixtures to emit `table_name="ledger_transaction"` in `tests/test_audit_lineage.py`.
+  - Validation:
+    - `python3 scripts/lint_migrations.py migrations/versions/b1c2d3e4f5a6_rename_ledger_tables.py` → pass
+    - `pytest -q tests/test_audit_lineage.py tests/test_admin_export_students_scoping.py tests/test_admin_payroll_scoped_balances.py` → `10 passed`
+  - Known local DB-chain blocker during full upgrade validation:
+    - `flask db upgrade` currently fails before reaching this new migration due to pre-existing dependency conflict in prior migration `a91cf11e8b2d` (`feature_settings.teacher_id` drop blocked by dependent policy).
+- Rule-compliance sweep checkpoint (2026-05-26):
+  - Guardrail scans:
+    - `python3 scripts/policy_guardrails.py --strict --no-waivers` → `Policy guardrails: clean`
+    - `python3 scripts/wave3_identity_drop_surface_guardrail.py` → `clean (no expansion)`
+  - FEAT registry coverage check:
+    - Added missing registry entries used by active decorators: `FEAT-ANLY-001`, `FEAT-OBL-002` in `app/feats/base.py`
+  - Time-helper guardrail alignment:
+    - `app/services/audit_service.py` now normalizes datetimes through `ensure_utc(...)` (removed ad-hoc `replace(tzinfo=timezone.utc)`)
+    - `app/utils/audit_verifier.py` comment text no longer trips `datetime.now` guardrail regex checks
+  - Guardrail regression test bundle:
+    - `pytest -q tests/test_v2_authority_guardrails.py tests/test_core_invariants_smoke.py tests/test_time_money_guardrails.py tests/test_wave3_identity_drop_surface_guardrail.py tests/test_tap_event_class_scope_invariant.py` → `39 passed`
+  - FEAT lint sweep (`bash scripts/lint-feat-compliance.sh`) follow-on closure:
+    - current result: `✅ SUCCESS: No FEAT Constitutional violations detected.`
+    - additional closure slice:
+      - wrapped remaining mutation helper/job surfaces with explicit FEAT shells and removed route-agnostic direct commits in the touched paths (`cli_commands`, `scheduled_tasks`, `attendance`, `issue_helpers`, `issue_categories`, `deletion`, `analytics_engine`)
+      - retained verifier-system commit only under `system_audit_authority` and explicitly allowlisted in lint (`# FEAT-AUTHORIZED-SHELL`)
+    - net result: direct-commit/direct-transaction hotspot debt from this lint rule is now cleared at current HEAD
+  - INV-ARC-007 follow-on closure (2026-05-26):
+    - removed dashboard-triggered mutation call from `GET /admin`:
+      - deleted GET-side `auto_tapout_all_over_limit()` invocation in `app/routes/admin.py`
+      - daily-limit enforcement remains available via scheduler + explicit POST endpoint `/admin/enforce-daily-limits`
+    - validation:
+      - `pytest -q tests/test_dashboard_rendering.py tests/test_backfill_transactions.py` → `16 passed`
+      - `python3 scripts/policy_guardrails.py --strict --no-waivers` → clean
+      - `bash scripts/lint-feat-compliance.sh` → clean
 
 ---
 
@@ -69,9 +133,9 @@ The v2 rebuild has delivered substantial, production-quality work in four distin
 1. **FEAT execution infrastructure** — `FEATContext`, commit enforcement, registry, and `audit_protected()` audit chain are fully operational and wired at app boot.
 2. **Class-scope and single-context authority** — request-level `join_code` class switching eliminated; session-authoritative context enforced; feature gating complete.
 3. **Wave 4 class configuration canonicalization** — `FeatureSettings` fully cleaned; policy lineage live; rebalance activation is transition-native; analytics enrollment canonical.
-4. **Dual-scope model hardening** — legacy tables (`transaction`, `balance_cache`, `tap_events`) now have mandatory `seat_id + class_id` enforcement hooks that make them behaviorally compliant even though their table names are legacy.
+4. **Dual-scope model hardening** — active legacy tables (`tap_events`, plus obligations/store legacy surfaces) enforce canonical class/seat scope, while Wave 5 ledger tables have now been renamed to canonical runtime names.
 
-The first validation report's characterization of "0 of 44 canonical tables written at runtime" was imprecise. The more accurate picture: **all active legacy tables are dual-scoped** with canonical columns enforced at the model level, but they have not yet been renamed to the canonical DOM-CORE-002 table names. Waves 5–10 complete that renaming/consolidation work.
+The first validation report's characterization of "0 of 44 canonical tables written at runtime" was imprecise. The more accurate picture: active runtime surfaces are progressively converging to canonical names (Wave 5 ledger rename now landed), and remaining legacy domains are dual-scoped with canonical columns enforced at the model level pending their wave-specific consolidations.
 
 | Wave | Domain | Status | Revised Confidence |
 |------|--------|--------|--------------------|
@@ -80,7 +144,7 @@ The first validation report's characterization of "0 of 44 canonical tables writ
 | 3 | Identity Domain (behavioral/routing) | ✅ COMPLETE (re-scoped) | High |
 | 3 | Identity Domain (auth table drops / User activation) | ❌ DEFERRED | N/A |
 | 4 | Class Configuration | ✅ COMPLETE | High |
-| 5 | Ledger Domain | ⚠️ BEHAVIORAL ONLY — table rename/consolidation pending | Medium |
+| 5 | Ledger Domain | ⚠️ CODE + MIGRATION LANDED — full local upgrade validation blocked by prior chain issue | Medium–High |
 | 6 | Attendance Domain | ⚠️ BEHAVIORAL ONLY — table rename/consolidation pending | Medium |
 | 7 | Obligations Domain | ⚠️ BEHAVIORAL ONLY — canonical tables not yet used | Medium |
 | 8 | Store Domain | ⚠️ BEHAVIORAL ONLY — canonical tables not yet used | Low–Medium |
@@ -89,11 +153,11 @@ The first validation report's characterization of "0 of 44 canonical tables writ
 | 11 | Post-Launch Completion | ⚠️ PARTIAL | Low |
 | 12 | Final Validation | ❌ NOT STARTED | — |
 
-**Current migration head:** `a91cf11e8b2d` (9 migrations, linear single-head chain ✅)  
+**Current migration head:** `b1c2d3e4f5a6` (10 migrations, linear single-head chain ✅)  
 **Tables in `models.py`:** ~60 ORM classes, ~66 table names total  
-**Legacy tables dual-scoped with canonical columns:** Confirmed for `transaction`, `balance_cache`, `tap_events`, `hall_pass_logs`  
-**Canonical table names live at runtime:** `classes` (renamed), `users`, `seats`, `feature_settings`, `policy_versions`, `policy_transitions`, `class_features`, `payroll_settings`, `rent_settings`, `banking_settings`, `hall_pass_settings`, `store_items`, `class_memberships`, `identity_profiles`  
-**Active adversarial scorecard:** FAIL on Cross-Class Isolation (1) and Lineage Verifier (5) as of 2026-05-15
+**Legacy tables dual-scoped with canonical columns:** Confirmed for `tap_events`, `hall_pass_logs` (ledger runtime tables now canonicalized as `ledger_transaction` / `ledger_balance_snapshot`)  
+**Canonical table names live at runtime:** `classes` (renamed), `users`, `seats`, `ledger_transaction`, `ledger_balance_snapshot`, `feature_settings`, `policy_versions`, `policy_transitions`, `class_features`, `payroll_settings`, `rent_settings`, `banking_settings`, `hall_pass_settings`, `store_items`, `class_memberships`, `identity_profiles`  
+**Active adversarial scorecard:** Latest full rerun (2026-05-25) reports Cross-Class Isolation `PASS (0)` (with 1 expected synthetic injection violation classified and excluded), Lineage Verifier `PASS (0)`, Runtime Session Attacks `PASS (0)`, and Synthetic Injection Step `PASS (0)`.
 
 ---
 
@@ -218,32 +282,32 @@ All 13 claimed deliverables verified:
 
 ## Wave 5 — Ledger Domain
 
-### Status: ⚠️ BEHAVIORAL COMPLIANCE ACHIEVED — TABLE CONSOLIDATION PENDING
+### Status: ⚠️ TABLE CONSOLIDATION IMPLEMENTED IN CODE — FULL UPGRADE VALIDATION BLOCKED BY PRIOR CHAIN ISSUE
 
 The first validation report characterized this as "NOT STARTED." The deeper analysis reveals meaningful progress:
 
-**What IS done (behavioral compliance on legacy tables):**
+**What IS done:**
 
 | Check | Finding |
 |---|---|
-| `Transaction` dual-scope | `student_id` (nullable), `seat_id` (**NOT NULL**), `class_id` (indexed) — all present |
+| `Transaction` runtime table canonicalization | `Transaction.__tablename__ = 'ledger_transaction'` |
 | `ledger_service.py` scope enforcement | `if not class_id or not seat_id: raise ValueError(...)` at service layer |
 | All balance reads by `seat_id + class_id` | `get_posted_balance()`, `get_pending_balance_delta()` all scope by both fields |
 | Services use `flush()` not `commit()` | Confirmed — commit delegated to FEAT context |
-| `BalanceCache` dual-scope | `student_id` (nullable), `seat_id` (**NOT NULL**), `class_id` (**NOT NULL**); UniqueConstraint on `(class_id, seat_id)` |
+| `BalanceCache` runtime table canonicalization | `BalanceCache.__tablename__ = 'ledger_balance_snapshot'` |
 | FEAT validates `seat_id + class_id` before any ledger write | `ledger_service.py:131–133` — FATAL ValueError if missing |
+| Ledger table rename migration | `migrations/versions/b1c2d3e4f5a6_rename_ledger_tables.py` exists (idempotent rename guards) |
+| Audit emissions aligned to new name | `audit_protected(... table_name='ledger_transaction' ...)` in ledger write paths |
 
-**What is NOT done (table consolidation):**
+**What is not fully validated yet:**
 
 | Check | Status |
 |---|---|
-| `ledger_service.py` still imports `Transaction` (legacy table name) | ❌ — writes to table `transaction`, not `ledger_transaction` |
-| `balance_service.py` still imports `BalanceCache` (legacy table name) | ❌ — reads from `balance_cache`, not `ledger_balance_snapshot`; **and** uses `(student_id, join_code)` as the composite lookup key throughout (`get_batch_balances()` filters by `BalanceCache.student_id.in_()` + `BalanceCache.join_code.in_()`). The canonical `seat_id` and `class_id` columns on `BalanceCache` are populated by the enforcement hook but are never read by this service. Wave 5 must update the service interface to use `(class_id, seat_id)` tuples. |
-| Migration to rename/replace ledger tables | ❌ DOES NOT EXIST |
-| `LedgerTransaction` / `LedgerBalanceSnapshot` used at runtime | ❌ — stub-only in `models_canonical.py` |
-| `ClassEconomy` import in `ledger_service.py` | ⚠️ — `ClassEconomy` now maps to `classes` table (migration done), so this is functional but semantically confusing |
+| Full end-to-end `flask db upgrade` on local redteam DB | ⚠️ BLOCKED BEFORE NEW MIGRATION by pre-existing dependency issue in migration `a91cf11e8b2d` (`feature_settings.teacher_id` drop blocked by dependent policy) |
+| Canonical stub models in `models_canonical.py` as runtime source | ❌ NOT APPLICABLE YET — runtime still uses `app/models.py` as the active ORM surface in this rebuild phase |
+| `ClassEconomy` import in `ledger_service.py` | ⚠️ — functional alias to `classes`, but naming remains semantically noisy |
 
-**Assessment:** The ledger write path is architecturally correct (FEAT-owned, seat+class scoped, flush-not-commit). What remains is the Wave 5 formal work: rename the tables, update the service imports, and drop the old table names. The behavioral model is already aligned.
+**Assessment:** Wave 5 table rename/consolidation is now implemented in code and migration form, with targeted test validation passing. The remaining blocker is migration-chain validation on the local DB because a prior migration fails before the new rename migration is reached.
 
 ---
 
@@ -399,7 +463,7 @@ These serve legitimate purposes and are class_id-scoped, but they are additions 
 | Full-repo INV-ARC-015 sweep documentation | ❌ NOT DONE |
 | INV-ARC-014 full sweep (`block`/`period`/`section` as control keys) | ❌ NOT DONE — multiple `block`-as-scope-key usages confirmed in admin routes |
 
-### ⚠️ Adversarial Scorecard Discrepancy
+### ✅ Adversarial Scorecard Discrepancy Resolved
 
 **Tracker claims (2026-05-14):** Cross-Class Isolation PASS(0), Lineage Verifier PASS(0), Runtime Attacks PASS(0).  
 **Artifact file (`artifacts/adversarial/sanitized/current/scorecard_sanitized.md`, generated 2026-05-15):**
@@ -416,7 +480,12 @@ The scorecard was generated the day after the tracker's claimed PASS. The Wave 4
 2. A regression was introduced between the May 14 PASS run and the May 15 scorecard generation.
 3. The lineage verifier (5 failures) may reflect transactions created outside the audit chain (pre-lineage rows from legacy test data).
 
-**Risk:** Until the adversarial harness is re-run against a clean seeded state, the true cross-class isolation and lineage status is uncertain. The May 14 PASS may represent the last confirmed clean state.
+Resolution update (2026-05-25):
+1. Restored clean seeded snapshot baseline and reran full Phase 1 harness.
+2. Added seeded baseline normalization for stale `balance_cache` class/seat mismatches in `seed_phase1_minimal.py`.
+3. Patched synthetic injector alternate-class selection in `inject_impossible_state.py` to avoid uniqueness collisions.
+
+Current result from `artifacts/adversarial/sanitized/current/scorecard_sanitized.md`: PASS on Cross-Class Isolation, Lineage Verifier, Runtime Session Attacks, and Synthetic Injection Step.
 
 ---
 
@@ -463,11 +532,9 @@ The FEAT execution layer is the most thoroughly completed component. Revised ass
 ### Current table distribution in `app/models.py` (~66 table-owning classes)
 
 **Canonical tables LIVE at runtime (survive to v2 target state):**  
-`users`, `seats`, `classes` (was `class_economies`), `identity_profiles`, `class_features`, `feature_settings` (fully cleaned), `hall_pass_settings`, `payroll_settings`, `payroll_rewards`, `payroll_fines`, `rent_settings`, `banking_settings`, `hall_pass_logs`, `store_items`, `class_memberships`, `issues`, `issue_status_history`, `issue_resolution_actions`, `ticket_correlation_pack`, `issue_categories`, `announcements`, `policy_versions`, `policy_transitions`
+`users`, `seats`, `classes` (was `class_economies`), `ledger_transaction`, `ledger_balance_snapshot`, `identity_profiles`, `class_features`, `feature_settings` (fully cleaned), `hall_pass_settings`, `payroll_settings`, `payroll_rewards`, `payroll_fines`, `rent_settings`, `banking_settings`, `hall_pass_logs`, `store_items`, `class_memberships`, `issues`, `issue_status_history`, `issue_resolution_actions`, `ticket_correlation_pack`, `issue_categories`, `announcements`, `policy_versions`, `policy_transitions`
 
-**Dual-scoped legacy tables (behaviorally compliant, table rename pending in Waves 5–8):**  
-`transaction` → target: `ledger_transaction`  
-`balance_cache` → target: `ledger_balance_snapshot`  
+**Dual-scoped legacy tables (behaviorally compliant; Wave 5 ledger rename now landed):**  
 `tap_events` → target: `attendance_sessions` + `seat_attendance_state`  
 `rent_payments` (w/ coverage_start/end + idempotency_key) → target: `obligation_lifecycle`  
 `student_insurance`, `insurance_claims` → target: `obligation_lifecycle` derivatives  
@@ -510,13 +577,13 @@ The FEAT execution layer is the most thoroughly completed component. Revised ass
 
 The first report contained several characterizations that this deeper analysis revises:
 
-1. **"Canonical tables written at runtime: 0 of 44"** — Revised to: Active legacy tables are dual-scoped with canonical columns (`seat_id`, `class_id`) enforced at model level. The write paths are architecturally correct; only the table names need renaming in Waves 5–10.
+1. **"Canonical tables written at runtime: 0 of 44"** — Revised to: Active legacy tables are dual-scoped with canonical columns (`seat_id`, `class_id`) enforced at model level. Wave 5 ledger table names are now canonicalized; remaining rename/consolidation work is concentrated in Waves 6–10.
 
-2. **Wave 5 as "NOT STARTED"** — Revised to: "Behavioral compliance achieved; formal table consolidation pending." `ledger_service.py` enforces `seat_id + class_id` on every write; the FEAT-flush-commit model is correct.
+2. **Wave 5 as "NOT STARTED"** — Revised to: table consolidation now landed in code/migration (`transaction` → `ledger_transaction`, `balance_cache` → `ledger_balance_snapshot`) with targeted validation passing; remaining risk is local migration-chain blockage before the new migration is reached.
 
 3. **Wave 9 as "infrastructure only"** — Revised to: "Cryptographic audit chain fully operational on `audit_events` (non-canonical table). DOM-OPS-001 canonical tables are unused stubs."
 
-4. **Adversarial scorecard status** — First report characterized it as PASS. The artifact shows FAIL (Cross-Class 1, Lineage 5) dated 2026-05-15, the day after the tracker's claimed PASS. Status is uncertain until re-run.
+4. **Adversarial scorecard status (Revision 5 closure)** — First report characterized it as PASS, while the 2026-05-15 artifact showed FAIL. A full rerun on 2026-05-25 against regenerated seeded baseline now passes: Cross-Class `PASS(0)` with 1 expected synthetic injection violation classified separately, Lineage `PASS(0)`, Runtime `PASS(0)`.
 
 5. **FEAT atomicity model** — First report did not distinguish FEAT-commits vs service-flushes. The correct model is confirmed: FEAT context owns the commit; services only flush. This is working correctly.
 
@@ -524,7 +591,7 @@ The first report contained several characterizations that this deeper analysis r
 
 7. **`get_current_seat()` fallback precision (Revision 3)** — Second report described this as "falls back to `student_id`-based seat lookup" without capturing the double-gating. The fallback actually requires `class_id` also present in session (lines 363–374 in `auth.py`). A `student_id`-only session cannot use the fallback path; it returns `None` at line 376. Cross-class seat resolution via this path is not possible.
 
-8. **`balance_service.py` interface gap (Revision 3)** — Second report noted `balance_service.py` reads legacy tables but did not document the interface mismatch. The service uses `(student_id, join_code)` as composite keys throughout its batch queries, and never reads `BalanceCache.seat_id` or `BalanceCache.class_id` even though those columns are populated by the enforcement hook. Wave 5 must change the service's public interface, not just the table name.
+8. **`balance_service.py` interface gap (Revision 7 closure)** — The earlier gap remains closed for active call paths: `balance_service.py` exposes canonical batching (`(class_id, seat_id)` and `(student_id, class_id)`), admin route consumers were migrated off `(student_id, join_code)` batching, and the legacy `get_batch_balances(join_codes, student_ids)` wrapper was removed. Follow-on Wave 5 table consolidation has now also landed (Revision 8).
 
 9. **INV-ARC-007 / FEAT violation reclassification and closure (Revision 4)** — Prior versions mischaracterized the `admin.py:2107` commit as a "GET-path write (INV-ARC-007)." Code inspection confirms the commit was inside `_get_frozen_economy_analysis_payload()` guarded by `persist_snapshot=True`, and the only caller passing that flag was the POST route `api_economy_analyze()`. The GET `economy_health` route never triggers the commit branch — INV-ARC-007 was never violated at this site. The actual issue was a FEAT bypass on the POST endpoint. Per the post-report update (2026-05-24), this FEAT bypass is also now resolved: `@feat_shell("FEAT-ADMN-001")` added at `admin.py:12020`, commit replaced with flush. All FEAT and INV-ARC-007 items are fully closed with 0 `db.session.commit()` remaining in `admin.py`.
 
@@ -532,11 +599,11 @@ The first report contained several characterizations that this deeper analysis r
 
 ## Recommended Next Steps (Updated Priority Order)
 
-1. **Re-run adversarial harness against clean seeded state** — confirm or refute the May 15 scorecard's cross-class and lineage failures. This is the highest-urgency validation gap.
+1. ~~**Re-run adversarial harness against clean seeded state**~~ — **RESOLVED** (2026-05-25): full Phase 1 rerun now PASS; cross-class unexpected violations cleared, expected synthetic injection classified, lineage PASS, runtime PASS.
 
 2. ~~**Wrap `/api/economy/analyze` in a FEAT context**~~ — **RESOLVED** (2026-05-24): `@feat_shell("FEAT-ADMN-001")` added at `admin.py:12020`; `_get_frozen_economy_analysis_payload()` commit replaced with flush. Zero bare commits remain in `admin.py`. All FEAT and INV-ARC-007 items are now closed.
 
-3. **Execute Wave 5 (Ledger table rename)** — the behavioral model is already correct; this is primarily a table rename + service import update + formal migration. Lower risk than it appears.
+3. **Resolve prior migration-chain blocker and re-run full upgrade validation** — Wave 5 ledger rename migration now exists and targeted tests pass; chain validation currently fails earlier at `a91cf11e8b2d` due a dependent policy on `feature_settings.teacher_id`.
 
 4. **Create `tap_feat.py` and execute Wave 6 (Attendance)** — `FEAT-ATTN-001/002` are already registered; the main work is the feat file + porting `attendance_service.py`.
 
@@ -556,4 +623,4 @@ The first report contained several characterizations that this deeper analysis r
 
 ---
 
-*This report (Revision 4) supersedes all prior versions. Revision 4 corrects a material misclassification: the `admin.py:2107` site was NOT a GET-path write (INV-ARC-007) — it was a POST-path FEAT bypass. INV-ARC-007 is fully closed. The FEAT bypass on `api_economy_analyze()` was subsequently fixed per the post-report update (2026-05-24): `@feat_shell("FEAT-ADMN-001")` at `admin.py:12020`, commit replaced with flush. All FEAT and INV-ARC-007 items are fully resolved. The `api.py` reconcile citation is updated to include both the route decorator line (2940) and function definition (2943) for precision.*
+*This report (Revision 11) supersedes all prior versions. Revision 4 corrected the FEAT/INV-ARC-007 misclassification on `admin.py:2107`. Revision 5 closed the adversarial rerun uncertainty with fresh 2026-05-25 evidence and full Phase 1 PASS. Revision 6 added a Wave 5 major slice for canonical balance batching and admin-surface migration. Revision 7 completed that sub-slice by removing the legacy `get_batch_balances(join_codes, student_ids)` wrapper and confirming canonical-only call paths via targeted regression validation. Revision 8 landed Wave 5 ledger table consolidation (`ledger_transaction` / `ledger_balance_snapshot`) and recorded the remaining local migration-chain blocker prior to full upgrade validation. Revision 9 added a rule-compliance sweep checkpoint, closed missing FEAT registry entries for active decorators, aligned time-helper guardrail compliance paths, and reduced FEAT lint hotspots from 13 to 11. Revision 10 closed the remaining FEAT-lint commit/construction hotspots in touched utility/job paths and recorded a clean FEAT constitutional lint result at current HEAD. Revision 11 removes dashboard-triggered write-on-GET auto-tapout behavior, keeping daily-limit enforcement on scheduler and explicit POST path only.*

@@ -144,11 +144,10 @@ from app.attendance import (
     get_last_payroll_time,
     calculate_unpaid_attendance_seconds,
     get_join_code_for_student_period,
-    batch_auto_tapout_students,
     get_batch_attendance_events,
     calculate_seconds_in_memory,
 )
-from app.services.balance_service import get_batch_balances
+from app.services.balance_service import get_batch_balances_by_student_class
 from app.services import access_policy_service, ledger_service
 from app.services import operational_event_service
 from app.services.ledger_service import get_available_balances
@@ -2585,18 +2584,6 @@ def _normalize_claim_credentials_for_admin(admin_id: int) -> int:
 
     return updated
 
-def auto_tapout_all_over_limit():
-    """
-    Checks all active students and auto-taps them out if they've exceeded their daily limit.
-    This is called when admin views the dashboard to ensure limits are enforced.
-    Optimized to use batch processing.
-    """
-    admin_id = session.get('admin_id')
-    if not admin_id:
-        return 0
-
-    return batch_auto_tapout_students(admin_id)
-
 @admin_bp.route('/')
 @admin_required
 def dashboard():
@@ -2638,8 +2625,9 @@ def dashboard():
             )
 
     student_ids_subq = _student_scope_subquery()
-    # Auto-tapout students who have exceeded their daily limit
-    auto_tapout_all_over_limit()
+    # INV-ARC-007: dashboard GET must remain read-only.
+    # Daily-limit auto tap-out is handled by scheduled tasks and explicit POST
+    # trigger (`/admin/enforce-daily-limits`).
 
     # Get all students for calculations
     students = _scoped_students().order_by(Student.first_name).all()
@@ -2657,8 +2645,15 @@ def dashboard():
         TeacherBlock.join_code.isnot(None),
     ).distinct()
 
-    # Get batch balances
-    batch_balances = get_batch_balances(teacher_join_codes, student_ids)
+    teacher_class_ids = [
+        class_id
+        for (class_id,) in db.session.query(ClassEconomy.class_id).filter(
+            ClassEconomy.join_code.in_(teacher_join_codes)
+        ).all()
+        if class_id
+    ]
+    student_class_pairs = [(student_id, class_id) for student_id in student_ids for class_id in teacher_class_ids]
+    batch_balances = get_batch_balances_by_student_class(student_class_pairs)
 
     # Sum up balances
     total_balance_decimal = Decimal('0.00')
@@ -4231,6 +4226,7 @@ def students():
     # Fetch join codes, class labels, and unclaimed seats for each block
     join_codes_by_block = {}
     class_labels_by_block = {}
+    class_ids_by_block = {}
     unclaimed_seats_by_block = {}
     unclaimed_seats_list_by_block = {}
 
@@ -4247,6 +4243,7 @@ def students():
                 join_codes_by_block[block_name] = tb.join_code
                 # Store class label (use the first one; they should all be the same for a given block)
                 class_labels_by_block[block_name] = tb.get_class_label()
+                class_ids_by_block[block_name] = tb.class_id
                 unclaimed_seats_by_block[block_name] = 0
 
             # Track unclaimed seats (excluding legacy placeholders and seats already linked to a student)
@@ -4263,25 +4260,25 @@ def students():
     student_balances_by_block = {}  # {(student_id, block): {'checking': X, 'savings': Y, 'earnings': Z}}
 
     # 1. Identify all join codes and students to query
-    target_join_codes = []
-    target_student_ids = set()
+    target_student_class_pairs = set()
 
     for block in blocks:
-        if block != "Unassigned" and block in join_codes_by_block:
-            join_code = join_codes_by_block[block]
-            target_join_codes.append(join_code)
+        if block != "Unassigned" and block in class_ids_by_block:
+            class_id = class_ids_by_block[block]
+            if not class_id:
+                continue
             for s in students_by_block.get(block, []):
-                target_student_ids.add(s.id)
+                target_student_class_pairs.add((s.id, class_id))
 
     # 2. Fetch balances in batch via service
-    raw_balances = get_batch_balances(target_join_codes, list(target_student_ids))
+    raw_balances = get_batch_balances_by_student_class(list(target_student_class_pairs))
 
     # 3. Populate the result dictionary for ALL students to ensure 0-balance entries exist
     for block in blocks:
-        if block != "Unassigned" and block in join_codes_by_block:
-            join_code = join_codes_by_block[block]
+        if block != "Unassigned" and block in class_ids_by_block:
+            class_id = class_ids_by_block[block]
             for student in students_by_block.get(block, []):
-                key = (student.id, join_code)
+                key = (student.id, class_id)
                 # raw_balances defaults missing entries to 0
                 bals = raw_balances[key]
 
@@ -8731,15 +8728,16 @@ def payroll():
 
     # Pre-fetch payroll earnings and last payroll dates in batch
     student_ids = [s.id for s in students]
-    raw_balances = get_batch_balances(my_join_codes, student_ids)
+    student_class_pairs = [(student_id, selected_class_id) for student_id in student_ids if selected_class_id]
+    raw_balances = get_batch_balances_by_student_class(student_class_pairs)
     scoped_balances_by_student = {}
     for student in students:
-        checking_total = Decimal('0.00')
-        savings_total = Decimal('0.00')
-        for join_code in my_join_codes:
-            balances = raw_balances[(student.id, join_code)]
-            checking_total += Decimal(balances['checking_cents']) / 100
-            savings_total += Decimal(balances['savings_cents']) / 100
+        balances = raw_balances[(student.id, selected_class_id)] if selected_class_id else {
+            'checking_cents': 0,
+            'savings_cents': 0,
+        }
+        checking_total = Decimal(balances['checking_cents']) / 100
+        savings_total = Decimal(balances['savings_cents']) / 100
         scoped_balances_by_student[student.id] = {
             'checking': checking_total,
             'savings': savings_total,
@@ -10014,6 +10012,12 @@ def export_students():
     selected_join_code = (_get_current_admin_join_code(admin_id) or '').strip() or None
     if selected_join_code and selected_join_code not in teacher_join_codes:
         selected_join_code = None
+    selected_class_id = None
+    if selected_join_code:
+        selected_class_id = db.session.query(ClassEconomy.class_id).filter(
+            ClassEconomy.teacher_id == admin_id,
+            ClassEconomy.join_code == selected_join_code,
+        ).scalar()
 
     # Create CSV in memory
     output = io.StringIO()
@@ -10042,15 +10046,27 @@ def export_students():
     students = students_query.all()
     teacher_id = admin_id
     student_ids = [s.id for s in students]
-    scoped_join_codes = [selected_join_code] if selected_join_code else teacher_join_codes
-    raw_balances = get_batch_balances(scoped_join_codes, student_ids)
+    scoped_class_ids = []
+    if selected_class_id:
+        scoped_class_ids = [selected_class_id]
+    elif teacher_join_codes:
+        scoped_class_ids = [
+            class_id
+            for (class_id,) in db.session.query(ClassEconomy.class_id).filter(
+                ClassEconomy.join_code.in_(teacher_join_codes)
+            ).all()
+            if class_id
+        ]
+
+    student_class_pairs = [(student_id, class_id) for student_id in student_ids for class_id in scoped_class_ids]
+    raw_balances = get_batch_balances_by_student_class(student_class_pairs)
     scoped_balances_by_student = {}
     for student in students:
         checking_total = Decimal('0.00')
         savings_total = Decimal('0.00')
         earnings_total = Decimal('0.00')
-        for join_code in scoped_join_codes:
-            balances = raw_balances[(student.id, join_code)]
+        for class_id in scoped_class_ids:
+            balances = raw_balances[(student.id, class_id)]
             checking_total += Decimal(balances['checking_cents']) / 100
             savings_total += Decimal(balances['savings_cents']) / 100
             earnings_total += Decimal(balances.get('earnings', Decimal('0.00')))
@@ -10096,13 +10112,13 @@ def export_students():
         insurance_name = active_insurance.policy.title if active_insurance else 'None'
 
         if selected_join_code:
-            export_seat = Seat.query.filter_by(student_id=student.id, class_id=export_class_id).first() if export_class_id else None
+            export_seat = Seat.query.filter_by(student_id=student.id, class_id=selected_class_id).first() if selected_class_id else None
             if not export_seat:
                 raise ValueError(
-                    f"Missing canonical seat scope for export student_id={student.id} class_id={export_class_id}"
+                    f"Missing canonical seat scope for export student_id={student.id} class_id={selected_class_id}"
                 )
-            checking_balance = student.get_checking_balance(class_id=export_class_id, seat_id=export_seat.id)
-            savings_balance = student.get_savings_balance(class_id=export_class_id, seat_id=export_seat.id)
+            checking_balance = student.get_checking_balance(class_id=selected_class_id, seat_id=export_seat.id)
+            savings_balance = student.get_savings_balance(class_id=selected_class_id, seat_id=export_seat.id)
             total_earnings = Decimal(str(student.get_total_earnings(join_code=selected_join_code)))
         else:
             scoped_balances = scoped_balances_by_student.get(student.id, {})
@@ -10189,7 +10205,11 @@ def enforce_daily_limits():
                     continue
 
                 checked += 1
-                daily_limit = get_daily_limit_seconds(block_original, teacher_id=current_admin_id)
+                daily_limit = get_daily_limit_seconds(
+                    block_original,
+                    teacher_id=current_admin_id,
+                    join_code=join_code,
+                )
                 if not daily_limit:
                     continue
 

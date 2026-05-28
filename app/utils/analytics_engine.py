@@ -36,6 +36,7 @@ from app.utils.economy_policy import (
     get_analytics_policy,
     get_policy_profile,
 )
+from app.feats.base import feat_shell
 import logging
 
 
@@ -516,6 +517,7 @@ class AnalyticsEngine:
         
         return alerts
     
+    @feat_shell("FEAT-ANLY-001")
     def create_snapshot(
         self,
         window_type: str,
@@ -590,7 +592,7 @@ class AnalyticsEngine:
         )
         
         db.session.add(snapshot)
-        db.session.commit()
+        db.session.flush()  # FEAT-AUTHORIZED-SHELL
         
         # Generate and handle alerts according to new AnalyticsAlert lifecycle
         alerts = self.generate_alerts(health_metrics, trends)
@@ -643,7 +645,7 @@ class AnalyticsEngine:
         for alert in stale_alerts:
             alert.resolve()
         
-        db.session.commit()
+        db.session.flush()  # FEAT-AUTHORIZED-SHELL
         
         return snapshot
     

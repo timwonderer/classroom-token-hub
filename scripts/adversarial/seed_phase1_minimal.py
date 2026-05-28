@@ -35,6 +35,7 @@ from app.extensions import db
 from app.feats.base import FEATContext
 from app.models import (
     Admin,
+    BalanceCache,
     ClassEconomy,
     ClassFeature,
     ClassMembership,
@@ -278,6 +279,54 @@ def set_feature_differential(class_a1: ClassEconomy, class_a2: ClassEconomy) -> 
         db.session.delete(row)
 
 
+def normalize_balance_cache_scope_for_seeded_classes(class_ids: set[str]) -> dict[str, int]:
+    """
+    Repair stale balance_cache rows whose class_id no longer matches the seat's class.
+
+    This keeps the adversarial seeded baseline deterministic by removing drift left behind
+    from prior synthetic-injection runs.
+    """
+    if not class_ids:
+        return {"mismatched_rows_found": 0, "rows_rehomed": 0, "rows_merged_deleted": 0}
+
+    mismatched_rows = (
+        db.session.query(BalanceCache, Seat)
+        .join(Seat, Seat.id == BalanceCache.seat_id)
+        .filter(
+            Seat.class_id.in_(class_ids),
+            BalanceCache.class_id != Seat.class_id,
+        )
+        .all()
+    )
+
+    rows_rehomed = 0
+    rows_merged_deleted = 0
+    for cache, seat in mismatched_rows:
+        canonical = (
+            BalanceCache.query
+            .filter_by(seat_id=seat.id, class_id=seat.class_id)
+            .first()
+        )
+        if canonical and canonical.id != cache.id:
+            canonical.posted_checking_balance_cents += cache.posted_checking_balance_cents or 0
+            canonical.posted_savings_balance_cents += cache.posted_savings_balance_cents or 0
+            if not canonical.join_code and seat.join_code:
+                canonical.join_code = seat.join_code
+            db.session.delete(cache)
+            rows_merged_deleted += 1
+            continue
+
+        cache.class_id = seat.class_id
+        cache.join_code = seat.join_code
+        rows_rehomed += 1
+
+    return {
+        "mismatched_rows_found": len(mismatched_rows),
+        "rows_rehomed": rows_rehomed,
+        "rows_merged_deleted": rows_merged_deleted,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Seed minimal Phase 1 adversarial topology")
     parser.add_argument("--env-file", default=".env.redteam.local")
@@ -345,6 +394,11 @@ def main() -> int:
         with FEATContext("FEAT-ADMN-001", idempotency_key="feat:adv:seed:features"):
             set_feature_differential(classes["A1"], classes["A2"])
 
+        with FEATContext("FEAT-ADMN-001", idempotency_key="feat:adv:seed:normalize-balance-cache-scope"):
+            normalization_summary = normalize_balance_cache_scope_for_seeded_classes(
+                {cls.class_id for cls in classes.values() if cls.class_id}
+            )
+
         # Commit is orchestrator-owned by FEAT contexts; at this point all done.
         summary = {
             "teachers": {"teacher_a_id": teachers["teacher_a"].id, "teacher_b_id": teachers["teacher_b"].id},
@@ -356,6 +410,7 @@ def main() -> int:
             "notes": {
                 "deleted_seat_created_and_removed": True,
                 "feature_diff": "hall_pass disabled in A1 (absent), enabled in A2 (present)",
+                "balance_cache_scope_normalization": normalization_summary,
             },
         }
         print(summary)

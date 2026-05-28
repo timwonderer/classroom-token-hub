@@ -21,9 +21,11 @@ from app.routes.admin import (
     LEGACY_PLACEHOLDER_FIRST_NAME,
 )
 from app.utils.claim_credentials import normalize_claim_hash
+from app.feats.base import feat_shell
 
 
 @click.command('normalize-claim-credentials')
+@feat_shell("FEAT-IDEN-001")
 def normalize_claim_credentials_command():
     """Backfill canonical claim hashes for roster seats when possible."""
 
@@ -50,7 +52,7 @@ def normalize_claim_credentials_command():
             updated += 1
 
     try:
-        db.session.commit()
+        db.session.flush()  # FEAT-AUTHORIZED-SHELL
     except Exception as exc:
         db.session.rollback()
         click.echo(f"Failed to normalize claim credentials: {exc}", err=True)

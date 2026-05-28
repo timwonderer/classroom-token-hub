@@ -26,6 +26,7 @@ from app.models import (
 from app.utils.helpers import generate_anonymous_code
 from app.utils.ip_handler import get_real_ip
 from app.services.tlcp import create_ticket_correlation_pack
+from app.feats.base import feat_shell
 
 
 def generate_opaque_student_reference(student_id):
@@ -114,6 +115,7 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
     return snapshot
 
 
+@feat_shell("FEAT-SUP-001")
 def create_issue(student, teacher_id, join_code, category_id, explanation, expected_outcome=None,
                  related_transaction_id=None, related_record_type=None, related_record_id=None,
                  include_recent_error=True):
@@ -207,7 +209,7 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
     # Record status history
     record_status_change(issue, None, Issue.STATUS_OPEN, 'student', student.id)
 
-    db.session.commit()
+    db.session.flush()  # FEAT-AUTHORIZED-SHELL
 
     return issue
 

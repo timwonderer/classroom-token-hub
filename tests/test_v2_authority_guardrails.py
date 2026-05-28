@@ -1,3 +1,4 @@
+import ast
 from datetime import datetime, timedelta, timezone
 import inspect
 from pathlib import Path
@@ -144,7 +145,16 @@ def test_transaction_constructor_is_only_used_in_ledger_service():
     hits = []
     for path in Path("app").rglob("*.py"):
         source = path.read_text()
-        if re.search(r"(?<!class )Transaction\(", source) and path not in allowed:
+        if path in allowed:
+            continue
+        tree = ast.parse(source, filename=str(path))
+        has_constructor_call = any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "Transaction"
+            for node in ast.walk(tree)
+        )
+        if has_constructor_call:
             hits.append(str(path))
     assert hits == [], f"Transaction constructor leaked outside ledger_service: {hits}"
 
@@ -255,7 +265,7 @@ def test_dashboard_read_is_interest_mutation_free(client):
     ).first() is None
 
 
-def test_dashboard_access_policy_normalizes_invalid_join_code(client):
+def test_dashboard_access_policy_fail_closed_invalid_join_code(client):
     teacher = make_admin("dash_scope_teacher", "secret")
     db.session.add(teacher)
     db.session.flush()
@@ -289,6 +299,7 @@ def test_dashboard_access_policy_normalizes_invalid_join_code(client):
 
     response = client.get("/student/dashboard")
 
-    assert response.status_code == 200
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/student/login")
     with client.session_transaction() as sess:
-        assert sess["current_join_code"] == "SCOPEA1"
+        assert sess["current_join_code"] == "MISSING"

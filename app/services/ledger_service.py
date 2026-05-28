@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from app.extensions import db
-from app.models import BalanceCache, Transaction, TransactionStatus, ClassEconomy, _quantize_currency
+from app.models import BalanceCache, Seat, Transaction, TransactionStatus, ClassEconomy, _quantize_currency
 from app.utils.seat_scope import get_seat_ids_for_student_join, transaction_scope_filter
 from app.utils.time import ensure_utc, utc_now
 from app.utils.transaction_idempotency import create_idempotent_transaction
@@ -147,7 +147,7 @@ def create_pending_transaction(
     db.session.add(transaction)
     db.session.flush()  # populate transaction.id before audit event
 
-    audit_protected("transaction", transaction, "INSERT", _TRANSACTION_AUDIT_FIELDS)
+    audit_protected("ledger_transaction", transaction, "INSERT", _TRANSACTION_AUDIT_FIELDS)
 
     return transaction
 
@@ -354,17 +354,26 @@ def _apply_monthly_savings_interest(seat, *, annual_rate=Decimal("0.045"), **_ig
         if interest <= Decimal("0.00"):
             return None
 
-        interest_tx = Transaction(
-            student_id=student.id,
-            teacher_id=teacher_id,
-            join_code=join_code,
+        # Legacy callers pass (student, join_code). Resolve the seat/class anchor
+        # so writes still flow through the canonical ledger constructor.
+        seat_ids = get_seat_ids_for_student_join(student.id, join_code) if join_code else []
+        seat_id = seat_ids[0] if seat_ids else None
+        legacy_seat = db.session.get(Seat, seat_id) if seat_id else None
+        if not legacy_seat or not legacy_seat.class_id:
+            return None
+        resolved_teacher_id = teacher_id or getattr(legacy_seat.class_economy, "teacher_id", None)
+        if not resolved_teacher_id:
+            return None
+
+        return create_pending_transaction(
+            seat_id=legacy_seat.id,
+            class_id=legacy_seat.class_id,
+            teacher_id=resolved_teacher_id,
             amount=interest,
             account_type="savings",
             type="Interest",
             description="Monthly Savings Interest",
         )
-        db.session.add(interest_tx)
-        return interest_tx
 
     # V2 Temporal Model: INTEREST IS CLASS-SCOPED
     # Use class timezone for month/year resolution

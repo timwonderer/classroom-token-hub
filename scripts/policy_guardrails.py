@@ -340,7 +340,7 @@ _EMIT_AUDIT_CALL_RE = re.compile(r"\bemit_audit_event\s*\(")
 
 # Tables treated as class-scoped by the audit system
 _CLASS_SCOPED_AUDIT_TABLES = {
-    "transaction", "payroll_settings", "rent_settings",
+    "transaction", "ledger_transaction", "payroll_settings", "rent_settings",
     "banking_settings", "feature_settings", "hall_pass_settings",
 }
 # Paths where direct lineage token assignment is legitimate

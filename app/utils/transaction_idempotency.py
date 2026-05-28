@@ -113,7 +113,7 @@ def create_idempotent_transaction(*, idempotency_key, **transaction_kwargs):
             db.session.add(new_txn)
             db.session.flush()
         # Emit audit event after successful creation (id is now populated)
-        audit_protected("transaction", new_txn, "INSERT", _TRANSACTION_AUDIT_FIELDS)
+        audit_protected("ledger_transaction", new_txn, "INSERT", _TRANSACTION_AUDIT_FIELDS)
         return new_txn, True
     except IntegrityError:
         existing = get_idempotent_transaction(

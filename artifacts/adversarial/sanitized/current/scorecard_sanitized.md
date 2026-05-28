@@ -1,12 +1,12 @@
 # Adversarial Sanitized Summary (current)
 
-- Generated at: `2026-05-15T02:17:22.138225+00:00`
+- Generated at: `2026-05-25T16:54:17.615706+00:00`
 - Code SHA: `unknown`
 
 | Check | Status | Violations |
 |---|---|---:|
-| Cross-Class Isolation | FAIL | 1 |
-| Lineage Verifier | FAIL | 5 |
+| Cross-Class Isolation | PASS | 0 |
+| Lineage Verifier | PASS | 0 |
 | Runtime Session Attacks | PASS | 0 |
 | Synthetic Injection Step | PASS | 0 |
 

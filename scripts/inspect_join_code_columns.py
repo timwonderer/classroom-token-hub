@@ -22,6 +22,7 @@ from sqlalchemy import inspect
 # Tables that SHOULD have join_code for multi-tenancy isolation
 STUDENT_DATA_TABLES = {
     'transaction',
+    'ledger_transaction',
     'tap_events',
     'student_blocks',
     'teacher_blocks',

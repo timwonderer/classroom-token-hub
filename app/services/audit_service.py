@@ -15,13 +15,13 @@ import logging
 import os
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 import sqlalchemy as sa
 
 from app.extensions import db
-from app.utils.time import utc_now
+from app.utils.time import ensure_utc, utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -136,9 +136,8 @@ def _canonical_payload(
     """
     def _normalize(v: Any) -> Any:
         if isinstance(v, datetime):
-            if v.tzinfo is None:
-                v = v.replace(tzinfo=timezone.utc)
-            return v.astimezone(timezone.utc).isoformat()
+            normalized = ensure_utc(v)
+            return normalized.isoformat() if normalized else None
         if hasattr(v, "__str__") and type(v).__name__ == "Decimal":
             return str(v)
         return v

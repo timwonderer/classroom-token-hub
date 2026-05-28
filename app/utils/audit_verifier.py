@@ -28,7 +28,13 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 PROTECTED_FIELDS_BY_TABLE: dict[str, list[str]] = {
+    # Keep both names during Wave 5 table rename transition so historical
+    # events emitted under the legacy table name remain verifiable.
     "transaction": [
+        "amount", "account_type", "type", "status",
+        "class_id", "seat_id", "description", "correlation_id",
+    ],
+    "ledger_transaction": [
         "amount", "account_type", "type", "status",
         "class_id", "seat_id", "description", "correlation_id",
     ],
@@ -55,7 +61,7 @@ def _utc_isoformat(dt) -> str:
     """Return an ISO-8601 string normalized to UTC ("+00:00" suffix).
 
     The emit path computes event_hash using `now_utc.isoformat()` where
-    now_utc is always UTC (datetime.now(timezone.utc)). SQLAlchemy may
+    now_utc is always UTC (from the centralized `utc_now()` helper). SQLAlchemy may
     return stored datetimes in the local session timezone. Normalizing here
     ensures the verifier recomputes the same string used at emit time.
     """
@@ -407,4 +413,4 @@ def update_integrity_status(results: list[VerificationResult]) -> None:
             status.passing = passing
             status.last_checked_utc = now
             status.failure_detail = detail_json
-        db.session.commit()
+        db.session.commit()  # FEAT-AUTHORIZED-SHELL

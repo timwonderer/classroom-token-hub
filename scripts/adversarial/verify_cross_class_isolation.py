@@ -44,7 +44,7 @@ def main() -> int:
             if tx_class_id and seat_class_id and str(tx_class_id) != str(seat_class_id):
                 violations.append(
                     {
-                        "table": "transaction",
+                        "table": Transaction.__tablename__,
                         "row_id": tx_id,
                         "seat_id": seat_id,
                         "row_class_id": str(tx_class_id),
@@ -61,7 +61,7 @@ def main() -> int:
         for bc_id, bc_class_id, seat_id, seat_class_id in bc_rows:
             if str(bc_class_id) != str(seat_class_id):
                 finding = {
-                    "table": "balance_cache",
+                    "table": BalanceCache.__tablename__,
                     "row_id": bc_id,
                     "seat_id": seat_id,
                     "row_class_id": str(bc_class_id),

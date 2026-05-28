@@ -80,7 +80,7 @@ def test_emit_audit_event_creates_chain_entry(app):
 
         # FEATBypass is already active via autouse fixture
         event = emit_audit_event(
-            table_name="transaction",
+            table_name="ledger_transaction",
             row_pk="999",
             operation="INSERT",
             protected_fields={"amount": "10.00", "type": "payroll"},
@@ -117,7 +117,7 @@ def test_chain_hash_continuity(app):
 
         for i in range(1, 6):
             emit_audit_event(
-                table_name="transaction",
+                table_name="ledger_transaction",
                 row_pk=str(i),
                 operation="INSERT",
                 protected_fields={"amount": str(i * 10)},
@@ -154,7 +154,7 @@ def test_verify_chain_detects_tampered_payload(app):
 
         for i in range(1, 4):
             emit_audit_event(
-                table_name="transaction",
+                table_name="ledger_transaction",
                 row_pk=str(i),
                 operation="INSERT",
                 protected_fields={"amount": str(i)},
@@ -193,7 +193,7 @@ def test_verify_chain_detects_deleted_event(app):
 
         for i in range(1, 5):
             emit_audit_event(
-                table_name="transaction",
+                table_name="ledger_transaction",
                 row_pk=str(i),
                 operation="INSERT",
                 protected_fields={"amount": str(i)},
@@ -231,7 +231,7 @@ def test_emit_outside_feat_raises(app):
 
         with pytest.raises(AuditContextError):
             emit_audit_event(
-                table_name="transaction",
+                table_name="ledger_transaction",
                 row_pk="1",
                 operation="INSERT",
                 protected_fields={"amount": "5.00"},
@@ -284,7 +284,7 @@ def test_integrity_status_degraded_on_bad_chain(app):
 
         for i in range(1, 3):
             emit_audit_event(
-                table_name="transaction",
+                table_name="ledger_transaction",
                 row_pk=str(i),
                 operation="INSERT",
                 protected_fields={"amount": str(i)},
@@ -324,7 +324,7 @@ def test_system_audit_authority_allows_write(app):
 
         with system_audit_authority("test-genesis"):
             event = emit_audit_event(
-                table_name="transaction",
+                table_name="ledger_transaction",
                 row_pk="system-1",
                 operation="INSERT",
                 protected_fields={"amount": "0.00"},

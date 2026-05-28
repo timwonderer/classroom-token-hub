@@ -814,7 +814,7 @@ class SystemAdminCredential(db.Model):
 
 
 class Transaction(db.Model):
-    __tablename__ = 'transaction'
+    __tablename__ = 'ledger_transaction'
     id = db.Column(db.Integer, primary_key=True)
     # student_id is DEPRECATED in favor of seat_id. 
     # V2 Domain Law requires activity to be anchored to a Seat.
@@ -1090,7 +1090,7 @@ class BalanceCache(db.Model):
     snapshot of posted balances to allow O(1) reads.
     Available Balance = Posted Balance (Cache) + Sum(Pending Transactions from Ledger)
     """
-    __tablename__ = 'balance_cache'
+    __tablename__ = 'ledger_balance_snapshot'
 
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=True)
@@ -1434,7 +1434,7 @@ class StudentItem(db.Model):
     redemption_details = db.Column(db.Text, nullable=True) # For student notes on usage
     redemption_date = db.Column(db.DateTime(timezone=True), nullable=True) # When student used it
     # Stable link to the purchase transaction for accurate refunds even if item metadata changes.
-    purchase_transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True, index=True)
+    purchase_transaction_id = db.Column(db.Integer, db.ForeignKey('ledger_transaction.id'), nullable=True, index=True)
 
     # Bundle tracking - for items purchased as part of a bundle
     is_from_bundle = db.Column(db.Boolean, default=False, nullable=False)
@@ -2242,7 +2242,7 @@ class InsuranceClaim(db.Model):
     approved_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
     processed_date = db.Column(db.DateTime(timezone=True), nullable=True)
     processed_by_teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True)
-    transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True)
+    transaction_id = db.Column(db.Integer, db.ForeignKey('ledger_transaction.id'), nullable=True)
 
     # Relationships
     student = db.relationship('Student', backref='insurance_claims')
@@ -2446,7 +2446,7 @@ class Issue(db.Model):
     submitted_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
 
     # Context attachment (transaction/record-specific issues)
-    related_transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True)
+    related_transaction_id = db.Column(db.Integer, db.ForeignKey('ledger_transaction.id'), nullable=True)
     related_record_type = db.Column(db.String(50), nullable=True)  # 'transaction', 'tap_event', 'rent_payment', etc.
     related_record_id = db.Column(db.Integer, nullable=True)  # Generic ID for other record types
 
@@ -2609,7 +2609,7 @@ class IssueResolutionAction(db.Model):
     performed_by_id = db.Column(db.Integer, nullable=False)
 
     # Related changes (for audit trail)
-    related_transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True)
+    related_transaction_id = db.Column(db.Integer, db.ForeignKey('ledger_transaction.id'), nullable=True)
     amount_changed = db.Column(db.Float, nullable=True)
     before_value = db.Column(db.Text, nullable=True)
     after_value = db.Column(db.Text, nullable=True)

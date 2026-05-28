@@ -61,26 +61,22 @@ def _rebuild_database_state():
     is_postgres = "postgresql" in test_db_url
 
     if is_postgres:
-        # For Postgres, we do a faster wipe by dropping the schema.
-        # We dispose the engine to clear all connections before dropping the schema.
+        # Dispose first to release any stale pooled connections.
         db.engine.dispose()
-        
-        # Use a raw connection to avoid SQLAlchemy's transaction management during schema drop
+
         with db.engine.connect() as conn:
-            # Postgres doesn't allow DROP SCHEMA inside a transaction block in some cases,
-            # or it can cause locks. We use an explicit commit.
             conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
             conn.execute(text("CREATE SCHEMA public"))
             conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
             conn.execute(text("SET search_path TO public"))
             conn.commit()
-        
-        # Dispose again to ensure the next connection (for create_all) is fresh
+
+            # Create all tables/types through the same connection.
+            db.Model.metadata.create_all(bind=conn)
+            conn.commit()
+
+        # Ensure subsequent tests get fresh pooled connections.
         db.engine.dispose()
-        
-        # Fresh creation
-        db.create_all()
-        db.session.commit()
     else:
         # SQLite or other
         db.drop_all()
@@ -106,11 +102,33 @@ def app(request):
     )
 
     with flask_app.app_context():
-        _rebuild_database_state()
+        lock_conn = None
+        lock_key_primary = 0x435448  # "CTH"
+        lock_key_secondary = 0x54455354  # "TEST"
+        is_postgres = "postgresql" in (test_db_url or "")
 
-        yield flask_app
+        try:
+            if is_postgres:
+                # Serialize full test lifecycle (rebuild + execution) across
+                # concurrent pytest processes sharing one test database.
+                lock_conn = db.engine.connect()
+                lock_conn.execute(
+                    text("SELECT pg_advisory_lock(:k1, :k2)"),
+                    {"k1": lock_key_primary, "k2": lock_key_secondary},
+                )
+                lock_conn.commit()
 
-        db.session.remove()
+            _rebuild_database_state()
+            yield flask_app
+        finally:
+            db.session.remove()
+            if lock_conn is not None:
+                lock_conn.execute(
+                    text("SELECT pg_advisory_unlock(:k1, :k2)"),
+                    {"k1": lock_key_primary, "k2": lock_key_secondary},
+                )
+                lock_conn.commit()
+                lock_conn.close()
 
 
 @pytest.fixture

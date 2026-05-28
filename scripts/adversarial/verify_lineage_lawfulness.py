@@ -68,7 +68,7 @@ def main() -> int:
             if lineage_event_id is None:
                 missing.append(
                     {
-                        "table": "transaction",
+                        "table": Transaction.__tablename__,
                         "row_id": tx_id,
                         "class_id": str(class_id) if class_id else None,
                         "seat_id": seat_id,

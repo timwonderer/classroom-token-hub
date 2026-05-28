@@ -1,15 +1,15 @@
 {
   "run_id": "current",
-  "generated_at": "2026-05-15T02:17:22.138225+00:00",
+  "generated_at": "2026-05-25T16:54:17.615706+00:00",
   "code_sha": "unknown",
   "checks": {
     "cross_class": {
-      "status": "FAIL",
-      "violation_count": 1
+      "status": "PASS",
+      "violation_count": 0
     },
     "lineage": {
-      "status": "FAIL",
-      "violation_count": 5
+      "status": "PASS",
+      "violation_count": 0
     },
     "runtime_attacks": {
       "status": "PASS",

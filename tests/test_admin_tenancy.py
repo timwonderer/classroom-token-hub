@@ -4,7 +4,7 @@ import re
 from datetime import datetime, timezone, timedelta
 
 from app import db
-from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TapEvent, StudentBlock, PayrollSettings, User, Seat, ClassEconomy
+from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TapEvent, StudentBlock, PayrollSettings, Seat, ClassEconomy
 from app.hash_utils import get_random_salt, hash_username
 from tests.helpers.class_scope import create_class_scope
 
@@ -172,6 +172,7 @@ def test_student_detail_recovers_from_stale_class_context(client):
     _login_admin(client, teacher, secret)
     with client.session_transaction() as sess:
         sess["current_class_id"] = class_b.class_id
+        sess["current_join_code"] = "JOINB"
 
     response = client.get(f"/admin/students/{student_a.id}")
     body = response.get_data(as_text=True)
@@ -188,36 +189,28 @@ def test_tap_out_students_rejects_cross_scope_student_block(client):
     teacher_b, _ = _create_admin("teacher-b")
     shared_student = _create_student("Shared", teacher_a)
     db.session.add(StudentTeacher(student_id=shared_student.id, teacher_id=teacher_b.id))
+    create_class_scope(
+        teacher=teacher_a,
+        join_code="JOINA",
+        student=shared_student,
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
+    create_class_scope(
+        teacher=teacher_b,
+        join_code="JOINB",
+        student=shared_student,
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
 
     db.session.add_all([
-        TeacherBlock(
-            teacher_id=teacher_a.id,
-            block="A",
-            class_label="A",
-            first_name="Shared",
-            last_initial="A",
-            last_name_hash_by_part=["x"],
-            dob_sum_hash=None,
-            salt=get_random_salt(),
-            first_half_hash="shared-a-seat",
-            join_code="JOINA",
-            student_id=shared_student.id,
-            is_claimed=True,
-        ),
-        TeacherBlock(
-            teacher_id=teacher_b.id,
-            block="A",
-            class_label="A",
-            first_name="Shared",
-            last_initial="A",
-            last_name_hash_by_part=["y"],
-            dob_sum_hash=None,
-            salt=get_random_salt(),
-            first_half_hash="shared-b-seat",
-            join_code="JOINB",
-            student_id=shared_student.id,
-            is_claimed=True,
-        ),
         TapEvent(
             student_id=shared_student.id,
             period="A",
@@ -246,7 +239,7 @@ def test_tap_out_students_rejects_cross_scope_student_block(client):
     assert payload["tapped_out"] == []
     assert any("different class scope" in msg for msg in payload["errors"])
 
-    block = StudentBlock.query.filter_by(student_id=shared_student.id, period="A").first()
+    block = StudentBlock.query.filter_by(student_id=shared_student.id, period="A", join_code="JOINB").first()
     assert block is not None
     assert block.join_code == "JOINB"
     assert block.done_for_day_date is None
@@ -263,22 +256,18 @@ def test_tap_out_students_rejects_cross_scope_student_block(client):
 def test_tap_out_students_rejects_null_join_code_student_block(client):
     teacher, secret = _create_admin("teacher-a")
     student = _create_student("Alice", teacher)
+    create_class_scope(
+        teacher=teacher,
+        join_code="JOINA",
+        student=student,
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
 
     db.session.add_all([
-        TeacherBlock(
-            teacher_id=teacher.id,
-            block="A",
-            class_label="A",
-            first_name="Alice",
-            last_initial="A",
-            last_name_hash_by_part=["x"],
-            dob_sum_hash=None,
-            salt=get_random_salt(),
-            first_half_hash="alice-seat",
-            join_code="JOINA",
-            student_id=student.id,
-            is_claimed=True,
-        ),
         TapEvent(
             student_id=student.id,
             period="A",
@@ -326,36 +315,28 @@ def test_tap_in_students_rejects_cross_scope_student_block(client):
     teacher_b, _ = _create_admin("teacher-b")
     shared_student = _create_student("SharedIn", teacher_a)
     db.session.add(StudentTeacher(student_id=shared_student.id, teacher_id=teacher_b.id))
+    create_class_scope(
+        teacher=teacher_a,
+        join_code="JOINA",
+        student=shared_student,
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
+    create_class_scope(
+        teacher=teacher_b,
+        join_code="JOINB",
+        student=shared_student,
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
 
     db.session.add_all([
-        TeacherBlock(
-            teacher_id=teacher_a.id,
-            block="A",
-            class_label="A",
-            first_name="SharedIn",
-            last_initial="A",
-            last_name_hash_by_part=["x"],
-            dob_sum_hash=None,
-            salt=get_random_salt(),
-            first_half_hash="shared-in-a-seat",
-            join_code="JOINA",
-            student_id=shared_student.id,
-            is_claimed=True,
-        ),
-        TeacherBlock(
-            teacher_id=teacher_b.id,
-            block="A",
-            class_label="A",
-            first_name="SharedIn",
-            last_initial="A",
-            last_name_hash_by_part=["y"],
-            dob_sum_hash=None,
-            salt=get_random_salt(),
-            first_half_hash="shared-in-b-seat",
-            join_code="JOINB",
-            student_id=shared_student.id,
-            is_claimed=True,
-        ),
         TapEvent(
             student_id=shared_student.id,
             period="A",
@@ -384,7 +365,7 @@ def test_tap_in_students_rejects_cross_scope_student_block(client):
     assert payload["tapped_in"] == []
     assert any("different class scope" in msg for msg in payload["errors"])
 
-    block = StudentBlock.query.filter_by(student_id=shared_student.id, period="A").first()
+    block = StudentBlock.query.filter_by(student_id=shared_student.id, period="A", join_code="JOINB").first()
     assert block is not None
     assert block.join_code == "JOINB"
 
@@ -400,22 +381,18 @@ def test_tap_in_students_rejects_cross_scope_student_block(client):
 def test_tap_in_students_rejects_null_join_code_student_block(client):
     teacher, secret = _create_admin("teacher-a")
     student = _create_student("AliceIn", teacher)
+    create_class_scope(
+        teacher=teacher,
+        join_code="JOINA",
+        student=student,
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
 
     db.session.add_all([
-        TeacherBlock(
-            teacher_id=teacher.id,
-            block="A",
-            class_label="A",
-            first_name="AliceIn",
-            last_initial="A",
-            last_name_hash_by_part=["x"],
-            dob_sum_hash=None,
-            salt=get_random_salt(),
-            first_half_hash="alice-in-seat",
-            join_code="JOINA",
-            student_id=student.id,
-            is_claimed=True,
-        ),
         TapEvent(
             student_id=student.id,
             period="A",
@@ -464,38 +441,32 @@ def test_enforce_daily_limits_ignores_other_join_code_activity(client):
     teacher_b, _ = _create_admin("teacher-b")
     shared_student = _create_student("SharedLimit", teacher_a)
     db.session.add(StudentTeacher(student_id=shared_student.id, teacher_id=teacher_b.id))
+    class_scope_a = create_class_scope(
+        teacher=teacher_a,
+        join_code="JOINA",
+        student=shared_student,
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
+    class_scope_b = create_class_scope(
+        teacher=teacher_b,
+        join_code="JOINB",
+        student=shared_student,
+        block="A",
+        display_name="A",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
 
     db.session.add_all([
-        TeacherBlock(
-            teacher_id=teacher_a.id,
-            block="A",
-            class_label="A",
-            first_name="SharedLimit",
-            last_initial="A",
-            last_name_hash_by_part=["x"],
-            dob_sum_hash=None,
-            salt=get_random_salt(),
-            first_half_hash="shared-limit-a-seat",
-            join_code="JOINA",
-            student_id=shared_student.id,
-            is_claimed=True,
-        ),
-        TeacherBlock(
-            teacher_id=teacher_b.id,
-            block="A",
-            class_label="A",
-            first_name="SharedLimit",
-            last_initial="A",
-            last_name_hash_by_part=["y"],
-            dob_sum_hash=None,
-            salt=get_random_salt(),
-            first_half_hash="shared-limit-b-seat",
-            join_code="JOINB",
-            student_id=shared_student.id,
-            is_claimed=True,
-        ),
         PayrollSettings(
             teacher_id=teacher_a.id,
+            join_code="JOINA",
+            class_id=class_scope_a.class_id,
             block="A",
             is_active=True,
             settings_mode="simple",
@@ -508,6 +479,7 @@ def test_enforce_daily_limits_ignores_other_join_code_activity(client):
             period="A",
             status="active",
             join_code="JOINB",
+            class_id=class_scope_b.class_id,
             reason="Start work",
             timestamp=datetime.now(timezone.utc) - timedelta(hours=2),
         ),
@@ -590,7 +562,7 @@ def test_enforce_daily_limits_taps_out_when_limit_reached_in_scope(client):
     assert payload["checked"] >= 1
     assert any(student.full_name in entry for entry in payload["tapped_out"])
 
-    block = StudentBlock.query.filter_by(student_id=student.id, period="A").first()
+    block = StudentBlock.query.filter_by(student_id=student.id, period="A", join_code="JOINA").first()
     assert block is not None
     assert block.join_code == "JOINA"
     assert block.done_for_day_date is not None
@@ -661,57 +633,29 @@ def test_student_detail_ignores_student_block_from_other_join_code(client):
 def test_edit_student_transfer_updates_transaction_seat_scope(client):
     teacher, secret = _create_admin("teacher-a")
     student = _create_student("TransferSeat", teacher)
-
-    db.session.add_all([
-        TeacherBlock(
-            teacher_id=teacher.id,
-            block="A",
-            class_label="A",
-            first_name="TransferSeat",
-            last_initial="A",
-            last_name_hash_by_part=["x"],
-            dob_sum_hash=None,
-            salt=get_random_salt(),
-            first_half_hash="transfer-seat-a",
-            join_code="JOINA",
-            student_id=student.id,
-            is_claimed=True,
-        ),
-        TeacherBlock(
-            teacher_id=teacher.id,
-            block="B",
-            class_label="B",
-            first_name="TransferSeat",
-            last_initial="A",
-            last_name_hash_by_part=["y"],
-            dob_sum_hash=None,
-            salt=get_random_salt(),
-            first_half_hash="transfer-seat-b",
-            join_code="JOINB",
-            student_id=student.id,
-            is_claimed=True,
-        ),
-    ])
-    db.session.flush()
-
-    user = User(
-        username="transfer-seat-user",
-        password_hash="pw",
+    source_join_code = f"T{teacher.id}S{student.id}"
+    class_scope_b = create_class_scope(
+        teacher=teacher,
+        join_code="JOINB",
+        student=student,
+        block="B",
+        display_name="B",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
     )
-    db.session.add(user)
-    db.session.flush()
 
-    seat_a = Seat(user_id=user.id, student_id=student.id, join_code="JOINA", block="A")
-    seat_b = Seat(user_id=user.id, student_id=student.id, join_code="JOINB", block="B")
-    db.session.add_all([seat_a, seat_b])
-    db.session.flush()
+    seat_a = Seat.query.filter_by(student_id=student.id, join_code=source_join_code).first()
+    seat_b = Seat.query.filter_by(student_id=student.id, join_code="JOINB", class_id=class_scope_b.class_id).first()
+    assert seat_a is not None
+    assert seat_b is not None
 
     from app.feats.base import FEATContext
     with FEATContext("FEAT-ADMN-001"):
         tx = Transaction(
             student_id=student.id,
             seat_id=seat_a.id,
-            join_code="JOINA",
+            join_code=source_join_code,
             amount=10,
             account_type="checking",
             type="bonus",

@@ -13,9 +13,11 @@ from app.models import (
     Student, StudentTeacher, PayrollSettings, RentSettings,
     InsurancePolicyBlock,
 )
+from app.feats.base import feat_shell
 
 logger = logging.getLogger(__name__)
 
+@feat_shell("FEAT-OPS-001")
 def collapse_universe(join_code: str, reason: str, actor_membership_id: Optional[int]) -> bool:
     """
     Canonical Destruction Primitive for a Class Economy (join_code).
@@ -181,7 +183,7 @@ def collapse_universe(join_code: str, reason: str, actor_membership_id: Optional
                     RentSettings.query.filter_by(teacher_id=teacher_id, block=block_name).delete(synchronize_session=False)
                     InsurancePolicyBlock.query.filter_by(block=block_name).delete(synchronize_session=False) # Simplified, might need teacher_id scoping depending on model
 
-        db.session.commit()
+        db.session.flush()  # FEAT-AUTHORIZED-SHELL
         return True
 
     except Exception as e:

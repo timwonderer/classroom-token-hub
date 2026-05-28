@@ -21,6 +21,7 @@ from app.services.attendance_service import (
 )
 from app.services.ledger_service import get_last_payroll_time as _get_last_payroll_time
 from app.models import ClassEconomy, Transaction
+from app.feats.base import feat_shell
 
 def get_last_payroll_time(student_id=None, join_code=None):
     """Compatibility wrapper around the ledger-owned payroll anchor query."""
@@ -502,6 +503,7 @@ def calculate_seconds_in_memory(events, anchor):
 
     return int(total_seconds)
 
+@feat_shell("FEAT-ATTN-001")
 def batch_auto_tapout_students(admin_id):
     """
     Optimized version of auto-tapout that processes all students for an admin in batch.
@@ -661,7 +663,7 @@ def batch_auto_tapout_students(admin_id):
 
     if tapped_out_count > 0:
         try:
-            db.session.commit()
+            db.session.flush()  # FEAT-AUTHORIZED-SHELL
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Error committing batch auto-tapout: {e}", exc_info=True)

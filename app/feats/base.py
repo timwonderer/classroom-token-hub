@@ -100,8 +100,12 @@ FEAT_REGISTRY = {
     "FEAT-STOR-005": {"domain": "Store", "blast_radius": "LOW", "desc": "Redeem Item"},
     "FEAT-ATTN-001": {"domain": "Attendance", "blast_radius": "MED", "desc": "Session Management"},
     "FEAT-ATTN-002": {"domain": "Attendance", "blast_radius": "LOW", "desc": "Individual Tap"},
+    "FEAT-ANLY-001": {"domain": "Analytics", "blast_radius": "LOW", "desc": "Analytics Alert Acknowledgement"},
     "FEAT-ADMN-001": {"domain": "Logistics", "blast_radius": "LOW", "desc": "Bulk Admin"},
     "FEAT-OBL-001": {"domain": "Obligations", "blast_radius": "MED", "desc": "Rent Payment"},
+    "FEAT-OBL-002": {"domain": "Obligations", "blast_radius": "MED", "desc": "Scheduled Rent Cycle"},
+    "FEAT-OPS-001": {"domain": "Operations", "blast_radius": "MED", "desc": "Maintenance/Cleanup Operations"},
+    "FEAT-SUP-001": {"domain": "Support", "blast_radius": "LOW", "desc": "Issue Submission and Category Setup"},
 }
 
 class FEATContext:

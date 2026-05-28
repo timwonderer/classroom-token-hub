@@ -6,6 +6,7 @@ Categories guide students to provide relevant context for their issues.
 
 from app.extensions import db
 from app.models import IssueCategory
+from app.feats.base import feat_shell
 
 
 DEFAULT_TRANSACTION_CATEGORIES = [
@@ -87,6 +88,7 @@ DEFAULT_GENERAL_CATEGORIES = [
 ]
 
 
+@feat_shell("FEAT-SUP-001")
 def init_default_categories():
     """
     Initialize default issue categories in the database.
@@ -115,7 +117,7 @@ def init_default_categories():
             created_count += 1
 
     if created_count > 0:
-        db.session.commit()
+        db.session.flush()  # FEAT-AUTHORIZED-SHELL
 
     return created_count
 

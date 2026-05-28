@@ -45,6 +45,7 @@ def main() -> int:
             .first()
         )
         bootstrap_created = False
+        alt_class_id = None
         if not row:
             # Seed topology may not include a balance cache row yet; bootstrap one safely.
             candidate_seat = Seat.query.filter(Seat.claimed_at.isnot(None)).first()
@@ -67,11 +68,21 @@ def main() -> int:
             bootstrap_created = True
 
         bc_id, bc_class_id, seat_id, seat_class_id = row
-        alt_class_id = next(cid for cid in class_ids if str(cid) != str(seat_class_id))
+        for cid in class_ids:
+            if str(cid) == str(seat_class_id):
+                continue
+            collision = BalanceCache.query.filter_by(seat_id=seat_id, class_id=cid).first()
+            if collision is None:
+                alt_class_id = cid
+                break
+        if alt_class_id is None:
+            raise SystemExit(
+                "Unable to inject mismatch: every alternate class_id already has a balance_cache row for this seat_id"
+            )
 
         # Deliberate corruption via raw SQL in controlled adversarial harness.
         db.session.execute(
-            sa.text("UPDATE balance_cache SET class_id = :new_class WHERE id = :row_id"),
+            sa.text(f"UPDATE {BalanceCache.__tablename__} SET class_id = :new_class WHERE id = :row_id"),
             {"new_class": str(alt_class_id), "row_id": int(bc_id)},
         )
         db.session.commit()

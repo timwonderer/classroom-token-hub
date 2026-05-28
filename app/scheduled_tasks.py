@@ -7,8 +7,10 @@ Contains periodic tasks that run in the background to maintain system state.
 import logging
 from datetime import datetime, timezone, timedelta
 from app.utils.time import get_class_cycle_start_utc, utc_now
+from app.feats.base import feat_shell
 
 
+@feat_shell("FEAT-ATTN-001")
 def enforce_daily_limits_job():
     """
     Scheduled job that checks all active students and auto-taps them out if they've exceeded their daily limit.
@@ -31,46 +33,45 @@ def enforce_daily_limits_job():
 
         for student in students:
             try:
-                # Get the student's current active sessions
-                student_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
-                has_active_session = False
+                # Isolate each student in a savepoint so one failure doesn't
+                # discard successful mutations for prior students.
+                with db.session.begin_nested():
+                    # Get the student's current active sessions
+                    student_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
+                    has_active_session = False
 
-                for period in student_blocks:
-                    latest_event = (
-                        TapEvent.query
-                        .filter_by(student_id=student.id, period=period)
-                        .order_by(TapEvent.timestamp.desc())
-                        .first()
-                    )
+                    for period in student_blocks:
+                        latest_event = (
+                            TapEvent.query
+                            .filter_by(student_id=student.id, period=period)
+                            .order_by(TapEvent.timestamp.desc())
+                            .first()
+                        )
 
-                    # If student is active, check their limit
-                    if latest_event and latest_event.status == "active":
-                        has_active_session = True
-                        break
+                        # If student is active, check their limit
+                        if latest_event and latest_event.status == "active":
+                            has_active_session = True
+                            break
 
-                if has_active_session:
-                    checked_count += 1
-                    # Get the latest event ID before running check
-                    latest_before = TapEvent.query.filter_by(
-                        student_id=student.id
-                    ).order_by(TapEvent.timestamp.desc()).first()
+                    if has_active_session:
+                        checked_count += 1
+                        # Get the latest event ID before running check
+                        latest_before = TapEvent.query.filter_by(
+                            student_id=student.id
+                        ).order_by(TapEvent.timestamp.desc()).first()
 
-                    check_and_auto_tapout_if_limit_reached(student, commit=False)
+                        check_and_auto_tapout_if_limit_reached(student, commit=False)
 
-                    # Check if a new tap-out event was created
-                    latest_after = TapEvent.query.filter_by(
-                        student_id=student.id
-                    ).order_by(TapEvent.timestamp.desc()).first()
+                        # Check if a new tap-out event was created
+                        latest_after = TapEvent.query.filter_by(
+                            student_id=student.id
+                        ).order_by(TapEvent.timestamp.desc()).first()
 
-                    if latest_after and (latest_before is None or latest_after.id != latest_before.id):
-                        if latest_after.status == "inactive":
-                            tapped_out_count += 1
-                            logger.info(f"Auto-tapped out student {student.id} ({student.full_name})")
-
-                # Commit after successfully processing this student so previous students' work is preserved
-                db.session.commit()
+                        if latest_after and (latest_before is None or latest_after.id != latest_before.id):
+                            if latest_after.status == "inactive":
+                                tapped_out_count += 1
+                                logger.info(f"Auto-tapped out student {student.id} ({student.full_name})")
             except Exception as e:
-                db.session.rollback()
                 logger.error(f"Error checking student {student.id}: {e}", exc_info=True)
                 continue
         logger.info(f"Auto tap-out job completed. Checked {checked_count} active students, tapped out {tapped_out_count}")
@@ -80,6 +81,7 @@ def enforce_daily_limits_job():
         logger.error(f"Auto tap-out job failed: {e}", exc_info=True)
 
 
+@feat_shell("FEAT-OPS-001")
 def database_maintenance_job():
     """
     Scheduled job that performs nightly database maintenance tasks.
@@ -138,7 +140,7 @@ def database_maintenance_job():
                 )
                 .delete(synchronize_session=False)
             )
-            db.session.commit()
+            db.session.flush()  # FEAT-AUTHORIZED-SHELL
             logger.info("Cleaned up %s orphaned StoreItemBlock entries", total_cleaned)
         else:
             logger.info("No orphaned StoreItemBlock entries found")
@@ -176,6 +178,7 @@ def _derive_cycle_length_days(settings) -> int:
     return 30
 
 
+@feat_shell("FEAT-OBL-002")
 def run_rent_cycle_for_class(class_id: str, execution_time):
     """
     Execute one rent cycle for one class.
@@ -255,7 +258,7 @@ def run_rent_cycle_for_class(class_id: str, execution_time):
         )
         charged += 1
 
-    db.session.commit()
+    db.session.flush()  # FEAT-AUTHORIZED-SHELL
     return {
         "status": "ok",
         "class_id": class_id,
