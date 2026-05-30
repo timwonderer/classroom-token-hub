@@ -24,7 +24,7 @@ from app.models import (
     TapEventReasonCode, HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
     StudentTeacher, TeacherBlock, StudentBlock, StoreItemBlock,
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource, _quantize_currency,
-    ClassEconomy, ClassMembership, Seat,
+    ClassEconomy, ClassMembership, Seat, SeatAttendanceState,
 )
 from app.auth import (
     login_required,
@@ -39,6 +39,26 @@ from app.auth import (
 )
 from app.access import AccessScopeDenied, resolve_scope
 from app.feats.base import feat_shell
+from app.feats.attendance import (
+    apply_standard_tap_mutations as feat_apply_standard_tap_mutations,
+    approve_hall_pass as feat_approve_hall_pass,
+    cancel_hall_pass as feat_cancel_hall_pass,
+    check_hall_pass_request_policy as feat_check_hall_pass_request_policy,
+    check_start_work_daily_limit as feat_check_start_work_daily_limit,
+    checkin_hall_pass as feat_checkin_hall_pass,
+    checkout_hall_pass as feat_checkout_hall_pass,
+    enforce_daily_limits as feat_enforce_daily_limits,
+    get_or_create_student_block as feat_get_or_create_student_block,
+    leave_hall_pass as feat_leave_hall_pass,
+    reject_hall_pass as feat_reject_hall_pass,
+    request_hall_pass as feat_request_hall_pass,
+    rotate_teacher_hall_pass_verify_token as feat_rotate_teacher_hall_pass_verify_token,
+    save_hall_pass_setup_config as feat_save_hall_pass_setup_config,
+    set_student_block_tap_enabled as feat_set_student_block_tap_enabled,
+    soft_delete_tap_entry as feat_soft_delete_tap_entry,
+    update_hall_pass_queue_settings as feat_update_hall_pass_queue_settings,
+    return_hall_pass as feat_return_hall_pass,
+)
 from app.routes.student import (
     get_current_class_context,
     get_current_teacher_id,
@@ -68,10 +88,11 @@ from app.utils.time import (
     UTC_MIN,
     class_date,
     day_bounds_utc,
+    get_class_now,
+    get_class_today_range,
 )
 
 # Import external modules
-from app.attendance import get_join_code_for_student_period
 from app.services.attendance_service import calculate_unpaid_attendance_seconds, get_all_block_statuses
 from app.services.ledger_service import (
     apply_overdraft_fee_if_needed as apply_ledger_overdraft_fee,
@@ -1077,6 +1098,7 @@ def reject_redemption():
 
 @api_bp.route('/hall-pass/<int:pass_id>/<string:action>', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ATTN-001")
 def handle_hall_pass_action(pass_id, action):
     log_entry = db.get_or_404(HallPassLog, pass_id)
     current_admin = get_current_admin()
@@ -1087,95 +1109,22 @@ def handle_hall_pass_action(pass_id, action):
     class_scope = ClassEconomy.query.filter_by(class_id=log_entry.class_id).first()
     if not class_scope or class_scope.teacher_id != current_admin.id:
         return jsonify({"status": "error", "message": "Pass not found."}), 404
-    student = log_entry.student
     now = utc_now()
-
-    if action == 'approve':
-        if log_entry.status != 'pending':
-            return jsonify({"status": "error", "message": "Pass is not pending."}), 400
-
-        # Check if hall pass deduction is needed (not for Office/Summons/Done for the day)
-        should_deduct = log_entry.reason.lower() not in ['office', 'summons', 'done for the day']
-
-        if should_deduct and student.hall_passes <= 0:
-            return jsonify({"status": "error", "message": "Student has no hall passes left."}), 400
-
-        log_entry.status = 'approved'
-        log_entry.decision_time = now
-        # Only deduct hall pass for regular reasons (not Office/Summons/Done for the day)
-        if should_deduct:
-            student.hall_passes -= 1
-            # Decrement rent_hall_passes first (rent-granted passes consumed before purchased)
-            block_period = log_entry.period or student.block
-            student_block = StudentBlock.query.filter_by(
-                seat_id=log_entry.seat_id,
-                class_id=log_entry.class_id,
-                period=block_period
-            ).first()
-            if not student_block:
-                student_block = StudentBlock(
-                    seat_id=log_entry.seat_id,
-                    class_id=log_entry.class_id,
-                    period=block_period,
-                    student_id=student.id,
-                )
-                db.session.add(student_block)
-            if student_block and student_block.rent_hall_passes > 0:
-                student_block.rent_hall_passes -= 1
-
-        db.session.flush()
-        return jsonify({"status": "success", "message": "Pass approved."})
-
-    elif action == 'reject':
-        if log_entry.status != 'pending':
-            return jsonify({"status": "error", "message": "Pass is not pending."}), 400
-
-        log_entry.status = 'rejected'
-        log_entry.decision_time = now
-        db.session.flush()
-        return jsonify({"status": "success", "message": "Pass rejected."})
-
-    elif action == 'leave':
-        if log_entry.status != 'approved':
-            return jsonify({"status": "error", "message": "Pass is not approved."}), 400
-
-        # Create a tap-out event for attendance tracking
-        tap_out_event = TapEvent(
-            student_id=log_entry.student_id,
-            seat_id=log_entry.seat_id,
-            class_id=log_entry.class_id,
-            join_code=log_entry.join_code,
-            period=log_entry.period,
-            status='inactive',
-            timestamp=now,
-            reason=log_entry.reason,
-        )
-        log_entry.status = 'left'
-        log_entry.left_time = now
-        db.session.add(tap_out_event)
-        db.session.flush()
-        return jsonify({"status": "success", "message": "Student has left the class."})
-
-    elif action == 'return':
-        if log_entry.status != 'left':
-            return jsonify({"status": "error", "message": "Student is not out of class."}), 400
-
-        # Create a tap-in event to close the loop
-        tap_in_event = TapEvent(
-            student_id=log_entry.student_id,
-            seat_id=log_entry.seat_id,
-            class_id=log_entry.class_id,
-            join_code=log_entry.join_code,
-            period=log_entry.period,
-            status='active',
-            timestamp=now,
-            reason="Return from hall pass",
-        )
-        log_entry.status = 'returned'
-        log_entry.return_time = now
-        db.session.add(tap_in_event)
-        db.session.flush()
-        return jsonify({"status": "success", "message": "Student has returned."})
+    try:
+        if action == 'approve':
+            result = feat_approve_hall_pass(log_entry=log_entry, now_utc=now)
+            return jsonify({"status": "success", "message": result.message})
+        if action == 'reject':
+            result = feat_reject_hall_pass(log_entry=log_entry, now_utc=now)
+            return jsonify({"status": "success", "message": result.message})
+        if action == 'leave':
+            result = feat_leave_hall_pass(log_entry=log_entry, now_utc=now)
+            return jsonify({"status": "success", "message": result.message})
+        if action == 'return':
+            result = feat_return_hall_pass(log_entry=log_entry, now_utc=now)
+            return jsonify({"status": "success", "message": result.message})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
 
     return jsonify({"status": "error", "message": "Invalid action."}), 400
 
@@ -1212,10 +1161,10 @@ def _check_simultaneous_pass_limit(log_entry):
 
     # Check simultaneous limit
     if pass_type_config and pass_type_config.get('simultaneous_limit') is not None:
-        user_tz = _get_default_timezone()
-        now_user_tz = utc_now().astimezone(user_tz)
-        today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
-        today_start_utc = today_start_user_tz.astimezone(pytz.utc)
+        if log_entry.class_id:
+            today_start_utc, _ = get_class_today_range(log_entry.class_id, reference_time_utc=utc_now())
+        else:
+            today_start_utc, _ = day_bounds_utc()
         today_start_db = normalize_for_db(today_start_utc)
 
         # Count currently out students for THIS destination from today (excluding this student)
@@ -1248,21 +1197,27 @@ def _enforce_hall_pass_student_context(student, log_entry):
 
     Class context is required and must match the pass class/join scope.
     """
-    context = get_current_class_context()
-    current_join_code = context.get("join_code") if context else None
-    current_class_id = context.get("class_id") if context else None
+    current_class_id = get_current_class_id()
+    if not current_class_id:
+        context = get_current_class_context()
+        current_class_id = context.get("class_id") if context else None
 
-    if not current_join_code or not current_class_id:
+    if not current_class_id:
+        # Legacy sessions may only pin join_code; treat that as invalid for mutation context.
+        if session.get("current_join_code"):
+            return jsonify({
+                "status": "error",
+                "message": "This pass belongs to a different class context. Switch class and retry.",
+            }), 403
+        # Canonical fallback for sessions with no class selected:
+        # ownership is already enforced by student_id match above, so allow class-scoped pass rows.
+        if log_entry.class_id:
+            return None
         return jsonify({
             "status": "error",
             "message": "This pass belongs to a different class context. Switch class and retry.",
         }), 403
 
-    if current_join_code and log_entry.join_code and log_entry.join_code != current_join_code:
-        return jsonify({
-            "status": "error",
-            "message": "This pass belongs to a different class context. Switch class and retry.",
-        }), 403
     if current_class_id and log_entry.class_id and log_entry.class_id != current_class_id:
         return jsonify({
             "status": "error",
@@ -1276,6 +1231,7 @@ def _enforce_hall_pass_student_context(student, log_entry):
 
 @api_bp.route('/hall-pass/cancel/<int:pass_id>', methods=['POST'])
 @login_required
+@feat_shell("FEAT-ATTN-002")
 def cancel_hall_pass(pass_id):
     """Allow students to cancel their pending hall pass request"""
     seat = get_current_seat()
@@ -1291,20 +1247,16 @@ def cancel_hall_pass(pass_id):
     if context_error:
         return context_error
 
-    # Only pending passes can be cancelled
-    if log_entry.status != 'pending':
-        return jsonify({"status": "error", "message": "Only pending passes can be cancelled."}), 400
-
-    # Mark as rejected (or create a new 'cancelled' status if preferred)
-    log_entry.status = 'rejected'
-    log_entry.decision_time = utc_now()
-
-    db.session.flush()
-    return jsonify({"status": "success", "message": "Hall pass request cancelled."})
+    try:
+        result = feat_cancel_hall_pass(log_entry=log_entry, now_utc=utc_now())
+        return jsonify({"status": "success", "message": result.message})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
 
 
 @api_bp.route('/hall-pass/checkout', methods=['POST'])
 @login_required
+@feat_shell("FEAT-ATTN-002")
 def checkout_hall_pass():
     """Allow student to check out with their approved hall pass (replaces terminal use)"""
     seat = get_current_seat()
@@ -1319,13 +1271,14 @@ def checkout_hall_pass():
     
     log_entry = db.get_or_404(HallPassLog, pass_id)
     current_app.logger.info(
-        "HALL_PASS_CHECKOUT_DEBUG: student_id=%s pass_id=%s pass_student_id=%s pass_seat_id=%s pass_class_id=%s pass_join_code=%s session_join_code=%s",
+        "HALL_PASS_CHECKOUT_DEBUG: student_id=%s pass_id=%s pass_student_id=%s pass_seat_id=%s pass_class_id=%s pass_join_code=%s session_class_id=%s session_join_code=%s",
         getattr(student, "id", None),
         pass_id,
         log_entry.student_id,
         log_entry.seat_id,
         log_entry.class_id,
         log_entry.join_code,
+        session.get("current_class_id"),
         session.get("current_join_code"),
     )
     
@@ -1336,70 +1289,28 @@ def checkout_hall_pass():
     if context_error:
         return context_error
 
-    # Verify pass is approved
-    if log_entry.status != 'approved':
-        return jsonify({"status": "error", "message": f"Pass is not approved. Current status: {log_entry.status}"}), 400
-    
     limit_response = _check_simultaneous_pass_limit(log_entry)
     if limit_response:
         return limit_response
-    
-    # Mark as left and create tap-out event
     now = utc_now()
-    log_entry.status = 'left'
-    log_entry.left_time = now
-
-    resolved_seat_id = log_entry.seat_id
-    resolved_class_id = log_entry.class_id
-    resolved_join_code = log_entry.join_code
-
-    if not resolved_seat_id and resolved_class_id:
-        resolved_seat_id = get_seat_id_for_class(student.id, resolved_class_id)
-    if not resolved_seat_id and resolved_join_code:
-        seat_row = Seat.query.filter_by(student_id=student.id, join_code=resolved_join_code).order_by(Seat.id.asc()).first()
-        if seat_row:
-            resolved_seat_id = seat_row.id
-            if not resolved_class_id:
-                resolved_class_id = seat_row.class_id
-
-    if not resolved_class_id and resolved_seat_id:
-        seat_row = db.session.get(Seat, resolved_seat_id)
-        if seat_row:
-            resolved_class_id = seat_row.class_id
-            if not resolved_join_code:
-                resolved_join_code = seat_row.join_code
-
-    if not student.id or not resolved_class_id or not resolved_seat_id:
-        current_app.logger.error(
-            "HALL_PASS_CHECKOUT_IDENTITY_MISSING: student_id=%s class_id=%s seat_id=%s join_code=%s",
-            getattr(student, "id", None),
-            resolved_class_id,
-            resolved_seat_id,
-            resolved_join_code,
-        )
-        return jsonify({"status": "error", "message": "Missing class/seat context for hall pass checkout."}), 401
-    
-    # Create tap-out event for attendance tracking
-    tap_out_event = TapEvent(
-        student_id=student.id,
-        seat_id=resolved_seat_id,
-        class_id=resolved_class_id,
-        join_code=resolved_join_code,
-        period=log_entry.period,
-        status='inactive',
-        timestamp=now,
-        reason=log_entry.reason,
-    )
-    db.session.add(tap_out_event)
-    
     try:
-        db.session.flush()
+        result = feat_checkout_hall_pass(student=student, log_entry=log_entry, now_utc=now)
         return jsonify({
             "status": "success",
-            "message": f"Checked out for {log_entry.reason}.",
-            "destination": log_entry.reason,
-            "left_time": now.isoformat()
+            "message": result.message,
+            "destination": result.destination,
+            "left_time": result.left_time_iso,
         })
+    except PermissionError as exc:
+        current_app.logger.error(
+            "HALL_PASS_CHECKOUT_IDENTITY_MISSING: student_id=%s pass_id=%s message=%s",
+            getattr(student, "id", None),
+            pass_id,
+            str(exc),
+        )
+        return jsonify({"status": "error", "message": str(exc)}), 401
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
     except SQLAlchemyError as e:
         db.session.rollback()
         current_app.logger.error(f"Hall pass checkout failed: {e}", exc_info=True)
@@ -1408,6 +1319,7 @@ def checkout_hall_pass():
 
 @api_bp.route('/hall-pass/checkin', methods=['POST'])
 @login_required
+@feat_shell("FEAT-ATTN-002")
 def checkin_hall_pass():
     """Allow student to check in from their hall pass (replaces terminal return)"""
     seat = get_current_seat()
@@ -1422,13 +1334,14 @@ def checkin_hall_pass():
     
     log_entry = db.get_or_404(HallPassLog, pass_id)
     current_app.logger.info(
-        "HALL_PASS_CHECKIN_DEBUG: student_id=%s pass_id=%s pass_student_id=%s pass_seat_id=%s pass_class_id=%s pass_join_code=%s session_join_code=%s",
+        "HALL_PASS_CHECKIN_DEBUG: student_id=%s pass_id=%s pass_student_id=%s pass_seat_id=%s pass_class_id=%s pass_join_code=%s session_class_id=%s session_join_code=%s",
         getattr(student, "id", None),
         pass_id,
         log_entry.student_id,
         log_entry.seat_id,
         log_entry.class_id,
         log_entry.join_code,
+        session.get("current_class_id"),
         session.get("current_join_code"),
     )
     
@@ -1439,65 +1352,24 @@ def checkin_hall_pass():
     if context_error:
         return context_error
     
-    # Verify pass is in 'left' status
-    if log_entry.status != 'left':
-        return jsonify({"status": "error", "message": f"You are not currently checked out. Status: {log_entry.status}"}), 400
-    
-    # Mark as returned and create tap-in event
     now = utc_now()
-    log_entry.status = 'returned'
-    log_entry.return_time = now
-
-    resolved_seat_id = log_entry.seat_id
-    resolved_class_id = log_entry.class_id
-    resolved_join_code = log_entry.join_code
-
-    if not resolved_seat_id and resolved_class_id:
-        resolved_seat_id = get_seat_id_for_class(student.id, resolved_class_id)
-    if not resolved_seat_id and resolved_join_code:
-        seat_row = Seat.query.filter_by(student_id=student.id, join_code=resolved_join_code).order_by(Seat.id.asc()).first()
-        if seat_row:
-            resolved_seat_id = seat_row.id
-            if not resolved_class_id:
-                resolved_class_id = seat_row.class_id
-
-    if not resolved_class_id and resolved_seat_id:
-        seat_row = db.session.get(Seat, resolved_seat_id)
-        if seat_row:
-            resolved_class_id = seat_row.class_id
-            if not resolved_join_code:
-                resolved_join_code = seat_row.join_code
-
-    if not student.id or not resolved_class_id or not resolved_seat_id:
-        current_app.logger.error(
-            "HALL_PASS_CHECKIN_IDENTITY_MISSING: student_id=%s class_id=%s seat_id=%s join_code=%s",
-            getattr(student, "id", None),
-            resolved_class_id,
-            resolved_seat_id,
-            resolved_join_code,
-        )
-        return jsonify({"status": "error", "message": "Missing class/seat context for hall pass checkin."}), 401
-    
-    # Create tap-in event for attendance tracking
-    tap_in_event = TapEvent(
-        student_id=student.id,
-        seat_id=resolved_seat_id,
-        class_id=resolved_class_id,
-        join_code=resolved_join_code,
-        period=log_entry.period,
-        status='active',
-        timestamp=now,
-        reason="Returned from hall pass",
-    )
-    db.session.add(tap_in_event)
-    
     try:
-        db.session.flush()
+        result = feat_checkin_hall_pass(student=student, log_entry=log_entry, now_utc=now)
         return jsonify({
             "status": "success",
-            "message": "Checked in successfully. Welcome back!",
-            "return_time": now.isoformat()
+            "message": result.message,
+            "return_time": result.return_time_iso,
         })
+    except PermissionError as exc:
+        current_app.logger.error(
+            "HALL_PASS_CHECKIN_IDENTITY_MISSING: student_id=%s pass_id=%s message=%s",
+            getattr(student, "id", None),
+            pass_id,
+            str(exc),
+        )
+        return jsonify({"status": "error", "message": str(exc)}), 401
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
     except SQLAlchemyError as e:
         db.session.rollback()
         current_app.logger.error(f"Hall pass checkin failed: {e}", exc_info=True)
@@ -1506,10 +1378,35 @@ def checkin_hall_pass():
 
 
 
-@api_bp.route('/hall-pass/settings', methods=['GET', 'POST'])
+@api_bp.route('/hall-pass/settings', methods=['GET'])
 @admin_required
 def hall_pass_settings():
-    """Get or update hall pass settings (admin only)"""
+    """Get hall pass queue settings (admin only)"""
+    current_admin = get_current_admin()
+    if not current_admin:
+        return jsonify({"status": "error", "message": "Admin ID not found in session"}), 401
+
+    join_code = (session.get("current_join_code") or "").strip()
+    class_id = (session.get("current_class_id") or "").strip()
+    if not join_code or not class_id:
+        return jsonify({"status": "error", "message": "Class context is required"}), 400
+
+    settings = HallPassSettings.query.filter_by(class_id=class_id).first()
+
+    return jsonify({
+        "status": "success",
+        "settings": {
+            "queue_enabled": settings.queue_enabled if settings else True,
+            "queue_limit": settings.queue_limit if settings else 10
+        }
+    })
+
+
+@api_bp.route('/hall-pass/settings', methods=['POST'])
+@admin_required
+@feat_shell("FEAT-ATTN-001")
+def update_hall_pass_settings():
+    """Update hall pass queue settings (admin only)."""
     current_admin = get_current_admin()
     if not current_admin:
         return jsonify({"status": "error", "message": "Admin ID not found in session"}), 401
@@ -1520,40 +1417,25 @@ def hall_pass_settings():
     if not join_code or not class_id:
         return jsonify({"status": "error", "message": "Class context is required"}), 400
 
-    if request.method == 'GET':
-        settings = HallPassSettings.query.filter_by(class_id=class_id).first()
-        return jsonify({
-            "status": "success",
-            "settings": {
-                "queue_enabled": settings.queue_enabled if settings else True,
-                "queue_limit": settings.queue_limit if settings else 10
-            }
-        })
-
-    # POST - update settings
-    settings = _get_or_create_hall_pass_settings(scoped_admin_id, class_id, join_code=join_code)
-    if not settings:
-        return jsonify({"status": "error", "message": "Class context is required"}), 400
-    data = request.get_json()
-
-    if 'queue_enabled' in data:
-        settings.queue_enabled = bool(data['queue_enabled'])
-
-    if 'queue_limit' in data:
-        queue_limit = int(data['queue_limit'])
-        if queue_limit < 1 or queue_limit > 50:
-            return jsonify({"status": "error", "message": "Queue limit must be between 1 and 50"}), 400
-        settings.queue_limit = queue_limit
-
-    settings.updated_at = utc_now()
-    db.session.flush()
+    data = request.get_json() or {}
+    try:
+        settings = feat_update_hall_pass_queue_settings(
+            teacher_id=scoped_admin_id,
+            class_id=class_id,
+            join_code=join_code,
+            queue_enabled=data.get("queue_enabled") if "queue_enabled" in data else None,
+            queue_limit=data.get("queue_limit") if "queue_limit" in data else None,
+            updated_at=utc_now(),
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
 
     return jsonify({
         "status": "success",
         "message": "Settings updated successfully",
         "settings": {
             "queue_enabled": settings.queue_enabled,
-            "queue_limit": settings.queue_limit
+            "queue_limit": settings.queue_limit,
         }
     })
 
@@ -1714,6 +1596,7 @@ def get_hall_pass_setup():
 
 @api_bp.route('/hall-pass/setup', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ATTN-001")
 def save_hall_pass_setup():
     """Save teacher's hall pass configuration"""
     current_admin = get_current_admin()
@@ -1769,7 +1652,9 @@ def save_hall_pass_setup():
         scope = _get_hall_pass_settings_scope(scoped_admin_id, join_code)
         if not scope:
             return jsonify({"status": "error", "message": "Class scope not found"}), 404
-        settings = _get_or_create_hall_pass_settings(scoped_admin_id, scope["class_id"], join_code=scope["join_code"])
+        settings = HallPassSettings.query.filter_by(class_id=scope["class_id"]).first()
+        if not settings:
+            settings = _get_or_create_hall_pass_settings(scoped_admin_id, scope["class_id"], join_code=scope["join_code"])
         if not settings:
             return jsonify({"status": "error", "message": "Class scope not found"}), 404
 
@@ -1777,11 +1662,14 @@ def save_hall_pass_setup():
         if feature_scope and not feature_scope["enabled"]:
             return jsonify({"status": "error", "message": "Hall pass is disabled for this class"}), 403
 
-        settings.queue_enabled = hall_pass_enabled
-        settings.pass_types = pass_types
-        settings.updated_at = utc_now()
-
-        db.session.flush()
+        settings = feat_save_hall_pass_setup_config(
+            teacher_id=scoped_admin_id,
+            class_id=scope["class_id"],
+            join_code=scope["join_code"],
+            hall_pass_enabled=hall_pass_enabled,
+            pass_types=pass_types,
+            updated_at=utc_now(),
+        )
 
         return jsonify({
             "status": "success",
@@ -1798,6 +1686,7 @@ def save_hall_pass_setup():
 
 @api_bp.route('/hall-pass/verify-token/rotate', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ATTN-001")
 def rotate_hall_pass_verify_token():
     """
     Rotate the teacher's hall pass public verification token.
@@ -1806,18 +1695,15 @@ def rotate_hall_pass_verify_token():
     The old token is immediately invalid. Use after a lost pass, suspicious
     traffic, or student screenshot concern.
     """
-    from app.models import Admin
     current_admin = get_current_admin()
     if not current_admin:
         return jsonify({"status": "error", "message": "Admin ID not found in session"}), 401
     teacher_id = current_admin.id
-    teacher = db.session.get(Admin, teacher_id)
-    if not teacher:
-        return jsonify({"status": "error", "message": "Teacher not found."}), 404
 
-    teacher.hall_pass_verify_token = Admin.generate_verify_token()
     try:
-        db.session.flush()
+        token = feat_rotate_teacher_hall_pass_verify_token(teacher_id=teacher_id)
+    except LookupError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
     except SQLAlchemyError:
         db.session.rollback()
         current_app.logger.error("Failed to rotate hall pass verify token", exc_info=True)
@@ -1825,7 +1711,7 @@ def rotate_hall_pass_verify_token():
 
     return jsonify({
         "status": "success",
-        "token": teacher.hall_pass_verify_token
+        "token": token
     })
 
 
@@ -2178,53 +2064,38 @@ def handle_tap():
     # Normalize action to new terminology
     normalized_action = action_map[action]
 
-    join_code = get_join_code_for_student_period(student.id, period)
-    if not join_code:
-        current_app.logger.warning(
-            f"TAP ERROR: Unable to resolve join_code for period={period}"
-        )
+    context = get_current_class_context()
+    class_id = context.get("class_id") if context else get_current_class_id()
+    if not class_id:
+        current_app.logger.warning("TAP ERROR: Missing class_id context for student_id=%s", student.id)
         return jsonify({"error": "Unable to resolve class context for this period."}), 400
 
-    now = utc_now()
+    seat_id = seat.id if seat and seat.class_id == class_id else get_seat_id_for_class(student.id, class_id)
+    if not seat_id:
+        return jsonify({"error": "No seat assigned in this class."}), 403
 
-    # --- Check if tap is enabled for this student in this period ---
-    # Resolve seat_id and class_id for V2 identity
-    from app.utils.seat_scope import get_seat_id_for_class
-    from app.models import ClassEconomy
-    economy = ClassEconomy.query.filter_by(join_code=join_code).first()
-    class_id = economy.class_id if economy else None
-    seat_id = get_seat_id_for_class(student.id, class_id) if class_id else None
+    seat_row = db.session.get(Seat, seat_id)
+    if seat_row and (seat_row.block_identifier or seat_row.block):
+        seat_period = (seat_row.block_identifier or seat_row.block or "").upper()
+        if seat_period and period != seat_period:
+            return jsonify({"error": "Invalid period or action"}), 400
+
+    economy = ClassEconomy.query.filter_by(class_id=class_id).first()
+    join_code = economy.join_code if economy else None
+
+    now = utc_now()
 
     if not seat_id or not class_id:
         return jsonify({"error": "No seat assigned in this class."}), 403
 
     # --- Check if tap is enabled for this student in this period ---
-    from app.models import StudentBlock
-    student_block = StudentBlock.query.filter_by(
+    student_block = feat_get_or_create_student_block(
+        student_id=student.id,
         seat_id=seat_id,
         class_id=class_id,
-        period=period
-    ).first()
-
-    # If no StudentBlock record exists, create one with default settings (tap_enabled=True)
-    if not student_block:
-        try:
-            student_block = StudentBlock(
-                seat_id=seat_id,
-                class_id=class_id,
-                period=period,
-                student_id=student.id,
-                tap_enabled=True
-            )
-            db.session.add(student_block)
-            db.session.flush()
-        except IntegrityError:
-            db.session.rollback()
-            student_block = StudentBlock.query.filter_by(
-                seat_id=seat_id,
-                class_id=class_id,
-                period=period
-            ).first()
+        period=period,
+        tap_enabled=True,
+    )
 
     # Check if tap is disabled for this period
     if not student_block.tap_enabled:
@@ -2232,7 +2103,7 @@ def handle_tap():
 
     # --- Check "done for the day" lock ---
     if normalized_action == "start_work":
-        today_local = class_date(timestamp_utc=now)
+        today_local = get_class_now(class_id, reference_time_utc=now).date()
 
         # Automatically clear "done for the day" lock if it's from a previous day
         if student_block.done_for_day_date is not None and student_block.done_for_day_date < today_local:
@@ -2253,75 +2124,20 @@ def handle_tap():
             # Fall through to the standard TapEvent creation logic below
             pass
         else:
-            # All other reasons go through the hall pass approval flow
-            # Check hall pass settings and queue limits
-
-            # CRITICAL: Resolve class context for V2 identity
-            from app.models import ClassEconomy
-            economy = ClassEconomy.query.filter_by(join_code=join_code).first()
-            if not economy:
+            policy_guard = feat_check_hall_pass_request_policy(
+                student=student,
+                class_id=class_id,
+                join_code=join_code,
+                period=period,
+                reason=reason,
+                now_utc=now,
+            )
+            if not policy_guard.allowed:
+                return jsonify({"error": policy_guard.message}), policy_guard.status_code
+            teacher_id = policy_guard.teacher_id
+            if not teacher_id:
                 return jsonify({"error": "Unable to resolve class context."}), 400
-
-            teacher_id = economy.teacher_id
-            class_id = economy.class_id
-
-            feature_scope = resolve_feature_class(teacher_id, 'hall_pass', block=period, join_code=join_code)
-            if feature_scope and not feature_scope["enabled"]:
-                return jsonify({"error": "Hall pass is currently disabled for this class."}), 403
-
-            settings = _get_or_create_hall_pass_settings(teacher_id, class_id)
-            if not settings:
-                return jsonify({"error": "Hall pass settings are not available for this class."}), 400
-
-            # Get pass types configuration
-            pass_types = settings.get_pass_types()
-
-            # Find configuration for this specific destination/reason
-            pass_type_config = next((pt for pt in pass_types if pt['name'].lower() == reason.lower()), None)
-
-            # If queue is disabled globally, check if we should block this request
-            # (we can still allow passes if they have unlimited limits for BOTH queue and simultaneous)
-            if not settings.queue_enabled:
-                # Allow only if this pass type has BOTH limits set to unlimited
-                if pass_type_config and (pass_type_config.get('queue_limit') is None and pass_type_config.get('simultaneous_limit') is None):
-                    pass  # Allow through
-                else:
-                    return jsonify({
-                        "error": "Queue system is currently disabled."
-                    }), 403
-
-            # Check per-destination queue limits
-            if pass_type_config and pass_type_config.get('queue_limit') is not None:
-                today_start_utc, _ = day_bounds_utc()
-                today_start_db = normalize_for_db(today_start_utc)
-
-                # Count approved (waiting) passes for THIS destination from today
-                queue_count = HallPassLog.query.filter(
-                    HallPassLog.status == 'approved',
-                    HallPassLog.reason == reason,
-                    HallPassLog.class_id == class_id,
-                    HallPassLog.decision_time >= today_start_db
-                ).count()
-
-                # Count currently out students for THIS destination from today
-                out_count = HallPassLog.query.filter(
-                    HallPassLog.status == 'left',
-                    HallPassLog.reason == reason,
-                    HallPassLog.class_id == class_id,
-                    HallPassLog.left_time >= today_start_db
-                ).count()
-
-                total_in_queue = queue_count + out_count
-                queue_limit = pass_type_config['queue_limit']
-
-                # Check if queue is at capacity for this destination
-                if total_in_queue >= queue_limit:
-                    return jsonify({
-                        "error": f"{reason} queue is full ({total_in_queue}/{queue_limit}). Please wait for someone to return."
-                    }), 403
-
-            # Check if hall pass is required (not for Office/Summons/Done for the day)
-            should_require_pass = reason.lower() not in ['office', 'summons', 'done for the day']
+            should_require_pass = policy_guard.should_require_pass
 
             # Keep hall-pass rent grants in sync for the active rent coverage period.
             # This applies the monthly top-off model even if the student paid rent earlier.
@@ -2334,24 +2150,15 @@ def handle_tap():
             if should_require_pass and student.hall_passes <= 0:
                 return jsonify({"error": "Insufficient hall passes."}), 400
 
-            # Create a hall pass log entry
-            hall_pass_log = HallPassLog(
-                student_id=student.id,
+            hall_pass_log = feat_request_hall_pass(
+                student=student,
                 seat_id=seat_id,
                 class_id=class_id,
-                reason=reason,
+                join_code=join_code,
                 period=period,
-                status='pending',
-                request_time=now
+                reason=reason,
+                now_utc=now,
             )
-            db.session.add(hall_pass_log)
-            db.session.flush()
-
-            from app.utils.seat_scope import get_seat_id_for_class
-            from app.models import ClassEconomy
-            economy = ClassEconomy.query.filter_by(join_code=join_code).first()
-            class_id = economy.class_id if economy else None
-            seat_id = get_seat_id_for_class(student.id, class_id) if class_id else None
 
             # Since the student is just requesting, they are still 'active'.
             # We need to return the current state to the UI.
@@ -2380,126 +2187,48 @@ def handle_tap():
         status = "active" if normalized_action == "start_work" else "inactive"
         reason = data.get("reason") if normalized_action == "stop_work" else None
 
-        # Auto-tap-out from other periods when tapping into a new period
-        # Resolve seat_id and class_id for V2 identity
-        from app.utils.seat_scope import get_seat_id_for_class
-        from app.models import ClassEconomy
-        economy = ClassEconomy.query.filter_by(join_code=join_code).first()
-        class_id = economy.class_id if economy else None
-        seat_id = get_seat_id_for_class(student.id, class_id) if class_id else None
-
-        if normalized_action == "start_work":
-            # Find all other periods where student is currently active
-            for other_period in valid_periods:
-                if other_period == period:
-                    continue  # Skip the period we're tapping into
-
-                latest_other = (
-                    TapEvent.query
-                    .filter_by(seat_id=seat_id, class_id=class_id, period=other_period, is_deleted=False)
-                    .order_by(TapEvent.timestamp.desc())
-                    .first()
-                )
-
-                if latest_other and latest_other.status == "active":
-                    # Auto tap-out from this period
-                    auto_tapout = TapEvent(
-                        student_id=student.id,
-                        seat_id=seat_id,
-                        class_id=class_id,
-                        join_code=join_code,
-                        period=other_period,
-                        status="inactive",
-                        timestamp=now,
-                        reason="auto_switch",  # Mark as automatic switch
-                    )
-                    db.session.add(auto_tapout)
-                    current_app.logger.info(f"Auto-tapped out seat {seat_id} from period {other_period} when tapping into {period}")
-
         # Prevent duplicate tap-in or tap-out
-        latest_event = (
-            TapEvent.query
-            .filter_by(seat_id=seat_id, class_id=class_id, period=period, is_deleted=False)
-            .order_by(TapEvent.timestamp.desc())
-            .first()
-        )
-        if latest_event and latest_event.status == status:
+        latest_state = SeatAttendanceState.query.filter_by(
+            seat_id=seat_id,
+            class_id=class_id,
+            period=period,
+        ).first()
+        if latest_state and ((latest_state.is_active and status == "active") or (not latest_state.is_active and status == "inactive")):
             current_app.logger.info(f"Duplicate {action} ignored for seat {seat_id} in period {period}")
             last_payroll_time = get_last_payroll_time(seat_id=seat_id, class_id=class_id)
             duration = calculate_unpaid_attendance_seconds(seat_id, class_id, period, last_payroll_time)
             db.session.flush() # FEAT-AUTHORIZED-SHELL
             return jsonify({
                 "status": "ok",
-                "active": latest_event.status == "active",
+                "active": latest_state.is_active,
                 "duration": duration
             })
 
-        # Check daily limit when Starting Work
         if normalized_action == "start_work":
-            from app.payroll import get_daily_limit_seconds
-            from app.attendance import calculate_period_attendance_utc_range
-
-            daily_limit = get_daily_limit_seconds(period)
-            if daily_limit:
-                start_of_day_utc, end_of_day_utc = day_bounds_utc(timestamp_utc=now)
-
-                # Query using proper UTC boundaries
-                today_attendance = calculate_period_attendance_utc_range(
-                    student.id, period, start_of_day_utc, end_of_day_utc
-                )
-
-                if today_attendance >= daily_limit:
-                    hours_limit = daily_limit / 3600.0
-                    current_app.logger.warning(
-                        f"Student {student.id} attempted to tap in for {period} but has reached daily limit of {hours_limit} hours"
-                    )
-                    return jsonify({
-                        "error": f"Daily limit of {hours_limit:.1f} hours reached for this period. Please try again tomorrow."
-                    }), 400
-
-        # When Starting Work, automatically return any active hall pass
-        if normalized_action == "start_work":
-            active_hall_pass = HallPassLog.query.filter_by(
+            daily_limit_guard = feat_check_start_work_daily_limit(
+                student_id=student.id,
                 seat_id=seat_id,
                 class_id=class_id,
                 period=period,
-                status='left'
-            ).order_by(HallPassLog.request_time.desc()).first()
+                now_utc=now,
+                logger=current_app.logger,
+            )
+            if not daily_limit_guard.allowed:
+                return jsonify({"error": daily_limit_guard.message}), daily_limit_guard.status_code
 
-            if active_hall_pass:
-                active_hall_pass.status = 'returned'
-                active_hall_pass.return_time = now
-                current_app.logger.info(f"Auto-returned hall pass {active_hall_pass.id} for student {student.id}")
-
-        event = TapEvent(
-            student_id=student.id,
+        feat_apply_standard_tap_mutations(
+            student=student,
+            student_block=student_block,
             seat_id=seat_id,
             class_id=class_id,
             join_code=join_code,
             period=period,
-            status=status,
-            timestamp=now,  # UTC-aware
+            normalized_action=normalized_action,
             reason=reason,
+            valid_periods=valid_periods,
+            now_utc=now,
+            logger=current_app.logger,
         )
-        db.session.add(event)
-
-        # Update "done for the day" status when Stopping Work with reason "done"
-        today_local = class_date(timestamp_utc=now)
-        # Clear done_for_day_date if it's a new day
-        if student_block.done_for_day_date and student_block.done_for_day_date != today_local:
-            student_block.done_for_day_date = None
-            current_app.logger.info(f"Cleared done_for_day_date for seat {seat_id} in period {period} (new day)")
-        # Set or clear done_for_day_date based on stop work reason
-        if normalized_action == "stop_work":
-            if reason and reason.lower() in ['done', 'done for the day']:
-                student_block.done_for_day_date = today_local
-                current_app.logger.info(f"Seat {seat_id} marked as done for the day in period {period}")
-            else:
-                if student_block.done_for_day_date is not None:
-                    student_block.done_for_day_date = None
-                    current_app.logger.info(f"Cleared done_for_day_date for seat {seat_id} in period {period} (reason: {reason})")
-
-        db.session.flush()
         current_app.logger.info(f"TAP success - seat {seat_id} {period} {action}")
     except SQLAlchemyError as e:
         db.session.rollback()
@@ -2507,13 +2236,12 @@ def handle_tap():
         return jsonify({"error": "Database error"}), 500
 
     # Fetch latest status and unpaid duration for the tapped period
-    latest_event = (
-        TapEvent.query
-        .filter_by(seat_id=seat_id, class_id=class_id, period=period, is_deleted=False)
-        .order_by(TapEvent.timestamp.desc())
-        .first()
-    )
-    is_active = latest_event.status == "active" if latest_event else False
+    latest_state = SeatAttendanceState.query.filter_by(
+        seat_id=seat_id,
+        class_id=class_id,
+        period=period,
+    ).first()
+    is_active = latest_state.is_active if latest_state else False
     last_payroll_time = get_last_payroll_time(seat_id=seat_id, class_id=class_id)
     duration = calculate_unpaid_attendance_seconds(seat_id, class_id, period, last_payroll_time)
 
@@ -2667,12 +2395,7 @@ def delete_tap_entry(event_id):
     if not student:
         return jsonify({"error": "Student not found or access denied"}), 404
 
-    # Mark as deleted
-    event.is_deleted = True
-    event.deleted_at = utc_now()
-    event.deleted_by = admin.id
-
-    db.session.flush()
+    feat_soft_delete_tap_entry(event=event, admin_id=admin.id, deleted_at=utc_now())
 
     current_app.logger.info(f"Admin {admin.id} deleted tap entry {event_id} for student {event.student_id}")
 
@@ -2700,7 +2423,6 @@ def update_student_block_settings():
     if not student_id or not period or tap_enabled is None:
         return jsonify({"error": "Missing required fields"}), 400
 
-    from app.models import StudentBlock
     from app.auth import get_student_for_admin
 
     # SECURITY FIX: Use scoped helper AND removed deprecated teacher_id check
@@ -2722,26 +2444,16 @@ def update_student_block_settings():
     class_id = seat.class_id
     seat_id = seat.id
 
-    # Strict v2 scope: seat_id + class_id + period must match.
-    student_block = StudentBlock.query.filter_by(
-        seat_id=seat_id,
-        class_id=class_id,
-        period=period,
-    ).first()
-
-    if not student_block:
-        student_block = StudentBlock(
+    try:
+        feat_set_student_block_tap_enabled(
+            student_id=student_id,
             seat_id=seat_id,
             class_id=class_id,
-            student_id=student_id,
             period=period,
-            tap_enabled=tap_enabled
+            tap_enabled=tap_enabled,
         )
-        db.session.add(student_block)
-    else:
-        student_block.tap_enabled = tap_enabled
-
-    db.session.flush()
+    except PermissionError:
+        return jsonify({"error": "Student block not found or access denied"}), 403
 
     current_app.logger.info(f"Admin {admin.id} set tap_enabled={tap_enabled} for student {student_id} period {period}")
 
@@ -2762,158 +2474,18 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
         commit: Whether to commit the transaction immediately (default: True).
                 Set to False if calling in a loop to batch commits.
     """
-    import pytz
-    from app.payroll import get_daily_limit_seconds
-    from app.attendance import calculate_period_attendance_utc_range
-
-    # Helper function to ensure UTC timezone-aware datetime
-
-
-    # Keep original case for settings lookup, but uppercase for TapEvent queries
-    student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
-    now_utc = utc_now()
-
-    start_of_day_utc, end_of_day_utc = day_bounds_utc(timestamp_utc=now_utc)
-    today_local = class_date(timestamp_utc=now_utc)
-
-    for block_original in student_blocks:
-        period_upper = block_original.upper()
-
-        # Resolve seat_id and class_id for V2 identity
-        seat = TeacherBlock.query.filter_by(
-            student_id=student.id,
-            block=block_original,
-            is_claimed=True
-        ).first()
-        
-        if not seat or not seat.class_id:
-            continue
-            
-        class_id = seat.class_id
-        seat_id = seat.id
-
-        # Check if student is currently active in this period (TapEvent uses uppercase)
-        latest_event = (
-            TapEvent.query
-            .filter_by(seat_id=seat_id, class_id=class_id, period=period_upper, is_deleted=False)
-            .order_by(TapEvent.timestamp.desc())
-            .first()
+    try:
+        feat_enforce_daily_limits(
+            student=student,
+            commit=commit,
+            logger=current_app.logger,
         )
-
-        if latest_event and latest_event.status == "active":
-            # Get teacher_id for this block (needed for settings lookup)
-            teacher_id = seat.teacher_id
-
-            # Get daily limit for this period (use original case for settings lookup)
-            daily_limit = get_daily_limit_seconds(block_original, teacher_id=teacher_id)
-
-            if daily_limit:
-                # Calculate today's completed attendance using canonical class-local day boundaries
-                today_attendance = calculate_period_attendance_utc_range(
-                    seat_id, class_id, period_upper, start_of_day_utc, end_of_day_utc
-                )
-
-                # Add current active session time
-                # Convert to UTC-aware datetime to prevent TypeError
-                last_tap_in_utc = ensure_utc(latest_event.timestamp)
-
-                # Only add active session time if tapped in today (within class-local day boundaries)
-                if start_of_day_utc <= last_tap_in_utc < end_of_day_utc:
-                    current_session_seconds = (now_utc - last_tap_in_utc).total_seconds()
-                    today_attendance += current_session_seconds
-
-                # If limit reached or exceeded, auto-tap-out
-                if today_attendance >= daily_limit:
-                    hours_limit = daily_limit / 3600.0
-
-                    # v2 strict mode: active events must always carry join_code.
-                    join_code = latest_event.join_code
-
-                    from app.models import ClassEconomy
-                    economy = ClassEconomy.query.filter_by(join_code=join_code).first()
-                    class_id = economy.class_id if economy else None
-                    from app.utils.seat_scope import get_seat_id_for_class
-                    seat_id = get_seat_id_for_class(student.id, class_id) if class_id else None
-
-                    if not join_code:
-                        current_app.logger.warning(
-                            f"Unable to resolve join_code for auto-tap-out; TapEvent ID is {latest_event.id}."
-                        )
-                        continue
-
-                    if not seat_id or not class_id:
-                        current_app.logger.warning(
-                            f"Unable to resolve V2 identity for student {student.id} in period {period_upper} for auto-tap-out."
-                        )
-                        continue
-
-                    # IDEMPOTENCY CHECK: Check if we already created a daily limit tap-out today
-                    # This prevents duplicate tap-outs from race conditions (multiple browser tabs, scheduled job, etc.)
-                    existing_limit_tapout = TapEvent.query.filter(
-                        TapEvent.seat_id == seat_id,
-                        TapEvent.class_id == class_id,
-                        TapEvent.period == period_upper,
-                        TapEvent.status == "inactive",
-                        TapEvent.timestamp >= start_of_day_utc,
-                        TapEvent.timestamp < end_of_day_utc,
-                        TapEvent.reason_code == TapEventReasonCode.DAILY_LIMIT,
-                        TapEvent.is_deleted == False
-                    ).first()
-
-                    if existing_limit_tapout:
-                        current_app.logger.debug(
-                            f"Skipping duplicate auto-tap-out for seat {seat_id} in {period_upper} - "
-                            f"daily limit tap-out already exists at {existing_limit_tapout.timestamp}"
-                        )
-                        continue  # Skip creating duplicate
-
-                    current_app.logger.info(
-                        f"Auto-tapping out seat {seat_id} from {period_upper} - daily limit of {hours_limit} hours reached (total: {today_attendance/3600:.2f}h)"
-                    )
-
-                    # Calculate when they SHOULD have been tapped out (at exactly the limit)
-                    # If they've been active for 90 minutes and limit is 75, tap them out 15 minutes ago
-                    overage_seconds = today_attendance - daily_limit
-                    tapout_timestamp = now_utc - timedelta(seconds=overage_seconds)
-
-                    # Create tap-out event backdated to when they hit the limit
-                    tap_out_event = TapEvent(
-                        seat_id=seat_id,
-                        class_id=class_id,
-                        student_id=student.id,
-                        join_code=join_code,
-                        period=period_upper,
-                        status="inactive",
-                        timestamp=tapout_timestamp,
-                        reason=f"Daily limit ({hours_limit:.1f}h) reached",
-                        reason_code=TapEventReasonCode.DAILY_LIMIT
-                    )
-                    db.session.add(tap_out_event)
-
-                    # Lock the student for the rest of the day in this period
-                    student_block = StudentBlock.query.filter_by(
-                        seat_id=seat_id,
-                        class_id=class_id,
-                        period=period_upper
-                    ).first()
-                    if not student_block:
-                        student_block = StudentBlock(
-                            seat_id=seat_id,
-                            class_id=class_id,
-                            student_id=student.id,
-                            period=period_upper,
-                            tap_enabled=True
-                        )
-                        db.session.add(student_block)
-                    student_block.done_for_day_date = today_local
-
-    # Commit all auto-tap-outs at once if requested
-    if commit:
-        try:
-            db.session.flush()
-        except Exception as e:
+    except Exception as e:
+        if commit:
             db.session.rollback()
-            current_app.logger.error(f"Failed to auto-tap-out student {student.id}: {e}")
+        current_app.logger.error(f"Failed to auto-tap-out student {student.id}: {e}")
+        if not commit:
+            raise
 
 
 @api_bp.route('/student-status', methods=['GET'])
@@ -2927,7 +2499,11 @@ def student_status():
     if not context:
         return jsonify({"status": "error", "message": "No class selected."}), 400
 
-    period_states = get_all_block_statuses(student, join_code=context['join_code'])
+    class_id = context.get("class_id")
+    if not class_id:
+        return jsonify({"status": "error", "message": "Class context unavailable."}), 400
+
+    period_states = get_all_block_statuses(student, class_id=class_id)
 
     # Convert Decimal values to float for JSON serialization
     for state in period_states.values():
@@ -3098,6 +2674,7 @@ def get_block_tap_settings():
 
 @api_bp.route('/admin/block-tap-settings', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-ATTN-001")
 def update_block_tap_settings():
     """
     Update tap_enabled settings for all students in a specific block/period.
@@ -3114,8 +2691,7 @@ def update_block_tap_settings():
     if not block or tap_enabled is None:
         return jsonify({"error": "Missing required fields"}), 400
     
-    from app.models import Student, StudentBlock
-    from app.auth import get_admin_student_query
+    from app.models import Student
     
     try:
         # Resolve class_id for this admin and block
@@ -3141,27 +2717,15 @@ def update_block_tap_settings():
         updated_count = 0
         for seat in seats:
             # Strict v2 scope: seat_id + class_id + period must match.
-            student_block = StudentBlock.query.filter_by(
+            feat_set_student_block_tap_enabled(
+                student_id=seat.student_id,
                 seat_id=seat.id,
                 class_id=class_id,
                 period=block,
-            ).first()
-
-            if not student_block:
-                student_block = StudentBlock(
-                    seat_id=seat.id,
-                    class_id=class_id,
-                    student_id=seat.student_id,
-                    period=block,
-                    tap_enabled=tap_enabled
-                )
-                db.session.add(student_block)
-            else:
-                student_block.tap_enabled = tap_enabled
+                tap_enabled=tap_enabled,
+            )
             updated_count += 1
-        
-        db.session.flush()
-        
+
         current_app.logger.info(
             f"Admin {admin.id} set tap_enabled={tap_enabled} for {updated_count} students in block {block}"
         )
@@ -3172,6 +2736,9 @@ def update_block_tap_settings():
             "updated_count": updated_count
         })
     
+    except PermissionError:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": "Class not found"}), 404
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error updating block tap settings: {e}", exc_info=True)

@@ -450,6 +450,48 @@ def test_payroll_settings_requires_current_class_context(client):
     assert db.session.query(PayrollSettings).count() == initial_settings_count
 
 
+def test_payroll_settings_uses_feature_scope_blocks_not_student_block_text(client):
+    admin = make_admin("payroll_scope_admin", "secret")
+    db.session.add(admin)
+    db.session.flush()
+
+    student = Student(first_name="Scope", last_initial="S", block="A", salt=b"salt")
+    db.session.add(student)
+    db.session.flush()
+
+    class_row = create_class_scope(
+        teacher=admin,
+        join_code="PAYS002",
+        block="B",
+        student=student,
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+    )
+    db.session.commit()
+
+    _login_admin(client, admin.id)
+    with client.session_transaction() as sess:
+        sess["current_class_id"] = class_row.class_id
+        sess["current_join_code"] = class_row.join_code
+
+    response = client.post(
+        "/admin/payroll/settings",
+        data={
+            "cwi_block": "B",
+            "settings_mode": "simple",
+            "simple_pay_rate": "15.0",
+            "simple_frequency": "biweekly",
+            "expected_weekly_hours": "5.0",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/admin/payroll")
+    saved = PayrollSettings.query.filter_by(class_id=class_row.class_id, block="B").first()
+    assert saved is not None
+
+
 def test_class_scoped_write_rejects_stale_session_join_code(client):
     admin = make_admin("stale_guard_admin", "secret")
     db.session.add(admin)

@@ -486,9 +486,46 @@ a:hover {
     bottom: 0;
     padding: 1.5rem;
     overflow-y: auto;
-    scrollbar-gutter: stable;
+    overflow-x: hidden;
+    scrollbar-gutter: stable both-edges;
     z-index: 1000;
     transition: transform 0.3s ease;
+}
+
+/* Keep nav width visually stable when sections expand and scrolling toggles. */
+.sidebar,
+.student-sidebar,
+.sysadmin-sidebar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.35) rgba(255, 255, 255, 0.08);
+}
+
+.sidebar::-webkit-scrollbar,
+.student-sidebar::-webkit-scrollbar,
+.sysadmin-sidebar::-webkit-scrollbar {
+    width: 10px;
+}
+
+.sidebar::-webkit-scrollbar-track,
+.student-sidebar::-webkit-scrollbar-track,
+.sysadmin-sidebar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+}
+
+.sidebar::-webkit-scrollbar-thumb,
+.student-sidebar::-webkit-scrollbar-thumb,
+.sysadmin-sidebar::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    border: 2px solid rgba(0, 0, 0, 0);
+    background-clip: content-box;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover,
+.student-sidebar::-webkit-scrollbar-thumb:hover,
+.sysadmin-sidebar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.55);
 }
 
 .sidebar a {

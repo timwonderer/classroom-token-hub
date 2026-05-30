@@ -17,8 +17,8 @@ def enforce_daily_limits_job():
     Runs hourly to ensure limits are enforced even if students close their browser.
     """
     # Import here to avoid circular imports
-    from app.models import Student, TapEvent
-    from app.routes.api import check_and_auto_tapout_if_limit_reached
+    from app.models import AttendanceSession, SeatAttendanceState, Student, TapEventReasonCode
+    from app.feats.attendance import enforce_daily_limits as feat_enforce_daily_limits
     from app.extensions import db
 
     logger = logging.getLogger('scheduled_tasks')
@@ -41,36 +41,52 @@ def enforce_daily_limits_job():
                     has_active_session = False
 
                     for period in student_blocks:
-                        latest_event = (
-                            TapEvent.query
+                        state = (
+                            SeatAttendanceState.query
                             .filter_by(student_id=student.id, period=period)
-                            .order_by(TapEvent.timestamp.desc())
+                            .order_by(SeatAttendanceState.updated_at.desc())
                             .first()
                         )
 
                         # If student is active, check their limit
-                        if latest_event and latest_event.status == "active":
+                        if state and state.is_active:
                             has_active_session = True
                             break
 
                     if has_active_session:
                         checked_count += 1
-                        # Get the latest event ID before running check
-                        latest_before = TapEvent.query.filter_by(
-                            student_id=student.id
-                        ).order_by(TapEvent.timestamp.desc()).first()
+                        # Compare canonical daily-limit session closures before/after.
+                        before_daily_limit_count = (
+                            AttendanceSession.query
+                            .filter(
+                                AttendanceSession.student_id == student.id,
+                                AttendanceSession.end_reason_code == TapEventReasonCode.DAILY_LIMIT,
+                                AttendanceSession.ended_at.is_not(None),
+                            )
+                            .count()
+                        )
 
-                        check_and_auto_tapout_if_limit_reached(student, commit=False)
+                        feat_enforce_daily_limits(student=student, commit=False, logger=logger)
 
-                        # Check if a new tap-out event was created
-                        latest_after = TapEvent.query.filter_by(
-                            student_id=student.id
-                        ).order_by(TapEvent.timestamp.desc()).first()
+                        after_daily_limit_count = (
+                            AttendanceSession.query
+                            .filter(
+                                AttendanceSession.student_id == student.id,
+                                AttendanceSession.end_reason_code == TapEventReasonCode.DAILY_LIMIT,
+                                AttendanceSession.ended_at.is_not(None),
+                            )
+                            .count()
+                        )
 
-                        if latest_after and (latest_before is None or latest_after.id != latest_before.id):
-                            if latest_after.status == "inactive":
-                                tapped_out_count += 1
-                                logger.info(f"Auto-tapped out student {student.id} ({student.full_name})")
+                        newly_closed = max(0, after_daily_limit_count - before_daily_limit_count)
+                        if newly_closed:
+                            tapped_out_count += newly_closed
+                            logger.info(
+                                "Auto-tapped out student %s (%s) in %s class sessions",
+                                student.id,
+                                student.full_name,
+                                newly_closed,
+                            )
             except Exception as e:
                 logger.error(f"Error checking student {student.id}: {e}", exc_info=True)
                 continue

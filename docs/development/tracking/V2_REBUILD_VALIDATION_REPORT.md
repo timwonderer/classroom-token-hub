@@ -1,9 +1,181 @@
-# V2 Rebuild Validation Report — Revision 11
+# V2 Rebuild Validation Report — Revision 18
 
-**Generated:** 2026-05-26  
+**Generated:** 2026-05-30  
 **Branch:** `codex/v2.0`  
 **Against:** `V2_Full_compliance_migration_plan.md`  
 **Methodology:** Direct code inspection (multi-pass), migration chain analysis, model column audit, service/FEAT write-path tracing, test coverage enumeration, CI infrastructure review, adversarial scorecard analysis, INV compliance sweep, auth-path and session-bridge verification (Revision 3 additions)
+
+### Post-Report Update (2026-05-30, `codex/v2.0`) — Wave 6 Final Cutover Closure
+
+- Closed the remaining Wave 6 cutover items from Revision 17:
+  - `app/attendance.py:get_batch_attendance_events(...)` now reads canonical `attendance_sessions` and synthesizes active/inactive transitions in-memory for payroll/admin calculations (no `tap_events` read dependency in this path).
+  - `app/attendance.py:batch_auto_tapout_students(...)` now writes via canonical `student_tap(...)` session-state mutation flow instead of creating legacy `TapEvent` rows directly.
+  - Removed hard legacy schema dependency on `TapEvent.student_id`:
+    - `app/models.py:TapEvent.student_id` now nullable.
+    - `app/models.py:_sync_tap_event_seat(...)` now backfills `student_id` from `seat_id` when absent while keeping class/seat hard invariants enforced.
+    - new migration: `migrations/versions/e4a2b7c9d1f0_make_tap_event_student_id_nullable.py`.
+- Validation:
+  - `python3 scripts/lint_migrations.py migrations/versions/e4a2b7c9d1f0_make_tap_event_student_id_nullable.py` → pass
+  - `flask db heads` → `e4a2b7c9d1f0 (head)`
+  - `flask db upgrade` → pass (`f2c9d1a6b7e8 -> e4a2b7c9d1f0`)
+  - `flask db downgrade f2c9d1a6b7e8` → pass
+  - `flask db upgrade` (re-upgrade) → pass
+  - `flask db current` → `e4a2b7c9d1f0 (head)`
+  - `pytest -q tests/test_attendance_seat_scope.py tests/test_attendance.py tests/test_hall_pass_checkout.py tests/test_tap_flow.py tests/test_admin_payroll_scoped_balances.py tests/test_api_tenancy.py -k "hall_pass or tap_entries or student_block_settings or block_tap_settings or payroll or attendance or seat_scope"` → `33 passed, 10 deselected`
+  - `python3 -m py_compile app/attendance.py app/models.py app/feats/attendance.py tests/test_attendance_seat_scope.py migrations/versions/e4a2b7c9d1f0_make_tap_event_student_id_nullable.py` → pass
+
+### Post-Report Update (2026-05-30, `codex/v2.0`) — Wave 6 Validation + Tracker Drift Closure
+
+- Validated current Wave 6 attendance slice against live code/tests and reconciled stale tracker claims.
+- Runtime/FEAT reality validated in this slice:
+  - `app/feats/attendance.py` exists and owns attendance/hall-pass/admin mutation helpers used by `app/routes/api.py`.
+  - `app/services/attendance_service.py` now computes attendance status/duration from canonical `AttendanceSession` + `SeatAttendanceState`.
+  - `AttendanceSession` / `SeatAttendanceState` are runtime models in `app/models.py` and are exercised by current attendance suites.
+  - Wave 6 migration file exists as `migrations/versions/c6a8f6d1e2b3_create_attendance_sessions_and_state.py`.
+- Validation:
+  - `python3 -m py_compile app/attendance.py app/services/attendance_service.py app/feats/attendance.py app/routes/api.py tests/test_attendance.py tests/test_hall_pass_checkout.py tests/test_tap_flow.py tests/test_api_tenancy.py` → pass
+  - `pytest -q tests/test_attendance.py tests/test_hall_pass_checkout.py tests/test_tap_flow.py tests/test_tap_toggle_and_lock.py` → `23 passed`
+  - `pytest -q tests/test_api_tenancy.py -k "hall_pass or tap_entries or student_block_settings or block_tap_settings"` → `9 passed`
+  - `pytest -q tests/test_api_admin_tap_scope.py tests/test_attendance_seat_scope.py` → `4 passed`
+  - `python3 scripts/lint_migrations.py migrations/versions/c6a8f6d1e2b3_create_attendance_sessions_and_state.py` → pass
+  - `flask db heads` → `f2c9d1a6b7e8 (head)`
+
+### Post-Report Update (2026-05-28, `codex/v2.0`) — Attendance Clean-Break Canonicalization (No Transitional Mirror)
+
+- Enforced clean-break direction for attendance runtime and tests:
+  - Removed transitional tap-to-canonical mirror listener path; attendance state is now written directly via canonical FEAT/session-state mutation flow.
+  - Updated attendance compatibility/service usage to read canonical `attendance_sessions` / `seat_attendance_state` for active status and duration calculations.
+  - Converted attendance and hall-pass checkout/checkin regression tests away from `TapEvent` assertions to canonical session/state assertions.
+- Validation:
+  - `pytest -q tests/test_attendance.py tests/test_tap_flow.py tests/test_hall_pass_checkout.py` → `20 passed`
+  - `pytest -q tests/test_tap_toggle_and_lock.py tests/test_api_tenancy.py -k "hall_pass or tap_entries or student_block_settings or block_tap_settings"` → `10 passed`
+  - `python3 -m py_compile app/attendance.py app/services/attendance_service.py app/feats/attendance.py app/routes/api.py tests/test_attendance.py tests/test_hall_pass_checkout.py` → pass
+
+### Post-Report Update (2026-05-28, `codex/v2.0`) — Attendance Step-3 FEAT Coverage Closure (Hall Pass Admin Controls)
+
+- Closed remaining hall-pass admin mutation paths in attendance API:
+  - Split `/api/hall-pass/settings` into:
+    - `GET` read-only handler
+    - `POST` handler wrapped in `@feat_shell("FEAT-ATTN-001")`
+  - Added FEAT wrappers for:
+    - `/api/hall-pass/setup` `POST`
+    - `/api/hall-pass/verify-token/rotate` `POST`
+- Moved settings/token writes behind attendance FEAT helpers in `app/feats/attendance.py`:
+  - `update_hall_pass_queue_settings(...)`
+  - `save_hall_pass_setup_config(...)`
+  - `rotate_teacher_hall_pass_verify_token(...)`
+- Validation:
+  - `python3 -m py_compile app/feats/attendance.py app/routes/api.py` → pass
+  - `pytest -q tests/test_hall_pass_verify.py tests/test_hall_pass_checkout.py` → `27 passed`
+  - `pytest -q tests/test_api_tenancy.py -k "hall_pass or tap_entries or student_block_settings or block_tap_settings"` → `9 passed`
+  - `pytest -q tests/test_tap_flow.py tests/test_tap_toggle_and_lock.py tests/test_attendance.py::test_get_session_status tests/test_attendance.py::test_get_all_block_statuses` → `10 passed`
+  - `python3 scripts/policy_guardrails.py --git-diff-base origin/main --git-diff-head HEAD` → `Policy guardrails: clean`
+
+### Post-Report Update (2026-05-28, `codex/v2.0`) — Attendance Step-2 FEAT Mutation Ownership (Admin Tap Controls)
+
+- Expanded attendance FEAT ownership for remaining admin mutation routes:
+  - `app/routes/api.py:/api/admin/tap-entries/<event_id> DELETE` now delegates soft-delete mutation to `app/feats/attendance.py:soft_delete_tap_entry(...)`.
+  - `app/routes/api.py:/api/admin/student-block-settings POST` now delegates canonical toggle mutation to `app/feats/attendance.py:set_student_block_tap_enabled(...)`.
+  - `app/routes/api.py:/api/admin/block-tap-settings POST` is now explicitly wrapped with `@feat_shell("FEAT-ATTN-001")` and uses FEAT helper mutation path per seat.
+- Preserved tenancy fail-closed behavior while FEAT-izing:
+  - `set_student_block_tap_enabled(...)` now detects legacy `StudentBlock(student_id, period)` rows and only promotes rows that can be proven in-scope for the current class.
+  - out-of-scope or null-scope legacy rows now raise `PermissionError`, which routes map back to prior expected API behavior:
+    - student-block toggle: `403`
+    - block-level bulk toggle: `404`
+- Validation:
+  - `python3 -m py_compile app/feats/attendance.py app/routes/api.py` → pass
+  - `pytest -q tests/test_api_tenancy.py -k "student_block_settings or block_tap_settings_post_preserves_out_of_scope_join_code_row"` → `3 passed`
+  - `pytest -q tests/test_api_admin_tap_scope.py tests/test_api_tenancy.py -k "tap_entries or student_block_settings or block_tap_settings"` → `6 passed`
+  - `pytest -q tests/test_hall_pass_checkout.py tests/test_tap_flow.py tests/test_attendance.py::test_get_session_status tests/test_attendance.py::test_get_all_block_statuses` → `17 passed`
+  - `pytest -q tests/test_tap_toggle_and_lock.py tests/test_api_fixes.py` → `7 passed`
+
+### Post-Report Update (2026-05-27, `codex/v2.0`) — Attendance Step-1 Correctness Slice
+
+- Fixed `app/attendance.py:get_session_status(...)` join-code/class-scope ordering bug:
+  - `join_code` is now resolved before class lookup and day-window computation.
+  - Eliminates the pre-assignment `join_code` reference path.
+- Normalized attendance/hall-pass day-bound logic to class-scoped temporal authority in `app/routes/api.py`:
+  - daily limit checks now use `get_class_today_range(class_id, ...)` instead of generic `day_bounds_utc(...)`
+  - done-for-day local date stamps now use `get_class_now(class_id, ...).date()`
+  - simultaneous-pass/day-limit queue windows now resolve from class-local day boundaries
+  - auto tap-out loop now computes start/end-of-day per class instead of once from ambient/session timezone
+- Removed stale hall-pass templates carrying dead endpoint contracts:
+  - deleted `templates/hall_pass_terminal.html` (referenced removed `/api/hall-pass/lookup/*`, `/terminal/use`, `/terminal/return`, `/queue`)
+  - deleted `templates/hall_pass_queue.html` (referenced removed `/api/hall-pass/queue`)
+  - no active route currently renders either template
+- Validation:
+  - `pytest -q tests/test_attendance.py::test_get_session_status tests/test_attendance.py::test_get_all_block_statuses` → `2 passed`
+  - `python3 -m py_compile app/attendance.py app/routes/api.py` → pass
+
+### Post-Report Update (2026-05-27, `codex/v2.0`) — Attendance Class/Seat Canonical Context Hardening
+
+- Enforced class-context checks for student hall-pass mutations via `class_id` authority:
+  - `app/routes/api.py:_enforce_hall_pass_student_context(...)` now resolves active context from `current_class_id`/class context and blocks mutation when a legacy `current_join_code`-only session tries to mutate.
+  - mismatch enforcement now keys on `log_entry.class_id` vs active `class_id`.
+- Removed internal join-code authority fallback in attendance FEAT pass scope resolution:
+  - `app/feats/attendance.py:_resolve_student_pass_scope(...)` now resolves only canonical `seat_id` + `class_id`.
+  - checkout/checkin FEAT paths backfill missing `seat_id`/`class_id` on legacy pass rows before mutation and only use `join_code` as a display/logging alias.
+- Removed join-code authority lookup from student tap mutation orchestration:
+  - `app/routes/api.py:/api/tap` now resolves runtime scope from active class context (`current_class_id`/`Seat`) and canonical seat lookup by `(student_id, class_id)`.
+  - class lookup by `join_code` for tap mutations was removed; `join_code` is retained only as a UI/logging alias after class scope is established.
+- Updated hall-pass checkout regression coverage to canonical anchors:
+  - `tests/test_hall_pass_checkout.py` now seeds a canonical `Seat` for the student fixture and drives class-context assertions with `current_class_id` (not `current_join_code` authority).
+- Updated tap-flow coverage fixtures to canonical identity prerequisites:
+  - `tests/test_tap_flow.py` helper now seeds claimed, user-bound seats with class anchors.
+  - legacy join-code-only auto-tapout test was replaced with canonical no-seat no-op behavior.
+- Extracted additional `/api/tap` mutation bodies behind attendance FEAT helpers:
+  - `app/feats/attendance.py` adds:
+    - `get_or_create_student_block(...)`
+    - `apply_standard_tap_mutations(...)`
+  - `app/routes/api.py:/api/tap` now delegates:
+    - StudentBlock create/retry path through `feat_get_or_create_student_block(...)`
+    - Hall-pass request row creation through `feat_request_hall_pass(...)`
+    - Standard start/stop mutation writes (auto period switch tap-out, auto hall-pass return, tap append, done-for-day state) through `feat_apply_standard_tap_mutations(...)`
+  - Route retains identity/scope resolution (`class_id` + `seat_id`) and response assembly.
+- Extracted `/api/tap` remaining domain policy guards behind FEAT helpers:
+  - `app/feats/attendance.py` adds:
+    - `check_start_work_daily_limit(...)` (read-only daily limit guard)
+    - `check_hall_pass_request_policy(...)` (read-only hall-pass feature/queue/policy guard)
+  - `app/routes/api.py:/api/tap` now consumes guard results and no longer owns these policy calculations inline.
+- Validation:
+  - `pytest -q tests/test_hall_pass_checkout.py` → `10 passed`
+  - `pytest -q tests/test_tap_flow.py` → `5 passed`
+  - `pytest -q tests/test_hall_pass_checkout.py tests/test_tap_flow.py tests/test_attendance.py::test_get_session_status tests/test_attendance.py::test_get_all_block_statuses` → `17 passed`
+  - `pytest -q tests/test_attendance.py::test_get_session_status tests/test_attendance.py::test_get_all_block_statuses` → `2 passed`
+  - `pytest -q tests/test_admin_tenancy.py -k "enforce_daily_limits_taps_out_when_limit_reached_in_scope"` → `1 passed`
+  - `python3 -m py_compile app/feats/attendance.py app/routes/api.py tests/test_hall_pass_checkout.py tests/test_tap_flow.py` → pass
+
+### Post-Report Update (2026-05-27, `codex/v2.0`) — Migration Chain Blocker Closure
+
+- Closed the local `flask db upgrade` blocker at migration `a91cf11e8b2d`:
+  - root cause: legacy Postgres RLS policy `teacher_isolation_policy` on `feature_settings` depended on `teacher_id`, so `DROP COLUMN teacher_id` failed with `DependentObjectsStillExist`.
+  - fix: `migrations/versions/a91cf11e8b2d_drop_feature_settings_legacy_scope_columns.py` now detects and drops `teacher_isolation_policy` before dropping legacy scope columns.
+- Validation:
+  - `python3 scripts/lint_migrations.py migrations/versions/a91cf11e8b2d_drop_feature_settings_legacy_scope_columns.py` → pass
+  - `flask db upgrade` now completes through:
+    - `f84c7ad2c1aa -> a91cf11e8b2d`
+    - `a91cf11e8b2d -> b1c2d3e4f5a6`
+  - DB revision state:
+    - `flask db heads` → `b1c2d3e4f5a6 (head)`
+    - `flask db current` → `b1c2d3e4f5a6 (head)`
+  - regression sanity:
+    - `pytest -q tests/test_admin_tenancy.py tests/test_dashboard_rendering.py tests/test_backfill_transactions.py` → `28 passed`
+
+### Post-Report Update (2026-05-27, `codex/v2.0`)
+
+- DB harness stabilization for Postgres-backed tests:
+  - `tests/conftest.py` now serializes full app-fixture lifecycle with `pg_advisory_lock(...)` and rebuilds schema on a single connection before `metadata.create_all(...)`.
+  - This closes the intermittent concurrent test-db rebuild races observed as:
+    - duplicate enum/type creation (`classmembershiprole`)
+    - schema-drop interference during parallel test setup (`relation "teachers" does not exist`)
+- Daily-limit enforcement scope correction:
+  - `app/routes/admin.py` `enforce_daily_limits()` now passes the resolved `join_code` into `get_daily_limit_seconds(...)`, restoring class-scoped limit lookup for canonical class paths.
+- Tenancy regression fixture alignment:
+  - `tests/test_admin_tenancy.py` now seeds canonical class scope (`ClassEconomy`/`Seat`) for JOINA/JOINB scenarios and aligns stale-session assertions with current class-resolution behavior.
+- Validation:
+  - `pytest -q tests/test_admin_tenancy.py -vv` → `12 passed`
+  - `pytest -q tests/test_dashboard_rendering.py tests/test_backfill_transactions.py` → `16 passed`
+  - `python3 -m py_compile app/routes/admin.py tests/test_admin_tenancy.py tests/conftest.py` → pass
 
 ### Post-Report Update (2026-05-24, `codex/v2.0`)
 
@@ -96,8 +268,8 @@
   - Validation:
     - `python3 scripts/lint_migrations.py migrations/versions/b1c2d3e4f5a6_rename_ledger_tables.py` → pass
     - `pytest -q tests/test_audit_lineage.py tests/test_admin_export_students_scoping.py tests/test_admin_payroll_scoped_balances.py` → `10 passed`
-  - Known local DB-chain blocker during full upgrade validation:
-    - `flask db upgrade` currently fails before reaching this new migration due to pre-existing dependency conflict in prior migration `a91cf11e8b2d` (`feature_settings.teacher_id` drop blocked by dependent policy).
+  - Historical local DB-chain blocker (now closed in Revision 13):
+    - prior failure: `flask db upgrade` stopped at `a91cf11e8b2d` because legacy policy `teacher_isolation_policy` depended on `feature_settings.teacher_id`.
 - Rule-compliance sweep checkpoint (2026-05-26):
   - Guardrail scans:
     - `python3 scripts/policy_guardrails.py --strict --no-waivers` → `Policy guardrails: clean`
@@ -188,7 +360,7 @@ The first validation report's characterization of "0 of 44 canonical tables writ
 | `migrations/archive/README.md` | ✅ | Correct date, prior head, file count |
 | `migrations/versions/0001_bootstrap.py` with `down_revision = None` | ✅ | Root migration; uses `metadata.create_all(checkfirst=True)` for both model sets |
 | `scripts/verify_migration_squash.py` | ✅ | Validates 44 canonical tables by name |
-| Single migration head | ✅ | Chain: `0001 → 0002a → 3447255cb1af → 53e7c7148fea → 8357d4036478 → c4e36a4ab2f1 → d2f9f1d9be2e → f84c7ad2c1aa → a91cf11e8b2d` |
+| Single migration head | ✅ | Chain: `0001 → 0002a → 3447255cb1af → 53e7c7148fea → 8357d4036478 → c4e36a4ab2f1 → d2f9f1d9be2e → f84c7ad2c1aa → a91cf11e8b2d → b1c2d3e4f5a6` |
 
 ### Gaps
 
@@ -282,7 +454,7 @@ All 13 claimed deliverables verified:
 
 ## Wave 5 — Ledger Domain
 
-### Status: ⚠️ TABLE CONSOLIDATION IMPLEMENTED IN CODE — FULL UPGRADE VALIDATION BLOCKED BY PRIOR CHAIN ISSUE
+### Status: ✅ TABLE CONSOLIDATION IMPLEMENTED + LOCAL UPGRADE VALIDATED THROUGH HEAD
 
 The first validation report characterized this as "NOT STARTED." The deeper analysis reveals meaningful progress:
 
@@ -303,17 +475,17 @@ The first validation report characterized this as "NOT STARTED." The deeper anal
 
 | Check | Status |
 |---|---|
-| Full end-to-end `flask db upgrade` on local redteam DB | ⚠️ BLOCKED BEFORE NEW MIGRATION by pre-existing dependency issue in migration `a91cf11e8b2d` (`feature_settings.teacher_id` drop blocked by dependent policy) |
+| Full end-to-end `flask db upgrade` on local redteam DB | ✅ PASS through `b1c2d3e4f5a6 (head)` after Revision 13 migration fix |
 | Canonical stub models in `models_canonical.py` as runtime source | ❌ NOT APPLICABLE YET — runtime still uses `app/models.py` as the active ORM surface in this rebuild phase |
 | `ClassEconomy` import in `ledger_service.py` | ⚠️ — functional alias to `classes`, but naming remains semantically noisy |
 
-**Assessment:** Wave 5 table rename/consolidation is now implemented in code and migration form, with targeted test validation passing. The remaining blocker is migration-chain validation on the local DB because a prior migration fails before the new rename migration is reached.
+**Assessment:** Wave 5 table rename/consolidation is implemented in code and migration form, and local migration-chain validation now reaches `b1c2d3e4f5a6 (head)` cleanly.
 
 ---
 
 ## Wave 6 — Attendance Domain
 
-### Status: ⚠️ BEHAVIORAL COMPLIANCE MOSTLY ACHIEVED — TABLE CONSOLIDATION + FEAT FILE PENDING
+### Status: ✅ COMPLETE FOR V2 RUNTIME CUTOVER (LEGACY TAP-EVENT AUDIT SURFACE RETAINED)
 
 **What IS done:**
 
@@ -326,15 +498,20 @@ The first validation report characterized this as "NOT STARTED." The deeper anal
 | Wave 3C.8 hall pass scope hardened | ✅ — class context required for mutation paths; fail-closed |
 | `FEAT-ATTN-001`, `FEAT-ATTN-002` in FEAT registry | ✅ Both registered |
 | `get_class_today_range()` and time helpers for class-local boundaries | ✅ `app/utils/time.py` |
+| `get_session_status(...)` join_code/class scope ordering | ✅ Fixed in `app/attendance.py` (Revision 14) |
+| Attendance/hall-pass daily boundary checks class-scoped | ✅ `app/routes/api.py` now uses `get_class_today_range(...)` / `get_class_now(...)` for class-local day windows |
+| Stale hall-pass template API contracts removed | ✅ dead templates deleted (`hall_pass_terminal.html`, `hall_pass_queue.html`) |
+| Attendance FEAT file in active runtime path | ✅ `app/feats/attendance.py` is imported by `app/routes/api.py` for tap/hall-pass/admin attendance mutations |
+| `attendance_service.py` canonical runtime reads | ✅ now reads `AttendanceSession` + `SeatAttendanceState` for active-status/duration calculations |
+| `AttendanceSession` / `SeatAttendanceState` runtime models | ✅ present in `app/models.py` and used by attendance suites |
+| Wave 6 migration artifact | ✅ `migrations/versions/c6a8f6d1e2b3_create_attendance_sessions_and_state.py` (lint clean) |
 
 **What is NOT done:**
 
 | Check | Status |
 |---|---|
-| `tap_feat.py` in `app/feats/` | ❌ DOES NOT EXIST |
-| `attendance_service.py` ports to canonical tables | ❌ Still imports `HallPassLog, StudentTeacher, TapEvent, TeacherBlock` |
-| `AttendanceSession`, `SeatAttendanceState` used at runtime | ❌ Stub-only in `models_canonical.py` |
-| Wave 6 migration (`0005_attendance_domain.py`) | ❌ DOES NOT EXIST |
+| Legacy tap-entry audit/history API surface | ⚠️ Intentionally retained for admin history and soft-delete workflows (`/api/attendance/history`, `/api/admin/tap-entries/*`) |
+| End-to-end DB upgrade validation through current head | ✅ Verified through `e4a2b7c9d1f0 (head)` with downgrade/re-upgrade cycle in this slice |
 
 **Critical note on `TapEvent`:** Despite being the "legacy" table, it enforces mandatory `seat_id + class_id` via `before_insert`/`before_update` hooks. The enforcement is stricter than most other legacy tables — `TapEvent` **will raise a ValueError** if written without canonical scope. However, `student_id` remains mandatory (NOT NULL) as a legacy requirement, creating a dependency on the legacy `students` table that blocks full Wave 6 completion.
 
@@ -603,9 +780,9 @@ The first report contained several characterizations that this deeper analysis r
 
 2. ~~**Wrap `/api/economy/analyze` in a FEAT context**~~ — **RESOLVED** (2026-05-24): `@feat_shell("FEAT-ADMN-001")` added at `admin.py:12020`; `_get_frozen_economy_analysis_payload()` commit replaced with flush. Zero bare commits remain in `admin.py`. All FEAT and INV-ARC-007 items are now closed.
 
-3. **Resolve prior migration-chain blocker and re-run full upgrade validation** — Wave 5 ledger rename migration now exists and targeted tests pass; chain validation currently fails earlier at `a91cf11e8b2d` due a dependent policy on `feature_settings.teacher_id`.
+3. ~~**Resolve prior migration-chain blocker and re-run full upgrade validation**~~ — **RESOLVED** (2026-05-27): `a91cf11e8b2d` now drops dependent legacy policy state before `teacher_id` removal; `flask db upgrade` reaches `b1c2d3e4f5a6 (head)`.
 
-4. **Create `tap_feat.py` and execute Wave 6 (Attendance)** — `FEAT-ATTN-001/002` are already registered; the main work is the feat file + porting `attendance_service.py`.
+4. ~~**Execute final Wave 6 table cutover tasks**~~ — **RESOLVED** (2026-05-30): payroll/admin batch attendance reads now use canonical sessions; daily-limit batch helper no longer writes legacy tap rows; `TapEvent.student_id` made nullable with migration `e4a2b7c9d1f0`; DB downgrade/re-upgrade validated through current head.
 
 5. **Update `test_smoke.py`** — add `PolicyVersion` and `PolicyTransition` to the import list and bump the assertion to 46 (2-line fix).
 
@@ -623,4 +800,4 @@ The first report contained several characterizations that this deeper analysis r
 
 ---
 
-*This report (Revision 11) supersedes all prior versions. Revision 4 corrected the FEAT/INV-ARC-007 misclassification on `admin.py:2107`. Revision 5 closed the adversarial rerun uncertainty with fresh 2026-05-25 evidence and full Phase 1 PASS. Revision 6 added a Wave 5 major slice for canonical balance batching and admin-surface migration. Revision 7 completed that sub-slice by removing the legacy `get_batch_balances(join_codes, student_ids)` wrapper and confirming canonical-only call paths via targeted regression validation. Revision 8 landed Wave 5 ledger table consolidation (`ledger_transaction` / `ledger_balance_snapshot`) and recorded the remaining local migration-chain blocker prior to full upgrade validation. Revision 9 added a rule-compliance sweep checkpoint, closed missing FEAT registry entries for active decorators, aligned time-helper guardrail compliance paths, and reduced FEAT lint hotspots from 13 to 11. Revision 10 closed the remaining FEAT-lint commit/construction hotspots in touched utility/job paths and recorded a clean FEAT constitutional lint result at current HEAD. Revision 11 removes dashboard-triggered write-on-GET auto-tapout behavior, keeping daily-limit enforcement on scheduler and explicit POST path only.*
+*This report (Revision 18) supersedes all prior versions. Revision 4 corrected the FEAT/INV-ARC-007 misclassification on `admin.py:2107`. Revision 5 closed the adversarial rerun uncertainty with fresh 2026-05-25 evidence and full Phase 1 PASS. Revision 6 added a Wave 5 major slice for canonical balance batching and admin-surface migration. Revision 7 completed that sub-slice by removing the legacy `get_batch_balances(join_codes, student_ids)` wrapper and confirming canonical-only call paths via targeted regression validation. Revision 8 landed Wave 5 ledger table consolidation (`ledger_transaction` / `ledger_balance_snapshot`) and recorded the remaining local migration-chain blocker prior to full upgrade validation. Revision 9 added a rule-compliance sweep checkpoint, closed missing FEAT registry entries for active decorators, aligned time-helper guardrail compliance paths, and reduced FEAT lint hotspots from 13 to 11. Revision 10 closed the remaining FEAT-lint commit/construction hotspots in touched utility/job paths and recorded a clean FEAT constitutional lint result at current HEAD. Revision 11 removed dashboard-triggered write-on-GET auto-tapout behavior, keeping daily-limit enforcement on scheduler and explicit POST path only. Revision 12 closed the Postgres test-db rebuild race in `tests/conftest.py`, restored class-scoped daily-limit lookup in `enforce_daily_limits()`, and validated the full admin-tenancy slice (`12/12` passing). Revision 13 closed the local migration-chain blocker at `a91cf11e8b2d` by dropping dependent legacy RLS policy state before legacy scope-column removal and confirmed full upgrade to `b1c2d3e4f5a6 (head)`. Revision 14 applied attendance Step-1/Step-2 runtime hardening and FEAT ownership expansion across hall-pass/tap mutation paths. Revision 15 closed remaining hall-pass admin mutation FEAT coverage (`/hall-pass/settings` POST, `/hall-pass/setup` POST, `/hall-pass/verify-token/rotate` POST) and re-validated attendance/hall-pass tenancy suites. Revision 16 removed transitional attendance mirror behavior and locked this slice to canonical `attendance_sessions` + `seat_attendance_state` paths. Revision 17 reconciled stale Wave 6 tracker claims to live runtime evidence. Revision 18 closes the final Wave 6 cutover tasks by migrating payroll/admin batch attendance reads to canonical sessions, removing direct legacy tap-event writes from batch daily-limit helper flows, and eliminating hard `TapEvent.student_id` dependency with migration and downgrade/re-upgrade validation through `e4a2b7c9d1f0 (head)`.*

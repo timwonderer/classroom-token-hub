@@ -1,6 +1,6 @@
 from app import db
 from app.hash_utils import get_random_salt
-from app.models import Seat, Student, StudentBlock, TapEvent, User
+from app.models import Admin, ClassEconomy, Seat, Student, StudentBlock, TapEvent, User
 
 
 def _student() -> Student:
@@ -14,20 +14,56 @@ def _student() -> Student:
     )
 
 
-def test_tap_event_autofills_seat_id_from_join_scope(client):
+def _ensure_class_scope(join_code: str, class_id: str) -> ClassEconomy:
+    class_scope = ClassEconomy.query.filter_by(join_code=join_code).first()
+    if class_scope:
+        return class_scope
+
+    admin = Admin.query.first()
+    if not admin:
+        admin = Admin(totp_secret="JBSWY3DPEHPK3PXP", teacher_public_id=f"teacher_{join_code.lower()}")
+        db.session.add(admin)
+        db.session.flush()
+
+    class_scope = ClassEconomy(
+        teacher_id=admin.id,
+        join_code=join_code,
+        class_id=class_id,
+        display_name=f"Scope {join_code}",
+    )
+    db.session.add(class_scope)
+    db.session.flush()
+    return class_scope
+
+
+def test_tap_event_autofills_seat_id_from_class_scope(client):
     student = _student()
     db.session.add(student)
     db.session.flush()
+
+    class_scope = _ensure_class_scope("JOIN_TAP", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 
     user = User(username=f"tap_user_{student.id}", password_hash="pw")
     db.session.add(user)
     db.session.flush()
 
-    seat = Seat(user_id=user.id, student_id=student.id, join_code="JOIN_TAP", block="A")
+    seat = Seat(
+        user_id=user.id,
+        student_id=student.id,
+        class_id=class_scope.class_id,
+        join_code="JOIN_TAP",
+        block="A",
+    )
     db.session.add(seat)
     db.session.flush()
 
-    event = TapEvent(student_id=student.id, join_code="JOIN_TAP", period="A", status="active")
+    event = TapEvent(
+        student_id=student.id,
+        class_id=class_scope.class_id,
+        join_code="JOIN_TAP",
+        period="A",
+        status="active",
+    )
     db.session.add(event)
     db.session.commit()
 
@@ -35,22 +71,71 @@ def test_tap_event_autofills_seat_id_from_join_scope(client):
     assert event.seat_id == seat.id
 
 
-def test_student_block_autofills_seat_id_from_join_scope(client):
+def test_student_block_autofills_seat_id_from_class_scope(client):
     student = _student()
     db.session.add(student)
     db.session.flush()
+
+    class_scope = _ensure_class_scope("JOIN_SB", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 
     user = User(username=f"sb_user_{student.id}", password_hash="pw")
     db.session.add(user)
     db.session.flush()
 
-    seat = Seat(user_id=user.id, student_id=student.id, join_code="JOIN_SB", block="A")
+    seat = Seat(
+        user_id=user.id,
+        student_id=student.id,
+        class_id=class_scope.class_id,
+        join_code="JOIN_SB",
+        block="A",
+    )
     db.session.add(seat)
     db.session.flush()
 
-    student_block = StudentBlock(student_id=student.id, join_code="JOIN_SB", period="A")
+    student_block = StudentBlock(
+        student_id=student.id,
+        class_id=class_scope.class_id,
+        join_code="JOIN_SB",
+        period="A",
+    )
     db.session.add(student_block)
     db.session.commit()
 
     db.session.refresh(student_block)
     assert student_block.seat_id == seat.id
+
+
+def test_tap_event_backfills_student_id_from_seat_scope(client):
+    student = _student()
+    db.session.add(student)
+    db.session.flush()
+
+    class_scope = _ensure_class_scope("JOIN_SCOPE", "cccccccc-cccc-cccc-cccc-cccccccccccc")
+
+    user = User(username=f"seat_user_{student.id}", password_hash="pw")
+    db.session.add(user)
+    db.session.flush()
+
+    seat = Seat(
+        user_id=user.id,
+        student_id=student.id,
+        class_id=class_scope.class_id,
+        join_code="JOIN_SCOPE",
+        block="A",
+    )
+    db.session.add(seat)
+    db.session.flush()
+
+    event = TapEvent(
+        student_id=None,
+        seat_id=seat.id,
+        class_id=class_scope.class_id,
+        join_code="JOIN_SCOPE",
+        period="A",
+        status="active",
+    )
+    db.session.add(event)
+    db.session.commit()
+
+    db.session.refresh(event)
+    assert event.student_id == student.id

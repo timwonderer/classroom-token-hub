@@ -1171,32 +1171,8 @@ def dashboard():
         )
         access_policy_service.assert_can_view_dashboard(scope)
     except AccessScopeDenied as exc:
-        selected_join_code = (session.get("current_join_code") or "").strip() or None
-        if not selected_join_code:
-            flash(exc.message, "error")
-            return redirect(url_for('student.login'))
-
-        legacy_tb = TeacherBlock.query.filter_by(
-            student_id=student.id,
-            join_code=selected_join_code,
-        ).order_by(TeacherBlock.id.asc()).first()
-        if not legacy_tb:
-            flash(exc.message, "error")
-            return redirect(url_for('student.login'))
-
-        legacy_seat = Seat.query.filter_by(
-            student_id=student.id,
-            join_code=selected_join_code,
-        ).order_by(Seat.id.asc()).first()
-
-        class LegacyScope:
-            join_code = selected_join_code
-            teacher_id = legacy_tb.teacher_id
-            block = legacy_tb.block or student.block or "A"
-            seat_id = legacy_seat.id if legacy_seat else None
-            class_id = None
-
-        scope = LegacyScope()
+        flash(exc.message, "error")
+        return redirect(url_for("student.select_class"))
     except access_policy_service.AccessPolicyDenied as exc:
         flash(exc.message, "error")
         return redirect(url_for('student.login'))
@@ -1204,12 +1180,17 @@ def dashboard():
     join_code = scope.join_code
     teacher_id = scope.teacher_id
     current_block = scope.block  # Get current class block
+    if not scope.class_id:
+        flash("Class context unavailable. Please select a class and retry.", "error")
+        return redirect(url_for("student.select_class"))
+    if not scope.seat_id:
+        flash("Seat context unavailable. Please select a class and retry.", "error")
+        return redirect(url_for("student.select_class"))
 
-    # CRITICAL FIX: Filter transactions by join_code (not just teacher_id)
-    # This ensures Period A and Period B with same teacher are isolated
+    # Canonical ledger scope: seat_id + class_id.
     transactions = Transaction.query.filter_by(
-        student_id=student.id,
-        join_code=join_code  # FIX: Use join_code for proper isolation
+        seat_id=scope.seat_id,
+        class_id=scope.class_id,
     ).order_by(Transaction.timestamp.desc()).all()
 
     # FIX: Filter student items by current teacher's store
@@ -1217,19 +1198,20 @@ def dashboard():
         StoreItem, StudentItem.store_item_id == StoreItem.id
     ).filter(
         StudentItem.status.in_(['purchased', 'pending', 'processing', 'redeemed', 'completed', 'expired']),
-        StudentItem.join_code == join_code,
+        StudentItem.class_id == scope.class_id,
+        StudentItem.seat_id == scope.seat_id,
     ).order_by(StudentItem.purchase_date.desc()).all()
 
     checking_transactions = [tx for tx in transactions if tx.account_type == 'checking']
     savings_transactions = [tx for tx in transactions if tx.account_type == 'savings']
 
-    checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
+    checking_balance, savings_balance = get_available_balances(scope.seat_id, scope.class_id)
     # Calculate forecast interest using Decimal
     forecast_interest = _quantize_currency(savings_balance * Decimal('0.045') / Decimal('12'))
 
     # FIX: Only show tap in/out status for CURRENT class, not all classes
     # Get status for only the current block (not all blocks)
-    period_states = get_all_block_statuses(student, join_code=join_code)
+    period_states = get_all_block_statuses(student, class_id=scope.class_id)
     # Filter to only current class block
     period_states = {current_block.upper(): period_states.get(current_block.upper(), {})}
     student_blocks = [current_block.upper()]  # Only current block
@@ -1544,11 +1526,14 @@ def payroll():
     if not context:
         flash("No class selected. Please select a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
+    if not class_id:
+        flash("Class context unavailable. Please select a class to continue.", "error")
+        return redirect(url_for('student.dashboard'))
 
     current_block = (context.get('block') or '').upper()
     join_code = context.get('join_code')
     teacher_id = context.get('teacher_id')
-    period_states = get_all_block_statuses(student, join_code=join_code)
+    period_states = get_all_block_statuses(student, class_id=class_id)
 
     # Scope dashboard data to the selected class context only
     period_states = {current_block: period_states.get(current_block, {})}

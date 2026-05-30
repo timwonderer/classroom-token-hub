@@ -51,9 +51,35 @@ def foreign_key_exists(table_name, constraint_name):
         return False
 
 
+def policy_exists(table_name, policy_name, schema_name="public"):
+    conn = op.get_bind()
+    result = conn.execute(
+        sa.text(
+            """
+            SELECT 1
+            FROM pg_policies
+            WHERE schemaname = :schema_name
+              AND tablename = :table_name
+              AND policyname = :policy_name
+            LIMIT 1
+            """
+        ),
+        {
+            "schema_name": schema_name,
+            "table_name": table_name,
+            "policy_name": policy_name,
+        },
+    ).scalar()
+    return bool(result)
+
+
 def upgrade():
     if not table_exists("feature_settings"):
         return
+
+    # Legacy RLS policy depends on teacher_id; drop it before removing column.
+    if policy_exists("feature_settings", "teacher_isolation_policy"):
+        op.execute("DROP POLICY teacher_isolation_policy ON feature_settings")
 
     with op.batch_alter_table("feature_settings", schema=None) as batch_op:
         if index_exists("feature_settings", "ix_feature_settings_teacher_id"):

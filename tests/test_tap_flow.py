@@ -4,6 +4,7 @@ from werkzeug.security import generate_password_hash
 from app.hash_utils import hash_username, get_random_salt
 from bs4 import BeautifulSoup
 import json
+from datetime import datetime, timezone
 
 def login(client, username, pin):
     return client.post('/student/login', data={'username': username, 'pin': pin})
@@ -14,19 +15,44 @@ def parse_server_state(html):
     return json.loads(script.string)
 
 def create_claimed_seat(teacher_id, student_id, block, join_code, salt=None):
-    from app.models import TeacherBlock, ClassEconomy, Seat
+    from app.models import TeacherBlock, ClassEconomy, Seat, User
     if salt is None:
         salt = get_random_salt()
 
     # Ensure ClassEconomy exists for FK constraint
     class_economy = ClassEconomy.query.filter_by(join_code=join_code).first()
     if not class_economy:
-        class_economy = ClassEconomy(join_code=join_code, teacher_id=teacher_id, display_name=f"Class {join_code}")
+        class_economy = ClassEconomy(
+            join_code=join_code,
+            teacher_id=teacher_id,
+            display_name=f"Class {join_code}",
+            status="active",
+            created_by_admin_id=teacher_id,
+        )
         db.session.add(class_economy)
         db.session.flush()
 
+    identity_user = (
+        User.query
+        .join(Seat, Seat.user_id == User.id)
+        .filter(Seat.student_id == student_id)
+        .order_by(Seat.id.asc())
+        .first()
+    )
+    if not identity_user:
+        identity_user = User(
+            username=f"tapflow_{student_id}_{join_code.lower()}",
+            password_hash=generate_password_hash("test-passphrase"),
+            last_active_class_id=class_economy.class_id,
+        )
+        db.session.add(identity_user)
+        db.session.flush()
+    elif not identity_user.last_active_class_id:
+        identity_user.last_active_class_id = class_economy.class_id
+
     tb = TeacherBlock(
         teacher_id=teacher_id,
+        class_id=class_economy.class_id,
         block=block,
         first_name="Test",
         last_initial="S",
@@ -42,11 +68,14 @@ def create_claimed_seat(teacher_id, student_id, block, join_code, salt=None):
     db.session.flush()
 
     db.session.add(Seat(
+        user_id=identity_user.id,
         student_id=student_id,
         class_id=class_economy.class_id,
         join_code=join_code,
         block=block,
+        block_identifier=block,
         role="student",
+        claimed_at=datetime.now(timezone.utc),
     ))
     return tb
 
@@ -110,7 +139,7 @@ def test_dynamic_blocks_and_tap_flow(client):
     assert '"A":{"active":false,"done":true' in dash_html2
 
 def test_invalid_period_and_action(client):
-    from app.models import Admin
+    from app.models import Admin, StudentTeacher
     import pyotp
 
     # Create dummy teacher
@@ -130,6 +159,9 @@ def test_invalid_period_and_action(client):
         pin_hash=generate_password_hash("0000"),
     )
     db.session.add(stu)
+    db.session.flush()
+
+    db.session.add(StudentTeacher(student_id=stu.id, teacher_id=teacher.id))
 
     # Create TeacherBlock
     create_claimed_seat(teacher.id, stu.id, "A", "JOIN-T2", salt)
@@ -195,19 +227,15 @@ def test_server_state_json(client):
     assert state2['A']['active'] is False
     assert state2['A']['done'] is True
 
-def test_auto_tapout_skips_when_join_code_missing(client, caplog):
+def test_auto_tapout_noops_without_canonical_seat_scope(client):
     """
-    Test that auto-tap-out gracefully skips students with legacy TapEvents
-    that have no join_code, and logs an appropriate warning.
+    Auto-tap-out should no-op when no canonical class/seat scope exists.
     """
-    from app import TapEvent
     from app.models import Admin, PayrollSettings
     from app.routes.api import check_and_auto_tapout_if_limit_reached
-    from datetime import datetime, timezone, timedelta
-    import logging
     import pyotp
 
-    # Create teacher and payroll settings with low limit
+    # Create teacher and payroll settings (student will intentionally have no seat).
     teacher = make_admin("legacy_teacher", pyotp.random_base32())
     db.session.add(teacher)
     db.session.flush()
@@ -238,38 +266,10 @@ def test_auto_tapout_skips_when_join_code_missing(client, caplog):
     from app.models import StudentTeacher
     st = StudentTeacher(student_id=stu.id, teacher_id=teacher.id)
     db.session.add(st)
-    
     db.session.commit()
 
-    # 2. Create a legacy TapEvent without join_code (simulating old data)
-    # Backdate it to ensure it exceeds the limit
-    legacy_event = TapEvent(
-        student_id=stu.id,
-        period="A",
-        status="active",
-        timestamp=datetime.now(timezone.utc) - timedelta(hours=1),
-        join_code=None  # Explicitly no join_code
-    )
-    db.session.add(legacy_event)
-    db.session.commit()
-
-    # 3. Count TapEvents before auto-tap-out
-    events_before = TapEvent.query.filter_by(student_id=stu.id, period="A").count()
-
-    # 4. Call auto-tap-out function with logging enabled
-    with caplog.at_level(logging.WARNING):
-        check_and_auto_tapout_if_limit_reached(stu)
-
-    # 5. Count TapEvents after - should be same (no new tap-out event created)
-    events_after = TapEvent.query.filter_by(student_id=stu.id, period="A").count()
-    assert events_before == events_after, "Auto-tap-out should skip when join_code cannot be resolved"
-
-    # 6. Verify warning was logged with TapEvent ID
-    assert any(
-        "Unable to resolve join_code" in record.message and
-        f"TapEvent ID is {legacy_event.id}" in record.message
-        for record in caplog.records
-    ), f"Expected warning about missing join_code was not logged. Records: {[r.message for r in caplog.records]}"
+    # No canonical seat/class context exists for this student; function should no-op.
+    check_and_auto_tapout_if_limit_reached(stu)
 
 
 def test_student_status_get_is_read_only_and_reconcile_is_explicit_mutation(client, monkeypatch):

@@ -1,6 +1,6 @@
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
-from app import db, Student, TapEvent, Transaction
+from app import db, Student, Transaction
 from app.attendance import (
     get_last_payroll_time,
     calculate_unpaid_attendance_seconds,
@@ -8,6 +8,8 @@ from app.attendance import (
     get_session_status,
     get_all_block_statuses
 )
+from app.models import AttendanceSession, ClassEconomy, SeatAttendanceState
+from app.utils.seat_scope import get_seat_id_for_class
 from datetime import datetime, timedelta, timezone
 
 
@@ -62,21 +64,32 @@ def _attach_student_to_class(student, join_code="ATTEND1", block="A"):
     db.session.commit()
     return join_code
 
+
+def _resolve_scope(student_id, join_code):
+    class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+    assert class_row is not None
+    seat_id = get_seat_id_for_class(student_id, class_row.class_id)
+    assert seat_id is not None
+    return seat_id, class_row.class_id
+
 def test_get_last_payroll_time(client):
-    # Test with no payroll transactions
-    assert get_last_payroll_time() is None
+    with pytest.raises(ValueError):
+        get_last_payroll_time(seat_id=None, class_id=None)
 
     # Create a student first
     student = Student(first_name="Test", last_initial="S", block="A", salt=b'salt', has_completed_setup=True)
     db.session.add(student)
     db.session.commit()
     join_code = _attach_student_to_class(student, join_code="PAYROLL1", block="A")
+    seat_id, class_id = _resolve_scope(student.id, join_code)
 
     # Test with a payroll transaction
     now = datetime.now(timezone.utc)
     # V2 requires seat_id/class_id, but compatibility layer supports join_code
     tx = Transaction(
         student_id=student.id, 
+        seat_id=seat_id,
+        class_id=class_id,
         amount=10, 
         type="payroll", 
         timestamp=now,
@@ -85,13 +98,14 @@ def test_get_last_payroll_time(client):
     db.session.add(tx)
     db.session.commit()
     
-    # Must provide join_code for V2 safety
-    assert get_last_payroll_time(join_code=join_code) == now
+    assert get_last_payroll_time(seat_id=seat_id, class_id=class_id) == now
 
     # Manual payments should only change the per-student anchor
     manual_time = now + timedelta(hours=1)
     manual_tx = Transaction(
         student_id=student.id, 
+        seat_id=seat_id,
+        class_id=class_id,
         amount=5, 
         type="manual_payment", 
         timestamp=manual_time,
@@ -100,24 +114,26 @@ def test_get_last_payroll_time(client):
     db.session.add(manual_tx)
     db.session.commit()
 
-    assert get_last_payroll_time(join_code=join_code) == now
-    assert get_last_payroll_time(student_id=student.id, join_code=join_code) == manual_time
+    assert get_last_payroll_time(seat_id=seat_id, class_id=class_id) == manual_time
 
     # Class-scoped anchors must ignore payroll/manual payment activity from other classes
+    other_join = _attach_student_to_class(student, join_code="OTHER", block="B")
+    other_seat_id, other_class_id = _resolve_scope(student.id, other_join)
     other_join_time = manual_time + timedelta(hours=1)
     other_join_tx = Transaction(
         student_id=student.id,
+        seat_id=other_seat_id,
+        class_id=other_class_id,
         amount=7,
         type="payroll",
         timestamp=other_join_time,
-        join_code="OTHER",
+        join_code=other_join,
     )
     db.session.add(other_join_tx)
     db.session.commit()
 
-    assert get_last_payroll_time(join_code="OTHER") == other_join_time
-    assert get_last_payroll_time(student_id=student.id, join_code="OTHER") == other_join_time
-    assert get_last_payroll_time(student_id=student.id, join_code="MISSING") is None
+    assert get_last_payroll_time(seat_id=other_seat_id, class_id=other_class_id) == other_join_time
+    assert get_last_payroll_time(seat_id=seat_id, class_id=class_id) == manual_time
 
 def test_calculate_unpaid_attendance_seconds(client):
     student = Student(first_name="Test", last_initial="S", block="A", salt=b'salt', has_completed_setup=True)
@@ -128,14 +144,23 @@ def test_calculate_unpaid_attendance_seconds(client):
     now = datetime.now(timezone.utc)
     tap_in_time = now - timedelta(minutes=30)
     tap_out_time = now - timedelta(minutes=15)
+    seat_id, class_id = _resolve_scope(student.id, join_code)
 
-    tap_in = TapEvent(student_id=student.id, period="A", status="active", timestamp=tap_in_time, join_code=join_code)
-    tap_out = TapEvent(student_id=student.id, period="A", status="inactive", timestamp=tap_out_time, join_code=join_code)
-    db.session.add_all([tap_in, tap_out])
+    db.session.add(
+        AttendanceSession(
+            student_id=student.id,
+            seat_id=seat_id,
+            class_id=class_id,
+            period="A",
+            started_at=tap_in_time,
+            ended_at=tap_out_time,
+            duration_seconds=900,
+        )
+    )
     db.session.commit()
 
     last_payroll_time = now - timedelta(days=1)
-    unpaid_seconds = calculate_unpaid_attendance_seconds(student.id, "A", last_payroll_time, join_code=join_code)
+    unpaid_seconds = calculate_unpaid_attendance_seconds(seat_id, class_id, "A", last_payroll_time)
 
     # 15 minutes of attendance = 900 seconds
     assert unpaid_seconds == 900
@@ -145,17 +170,27 @@ def test_calculate_period_attendance(client):
     db.session.add(student)
     db.session.commit()
 
+    join_code = _attach_student_to_class(student, join_code="ATTEND6", block="A")
     now = datetime.now(timezone.utc)
     today = now.date()
     tap_in_time = now - timedelta(minutes=20)
     tap_out_time = now - timedelta(minutes=10)
+    seat_id, class_id = _resolve_scope(student.id, join_code)
 
-    tap_in = TapEvent(student_id=student.id, period="A", status="active", timestamp=tap_in_time)
-    tap_out = TapEvent(student_id=student.id, period="A", status="inactive", timestamp=tap_out_time)
-    db.session.add_all([tap_in, tap_out])
+    db.session.add(
+        AttendanceSession(
+            student_id=student.id,
+            seat_id=seat_id,
+            class_id=class_id,
+            period="A",
+            started_at=tap_in_time,
+            ended_at=tap_out_time,
+            duration_seconds=600,
+        )
+    )
     db.session.commit()
 
-    period_attendance = calculate_period_attendance(student.id, "A", today)
+    period_attendance = calculate_period_attendance(seat_id, class_id, "A", today)
 
     # 10 minutes of attendance = 600 seconds
     assert period_attendance == 600
@@ -168,11 +203,33 @@ def test_get_session_status(client):
 
     now = datetime.now(timezone.utc)
     tap_in_time = now - timedelta(minutes=5)
-    tap_in = TapEvent(student_id=student.id, period="A", status="active", timestamp=tap_in_time, join_code=join_code)
-    db.session.add(tap_in)
+    seat_id, class_id = _resolve_scope(student.id, join_code)
+
+    session = AttendanceSession(
+        student_id=student.id,
+        seat_id=seat_id,
+        class_id=class_id,
+        period="A",
+        started_at=tap_in_time,
+    )
+    db.session.add(session)
+    db.session.flush()
+    db.session.add(
+        SeatAttendanceState(
+            student_id=student.id,
+            seat_id=seat_id,
+            class_id=class_id,
+            period="A",
+            is_active=True,
+            open_session_id=session.id,
+            last_event_at=tap_in_time,
+            last_event_status="active",
+            last_reason="start_work",
+        )
+    )
     db.session.commit()
 
-    is_active, done, duration = get_session_status(student.id, "A")
+    is_active, done, duration = get_session_status(seat_id, class_id, "A")
     assert is_active is True
     assert done is False
     assert duration > 0
@@ -182,18 +239,41 @@ def test_get_all_block_statuses(client):
     db.session.add(student)
     db.session.commit()
     join_code_a = _attach_student_to_class(student, join_code="ATTEND4", block="A")
-    _attach_student_to_class(student, join_code="ATTEND5", block="B")
+    join_code_b = _attach_student_to_class(student, join_code="ATTEND5", block="B")
 
     now = datetime.now(timezone.utc)
     tap_in_time_a = now - timedelta(minutes=10)
-    tap_in_a = TapEvent(student_id=student.id, period="A", status="active", timestamp=tap_in_time_a, join_code=join_code_a)
-    db.session.add(tap_in_a)
+    seat_id_a, class_id_a = _resolve_scope(student.id, join_code_a)
+    session_a = AttendanceSession(
+        student_id=student.id,
+        seat_id=seat_id_a,
+        class_id=class_id_a,
+        period="A",
+        started_at=tap_in_time_a,
+    )
+    db.session.add(session_a)
+    db.session.flush()
+    db.session.add(
+        SeatAttendanceState(
+            student_id=student.id,
+            seat_id=seat_id_a,
+            class_id=class_id_a,
+            period="A",
+            is_active=True,
+            open_session_id=session_a.id,
+            last_event_at=tap_in_time_a,
+            last_event_status="active",
+        )
+    )
     db.session.commit()
 
-    statuses = get_all_block_statuses(student)
-    assert "A" in statuses
-    assert "B" in statuses
-    assert statuses["A"]["active"] is True
-    assert statuses["B"]["active"] is False
-    assert statuses["A"]["projected_pay"] is None
-    assert statuses["B"]["projected_pay"] is None
+    statuses_a = get_all_block_statuses(student, class_id=class_id_a)
+    assert "A" in statuses_a
+    assert "B" not in statuses_a
+    assert statuses_a["A"]["active"] is True
+    assert statuses_a["A"]["projected_pay"] is None
+
+    _, class_id_b = _resolve_scope(student.id, join_code_b)
+    statuses_b = get_all_block_statuses(student, class_id=class_id_b)
+    assert "B" in statuses_b
+    assert statuses_b["B"]["active"] is False

@@ -17,7 +17,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
     <div class="offcanvas-body">
-        <p>Create updates for students and manage what is visible by class period.</p>
+        <p>Create updates for students and manage what is visible in the active class context.</p>
         <div class="accordion mt-4 mb-4" id="announcementsGuideAccordion">
             <div class="accordion-item">
                 <h2 class="accordion-header" id="announcementsGuideHeadingCreate">
@@ -28,20 +28,7 @@
                 </h2>
                 <div id="announcementsGuideCreate" class="accordion-collapse collapse mt-2" aria-labelledby="announcementsGuideHeadingCreate" data-bs-parent="#announcementsGuideAccordion">
                     <div class="accordion-body">
-                        <p>Select <strong>New Announcement</strong>, choose the class period, set a priority, and write your message.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="announcementsGuideHeadingFilter">
-                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#announcementsGuideFilter" aria-expanded="false" aria-controls="announcementsGuideFilter">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">filter_alt</span>
-                        <strong>Filter by Period</strong>
-                    </button>
-                </h2>
-                <div id="announcementsGuideFilter" class="accordion-collapse collapse mt-2" aria-labelledby="announcementsGuideHeadingFilter" data-bs-parent="#announcementsGuideAccordion">
-                    <div class="accordion-body">
-                        <p>Use the period filter to show only the announcements for specific classes.</p>
+                        <p>Select <strong>New Announcement</strong>, set a priority, and write your message for the class currently selected in the sidebar.</p>
                     </div>
                 </div>
             </div>
@@ -71,36 +58,20 @@
     </a>
 </div>
 
-<!-- Period Filter (if teacher has multiple periods) -->
-{% if teacher_blocks and teacher_blocks|length > 1 %}
-<div class="card shadow-sm mb-4">
-    <div class="card-body">
-        <div class="d-flex align-items-center gap-3 flex-wrap">
-            <span class="fw-bold text-muted">Filter by Period:</span>
-            <div class="btn-group btn-group-sm" role="group" id="periodFilter">
-                <input type="checkbox" class="btn-check" id="filter-all" checked>
-                <label class="btn btn-outline-primary" for="filter-all">All Periods</label>
-
-                {% for block in teacher_blocks %}
-                <input type="checkbox" class="btn-check period-filter" id="filter-{{ block.join_code }}" data-join-code="{{ block.join_code }}" checked>
-                <label class="btn btn-outline-primary" for="filter-{{ block.join_code }}">{{ block.get_class_label() }} (Period {{ block.block }})</label>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
+<div class="alert alert-light border mb-4 d-flex align-items-center gap-2">
+    <span class="material-symbols-outlined text-primary">info</span>
+    <span><strong>Active Class:</strong> {{ active_class_label }}{% if active_join_code %} <span class="text-muted">({{ active_join_code }})</span>{% endif %}</span>
 </div>
-{% endif %}
 
 {% if announcements %}
     <div class="row" id="announcementsList">
         {% for announcement in announcements %}
-        <div class="col-lg-12 mb-3 announcement-card" data-join-code="{{ announcement.join_code }}">
+        <div class="col-lg-12 mb-3 announcement-card">
             <div class="card shadow {{ 'border-start border-5' if announcement.is_active else '' }} {{ 'border-danger' if announcement.priority == 'urgent' else 'border-warning' if announcement.priority == 'high' else 'border-info' if announcement.priority == 'normal' else 'border-secondary' }}">
                 <div class="card-header d-flex justify-content-between align-items-center {{ announcement.get_priority_class() }}">
                     <div>
                         <span class="material-symbols-outlined me-2 align-middle">{{ announcement.get_priority_icon() }}</span>
                         <strong>{{ announcement.title }}</strong>
-                        <span class="badge bg-dark ms-2">{{ announcement.block_info.label }}</span>
                         {% if not announcement.is_active %}
                             <span class="badge bg-secondary ms-2">Inactive</span>
                         {% endif %}
@@ -142,7 +113,7 @@
     </div>
 {% else %}
     <div class="alert alert-info">
-        <span class="material-symbols-outlined me-2">info</span>No announcements yet. Create your first announcement to communicate with students in this class period.
+        <span class="material-symbols-outlined me-2">info</span>No announcements yet. Create your first announcement to communicate with students in the active class.
     </div>
 {% endif %}
 
@@ -155,52 +126,6 @@
 
 {% block extra_scripts %}
 <script>
-// Period filtering
-document.addEventListener('DOMContentLoaded', function() {
-    const filterAll = document.getElementById('filter-all');
-    const periodFilters = document.querySelectorAll('.period-filter');
-    const announcementCards = document.querySelectorAll('.announcement-card');
-
-    function updateFilters() {
-        // Get selected join codes
-        const selectedJoinCodes = new Set();
-        periodFilters.forEach(checkbox => {
-            if (checkbox.checked) {
-                selectedJoinCodes.add(checkbox.dataset.joinCode);
-            }
-        });
-
-        // Show/hide announcements
-        announcementCards.forEach(card => {
-            const joinCode = card.dataset.joinCode;
-            if (filterAll.checked || selectedJoinCodes.has(joinCode)) {
-                card.style.display = 'block';
-            } else {
-                card.style.display = 'none';
-            }
-        });
-
-        // Update "All" checkbox state
-        const allChecked = Array.from(periodFilters).every(cb => cb.checked);
-        filterAll.checked = allChecked;
-    }
-
-    // Filter all handler
-    if (filterAll) {
-        filterAll.addEventListener('change', function() {
-            periodFilters.forEach(checkbox => {
-                checkbox.checked = this.checked;
-            });
-            updateFilters();
-        });
-    }
-
-    // Individual period filter handlers
-    periodFilters.forEach(checkbox => {
-        checkbox.addEventListener('change', updateFilters);
-    });
-});
-
 function toggleAnnouncement(announcementId) {
     fetch(`/admin/announcements/toggle/${announcementId}`, {
         method: 'POST',

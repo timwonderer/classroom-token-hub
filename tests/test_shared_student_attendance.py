@@ -3,7 +3,7 @@ from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import uuid
 from datetime import datetime, timezone
 from app import db
-from app.models import Admin, Seat, Student, StudentTeacher, TapEvent
+from app.models import AttendanceSession, ClassEconomy, Seat, SeatAttendanceState, Student, StudentTeacher
 from app.attendance import get_all_block_statuses
 from tests.helpers.class_scope import create_class_scope
 
@@ -55,27 +55,41 @@ def test_attendance_status_isolation(client):
     seat = Seat.query.filter_by(student_id=student.id, join_code="JC1").first()
     assert seat is not None
 
-    # 4. Tap In for T1 (JC1)
+    # 4. Mark active attendance for T1 class scope only.
     now = datetime.now(timezone.utc)
-    tap = TapEvent(student_id=student.id, seat_id=seat.id, period="PERIOD 1", status="active", timestamp=now, join_code="JC1")
-    db.session.add(tap)
+    class_t1 = ClassEconomy.query.filter_by(join_code="JC1").first()
+    assert class_t1 is not None
+    session = AttendanceSession(
+        student_id=student.id,
+        seat_id=seat.id,
+        class_id=class_t1.class_id,
+        period="PERIOD 1",
+        started_at=now,
+    )
+    db.session.add(session)
+    db.session.flush()
+    db.session.add(
+        SeatAttendanceState(
+            student_id=student.id,
+            seat_id=seat.id,
+            class_id=class_t1.class_id,
+            period="PERIOD 1",
+            is_active=True,
+            open_session_id=session.id,
+            last_event_at=now,
+            last_event_status="active",
+        )
+    )
     db.session.commit()
     
-    # 5. Check Status via get_all_block_statuses WITH Join Code (Scoped View)
-    # T1 View
-    status_t1 = get_all_block_statuses(student, join_code="JC1")
+    # 5. Check Status via get_all_block_statuses in canonical class scope.
+    status_t1 = get_all_block_statuses(student, class_id=class_t1.class_id)
     assert "PERIOD 1" in status_t1
     assert status_t1["PERIOD 1"]["active"] is True
 
-    # T2 View (Scoped)
-    status_t2 = get_all_block_statuses(student, join_code="JC2")
+    class_t2 = ClassEconomy.query.filter_by(join_code="JC2").first()
+    assert class_t2 is not None
+    status_t2 = get_all_block_statuses(student, class_id=class_t2.class_id)
     assert "PERIOD 1" in status_t2
     # Should NOT be active because tap was for JC1
     assert status_t2["PERIOD 1"]["active"] is False
-
-    # 6. Check Status via Global View (No Join Code)
-    # The non-scoped helper now resolves through a single class context and remains
-    # seat-scoped, so it should not leak JC1 activity into the other class.
-    global_status = get_all_block_statuses(student, join_code=None)
-    assert "PERIOD 1" in global_status
-    assert global_status["PERIOD 1"]["active"] is False

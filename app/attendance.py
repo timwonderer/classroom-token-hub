@@ -1,4 +1,5 @@
 from datetime import datetime, timezone, timedelta
+from types import SimpleNamespace
 from app.utils.time import (
     utc_now,
     ensure_utc,
@@ -8,115 +9,30 @@ from app.utils.time import (
     get_class_today_range,
     local_date_range_utc,
 )
-from sqlalchemy import func
+import sqlalchemy as sa
 from flask import current_app
 from app.extensions import db
 import pytz
-# Import from shared utilities to avoid circular dependency with payroll.py
-from app.utils.attendance_helpers import get_join_code_for_student_period
-from app.utils.seat_scope import get_seat_ids_for_student_join, get_seat_id_for_class
 from app.services.attendance_service import (
     calculate_unpaid_attendance_seconds as _calculate_unpaid_attendance_seconds,
     get_all_block_statuses as _get_all_block_statuses,
 )
 from app.services.ledger_service import get_last_payroll_time as _get_last_payroll_time
-from app.models import ClassEconomy, Transaction
+from app.models import AttendanceSession
 from app.feats.base import feat_shell
 
-def get_last_payroll_time(student_id=None, join_code=None):
-    """Compatibility wrapper around the ledger-owned payroll anchor query."""
-    class_id = None
-    seat_id = None
-    if join_code:
-        class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
-        class_id = class_row.class_id if class_row else None
-        if class_id is None:
-            legacy_filters = [
-                Transaction.join_code == join_code,
-                Transaction.type.in_(["payroll", "manual_payment"]),
-            ]
-            if student_id is not None:
-                legacy_filters.append(Transaction.student_id == student_id)
-            tx = Transaction.query.filter(*legacy_filters).order_by(Transaction.timestamp.desc()).first()
-            return ensure_utc(tx.timestamp) if tx else None
-    if student_id and class_id:
-        seat_id = get_seat_id_for_class(student_id, class_id)
-    if student_id and not class_id:
-        tx = (
-            Transaction.query
-            .filter(
-                Transaction.student_id == student_id,
-                Transaction.type.in_(["payroll", "manual_payment"]),
-            )
-            .order_by(Transaction.timestamp.desc())
-            .first()
-        )
-        return ensure_utc(tx.timestamp) if tx else None
+def get_last_payroll_time(*, seat_id: int, class_id: str):
+    """Return the latest payroll/manual payment anchor for one canonical seat/class scope."""
+    if not seat_id or not class_id:
+        raise ValueError("get_last_payroll_time requires seat_id and class_id.")
     return _get_last_payroll_time(seat_id=seat_id, class_id=class_id)
 
 
 
-def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, join_code=None):
-    """Compatibility wrapper around the attendance-owned time calculation."""
-    class_id = None
-    seat_id = None
-    if join_code:
-        class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
-        class_id = class_row.class_id if class_row else None
-    if student_id and class_id:
-        seat_id = get_seat_id_for_class(student_id, class_id)
+def calculate_unpaid_attendance_seconds(seat_id, class_id, period, last_payroll_time):
+    """Calculate unpaid attendance seconds for one canonical seat/class/period scope."""
     if not seat_id or not class_id:
-        from app.models import TapEvent
-        base_query = TapEvent.query.filter(
-            TapEvent.student_id == student_id,
-            TapEvent.period == period,
-            TapEvent.is_deleted == False,
-        )
-        if join_code:
-            base_query = base_query.filter(TapEvent.join_code == join_code)
-        events = base_query.order_by(TapEvent.timestamp.asc()).all()
-
-        if not events:
-            return 0
-
-        last_payroll_time = ensure_utc(last_payroll_time)
-        if not last_payroll_time:
-            total_seconds = 0
-            in_time = None
-            for event in events:
-                event_time = ensure_utc(event.timestamp)
-                if event.status == "active":
-                    in_time = event_time
-                elif event.status == "inactive" and in_time:
-                    total_seconds += (event_time - in_time).total_seconds()
-                    in_time = None
-            return int(total_seconds)
-
-        last_event_before_payroll = (
-            base_query
-            .filter(TapEvent.timestamp <= last_payroll_time)
-            .order_by(TapEvent.timestamp.desc())
-            .first()
-        )
-        if last_event_before_payroll and last_event_before_payroll.status == "active":
-            synthetic_event = type("SyntheticEvent", (), {})()
-            synthetic_event.timestamp = last_payroll_time
-            synthetic_event.status = "active"
-            post_events = base_query.filter(TapEvent.timestamp > last_payroll_time).order_by(TapEvent.timestamp.asc()).all()
-            events = [synthetic_event] + post_events
-        else:
-            events = base_query.filter(TapEvent.timestamp > last_payroll_time).order_by(TapEvent.timestamp.asc()).all()
-
-        total_seconds = 0
-        in_time = None
-        for event in events:
-            event_time = ensure_utc(event.timestamp)
-            if event.status == "active":
-                in_time = event_time
-            elif event.status == "inactive" and in_time:
-                total_seconds += (event_time - in_time).total_seconds()
-                in_time = None
-        return int(total_seconds)
+        raise ValueError("calculate_unpaid_attendance_seconds requires seat_id and class_id.")
     return _calculate_unpaid_attendance_seconds(
         seat_id,
         class_id,
@@ -125,31 +41,15 @@ def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, j
     )
 
 
-def calculate_period_attendance(student_or_seat_id, period_or_class_id, date_or_period, date=None):
+def calculate_period_attendance(seat_id, class_id, period, date):
     """
     Calculates total attendance seconds for a student in a specific period
     on a specific date. Used for daily attendance reporting.
     NOTE: This uses UTC day boundaries.
     For class-timezone daily limits, use calculate_period_attendance_utc_range instead.
     """
-    from app.models import TapEvent
-
-    # Backward-compatible argument parsing:
-    # - New: (seat_id, class_id, period, date)
-    # - Legacy: (student_id, period, date)
-    student_id = None
-    if date is None:
-        student_id = student_or_seat_id
-        period = period_or_class_id
-        date = date_or_period
-        join_code = get_join_code_for_student_period(student_id, period)
-        class_row = ClassEconomy.query.filter_by(join_code=join_code).first() if join_code else None
-        class_id = class_row.class_id if class_row else None
-        seat_id = get_seat_id_for_class(student_id, class_id) if class_id else None
-    else:
-        seat_id = student_or_seat_id
-        class_id = period_or_class_id
-        period = date_or_period
+    if not seat_id or not class_id:
+        raise ValueError("calculate_period_attendance requires seat_id and class_id.")
 
     # Build UTC range for the specified date
     start_utc = datetime.combine(date, datetime.min.time(), tzinfo=timezone.utc)
@@ -158,52 +58,26 @@ def calculate_period_attendance(student_or_seat_id, period_or_class_id, date_or_
     start_db = normalize_for_db(start_utc)
     end_db = normalize_for_db(end_utc)
 
-    if not seat_id or not class_id:
-        if not student_id:
-            return 0
-        events = TapEvent.query.filter(
-            TapEvent.student_id == student_id,
-            TapEvent.period == period,
-            TapEvent.timestamp >= start_db,
-            TapEvent.timestamp < end_db,
-            TapEvent.is_deleted == False,
-        ).order_by(TapEvent.timestamp.asc()).all()
-        total_seconds = 0
-        in_time = None
-        for event in events:
-            event_time = ensure_utc(event.timestamp)
-            if event.status == "active":
-                in_time = event_time
-            elif event.status == "inactive" and in_time:
-                total_seconds += (event_time - in_time).total_seconds()
-                in_time = None
-        return int(total_seconds)
-
-    # Get all events for this seat/period on the specified date
-    events = TapEvent.query.filter(
-        TapEvent.seat_id == seat_id,
-        TapEvent.class_id == class_id,
-        TapEvent.period == period,
-        TapEvent.timestamp >= start_db,
-        TapEvent.timestamp < end_db,
-        TapEvent.is_deleted == False  # Exclude deleted events
-    ).order_by(TapEvent.timestamp.asc()).all()
+    sessions = AttendanceSession.query.filter(
+        AttendanceSession.seat_id == seat_id,
+        AttendanceSession.class_id == class_id,
+        AttendanceSession.period == period,
+        AttendanceSession.started_at < end_db,
+        sa.or_(AttendanceSession.ended_at.is_(None), AttendanceSession.ended_at > start_db),
+    ).all()
 
     total_seconds = 0
-    in_time = None
-
-    for event in events:
-        event_time = ensure_utc(event.timestamp)
-        if event.status == "active":
-            in_time = event_time
-        elif event.status == "inactive" and in_time:
-            total_seconds += (event_time - in_time).total_seconds()
-            in_time = None
-
+    now_utc = utc_now()
+    for session in sessions:
+        start_time = max(ensure_utc(session.started_at), start_utc)
+        end_time = ensure_utc(session.ended_at) if session.ended_at else now_utc
+        end_time = min(end_time, end_utc)
+        if end_time > start_time:
+            total_seconds += (end_time - start_time).total_seconds()
     return int(total_seconds)
 
 
-def calculate_period_attendance_utc_range(student_or_seat_id, period_or_class_id, start_or_period, end_or_start_utc, end_utc=None):
+def calculate_period_attendance_utc_range(seat_id, class_id, period, start_utc, end_utc):
     """
     Calculates total attendance seconds for a student in a specific period
     within a UTC datetime range. Use this for timezone-aware daily limits.
@@ -218,246 +92,142 @@ def calculate_period_attendance_utc_range(student_or_seat_id, period_or_class_id
     Returns:
         int: Total seconds of attendance in the range
     """
-    from app.models import TapEvent
-
-    # Backward-compatible argument parsing:
-    # - New: (seat_id, class_id, period, start_utc, end_utc)
-    # - Legacy: (student_id, period, start_utc, end_utc)
-    student_id = None
-    if end_utc is None:
-        student_id = student_or_seat_id
-        period = period_or_class_id
-        start_utc = start_or_period
-        end_utc = end_or_start_utc
-        join_code = get_join_code_for_student_period(student_id, period)
-        class_row = ClassEconomy.query.filter_by(join_code=join_code).first() if join_code else None
-        class_id = class_row.class_id if class_row else None
-        seat_id = get_seat_id_for_class(student_id, class_id) if class_id else None
-    else:
-        seat_id = student_or_seat_id
-        class_id = period_or_class_id
-        period = start_or_period
-        start_utc = end_or_start_utc
+    if not seat_id or not class_id:
+        raise ValueError("calculate_period_attendance_utc_range requires seat_id and class_id.")
 
     start_db = normalize_for_db(start_utc)
     end_db = normalize_for_db(end_utc)
 
-    if not seat_id or not class_id:
-        if not student_id:
-            return 0
-        events = TapEvent.query.filter(
-            TapEvent.student_id == student_id,
-            TapEvent.period == period,
-            TapEvent.timestamp >= start_db,
-            TapEvent.timestamp < end_db,
-            TapEvent.is_deleted == False,
-        ).order_by(TapEvent.timestamp.asc()).all()
-        total_seconds = 0
-        in_time = None
-        for event in events:
-            event_time = ensure_utc(event.timestamp)
-            if event.status == "active":
-                in_time = event_time
-            elif event.status == "inactive" and in_time:
-                total_seconds += (event_time - in_time).total_seconds()
-                in_time = None
-        return int(total_seconds)
-
-    # Get all events in the UTC range
-    events = TapEvent.query.filter(
-        TapEvent.seat_id == seat_id,
-        TapEvent.class_id == class_id,
-        TapEvent.period == period,
-        TapEvent.timestamp >= start_db,
-        TapEvent.timestamp < end_db,
-        TapEvent.is_deleted == False  # Exclude deleted events
-    ).order_by(TapEvent.timestamp.asc()).all()
+    sessions = AttendanceSession.query.filter(
+        AttendanceSession.seat_id == seat_id,
+        AttendanceSession.class_id == class_id,
+        AttendanceSession.period == period,
+        AttendanceSession.started_at < end_db,
+        sa.or_(AttendanceSession.ended_at.is_(None), AttendanceSession.ended_at > start_db),
+    ).all()
 
     total_seconds = 0
-    in_time = None
-
-    for event in events:
-        event_time = ensure_utc(event.timestamp)
-        if event.status == "active":
-            in_time = event_time
-        elif event.status == "inactive" and in_time:
-            total_seconds += (event_time - in_time).total_seconds()
-            in_time = None
-
+    now_utc = utc_now()
+    for session in sessions:
+        start_time = max(ensure_utc(session.started_at), start_utc)
+        end_time = ensure_utc(session.ended_at) if session.ended_at else now_utc
+        end_time = min(end_time, end_utc)
+        if end_time > start_time:
+            total_seconds += (end_time - start_time).total_seconds()
     return int(total_seconds)
 
 
-def get_session_status(student_id, period):
+def get_session_status(seat_id, class_id, period):
     """
     Gets the current session status for a student in a specific period.
     Returns a tuple of (is_active, done, duration).
     """
-    from app.models import TapEvent
-    from datetime import datetime, timezone
+    from app.models import SeatAttendanceState, StudentBlock
 
-    class_id = None
-    if join_code:
-        class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
-        class_id = class_row.class_id if class_row else None
+    if not seat_id or not class_id:
+        raise ValueError("get_session_status requires seat_id and class_id.")
+    latest_state = SeatAttendanceState.query.filter_by(
+        seat_id=seat_id,
+        class_id=class_id,
+        period=period,
+    ).order_by(SeatAttendanceState.updated_at.desc()).first()
+    is_active = latest_state.is_active if latest_state else False
 
-    if class_id:
-        today_start_utc, today_end_utc = get_class_today_range(class_id)
-    else:
-        # Safe fallback for legacy rows without class context.
-        today_start_utc, today_end_utc = local_date_range_utc(
-            class_date(timezone_name="America/Los_Angeles"),
-            timezone_name="America/Los_Angeles",
-        )
-    today_start_db = normalize_for_db(today_start_utc)
-    today_end_db = normalize_for_db(today_end_utc)
-    join_code = get_join_code_for_student_period(student_id, period)
-
-    # Check if student is currently active
-    latest_event_query = TapEvent.query.filter_by(period=period, is_deleted=False)
-    if join_code:
-        seat_ids = get_seat_ids_for_student_join(student_id, join_code)
-        if seat_ids:
-            latest_event_query = latest_event_query.filter(TapEvent.seat_id.in_(seat_ids))
-        else:
-            latest_event_query = latest_event_query.filter(TapEvent.student_id == student_id)
-        latest_event_query = latest_event_query.filter(TapEvent.join_code == join_code)
-    else:
-        latest_event_query = latest_event_query.filter(TapEvent.student_id == student_id)
-    latest_event = latest_event_query.order_by(TapEvent.timestamp.desc()).first()
-    is_active = latest_event.status == "active" if latest_event else False
-
-    # Check if marked as done today
-    done_query = TapEvent.query.filter(
-        TapEvent.period == period,
-        TapEvent.timestamp >= today_start_db,
-        TapEvent.timestamp < today_end_db,
-        TapEvent.reason != None,
-        TapEvent.is_deleted == False  # Exclude deleted events
+    today_local = get_class_now(class_id).date()
+    block_query = StudentBlock.query.filter(
+        StudentBlock.seat_id == seat_id,
+        StudentBlock.class_id == class_id,
+        StudentBlock.period == period,
+        StudentBlock.done_for_day_date.isnot(None),
     )
-    if join_code:
-        seat_ids = get_seat_ids_for_student_join(student_id, join_code)
-        if seat_ids:
-            done_query = done_query.filter(TapEvent.seat_id.in_(seat_ids))
-        else:
-            done_query = done_query.filter(TapEvent.student_id == student_id)
-        done_query = done_query.filter(TapEvent.join_code == join_code)
-    else:
-        done_query = done_query.filter(TapEvent.student_id == student_id)
-    done = done_query.filter(
-        func.lower(TapEvent.reason).in_(['done', 'done for the day'])
-    ).first() is not None
+    done = block_query.filter(StudentBlock.done_for_day_date == today_local).first() is not None
 
     # Calculate unpaid duration
-    last_payroll_time = get_last_payroll_time(student_id=student_id, join_code=join_code)
-    duration = calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, join_code=join_code)
+    last_payroll_time = get_last_payroll_time(seat_id=seat_id, class_id=class_id)
+    duration = calculate_unpaid_attendance_seconds(seat_id, class_id, period, last_payroll_time)
 
     return is_active, done, duration
 
 
-def get_all_block_statuses(student, join_code=None):
-    """Compatibility wrapper around the attendance-owned block status query."""
-    return _get_all_block_statuses(student, join_code=join_code)
+def get_all_block_statuses(student, *, class_id: str):
+    """Return block statuses within one canonical class scope."""
+    if not class_id:
+        raise ValueError("get_all_block_statuses requires class_id.")
+    return _get_all_block_statuses(student, class_id=class_id)
 
 # -------------------------------------------------------------------
 # BATCH OPTIMIZATION HELPERS
 # -------------------------------------------------------------------
 
-def get_batch_attendance_events(student_ids, min_anchor, allowed_join_codes=None):
+def get_batch_attendance_events(seat_ids, min_anchor, allowed_class_ids):
     """
-    Fetch all relevant tap events for the given students after min_anchor.
-    Crucially, also determines if they were 'active' right before min_anchor.
-    Returns a dict: (student_id, period_upper, join_code) -> list of TapEvent
+    Fetch attendance transitions from canonical attendance sessions.
+    Returns a dict: (seat_id, period_upper, class_id) -> list of event-like rows
+    with ``status`` and ``timestamp`` fields.
 
-    SECURITY: Pass allowed_join_codes to restrict results to a specific tenant's
-    class periods. Without this filter the query returns events from every class
-    the students are enrolled in, including those owned by other teachers.
+    SECURITY: ``allowed_class_ids`` is required to restrict results to explicit
+    tenant-owned class scopes.
     """
-    from app.models import TapEvent
-    from sqlalchemy import func, and_
+    if not seat_ids:
+        return {}
+    if not allowed_class_ids:
+        return {}
 
-    # 1. Fetch all events > min_anchor (if min_anchor exists)
-    query = TapEvent.query.filter(
-        TapEvent.student_id.in_(student_ids),
-        TapEvent.is_deleted == False
+    min_anchor_utc = ensure_utc(min_anchor) if min_anchor else None
+    query = AttendanceSession.query.filter(
+        AttendanceSession.seat_id.in_(seat_ids),
+        AttendanceSession.class_id.in_(allowed_class_ids),
     )
 
-    if allowed_join_codes is not None:
-        query = query.filter(TapEvent.join_code.in_(allowed_join_codes))
-
-    if min_anchor:
-        query = query.filter(TapEvent.timestamp > min_anchor)
-
-    events = query.order_by(TapEvent.timestamp.asc()).all()
-
-    # Group by (student_id, period, join_code)
-    grouped = {}
-    for e in events:
-        key = (e.student_id, (e.period or "").upper(), e.join_code)
-        grouped.setdefault(key, []).append(e)
-
-    # 2. If min_anchor exists, we need the "initial state" for each student/period
-    # We need the LAST event <= min_anchor for each student/period.
-    if min_anchor:
-        # Subquery to find the latest timestamp for each student/period/join_code before anchor
-        pre_anchor_query = db.session.query(
-            TapEvent.student_id,
-            TapEvent.period,
-            TapEvent.join_code,
-            func.max(TapEvent.timestamp).label("max_ts")
-        ).filter(
-            TapEvent.student_id.in_(student_ids),
-            TapEvent.timestamp <= min_anchor,
-            TapEvent.is_deleted == False
+    if min_anchor_utc:
+        query = query.filter(
+            sa.or_(
+                AttendanceSession.started_at > min_anchor_utc,
+                AttendanceSession.ended_at.is_(None),
+                AttendanceSession.ended_at > min_anchor_utc,
+            )
         )
 
-        if allowed_join_codes is not None:
-            pre_anchor_query = pre_anchor_query.filter(TapEvent.join_code.in_(allowed_join_codes))
+    sessions = query.order_by(AttendanceSession.started_at.asc(), AttendanceSession.id.asc()).all()
 
-        subquery = pre_anchor_query.group_by(
-            TapEvent.student_id,
-            TapEvent.period,
-            TapEvent.join_code,
-        ).subquery()
+    grouped = {}
+    for session in sessions:
+        start_time = ensure_utc(session.started_at)
+        end_time = ensure_utc(session.ended_at) if session.ended_at else None
 
-        # Join back to get the full event details (status)
-        initial_states = db.session.query(
-            TapEvent.student_id,
-            TapEvent.period,
-            TapEvent.join_code,
-            TapEvent.status,
-            TapEvent.timestamp
-        ).join(
-            subquery,
-            and_(
-                TapEvent.student_id == subquery.c.student_id,
-                TapEvent.period == subquery.c.period,
-                TapEvent.join_code == subquery.c.join_code,
-                TapEvent.timestamp == subquery.c.max_ts
+        if min_anchor_utc:
+            if end_time is not None and end_time <= min_anchor_utc:
+                continue
+            active_at = max(start_time, min_anchor_utc)
+        else:
+            active_at = start_time
+
+        key = (session.seat_id, (session.period or "").upper(), session.class_id)
+        grouped.setdefault(key, []).append(
+            SimpleNamespace(
+                student_id=session.student_id,
+                seat_id=session.seat_id,
+                period=session.period,
+                class_id=session.class_id,
+                status="active",
+                timestamp=active_at,
             )
-        ).filter(
-            TapEvent.is_deleted == False
-        ).all()
+        )
 
-        # Prepend a virtual "start" event if they were active
-        for row in initial_states:
-            s_id, period, status, ts = row.student_id, row.period, row.status, row.timestamp
-            join_code = row.join_code
-            if status == 'active':
-                key = (s_id, (period or "").upper(), join_code)
-
-                # Virtual start at min_anchor
-                virtual_start_time = ensure_utc(min_anchor)
-
-                # Mock object (or partial object)
-                mock_event = TapEvent(
-                    student_id=s_id,
-                    period=period,
-                    join_code=join_code,
-                    status='active',
-                    timestamp=virtual_start_time
+        if end_time and (not min_anchor_utc or end_time > min_anchor_utc):
+            grouped[key].append(
+                SimpleNamespace(
+                    student_id=session.student_id,
+                    seat_id=session.seat_id,
+                    period=session.period,
+                    class_id=session.class_id,
+                    status="inactive",
+                    timestamp=end_time,
                 )
+            )
 
-                grouped.setdefault(key, []).insert(0, mock_event)
+    for events in grouped.values():
+        events.sort(key=lambda event: (ensure_utc(event.timestamp), 0 if event.status == "active" else 1))
 
     return grouped
 
@@ -509,7 +279,7 @@ def batch_auto_tapout_students(admin_id):
     Optimized version of auto-tapout that processes all students for an admin in batch.
     Returns the count of students tapped out.
     """
-    from app.models import Student, TapEvent, TapEventReasonCode, StudentBlock, PayrollSettings, StudentTeacher, TeacherBlock
+    from app.models import Student, TapEventReasonCode, StudentBlock, PayrollSettings, StudentTeacher, TeacherBlock
     from app.extensions import db
 
     # 1. Get all students for this admin via StudentTeacher
@@ -523,41 +293,27 @@ def batch_auto_tapout_students(admin_id):
     if not student_ids:
         return 0
 
-    # 1b. SECURITY: Fetch only the join codes owned by this admin.
-    # This prevents reading or writing attendance data for students' other
-    # class periods that belong to different teachers.
-    admin_join_codes = [
-        row[0] for row in db.session.query(TeacherBlock.join_code)
-        .filter(
-            TeacherBlock.teacher_id == admin_id,
-            TeacherBlock.join_code.isnot(None)
-        )
-        .distinct()
-        .all()
-    ]
+    # 1b. SECURITY: Fetch only class scopes owned by this admin.
+    admin_class_rows = db.session.query(TeacherBlock.class_id, TeacherBlock.join_code).filter(
+        TeacherBlock.teacher_id == admin_id,
+        TeacherBlock.class_id.isnot(None),
+    ).distinct().all()
+    admin_class_ids = [row.class_id for row in admin_class_rows if row.class_id]
+    join_code_by_class_id = {row.class_id: row.join_code for row in admin_class_rows if row.class_id}
 
-    if not admin_join_codes:
+    if not admin_class_ids:
         return 0
 
     now_utc = utc_now()
-    class_ids_by_join_code = {
-        row.join_code: row.class_id
-        for row in ClassEconomy.query.with_entities(ClassEconomy.join_code, ClassEconomy.class_id)
-        .filter(ClassEconomy.join_code.in_(admin_join_codes))
-        .all()
-    }
-    class_day_start_by_join_code = {}
-    class_today_by_join_code = {}
-    for join_code in admin_join_codes:
-        class_id = class_ids_by_join_code.get(join_code)
-        if not class_id:
-            continue
+    class_day_start_by_class_id = {}
+    class_today_by_class_id = {}
+    for class_id in admin_class_ids:
         day_start_utc, _ = get_class_today_range(class_id, reference_time_utc=now_utc)
-        class_day_start_by_join_code[join_code] = day_start_utc
-        class_today_by_join_code[join_code] = get_class_now(class_id, reference_time_utc=now_utc).date()
+        class_day_start_by_class_id[class_id] = day_start_utc
+        class_today_by_class_id[class_id] = get_class_now(class_id, reference_time_utc=now_utc).date()
 
-    if class_day_start_by_join_code:
-        start_of_day_utc = min(class_day_start_by_join_code.values())
+    if class_day_start_by_class_id:
+        start_of_day_utc = min(class_day_start_by_class_id.values())
     else:
         start_of_day_utc, _ = local_date_range_utc(
             class_date(timezone_name="America/Los_Angeles", timestamp_utc=now_utc),
@@ -565,14 +321,31 @@ def batch_auto_tapout_students(admin_id):
         )
     default_today_local = class_date(timestamp_utc=now_utc)
 
-    # 3. Batch fetch events for today, scoped to this admin's join codes only.
-    # events_map: (student_id, period, join_code) -> list[TapEvent]
-    events_map = get_batch_attendance_events(student_ids, start_of_day_utc, allowed_join_codes=admin_join_codes)
+    claimed_seats = (
+        TeacherBlock.query
+        .filter(
+            TeacherBlock.teacher_id == admin_id,
+            TeacherBlock.is_claimed == True,
+            TeacherBlock.student_id.in_(student_ids),
+            TeacherBlock.class_id.in_(admin_class_ids),
+        )
+        .all()
+    )
+    if not claimed_seats:
+        return 0
+    seat_ids = [seat.id for seat in claimed_seats]
 
-    # Restructure for faster lookup: student_id -> period -> list of (join_code, events)
-    lookup = {}
-    for (sid, per, jc), evts in events_map.items():
-        lookup.setdefault(sid, {}).setdefault(per, []).append((jc, evts))
+    # 3. Batch fetch events for today, scoped to this admin's class_ids only.
+    # events_map: (seat_id, period, class_id) -> list[event-like]
+    events_map = get_batch_attendance_events(seat_ids, start_of_day_utc, allowed_class_ids=admin_class_ids)
+
+    # Lookup by canonical actor scope for fast iteration
+    seats_by_student_period = {}
+    for seat in claimed_seats:
+        blk = (seat.block or "").strip().upper()
+        if not blk:
+            continue
+        seats_by_student_period.setdefault(seat.student_id, {}).setdefault(blk, []).append(seat)
 
     # 4. Batch fetch PayrollSettings
     payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True).all()
@@ -598,10 +371,6 @@ def batch_auto_tapout_students(admin_id):
 
     # 5. Batch fetch Students to get their blocks
     students = Student.query.filter(Student.id.in_(student_ids)).all()
-    student_blocks_lookup = {
-        (sb.student_id, (sb.period or "").strip().upper()): sb
-        for sb in StudentBlock.query.filter(StudentBlock.student_id.in_(student_ids)).all()
-    }
 
     # 6. Iterate and check
     tapped_out_count = 0
@@ -610,10 +379,11 @@ def batch_auto_tapout_students(admin_id):
         student_blocks = [b.strip().upper() for b in (student.block or "").split(',') if b.strip()]
 
         for period in student_blocks:
-            # Check if we have events for this period
-            entries = lookup.get(student.id, {}).get(period, [])
-
-            for join_code, events in entries:
+            seat_rows = seats_by_student_period.get(student.id, {}).get(period, [])
+            for seat_row in seat_rows:
+                class_id = seat_row.class_id
+                resolved_seat_id = seat_row.id
+                events = events_map.get((resolved_seat_id, period, class_id), [])
                 if not events:
                     continue
 
@@ -635,31 +405,39 @@ def batch_auto_tapout_students(admin_id):
                     tapout_ts = now_utc - timedelta(seconds=max(0, overage))
                     if tapout_ts > now_utc: tapout_ts = now_utc
 
-                    # Create TapEvent
-                    new_event = TapEvent(
+                    if not class_id or not resolved_seat_id:
+                        continue
+                    join_code = join_code_by_class_id.get(class_id)
+                    student_tap(
                         student_id=student.id,
+                        seat_id=resolved_seat_id,
+                        class_id=class_id,
+                        join_code=join_code,
                         period=period,
-                        status='inactive',
-                        timestamp=tapout_ts,
+                        status="inactive",
                         reason=f"Daily limit ({hours_limit:.1f}h) reached",
                         reason_code=TapEventReasonCode.DAILY_LIMIT,
-                        join_code=join_code
+                        timestamp_utc=tapout_ts,
                     )
-                    db.session.add(new_event)
                     tapped_out_count += 1
 
                     # Lock student
-                    sb = student_blocks_lookup.get((student.id, period))
+                    sb = StudentBlock.query.filter_by(
+                        seat_id=resolved_seat_id,
+                        class_id=class_id,
+                        period=period,
+                    ).first()
                     if not sb:
                         sb = StudentBlock(
+                            seat_id=resolved_seat_id,
+                            class_id=class_id,
                             student_id=student.id,
                             period=period,
                             tap_enabled=True,
                             join_code=join_code
                         )
                         db.session.add(sb)
-                        student_blocks_lookup[(student.id, period)] = sb
-                    sb.done_for_day_date = class_today_by_join_code.get(join_code, default_today_local)
+                    sb.done_for_day_date = class_today_by_class_id.get(class_id, default_today_local)
 
     if tapped_out_count > 0:
         try:

@@ -2,16 +2,12 @@ from functools import wraps
 
 import sqlalchemy as sa
 from app.extensions import db
-from app.models import TapEvent, Student, Transaction, PayrollSettings, ClassEconomy
-from datetime import datetime, timezone
+from app.models import Student, Transaction, PayrollSettings, ClassEconomy
 from app.utils.time import ensure_utc
 from app.attendance import (
-    calculate_unpaid_attendance_seconds,
-    get_last_payroll_time,
     get_batch_attendance_events,
     calculate_seconds_in_memory
 )
-from app.utils.attendance_helpers import get_join_code_for_student_period
 from flask import has_request_context, session
 from decimal import Decimal
 
@@ -157,15 +153,16 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
     # map: block (str/None) -> rate_per_second (Decimal)
     pay_rates = _get_batch_pay_rates(teacher_id)
 
-    # --- 2. Batch Fetch Join Codes ---
-    # map: (student_id, block) -> join_code
-    student_join_codes = _get_batch_join_codes(teacher_id, student_ids)
+    # --- 2. Batch Fetch Claimed Seat Scopes ---
+    # map: (student_id, block_upper) -> {seat_id, class_id, join_code}
+    block_scopes = _get_batch_block_scopes(teacher_id, student_ids)
 
     # --- 3. Determine class scope and fetch class-scoped payroll anchors ---
-    teacher_join_codes = list({jc for jc in student_join_codes.values() if jc})
+    allowed_class_ids = list({scope["class_id"] for scope in block_scopes.values() if scope.get("class_id")})
+    scoped_seat_ids = list({scope["seat_id"] for scope in block_scopes.values() if scope.get("seat_id")})
     student_last_payrolls = _get_batch_last_payroll_times(
-        student_ids,
-        allowed_join_codes=teacher_join_codes,
+        scoped_seat_ids,
+        allowed_class_ids=allowed_class_ids,
     )
 
     # --- 4. Batch Fetch Attendance Events ---
@@ -180,10 +177,9 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
     # If no history at all, we technically fetch everything (min_anchor=None)
     min_anchor = min(valid_times) if valid_times else None
 
-    # map: (student_id, period, join_code) -> list of valid events (sorted)
+    # map: (seat_id, period, class_id) -> list of valid events (sorted)
     # Also handles the "initial state" (was active at anchor) logic internally
-    # Updated: Use shared function from app.attendance
-    events_map = get_batch_attendance_events(student_ids, min_anchor, allowed_join_codes=teacher_join_codes)
+    events_map = get_batch_attendance_events(scoped_seat_ids, min_anchor, allowed_class_ids=allowed_class_ids)
 
     # --- 5. In-Memory Calculation ---
     for student in students:
@@ -207,22 +203,20 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
             # lookup rate
             rate_per_second = pay_rates.get(block_upper, pay_rates.get(None, DEFAULT_PAY_RATE_PER_SECOND_DECIMAL))
 
-            # lookup join code
-            join_code = student_join_codes.get((student.id, block_upper))
-            
-            if not join_code:
+            scope = block_scopes.get((student.id, block_upper))
+            if not scope:
+                continue
+            join_code = scope.get("join_code")
+            class_id = scope.get("class_id")
+            seat_id = scope.get("seat_id")
+            if not join_code or not class_id or not seat_id:
                 continue
 
-            payroll_anchor = student_last_payrolls.get((student.id, join_code))
+            payroll_anchor = student_last_payrolls.get((seat_id, class_id))
             if payroll_anchor is None:
                 payroll_anchor = normalized_global_last_payroll
 
-            # Calculate seconds using batched events
-            # We only care about events >= payroll_anchor
-            # The batch loader naturally gives us a relevant stream
-            # but we must double-check the anchor for this specific student-block logic
-            
-            events = events_map.get((student.id, block_upper, join_code), [])
+            events = events_map.get((seat_id, block_upper, class_id), [])
             # Updated: Use shared function from app.attendance
             total_seconds = calculate_seconds_in_memory(events, payroll_anchor)
 
@@ -260,8 +254,8 @@ def _get_batch_pay_rates(teacher_id):
             
     return rates
 
-def _get_batch_join_codes(teacher_id, student_ids):
-    """Batch fetch join codes for students in a teacher's classes."""
+def _get_batch_block_scopes(teacher_id, student_ids):
+    """Batch fetch canonical claimed seat scopes for student block contexts."""
     from app.models import TeacherBlock
     
     query = TeacherBlock.query.filter(
@@ -274,36 +268,41 @@ def _get_batch_join_codes(teacher_id, student_ids):
         
     seats = query.order_by(TeacherBlock.id.desc()).all()
 
-    # Map (student_id, block_upper) -> latest join_code for that block context
-    join_codes = {}
+    # Map (student_id, block_upper) -> latest claimed seat scope.
+    scopes = {}
     for seat in seats:
         key = (seat.student_id, (seat.block or "").upper())
-        if key not in join_codes:
-            join_codes[key] = seat.join_code
-    return join_codes
+        if key not in scopes:
+            scopes[key] = {
+                "seat_id": seat.id,
+                "class_id": seat.class_id,
+                "join_code": seat.join_code,
+            }
+    return scopes
 
-def _get_batch_last_payroll_times(student_ids, allowed_join_codes=None):
+def _get_batch_last_payroll_times(seat_ids, allowed_class_ids):
     """
-    Batch find the last payroll/manual-payment anchor for each (student, join_code).
+    Batch find the last payroll/manual-payment anchor for each (seat_id, class_id).
     """
-    from app.models import Transaction
     from sqlalchemy import func
-    
+
+    if not seat_ids or not allowed_class_ids:
+        return {}
+
     query = db.session.query(
-        Transaction.student_id,
-        Transaction.join_code,
+        Transaction.seat_id,
+        Transaction.class_id,
         func.max(Transaction.timestamp)
     ).filter(
-        Transaction.student_id.in_(student_ids),
+        Transaction.seat_id.in_(seat_ids),
+        Transaction.class_id.in_(allowed_class_ids),
         Transaction.type.in_(["payroll", "manual_payment"]),
-        Transaction.join_code.isnot(None),
+        Transaction.is_void.isnot(True),
     )
-    if allowed_join_codes is not None:
-        query = query.filter(Transaction.join_code.in_(allowed_join_codes))
 
-    results = query.group_by(Transaction.student_id, Transaction.join_code).all()
+    results = query.group_by(Transaction.seat_id, Transaction.class_id).all()
 
-    return {(student_id, join_code): ensure_utc(ts) for student_id, join_code, ts in results}
+    return {(seat_id, class_id): ensure_utc(ts) for seat_id, class_id, ts in results}
 
 
 @with_teacher_id_fallback

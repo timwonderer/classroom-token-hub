@@ -1065,24 +1065,14 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
 
 def _resolve_seat_id(connection, student_id, *, class_id=None, join_code=None):
     """Lookup seat ID for a student in a class universe."""
-    if not student_id:
+    if not student_id or not class_id:
         return None
-    
-    if class_id:
-        seat_id = connection.execute(
-            sa.text("SELECT id FROM seats WHERE student_id = :student_id AND class_id = :class_id LIMIT 1"),
-            {"student_id": student_id, "class_id": class_id},
-        ).scalar()
-        if seat_id: return int(seat_id)
 
-    if join_code:
-        seat_id = connection.execute(
-            sa.text("SELECT id FROM seats WHERE student_id = :student_id AND join_code = :join_code LIMIT 1"),
-            {"student_id": student_id, "join_code": join_code},
-        ).scalar()
-        return int(seat_id) if seat_id else None
-    
-    return None
+    seat_id = connection.execute(
+        sa.text("SELECT id FROM seats WHERE student_id = :student_id AND class_id = :class_id LIMIT 1"),
+        {"student_id": student_id, "class_id": class_id},
+    ).scalar()
+    return int(seat_id) if seat_id else None
 
 
 class BalanceCache(db.Model):
@@ -1150,11 +1140,68 @@ class StudentBlock(db.Model):
     )
 
 
+class AttendanceSession(db.Model):
+    """Canonical attendance session windows per seat/class/period."""
+    __tablename__ = 'attendance_sessions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
+    period = db.Column(db.String(10), nullable=False, index=True)
+
+    started_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    ended_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
+    duration_seconds = db.Column(db.Integer, nullable=True)
+
+    start_reason = db.Column(db.String(50), nullable=True)
+    end_reason = db.Column(db.String(50), nullable=True)
+    end_reason_code = db.Column(db.Enum(TapEventReasonCode, values_callable=lambda x: [e.value for e in x]), nullable=True, index=True)
+
+    source_tap_event_id = db.Column(db.Integer, db.ForeignKey('tap_events.id', ondelete='SET NULL'), nullable=True, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+    student = db.relationship("Student", backref=db.backref("attendance_sessions", passive_deletes=True))
+    seat = db.relationship("Seat", backref=db.backref("attendance_sessions", passive_deletes=True))
+
+    __table_args__ = (
+        db.Index('ix_attendance_sessions_seat_class_period_start', 'seat_id', 'class_id', 'period', 'started_at'),
+    )
+
+
+class SeatAttendanceState(db.Model):
+    """Canonical latest attendance state per seat/class/period."""
+    __tablename__ = 'seat_attendance_state'
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=False, index=True)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
+    period = db.Column(db.String(10), nullable=False, index=True)
+
+    is_active = db.Column(db.Boolean, default=False, nullable=False)
+    open_session_id = db.Column(db.Integer, db.ForeignKey('attendance_sessions.id', ondelete='SET NULL'), nullable=True)
+    done_for_day_date = db.Column(db.Date, nullable=True)
+    last_event_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    last_event_status = db.Column(db.String(10), nullable=True)
+    last_reason = db.Column(db.String(50), nullable=True)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+    student = db.relationship("Student", backref=db.backref("attendance_states", passive_deletes=True))
+    seat = db.relationship("Seat", backref=db.backref("attendance_states", passive_deletes=True))
+
+    __table_args__ = (
+        db.UniqueConstraint('seat_id', 'class_id', 'period', name='uq_attendance_state_scope'),
+        db.Index('ix_attendance_state_student_period', 'student_id', 'period'),
+    )
+
+
 class TapEvent(db.Model):
     __tablename__ = 'tap_events'
 
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
     period = db.Column(db.String(10), nullable=False)
     # CRITICAL: class_id scopes attendance to a specific class economy
@@ -1189,18 +1236,9 @@ def _sync_student_block_seat(_mapper, connection, target):
         return
     
     class_id = getattr(target, "class_id", None)
-    join_code = getattr(target, "join_code", None)
-
-    if not class_id and join_code:
-        class_id = connection.execute(
-            sa.text("SELECT class_id FROM classes WHERE join_code = :join_code LIMIT 1"),
-            {"join_code": join_code},
-        ).scalar()
-        if class_id:
-            target.class_id = str(class_id)
     
     if not getattr(target, "seat_id", None):
-        seat_id = _resolve_seat_id(connection, target.student_id, class_id=class_id, join_code=join_code)
+        seat_id = _resolve_seat_id(connection, target.student_id, class_id=class_id)
         if seat_id:
             target.seat_id = seat_id
 
@@ -1209,22 +1247,12 @@ def _sync_student_block_seat(_mapper, connection, target):
 @sa.event.listens_for(TapEvent, "before_update")
 def _sync_tap_event_seat(_mapper, connection, target):
     """Dual-write bridge for tap_events.seat_id."""
-    if not getattr(target, "student_id", None):
-        return
-
     class_id = getattr(target, "class_id", None)
-    join_code = getattr(target, "join_code", None)
+    student_id = getattr(target, "student_id", None)
+    seat_id = getattr(target, "seat_id", None)
 
-    if not class_id and join_code:
-        class_id = connection.execute(
-            sa.text("SELECT class_id FROM classes WHERE join_code = :join_code LIMIT 1"),
-            {"join_code": join_code},
-        ).scalar()
-        if class_id:
-            target.class_id = str(class_id)
-
-    if not getattr(target, "seat_id", None):
-        seat_id = _resolve_seat_id(connection, target.student_id, class_id=class_id, join_code=join_code)
+    if not seat_id and student_id:
+        seat_id = _resolve_seat_id(connection, student_id, class_id=class_id)
         if seat_id:
             target.seat_id = seat_id
 
@@ -1235,6 +1263,14 @@ def _sync_tap_event_seat(_mapper, connection, target):
         ).scalar()
         if seat_class_id:
             target.class_id = str(seat_class_id)
+
+    if not getattr(target, "student_id", None) and getattr(target, "seat_id", None):
+        seat_student_id = connection.execute(
+            sa.text("SELECT student_id FROM seats WHERE id = :seat_id LIMIT 1"),
+            {"seat_id": target.seat_id},
+        ).scalar()
+        if seat_student_id:
+            target.student_id = int(seat_student_id)
 
     # V2 hard invariant: tap events cannot exist outside class/seat scope.
     if not getattr(target, "class_id", None):
@@ -1686,18 +1722,9 @@ def _sync_hall_pass_seat(_mapper, connection, target):
     """Dual-write bridge for hall_pass_logs.seat_id."""
     student_id = getattr(target, "student_id", None)
     class_id = getattr(target, "class_id", None)
-    join_code = getattr(target, "join_code", None)
-
-    if not class_id and join_code:
-        class_id = connection.execute(
-            sa.text("SELECT class_id FROM classes WHERE join_code = :join_code LIMIT 1"),
-            {"join_code": join_code},
-        ).scalar()
-        if class_id:
-            target.class_id = str(class_id)
 
     if not getattr(target, "seat_id", None):
-        seat_id = _resolve_seat_id(connection, student_id, class_id=class_id, join_code=join_code)
+        seat_id = _resolve_seat_id(connection, student_id, class_id=class_id)
         if seat_id:
             target.seat_id = seat_id
 

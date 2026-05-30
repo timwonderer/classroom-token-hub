@@ -143,10 +143,10 @@ from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cach
 from app.attendance import (
     get_last_payroll_time,
     calculate_unpaid_attendance_seconds,
-    get_join_code_for_student_period,
     get_batch_attendance_events,
     calculate_seconds_in_memory,
 )
+from app.utils.attendance_helpers import get_join_code_for_student_period
 from app.services.balance_service import get_batch_balances_by_student_class
 from app.services import access_policy_service, ledger_service
 from app.services import operational_event_service
@@ -346,7 +346,7 @@ def _resolve_admin_class_context(admin_id: int | None) -> dict | None:
         return None
 
     candidate_class_id = (session.get('current_class_id') or '').strip() or None
-
+    class_row = None
     if candidate_class_id:
         class_row = (
             ClassEconomy.query.with_entities(
@@ -359,7 +359,24 @@ def _resolve_admin_class_context(admin_id: int | None) -> dict | None:
             .first()
         )
     else:
-        return None
+        # Fallback for legacy sessions that still carry join_code but not class_id.
+        candidate_join_code = (session.get('current_join_code') or '').strip() or None
+        if candidate_join_code:
+            class_row = (
+                ClassEconomy.query.with_entities(
+                    ClassEconomy.class_id, ClassEconomy.join_code, ClassEconomy.teacher_id
+                )
+                .filter(
+                    ClassEconomy.teacher_id == admin_id,
+                    ClassEconomy.join_code == candidate_join_code,
+                )
+                .first()
+            )
+            if class_row:
+                session['current_class_id'] = class_row.class_id
+                session['current_join_code'] = class_row.join_code
+        else:
+            return None
     if not class_row or class_row.teacher_id != admin_id:
         return None
 
@@ -916,7 +933,9 @@ def _build_payroll_preview_state(teacher_id, students, join_codes_by_block):
 
     for join_code, students_map in students_by_join_code.items():
         class_students = list(students_map.values())
-        anchor = ensure_utc(get_last_payroll_time(join_code=join_code))
+        # V2 strict mode: payroll anchors are derived from canonical seat/class scope
+        # inside payroll services, not join-code compatibility helpers.
+        anchor = None
         if getattr(g, "read_only", False):
             summary = calculate_payroll(class_students, anchor, teacher_id=teacher_id)
             updated_at = None
@@ -7199,47 +7218,33 @@ def insurance_management():
     """Main insurance management dashboard."""
     admin_id = session.get('admin_id')
     form = InsurancePolicyForm()
-    feature_options = get_admin_feature_join_code_options('insurance', admin_id=admin_id)
-    selected_scope = require_admin_feature_scope(
-        'insurance',
-        admin_id=admin_id,
-        requested_block=request.values.get('settings_block'),
-    )
-    teacher_blocks = [option['block'] for option in feature_options]
+    class_context = _resolve_admin_class_context(admin_id)
+    if not class_context:
+        flash("Select a class from the sidebar before managing insurance.", "warning")
+        return redirect(url_for('admin.dashboard'))
+    selected_scope = resolve_feature_class(admin_id, 'insurance', join_code=class_context['join_code'])
+    if not selected_scope or not selected_scope.get('enabled'):
+        abort(404)
     settings_block = selected_scope['block']
     selected_join_code = selected_scope['join_code']
     selected_class_id = selected_scope['class_id']
-
-    # Get class labels for display
-    class_labels_by_block = _get_class_labels_for_blocks(admin_id, teacher_blocks)
+    teacher_block = (
+        TeacherBlock.query
+        .filter_by(
+            teacher_id=admin_id,
+            join_code=selected_join_code,
+        )
+        .order_by(TeacherBlock.id.asc())
+        .first()
+    )
+    active_class_label = teacher_block.get_class_label() if teacher_block else selected_join_code
 
     # Populate blocks choices from teacher's students
     blocks = _get_teacher_blocks()
     form.blocks.choices = [(block, f"Period {block}") for block in blocks]
 
-    # CRITICAL: Filter policies by selected block for multi-tenancy
-    # Policies are visible in a block if:
-    # 1. They have an InsurancePolicyBlock entry for the selected block, OR
-    # 2. They have NO InsurancePolicyBlock entries (available to all blocks)
-    if settings_block:
-        # Get policies that are either specifically visible to this block or visible to all blocks
-        existing_policies = (
-            InsurancePolicy.query
-            .filter_by(class_id=selected_class_id)
-            .filter(
-                sa.or_(
-                    InsurancePolicy.id.in_(
-                        db.session.query(InsurancePolicyBlock.policy_id).filter(
-                            InsurancePolicyBlock.block == settings_block.upper()
-                        )
-                    ),
-                    ~sa.exists().where(InsurancePolicyBlock.policy_id == InsurancePolicy.id)
-                )
-            )
-            .all()
-        )
-    else:
-        existing_policies = InsurancePolicy.query.filter_by(class_id=selected_class_id).all()
+    # V2 class-authoritative scoping: all policy reads are bounded by canonical class_id.
+    existing_policies = InsurancePolicy.query.filter_by(class_id=selected_class_id).all()
 
     # Collect existing tier groups for the current teacher
     tier_groups_map = {}
@@ -7292,29 +7297,9 @@ def insurance_management():
     # Get policies for current teacher only
     policies = existing_policies
 
-    # Filter students by selected block
-    if settings_block:
-        # Use SQL LIKE for more efficient filtering (case-insensitive, match whole block)
-        block_pattern = f'%,{settings_block},%'  # for matching in the middle
-        block_pattern_start = f'{settings_block},%'  # for matching at the start
-        block_pattern_end = f'%,{settings_block}'  # for matching at the end
-        block_pattern_exact = f'{settings_block}'  # for exact match
-        students_in_block = (
-            _scoped_students()
-            .filter(
-                sa.or_(
-                    sa.func.lower(Student.block) == settings_block.lower(),
-                    sa.func.lower(Student.block).like(f'{settings_block.lower()},%'),
-                    sa.func.lower(Student.block).like(f'%,{settings_block.lower()},%'),
-                    sa.func.lower(Student.block).like(f'%,{settings_block.lower()}')
-                )
-            )
-            .all()
-        )
-    else:
-        students_in_block = _scoped_students().all()
-
-    student_ids_in_block = [s.id for s in students_in_block]
+    # V2 class-authoritative scoping: _scoped_students() is already bounded by active class_id.
+    students_in_scope = _scoped_students().all()
+    student_ids_in_scope = [s.id for s in students_in_scope]
 
     # Get student enrollments for selected block
     # CRITICAL: Filter by join_code for proper multi-tenancy scoping
@@ -7323,12 +7308,12 @@ def insurance_management():
     claims = []
     pending_claims_count = 0
 
-    if student_ids_in_block and selected_join_code:
+    if student_ids_in_scope and selected_join_code:
         # Filter enrollments by join_code to ensure proper class isolation
         active_enrollments = (
             StudentInsurance.query
             .join(Student, StudentInsurance.student_id == Student.id)
-            .filter(Student.id.in_(student_ids_in_block))
+            .filter(Student.id.in_(student_ids_in_scope))
             .filter(StudentInsurance.join_code == selected_join_code)
             .filter(StudentInsurance.status == 'active')
             .all()
@@ -7336,7 +7321,7 @@ def insurance_management():
         cancelled_enrollments = (
             StudentInsurance.query
             .join(Student, StudentInsurance.student_id == Student.id)
-            .filter(Student.id.in_(student_ids_in_block))
+            .filter(Student.id.in_(student_ids_in_scope))
             .filter(StudentInsurance.join_code == selected_join_code)
             .filter(StudentInsurance.status == 'cancelled')
             .all()
@@ -7346,7 +7331,7 @@ def insurance_management():
         claims = (
             InsuranceClaim.query
             .join(StudentInsurance, InsuranceClaim.student_insurance_id == StudentInsurance.id)
-            .filter(StudentInsurance.student_id.in_(student_ids_in_block))
+            .filter(StudentInsurance.student_id.in_(student_ids_in_scope))
             .filter(StudentInsurance.join_code == selected_join_code)
             .order_by(InsuranceClaim.filed_date.desc())
             .all()
@@ -7354,7 +7339,7 @@ def insurance_management():
         pending_claims_count = (
             InsuranceClaim.query
             .join(StudentInsurance, InsuranceClaim.student_insurance_id == StudentInsurance.id)
-            .filter(StudentInsurance.student_id.in_(student_ids_in_block))
+            .filter(StudentInsurance.student_id.in_(student_ids_in_scope))
             .filter(StudentInsurance.join_code == selected_join_code)
             .filter(InsuranceClaim.status == 'pending')
             .count()
@@ -7391,9 +7376,9 @@ def insurance_management():
                           policy_pending_claim_counts=policy_pending_claim_counts,
                           tier_groups=tier_groups,
                           next_tier_category_id=next_tier_category_id,
-                          teacher_blocks=teacher_blocks,
                           settings_block=settings_block,
-                          class_labels_by_block=class_labels_by_block,
+                          active_class_label=active_class_label,
+                          active_join_code=selected_join_code,
                           insurance_recommendation=insurance_recommendation,
                           selected_feature_scope=selected_scope)
 
@@ -8680,9 +8665,10 @@ def payroll():
     next_pay_date_utc = _compute_next_pay_date(default_setting, now_utc)
 
     # Recent payroll activity
-    # CRITICAL: Filter by join_code as it is the source of truth for class isolation
+    # CRITICAL: Filter by canonical class_id for class isolation.
     my_join_codes = [selected_join_code]
     join_codes_by_block = {selected_block: selected_join_code} if selected_block else {}
+    my_class_ids = [selected_class_id] if selected_class_id else []
     payroll_preview = _build_payroll_preview_state(admin_id, students, join_codes_by_block)
     payroll_summary = payroll_preview["total_summary"]
     payroll_updated_at = payroll_preview["latest_updated_at"]
@@ -8692,7 +8678,7 @@ def payroll():
     recent_payrolls = (
         Transaction.query
         .filter(Transaction.student_id.in_(sa.select(student_ids_subq)))
-        .filter(Transaction.join_code.in_(my_join_codes))  # Fix: Scope by join_code (source of truth)
+        .filter(Transaction.class_id.in_(my_class_ids))
         .filter_by(type='payroll')
         .order_by(Transaction.timestamp.desc())
         .limit(20)
@@ -8751,7 +8737,7 @@ def payroll():
         Transaction.student_id.in_(student_ids),
         Transaction.type == 'payroll',
         Transaction.is_void == False,
-        Transaction.join_code.in_(my_join_codes),
+        Transaction.class_id.in_(my_class_ids),
     ).group_by(Transaction.student_id).all()
     earnings_map = {sid: float(amt or 0) for sid, amt in earnings_rows}
 
@@ -8762,22 +8748,55 @@ def payroll():
     ).filter(
         Transaction.student_id.in_(student_ids),
         Transaction.type == 'payroll',
-        Transaction.join_code.in_(my_join_codes),
+        Transaction.class_id.in_(my_class_ids),
     ).group_by(Transaction.student_id).all()
     last_payroll_map = {sid: ts for sid, ts in last_payroll_rows}
 
     events_map_by_join_code = {}
+    seat_ids_by_join_code = defaultdict(set)
+    seat_id_by_student_block_class = {}
+    class_rows = (
+        ClassEconomy.query.with_entities(ClassEconomy.join_code, ClassEconomy.class_id)
+        .filter(ClassEconomy.join_code.in_(my_join_codes))
+        .all()
+    )
+    class_id_by_join_code = {row.join_code: row.class_id for row in class_rows if row.class_id}
+    claimed_seat_rows = (
+        TeacherBlock.query
+        .with_entities(
+            TeacherBlock.id,
+            TeacherBlock.student_id,
+            TeacherBlock.join_code,
+            TeacherBlock.class_id,
+            TeacherBlock.block,
+        )
+        .filter(
+            TeacherBlock.teacher_id == admin_id,
+            TeacherBlock.is_claimed == True,
+            TeacherBlock.join_code.in_(my_join_codes),
+            TeacherBlock.student_id.in_(student_ids),
+            TeacherBlock.class_id.isnot(None),
+        )
+        .all()
+    )
+    for seat_row in claimed_seat_rows:
+        seat_ids_by_join_code[seat_row.join_code].add(seat_row.id)
+        seat_id_by_student_block_class.setdefault(
+            (seat_row.student_id, (seat_row.block or "").strip().upper(), seat_row.class_id),
+            seat_row.id,
+        )
+
     for join_code in my_join_codes:
         anchor = payroll_anchor_by_join_code.get(join_code)
-        scoped_student_ids = [
-            student.id
-            for student in students
-            if any(join_codes_by_block.get(b.strip()) == join_code for b in (student.block or "").split(',') if b.strip())
-        ]
+        class_id = class_id_by_join_code.get(join_code)
+        if not class_id:
+            events_map_by_join_code[join_code] = {}
+            continue
+        scoped_seat_ids = sorted(seat_ids_by_join_code.get(join_code, set()))
         events_map_by_join_code[join_code] = get_batch_attendance_events(
-            scoped_student_ids,
+            scoped_seat_ids,
             anchor,
-            allowed_join_codes=[join_code],
+            allowed_class_ids=[class_id],
         )
 
     for student in students:
@@ -8789,7 +8808,13 @@ def payroll():
             join_code = join_codes_by_block.get(block)
             if not join_code:
                 continue
-            key = (student.id, block_upper, join_code)
+            class_id = class_id_by_join_code.get(join_code)
+            if not class_id:
+                continue
+            seat_id = seat_id_by_student_block_class.get((student.id, block_upper, class_id))
+            if not seat_id:
+                continue
+            key = (seat_id, block_upper, class_id)
             events = events_map_by_join_code.get(join_code, {}).get(key, [])
             if events:
                 unpaid_seconds += calculate_seconds_in_memory(
@@ -8940,7 +8965,8 @@ def payroll_settings():
         # Get current admin ID for teacher scoping
         admin_id = session.get("admin_id")
         feature_options = get_admin_feature_join_code_options('payroll', admin_id=admin_id)
-        enabled_blocks = {option['block'] for option in feature_options if option.get('block')}
+        enabled_blocks = [option['block'] for option in feature_options if option.get('block')]
+        enabled_block_set = set(enabled_blocks)
         class_id_by_block = {
             option['block']: option['class_id']
             for option in feature_options
@@ -8952,9 +8978,8 @@ def payroll_settings():
             requested_block=request.form.get('cwi_block') or request.form.get('block'),
         )
         
-        # Get all blocks
-        students = _scoped_students().all()
-        blocks = sorted({s.block for s in students if s.block and s.block in enabled_blocks})
+        # Derive assignable blocks from canonical feature scopes, not legacy student.block text.
+        blocks = enabled_blocks
 
         # Determine which mode we're in
         settings_mode = request.form.get('settings_mode', 'simple')
@@ -9086,11 +9111,12 @@ def payroll_settings():
             target_blocks = blocks
         else:
             # Apply to selected blocks only
-            target_blocks = selected_blocks
+            target_blocks = [str(block).strip().upper() for block in selected_blocks if str(block).strip()]
 
-        target_blocks = [block for block in target_blocks if block in enabled_blocks]
+        target_blocks = [block for block in target_blocks if block in enabled_block_set]
+        target_blocks = list(dict.fromkeys(target_blocks))
         if not target_blocks:
-            abort(404)
+            raise ValueError("No valid payroll class scope selected")
 
         payload_hash = hashlib.sha256(
             json.dumps(
@@ -9113,7 +9139,7 @@ def payroll_settings():
             for block_value in target_blocks:
                 class_id = class_id_by_block.get(block_value)
                 if not class_id:
-                    abort(404)
+                    raise ValueError(f"Missing class scope for payroll block '{block_value}'")
 
                 setting = PayrollSettings.query.filter_by(class_id=class_id, block=block_value).first()
                 if not setting:
@@ -11417,120 +11443,81 @@ def copy_feature_settings():
 @admin_required
 def announcements():
     """
-    Manage class announcements across all class periods.
-
-    Teachers can view, filter, and manage announcements for all their class periods.
-    No period selection required - shows all announcements with period filtering.
+    Manage class announcements for the currently selected class context.
     """
-    admin_id = session.get('admin_id')
+    current_admin = get_current_admin()
+    scoped_admin_id = current_admin.id if current_admin else session.get('admin_id')
+    class_context = _resolve_admin_class_context(scoped_admin_id)
+    if not class_context:
+        flash("Select a class from the sidebar before managing announcements.", "warning")
+        return redirect(url_for('admin.dashboard'))
 
-    # Get unique teacher blocks (class periods) by join_code
-    # TeacherBlock has one row per student seat, so we need to get distinct periods
-    teacher_blocks_query = TeacherBlock.query.filter_by(
-        teacher_id=admin_id
-    ).order_by(TeacherBlock.block).all()
+    selected_join_code = class_context["join_code"]
 
-    # Deduplicate by join_code to get unique periods
-    seen_join_codes = set()
-    teacher_blocks = []
-    for tb in teacher_blocks_query:
-        if tb.join_code not in seen_join_codes:
-            seen_join_codes.add(tb.join_code)
-            teacher_blocks.append(tb)
-
-    # Create a mapping of join_code to block info
-    blocks_by_join_code = {
-        tb.join_code: {
-            'block': tb.block,
-            'label': f"{tb.get_class_label()} (Period {tb.block})",
-            'join_code': tb.join_code
-        }
-        for tb in teacher_blocks
-    }
-
-    # Get all announcements for this teacher (across all periods)
-    # Exclude system admin announcements
+    # Get announcements for this teacher scoped to the active class context only.
     from app.models import Announcement
     announcements_list = Announcement.query.filter_by(
-        teacher_id=admin_id,
+        teacher_id=scoped_admin_id,
+        join_code=selected_join_code,
         system_admin_id=None  # Only teacher-created announcements
     ).order_by(Announcement.created_at.desc()).all()
 
-    # Attach block info to each announcement
-    for announcement in announcements_list:
-        announcement.block_info = blocks_by_join_code.get(announcement.join_code, {
-            'block': 'Unknown',
-            'label': 'Unknown Period',
-            'join_code': announcement.join_code
-        })
+    teacher_block = TeacherBlock.query.filter_by(
+        teacher_id=scoped_admin_id,
+        join_code=selected_join_code,
+    ).order_by(TeacherBlock.id.asc()).first()
+
+    active_class_label = teacher_block.get_class_label() if teacher_block else selected_join_code
 
     return render_template(
         'admin_announcements.html',
         announcements=announcements_list,
-        teacher_blocks=teacher_blocks,
-        blocks_by_join_code=blocks_by_join_code
+        active_class_label=active_class_label,
+        active_join_code=selected_join_code,
     )
 
 
 @admin_bp.route('/announcements/create', methods=['GET', 'POST'])
 @admin_required
 def announcement_create():
-    """Create a new announcement for selected class periods."""
+    """Create a new announcement for the currently selected class context."""
     from app.forms import AnnouncementForm
     from app.models import Announcement
 
-    admin_id = session.get('admin_id')
-
-    # Get unique teacher blocks (class periods) by join_code
-    # TeacherBlock has one row per student seat, so we need to get distinct periods
-    teacher_blocks_query = TeacherBlock.query.filter_by(
-        teacher_id=scoped_admin_id
-    ).order_by(TeacherBlock.block).all()
-
-    # Deduplicate by join_code to get unique periods
-    seen_join_codes = set()
-    teacher_blocks = []
-    for tb in teacher_blocks_query:
-        if tb.join_code not in seen_join_codes:
-            seen_join_codes.add(tb.join_code)
-            teacher_blocks.append(tb)
-
-    if not teacher_blocks:
-        flash('You need to set up class periods before creating announcements.', 'warning')
+    current_admin = get_current_admin()
+    scoped_admin_id = current_admin.id if current_admin else session.get('admin_id')
+    class_context = _resolve_admin_class_context(scoped_admin_id)
+    if not class_context:
+        flash("Select a class from the sidebar before creating announcements.", "warning")
         return redirect(url_for('admin.dashboard'))
 
-    # Create form and populate period choices
+    selected_join_code = class_context["join_code"]
+    teacher_block = TeacherBlock.query.filter_by(
+        teacher_id=scoped_admin_id,
+        join_code=selected_join_code,
+    ).order_by(TeacherBlock.id.asc()).first()
+
+    # Keep periods field for form validation, but lock it to active class context.
     form = AnnouncementForm()
-    form.periods.choices = [
-        (tb.join_code, f"{tb.get_class_label()} (Period {tb.block})")
-        for tb in teacher_blocks
-    ]
+    form.periods.choices = [(selected_join_code, selected_join_code)]
+    if request.method == 'GET':
+        form.periods.data = [selected_join_code]
 
     if form.validate_on_submit():
         try:
-            selected_join_codes = form.periods.data
-            created_count = 0
-
-            # Create an announcement for each selected period
-            for join_code in selected_join_codes:
-                announcement = Announcement(
-                    teacher_id=scoped_admin_id,
-                    join_code=join_code,
-                    title=form.title.data,
-                    message=form.message.data,
-                    priority=form.priority.data,
-                    is_active=form.is_active.data,
-                    expires_at=form.expires_at.data
-                )
-                db.session.add(announcement)
-                created_count += 1
+            announcement = Announcement(
+                teacher_id=scoped_admin_id,
+                join_code=selected_join_code,
+                title=form.title.data,
+                message=form.message.data,
+                priority=form.priority.data,
+                is_active=form.is_active.data,
+                expires_at=form.expires_at.data
+            )
+            db.session.add(announcement)
 
             db.session.flush()
-
-            if created_count == 1:
-                flash(f'Announcement "{form.title.data}" created successfully!', 'success')
-            else:
-                flash(f'Announcement "{form.title.data}" posted to {created_count} class periods!', 'success')
+            flash(f'Announcement "{form.title.data}" created successfully!', 'success')
 
             return redirect(url_for('admin.announcements'))
 
@@ -11543,7 +11530,9 @@ def announcement_create():
         'admin_announcement_form.html',
         form=form,
         action='Create',
-        teacher_blocks=teacher_blocks
+        active_join_code=selected_join_code,
+        active_class_label=teacher_block.get_class_label() if teacher_block else selected_join_code,
+        active_block=teacher_block.block if teacher_block else None,
     )
 
 
@@ -11556,11 +11545,16 @@ def announcement_edit(announcement_id):
 
     current_admin = get_current_admin()
     scoped_admin_id = current_admin.id if current_admin else session.get('admin_id')
+    class_context = _resolve_admin_class_context(scoped_admin_id)
+    if not class_context:
+        flash("Select a class from the sidebar before editing announcements.", "warning")
+        return redirect(url_for('admin.dashboard'))
 
-    # Get announcement and verify ownership
+    # Get announcement and verify ownership in active class context.
     announcement = Announcement.query.filter_by(
         id=announcement_id,
-        teacher_id=scoped_admin_id
+        teacher_id=scoped_admin_id,
+        join_code=class_context["join_code"],
     ).first()
 
     if not announcement:
@@ -11613,11 +11607,16 @@ def announcement_delete(announcement_id):
 
     current_admin = get_current_admin()
     scoped_admin_id = current_admin.id if current_admin else session.get('admin_id')
+    class_context = _resolve_admin_class_context(scoped_admin_id)
+    if not class_context:
+        flash("Select a class from the sidebar before deleting announcements.", "warning")
+        return redirect(url_for('admin.dashboard'))
 
-    # Get announcement and verify ownership
+    # Get announcement and verify ownership in active class context.
     announcement = Announcement.query.filter_by(
         id=announcement_id,
-        teacher_id=scoped_admin_id
+        teacher_id=scoped_admin_id,
+        join_code=class_context["join_code"],
     ).first()
 
     if not announcement:
@@ -11647,11 +11646,15 @@ def announcement_toggle(announcement_id):
 
     current_admin = get_current_admin()
     scoped_admin_id = current_admin.id if current_admin else session.get('admin_id')
+    class_context = _resolve_admin_class_context(scoped_admin_id)
+    if not class_context:
+        return jsonify({'status': 'error', 'message': 'Select a class from the sidebar first.'}), 400
 
-    # Get announcement and verify ownership
+    # Get announcement and verify ownership in active class context.
     announcement = Announcement.query.filter_by(
         id=announcement_id,
-        teacher_id=scoped_admin_id
+        teacher_id=scoped_admin_id,
+        join_code=class_context["join_code"],
     ).first()
 
     if not announcement:
