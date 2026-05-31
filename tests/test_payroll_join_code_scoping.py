@@ -1,119 +1,117 @@
-from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from decimal import Decimal
+from uuid import uuid4
+
 from app.extensions import db
-from app.models import PayrollSettings, Admin, ClassEconomy
-from app.payroll import get_pay_rate_for_block, get_daily_limit_seconds
+from app.models import ClassEconomy, PayrollSettings
+from app.payroll import get_daily_limit_seconds, get_pay_rate_for_block
+from tests.helpers.v2_fixtures import make_admin
 
-def test_pay_rate_scoping_strictness(client):
-    """
-    Verify that payroll settings lookup is STRICTLY join_code scoped.
-    Legacy teacher_id fallback should NOT occur in student context.
-    """
-    # Setup: Teacher with two classes (join codes)
-    teacher = make_admin('teacher_strict', 'dummy_secret')
-    # teacher.set_password('password') # Admin model doesn't have set_password or it's not needed here
+
+def _create_class(teacher_id: int, join_code: str) -> ClassEconomy:
+    class_row = ClassEconomy(
+        class_id=str(uuid4()),
+        join_code=join_code,
+        teacher_id=teacher_id,
+        display_name=join_code,
+        created_by_admin_id=teacher_id,
+    )
+    db.session.add(class_row)
+    db.session.flush()
+    return class_row
+
+
+def test_pay_rate_isolation_by_class_id(client):
+    """Same teacher + same block across classes must not bleed settings."""
+    teacher = make_admin("teacher_scope_rates", "secret")
     db.session.add(teacher)
-    db.session.commit()
-    
-    # Create Class Economies
-    class_a = ClassEconomy(join_code='CLASS-A', teacher_id=teacher.id, display_name='Class A', created_by_admin_id=teacher.id)
-    class_b = ClassEconomy(join_code='CLASS-B', teacher_id=teacher.id, display_name='Class B', created_by_admin_id=teacher.id)
-    db.session.add_all([class_a, class_b])
-    db.session.commit()
+    db.session.flush()
 
-    # 1. Global Teacher Default (should be IGNORED by strict join_code lookup)
-    global_setting = PayrollSettings(
-        teacher_id=teacher.id,
-        block=None,
-        join_code=None,
-        pay_rate=Decimal('6.00') # $0.10/min
+    class_a = _create_class(teacher.id, "CLASS-A")
+    class_b = _create_class(teacher.id, "CLASS-B")
+
+    db.session.add(
+        PayrollSettings(
+            teacher_id=teacher.id,
+            class_id=class_a.class_id,
+            join_code=class_a.join_code,
+            block="Period 1",
+            pay_rate=Decimal("0.50"),
+            is_active=True,
+        )
     )
-    db.session.add(global_setting)
-    
-    # 2. Join Code Specific (Class A)
-    # Rate: $0.50/min
-    class_a_setting = PayrollSettings(
-        teacher_id=teacher.id,
-        block='Period 1',
-        join_code='CLASS-A',
-        pay_rate=Decimal('0.50') # $0.50/min
-    )
-    db.session.add(class_a_setting)
-    
     db.session.commit()
 
-    # --- Verification ---
+    rate_a = get_pay_rate_for_block("Period 1", class_id=class_a.class_id)
+    rate_b = get_pay_rate_for_block("Period 1", class_id=class_b.class_id)
 
-    # Case A: Explicit Join Code (CLASS-A) should match Class A setting
-    rate_a = get_pay_rate_for_block('Period 1', teacher_id=teacher.id, join_code='CLASS-A')
-    assert round(rate_a * 60, 2) == Decimal('0.50'), "Should find CLASS-A setting"
-
-    # Case B: Explicit Join Code (CLASS-B) 
-    # CLASS-B has NO settings. 
-    # STRICT BEHAVIOR: Should NOT fall back to global_setting ($0.10).
-    # Should return default system rate ($0.25/min usually) or None if we change return type.
-    # Current default in payroll.py is DEFAULT_PAY_RATE_PER_SECOND (~0.25/min)
-    
-    # NOTE: The implementation plan says "return default/None (do NOT fall back to teacher global)".
-    # If we remove fallback, it should return the hardcoded default (0.25) not the teacher's global (0.10).
-    rate_b = get_pay_rate_for_block('Period 1', teacher_id=teacher.id, join_code='CLASS-B')
-    
-    # 0.25 is standard default
-    assert round(rate_b * 60, 2) == Decimal('0.25'), \
-        f"Should return system default (0.25) when no class setting exists. Got {round(rate_b * 60, 2)}"
-
-    # Case C: Missing Join Code in Student Context
-    # Should raise error or behave predictably (depending on implementation choice).
-    # For now, let's assume we pass None and it might behave like legacy (which we want to remove),
-    # OR we explicitly fail it. 
-    # Plan says: "In student context, join_code is mandatory".
-    # We will enforce this by ensuring we don't use it without join_code in student routes.
-    # At function level, if we pass None, it might still allow teacher-context usage (legacy admin tools).
-    # BUT for this test we focus on cross-talk.
-    
-    pass 
+    assert round(rate_a * 60, 2) == Decimal("0.50")
+    assert round(rate_b * 60, 2) == Decimal("0.25")
 
 
-def test_daily_limit_scoping_strictness(client):
-    """
-    Verify daily limit strict scoping.
-    """
-    teacher = make_admin('teacher_limit_strict', 'dummy_secret')
-    # teacher.set_password('password')
+def test_daily_limit_isolation_by_class_id(client):
+    """Daily limits must resolve by class_id, not teacher-level ownership."""
+    teacher = make_admin("teacher_scope_limits", "secret")
     db.session.add(teacher)
-    db.session.commit()
-    
-    class_x = ClassEconomy(join_code='CLASS-X', teacher_id=teacher.id, display_name='Class X', created_by_admin_id=teacher.id)
-    db.session.add(class_x)
-    db.session.commit()
-    
-    # Teacher Global Limit: 1 hour
-    global_limit = PayrollSettings(
-        teacher_id=teacher.id,
-        block=None,
-        join_code=None,
-        settings_mode='simple',
-        daily_limit_hours=1.0
+    db.session.flush()
+
+    class_x = _create_class(teacher.id, "CLASS-X")
+    class_y = _create_class(teacher.id, "CLASS-Y")
+
+    db.session.add(
+        PayrollSettings(
+            teacher_id=teacher.id,
+            class_id=class_x.class_id,
+            join_code=class_x.join_code,
+            block="Period 1",
+            settings_mode="simple",
+            daily_limit_hours=2.0,
+            is_active=True,
+        )
     )
-    db.session.add(global_limit)
-    
-    # Class X Specific Limit: 2 hours
-    class_limit = PayrollSettings(
-        teacher_id=teacher.id,
-        block='Period 1',
-        join_code='CLASS-X',
-        settings_mode='simple',
-        daily_limit_hours=2.0
-    )
-    db.session.add(class_limit)
     db.session.commit()
-    
-    # Verify Class X gets 2 hours
-    limit_x = get_daily_limit_seconds('Period 1', teacher_id=teacher.id, join_code='CLASS-X')
-    assert limit_x == 7200
-    
-    # Verify CLASS-Y (no specific limit) does NOT get teacher global limit
-    # (Strict separation)
-    limit_y = get_daily_limit_seconds('Period 1', teacher_id=teacher.id, join_code='CLASS-Y')
-    assert limit_y is None, "Should NOT fall back to teacher global limit in strict mode"
+
+    assert get_daily_limit_seconds("Period 1", class_id=class_x.class_id) == 7200
+    assert get_daily_limit_seconds("Period 1", class_id=class_y.class_id) is None
+
+
+def test_payroll_settings_lookup_requires_class_id(client):
+    with pytest.raises(ValueError, match="class_id"):
+        get_pay_rate_for_block("Period 1", class_id=None)
+
+    with pytest.raises(ValueError, match="class_id"):
+        get_daily_limit_seconds("Period 1", class_id=None)
+
+
+def test_duplicate_active_settings_fail_closed(client):
+    """Ambiguous active rows for same class/block must fail closed."""
+    teacher = make_admin("teacher_scope_dup", "secret")
+    db.session.add(teacher)
+    db.session.flush()
+
+    class_a = _create_class(teacher.id, "CLASS-DUP")
+
+    db.session.add_all(
+        [
+            PayrollSettings(
+                teacher_id=teacher.id,
+                class_id=class_a.class_id,
+                join_code=class_a.join_code,
+                block="Period 1",
+                pay_rate=Decimal("0.50"),
+                is_active=True,
+            ),
+            PayrollSettings(
+                teacher_id=teacher.id,
+                class_id=class_a.class_id,
+                join_code=class_a.join_code,
+                block="Period 1",
+                pay_rate=Decimal("0.65"),
+                is_active=True,
+            ),
+        ]
+    )
+    db.session.commit()
+
+    with pytest.raises(ValueError, match="Ambiguous PayrollSettings scope"):
+        get_pay_rate_for_block("Period 1", class_id=class_a.class_id)

@@ -796,9 +796,7 @@ body.landing-page {
     line-height: 1.2;
     transition: filter 120ms ease-in-out;
     box-shadow: var( --shadow);
-    border-style:solid;
-    border-color: transparent;
-    border-width: 2px;
+
 }
 
 .landing-signin-btn:hover,
@@ -806,10 +804,9 @@ body.landing-page {
 .landing-learn-more-btn:hover,
 .landing-learn-more-btn:focus-visible {
     color: var(--text-inverse);
-    
-    border-style:solid;
-    border-color: var(--secondary-color);
-    border-width: 2px;
+    box-shadow: 0 0 5px 1px var(--secondary-color);
+
+
 }
 
 .landing-signin-btn-main {

@@ -568,7 +568,7 @@ def check_start_work_daily_limit(
 ) -> TapGuardResult:
     """Read-only daily-limit guard for tap start_work requests."""
     now = now_utc or utc_now()
-    daily_limit = get_daily_limit_seconds(period)
+    daily_limit = get_daily_limit_seconds(period, class_id=class_id)
     if not daily_limit:
         return TapGuardResult(allowed=True)
 
@@ -719,7 +719,7 @@ def enforce_daily_limits(*, student, commit: bool = True, logger=None):
         if not state or not state.is_active:
             continue
 
-        daily_limit = get_daily_limit_seconds(block_original, teacher_id=seat.teacher_id)
+        daily_limit = get_daily_limit_seconds(block_original, class_id=class_id)
         if not daily_limit:
             continue
 

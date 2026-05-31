@@ -2165,7 +2165,7 @@ def handle_tap():
             is_active = True
             last_payroll_time = get_last_payroll_time(seat_id=seat_id, class_id=class_id)
             duration = calculate_unpaid_attendance_seconds(seat_id, class_id, period, last_payroll_time)
-            rate_per_second = get_pay_rate_for_block(block_lookup.get(period, period))
+            rate_per_second = get_pay_rate_for_block(block_lookup.get(period, period), class_id=class_id)
             projected_pay = duration * rate_per_second
 
             db.session.flush() # FEAT-AUTHORIZED-SHELL
@@ -2245,7 +2245,7 @@ def handle_tap():
     last_payroll_time = get_last_payroll_time(seat_id=seat_id, class_id=class_id)
     duration = calculate_unpaid_attendance_seconds(seat_id, class_id, period, last_payroll_time)
 
-    rate_per_second = get_pay_rate_for_block(block_lookup.get(period, period))
+    rate_per_second = get_pay_rate_for_block(block_lookup.get(period, period), class_id=class_id)
     projected_pay = duration * rate_per_second
 
     db.session.flush()

@@ -139,7 +139,7 @@ from app.feats.admin_adjustment_feat import execute_admin_adjustments
 from app.feats.insurance_claim_feat import execute_insurance_claim_resolution
 from app.feats.transaction_void_feat import execute_void_transaction
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
-from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
+from app.payroll import calculate_payroll_breakdown, get_cached_payroll_with_meta
 from app.attendance import (
     get_last_payroll_time,
     calculate_unpaid_attendance_seconds,
@@ -913,7 +913,7 @@ def _get_join_codes_by_block(admin_id, blocks):
     return join_codes
 
 
-def _build_payroll_preview_state(teacher_id, students, join_codes_by_block):
+def _build_payroll_preview_state(students, join_codes_by_block):
     """Aggregate payroll preview data from class-scoped payroll anchors."""
     students_by_join_code: dict[str, dict[int, Student]] = defaultdict(dict)
 
@@ -933,19 +933,36 @@ def _build_payroll_preview_state(teacher_id, students, join_codes_by_block):
 
     for join_code, students_map in students_by_join_code.items():
         class_students = list(students_map.values())
-        # V2 strict mode: payroll anchors are derived from canonical seat/class scope
-        # inside payroll services, not join-code compatibility helpers.
+        
+        economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+        if not economy:
+            continue
+            
+        class_id = economy.class_id
+        student_ids = [s.id for s in class_students]
+        seats = Seat.query.filter(Seat.student_id.in_(student_ids), Seat.class_id == class_id).all()
+        seat_ids = [s.id for s in seats]
+        
+        # map seat_id to student_id to preserve backward compatibility of the preview payload
+        seat_to_student = {s.id: s.student_id for s in seats if s.student_id}
+        
         anchor = None
         if getattr(g, "read_only", False):
-            summary = calculate_payroll(class_students, anchor, teacher_id=teacher_id)
+            seat_summary = calculate_payroll_breakdown(class_id, seat_ids, anchor)
             updated_at = None
         else:
-            summary, updated_at = get_cached_payroll_with_meta(
-                class_students,
-                anchor,
-                teacher_id=teacher_id,
-                join_code=join_code,
+            seat_summary, updated_at = get_cached_payroll_with_meta(
+                class_id,
+                seat_ids,
+                anchor
             )
+            
+        # Remap to student_id to preserve downstream view templates expecting student IDs
+        summary = {}
+        for s_id, amt in seat_summary.items():
+            if s_id in seat_to_student:
+                summary[seat_to_student[s_id]] = amt
+
         anchor_by_join_code[join_code] = anchor
         summary_by_join_code[join_code] = summary
         if updated_at is not None:
@@ -2782,7 +2799,7 @@ def dashboard():
     # --- Payroll Info ---
     dashboard_blocks = sorted({b.strip() for s in students for b in (s.block or "").split(',') if b.strip()})
     dashboard_join_codes_by_block = _get_join_codes_by_block(current_admin_id, dashboard_blocks)
-    payroll_preview = _build_payroll_preview_state(current_admin_id, students, dashboard_join_codes_by_block)
+    payroll_preview = _build_payroll_preview_state(students, dashboard_join_codes_by_block)
     payroll_summary = payroll_preview["total_summary"]
     payroll_updated_at = payroll_preview["latest_updated_at"]
     total_payroll_estimate = sum(payroll_summary.values())
@@ -8508,7 +8525,7 @@ def _run_payroll_legacy():
         last_payroll_time = last_payroll_tx.timestamp if last_payroll_tx else None
         current_app.logger.info(f"Run payroll: last payroll at {last_payroll_time}")
  
-        students = (
+        students_query = (
             _scoped_students(include_unassigned=False)
             .join(TeacherBlock, TeacherBlock.student_id == Student.id)
             .filter(
@@ -8517,25 +8534,32 @@ def _run_payroll_legacy():
                 TeacherBlock.is_claimed == True,
             )
             .distinct()
-            .all()
         )
+        # We fetch students merely to maintain parity with the V1 adjustment creation below
+        # but the actual payroll computation is bound purely by the canonical class_id.
+        
+        class_id = selected_scope['class_id']
+        seats = Seat.query.filter_by(class_id=class_id, role='student').all()
+        seat_ids = [s.id for s in seats]
+        
         summary = calculate_payroll_breakdown(
-            students,
+            class_id,
+            seat_ids,
             last_payroll_time,
-            teacher_id=current_admin_id,
         )
  
         adjustments = []
-        for (student_id, join_code), amount in summary.items():
-            if join_code != selected_join_code:
+        for seat_id, amount in summary.items():
+            seat = db.session.get(Seat, seat_id)
+            if not seat or not seat.student_id:
                 continue
-            student = db.session.get(Student, student_id)
+            student = db.session.get(Student, seat.student_id)
             if not student:
                 continue
             adjustments.append({
                 'student': student,
                 'teacher_id': current_admin_id,
-                'join_code': join_code,
+                'join_code': selected_join_code,
                 'amount': amount,
                 'description': "Payroll based on attendance",
                 'type': 'payroll',
@@ -8669,7 +8693,7 @@ def payroll():
     my_join_codes = [selected_join_code]
     join_codes_by_block = {selected_block: selected_join_code} if selected_block else {}
     my_class_ids = [selected_class_id] if selected_class_id else []
-    payroll_preview = _build_payroll_preview_state(admin_id, students, join_codes_by_block)
+    payroll_preview = _build_payroll_preview_state(students, join_codes_by_block)
     payroll_summary = payroll_preview["total_summary"]
     payroll_updated_at = payroll_preview["latest_updated_at"]
     payroll_anchor_by_join_code = payroll_preview["anchor_by_join_code"]
@@ -10233,8 +10257,7 @@ def enforce_daily_limits():
                 checked += 1
                 daily_limit = get_daily_limit_seconds(
                     block_original,
-                    teacher_id=current_admin_id,
-                    join_code=join_code,
+                    class_id=class_id,
                 )
                 if not daily_limit:
                     continue
