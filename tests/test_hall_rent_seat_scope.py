@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from app import db
-from app.hash_utils import get_random_salt
+from app.hash_utils import get_random_salt, hash_username_lookup
 from app.models import HallPassLog, RentPayment, RentWaiver, Seat, Student, User
 
 
@@ -22,7 +22,7 @@ def test_hall_pass_log_autofills_seat_id_from_join_scope(client):
     db.session.add(student)
     db.session.flush()
 
-    user = User(username=f"hall_user_{student.id}", password_hash="pw")
+    user = User(username_hash=hash_username_lookup(f"hall_user_{student.id}"), password_hash="pw")
     db.session.add(user)
     db.session.flush()
 
@@ -48,7 +48,7 @@ def test_rent_payment_autofills_seat_id_from_join_scope(client):
     db.session.add(student)
     db.session.flush()
 
-    user = User(username=f"rent_user_{student.id}", password_hash="pw")
+    user = User(username_hash=hash_username_lookup(f"rent_user_{student.id}"), password_hash="pw")
     db.session.add(user)
     db.session.flush()
 
@@ -74,7 +74,7 @@ def test_rent_waiver_autofills_seat_id_from_join_scope(client):
     db.session.add(student)
     db.session.flush()
 
-    user = User(username=f"waiver_user_{student.id}", password_hash="pw")
+    user = User(username_hash=hash_username_lookup(f"waiver_user_{student.id}"), password_hash="pw")
     db.session.add(user)
     db.session.flush()
 

@@ -207,7 +207,7 @@ def _get_or_create_setup_user_for_student(student_id: int | None) -> User | None
         return user
 
     user = User(
-        username=f"pending_{student_id}_{secrets.token_urlsafe(8)}",
+        username_hash=hash_username_lookup(f"pending_{student_id}_{secrets.token_urlsafe(8)}"),
         password_hash=generate_password_hash(secrets.token_urlsafe(24)),
     )
     db.session.add(user)
@@ -868,13 +868,13 @@ def create_username():
         user = user or _find_linked_user_for_student(student.id)
         if not user:
             user = User(
-                username=username,
+                username_hash=hash_username_lookup(username),
                 password_hash=generate_password_hash(secrets.token_urlsafe(24)),
             )
             db.session.add(user)
             db.session.flush()
         else:
-            user.username = username
+            user.username_hash = hash_username_lookup(username)
 
         if seat and seat.user_id != user.id:
             seat.user_id = user.id

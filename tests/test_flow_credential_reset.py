@@ -124,11 +124,7 @@ def test_credential_reset_flow(client, test_data):
         assert len(reset_code) == 8
         assert s.recovery_status == 'to_be_claimed'
 
-    # ── Step 2: Verify student detail page shows recovery info ──
-    with client.session_transaction() as sess:
-        sess['current_join_code'] = join_code
-    resp = client.get(f'/admin/students/{student_id}')
-    assert resp.status_code == 200
+    # ── Step 2: Verify redirected student detail page shows recovery info ──
     assert b"Account Recovery In Progress" in resp.data
     assert reset_code.encode() in resp.data
     assert b"FLOW2A" in resp.data

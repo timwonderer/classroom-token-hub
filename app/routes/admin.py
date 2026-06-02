@@ -46,6 +46,7 @@ from sqlalchemy import desc, text, or_, and_, func
 from sqlalchemy.orm import joinedload
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 import sqlalchemy as sa
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 import pyotp
 import pytz
 from werkzeug.exceptions import HTTPException, NotFound
@@ -147,7 +148,7 @@ from app.attendance import (
     calculate_seconds_in_memory,
 )
 from app.utils.attendance_helpers import get_join_code_for_student_period
-from app.services.balance_service import get_batch_balances_by_student_class
+from app.services.balance_service import get_batch_balances_by_class_seat
 from app.services import access_policy_service, ledger_service
 from app.services import operational_event_service
 from app.services.ledger_service import get_available_balances
@@ -1517,6 +1518,90 @@ def _get_student_or_404(student_id, include_unassigned=True):
     return student
 
 
+_STUDENT_DETAIL_NAV_TTL_SECONDS = 300
+
+
+def _student_detail_nav_serializer() -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(current_app.config["SECRET_KEY"], salt="cth-student-detail-nav-v1")
+
+
+def _issue_student_detail_nav_token(*, student_id: int, seat_public_id: str, class_id: str | None = None) -> str:
+    payload = {
+        "student_id": int(student_id),
+        "seat_public_id": str(seat_public_id),
+        "class_id": str(class_id) if class_id else None,
+        "admin_id": int(session.get("admin_id", 0) or 0),
+    }
+    return _student_detail_nav_serializer().dumps(payload)
+
+
+def _read_student_detail_nav_token(token: str) -> dict | None:
+    token = (token or "").strip()
+    if not token:
+        return None
+    try:
+        payload = _student_detail_nav_serializer().loads(
+            token,
+            max_age=_STUDENT_DETAIL_NAV_TTL_SECONDS,
+        )
+    except (BadSignature, SignatureExpired):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _resolve_student_detail_seat(student_id: int, teacher_id: int) -> Seat | None:
+    selected_class_id = (session.get("current_class_id") or "").strip()
+    selected_join_code = (session.get("current_join_code") or "").strip()
+
+    seat_query = (
+        Seat.query
+        .join(ClassEconomy, ClassEconomy.class_id == Seat.class_id)
+        .filter(
+            Seat.student_id == student_id,
+            Seat.role == "student",
+            Seat.public_id.isnot(None),
+            ClassEconomy.teacher_id == teacher_id,
+        )
+    )
+    if selected_class_id:
+        scoped = seat_query.filter(Seat.class_id == selected_class_id).first()
+        if scoped:
+            return scoped
+    if selected_join_code:
+        scoped = seat_query.filter(Seat.join_code == selected_join_code).first()
+        if scoped:
+            return scoped
+    return seat_query.order_by(Seat.id.asc()).first()
+
+
+def _build_student_detail_url(student_id: int, *, teacher_id: int | None = None) -> str | None:
+    teacher_id = int(teacher_id or session.get("admin_id") or 0)
+    if not teacher_id:
+        return None
+    seat = _resolve_student_detail_seat(int(student_id), teacher_id)
+    if not seat or not seat.public_id:
+        return None
+    nav_token = _issue_student_detail_nav_token(
+        student_id=int(student_id),
+        seat_public_id=seat.public_id,
+        class_id=seat.class_id,
+    )
+    return url_for("admin.student_detail_public", student_public_id=seat.public_id, nav=nav_token)
+
+
+def _redirect_to_student_detail(student_id: int):
+    detail_url = _build_student_detail_url(student_id)
+    if not detail_url:
+        abort(404)
+    return redirect(detail_url)
+
+
+@admin_bp.app_template_global("student_detail_url")
+def student_detail_url(student_id: int) -> str:
+    detail_url = _build_student_detail_url(student_id)
+    return detail_url or url_for("admin.students")
+
+
 def _ensure_teacher_student_seat(teacher_id, join_code, block):
     """
     Ensure a 'Teacher Student' seat exists for the given class period.
@@ -2688,8 +2773,10 @@ def dashboard():
         ).all()
         if class_id
     ]
-    student_class_pairs = [(student_id, class_id) for student_id in student_ids for class_id in teacher_class_ids]
-    batch_balances = get_batch_balances_by_student_class(student_class_pairs)
+    
+    seats = Seat.query.filter(Seat.class_id.in_(teacher_class_ids), Seat.role == 'student').all()
+    class_seat_pairs = [(seat.class_id, seat.id) for seat in seats]
+    batch_balances = get_batch_balances_by_class_seat(class_seat_pairs)
 
     # Sum up balances
     total_balance_decimal = Decimal('0.00')
@@ -2884,22 +2971,9 @@ def give_bonus_all():
     # Get current admin ID for teacher_id
     current_admin_id = session.get('admin_id')
 
-    # Prefetch join_codes for all scoped students to avoid N+1 queries
-    students_query = _scoped_students()
-    student_ids_subquery = students_query.with_entities(Student.id).subquery()
-    teacher_blocks = (
-        TeacherBlock.query
-        .filter(
-            TeacherBlock.student_id.in_(sa.select(student_ids_subquery)),
-            TeacherBlock.teacher_id == current_admin_id,
-            TeacherBlock.is_claimed.is_(True)
-        )
-        .with_entities(TeacherBlock.student_id, TeacherBlock.join_code)
-        .all()
-    )
-    join_code_map = {student_id: join_code for student_id, join_code in teacher_blocks}
-
     class_ids_subq = db.session.query(ClassEconomy.class_id).filter_by(teacher_id=current_admin_id).subquery()
+    seats = Seat.query.filter(Seat.class_id.in_(sa.select(class_ids_subq)), Seat.role == 'student').all()
+
     banking_settings = (
         BankingSettings.query
         .filter(BankingSettings.class_id.in_(sa.select(class_ids_subq)))
@@ -2907,23 +2981,10 @@ def give_bonus_all():
     )
     adjustments = []
 
-    # Stream students in batches to reduce memory usage
-    students = students_query.yield_per(50)
-    for student in students:
-        join_code = join_code_map.get(student.id)
-        # CRITICAL: Get join_code for this student-teacher pair to avoid multi-tenancy violations
-        # join_code is the source of truth for class scoping, not teacher_id
-        if not join_code:
-            # Fallback: try to get join_code from TeacherBlock
-            current_app.logger.warning(
-            f"No join_code found for student {student.id} in give_bonus_all. "
-            f"This should not happen if TeacherBlock records are properly created."
-            )
-
+    for seat in seats:
         adjustments.append({
-            'student': student,
+            'seat': seat,
             'teacher_id': current_admin_id,
-            'join_code': join_code,
             'amount': amount,
             'type': tx_type,
             'description': title,
@@ -4295,34 +4356,35 @@ def students():
     # This prevents multi-tenancy violations where students see aggregated balances across all classes
     student_balances_by_block = {}  # {(student_id, block): {'checking': X, 'savings': Y, 'earnings': Z}}
 
-    # 1. Identify all join codes and students to query
-    target_student_class_pairs = set()
-
+    # 1. Identify all class_ids to query
+    target_class_ids = set()
     for block in blocks:
         if block != "Unassigned" and block in class_ids_by_block:
-            class_id = class_ids_by_block[block]
-            if not class_id:
-                continue
-            for s in students_by_block.get(block, []):
-                target_student_class_pairs.add((s.id, class_id))
+            if class_ids_by_block[block]:
+                target_class_ids.add(class_ids_by_block[block])
 
-    # 2. Fetch balances in batch via service
-    raw_balances = get_batch_balances_by_student_class(list(target_student_class_pairs))
+    # 2. Fetch seats for these classes and get balances by seat
+    seats = Seat.query.filter(Seat.class_id.in_(target_class_ids), Seat.role == 'student').all()
+    class_seat_pairs = [(seat.class_id, seat.id) for seat in seats]
+    raw_balances = get_batch_balances_by_class_seat(class_seat_pairs)
+
+    seat_map = {(seat.student_id, seat.class_id): seat for seat in seats}
 
     # 3. Populate the result dictionary for ALL students to ensure 0-balance entries exist
     for block in blocks:
         if block != "Unassigned" and block in class_ids_by_block:
             class_id = class_ids_by_block[block]
             for student in students_by_block.get(block, []):
-                key = (student.id, class_id)
-                # raw_balances defaults missing entries to 0
-                bals = raw_balances[key]
+                seat = seat_map.get((student.id, class_id))
+                bals = raw_balances.get((str(class_id), seat.id)) if seat else None
+                if not bals:
+                    bals = {'checking_cents': 0, 'savings_cents': 0, 'earnings': Decimal('0.00')}
 
                 final_key = (student.id, block)
                 student_balances_by_block[final_key] = {
                     'checking': float(Decimal(bals['checking_cents']) / 100),
                     'savings': float(Decimal(bals['savings_cents']) / 100),
-                    'earnings': float(bals.get('earnings', 0.00))
+                    'earnings': float(bals.get('earnings', Decimal('0.00')))
                 }
 
     # Calculate rent privileges for each student in each block (batched)
@@ -4440,51 +4502,53 @@ def set_class_timezone(class_id: str):
 @admin_bp.route('/students/<int:student_id>')
 @admin_required
 def student_detail(student_id):
-    """View detailed information for a specific student."""
-    student = _get_student_or_404(student_id)
+    """Legacy numeric student-detail URL is intentionally disabled in V2."""
+    abort(404)
+
+
+@admin_bp.route('/students/<string:student_public_id>')
+@admin_required
+def student_detail_public(student_public_id):
+    """View detailed information for a specific student via public-id URL."""
     teacher_id = session.get('admin_id')
+    nav_payload = _read_student_detail_nav_token(request.args.get('nav', ''))
+    if not nav_payload:
+        abort(404)
 
-    # Resolve the effective class context for this student detail page.
-    # This prevents stale `session['current_join_code']` values from hiding data
-    # when teachers open students from a different class tab.
-    student_join_codes_query = TeacherBlock.query.filter_by(
-        teacher_id=teacher_id,
-        student_id=student.id,
-        is_claimed=True,
-    ).with_entities(TeacherBlock.join_code)
-    student_join_codes = {
-        join_code for (join_code,) in student_join_codes_query.all() if join_code
-    }
+    expected_admin_id = int(nav_payload.get("admin_id") or 0)
+    if expected_admin_id and expected_admin_id != int(teacher_id or 0):
+        abort(404)
+    expected_public_id = str(nav_payload.get("seat_public_id") or "")
+    expected_student_id = int(nav_payload.get("student_id") or 0)
+    expected_class_id = str(nav_payload.get("class_id") or "")
+    if expected_public_id != student_public_id:
+        abort(404)
 
-    join_code = None
-    session_join_code = session.get('current_join_code')
-    if session_join_code in student_join_codes:
-        join_code = session_join_code
-    elif student_join_codes:
-        # Prefer the student's most recent transaction context, then a stable fallback.
-        latest_tx_join_code = (
-            Transaction.query.filter(
-                Transaction.student_id == student.id,
-                Transaction.join_code.in_(student_join_codes),
-            )
-            .order_by(Transaction.timestamp.desc())
-            .with_entities(Transaction.join_code)
-            .first()
+    scoped_seat = (
+        Seat.query
+        .join(ClassEconomy, ClassEconomy.class_id == Seat.class_id)
+        .filter(
+            Seat.public_id == student_public_id,
+            Seat.role == "student",
+            ClassEconomy.teacher_id == teacher_id,
         )
-        if latest_tx_join_code and latest_tx_join_code[0]:
-            join_code = latest_tx_join_code[0]
-        else:
-            join_code = sorted(student_join_codes)[0]
+        .first()
+    )
+    if not scoped_seat or not scoped_seat.student_id:
+        abort(404)
+    if expected_student_id and scoped_seat.student_id != expected_student_id:
+        abort(404)
+    if expected_class_id and str(scoped_seat.class_id or "") != expected_class_id:
+        abort(404)
 
+    student = _get_student_or_404(scoped_seat.student_id)
+    join_code = scoped_seat.join_code
+    class_id = scoped_seat.class_id
+    seat_id = scoped_seat.id
     if join_code:
         session['current_join_code'] = join_code
-    seat_id = None
-    class_id = None
-    if join_code:
-        class_row = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=teacher_id).first()
-        class_id = class_row.class_id if class_row else None
-        if class_id:
-            seat_id = get_seat_id_for_class(student.id, class_id)
+    if class_id:
+        session['current_class_id'] = class_id
 
     if seat_id and class_id:
         tx_scope = sa.and_(Transaction.seat_id == seat_id, Transaction.class_id == class_id)
@@ -4540,7 +4604,7 @@ def student_detail(student_id):
     latest_tap_event = latest_tap_event_query.order_by(TapEvent.timestamp.desc()).first()
 
     class_row = ClassEconomy.query.filter_by(join_code=join_code).first() if join_code else None
-    class_id = class_row.class_id if class_row else None
+    class_id = class_row.class_id if class_row else class_id
     scoped_seat = Seat.query.filter_by(student_id=student.id, class_id=class_id).first() if class_id else None
 
     # Get student's active insurance policy scoped to current class.
@@ -4641,7 +4705,7 @@ def set_hall_passes(student_id):
     else:
         flash("Invalid hall pass balance provided.", "error")
 
-    return redirect(url_for('admin.student_detail', student_id=student_id))
+    return _redirect_to_student_detail(student_id)
 
 
 @admin_bp.route('/student/edit', methods=['POST'])
@@ -4687,7 +4751,7 @@ def edit_student():
     else:
         # No blocks selected - this would break tap/hall pass functionality
         flash("At least one block must be selected.", "error")
-        return redirect(url_for('admin.student_detail', student_id=student_id))
+        return _redirect_to_student_detail(student_id)
 
     # Track old blocks for TeacherBlock updates
     old_blocks = set(b.strip().upper() for b in (student.block or '').split(',') if b.strip())
@@ -4897,7 +4961,7 @@ def edit_student():
         flash("Error updating student due to internal error", "error")
 
     if reset_login:
-        return redirect(url_for('admin.student_detail', student_id=student.id))
+        return _redirect_to_student_detail(student.id)
 
     return redirect(url_for('admin.students'))
 
@@ -8551,15 +8615,11 @@ def _run_payroll_legacy():
         adjustments = []
         for seat_id, amount in summary.items():
             seat = db.session.get(Seat, seat_id)
-            if not seat or not seat.student_id:
-                continue
-            student = db.session.get(Student, seat.student_id)
-            if not student:
+            if not seat:
                 continue
             adjustments.append({
-                'student': student,
+                'seat': seat,
                 'teacher_id': current_admin_id,
-                'join_code': selected_join_code,
                 'amount': amount,
                 'description': "Payroll based on attendance",
                 'type': 'payroll',
@@ -8737,15 +8797,20 @@ def payroll():
     student_stats = []
 
     # Pre-fetch payroll earnings and last payroll dates in batch
-    student_ids = [s.id for s in students]
-    student_class_pairs = [(student_id, selected_class_id) for student_id in student_ids if selected_class_id]
-    raw_balances = get_batch_balances_by_student_class(student_class_pairs)
+    seats = []
+    if selected_class_id:
+        seats = Seat.query.filter(Seat.class_id == selected_class_id, Seat.role == 'student').all()
+    class_seat_pairs = [(seat.class_id, seat.id) for seat in seats]
+    raw_balances = get_batch_balances_by_class_seat(class_seat_pairs)
+    seat_map = {(seat.student_id, seat.class_id): seat for seat in seats}
+
     scoped_balances_by_student = {}
     for student in students:
-        balances = raw_balances[(student.id, selected_class_id)] if selected_class_id else {
-            'checking_cents': 0,
-            'savings_cents': 0,
-        }
+        seat = seat_map.get((student.id, selected_class_id))
+        balances = raw_balances.get((str(selected_class_id), seat.id)) if seat else None
+        if not balances:
+            balances = {'checking_cents': 0, 'savings_cents': 0}
+
         checking_total = Decimal(balances['checking_cents']) / 100
         savings_total = Decimal(balances['savings_cents']) / 100
         scoped_balances_by_student[student.id] = {
@@ -9666,18 +9731,13 @@ def payroll_apply_reward(reward_id):
         for student_id in student_ids:
             student = _get_student_or_404(int(student_id))
             if student:
-                teacher_block = _get_claimed_teacher_block_for_join_code(
-                    student.id,
-                    current_admin_id,
-                    selected_join_code,
-                )
-                if not teacher_block:
+                seat = Seat.query.filter_by(student_id=student.id, class_id=selected_scope['class_id']).first()
+                if not seat:
                     return jsonify({'success': False, 'message': 'Student is outside the selected class scope'}), 404
 
                 adjustments.append({
-                    'student': student,
+                    'seat': seat,
                     'teacher_id': current_admin_id,
-                    'join_code': selected_join_code,
                     'amount': reward.amount,
                     'description': f"Reward: {reward.name}",
                     'account_type': 'checking',
@@ -9725,18 +9785,13 @@ def payroll_apply_fine(fine_id):
         for student_id in student_ids:
             student = _get_student_or_404(int(student_id))
             if student:
-                teacher_block = _get_claimed_teacher_block_for_join_code(
-                    student.id,
-                    current_admin_id,
-                    selected_join_code,
-                )
-                if not teacher_block:
+                seat = Seat.query.filter_by(student_id=student.id, class_id=selected_scope['class_id']).first()
+                if not seat:
                     return jsonify({'success': False, 'message': 'Student is outside the selected class scope'}), 404
 
                 adjustments.append({
-                    'student': student,
+                    'seat': seat,
                     'teacher_id': current_admin_id,
-                    'join_code': selected_join_code,
                     'amount': -abs(fine.amount),
                     'description': f"Fine: {fine.name}",
                     'account_type': 'checking',
@@ -9789,19 +9844,14 @@ def payroll_manual_payment():
             for student_id in student_ids:
                 student = _get_student_or_404(int(student_id))
                 if student:
-                    teacher_block = _get_claimed_teacher_block_for_join_code(
-                        student.id,
-                        current_admin_id,
-                        selected_join_code,
-                    )
-                    if not teacher_block:
+                    seat = Seat.query.filter_by(student_id=student.id, class_id=selected_scope['class_id']).first()
+                    if not seat:
                         flash('One or more selected students are outside the selected class scope.', 'error')
                         return redirect(url_for('admin.payroll'))
 
                     adjustments.append({
-                        'student': student,
+                        'seat': seat,
                         'teacher_id': current_admin_id,
-                        'join_code': selected_join_code,
                         'amount': amount,
                         'description': f"Manual Payment: {description}",
                         'account_type': account_type,
@@ -10108,15 +10158,21 @@ def export_students():
             if class_id
         ]
 
-    student_class_pairs = [(student_id, class_id) for student_id in student_ids for class_id in scoped_class_ids]
-    raw_balances = get_batch_balances_by_student_class(student_class_pairs)
+    seats = Seat.query.filter(Seat.class_id.in_(scoped_class_ids), Seat.role == 'student').all()
+    class_seat_pairs = [(seat.class_id, seat.id) for seat in seats]
+    raw_balances = get_batch_balances_by_class_seat(class_seat_pairs)
+    seat_map = {(seat.student_id, seat.class_id): seat for seat in seats}
+
     scoped_balances_by_student = {}
     for student in students:
         checking_total = Decimal('0.00')
         savings_total = Decimal('0.00')
         earnings_total = Decimal('0.00')
         for class_id in scoped_class_ids:
-            balances = raw_balances[(student.id, class_id)]
+            seat = seat_map.get((student.id, class_id))
+            balances = raw_balances.get((str(class_id), seat.id)) if seat else None
+            if not balances:
+                balances = {'checking_cents': 0, 'savings_cents': 0, 'earnings': Decimal('0.00')}
             checking_total += Decimal(balances['checking_cents']) / 100
             savings_total += Decimal(balances['savings_cents']) / 100
             earnings_total += Decimal(balances.get('earnings', Decimal('0.00')))

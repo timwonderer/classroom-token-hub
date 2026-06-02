@@ -307,73 +307,10 @@ def apply_monthly_savings_interest(*args, **kwargs):
     return res
 
 
-def _apply_monthly_savings_interest(seat, *, annual_rate=Decimal("0.045"), **_ignored):
+def _apply_monthly_savings_interest(seat, *, annual_rate=Decimal("0.045")):
     """Command to post monthly savings interest through the ledger authority."""
     if not seat:
         return None
-
-    # Legacy compatibility: older callers still pass a Student + join_code.
-    if not hasattr(seat, "class_id") or not hasattr(seat, "class_economy"):
-        student = seat
-        join_code = _ignored.get("join_code") or getattr(student, "join_code", None)
-        teacher_id = _ignored.get("teacher_id")
-        now = utc_now()
-        this_month = now.month
-        this_year = now.year
-
-        student_transactions = list(getattr(student, "transactions", []))
-        if join_code:
-            student_transactions = [tx for tx in student_transactions if tx.join_code == join_code]
-
-        for tx in student_transactions:
-            tx_timestamp = ensure_utc(tx.timestamp)
-            if (
-                tx.account_type == "savings"
-                and tx.description == "Monthly Savings Interest"
-                and tx_timestamp
-                and tx_timestamp.month == this_month
-                and tx_timestamp.year == this_year
-                and not tx.is_void
-            ):
-                return None
-
-        eligible_balance = Decimal("0.00")
-        for tx in student_transactions:
-            if tx.account_type != "savings" or tx.is_void or tx.amount is None:
-                continue
-            if tx.amount <= Decimal("0.00"):
-                continue
-            if tx.type == "Interest" or "Interest" in (tx.description or ""):
-                continue
-            available_at = ensure_utc(tx.date_funds_available)
-            if available_at and (now - available_at).days >= 30:
-                eligible_balance += _quantize_currency(tx.amount)
-
-        monthly_rate = annual_rate / Decimal("12")
-        interest = _quantize_currency(eligible_balance * monthly_rate)
-        if interest <= Decimal("0.00"):
-            return None
-
-        # Legacy callers pass (student, join_code). Resolve the seat/class anchor
-        # so writes still flow through the canonical ledger constructor.
-        seat_ids = get_seat_ids_for_student_join(student.id, join_code) if join_code else []
-        seat_id = seat_ids[0] if seat_ids else None
-        legacy_seat = db.session.get(Seat, seat_id) if seat_id else None
-        if not legacy_seat or not legacy_seat.class_id:
-            return None
-        resolved_teacher_id = teacher_id or getattr(legacy_seat.class_economy, "teacher_id", None)
-        if not resolved_teacher_id:
-            return None
-
-        return create_pending_transaction(
-            seat_id=legacy_seat.id,
-            class_id=legacy_seat.class_id,
-            teacher_id=resolved_teacher_id,
-            amount=interest,
-            account_type="savings",
-            type="Interest",
-            description="Monthly Savings Interest",
-        )
 
     # V2 Temporal Model: INTEREST IS CLASS-SCOPED
     # Use class timezone for month/year resolution

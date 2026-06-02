@@ -23,16 +23,8 @@ def execute_admin_adjustments(*, adjustments: list[dict], banking_settings=None)
 
     for adjustment in adjustments:
         seat = adjustment.get("seat")
-        if not seat and "student" in adjustment and "join_code" in adjustment:
-            from app.models import Seat
-            seat = Seat.query.filter_by(
-                student_id=adjustment["student"].id,
-                join_code=adjustment["join_code"]
-            ).first()
-
         if not seat:
-            # Fallback for unexpected cases: if no seat and no student/join_code, we can't proceed
-            raise KeyError("Adjustment missing 'seat' and cannot resolve from 'student'/'join_code'.")
+            raise KeyError("Adjustment missing 'seat'. Bulk adjustments must be seat-bound.")
 
         amount = Decimal(str(adjustment["amount"]))
         account_type = adjustment.get("account_type", "checking")

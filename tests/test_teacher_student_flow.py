@@ -374,7 +374,6 @@ def test_teacher_student_reuses_identity_across_join_codes(client, teacher, app)
         # V2 invariant: one teacher-shadow identity, many class-local seats
         assert student_a.id == student_b.id
         assert user_a.id == user_b.id
-        assert user_a.public_id == user_b.public_id
         assert StudentTeacher.query.filter_by(
             student_id=student_a.id,
             teacher_id=teacher.id,

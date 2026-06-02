@@ -32,6 +32,8 @@ from app.models_canonical import (
     PayrollFine,
     PayrollReward,
     PayrollSetting,
+    PolicyTransition,
+    PolicyVersion,
     RedemptionEvent,
     RentSetting,
     Seat,
@@ -56,6 +58,8 @@ def test_canonical_models_importable():
         UserRecoveryToken,
         ClassFeature,
         FeatureSetting,
+        PolicyVersion,
+        PolicyTransition,
         HallPassSetting,
         RentSetting,
         PayrollSetting,
@@ -93,4 +97,4 @@ def test_canonical_models_importable():
         Announcement,
         IssueCategory,
     ]
-    assert len(models) == 44
+    assert len(models) == 46

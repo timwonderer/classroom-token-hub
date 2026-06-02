@@ -1,5 +1,5 @@
 from app import db
-from app.hash_utils import get_random_salt
+from app.hash_utils import get_random_salt, hash_username_lookup
 from app.models import Admin, ClassEconomy, Seat, Student, StudentBlock, TapEvent, User
 
 
@@ -43,7 +43,7 @@ def test_tap_event_autofills_seat_id_from_class_scope(client):
 
     class_scope = _ensure_class_scope("JOIN_TAP", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 
-    user = User(username=f"tap_user_{student.id}", password_hash="pw")
+    user = User(username_hash=hash_username_lookup(f"tap_user_{student.id}"), password_hash="pw")
     db.session.add(user)
     db.session.flush()
 
@@ -78,7 +78,7 @@ def test_student_block_autofills_seat_id_from_class_scope(client):
 
     class_scope = _ensure_class_scope("JOIN_SB", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 
-    user = User(username=f"sb_user_{student.id}", password_hash="pw")
+    user = User(username_hash=hash_username_lookup(f"sb_user_{student.id}"), password_hash="pw")
     db.session.add(user)
     db.session.flush()
 
@@ -112,7 +112,7 @@ def test_tap_event_backfills_student_id_from_seat_scope(client):
 
     class_scope = _ensure_class_scope("JOIN_SCOPE", "cccccccc-cccc-cccc-cccc-cccccccccccc")
 
-    user = User(username=f"seat_user_{student.id}", password_hash="pw")
+    user = User(username_hash=hash_username_lookup(f"seat_user_{student.id}"), password_hash="pw")
     db.session.add(user)
     db.session.flush()
 

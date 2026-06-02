@@ -19,14 +19,15 @@ def settle_pending_transaction_contexts(*args, **kwargs):
 
 def _settle_pending_transaction_contexts_legacy(limit: int | None = None) -> dict[str, int]:
     """
-    Sweep each student/join_code context with unsettled ledger activity (LEGACY).
+    Sweep each seat/class context with unsettled ledger activity.
 
     Each context is committed independently so one failure does not stop the run.
     """
     context_query = (
-        db.session.query(Transaction.student_id, Transaction.join_code)
+        db.session.query(Transaction.seat_id, Transaction.class_id)
         .filter(
-            Transaction.join_code.isnot(None),
+            Transaction.class_id.isnot(None),
+            Transaction.seat_id.isnot(None),
             db.or_(
                 Transaction.status == TransactionStatus.PENDING,
                 db.and_(
@@ -36,7 +37,7 @@ def _settle_pending_transaction_contexts_legacy(limit: int | None = None) -> dic
             ),
         )
         .distinct()
-        .order_by(Transaction.student_id.asc(), Transaction.join_code.asc())
+        .order_by(Transaction.class_id.asc(), Transaction.seat_id.asc())
     )
     if limit is not None:
         context_query = context_query.limit(limit)
@@ -48,18 +49,18 @@ def _settle_pending_transaction_contexts_legacy(limit: int | None = None) -> dic
     # context, which invalidates server-side cursors on PostgreSQL.
     pending_contexts = context_query.all()
  
-    for student_id, join_code in pending_contexts:
+    for seat_id, class_id in pending_contexts:
         try:
-            settle_balances(student_id, join_code)
+            settle_balances(seat_id, class_id)
             db.session.flush() # FEAT-LEGACY-WRAP: commit removed
             settled_contexts += 1
         except Exception:
             db.session.rollback()
             failed_contexts += 1
             logger.exception(
-                "Settlement sweep failed for student %s in %s",
-                student_id,
-                join_code,
+                "Settlement sweep failed for seat %s in class %s",
+                seat_id,
+                class_id,
             )
  
     return {
@@ -67,7 +68,7 @@ def _settle_pending_transaction_contexts_legacy(limit: int | None = None) -> dic
         "failed_contexts": failed_contexts,
     }
 
-def settle_balances(student_id: int, join_code: str) -> None:
+def settle_balances(seat_id: int, class_id: str) -> None:
     """
     Atomic settlement of pending transactions into the balance cache.
     
@@ -75,71 +76,107 @@ def settle_balances(student_id: int, join_code: str) -> None:
     Raises RuntimeError if called during a read-only request (g.read_only=True).
 
     This function:
-    1. Locks the BalanceCache row for the student/class context (creating if needed).
+    1. Locks the BalanceCache row for the seat/class context (creating if needed).
     2. Fetches all PENDING transactions for this context.
     3. Aggregates their amounts by account type.
     4. Updates the BalanceCache with the net changes.
     5. Transitions transactions to POSTED (or VOID if marked as void).
     
     Args:
-        student_id: The ID of the student.
-        join_code: The class join code.
+        seat_id: The ID of the seat.
+        class_id: The canonical class UUID.
     """
     # Guard against write-on-read
     if getattr(g, "read_only", False):
         raise RuntimeError("Settlement attempted during read-only request context")
 
     try:
-        seat_ids = get_seat_ids_for_student_join(student_id, join_code)
-        class_id = None
-        if seat_ids:
-            seat_row = (
-                Seat.query.with_entities(Seat.class_id)
-                .filter(
-                    Seat.id.in_(seat_ids),
-                    Seat.class_id.isnot(None),
-                )
-                .first()
-            )
-            class_id = seat_row[0] if seat_row and seat_row[0] else None
-        if not class_id:
-            class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(join_code=join_code).first()
-            class_id = class_row[0] if class_row and class_row[0] else None
-        if not class_id:
-            raise ValueError(f"settle_balances requires canonical class_id for join_code={join_code}")
-        scope_filter = transaction_scope_filter(Transaction, student_id, seat_ids)
+        original_scope_id = int(seat_id)
+        original_scope_key = class_id
+        resolved_student_id = None
+        resolved_join_code = None
+        resolved_seat_id = None
+        scope_filter = None
 
+        class_row = (
+            ClassEconomy.query
+            .with_entities(ClassEconomy.class_id, ClassEconomy.join_code)
+            .filter_by(class_id=class_id)
+            .first()
+        )
+        if class_row:
+            # Canonical invocation: settle_balances(seat_id, class_id)
+            canonical_class_id = str(class_row[0])
+            resolved_join_code = class_row[1]
+            resolved_seat_id = original_scope_id
+            seat = db.session.get(Seat, resolved_seat_id)
+            if seat:
+                resolved_student_id = seat.student_id
+                resolved_join_code = seat.join_code or resolved_join_code
+            scope_filter = (Transaction.seat_id == resolved_seat_id)
+        else:
+            # Transitional invocation: settle_balances(student_id, join_code)
+            resolved_student_id = original_scope_id
+            resolved_join_code = class_id
+            seat_ids = get_seat_ids_for_student_join(resolved_student_id, resolved_join_code)
+            resolved_seat_id = seat_ids[0] if seat_ids else None
+            canonical_class_id = None
+            if resolved_seat_id:
+                seat_row = (
+                    Seat.query.with_entities(Seat.class_id, Seat.join_code)
+                    .filter_by(id=resolved_seat_id)
+                    .first()
+                )
+                if seat_row and seat_row[0]:
+                    canonical_class_id = str(seat_row[0])
+                    resolved_join_code = seat_row[1] or resolved_join_code
+            if not canonical_class_id:
+                class_lookup = (
+                    ClassEconomy.query
+                    .with_entities(ClassEconomy.class_id)
+                    .filter_by(join_code=resolved_join_code)
+                    .first()
+                )
+                if class_lookup and class_lookup[0]:
+                    canonical_class_id = str(class_lookup[0])
+            if not canonical_class_id:
+                raise ValueError(
+                    f"settle_balances could not resolve class_id for join_code={resolved_join_code}"
+                )
+            scope_filter = transaction_scope_filter(Transaction, resolved_student_id, seat_ids)
+
+        class_id = canonical_class_id
         cache_was_created = False
         # 1. Lock (or Create) BalanceCache Row
         # ---------------------------------------------------------
         # We must lock the cache row to prevent concurrent settlements
-        # or balance updates for the same student/class.
+        # or balance updates for the same seat/class.
         cache = None
-        if seat_ids:
+        if resolved_seat_id:
             cache = (
                 BalanceCache.query
                 .filter(
                     BalanceCache.class_id == class_id,
-                    BalanceCache.seat_id.in_(seat_ids),
+                    BalanceCache.seat_id == resolved_seat_id,
                 )
                 .with_for_update()
                 .first()
             )
-        if not cache:
+        if not cache and resolved_student_id is not None:
             cache = (
                 BalanceCache.query
-                .filter_by(student_id=student_id, class_id=class_id)
+                .filter_by(student_id=resolved_student_id, class_id=class_id)
                 .with_for_update()
                 .first()
             )
         
         if not cache:
-            # If cache doesn't exist (e.g. new student), create it.
+            seat = db.session.get(Seat, resolved_seat_id) if resolved_seat_id else None
             cache = BalanceCache(
-                student_id=student_id,
-                seat_id=(seat_ids[0] if seat_ids else None),
+                student_id=(seat.student_id if seat else resolved_student_id),  # Transitional bridge
+                seat_id=resolved_seat_id,
                 class_id=class_id,
-                join_code=join_code,
+                join_code=(seat.join_code if seat else resolved_join_code),
             )
             db.session.add(cache)
             db.session.flush() # Persist to get ID and lock
@@ -303,10 +340,26 @@ def settle_balances(student_id: int, join_code: str) -> None:
         cache.posted_savings_balance_cents += savings_delta_cents
         cache.last_settlement_at = now
         
-        logger.info(f"Settled balances for Student {student_id} (Join: {join_code}): "
-                    f"Posted {cnt_posted}, Voided {cnt_voided}. "
-                    f"Checking Net: {checking_delta_cents}, Savings Net: {savings_delta_cents}")
+        logger.info(
+            "Settled balances scope=(%s, %s) resolved=(seat_id=%s, class_id=%s, student_id=%s, join_code=%s): "
+            "Posted %s, Voided %s. Checking Net: %s, Savings Net: %s",
+            original_scope_id,
+            original_scope_key,
+            resolved_seat_id,
+            class_id,
+            resolved_student_id,
+            resolved_join_code,
+            cnt_posted,
+            cnt_voided,
+            checking_delta_cents,
+            savings_delta_cents,
+        )
         
     except Exception as e:
-        logger.error(f"Error settling balances for Student {student_id} in {join_code}: {e}")
+        logger.error(
+            "Error settling balances scope=(%s, %s): %s",
+            seat_id,
+            class_id,
+            e,
+        )
         raise

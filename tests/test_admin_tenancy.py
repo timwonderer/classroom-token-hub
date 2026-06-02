@@ -2,6 +2,7 @@ from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pyotp
 import re
 from datetime import datetime, timezone, timedelta
+from itsdangerous import URLSafeTimedSerializer
 
 from app import db
 from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TapEvent, StudentBlock, PayrollSettings, Seat, ClassEconomy
@@ -66,6 +67,40 @@ def _login_admin(client, admin: Admin, secret: str):
     return response
 
 
+def _build_student_detail_public_url(client, admin: Admin, student: Student) -> str:
+    with client.session_transaction() as sess:
+        selected_class_id = (sess.get("current_class_id") or "").strip()
+        selected_join_code = (sess.get("current_join_code") or "").strip()
+
+    seat_query = (
+        Seat.query
+        .join(ClassEconomy, ClassEconomy.class_id == Seat.class_id)
+        .filter(
+            Seat.student_id == student.id,
+            Seat.role == "student",
+            Seat.public_id.isnot(None),
+            ClassEconomy.teacher_id == admin.id,
+        )
+    )
+    seat = None
+    if selected_class_id:
+        seat = seat_query.filter(Seat.class_id == selected_class_id).first()
+    if not seat and selected_join_code:
+        seat = seat_query.filter(Seat.join_code == selected_join_code).first()
+    if not seat:
+        seat = seat_query.order_by(Seat.id.asc()).first()
+    assert seat is not None
+
+    serializer = URLSafeTimedSerializer(client.application.config["SECRET_KEY"], salt="cth-student-detail-nav-v1")
+    nav = serializer.dumps({
+        "student_id": int(student.id),
+        "seat_public_id": str(seat.public_id),
+        "class_id": str(seat.class_id) if seat.class_id else None,
+        "admin_id": int(admin.id),
+    })
+    return f"/admin/students/{seat.public_id}?nav={nav}"
+
+
 def test_student_listing_scoped_to_teacher(client):
     teacher_a, secret_a = _create_admin("teacher-a")
     teacher_b, secret_b = _create_admin("teacher-b")
@@ -116,7 +151,8 @@ def test_shared_student_accessible_to_multiple_teachers(client):
 
     _login_admin(client, teacher_b, secret_b)
 
-    detail_response = client.get(f"/admin/students/{shared_student.id}")
+    detail_url = _build_student_detail_public_url(client, teacher_b, shared_student)
+    detail_response = client.get(detail_url, follow_redirects=True)
     list_response = client.get("/admin/students")
 
     assert detail_response.status_code == 200
@@ -174,7 +210,8 @@ def test_student_detail_recovers_from_stale_class_context(client):
         sess["current_class_id"] = class_b.class_id
         sess["current_join_code"] = "JOINB"
 
-    response = client.get(f"/admin/students/{student_a.id}")
+    detail_url = _build_student_detail_public_url(client, teacher, student_a)
+    response = client.get(detail_url, follow_redirects=True)
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -622,12 +659,26 @@ def test_student_detail_ignores_student_block_from_other_join_code(client):
     db.session.commit()
 
     _login_admin(client, teacher_a, secret_a)
-    response = client.get(f"/admin/students/{shared_student.id}?join_code=JOINA")
+    response = client.get(_build_student_detail_public_url(client, teacher_a, shared_student), follow_redirects=True)
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
     assert 'id="tapToggleA"' in body
     assert re.search(r'<input[^>]*id="tapToggleA"[^>]*checked', body) is not None
+
+
+def test_student_detail_public_url_requires_nav_token(client):
+    teacher, secret = _create_admin("teacher-public")
+    student = _create_student("PublicDetail", teacher)
+    _login_admin(client, teacher, secret)
+
+    nav_url = _build_student_detail_public_url(client, teacher, student)
+    ok = client.get(nav_url, follow_redirects=False)
+    assert ok.status_code == 200
+
+    public_path = nav_url.split("?", 1)[0]
+    direct = client.get(public_path, follow_redirects=False)
+    assert direct.status_code == 404
 
 
 def test_edit_student_transfer_updates_transaction_seat_scope(client):

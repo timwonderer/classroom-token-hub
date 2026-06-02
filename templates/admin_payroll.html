@@ -354,7 +354,7 @@
                 <td>
                   {% if record.student %}
                   <a
-                    href="{{ url_for('admin.student_detail', student_id=record.student_id) }}">
+                    href="{{ student_detail_url(record.student_id) }}">
                     {{ record.student.full_name }}
                   </a>
                   {% else %}
@@ -452,7 +452,7 @@
                 <td>
                   {% if entry.student %}
                   <a
-                    href="{{ url_for('admin.student_detail', student_id=entry.student_id) }}">
+                    href="{{ student_detail_url(entry.student_id) }}">
                     {{ entry.student_name }}
                   </a>
                   {% else %}

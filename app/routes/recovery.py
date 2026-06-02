@@ -121,7 +121,11 @@ def _generate_reset_code_legacy(student_id):
  
     flash(f"Reset code generated for {student.first_name} {student.last_initial}. "
           f"Code: {code} — Expires in 10 minutes.", "success")
-    return redirect(url_for('admin.student_detail', student_id=student.id))
+    from app.routes.admin import _build_student_detail_url
+    detail_url = _build_student_detail_url(student.id, teacher_id=session.get("admin_id"))
+    if not detail_url:
+        return redirect(url_for('admin.students'))
+    return redirect(detail_url)
 
 # ----------------------------------------------------------------------
 # STUDENT ROUTES — Single Recovery Flow

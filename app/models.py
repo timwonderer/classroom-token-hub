@@ -186,8 +186,7 @@ class User(db.Model):
     __tablename__ = 'users'
 
     id = db.Column(db.Integer, primary_key=True)
-    public_id = db.Column(db.String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
-    username = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    username_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.Text, nullable=False)
     last_active_class_id = db.Column(
         db.String(36),

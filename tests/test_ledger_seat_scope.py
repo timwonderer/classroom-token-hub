@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from app import db
-from app.hash_utils import get_random_salt
+from app.hash_utils import get_random_salt, hash_username_lookup
 from app.models import BalanceCache, Seat, Student, Transaction, TransactionStatus, User
 from app.utils.banking import settle_balances
 
@@ -22,7 +22,7 @@ def test_transaction_autofills_seat_id_from_student_and_join_code(client):
     db.session.add(student)
     db.session.flush()
 
-    user = User(username=f"ledger_user_{student.id}", password_hash="pw")
+    user = User(username_hash=hash_username_lookup(f"ledger_user_{student.id}"), password_hash="pw")
     db.session.add(user)
     db.session.flush()
 
@@ -50,7 +50,7 @@ def test_settlement_creates_balance_cache_with_seat_id(client):
     db.session.add(student)
     db.session.flush()
 
-    user = User(username=f"cache_user_{student.id}", password_hash="pw")
+    user = User(username_hash=hash_username_lookup(f"cache_user_{student.id}"), password_hash="pw")
     db.session.add(user)
     db.session.flush()
 

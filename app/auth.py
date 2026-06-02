@@ -14,6 +14,7 @@ import sqlalchemy as sa
 from flask import session, flash, redirect, url_for, request, current_app, jsonify, abort, g
 from werkzeug.security import generate_password_hash
 from app.extensions import db
+from app.hash_utils import hash_username_lookup
 
 
 # -------------------- SESSION CONFIGURATION --------------------
@@ -545,7 +546,7 @@ def sync_student_session_context(
             linked_user = None
         else:
             linked_user = User(
-                username=f"pending_{student.id}_{secrets.token_urlsafe(8)}",
+                username_hash=hash_username_lookup(f"pending_{student.id}_{secrets.token_urlsafe(8)}"),
                 password_hash=generate_password_hash(secrets.token_urlsafe(24)),
             )
             db.session.add(linked_user)

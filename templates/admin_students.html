@@ -462,7 +462,7 @@
                       {% for student in unclaimed_students %}
                       <tr>
                         <td>
-                          <a href="{{ url_for('admin.student_detail', student_id=student.id) }}"
+                          <a href="{{ student_detail_url(student.id) }}"
                             class="text-decoration-none">
                             <span class="fw-bold">{{ student.full_name }}</span>
                           </a>
@@ -474,7 +474,7 @@
                           <span class="badge bg-warning text-dark">Needs Username</span>
                         </td>
                         <td>
-                          <a href="{{ url_for('admin.student_detail', student_id=student.id) }}"
+                          <a href="{{ student_detail_url(student.id) }}"
                             class="btn btn-sm btn-outline-primary"
                             aria-label="View details for {{ student.full_name }}">
                             <span class="material-symbols-outlined align-middle fs-6"
@@ -593,7 +593,7 @@
                             onchange="updateBulkToolbar('{{ block }}')" aria-label="Select {{ student.full_name }}">
                         </td>
                         <td>
-                          <a href="{{ url_for('admin.student_detail', student_id=student.id) }}"
+                          <a href="{{ student_detail_url(student.id) }}"
                             class="fw-bold text-decoration-none">
                             {{ student.full_name }}
                           </a>
