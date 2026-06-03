@@ -58,6 +58,7 @@ This execution model is elaborated by the following `INV-ARC` documents:
 - `INV-ARC-005_No_PII_Leakage_in_Execution_Layer.md`
 - `INV-ARC-006_Command_Boundary_for_Mutation.md`
 - `INV-ARC-007_GET_Must_Be_Pure.md`
+- `INV-ARC-008_Identity_Resolution_and_Seat_Scope.md`
 - `INV-ARC-009_Domain_Authority_for_State.md`
 - `INV-ARC-010_Explicit_Context_Switching.md`
 - `INV-ARC-011_No_Phantom_Scope_Access.md`
@@ -65,6 +66,7 @@ This execution model is elaborated by the following `INV-ARC` documents:
 - `INV-ARC-013_Membership_by_Existence.md`
 - `INV-ARC-014_No_Label_Based_Logic.md`
 - `INV-ARC-015_Temporal_Model_and_Boundary_Enforcement.md`
+- `INV-ARC-016_Lawful_Existence_and_Audit_Lineage.md`
 
 ## VII. Rebuild Intent
 

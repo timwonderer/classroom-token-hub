@@ -3,6 +3,7 @@ import pytest
 from datetime import datetime, timezone
 
 from app.extensions import db
+from app.feats.base import InvariantViolation
 from app.models import (
     Admin, ClassEconomy, ClassMembership, TeacherBlock, Transaction, StudentBlock,
     TapEvent, HallPassLog, RedemptionAuditLog, StudentItem, AnalyticsEvent,
@@ -78,9 +79,10 @@ def test_collapse_universe_cascades_and_cleans_up(client):
         student_id=student.id, 
         student_first_name="Collapse",
         student_last_initial="S",
-        opaque_student_reference="ref",
+        actor_public_id="ref",
         class_label="A",
         teacher_id=admin.id, 
+        class_id=economy.class_id,
         join_code=join_code, 
         category_id=issue_cat.id, 
         issue_type="transaction",
@@ -91,7 +93,7 @@ def test_collapse_universe_cascades_and_cleans_up(client):
     db.session.commit()
 
     # Pre-collapse assertions
-    assert db.session.get(ClassEconomy, join_code) is not None
+    assert ClassEconomy.query.filter_by(join_code=join_code).first() is not None
     assert db.session.query(Transaction).filter_by(join_code=join_code).count() == 1
     assert db.session.query(StoreItemBlock).filter_by(store_item_id=store_item.id).count() == 1
     assert db.session.query(StoreItem).filter_by(id=store_item.id).count() == 1
@@ -104,11 +106,11 @@ def test_collapse_universe_cascades_and_cleans_up(client):
     admin_id_val = admin.id
 
     # Do the collapse
-    success = collapse_universe(join_code, reason="Test collapse", actor_membership_id=membership.id)
+    success = collapse_universe(economy.class_id, reason="Test collapse", actor_membership_id=membership.id)
     assert success is True
 
     # Post-collapse assertions
-    assert db.session.get(ClassEconomy, join_code) is None
+    assert ClassEconomy.query.filter_by(join_code=join_code).first() is None
     assert db.session.query(ClassMembership).filter_by(join_code=join_code).count() == 0
     assert db.session.query(Transaction).filter_by(join_code=join_code).count() == 0
     assert db.session.query(TeacherBlock).filter_by(join_code=join_code).count() == 0
@@ -123,6 +125,7 @@ def test_collapse_universe_cascades_and_cleans_up(client):
     assert db.session.query(PayrollSettings).filter_by(teacher_id=admin_id_val, block="A").count() == 0
     assert db.session.query(RentSettings).filter_by(teacher_id=admin_id_val, block="A").count() == 0
 
+    db.session.expire_all()
     # Student A should be entirely deleted because they have no other classes
     assert db.session.get(Student, student_id_val) is None
     
@@ -151,4 +154,40 @@ def test_admin_join_code_delete_route(client):
     })
     
     assert response.status_code == 200
-    assert db.session.get(ClassEconomy, join_code) is None
+    assert ClassEconomy.query.filter_by(join_code=join_code).first() is None
+
+
+def test_collapse_universe_raises_on_null_class_id_scope_rows(client):
+    admin = make_admin("collapse_invalid_admin", "secret")
+    db.session.add(admin)
+    db.session.flush()
+
+    student = Student(first_name="Invalid", last_initial="S", block="A", salt=b"salt")
+    db.session.add(student)
+    db.session.flush()
+
+    economy = create_class_scope(
+        teacher=admin,
+        join_code="INV001",
+        student=student,
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+    )
+    membership = ClassMembership.query.filter_by(
+        join_code="INV001",
+        admin_id=admin.id,
+        role="admin",
+    ).first()
+    db.session.add(
+        StudentBlock(
+            student_id=student.id,
+            period="A",
+            join_code="INV001",
+            class_id=None,
+            tap_enabled=True,
+        )
+    )
+    db.session.commit()
+
+    with pytest.raises(InvariantViolation):
+        collapse_universe(economy.class_id, reason="Invariant test", actor_membership_id=membership.id)

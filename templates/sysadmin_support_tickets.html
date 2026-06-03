@@ -284,7 +284,7 @@
                                     <div class="d-flex flex-wrap gap-1 mb-2">
                                         <span class="badge bg-secondary" style="font-size:0.7rem;">
                                             <span class="material-symbols-outlined me-1">person</span>
-                                            {{ issue.opaque_student_reference[:8] }}...
+                                            {{ issue.actor_public_id[:8] }}...
                                         </span>
                                         <span class="badge bg-light text-dark border" style="font-size:0.7rem;">
                                             {{ issue.category.name if issue.category else 'Unknown' }}

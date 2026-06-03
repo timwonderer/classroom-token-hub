@@ -169,7 +169,7 @@ def test_delete_join_code_removes_only_scoped_records(client):
         student_id=student_a.id,
         student_first_name=student_a.first_name,
         student_last_initial=student_a.last_initial,
-        opaque_student_reference="opaque-join-delete",
+        actor_public_id="seat-public-join-delete",
         teacher_id=teacher.id,
         join_code="JCDEL1",
         category_id=category.id,

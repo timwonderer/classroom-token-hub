@@ -47,7 +47,7 @@ from app.forms import (
 )
 
 # Import utility functions
-from app.utils.helpers import generate_anonymous_code, is_safe_url, format_utc_iso, render_template_with_fallback as render_template
+from app.utils.helpers import is_safe_url, format_utc_iso, render_template_with_fallback as render_template
 from app.utils.constants import THEME_PROMPTS
 from app.utils.turnstile import verify_turnstile_token
 from app.utils.ip_handler import get_real_ip
@@ -61,7 +61,6 @@ from app.access import (
     AccessScopeDenied,
     resolve_scope,
     resolve_student_class_switch_scope,
-    resolve_student_teacher_switch_scope,
 )
 from app.services.attendance_service import get_all_block_statuses
 from app.services.ledger_service import (
@@ -321,6 +320,17 @@ def _ensure_class_anchor_for_teacher_block(teacher_block) -> str | None:
             role='admin',
         ))
 
+    teacher_seat = Seat.query.filter_by(
+        class_id=class_row.class_id,
+        role='teacher',
+    ).first()
+    if teacher_seat is None:
+        db.session.add(Seat(
+            class_id=class_row.class_id,
+            join_code=teacher_block.join_code,
+            role='teacher',
+        ))
+
     return class_row.class_id
 
 
@@ -415,6 +425,12 @@ def get_rent_settings_for_context(context):
             return scoped
 
     return base_query.filter(RentSettings.block.is_(None)).first()
+
+
+def _support_actor_public_id(class_context):
+    seat_id = class_context.get('seat_id') if class_context else None
+    seat = db.session.get(Seat, seat_id) if seat_id else None
+    return seat.public_id if seat else None
 
 
 def _get_rent_coverage_window(settings, coverage_due_date):
@@ -1172,7 +1188,7 @@ def dashboard():
         access_policy_service.assert_can_view_dashboard(scope)
     except AccessScopeDenied as exc:
         flash(exc.message, "error")
-        return redirect(url_for("student.select_class"))
+        return redirect(url_for("student.select_class_context"))
     except access_policy_service.AccessPolicyDenied as exc:
         flash(exc.message, "error")
         return redirect(url_for('student.login'))
@@ -4260,51 +4276,8 @@ def switch_period(teacher_id):
 @student_bp.route('/switch-teacher/<string:teacher_public_id>', methods=['POST'])
 @login_required
 def switch_teacher(teacher_public_id):
-    """Switch classes using teacher public identity instead of numeric teacher ID."""
-    from app.models import Admin
-
-    teacher = Admin.query.filter_by(teacher_public_id=teacher_public_id).first()
-    if not teacher:
-        flash("You don't have access to that class.", "error")
-        return redirect(url_for('student.dashboard'))
-
-    return _switch_to_teacher_scope(teacher_id=teacher.id)
-
-
-def _switch_to_teacher_scope(*, teacher_id: int):
-    """Resolve a teacher switch to a concrete claimed seat/join_code for this student."""
-    from app.models import Seat, Admin
-    from app.auth import switch_student_session_context
-
-    student = get_logged_in_student()
-    if not student:
-        flash("You must be logged in to switch classes.", "error")
-        return redirect(url_for('student.login'))
-
-    try:
-        resolved_switch = resolve_student_teacher_switch_scope(actor=student, teacher_id=teacher_id)
-        access_policy_service.assert_can_switch_teacher(resolved_switch.scope, teacher_id=teacher_id)
-    except (AccessScopeDenied, access_policy_service.AccessPolicyDenied):
-        flash("You don't have access to that class.", "error")
-        return redirect(url_for('student.dashboard'))
-    target_seat = db.session.get(Seat, resolved_switch.seat_id)
-    if target_seat is None:
-        flash("You don't have access to that class.", "error")
-        return redirect(url_for('student.dashboard'))
-
-    switch_student_session_context(
-        student,
-        class_id=resolved_switch.scope.class_id,
-        seat_id=target_seat.id,
-    )
-    session['current_teacher_id'] = teacher_id
-
-    # Get teacher name for flash message
-    teacher = db.session.get(Admin, teacher_id)
-    if teacher:
-        flash(f"Switched to {teacher.get_display_name()}'s class")
-
-    return redirect(url_for('student.dashboard'))
+    """Reject obsolete role-specific public-ID switching."""
+    abort(404)
 
 
 # -------------------- SETUP COMPLETE --------------------
@@ -4366,8 +4339,10 @@ def submit_general_issue():
         return redirect(url_for('student.dashboard'))
 
     form = StudentIssueSubmissionForm()
-    actor_opaque_id = generate_anonymous_code(f"student_issue:{student.id}")
-    show_recent_error_option = has_recent_error_for_actor('student', actor_opaque_id)
+    actor_public_id = _support_actor_public_id(class_context)
+    show_recent_error_option = bool(
+        actor_public_id and has_recent_error_for_actor('student', actor_public_id)
+    )
 
     # Populate category choices
     form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('general')
@@ -4424,8 +4399,10 @@ def report_transaction_issue(transaction_id):
     ).first_or_404()
 
     form = TransactionIssueSubmissionForm()
-    actor_opaque_id = generate_anonymous_code(f"student_issue:{student.id}")
-    show_recent_error_option = has_recent_error_for_actor('student', actor_opaque_id)
+    actor_public_id = _support_actor_public_id(class_context)
+    show_recent_error_option = bool(
+        actor_public_id and has_recent_error_for_actor('student', actor_public_id)
+    )
 
     # Populate category choices with general categories
     form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('transaction')
@@ -4485,8 +4462,10 @@ def report_tap_event_issue(tap_event_id):
     ).first_or_404()
 
     form = StudentIssueSubmissionForm()
-    actor_opaque_id = generate_anonymous_code(f"student_issue:{student.id}")
-    show_recent_error_option = has_recent_error_for_actor('student', actor_opaque_id)
+    actor_public_id = _support_actor_public_id(class_context)
+    show_recent_error_option = bool(
+        actor_public_id and has_recent_error_for_actor('student', actor_public_id)
+    )
 
     # Populate category choices with general categories (includes "Clock In/Out Not Working")
     form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('general')

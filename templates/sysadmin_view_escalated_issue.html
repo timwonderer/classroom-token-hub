@@ -41,14 +41,14 @@
 
                     <hr>
 
-                    <!-- Student Reference (Opaque) -->
+                    <!-- Seat Public Reference -->
                     <div class="mb-3">
-                        <h6 class="text-muted mb-2">Student Reference</h6>
+                        <h6 class="text-muted mb-2">Seat Public Reference</h6>
                         <p class="mb-0">
                             <span class="material-symbols-outlined me-2">tag</span>
-                            <code>{{ issue.opaque_student_reference }}</code>
+                            <code>{{ issue.actor_public_id }}</code>
                             <small class="text-muted d-block mt-1">
-                                Non-reversible identifier for privacy protection
+                                Deidentified class-scoped actor reference
                             </small>
                         </p>
                     </div>
@@ -202,8 +202,8 @@
                     <div class="card-body">
                         <div class="mb-3">
                             <div class="d-flex flex-wrap gap-2">
-                                <button type="button" class="btn btn-outline-secondary btn-sm copy-correlation-value" data-copy-value="{{ correlation_pack.actor_opaque_id }}">
-                                    Copy actor_opaque_id
+                                <button type="button" class="btn btn-outline-secondary btn-sm copy-correlation-value" data-copy-value="{{ correlation_pack.actor_public_id }}">
+                                    Copy actor_public_id
                                 </button>
                                 {% if correlation_pack.join_code_id %}
                                 <button type="button" class="btn btn-outline-secondary btn-sm copy-correlation-value" data-copy-value="{{ correlation_pack.join_code_id }}">

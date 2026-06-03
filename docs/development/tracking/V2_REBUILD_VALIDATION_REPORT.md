@@ -1,9 +1,105 @@
-# V2 Rebuild Validation Report — Revision 18
+# V2 Rebuild Validation Report — Revision 19
 
-**Generated:** 2026-05-30  
+**Generated:** 2026-06-01
 **Branch:** `codex/v2.0`  
 **Against:** `V2_Full_compliance_migration_plan.md`  
 **Methodology:** Direct code inspection (multi-pass), migration chain analysis, model column audit, service/FEAT write-path tracing, test coverage enumeration, CI infrastructure review, adversarial scorecard analysis, INV compliance sweep, auth-path and session-bridge verification (Revision 3 additions)
+
+### Post-Report Update (2026-06-02, `codex/v2.0`) — TLCP Runtime Actor-Public-ID Cutover
+
+- Support/log actor identity now resolves to class-scoped `Seat.public_id` at runtime:
+  - `resolve_actor_context()` emits `actor_public_id`
+  - request traces, error events, and ticket correlation packs store the seat UUID
+  - student support recent-error prompts resolve from active `seat_id`
+  - issue creation requires the submitted class-scoped seat and uses its `public_id`
+- Removed the nested TLCP savepoint from `create_issue()` so support-ticket creation
+  stays inside the FEAT-owned transaction boundary.
+- Completed `TLCP-SCHEMA-001`: physical TLCP actor columns, indexes, log labels, tests,
+  and sysadmin copy affordances now use `actor_public_id`.
+- Added idempotent migration `f6a7b8c9d0e1_rename_tlcp_actor_public_id.py` and
+  validated upgrade, explicit downgrade to `ebb7b66b2176`, and re-upgrade to head.
+- Live schema check confirms `actor_request_trace`, `error_events`, and
+  `ticket_correlation_pack` expose `actor_public_id` only for TLCP actor identity.
+- Validation:
+  - `git diff --check` -> pass
+  - touched-module `python -m py_compile` -> pass
+  - migration lint -> pass
+  - migration upgrade/downgrade/re-upgrade -> pass
+  - TLCP focused suite -> `6 passed`
+  - adjacent public-ID authority suite -> `61 passed`
+
+### Post-Report Update (2026-06-02, `codex/v2.0`) — Support Issue Actor-Public-ID Schema Rename
+
+- Renamed the support issue filing-actor reference from the former student-opaque
+  field name to `issues.actor_public_id`.
+- Updated ORM, issue creation, sysadmin support templates, and tests to use
+  `actor_public_id`.
+- Added migration `f7b8c9d0e1f2_rename_issue_actor_public_id.py`; the column stores the
+  filing seat's UUID `Seat.public_id`.
+- Fixed adjacent stale `collapse_universe()` class lookup so class deletion resolves
+  by `join_code` correctly.
+- Validation:
+  - active grep for former support issue opaque-student field names -> no app/test/doc
+    hits
+  - touched-module `python -m py_compile` -> pass
+  - migration lint -> pass
+  - `flask db heads && flask db current` -> `f7b8c9d0e1f2 (head)`
+  - live schema check confirms only `issues.actor_public_id` remains
+  - affected support/schema/class-deletion suite -> `15 passed`
+
+### Post-Report Update (2026-06-02, `codex/v2.0`) — Teacher-Seat Public Lookup Runtime Reduction
+
+- Provisioned teacher `Seat` rows in class-anchor creation and claim-anchor repair
+  paths.
+- Removed role-specific teacher-public-ID lookup authority from class-scoped runtime:
+  - obsolete `/student/switch-teacher/<teacher_public_id>` returns `404`
+  - hall-pass pass-type lookup rejects `teacher_public_id`
+  - public hall-pass activity lookup requires matching teacher-seat `Seat.public_id`
+    plus explicit `class_id`, and returns only that class's logs
+- Removed the obsolete teacher-switch scope resolver and policy branch.
+- Closed two adjacent fail-closed defects:
+  - unresolved explicit `join_code` aliases no longer fall back to another claimed seat
+  - dashboard scope failure now redirects to the live class-selection endpoint
+- Validation:
+  - `git diff --check` -> pass
+  - touched-module `python -m py_compile` -> pass
+  - adjacent tenancy, authorization, and class-switch suite -> `61 passed`
+
+### Post-Report Update (2026-06-02, `codex/v2.0`) — UUID Seat Public Identity Contract
+
+- Added `docs/development/specs/V2_IDENTITY_AND_OWNERSHIP_MODEL.md` as the normative
+  clean-v2 identity ownership contract.
+- Formalized UUID-encoded `seats.public_id` as the single deidentified public actor
+  identifier for teacher and student seats.
+- Classified `Admin.public_id`, `Admin.teacher_public_id`, `Student.opaque_reference`,
+  `Student.internal_reference`, and separate TLCP actor identity families as invalid
+  v2 residue rather than compatibility surfaces to preserve.
+- Updated `DOM-IDEN-001`, `DOM-SUP-001`, `INV-ARC-008`, the student identity spec, the
+  active identity inventory, and the canonical ORM reference model.
+- Preserved `hall_pass_verify_token` as an unresolved capability-ownership question,
+  separate from actor identity.
+- Validation:
+  - `git diff --check` -> pass
+  - `python -m py_compile app/models_canonical.py app/models.py app/routes/admin.py tests/test_admin_tenancy.py` -> pass
+  - focused admin-tenancy suite -> `5 passed, 10 deselected`
+
+### Post-Report Update (2026-06-01, `codex/v2.0`) — Admin Student Detail Seat-Public-ID Scope Closure
+
+- Replaced teacher-facing numeric student-detail URLs with class-local seat public IDs:
+  - `/admin/students/<int:student_id>` now returns `404`.
+  - `/admin/students/<string:student_public_id>` resolves only `Seat.public_id` values carried by short-lived signed navigation tokens.
+  - Teacher-facing templates and post-action redirects now generate student-detail URLs through `student_detail_url(...)`.
+- Enforced class-local context authority for student-detail navigation:
+  - `Seat.public_id` is the URL identity; neither legacy `student_id` nor role-specific public identity is accepted as a detail-route identifier.
+  - resolution filters by `Seat.public_id` + teacher-owned `ClassEconomy`.
+  - the resolved `Seat.class_id` must match both the signed navigation token and active `session["current_class_id"]`; mismatch returns `404`.
+  - URL generation treats active `current_class_id` as authoritative and does not fall back to another seat when the student is absent from that class.
+- Added adversarial tenancy regressions:
+  - shared student across two teachers / two classes: teacher A cannot query teacher B's seat public ID, even with a correctly signed token shaped for teacher A.
+  - shared student across two classes taught by one teacher: class A URL works in class A context, returns `404` after switching to class B context, and class B context generates seat B's distinct public ID.
+- Validation:
+  - `python -m py_compile app/routes/admin.py tests/test_admin_tenancy.py` -> pass
+  - `pytest -q tests/test_admin_tenancy.py -k "shared_student_accessible_to_multiple_teachers or student_detail_public_url_requires_nav_token or student_detail_public_id_is_seat_scoped_for_shared_student or student_detail_public_id_requires_active_class_for_same_teacher or student_detail_forbids_cross_tenant_access"` -> `5 passed, 10 deselected`
 
 ### Post-Report Update (2026-05-30, `codex/v2.0`) — Wave 6 Final Cutover Closure
 
@@ -383,7 +479,7 @@ Wave 3 was re-scoped during execution from the full structural auth migration (a
 | Student feature gating with hard `abort(404)` | ✅ COMPLETE | `student.py` lines 147–166; `STUDENT_FEATURE_ENDPOINTS` (10 routes) |
 | Single-context: no request-level `join_code` class switching in admin/analytics | ✅ COMPLETE | `analytics.py` uses `resolve_current_class_context()`; admin context is session-authoritative |
 | Route commit elimination: `student.py`, `analytics.py`, `system_admin.py`, `api.py` | ✅ COMPLETE | 0 `db.session.commit()` in all four files |
-| `student_detail()` no longer accepts `?join_code=` override | ✅ COMPLETE | Route auto-resolves from student context |
+| Admin student detail uses active-class `Seat.public_id` navigation | ✅ COMPLETE | Numeric URLs return `404`; signed seat-public-ID URLs require teacher ownership, token class, and active `current_class_id` to resolve the same seat |
 | Legacy claim flow: `join_code + first_name + last_name` (no DOB) | ✅ COMPLETE | `student.py:549–698`; dedupe code for name collisions |
 | `last_active_class_id` on `User` model | ✅ COMPLETE | `models.py:192`; migration `8357d4036478` |
 | `scripts/policy_guardrails.py` (10 rules, waiver system) | ✅ COMPLETE | Enforces: NO_ROUTE_COMMIT, WRITE_ON_GET, SCOPE_FALLBACK, TAP_NULL_SCOPE, AUDIT_UPDATE_DELETE, and 5 others |
@@ -407,8 +503,8 @@ These are pre-Wave-12 items but were tracked as Wave 3 cleanup targets:
 Significant number of `filter_by(join_code=...)` and `filter(*.join_code ==...)` patterns remain in `admin.py` outside of pure session context reads. Examples:
 - Line 982: `TeacherBlock.query.filter_by(join_code=join_code)`
 - Lines 1040–1055: class deletion cleanup queries via `join_code`
-- Lines 4479, 4486, 4512–4514: student detail financial queries filtered by `join_code` (not `class_id`)
-- Line 4463: `ClassEconomy.query.filter_by(join_code=join_code, teacher_id=teacher_id)` — double-legacy scope
+
+The prior student-detail examples in this list are closed as of Revision 19: the route resolves a teacher-owned `Seat.public_id`, requires an active-class match, and uses the resolved `seat_id + class_id` scope for participant data.
 
 **INV-ARC-014 — `block` as control key (not closed):**  
 `RentSettings` still has `block = db.Column(db.String(10), nullable=True)` at line 1540 (despite `FeatureSettings.block` being dropped in Wave 4). Admin routes use `block` as a scope routing key in several places:
@@ -800,4 +896,4 @@ The first report contained several characterizations that this deeper analysis r
 
 ---
 
-*This report (Revision 18) supersedes all prior versions. Revision 4 corrected the FEAT/INV-ARC-007 misclassification on `admin.py:2107`. Revision 5 closed the adversarial rerun uncertainty with fresh 2026-05-25 evidence and full Phase 1 PASS. Revision 6 added a Wave 5 major slice for canonical balance batching and admin-surface migration. Revision 7 completed that sub-slice by removing the legacy `get_batch_balances(join_codes, student_ids)` wrapper and confirming canonical-only call paths via targeted regression validation. Revision 8 landed Wave 5 ledger table consolidation (`ledger_transaction` / `ledger_balance_snapshot`) and recorded the remaining local migration-chain blocker prior to full upgrade validation. Revision 9 added a rule-compliance sweep checkpoint, closed missing FEAT registry entries for active decorators, aligned time-helper guardrail compliance paths, and reduced FEAT lint hotspots from 13 to 11. Revision 10 closed the remaining FEAT-lint commit/construction hotspots in touched utility/job paths and recorded a clean FEAT constitutional lint result at current HEAD. Revision 11 removed dashboard-triggered write-on-GET auto-tapout behavior, keeping daily-limit enforcement on scheduler and explicit POST path only. Revision 12 closed the Postgres test-db rebuild race in `tests/conftest.py`, restored class-scoped daily-limit lookup in `enforce_daily_limits()`, and validated the full admin-tenancy slice (`12/12` passing). Revision 13 closed the local migration-chain blocker at `a91cf11e8b2d` by dropping dependent legacy RLS policy state before legacy scope-column removal and confirmed full upgrade to `b1c2d3e4f5a6 (head)`. Revision 14 applied attendance Step-1/Step-2 runtime hardening and FEAT ownership expansion across hall-pass/tap mutation paths. Revision 15 closed remaining hall-pass admin mutation FEAT coverage (`/hall-pass/settings` POST, `/hall-pass/setup` POST, `/hall-pass/verify-token/rotate` POST) and re-validated attendance/hall-pass tenancy suites. Revision 16 removed transitional attendance mirror behavior and locked this slice to canonical `attendance_sessions` + `seat_attendance_state` paths. Revision 17 reconciled stale Wave 6 tracker claims to live runtime evidence. Revision 18 closes the final Wave 6 cutover tasks by migrating payroll/admin batch attendance reads to canonical sessions, removing direct legacy tap-event writes from batch daily-limit helper flows, and eliminating hard `TapEvent.student_id` dependency with migration and downgrade/re-upgrade validation through `e4a2b7c9d1f0 (head)`.*
+*This report (Revision 19) supersedes all prior versions. Revision 4 corrected the FEAT/INV-ARC-007 misclassification on `admin.py:2107`. Revision 5 closed the adversarial rerun uncertainty with fresh 2026-05-25 evidence and full Phase 1 PASS. Revision 6 added a Wave 5 major slice for canonical balance batching and admin-surface migration. Revision 7 completed that sub-slice by removing the legacy `get_batch_balances(join_codes, student_ids)` wrapper and confirming canonical-only call paths via targeted regression validation. Revision 8 landed Wave 5 ledger table consolidation (`ledger_transaction` / `ledger_balance_snapshot`) and recorded the remaining local migration-chain blocker prior to full upgrade validation. Revision 9 added a rule-compliance sweep checkpoint, closed missing FEAT registry entries for active decorators, aligned time-helper guardrail compliance paths, and reduced FEAT lint hotspots from 13 to 11. Revision 10 closed the remaining FEAT-lint commit/construction hotspots in touched utility/job paths and recorded a clean FEAT constitutional lint result at current HEAD. Revision 11 removed dashboard-triggered write-on-GET auto-tapout behavior, keeping daily-limit enforcement on scheduler and explicit POST path only. Revision 12 closed the Postgres test-db rebuild race in `tests/conftest.py`, restored class-scoped daily-limit lookup in `enforce_daily_limits()`, and validated the full admin-tenancy slice (`12/12` passing). Revision 13 closed the local migration-chain blocker at `a91cf11e8b2d` by dropping dependent legacy RLS policy state before legacy scope-column removal and confirmed full upgrade to `b1c2d3e4f5a6 (head)`. Revision 14 applied attendance Step-1/Step-2 runtime hardening and FEAT ownership expansion across hall-pass/tap mutation paths. Revision 15 closed remaining hall-pass admin mutation FEAT coverage (`/hall-pass/settings` POST, `/hall-pass/setup` POST, `/hall-pass/verify-token/rotate` POST) and re-validated attendance/hall-pass tenancy suites. Revision 16 removed transitional attendance mirror behavior and locked this slice to canonical `attendance_sessions` + `seat_attendance_state` paths. Revision 17 reconciled stale Wave 6 tracker claims to live runtime evidence. Revision 18 closes the final Wave 6 cutover tasks by migrating payroll/admin batch attendance reads to canonical sessions, removing direct legacy tap-event writes from batch daily-limit helper flows, and eliminating hard `TapEvent.student_id` dependency with migration and downgrade/re-upgrade validation through `e4a2b7c9d1f0 (head)`. Revision 19 closes the teacher-facing student-detail URL boundary by requiring active-class `Seat.public_id` resolution and recording adversarial cross-teacher and same-teacher cross-class regressions.*

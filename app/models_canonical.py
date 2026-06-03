@@ -4,6 +4,8 @@ Wave 1 scope: define the 44 canonical table mappings as an authoritative
 reference without changing runtime behavior.
 """
 
+import uuid
+
 import sqlalchemy as sa
 from sqlalchemy.orm import declarative_base
 
@@ -28,6 +30,13 @@ class User(Base, TimestampMixin):
 class Seat(Base, TimestampMixin):
     __tablename__ = "seats"
     id = sa.Column(sa.Integer, primary_key=True)
+    public_id = sa.Column(
+        sa.String(36),
+        unique=True,
+        nullable=False,
+        index=True,
+        default=lambda: str(uuid.uuid4()),
+    )
 
 
 class Class_(Base, TimestampMixin):

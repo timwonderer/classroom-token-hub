@@ -23,24 +23,9 @@ from app.models import (
     ClassEconomy,
     Seat,
 )
-from app.utils.helpers import generate_anonymous_code
 from app.utils.ip_handler import get_real_ip
 from app.services.tlcp import create_ticket_correlation_pack
 from app.feats.base import feat_shell
-
-
-def generate_opaque_student_reference(student_id):
-    """
-    Generate a non-reversible, opaque reference for a student.
-    Used for sysadmin investigations without revealing student identity.
-
-    Args:
-        student_id: The student's database ID
-
-    Returns:
-        str: Opaque hash that cannot be reversed to identify the student
-    """
-    return generate_anonymous_code(f"student_issue:{student_id}")
 
 
 def create_context_snapshot(student, join_code, related_transaction_id=None, related_record_type=None, related_record_id=None):
@@ -152,9 +137,14 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
 
     class_label = seat.get_class_label() if seat else None
     class_id = seat.class_id if seat else None
+    canonical_seat = None
+    if class_id:
+        canonical_seat = Seat.query.filter_by(student_id=student.id, class_id=class_id).first()
+    if not canonical_seat:
+        raise ValueError("create_issue requires canonical seat public_id scope.")
 
-    # Generate opaque reference
-    opaque_ref = generate_opaque_student_reference(student.id)
+    # v2 public support identity is the deidentified class-scoped seat UUID.
+    actor_public_id = canonical_seat.public_id
 
     # Create context snapshot
     context_snapshot = create_context_snapshot(
@@ -168,7 +158,7 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
         student_id=student.id,
         student_first_name=student.first_name,
         student_last_initial=student.last_initial,
-        opaque_student_reference=opaque_ref,
+        actor_public_id=actor_public_id,
         teacher_id=teacher_id,
         join_code=join_code,
         class_label=class_label,
@@ -190,21 +180,15 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
     db.session.add(issue)
     db.session.flush()  # Get the issue ID
 
-    # Attach immutable correlation snapshot at submission time.
-    try:
-        with db.session.begin_nested():
-            create_ticket_correlation_pack(
-                issue_id=issue.id,
-                actor_type='student',
-                actor_opaque_id=opaque_ref,
-                class_id=class_id,
-                ticket_created_at=now_utc,
-                include_recent_error=include_recent_error,
-            )
-    except Exception:
-        # Keep student ticket submission resilient even if correlation packing fails.
-        # The savepoint is already rolled back, so the main session remains usable.
-        current_app.logger.warning("Failed to attach TLCP snapshot to issue_id=%s", issue.id, exc_info=True)
+    # Attach immutable correlation snapshot at submission time inside the FEAT boundary.
+    create_ticket_correlation_pack(
+        issue_id=issue.id,
+        actor_type='student',
+        actor_public_id=actor_public_id,
+        class_id=class_id,
+        ticket_created_at=now_utc,
+        include_recent_error=include_recent_error,
+    )
 
     # Record status history
     record_status_change(issue, None, Issue.STATUS_OPEN, 'student', student.id)

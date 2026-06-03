@@ -10,7 +10,7 @@ Target state:
 - DOM-CORE-002: exactly 44 canonical tables, nothing else in the schema
 - DOM-CORE-001: 9 domains with strict authority boundaries
 - FEAT-CORE-000: all state mutation through FEAT units
-- INV-CORE-000 + INV-ARC-000–015: all invariants enforced
+- INV-CORE-000 + INV-ARC-000-016: all invariants enforced
 
 **Each wave ends with a mandatory verification gate. A wave that produces a non-operational app must be rolled back (git + `flask db downgrade`) and retried before proceeding.**
 
@@ -1031,6 +1031,138 @@ Focused validation:
   - Result: `41 passed`
 - `python3 scripts/wave3_identity_drop_surface_guardrail.py`
   - Result: `Wave 3 identity-drop surface guardrail: clean (no expansion)`
+
+### Status Update (2026-06-01): Wave 3 Scope Hardening — Admin Student-Detail Seat Public IDs
+
+- Replaced teacher-facing numeric student-detail URL identity with class-local `Seat.public_id`:
+  - `/admin/students/<int:student_id>` now returns `404`.
+  - `/admin/students/<string:student_public_id>` requires a short-lived signed navigation token.
+  - teacher-facing templates and post-action redirects now generate URLs through `student_detail_url(...)`.
+- Enforced fail-closed active-class resolution:
+  - route resolution requires `Seat.public_id`, teacher-owned class scope, signed token class, and active `session["current_class_id"]` to identify the same seat.
+  - URL generation does not fall back to another seat if the student is not present in the active class.
+  - role-specific public IDs and legacy numeric student IDs are not accepted as aliases for a class-scoped seat.
+- Added tenancy regressions for both shared-student cases:
+  - two teachers, two classes, one student: one teacher cannot query the other teacher's seat public ID.
+  - one teacher, two classes, one student: a URL generated in class A returns `404` after switching to class B, and class B generates its own seat public ID.
+
+Focused validation:
+
+- `python -m py_compile app/routes/admin.py tests/test_admin_tenancy.py`
+  - Result: pass
+- `pytest -q tests/test_admin_tenancy.py -k "shared_student_accessible_to_multiple_teachers or student_detail_public_url_requires_nav_token or student_detail_public_id_is_seat_scoped_for_shared_student or student_detail_public_id_requires_active_class_for_same_teacher or student_detail_forbids_cross_tenant_access"`
+  - Result: `5 passed, 10 deselected`
+
+### Status Update (2026-06-02): Identity Ownership Contract Formalized
+
+- Added `docs/development/specs/V2_IDENTITY_AND_OWNERSHIP_MODEL.md` as the normative
+  clean-v2 ownership contract:
+  - `users.id` authenticates.
+  - `seats.id` acts.
+  - `classes.class_id` scopes.
+  - UUID-encoded `seats.public_id` is the single deidentified public actor identifier
+    for teacher and student seats.
+- Recorded that role-specific public-ID fields and separate pre-cutover actor
+  correlation are invalid v2 residue, not compatibility surfaces to preserve.
+- Kept capability-token ownership separate from actor identity. Final ownership and
+  class scope for `hall_pass_verify_token` remain open.
+- Validation:
+  - `git diff --check` -> pass
+  - `python -m py_compile app/models_canonical.py app/models.py app/routes/admin.py tests/test_admin_tenancy.py` -> pass
+  - focused admin-tenancy suite -> `5 passed, 10 deselected`
+
+### Status Update (2026-06-02): Teacher-Seat Public Lookup Runtime Reduction
+
+- Added teacher-seat provisioning to class-anchor creation and claim-anchor repair
+  paths.
+- Removed role-specific teacher-public-ID authority from class-scoped runtime paths:
+  - `/student/switch-teacher/<teacher_public_id>` now returns `404`; the existing
+    `/student/switch-class/<class_id>` route remains the supported class switch path.
+  - `/api/hall-pass/available-types` rejects `teacher_public_id` input.
+  - `/api/hall-pass/verification/active` now requires one explicit `class_id` plus the
+    matching teacher-seat UUID `Seat.public_id`; it no longer aggregates every class
+    owned by an `Admin`.
+- Removed the obsolete teacher-switch resolver and access-policy branch.
+- Closed adjacent fail-closed bugs exposed during validation:
+  - explicit invalid `join_code` aliases now fail instead of falling back to another
+    claimed seat.
+  - dashboard scope failure redirects to `student.select_class_context`, not the
+    removed `student.select_class` endpoint.
+- Validation:
+  - `git diff --check` -> pass
+  - touched-module `python -m py_compile` -> pass
+  - `pytest -q tests/test_api_tenancy.py tests/test_route_authorization_sweep.py tests/test_v2_authority_guardrails.py tests/test_class_context_and_switching.py`
+    -> `61 passed`
+
+### Status Update (2026-06-02): TLCP Runtime Actor-Public-ID Cutover
+
+- Replaced runtime support/log actor identity generation with class-scoped
+  `Seat.public_id`:
+  - `resolve_actor_context()` now emits `actor_public_id` for student and teacher
+    contexts.
+  - request traces, error events, and ticket correlation packs store that seat UUID in
+    `actor_public_id`.
+  - student support recent-error prompts resolve from the active `seat_id` instead of
+    hashing `student_id`.
+  - support issue creation now requires the submitted class-scoped seat and uses its
+    `public_id` as the ticket reference.
+- Removed a FEAT atomicity violation in `create_issue()` by eliminating the nested
+  transaction around TLCP pack creation; the support FEAT boundary now owns the
+  correlation-pack write.
+- Completed follow-up:
+  - `TLCP-SCHEMA-001` renamed physical TLCP actor columns, indexes, log labels, tests,
+    and sysadmin copy affordances to `actor_public_id`.
+- Validation:
+  - `git diff --check` -> pass
+  - touched-module `python -m py_compile` -> pass
+  - `pytest -q tests/test_tlcp_actor_context_resolution.py tests/test_ticket_log_correlation_pack.py`
+    -> `6 passed`
+  - `pytest -q tests/test_api_tenancy.py tests/test_route_authorization_sweep.py tests/test_v2_authority_guardrails.py tests/test_class_context_and_switching.py`
+    -> `61 passed`
+
+### Status Update (2026-06-02): TLCP-SCHEMA-001 Completed
+
+- Renamed physical TLCP actor identity surfaces from the former opaque actor column
+  name to `actor_public_id`:
+  - `actor_request_trace.actor_public_id`
+  - `error_events.actor_public_id`
+  - `ticket_correlation_pack.actor_public_id`
+- Updated ORM models, TLCP service queries, raw error-event insert SQL, logging format
+  fields, tests, and sysadmin copy UI to use `actor_public_id`.
+- Added idempotent migration `f6a7b8c9d0e1_rename_tlcp_actor_public_id.py` with
+  downgrade support back to the previous physical name.
+- Validation:
+  - `scripts/lint_migrations.py migrations/versions/f6a7b8c9d0e1_rename_tlcp_actor_public_id.py`
+    -> pass
+  - `flask db heads` -> `f6a7b8c9d0e1 (head)`
+  - `flask db upgrade` -> upgraded `ebb7b66b2176` to `f6a7b8c9d0e1`
+  - `flask db downgrade ebb7b66b2176` -> pass
+  - `flask db upgrade` -> re-upgraded to `f6a7b8c9d0e1`
+  - live schema check confirms only `actor_public_id` TLCP actor columns remain
+  - `pytest -q tests/test_tlcp_actor_context_resolution.py tests/test_ticket_log_correlation_pack.py`
+    -> `6 passed`
+
+### Status Update (2026-06-02): Support Issue Actor Public ID Schema Rename
+
+- Renamed support issue filing-actor reference from the former student-opaque field
+  name to `issues.actor_public_id`.
+- Updated ORM, issue creation, sysadmin templates, and support tests to use
+  `actor_public_id`.
+- Added idempotent migration `f7b8c9d0e1f2_rename_issue_actor_public_id.py` with
+  downgrade support back to the previous physical name.
+- `issues.actor_public_id` stores the filing seat's UUID `Seat.public_id`; it is the
+  sysadmin-safe public actor reference for the support ticket.
+- Fixed adjacent stale class-deletion lookup in `collapse_universe()` so the deletion
+  primitive resolves `ClassEconomy` by `join_code` instead of treating `join_code` as
+  the primary key.
+- Validation:
+  - active grep for former support issue opaque-student field names -> no app/test/doc
+    hits
+  - touched-module `python -m py_compile` -> pass
+  - migration lint for `f7b8c9d0e1f2_rename_issue_actor_public_id.py` -> pass
+  - `flask db heads && flask db current` -> `f7b8c9d0e1f2 (head)`
+  - live schema check confirms only `issues.actor_public_id` remains
+  - affected support/schema/class-deletion suite -> `15 passed`
 
 ### Status Update (2026-05-20): Wave 4 Resume Slice — Analytics Enrollment Class Scope
 

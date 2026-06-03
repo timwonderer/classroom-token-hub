@@ -89,12 +89,10 @@ def test_switch_class_route_uses_access_scope_boundary():
     assert "TeacherBlock.query.filter_by(" not in source
 
 
-def test_switch_teacher_route_uses_access_scope_boundary():
-    source = inspect.getsource(student_routes._switch_to_teacher_scope)
-    assert "resolve_student_teacher_switch_scope(" in source
-    assert "assert_can_switch_teacher(" in source
-    assert "student.get_all_teachers()" not in source
-    assert "TeacherBlock.query.filter_by(" not in source
+def test_switch_teacher_role_specific_public_id_route_is_disabled():
+    source = inspect.getsource(student_routes.switch_teacher)
+    assert "abort(404)" in source
+    assert "Admin.query" not in source
 
 
 def test_admin_void_route_is_not_direct_ledger_authority():
@@ -207,9 +205,9 @@ def test_switch_class_access_policy_exists():
     assert "def assert_can_switch_class(" in source
 
 
-def test_switch_teacher_access_policy_exists():
+def test_switch_teacher_access_policy_is_removed():
     source = Path("app/services/access_policy_service.py").read_text()
-    assert "def assert_can_switch_teacher(" in source
+    assert "def assert_can_switch_teacher(" not in source
 
 
 def test_insurance_claim_feat_enforces_access_policy():
@@ -300,6 +298,6 @@ def test_dashboard_access_policy_fail_closed_invalid_join_code(client):
     response = client.get("/student/dashboard")
 
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/student/login")
+    assert response.headers["Location"].endswith("/student/select-class-context")
     with client.session_transaction() as sess:
         assert sess["current_join_code"] == "MISSING"

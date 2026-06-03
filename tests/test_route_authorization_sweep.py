@@ -17,8 +17,8 @@ def _login_student(client, student_id):
         sess["login_time"] = datetime.now(timezone.utc).isoformat()
         sess["last_activity"] = datetime.now(timezone.utc).isoformat()
 
-def test_hall_pass_active_requires_teacher_public_id_and_scopes_to_teacher_classes(client):
-    """Verification display should require random teacher public ID and be join-code scoped."""
+def test_hall_pass_active_requires_teacher_seat_public_id_and_scopes_to_one_class(client):
+    """Verification display should require one class-bound teacher seat public ID."""
     admin = make_admin("hall_pass_admin", "secret")
     other_admin = make_admin("hall_pass_other", "secret")
     db.session.add(admin)
@@ -30,10 +30,17 @@ def test_hall_pass_active_requires_teacher_public_id_and_scopes_to_teacher_class
     db.session.add_all([student_a, student_b])
     db.session.flush()
 
+    class_a = ClassEconomy(join_code="HPASS01", teacher_id=admin.id, status="active", created_by_admin_id=admin.id)
+    class_b = ClassEconomy(join_code="HPASS02", teacher_id=admin.id, status="active", created_by_admin_id=admin.id)
+    class_other = ClassEconomy(join_code="HPASS99", teacher_id=other_admin.id, status="active", created_by_admin_id=other_admin.id)
+    db.session.add_all([class_a, class_b, class_other])
+    db.session.flush()
+    teacher_seat_a = Seat(class_id=class_a.class_id, join_code="HPASS01", role="teacher")
+    teacher_seat_b = Seat(class_id=class_b.class_id, join_code="HPASS02", role="teacher")
     db.session.add_all([
-        ClassEconomy(join_code="HPASS01", teacher_id=admin.id, status="active", created_by_admin_id=admin.id),
-        ClassEconomy(join_code="HPASS02", teacher_id=admin.id, status="active", created_by_admin_id=admin.id),
-        ClassEconomy(join_code="HPASS99", teacher_id=other_admin.id, status="active", created_by_admin_id=other_admin.id),
+        teacher_seat_a,
+        teacher_seat_b,
+        Seat(class_id=class_other.class_id, join_code="HPASS99", role="teacher"),
         ClassMembership(join_code="HPASS01", admin_id=admin.id, role="admin"),
         ClassMembership(join_code="HPASS02", admin_id=admin.id, role="admin"),
         ClassMembership(join_code="HPASS99", admin_id=other_admin.id, role="admin"),
@@ -47,6 +54,7 @@ def test_hall_pass_active_requires_teacher_public_id_and_scopes_to_teacher_class
             reason="Restroom",
             status="left",
             period="A",
+            class_id=class_a.class_id,
             join_code="HPASS01",
             left_time=now,
             request_time=now,
@@ -56,6 +64,7 @@ def test_hall_pass_active_requires_teacher_public_id_and_scopes_to_teacher_class
             reason="Nurse",
             status="returned",
             period="B",
+            class_id=class_b.class_id,
             join_code="HPASS02",
             left_time=now - timedelta(minutes=2),
             return_time=now - timedelta(minutes=1),
@@ -66,6 +75,7 @@ def test_hall_pass_active_requires_teacher_public_id_and_scopes_to_teacher_class
             reason="Office",
             status="left",
             period="A",
+            class_id=class_other.class_id,
             join_code="HPASS99",
             left_time=now - timedelta(minutes=4),
             request_time=now - timedelta(minutes=4),
@@ -73,23 +83,27 @@ def test_hall_pass_active_requires_teacher_public_id_and_scopes_to_teacher_class
     ])
     db.session.commit()
 
-    # 1. Missing teacher public ID -> 400
+    # 1. Missing actor/class context -> 400
     response = client.get("/api/hall-pass/verification/active")
     assert response.status_code == 400
-    assert b"teacher is required" in response.data
+    assert b"actor and class_id are required" in response.data
 
-    # 2. Invalid teacher public ID -> 404
-    response = client.get("/api/hall-pass/verification/active?teacher=invalid-public-id")
+    # 2. Cross-class actor reuse -> 404
+    response = client.get(
+        f"/api/hall-pass/verification/active?actor={teacher_seat_a.public_id}&class_id={class_b.class_id}"
+    )
     assert response.status_code == 404
 
-    # 3. Valid teacher scope includes only that teacher's join codes
-    response = client.get(f"/api/hall-pass/verification/active?teacher={admin.public_id}")
+    # 3. Valid teacher seat scope includes only one class, even for a multi-class teacher.
+    response = client.get(
+        f"/api/hall-pass/verification/active?actor={teacher_seat_a.public_id}&class_id={class_a.class_id}"
+    )
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["status"] == "success"
     destinations = [entry["destination"] for entry in payload["passes"]]
     assert "Restroom" in destinations
-    assert "Nurse" in destinations
+    assert "Nurse" not in destinations
     assert "Office" not in destinations
 
 def test_approve_redemption_requires_membership(client):

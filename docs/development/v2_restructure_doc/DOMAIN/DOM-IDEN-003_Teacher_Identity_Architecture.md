@@ -25,6 +25,7 @@ Supersedes `docs/ARCHITECTURE/IDENTITY/ARC-IDEN-001_Admin_Identity_Handling.md`.
 - `DOM-IDEN-002_Student_Account_Recovery.md`
 - `DOM-IDEN-004_Teacher_Account_Recovery.md`
 - `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
+- `docs/development/specs/V2_IDENTITY_AND_OWNERSHIP_MODEL.md`
 
 ## III. Core Design Principle
 
@@ -54,7 +55,6 @@ which credential scheme and authentication flow applies.
 Key fields:
 
 - `id`
-- `public_id`
 - `user_role` — `'teacher'` | `'student'` | `'sysadmin'`
 - `username_hash` — HMAC of the normalized username; primary auth lookup key
 - `username_lookup_hash` — secondary lookup index (indexed separately)
@@ -118,6 +118,7 @@ Rules:
 
 - A teacher seat is created when the teacher sets up a class.
 - A teacher seat belongs to exactly one class universe.
+- `public_id` is the UUID-encoded canonical deidentified public actor identifier.
 - A teacher may hold seats in multiple classes (one seat per class).
 - Teacher seats do not use `roster_fingerprint` or `dedupe_code`; those fields are
   `NULL` for teacher seats.

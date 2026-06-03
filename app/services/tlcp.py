@@ -17,8 +17,7 @@ from app.auth import (
     get_logged_in_student,
 )
 from app.extensions import db
-from app.models import ActorRequestTrace, ErrorEvent, ClassEconomy, Student, TicketCorrelationPack
-from app.utils.helpers import generate_anonymous_code
+from app.models import ActorRequestTrace, ErrorEvent, ClassEconomy, Seat, TicketCorrelationPack
 from app.utils.time import utc_now
 
 CORRELATION_VERSION = 1
@@ -61,6 +60,23 @@ def _sanitize_error_message(raw_message: str | None) -> str:
     return compact[:500]
 
 
+def _teacher_seat_public_id(*, admin_id: int | None, class_id: str | None) -> str | None:
+    if not admin_id or not class_id:
+        return None
+    class_row = ClassEconomy.query.filter_by(class_id=class_id, teacher_id=admin_id).first()
+    if not class_row:
+        return None
+    seat = Seat.query.filter_by(class_id=class_id, role="teacher").first()
+    return seat.public_id if seat else None
+
+
+def _student_seat_public_id(*, student_id: int | None, class_id: str | None) -> str | None:
+    if not student_id or not class_id:
+        return None
+    seat = Seat.query.filter_by(student_id=student_id, class_id=class_id).first()
+    return seat.public_id if seat else None
+
+
 def _noise_endpoint_prefixes() -> tuple[str, ...]:
     raw = os.getenv("TLCP_NOISE_ENDPOINT_PREFIXES")
     if not raw:
@@ -80,10 +96,9 @@ def resolve_actor_context() -> dict | None:
     if not has_request_context():
         return None
 
-    actor_type = None
-    actor_id = None
     join_code = None
     class_id = None
+    actor_public_id = None
 
     current_seat = get_current_seat()
     if current_seat and current_seat.student_id:
@@ -91,23 +106,22 @@ def resolve_actor_context() -> dict | None:
         actor_id = current_seat.student_id
         join_code = current_seat.join_code or session.get("current_join_code")
         class_id = current_seat.class_id or session.get("current_class_id") or _resolve_class_id(join_code)
-        actor_opaque_id = generate_anonymous_code(f"student_issue:{actor_id}")
+        actor_public_id = current_seat.public_id
     elif (student := get_logged_in_student()) is not None:
         actor_type = "student"
         actor_id = student.id
         join_code = session.get("current_join_code")
         class_id = session.get("current_class_id") or _resolve_class_id(join_code) or student.class_id
-        actor_opaque_id = generate_anonymous_code(f"student_issue:{actor_id}")
+        actor_public_id = _student_seat_public_id(student_id=actor_id, class_id=class_id)
     elif (admin := get_current_admin()) is not None:
         actor_type = "teacher"
         actor_id = admin.id
         join_code = session.get("current_join_code")
-        class_id = _resolve_class_id(join_code)
-        actor_opaque_id = generate_anonymous_code(f"teacher:{actor_id}")
+        class_id = session.get("current_class_id") or _resolve_class_id(join_code)
+        actor_public_id = _teacher_seat_public_id(admin_id=actor_id, class_id=class_id)
     elif (sysadmin := get_current_system_admin()) is not None:
         actor_type = "sysadmin"
         actor_id = sysadmin.id
-        actor_opaque_id = generate_anonymous_code(f"sysadmin:{actor_id}")
     else:
         return None
 
@@ -115,7 +129,7 @@ def resolve_actor_context() -> dict | None:
     return {
         "actor_type": actor_type,
         "actor_id": actor_id,
-        "actor_opaque_id": actor_opaque_id,
+        "actor_public_id": actor_public_id,
         "class_id": class_id,
         "endpoint": endpoint,
         "method": request.method,
@@ -135,7 +149,7 @@ def persist_request_trace(
     default request-scoped ``db.session``.  The caller is responsible for
     committing (or rolling back) the provided session.
     """
-    if not context:
+    if not context or not context.get("actor_public_id"):
         return
 
     sess = _session if _session is not None else db.session
@@ -149,7 +163,7 @@ def persist_request_trace(
 
     trace = ActorRequestTrace(
         actor_type=context.get("actor_type"),
-        actor_opaque_id=context.get("actor_opaque_id"),
+        actor_public_id=context.get("actor_public_id"),
         class_id=context.get("class_id"),
         request_id=request_id,
         method=context.get("method"),
@@ -164,7 +178,7 @@ def persist_request_trace(
         sess.query(ActorRequestTrace.id)
         .filter(
             ActorRequestTrace.actor_type == context.get("actor_type"),
-            ActorRequestTrace.actor_opaque_id == context.get("actor_opaque_id"),
+            ActorRequestTrace.actor_public_id == context.get("actor_public_id"),
         )
         .order_by(ActorRequestTrace.created_at.desc(), ActorRequestTrace.id.desc())
         .limit(trace_limit)
@@ -173,7 +187,7 @@ def persist_request_trace(
 
     sess.query(ActorRequestTrace).filter(
         ActorRequestTrace.actor_type == context.get("actor_type"),
-        ActorRequestTrace.actor_opaque_id == context.get("actor_opaque_id"),
+        ActorRequestTrace.actor_public_id == context.get("actor_public_id"),
         ~ActorRequestTrace.id.in_(sa.select(ids_to_keep.c.id)),
     ).delete(synchronize_session=False)
 
@@ -192,7 +206,7 @@ def save_error_event(
     *,
     request_id: str | None,
     actor_type: str | None,
-    actor_opaque_id: str | None,
+    actor_public_id: str | None,
     class_id: str | None,
     endpoint: str | None,
     method: str | None,
@@ -200,14 +214,14 @@ def save_error_event(
     error_message: str | None,
 ) -> None:
     """Persist a short-lived error event for ticket correlation."""
-    if not actor_type or not actor_opaque_id:
+    if not actor_type or not actor_public_id:
         return
 
     db.session.add(
         ErrorEvent(
             request_id=request_id,
             actor_type=actor_type,
-            actor_opaque_id=actor_opaque_id,
+            actor_public_id=actor_public_id,
             class_id=class_id,
             endpoint=endpoint,
             method=method,
@@ -221,7 +235,7 @@ def save_error_event(
 
 def has_recent_error_for_actor(
     actor_type: str,
-    actor_opaque_id: str,
+    actor_public_id: str,
     recent_minutes: int | None = None,
 ) -> bool:
     """Return True when the actor has a recent error event."""
@@ -231,7 +245,7 @@ def has_recent_error_for_actor(
         db.session.query(ErrorEvent.id)
         .filter(
             ErrorEvent.actor_type == actor_type,
-            ErrorEvent.actor_opaque_id == actor_opaque_id,
+            ErrorEvent.actor_public_id == actor_public_id,
             ErrorEvent.created_at >= cutoff,
         )
         .first()
@@ -243,7 +257,7 @@ def create_ticket_correlation_pack(
     *,
     issue_id: int,
     actor_type: str,
-    actor_opaque_id: str,
+    actor_public_id: str,
     class_id: str | None,
     ticket_created_at,
     include_recent_error: bool = True,
@@ -257,7 +271,7 @@ def create_ticket_correlation_pack(
     trace_rows = (
         ActorRequestTrace.query.filter_by(
             actor_type=actor_type,
-            actor_opaque_id=actor_opaque_id,
+            actor_public_id=actor_public_id,
         )
         .order_by(ActorRequestTrace.created_at.desc(), ActorRequestTrace.id.desc())
         .limit(fetch_limit)
@@ -284,7 +298,7 @@ def create_ticket_correlation_pack(
     errors_query = (
         ErrorEvent.query.filter(
             ErrorEvent.actor_type == actor_type,
-            ErrorEvent.actor_opaque_id == actor_opaque_id,
+            ErrorEvent.actor_public_id == actor_public_id,
             ErrorEvent.created_at >= error_window_start,
             ErrorEvent.created_at <= ticket_created_at,
         )
@@ -297,7 +311,7 @@ def create_ticket_correlation_pack(
         latest_error = (
             ErrorEvent.query.filter(
                 ErrorEvent.actor_type == actor_type,
-                ErrorEvent.actor_opaque_id == actor_opaque_id,
+                ErrorEvent.actor_public_id == actor_public_id,
                 ErrorEvent.created_at >= ttl_cutoff,
             )
             .order_by(ErrorEvent.created_at.desc(), ErrorEvent.id.desc())
@@ -323,7 +337,7 @@ def create_ticket_correlation_pack(
         issue_id=issue_id,
         correlation_version=CORRELATION_VERSION,
         actor_type=actor_type,
-        actor_opaque_id=actor_opaque_id,
+        actor_public_id=actor_public_id,
         class_id=class_id,
         request_trace_json=request_trace_json,
         error_refs_json=error_refs_json,

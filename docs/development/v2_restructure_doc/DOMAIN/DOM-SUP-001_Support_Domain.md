@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-SUP-001 | 1.0 | 2026-04-22 | N/A | Normative |
+| DOM-SUP-001 | 1.1 | 2026-06-02 | 1.0 | Normative |
 
 ## I. Purpose
 
@@ -129,7 +129,8 @@ Key fields:
 - Display-safe cached identity fields (written at submission; never updated):
   - `student_first_name` — encrypted
   - `student_last_initial`
-  - `opaque_seat_reference` — non-reversible hash derived from `seat.public_id`; used in sysadmin views instead of the raw seat FK
+  - `actor_public_id` — UUID-encoded `seat.public_id`, used in sysadmin views instead
+    of the raw seat FK
 - Class context cache:
   - `class_label` — frozen display name at submission time
 - Related record context:
@@ -161,8 +162,8 @@ Rules:
 
 - Submission fields (`student_explanation`, `student_expected_outcome`, `submitted_at`,
   `context_snapshot`) are immutable after creation.
-- `opaque_seat_reference` is the only participant identity value visible to sysadmin;
-  the raw `seat_id` FK is not surfaced in sysadmin views.
+- `actor_public_id` is the seat's UUID public ID and the only participant identity
+  value visible to sysadmin; the raw `seat_id` FK is not surfaced in sysadmin views.
 - `class_label` is cached at submission time; it must not be re-fetched live from
   ClassEconomy after submission.
 - `share_class_name_with_sysadmin` defaults to false; it is set only by explicit
@@ -223,7 +224,8 @@ Key fields:
 - `issue_id` — PK and FK to issues (CASCADE); one-to-one
 - `correlation_version` — identifies the correlation schema used
 - `actor_type`
-- `actor_opaque_id` — matches the opaque ID used in `actor_request_trace` and `error_events`
+- `actor_public_id` — UUID-encoded `seats.public_id`; matches the actor reference used
+  in `actor_request_trace` and `error_events`
 - `class_id`
 - `request_trace_json` — frozen list of relevant request trace entries at submission time
 - `error_refs_json` — frozen list of relevant error event references at submission time
@@ -235,8 +237,8 @@ Rules:
 - `request_trace_json` and `error_refs_json` are frozen snapshots; they are not live
   references. Even if the source rows in `actor_request_trace` or `error_events` are
   purged, the pack retains its captured data.
-- `actor_opaque_id` matches the opaque representation in Analytics; it must not
-  allow reverse lookup to a plaintext identity without separate identity domain access.
+- `actor_public_id` is the canonical deidentified seat actor reference. It resolves
+  through Identity under the ticket's `class_id`; it does not grant authority by itself.
 
 ### `user_reports`
 
@@ -315,10 +317,11 @@ Rules:
 - Corrective money effects (e.g., transaction reversals) must be executed via FEAT,
   which invokes Ledger. The resolution action row records the declaration; Ledger owns
   the resulting transaction row.
-- `opaque_student_reference` and `actor_opaque_id` must be computed consistently and
-  must not allow reverse lookup to plaintext identity without separate domain access.
+- Sysadmin-accessible actor references use UUID-encoded `seats.public_id`, carried as
+  `actor_public_id` where a support-specific column name is needed.
 - Sysadmins must not be exposed to raw `student_id` or `teacher_id` values via the
-  support system. All sysadmin-accessible actor references must use the opaque form.
+  support system. All sysadmin-accessible actor references must use UUID-encoded
+  `seats.public_id`.
 
 ## VIII. Issue Status Machine
 

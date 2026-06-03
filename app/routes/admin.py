@@ -52,7 +52,7 @@ import pytz
 from werkzeug.exceptions import HTTPException, NotFound
 
 from app.extensions import db, limiter
-from app.feats.base import feat_shell, FEATContext
+from app.feats.base import feat_shell, FEATContext, InvariantViolation
 from app.access import AccessScopeDenied, resolve_scope
 from app.models import (
     Student, Admin, ClassEconomy, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
@@ -1080,19 +1080,56 @@ def _delete_transactions_for_join_code(join_code, *, join_code_deletion=False):
     return Transaction.query.filter_by(join_code=join_code).delete(synchronize_session=False)
 
 
-def _hard_delete_join_code_scope(join_code, teacher_id):
+def _hard_delete_class_scope(class_id, teacher_id):
     """
-    Permanently remove records scoped to a destroyed join code.
+    Permanently remove records scoped to a destroyed class.
 
-    Scope is strict to the provided join_code.
+    The boundary may enter through join_code, but internal deletion uses the
+    canonical class_id anchor only.
     """
-    if not join_code:
-        raise ValueError("join_code is required for class deletion")
+    if not class_id:
+        current_app.logger.critical("P0 INVARIANT VIOLATION: class deletion invoked without class_id.")
+        raise InvariantViolation("class deletion requires canonical class_id")
+
+    class_row = db.session.get(ClassEconomy, class_id)
+    if not class_row:
+        return
+
+    join_code = class_row.join_code
+    invalid_scope_rows = []
+    scoped_models = (
+        ("teacher_blocks", TeacherBlock),
+        ("ledger_transaction", Transaction),
+        ("student_blocks", StudentBlock),
+        ("tap_events", TapEvent),
+        ("hall_pass_logs", HallPassLog),
+        ("student_items", StudentItem),
+        ("analytics_events", AnalyticsEvent),
+        ("analytics_snapshots", AnalyticsSnapshot),
+        ("issues", Issue),
+        ("student_insurance", StudentInsurance),
+        ("rent_payments", RentPayment),
+        ("announcements", Announcement),
+    )
+    for label, model in scoped_models:
+        count = db.session.query(model).filter(
+            model.join_code == join_code,
+            model.class_id.is_(None),
+        ).count()
+        if count:
+            invalid_scope_rows.append(f"{label}={count}")
+    if invalid_scope_rows:
+        message = (
+            f"class_id NULL rows detected for class_id={class_id} join_code={join_code}: "
+            f"{', '.join(invalid_scope_rows)}"
+        )
+        current_app.logger.critical("P0 INVARIANT VIOLATION: %s", message)
+        raise InvariantViolation(message)
 
     scoped_student_ids = [
         sid for (sid,) in db.session.query(TeacherBlock.student_id)
         .filter(
-            TeacherBlock.join_code == join_code,
+            TeacherBlock.class_id == class_id,
             TeacherBlock.student_id.isnot(None),
         )
         .distinct()
@@ -1100,56 +1137,67 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
     ]
     student_item_ids_subq = (
         db.session.query(StudentItem.id)
-        .filter(StudentItem.join_code == join_code)
+        .filter(StudentItem.class_id == class_id)
         .subquery()
     )
     insurance_ids_subq = (
         db.session.query(StudentInsurance.id)
-        .filter(StudentInsurance.join_code == join_code)
+        .filter(StudentInsurance.class_id == class_id)
         .subquery()
     )
     tx_ids_subq = (
         db.session.query(Transaction.id)
-        .filter(Transaction.join_code == join_code)
+        .filter(Transaction.class_id == class_id)
         .subquery()
     )
     issue_ids_subq = (
         db.session.query(Issue.id)
-        .filter(Issue.join_code == join_code)
+        .filter(Issue.class_id == class_id)
         .subquery()
     )
-    class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
-    class_id = class_row.class_id if class_row else None
     class_blocks = [
         block for (block,) in db.session.query(TeacherBlock.block).filter(
             TeacherBlock.teacher_id == teacher_id,
-            TeacherBlock.join_code == join_code,
+            TeacherBlock.class_id == class_id,
             TeacherBlock.block.isnot(None),
         ).distinct().all()
     ]
+    if class_blocks and scoped_student_ids:
+        inferred_student_block_nulls = db.session.query(StudentBlock).filter(
+            StudentBlock.student_id.in_(scoped_student_ids),
+            StudentBlock.period.in_(class_blocks),
+            StudentBlock.class_id.is_(None),
+        ).count()
+        if inferred_student_block_nulls:
+            message = (
+                f"class_id NULL student_blocks detected for class_id={class_id} "
+                f"join_code={join_code}: student_blocks_inferred={inferred_student_block_nulls}"
+            )
+            current_app.logger.critical("P0 INVARIANT VIOLATION: %s", message)
+            raise InvariantViolation(message)
 
     # Class-scoped records
     RedemptionAuditLog.query.filter(
         RedemptionAuditLog.student_item_id.in_(sa.select(student_item_ids_subq))
     ).delete(synchronize_session=False)
-    StudentItem.query.filter(StudentItem.join_code == join_code).delete(synchronize_session=False)
-    TapEvent.query.filter(TapEvent.join_code == join_code).delete(synchronize_session=False)
-    HallPassLog.query.filter(HallPassLog.join_code == join_code).delete(synchronize_session=False)
-    RentPayment.query.filter(RentPayment.join_code == join_code).delete(synchronize_session=False)
-    StudentBlock.query.filter(StudentBlock.join_code == join_code).delete(synchronize_session=False)
-    BalanceCache.query.filter_by(join_code=join_code).delete(synchronize_session=False)
-    AnalyticsSnapshot.query.filter(AnalyticsSnapshot.join_code == join_code).delete(synchronize_session=False)
-    AnalyticsEvent.query.filter(AnalyticsEvent.join_code == join_code).delete(synchronize_session=False)
+    StudentItem.query.filter(StudentItem.class_id == class_id).delete(synchronize_session=False)
+    TapEvent.query.filter(TapEvent.class_id == class_id).delete(synchronize_session=False)
+    HallPassLog.query.filter(HallPassLog.class_id == class_id).delete(synchronize_session=False)
+    RentPayment.query.filter(RentPayment.class_id == class_id).delete(synchronize_session=False)
+    StudentBlock.query.filter(StudentBlock.class_id == class_id).delete(synchronize_session=False)
+    BalanceCache.query.filter(BalanceCache.class_id == class_id).delete(synchronize_session=False)
+    AnalyticsSnapshot.query.filter(AnalyticsSnapshot.class_id == class_id).delete(synchronize_session=False)
+    AnalyticsEvent.query.filter(AnalyticsEvent.class_id == class_id).delete(synchronize_session=False)
     Announcement.query.filter(
         Announcement.teacher_id == teacher_id,
-        Announcement.join_code == join_code,
+        Announcement.class_id == class_id,
     ).delete(synchronize_session=False)
 
     # Issue data tied to this class
     IssueResolutionAction.query.filter(
         IssueResolutionAction.issue_id.in_(sa.select(issue_ids_subq))
     ).delete(synchronize_session=False)
-    Issue.query.filter(Issue.join_code == join_code).delete(synchronize_session=False)
+    Issue.query.filter(Issue.class_id == class_id).delete(synchronize_session=False)
 
     # Insurance data tied to this class or class-scoped transactions
     InsuranceClaim.query.filter(
@@ -1158,10 +1206,10 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
             InsuranceClaim.transaction_id.in_(sa.select(tx_ids_subq)),
         )
     ).delete(synchronize_session=False)
-    StudentInsurance.query.filter(StudentInsurance.join_code == join_code).delete(synchronize_session=False)
+    StudentInsurance.query.filter(StudentInsurance.class_id == class_id).delete(synchronize_session=False)
 
     # Financial ledger (only here)
-    _delete_transactions_for_join_code(join_code, join_code_deletion=True)
+    Transaction.query.filter(Transaction.class_id == class_id).delete(synchronize_session=False)
 
     # Remove store items tied only to this class block scope.
     if class_blocks:
@@ -1214,26 +1262,17 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
         ).delete(synchronize_session=False)
 
     # Seats/ownership for this class
-    ClassMembership.query.filter_by(join_code=join_code).delete(synchronize_session=False)
+    ClassMembership.query.filter(ClassMembership.class_id == class_id).delete(synchronize_session=False)
     TeacherBlock.query.filter(
         TeacherBlock.teacher_id == teacher_id,
-        TeacherBlock.join_code == join_code
+        TeacherBlock.class_id == class_id,
     ).delete(synchronize_session=False)
-    ClassEconomy.query.filter_by(join_code=join_code).delete(synchronize_session=False)
-
-    if class_blocks and scoped_student_ids:
-        # Only delete legacy StudentBlocks (no join_code) that match the period names.
-        # StudentBlocks with a join_code were already handled by the join_code deletion above.
-        StudentBlock.query.filter(
-            StudentBlock.student_id.in_(scoped_student_ids),
-            StudentBlock.period.in_(class_blocks),
-            StudentBlock.join_code.is_(None),
-        ).delete(synchronize_session=False)
+    ClassEconomy.query.filter_by(class_id=class_id).delete(synchronize_session=False)
 
     # Remove students that no longer belong to any class after this join-code deletion.
     remaining_student_ids_subq = db.session.query(TeacherBlock.student_id).filter(
         TeacherBlock.student_id.isnot(None),
-        TeacherBlock.join_code != join_code,
+        TeacherBlock.class_id != class_id,
     ).subquery()
     orphan_student_ids = (
         db.session.query(Student.id)
@@ -1258,7 +1297,7 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
             remaining = db.session.query(TeacherBlock).filter(
                 TeacherBlock.teacher_id == teacher_id,
                 TeacherBlock.block == block_name,
-                TeacherBlock.join_code != join_code,
+                TeacherBlock.class_id != class_id,
             ).count()
             if remaining == 0:
                 PayrollSettings.query.filter_by(
@@ -1397,10 +1436,9 @@ def _hard_delete_teacher_account_scope(teacher_id):
     if not teacher_id:
         raise ValueError("teacher_id is required for account deletion")
 
-    join_codes = [
-        code for (code,) in db.session.query(TeacherBlock.join_code).filter(
-            TeacherBlock.teacher_id == teacher_id,
-            TeacherBlock.join_code.isnot(None),
+    class_ids = [
+        value for (value,) in db.session.query(ClassEconomy.class_id).filter(
+            ClassEconomy.teacher_id == teacher_id,
         ).distinct().all()
     ]
 
@@ -1417,8 +1455,8 @@ def _hard_delete_teacher_account_scope(teacher_id):
     )
 
     # Required ordering: all join-code-scoped data is destroyed before admin account deletion.
-    for join_code in join_codes:
-        _hard_delete_join_code_scope(join_code, teacher_id)
+    for class_id in class_ids:
+        _hard_delete_class_scope(class_id, teacher_id)
 
     _delete_teacher_residual_ownership_rows(teacher_id)
     _delete_teacher_settings_activity_and_audit_rows(teacher_id)
@@ -1564,13 +1602,9 @@ def _resolve_student_detail_seat(student_id: int, teacher_id: int) -> Seat | Non
         )
     )
     if selected_class_id:
-        scoped = seat_query.filter(Seat.class_id == selected_class_id).first()
-        if scoped:
-            return scoped
+        return seat_query.filter(Seat.class_id == selected_class_id).first()
     if selected_join_code:
-        scoped = seat_query.filter(Seat.join_code == selected_join_code).first()
-        if scoped:
-            return scoped
+        return seat_query.filter(Seat.join_code == selected_join_code).first()
     return seat_query.order_by(Seat.id.asc()).first()
 
 
@@ -1801,6 +1835,17 @@ def _ensure_join_code_anchors(teacher_id, join_code, class_label=None, return_me
             join_code=join_code,
             admin_id=teacher_id,
             role="admin",
+        ))
+
+    teacher_seat = Seat.query.filter_by(
+        class_id=economy.class_id,
+        role="teacher",
+    ).first()
+    if teacher_seat is None:
+        db.session.add(Seat(
+            class_id=economy.class_id,
+            join_code=join_code,
+            role="teacher",
         ))
 
     db.session.flush()
@@ -4511,6 +4556,7 @@ def student_detail(student_id):
 def student_detail_public(student_public_id):
     """View detailed information for a specific student via public-id URL."""
     teacher_id = session.get('admin_id')
+    current_class_id = str(session.get('current_class_id') or "")
     nav_payload = _read_student_detail_nav_token(request.args.get('nav', ''))
     if not nav_payload:
         abort(404)
@@ -4539,6 +4585,8 @@ def student_detail_public(student_public_id):
     if expected_student_id and scoped_seat.student_id != expected_student_id:
         abort(404)
     if expected_class_id and str(scoped_seat.class_id or "") != expected_class_id:
+        abort(404)
+    if current_class_id and str(scoped_seat.class_id or "") != current_class_id:
         abort(404)
 
     student = _get_student_or_404(scoped_seat.student_id)
@@ -5087,7 +5135,10 @@ def delete_block():
             }), 400
 
         join_code = join_codes[0]
-        _hard_delete_join_code_scope(join_code, current_admin_id)
+        class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+        if not class_row:
+            return jsonify({"status": "error", "message": "Join code not found or access denied."}), 404
+        _hard_delete_class_scope(class_row.class_id, current_admin_id)
 
         # Cleanup any residual unclaimed seats in same block for this join code owner.
         TeacherBlock.query.filter(
@@ -5099,6 +5150,9 @@ def delete_block():
             "status": "success",
             "message": f"Successfully deleted class Block {block} (join code {join_code}) and scoped records."
         })
+    except InvariantViolation:
+        db.session.rollback()
+        raise
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting block {block}: {e}", exc_info=True)
@@ -5134,11 +5188,17 @@ def delete_join_code():
             return gate_error
 
     try:
-        _hard_delete_join_code_scope(join_code, current_admin_id)
+        class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+        if not class_row:
+            return jsonify({"status": "error", "message": "Join code not found or access denied."}), 404
+        _hard_delete_class_scope(class_row.class_id, current_admin_id)
         return jsonify({
             "status": "success",
             "message": f"Join code {join_code} and all scoped records were permanently deleted."
         })
+    except InvariantViolation:
+        db.session.rollback()
+        raise
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting join code {join_code}: {e}", exc_info=True)

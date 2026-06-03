@@ -1,5 +1,6 @@
 from app.extensions import db
 from app.models import ClassEconomy, ClassMembership, Seat, TeacherBlock
+from datetime import datetime, timezone
 from uuid import uuid4
 
 
@@ -38,6 +39,11 @@ def create_class_scope(
             admin_id=teacher.id,
             role="admin",
         ))
+        db.session.add(Seat(
+            class_id=class_row.class_id,
+            join_code=join_code,
+            role="teacher",
+        ))
 
     if student is not None and create_student_membership:
         db.session.add(ClassMembership(
@@ -73,6 +79,7 @@ def create_class_scope(
             block=block,
             block_identifier=block,
             role="student",
+            claimed_at=datetime.now(timezone.utc) if teacher_block_claimed else None,
         ))
 
     return class_row

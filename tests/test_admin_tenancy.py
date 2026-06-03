@@ -681,6 +681,96 @@ def test_student_detail_public_url_requires_nav_token(client):
     assert direct.status_code == 404
 
 
+def test_student_detail_public_id_is_seat_scoped_for_shared_student(client):
+    teacher_a, secret_a = _create_admin("teacher-seat-scope-a")
+    teacher_b, _ = _create_admin("teacher-seat-scope-b")
+    shared_student = _create_student("SharedSeatScope", teacher_a)
+    db.session.add(StudentTeacher(student_id=shared_student.id, teacher_id=teacher_b.id))
+    class_b = create_class_scope(
+        teacher=teacher_b,
+        join_code="SHAREDSEATB",
+        student=shared_student,
+        block="B",
+        display_name="B",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
+    db.session.commit()
+
+    class_a = ClassEconomy.query.filter(
+        ClassEconomy.teacher_id == teacher_a.id,
+        ClassEconomy.class_id != class_b.class_id,
+    ).first()
+    seat_a = Seat.query.filter_by(student_id=shared_student.id, class_id=class_a.class_id).first()
+    seat_b = Seat.query.filter_by(student_id=shared_student.id, class_id=class_b.class_id).first()
+    assert seat_a is not None
+    assert seat_b is not None
+    assert seat_a.public_id != seat_b.public_id
+
+    _login_admin(client, teacher_a, secret_a)
+    own_detail_url = _build_student_detail_public_url(client, teacher_a, shared_student)
+    assert f"/admin/students/{seat_a.public_id}?" in own_detail_url
+    assert client.get(own_detail_url, follow_redirects=False).status_code == 200
+
+    serializer = URLSafeTimedSerializer(client.application.config["SECRET_KEY"], salt="cth-student-detail-nav-v1")
+    forged_cross_class_nav = serializer.dumps({
+        "student_id": int(shared_student.id),
+        "seat_public_id": str(seat_b.public_id),
+        "class_id": str(seat_b.class_id),
+        "admin_id": int(teacher_a.id),
+    })
+    cross_class_response = client.get(
+        f"/admin/students/{seat_b.public_id}?nav={forged_cross_class_nav}",
+        follow_redirects=False,
+    )
+    assert cross_class_response.status_code == 404
+
+
+def test_student_detail_public_id_requires_active_class_for_same_teacher(client):
+    teacher, secret = _create_admin("teacher-multi-class")
+    student = _create_student("MultiClassSeat", teacher)
+    class_a = ClassEconomy.query.filter_by(teacher_id=teacher.id).first()
+    class_b = create_class_scope(
+        teacher=teacher,
+        join_code="MULTICLASSB",
+        student=student,
+        block="B",
+        display_name="B",
+        create_claimed_teacher_block=True,
+        teacher_block_claimed=True,
+        create_seat=True,
+    )
+    db.session.commit()
+
+    seat_a = Seat.query.filter_by(student_id=student.id, class_id=class_a.class_id).first()
+    seat_b = Seat.query.filter_by(student_id=student.id, class_id=class_b.class_id).first()
+    assert seat_a is not None
+    assert seat_b is not None
+    assert seat_a.public_id != seat_b.public_id
+
+    with client.session_transaction() as sess:
+        sess["is_admin"] = True
+        sess["admin_id"] = teacher.id
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+        sess["current_class_id"] = class_a.class_id
+        sess["current_join_code"] = class_a.join_code
+
+    class_a_url = _build_student_detail_public_url(client, teacher, student)
+    assert f"/admin/students/{seat_a.public_id}?" in class_a_url
+    assert client.get(class_a_url, follow_redirects=False).status_code == 200
+
+    with client.session_transaction() as sess:
+        sess["current_class_id"] = class_b.class_id
+        sess["current_join_code"] = class_b.join_code
+
+    assert client.get(class_a_url, follow_redirects=False).status_code == 404
+
+    class_b_url = _build_student_detail_public_url(client, teacher, student)
+    assert f"/admin/students/{seat_b.public_id}?" in class_b_url
+    assert client.get(class_b_url, follow_redirects=False).status_code == 200
+
+
 def test_edit_student_transfer_updates_transaction_seat_scope(client):
     teacher, secret = _create_admin("teacher-a")
     student = _create_student("TransferSeat", teacher)

@@ -14,6 +14,15 @@ Tier 1 — Constitutional. This document defines structural enforcement mechanis
 - `DOM-CORE-000_Domain_Foundation.md`
 - `DOM-IDEN-001_Identity_Class_Binding_Domain.md` (class identity anchor `classes`)
 
+## IV.A Terminology Formalization
+
+- The canonical metadata field for a class-period label is `section`.
+- `section` represents labels such as `2`, `Block A`, or `Period 1`.
+- `display_name` represents the human-facing class title such as `Honors Chemistry`.
+- Teacher-facing display should prefer `display_name` + `section`.
+- Legacy `block` naming is transitional and MUST NOT be treated as the long-term
+  class-section field name.
+
 ## V. Schema Authority Declaration
 
 This domain is the sole schema and mutation authority over:

@@ -21,7 +21,7 @@ def test_teacher_must_close_issue_after_final_review(client):
         student_id=student.id,
         student_first_name=student.first_name,
         student_last_initial=student.last_initial,
-        opaque_student_reference="opaque-student-1",
+        actor_public_id="seat-public-issue-1",
         teacher_id=teacher.id,
         join_code="JOINLIFE1",
         class_label="Block A",

@@ -13,51 +13,115 @@ from app.models import (
     Student, StudentTeacher, PayrollSettings, RentSettings,
     InsurancePolicyBlock,
 )
-from app.feats.base import feat_shell
+from app.feats.base import feat_shell, InvariantViolation
 
 logger = logging.getLogger(__name__)
 
+
+def _raise_invariant_violation(message: str) -> None:
+    logger.critical("P0 INVARIANT VIOLATION: %s", message)
+    raise InvariantViolation(message)
+
+
+def _assert_class_scope_integrity(class_id: str, join_code: str) -> None:
+    scoped_models = (
+        ("teacher_blocks", TeacherBlock),
+        ("ledger_transaction", Transaction),
+        ("student_blocks", StudentBlock),
+        ("tap_events", TapEvent),
+        ("hall_pass_logs", HallPassLog),
+        ("student_items", StudentItem),
+        ("analytics_events", AnalyticsEvent),
+        ("analytics_snapshots", AnalyticsSnapshot),
+        ("issues", Issue),
+        ("student_insurance", StudentInsurance),
+        ("rent_payments", RentPayment),
+        ("announcements", Announcement),
+    )
+    violations = []
+    for label, model in scoped_models:
+        count = db.session.query(model).filter(
+            model.join_code == join_code,
+            model.class_id.is_(None),
+        ).count()
+        if count:
+            violations.append(f"{label}={count}")
+
+    affected_blocks = db.session.query(TeacherBlock.block).filter(
+        TeacherBlock.class_id == class_id,
+        TeacherBlock.block.isnot(None),
+    ).distinct().all()
+    affected_student_ids = db.session.query(TeacherBlock.student_id).filter(
+        TeacherBlock.class_id == class_id,
+        TeacherBlock.student_id.isnot(None),
+    ).distinct().all()
+    block_names = [block for (block,) in affected_blocks]
+    student_ids = [student_id for (student_id,) in affected_student_ids]
+    if block_names and student_ids:
+        inferred_student_block_nulls = db.session.query(StudentBlock).filter(
+            StudentBlock.student_id.in_(student_ids),
+            StudentBlock.period.in_(block_names),
+            StudentBlock.class_id.is_(None),
+        ).count()
+        if inferred_student_block_nulls:
+            violations.append(f"student_blocks_inferred={inferred_student_block_nulls}")
+
+    if violations:
+        _raise_invariant_violation(
+            f"class_id NULL rows detected for class_id={class_id} join_code={join_code}: {', '.join(violations)}"
+        )
+
 @feat_shell("FEAT-OPS-001")
-def collapse_universe(join_code: str, reason: str, actor_membership_id: Optional[int]) -> bool:
+def collapse_universe(class_id: str, reason: str, actor_membership_id: Optional[int]) -> bool:
     """
-    Canonical Destruction Primitive for a Class Economy (join_code).
+    Canonical destruction primitive for a class economy.
     
-    A deleted join_code MUST leave zero remaining rows in any table scoped by that join_code.
+    The boundary may enter through `join_code`, but this primitive executes on the
+    canonical `class_id` anchor only.
+
+    A deleted class MUST leave zero remaining rows in any table scoped by that class.
     There is no soft delete. There is no archive state. There is no preserved financial history.
     
     Args:
-        join_code: The join_code of the class economy to collapse.
+        class_id: Canonical class boundary to collapse.
         reason: An audit reason for the deletion (logged).
         actor_membership_id: The ClassMembership ID of the actor performing the deletion.
         
     Returns:
         True if the universe was collapsed (or didn't exist), False if an error occurred.
     """
-    if not join_code:
-        return True # Idempotency: If join_code does not exist, return success.
+    if not class_id:
+        return True  # Idempotency: If class_id does not exist, return success.
 
     try:
-        # Check if the economy actually exists to avoid unnecessary work if called idempotently
-        economy = db.session.get(ClassEconomy, join_code)
+        economy = db.session.get(ClassEconomy, class_id)
         if not economy:
             return True
+        join_code = economy.join_code
+        _assert_class_scope_integrity(class_id, join_code)
 
-        logger.info(f"Collapsing universe for join_code={join_code}. Reason: {reason}. Actor: {actor_membership_id}")
+        logger.info(
+            "Collapsing universe for class_id=%s join_code=%s. Reason: %s. Actor: %s",
+            class_id,
+            join_code,
+            reason,
+            actor_membership_id,
+        )
 
         # 1. Identify affected TeacherBlocks and Students
         affected_blocks = db.session.query(TeacherBlock.block, TeacherBlock.teacher_id).filter_by(
-            join_code=join_code
+            class_id=class_id
         ).all()
         
         affected_student_ids_tb = [
             s_id for (s_id,) in db.session.query(TeacherBlock.student_id).filter(
-                TeacherBlock.join_code == join_code,
+                TeacherBlock.class_id == class_id,
                 TeacherBlock.student_id.isnot(None)
             ).distinct().all()
         ]
         affected_student_ids_sb = [
             s_id for (s_id,) in db.session.query(StudentBlock.student_id).filter(
-                StudentBlock.join_code == join_code,
+                StudentBlock.class_id == class_id,
                 StudentBlock.student_id.isnot(None)
             ).distinct().all()
         ]
@@ -68,35 +132,35 @@ def collapse_universe(join_code: str, reason: str, actor_membership_id: Optional
         # We explicitly delete the others or things that require manual cleanup first
 
         # 2. Activity / State Logs & Records (Not all have ON DELETE CASCADE yet)
-        HallPassLog.query.filter_by(join_code=join_code).delete(synchronize_session=False)
-        AnalyticsSnapshot.query.filter_by(join_code=join_code).delete(synchronize_session=False)
-        AnalyticsEvent.query.filter_by(join_code=join_code).delete(synchronize_session=False)
-        Announcement.query.filter_by(join_code=join_code).delete(synchronize_session=False)
-        StudentBlock.query.filter_by(join_code=join_code).delete(synchronize_session=False)
+        HallPassLog.query.filter_by(class_id=class_id).delete(synchronize_session=False)
+        AnalyticsSnapshot.query.filter_by(class_id=class_id).delete(synchronize_session=False)
+        AnalyticsEvent.query.filter_by(class_id=class_id).delete(synchronize_session=False)
+        Announcement.query.filter_by(class_id=class_id).delete(synchronize_session=False)
+        StudentBlock.query.filter_by(class_id=class_id).delete(synchronize_session=False)
 
         # 3. Insurance & Issue Data
-        issue_ids_subq = select(Issue.id).filter_by(join_code=join_code).subquery()
+        issue_ids_subq = select(Issue.id).filter_by(class_id=class_id).subquery()
         IssueResolutionAction.query.filter(
             IssueResolutionAction.issue_id.in_(select(issue_ids_subq))
         ).delete(synchronize_session=False)
-        Issue.query.filter_by(join_code=join_code).delete(synchronize_session=False)
+        Issue.query.filter_by(class_id=class_id).delete(synchronize_session=False)
 
-        insurance_ids_subq = select(StudentInsurance.id).filter_by(join_code=join_code).subquery()
-        tx_ids_subq = select(Transaction.id).filter_by(join_code=join_code).subquery()
+        insurance_ids_subq = select(StudentInsurance.id).filter_by(class_id=class_id).subquery()
+        tx_ids_subq = select(Transaction.id).filter_by(class_id=class_id).subquery()
         InsuranceClaim.query.filter(
             or_(
                 InsuranceClaim.student_insurance_id.in_(select(insurance_ids_subq)),
                 InsuranceClaim.transaction_id.in_(select(tx_ids_subq))
             )
         ).delete(synchronize_session=False)
-        StudentInsurance.query.filter_by(join_code=join_code).delete(synchronize_session=False)
+        StudentInsurance.query.filter_by(class_id=class_id).delete(synchronize_session=False)
 
         # 4. Inventory / Store Data
-        student_item_ids_subq = select(StudentItem.id).filter_by(join_code=join_code).subquery()
+        student_item_ids_subq = select(StudentItem.id).filter_by(class_id=class_id).subquery()
         RedemptionAuditLog.query.filter(
             RedemptionAuditLog.student_item_id.in_(select(student_item_ids_subq))
         ).delete(synchronize_session=False)
-        StudentItem.query.filter_by(join_code=join_code).delete(synchronize_session=False)
+        StudentItem.query.filter_by(class_id=class_id).delete(synchronize_session=False)
 
         # Clean up StoreItemBlocks for the affected blocks
         if affected_blocks:
@@ -127,17 +191,8 @@ def collapse_universe(join_code: str, reason: str, actor_membership_id: Optional
                 # We already deleted StudentItems, so we just delete the StoreItems
                 StoreItem.query.filter(StoreItem.id.in_(select(deletable_store_items))).delete(synchronize_session=False)
 
-        # 5. Delete TeacherBlocks for this join_code
-        TeacherBlock.query.filter_by(join_code=join_code).delete(synchronize_session=False)
-        
-        # 5b. Remove legacy StudentBlock entries (that rely on period name instead of join_code)
-        if affected_blocks and affected_student_ids:
-            block_names = list(set(b_name for b_name, _ in affected_blocks))
-            StudentBlock.query.filter(
-                StudentBlock.student_id.in_(affected_student_ids),
-                StudentBlock.period.in_(block_names),
-                StudentBlock.join_code.is_(None)
-            ).delete(synchronize_session=False)
+        # 5. Delete TeacherBlocks for this class
+        TeacherBlock.query.filter_by(class_id=class_id).delete(synchronize_session=False)
 
         # 6. Delete the ClassEconomy itself (This triggers ON DELETE CASCADE for Transactions, Memberships, etc.)
         db.session.delete(economy)
@@ -186,7 +241,10 @@ def collapse_universe(join_code: str, reason: str, actor_membership_id: Optional
         db.session.flush()  # FEAT-AUTHORIZED-SHELL
         return True
 
+    except InvariantViolation:
+        db.session.rollback()
+        raise
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Failed to collapse universe for join_code={join_code}: {e}", exc_info=True)
+        logger.error(f"Failed to collapse universe for class_id={class_id}: {e}", exc_info=True)
         return False

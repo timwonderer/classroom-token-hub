@@ -113,8 +113,8 @@ class RequestIdFilter(logging.Filter):
                 record.request_id = "-"
         if not hasattr(record, "actor_type"):
             record.actor_type = context.get("actor_type", "-") if context else "-"
-        if not hasattr(record, "actor_opaque_id"):
-            record.actor_opaque_id = context.get("actor_opaque_id", "-") if context else "-"
+        if not hasattr(record, "actor_public_id"):
+            record.actor_public_id = context.get("actor_public_id", "-") if context else "-"
         if not hasattr(record, "class_id"):
             record.class_id = context.get("class_id", "-") if context else "-"
         if not hasattr(record, "endpoint"):
@@ -166,7 +166,7 @@ def register_error_handlers(app):
                 "method": request.method,
                 "request_id": getattr(g, "request_id", None),
                 "actor_type": context.get("actor_type"),
-                "actor_opaque_id": context.get("actor_opaque_id"),
+                "actor_public_id": context.get("actor_public_id"),
                 "class_id": context.get("class_id"),
                 "endpoint": endpoint,
                 "error_class": e.__class__.__name__,
@@ -182,17 +182,17 @@ def register_error_handlers(app):
             with db.engine.begin() as conn:
                 from app.models import ErrorEvent
                 from app.utils.time import utc_now
-                if context.get("actor_type") and context.get("actor_opaque_id"):
+                if context.get("actor_type") and context.get("actor_public_id"):
                     from app.services.tlcp import _sanitize_error_message
                     conn.execute(
                         sa.text(
                             """
                             INSERT INTO error_events
-                                (request_id, actor_type, actor_opaque_id, class_id,
+                                (request_id, actor_type, actor_public_id, class_id,
                                  endpoint, method, error_class, error_message,
                                  correlation_version, created_at)
                             VALUES
-                                (:request_id, :actor_type, :actor_opaque_id, :class_id,
+                                (:request_id, :actor_type, :actor_public_id, :class_id,
                                  :endpoint, :method, :error_class, :error_message,
                                  :correlation_version, :created_at)
                             """
@@ -200,7 +200,7 @@ def register_error_handlers(app):
                         {
                             "request_id": getattr(g, "request_id", None),
                             "actor_type": context.get("actor_type"),
-                            "actor_opaque_id": context.get("actor_opaque_id"),
+                            "actor_public_id": context.get("actor_public_id"),
                             "class_id": context.get("class_id"),
                             "endpoint": endpoint,
                             "method": request.method,
@@ -285,14 +285,14 @@ def create_app():
     log_format = os.getenv(
         "LOG_FORMAT",
         "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s] "
-        "[actor=%(actor_type)s:%(actor_opaque_id)s class_id=%(class_id)s] "
+        "[actor=%(actor_type)s:%(actor_public_id)s class_id=%(class_id)s] "
         "[endpoint=%(endpoint)s method=%(method)s] "
         "[error_class=%(error_class)s correlation_version=%(correlation_version)s]: %(message)s",
     )
     if log_format.strip().lower() == "json":
         log_format = (
             '{"timestamp":"%(asctime)s","level":"%(levelname)s","module":"%(module)s",'
-            '"request_id":"%(request_id)s","actor":"%(actor_type)s:%(actor_opaque_id)s",'
+            '"request_id":"%(request_id)s","actor":"%(actor_type)s:%(actor_public_id)s",'
             '"class_id":"%(class_id)s","endpoint":"%(endpoint)s","method":"%(method)s",'
             '"error_class":"%(error_class)s","correlation_version":"%(correlation_version)s",'
             '"message":"%(message)s"}'
@@ -354,6 +354,10 @@ def create_app():
         request_id = getattr(g, "request_id", None)
         if request_id:
             response.headers.setdefault("X-Request-Id", request_id)
+        if app.config.get("TESTING"):
+            # Test fixtures wrap each test in transactions; the independent TLCP
+            # writer can otherwise contend with teardown deletes.
+            return response
         context = getattr(g, "correlation_context", None)
         if context:
             try:

@@ -723,9 +723,8 @@ def test_student_seat_context_rejects_cross_user_seat_id(client):
         assert get_current_seat() is None
 
 
-def test_hall_pass_available_types_requires_class_id(client):
+def test_hall_pass_available_types_rejects_teacher_public_id(client):
     teacher, _ = _create_admin("teacher-hall-public")
-    teacher.teacher_public_id = "crisp-otter-leaf"
     student = _create_student("PublicIdPassTypes", primary_teacher=teacher)
     _create_claimed_seat(teacher, student, "HALLP1", block="A")
 
@@ -735,14 +734,12 @@ def test_hall_pass_available_types_requires_class_id(client):
     assert response.status_code == 400
     payload = response.get_json()
     assert payload["status"] == "error"
+    assert payload["message"] == "teacher_public_id is not supported"
 
 
-def test_switch_teacher_public_id_updates_join_code_context(client):
+def test_switch_teacher_public_id_route_is_disabled(client):
     teacher_a, _ = _create_admin("teacher-switch-a")
     teacher_b, _ = _create_admin("teacher-switch-b")
-    teacher_b.teacher_public_id = "teacher-switch-b-public"
-    db.session.commit()
-
     student = _create_student(
         "SwitchByPublicId",
         primary_teacher=teacher_a,
@@ -754,10 +751,10 @@ def test_switch_teacher_public_id_updates_join_code_context(client):
     _login_student(client, student, join_code="SWITCHA1")
     response = client.post("/student/switch-teacher/teacher-switch-b-public")
 
-    assert response.status_code == 302
+    assert response.status_code == 404
     with client.session_transaction() as sess:
-        assert sess["current_join_code"] == "SWITCHB1"
-        assert sess["current_teacher_id"] == teacher_b.id
+        assert sess["current_join_code"] == "SWITCHA1"
+        assert "current_teacher_id" not in sess
 
 
 def test_switch_teacher_public_id_invalid_keeps_current_context(client):
@@ -768,7 +765,7 @@ def test_switch_teacher_public_id_invalid_keeps_current_context(client):
     _login_student(client, student, join_code="SWITCHINV")
     response = client.post("/student/switch-teacher/not-valid-public-id")
 
-    assert response.status_code == 302
+    assert response.status_code == 404
     with client.session_transaction() as sess:
         assert sess["current_join_code"] == "SWITCHINV"
 

@@ -8,6 +8,7 @@ from app.models import (
     Issue,
     IssueCategory,
     IssueResolutionAction,
+    Seat,
     Student,
     SystemAdmin,
     Transaction,
@@ -22,23 +23,40 @@ def test_sysadmin_resolve_issue_issues_bug_reward_transaction(client):
     db.session.flush()
 
     sysadmin = make_sysadmin("sysadmin_issue_reward", "secret")
-    student = Student(first_name="Bug", last_initial="R", block="A", salt=b"salt")
     category = IssueCategory(
         name="Bug Report Category",
         category_type="general",
         is_active=True,
     )
     economy = ClassEconomy(join_code="JOINBUG123", teacher_id=teacher.id, status="active")
+    student = Student(
+        first_name="Bug",
+        last_initial="R",
+        block="A",
+        join_code=economy.join_code,
+        class_id=economy.class_id,
+        salt=b"salt",
+    )
     db.session.add_all([sysadmin, student, category, economy])
+    db.session.flush()
+    seat = Seat(
+        student_id=student.id,
+        class_id=economy.class_id,
+        join_code=economy.join_code,
+        role="student",
+    )
+    db.session.add(seat)
     db.session.flush()
 
     issue = Issue(
         student_id=student.id,
         student_first_name=student.first_name,
         student_last_initial=student.last_initial,
-        opaque_student_reference="opaque-ref-123",
+        actor_public_id=seat.public_id,
         teacher_id=teacher.id,
         join_code="JOINBUG123",
+        class_id=economy.class_id,
+        seat_id=seat.id,
         class_label="Block A",
         category_id=category.id,
         issue_type="general",

@@ -24,6 +24,10 @@ For request-boundary session expiry and mutation replay rules, see:
 
 - `docs/development/specs/V2_SESSION_MUTATION_SAFETY.md`
 
+For the shared identity ownership contract used by teacher and student seats, see:
+
+- `docs/development/specs/V2_IDENTITY_AND_OWNERSHIP_MODEL.md`
+
 ## Core Design Principle
 
 CTH separates identity into three layers:
@@ -43,7 +47,6 @@ Purpose: authentication, recovery, and global security state.
 Typical fields:
 
 - `id`
-- `public_id`
 - `username_hash`
 - `username_lookup_hash`
 - `pin_hash`
@@ -73,9 +76,8 @@ Rules:
 Identifier guidance:
 
 - `users.id` is the internal primary key used for foreign keys.
-- `users.public_id` is the stable external identifier for that same single human
-  identity.
 - `users.id` remains the internal FK target.
+- Global identity workflows do not expose a separate user public-ID family.
 
 Session guidance:
 
@@ -110,6 +112,12 @@ Rules:
 - If the class row exists, that class universe exists.
 - `classes` is a class anchor and lookup record, not a membership table.
 - `classes` should not use a generic `user_id` field to imply participation.
+- `section` is the canonical metadata field for the class section label
+  (for example `2`, `Block A`, `Period 1`).
+- `display_name` is the human-facing class title
+  (for example `Honors Chemistry`).
+- Teacher-facing display should treat `display_name` + `section` as the canonical
+  pair when both are available.
 - CTH does not model archive or inactive class states as identity.
 - Deleting a class deletes its seats and class-scoped economic state.
 
@@ -139,6 +147,18 @@ Rules:
 - A user may own multiple seats, but each seat belongs to at most one user.
 - `user_id` is nullable until the seat is claimed.
 - If the seat exists, the participant exists in that class universe.
+- Class-section metadata belongs on `classes.section`, not on `seats`.
+  Any remaining seat-level block or section labels are transitional mirrors only.
+- `seats.public_id` is the public identifier for class-scoped participant navigation.
+- `seats.public_id` is the canonical deidentified public actor identifier for both teacher and
+  student seats when the actor is being referenced inside a class-scoped context.
+- `seats.public_id` is a UUID encoded as a 36-character string and carries no
+  human-readable or role-specific meaning.
+- Teacher-facing participant routes MUST resolve `seats.public_id` within the active
+  `class_id`; a public ID from another class MUST return `404`, including when both
+  classes belong to the same teacher.
+- A role-specific public ID and a legacy numeric student ID MUST NOT be accepted as
+  substitutes for `seats.public_id` on class-scoped participant routes.
 
 Recommended constraints:
 
@@ -202,6 +222,8 @@ Meaning:
   `class_id`.
 - `user_id` should be used for authentication, recovery, and global security state only.
 - `join_code` should be used only as a public entry token that resolves to `class_id`.
+- Class-scoped participant URLs should use `seats.public_id`, then resolve to
+  `seat_id + class_id` under the active request context.
 
 ## Runtime Context Flow
 

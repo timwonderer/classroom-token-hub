@@ -2323,7 +2323,7 @@ class ActorRequestTrace(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     actor_type = db.Column(db.String(20), nullable=False, index=True)
-    actor_opaque_id = db.Column(db.String(64), nullable=False, index=True)
+    actor_public_id = db.Column(db.String(64), nullable=False, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='SET NULL'), nullable=True, index=True)
     request_id = db.Column(db.String(128), nullable=False, index=True)
     method = db.Column(db.String(10), nullable=False)
@@ -2332,7 +2332,7 @@ class ActorRequestTrace(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
 
     __table_args__ = (
-        db.Index('ix_actor_trace_actor_created', 'actor_type', 'actor_opaque_id', 'created_at'),
+        db.Index('ix_actor_trace_actor_public_created', 'actor_type', 'actor_public_id', 'created_at'),
     )
 
 
@@ -2344,7 +2344,7 @@ class ErrorEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     request_id = db.Column(db.String(128), nullable=True, index=True)
     actor_type = db.Column(db.String(20), nullable=True, index=True)
-    actor_opaque_id = db.Column(db.String(64), nullable=True, index=True)
+    actor_public_id = db.Column(db.String(64), nullable=True, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='SET NULL'), nullable=True, index=True)
     endpoint = db.Column(db.String(500), nullable=True)
     method = db.Column(db.String(10), nullable=True)
@@ -2354,7 +2354,7 @@ class ErrorEvent(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
 
     __table_args__ = (
-        db.Index('ix_error_events_actor_created', 'actor_type', 'actor_opaque_id', 'created_at'),
+        db.Index('ix_error_events_actor_public_created', 'actor_type', 'actor_public_id', 'created_at'),
     )
 
 
@@ -2447,13 +2447,13 @@ class Issue(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    # Student identification (non-identifying for sysadmin)
+    # Student display cache and actor reference
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
     student_first_name = db.Column(db.String(100), nullable=False)  # Cached for display
     student_last_initial = db.Column(db.String(1), nullable=False)
 
-    # Opaque identifier for sysadmin investigations (non-reversible)
-    opaque_student_reference = db.Column(db.String(64), nullable=False, index=True)
+    # Public actor identifier for sysadmin investigations
+    actor_public_id = db.Column(db.String(64), nullable=False, index=True)
 
     # Class context
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
@@ -2581,14 +2581,14 @@ class TicketCorrelationPack(db.Model):
     issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), primary_key=True)
     correlation_version = db.Column(db.Integer, nullable=False, default=1, server_default='1')
     actor_type = db.Column(db.String(20), nullable=False)
-    actor_opaque_id = db.Column(db.String(64), nullable=False)
+    actor_public_id = db.Column(db.String(64), nullable=False)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='SET NULL'), nullable=True)
     request_trace_json = db.Column(db.JSON, nullable=False, default=list)
     error_refs_json = db.Column(db.JSON, nullable=False, default=list)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
 
     __table_args__ = (
-        db.Index('ix_ticket_correlation_actor', 'actor_type', 'actor_opaque_id'),
+        db.Index('ix_ticket_correlation_actor_public', 'actor_type', 'actor_public_id'),
     )
 
 

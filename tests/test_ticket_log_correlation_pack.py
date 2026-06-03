@@ -8,10 +8,10 @@ from app.models import (
     ErrorEvent,
     IssueCategory,
     ClassEconomy,
+    Seat,
     Student,
     TeacherBlock,
 )
-from app.utils.helpers import generate_anonymous_code
 from app.utils.issue_helpers import create_issue
 from app.utils.time import utc_now
 
@@ -37,7 +37,7 @@ def _create_student_issue_context():
     db.session.add(student)
     db.session.flush()
 
-    seat = TeacherBlock(
+    teacher_block = TeacherBlock(
         teacher_id=admin.id,
         block="A",
         first_name="Student",
@@ -49,23 +49,33 @@ def _create_student_issue_context():
         student_id=student.id,
         is_claimed=True,
     )
+    db.session.add(teacher_block)
+
+    seat = Seat(
+        student_id=student.id,
+        class_id=join_code.class_id,
+        join_code=join_code.join_code,
+        role="student",
+        claimed_at=utc_now(),
+    )
     db.session.add(seat)
+    db.session.flush()
+    actor_public_id = seat.public_id
 
     category = IssueCategory(name="General TLCP", category_type="general", is_active=True)
     db.session.add(category)
-    db.session.commit()
+    db.session.flush()
 
-    return admin, student, join_code, category
+    return admin, student, join_code, category, actor_public_id
 
 
 def test_create_issue_attaches_correlation_pack_with_trace_and_error(app):
-    admin, student, join_code, category = _create_student_issue_context()
-    actor_opaque_id = generate_anonymous_code(f"student_issue:{student.id}")
+    admin, student, join_code, category, actor_public_id = _create_student_issue_context()
 
     db.session.add(
         ActorRequestTrace(
             actor_type="student",
-            actor_opaque_id=actor_opaque_id,
+            actor_public_id=actor_public_id,
             class_id=join_code.class_id,
             request_id="req-test-1",
             method="POST",
@@ -78,7 +88,7 @@ def test_create_issue_attaches_correlation_pack_with_trace_and_error(app):
         ErrorEvent(
             request_id="req-test-1",
             actor_type="student",
-            actor_opaque_id=actor_opaque_id,
+            actor_public_id=actor_public_id,
             class_id=join_code.class_id,
             endpoint="/store/buy",
             method="POST",
@@ -88,7 +98,7 @@ def test_create_issue_attaches_correlation_pack_with_trace_and_error(app):
             created_at=utc_now() - timedelta(minutes=15),
         )
     )
-    db.session.commit()
+    db.session.flush()
 
     with app.test_request_context("/student/help-support/submit-issue", method="POST"):
         issue = create_issue(
@@ -102,7 +112,7 @@ def test_create_issue_attaches_correlation_pack_with_trace_and_error(app):
         )
 
     assert issue.correlation_pack is not None
-    assert issue.correlation_pack.actor_opaque_id == actor_opaque_id
+    assert issue.correlation_pack.actor_public_id == actor_public_id
     assert len(issue.correlation_pack.request_trace_json) == 1
     assert issue.correlation_pack.request_trace_json[0]["request_id"] == "req-test-1"
     assert len(issue.correlation_pack.error_refs_json) == 1
@@ -110,14 +120,13 @@ def test_create_issue_attaches_correlation_pack_with_trace_and_error(app):
 
 
 def test_create_issue_can_skip_recent_error_refs(app):
-    admin, student, join_code, category = _create_student_issue_context()
-    actor_opaque_id = generate_anonymous_code(f"student_issue:{student.id}")
+    admin, student, join_code, category, actor_public_id = _create_student_issue_context()
 
     db.session.add(
         ErrorEvent(
             request_id="req-test-2",
             actor_type="student",
-            actor_opaque_id=actor_opaque_id,
+            actor_public_id=actor_public_id,
             class_id=join_code.class_id,
             endpoint="/store/buy",
             method="POST",
@@ -127,7 +136,7 @@ def test_create_issue_can_skip_recent_error_refs(app):
             created_at=utc_now() - timedelta(minutes=5),
         )
     )
-    db.session.commit()
+    db.session.flush()
 
     with app.test_request_context("/student/help-support/submit-issue", method="POST"):
         issue = create_issue(
@@ -159,12 +168,11 @@ def test_authenticated_request_writes_trace_row(app, client):
     db.session.add(student)
     db.session.commit()
 
-    actor_opaque_id = generate_anonymous_code(f"student_issue:{student.id}")
     request_id = uuid.uuid4().hex
     context = {
         "actor_type": "student",
         "actor_id": student.id,
-        "actor_opaque_id": actor_opaque_id,
+        "actor_public_id": "seat-public-trace-test",
         "class_id": None,
         "endpoint": "/_tlcp_ping",
         "method": "GET",
@@ -182,7 +190,7 @@ def test_authenticated_request_writes_trace_row(app, client):
     trace = (
         ActorRequestTrace.query.filter_by(
             actor_type="student",
-            actor_opaque_id=actor_opaque_id,
+            actor_public_id="seat-public-trace-test",
             endpoint="/_tlcp_ping",
         )
         .order_by(ActorRequestTrace.id.desc())

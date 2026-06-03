@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-001 | 1.2 | 2026-04-23 | 1.1 | Constitutional |
+| DOM-IDEN-001 | 1.4 | 2026-06-02 | 1.3 | Constitutional |
 
 ---
 
@@ -25,14 +25,16 @@ This domain does not own:
 
 ## III. Authority Level
 
-Tier 1 — Constitutional. This document defines structural enforcement mechanisms and domain-specific constraints that operationalize Foundational invariants. It is subordinate to `INV-CORE-000` and `INV-CORE-001`.
+Tier 1 — Constitutional. This document defines structural enforcement mechanisms and domain-specific constraints that operationalize Foundational invariants. It is subordinate to `INV-CORE-000`, `INV-CORE-001`, and `INV-ARC-008`.
 
 ## IV. Dependencies
 
 - `INV-CORE-000_Core_Invariants.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-008_Identity_Resolution_and_Seat_Scope.md`
 - `DOM-CORE-000_Domain_Foundation.md`
 - `DOM-IDEN-003_Teacher_Identity_Architecture.md`
 - `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
+- `docs/development/specs/V2_IDENTITY_AND_OWNERSHIP_MODEL.md`
 
 ## V. Schema Authority Declaration
 
@@ -61,6 +63,10 @@ Human-facing display identity (Names, initials). One-to-one with `seats`.
 
 The universe anchor. Defines the boundary of a classroom economy.
 
+Key metadata:
+- `display_name` — human-facing class title (for example `Honors Chemistry`)
+- `section` — human-facing section label (for example `2`, `Block A`, `Period 1`)
+
 ---
 
 ## VII. Schema Contract
@@ -84,6 +90,7 @@ Rules:
 
 Key fields:
 - `id` (PK)
+- `public_id` — UUID-encoded canonical deidentified public actor identifier
 - `user_id` — nullable; FK to `users` (The Binding)
 - `class_id` — FK to `classes` (The Anchor)
 - `role` — `'teacher'` | `'student'`
@@ -93,6 +100,14 @@ Rules:
 - A seat is "Unclaimed" if `user_id` is NULL.
 - A seat is "Claimed" if `user_id` is NOT NULL.
 - **INV-IDEN-011: One-to-One Binding per Class**: A single `user_id` may own multiple seats across the system, but at most ONE seat per `class_id`.
+- **INV-IDEN-013: Seat Public-ID Scope**: Class-scoped participant URLs MUST expose `seats.public_id` and resolve it under the active `class_id`. A public ID from another class MUST be rejected, including when both classes belong to the same teacher.
+- `seats.public_id` is the canonical deidentified public actor identifier for both teacher and student
+  seats inside class-scoped runtime, support, and navigation contexts.
+- `seats.public_id` is a UUID encoded as a 36-character string. It carries no
+  human-readable or role-specific meaning and MUST resolve under the active `class_id`.
+- Section or period metadata belongs to `classes.section`. Any remaining seat-level
+  block or section fields are transitional compatibility mirrors only and MUST NOT be
+  treated as canonical class identity.
 
 ---
 
@@ -122,10 +137,12 @@ Binding a global user to a class-local seat is a non-reversible transaction (wit
 Every request operating within a class MUST be resolved to a specific `seat_id`.
 
 - **INV-IDEN-012: Context Authority**: The system MUST verify that the authenticated `user_id` owns the `seat_id` provided in the request context for that `class_id`.
+- **INV-IDEN-013: Seat Public-ID Scope**: A participant URL is valid only when `seats.public_id`, the signed navigation context, and the active `class_id` all resolve to the same seat.
 - **Global vs. Scoped Requests**:
   - **Global Requests**: Authentication only (`user_id`). Permitted for identity management, class selection, and Sysadmin actions.
   - **Scoped Requests**: Authentication + Authorization (`user_id` + `seat_id`). MANDATORY for all activity in Ledger, Obligations, Attendance, and Store domains.
 - Cross-seat or cross-class requests where the `user_id` does not own the target `seat_id` MUST be rejected.
+- Class-scoped participant routes MUST NOT accept legacy numeric student IDs or role-specific public IDs as aliases for `seats.public_id`.
 
 ### 3. Context Restoration Law (The Sticky Context)
 To support multi-device continuity and prevent "Class Drift," the system maintains a persistent pointer to the last used context.
@@ -142,6 +159,7 @@ To support multi-device continuity and prevent "Class Drift," the system maintai
 - **INV-IDEN-002: Seat Sovereignty**. `seat_id` is the primary key for all activity-tracking in other domains.
 - **INV-IDEN-011: One-to-One Binding per Class**. A user shall not hold multiple seats in the same class universe.
 - **INV-IDEN-012: Context Authority**. Requests must prove ownership of the `seat_id` context.
+- **INV-IDEN-013: Seat Public-ID Scope**. Participant URLs expose a class-local `seats.public_id` and fail closed on any active-class mismatch.
 
 ---
 
@@ -158,4 +176,4 @@ To support multi-device continuity and prevent "Class Drift," the system maintai
 Revisions to this document must:
 1. Increment the version number.
 2. Update the Effective Date.
-3. Maintain consistency with `INV-CORE-000`.
+3. Maintain consistency with `INV-CORE-000` and `INV-ARC-008`.

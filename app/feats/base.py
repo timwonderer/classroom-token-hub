@@ -84,6 +84,11 @@ class FEATContextError(Exception):
     """Raised when a mutation is attempted outside a FEAT context."""
     pass
 
+
+class InvariantViolation(Exception):
+    """Raised when runtime state violates a canonical architectural invariant."""
+    pass
+
 # Canonical FEAT Registry
 FEAT_REGISTRY = {
     "FEAT-BYPASS-LEGACY": {"domain": "Test", "blast_radius": "LOW", "desc": "Legacy fixture bypass"},

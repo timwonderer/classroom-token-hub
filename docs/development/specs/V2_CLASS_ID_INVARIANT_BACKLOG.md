@@ -15,6 +15,10 @@ That is not the v2 model.
 - `class_id` either exists or never existed.
 - `join_code` is the current public entry point that resolves to a single class universe.
 - Labels such as `block`, `period`, `section`, and `display_name` are metadata only, not identity.
+- The canonical class-section metadata field is `classes.section`; legacy `block`
+  naming should be retired in favor of `section`.
+- Teacher-facing class naming should use `display_name` + `section`
+  (for example `Honors Chemistry`, section `2`).
 - A student exists in a class only if that student has a valid association with that class universe.
 - Student-in-class state is limited to:
   - unclaimed
@@ -28,6 +32,8 @@ That is not the v2 model.
 - Eliminate any membership code that models class participation as `active` / `inactive` / `archived` instead of existence.
 - Replace cleanup and lifecycle logic that keys off labels or teacher-wide label groupings instead of surviving class associations.
 - Revisit settings models and cleanup rules that still act like `teacher_id + block` is a durable ownership boundary.
+- Move period/block metadata onto `classes.section` and remove remaining identity-adjacent
+  `block` fields or mirrors from seat and roster surfaces once bridge paths are retired.
 - Remove stale tests that still construct impossible class worlds through deprecated lifecycle fields.
 - Retire `join_code`-authoritative banking and ledger scope once the V2 ledger rebuild plan lands.
 
@@ -36,6 +42,7 @@ That is not the v2 model.
 - Teacher/admin write flows now fail at the request boundary unless the session carries a valid canonical class context.
 - For current runtime behavior, admin writes are session-authoritative on `current_join_code`; request-level scope alone is not sufficient.
 - Test fixtures for admin writes must establish canonical class scope explicitly instead of relying on teacher-only or block-only setup.
+- Class-scoped participant URLs expose UUID-encoded `seats.public_id`, not legacy numeric student IDs or role-specific public IDs. Resolution must match the signed navigation context and active `current_class_id`; it must not fall back to another seat when the participant exists in another class.
 
 ## Explicit Non-Goals For Current Launch Work
 

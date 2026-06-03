@@ -405,15 +405,19 @@ pytest -k "recovery"
 
 ### The Golden Rule
 
-**EVERY query involving student/seat data MUST be scoped by `class_id` (or `join_code`).**
+**EVERY query involving student/seat data MUST be scoped by `class_id`.**
 
 ### v2 Scoping Model
 
-The canonical boundary is `class_id` (UUID from `class_economies`). `join_code` is its public-facing alias and both are acceptable scoping keys. `seat_id` anchors per-user activity within a class.
+The canonical boundary is `class_id` (UUID from `classes`). `join_code` is its public-facing alias and must resolve to `class_id` before authority-sensitive operations. `seat_id` anchors per-user activity within a class.
 
-- **Class boundary:** `class_id` / `join_code`
+- **Class boundary:** `class_id`
+- **Public class alias:** `join_code` (resolve to `class_id` before authority-sensitive operations)
 - **Per-user activity anchor:** `seat_id`
 - **Global identity:** `user_id` (for auth/recovery only — does NOT grant class scope)
+- **Public actor identity:** UUID-encoded `Seat.public_id`, resolved under active `class_id`
+
+Class-scoped participant routes must not expose or accept legacy numeric student IDs or role-specific public IDs as substitutes for `Seat.public_id`. A seat public ID from another class must return `404`, including when the same teacher owns both classes.
 
 ```python
 # ✅ CORRECT — seat + class scope

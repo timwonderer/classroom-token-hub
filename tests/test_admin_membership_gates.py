@@ -62,7 +62,7 @@ def test_delete_join_code_requires_membership_even_if_teacherblock_exists(client
     _login_admin(client, admin_a.id)
     response = client.post("/admin/join-code/delete", json={"join_code": "DELG001"})
     assert response.status_code == 403
-    assert db.session.get(ClassEconomy, "DELG001") is not None
+    assert ClassEconomy.query.filter_by(join_code="DELG001").first() is not None
 
 
 def test_delete_join_code_requires_confirmation(client):
@@ -87,7 +87,7 @@ def test_delete_join_code_requires_confirmation(client):
     # 3. Correct confirmation -> 200
     response = client.post("/admin/join-code/delete", json={"join_code": "CONF001", "confirm_join_code": "CONF001"})
     assert response.status_code == 200
-    assert db.session.get(ClassEconomy, "CONF001") is None
+    assert ClassEconomy.query.filter_by(join_code="CONF001").first() is None
 
 
 def test_issues_queue_respects_current_join_code_membership_scope(client):
@@ -115,7 +115,7 @@ def test_issues_queue_respects_current_join_code_membership_scope(client):
             student_id=student.id,
             student_first_name=student.first_name,
             student_last_initial=student.last_initial,
-            opaque_student_reference="opaque-issue-gate-a",
+            actor_public_id="seat-public-issue-gate-a",
             teacher_id=admin.id,
             join_code="ISSGA1",
             category_id=category.id,
@@ -126,7 +126,7 @@ def test_issues_queue_respects_current_join_code_membership_scope(client):
             student_id=student.id,
             student_first_name=student.first_name,
             student_last_initial=student.last_initial,
-            opaque_student_reference="opaque-issue-gate-b",
+            actor_public_id="seat-public-issue-gate-b",
             teacher_id=admin.id,
             join_code="ISSGB1",
             category_id=category.id,

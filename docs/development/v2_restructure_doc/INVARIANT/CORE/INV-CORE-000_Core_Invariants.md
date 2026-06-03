@@ -128,18 +128,9 @@ Class and membership are existence-based, not lifecycle-based. A `class_id` eith
 - Any cleanup or preservation rule based on `teacher_id + label` instead of `class_id`.
 
 ---
-### 7. Identity Resolution and Student Quarantine (V2 Transition)
+## IV. Transition Note
 
-#### Statement
-The identity model separates *Authentication Resolution* from *Domain Execution*. V2 domains operate strictly on `class_id` + `seat_id`. The legacy `student_id` is a quarantined, transitional identifier.
-
-#### Constraints
-- **Authentication Resolution Pipeline**: The only authorized identity resolution chain during authentication is: `users.id` -> `last_active_class_id` -> `seats.id` -> `identity_profile`.
-- **Domain Execution Boundary**: Domain code MUST NOT attempt to reconstruct or resolve a user's `seat_id` or `class_id`. These must be provided securely by the routing/authentication layer. If context is missing, the application must prompt the user rather than guess.
-- **Student ID Quarantine**: `student_id` is formally quarantined. It is load-bearing for legacy financial records, but MUST NOT be introduced into new V2 domains.
-- New FEATs and routes MUST use `class_id` + `seat_id` as their anchors.
-
-#### Prohibited Action
-- Passing `student_id` to new models, routes, or FEATs outside of strictly approved legacy bridge code.
-- Using `users.username` for direct lookup (must use `users.username_hash`).
-- Exposing `users.id` across class boundaries (support contexts must use `seats.public_id`).
+V2 transition rules for identity resolution, `student_id` quarantine, and seat-scoped
+participant URL enforcement are execution-layer invariants, not `INV-CORE` rules. They
+are defined in
+`docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-008_Identity_Resolution_and_Seat_Scope.md`.

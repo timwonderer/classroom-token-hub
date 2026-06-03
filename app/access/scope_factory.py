@@ -22,12 +22,6 @@ class ResolvedStudentClassSwitch:
     seat_id: int
 
 
-@dataclass(frozen=True)
-class ResolvedStudentTeacherSwitch:
-    scope: Scope
-    seat_id: int
-
-
 def _store_session_class_context(*, class_id: str | None, join_code: str | None) -> None:
     if class_id:
         session["current_class_id"] = class_id
@@ -106,46 +100,6 @@ def resolve_student_class_switch_scope(*, actor, class_id: str) -> ResolvedStude
     return ResolvedStudentClassSwitch(scope=scope, seat_id=seat.id)
 
 
-def resolve_student_teacher_switch_scope(*, actor, teacher_id: int) -> ResolvedStudentTeacherSwitch:
-    """Resolve a strict claimed-class target for student teacher switching."""
-    seats = (
-        Seat.query.join(ClassEconomy, Seat.class_id == ClassEconomy.class_id)
-        .filter(
-            Seat.student_id == actor.id,
-            ClassEconomy.teacher_id == teacher_id,
-        )
-        .filter(Seat.claimed_at.isnot(None))
-        .order_by(Seat.block.asc(), Seat.id.asc())
-        .all()
-    )
-    if not seats:
-        raise AccessScopeDenied(
-            reason_code="foreign_teacher_scope",
-            message="You don't have access to that class.",
-        )
-
-    current_class_id = (session.get("current_class_id") or "").strip()
-    target_seat = next((s for s in seats if s.class_id == current_class_id), None) or seats[0]
-
-    class_row = ClassEconomy.query.filter_by(class_id=target_seat.class_id).first()
-    if not class_row:
-         raise AccessScopeDenied(
-            reason_code="foreign_teacher_scope",
-            message="Class configuration not found.",
-        )
-
-    scope = Scope(
-        class_id=class_row.class_id,
-        join_code=target_seat.join_code,
-        actor_id=actor.id,
-        role="student",
-        teacher_id=class_row.teacher_id,
-        block=target_seat.block_identifier or target_seat.block,
-        seat_id=target_seat.id,
-    )
-    return ResolvedStudentTeacherSwitch(scope=scope, seat_id=target_seat.id)
-
-
 def _resolve_teacher_scope(*, actor, selected_class_id: str | None) -> Scope:
     normalized_class_id = (selected_class_id or session.get("current_class_id") or "").strip() or None
     if normalized_class_id:
@@ -215,7 +169,12 @@ def resolve_scope(*, actor, selected_join_code: str | None = None, actor_role: s
     selected_class_id = (session.get("current_class_id") or "").strip() or None
     if selected_join_code:
         class_row = ClassEconomy.query.filter_by(join_code=selected_join_code).first()
-        selected_class_id = class_row.class_id if class_row else selected_class_id
+        if class_row is None:
+            raise AccessScopeDenied(
+                reason_code="foreign_class_scope",
+                message="You don't have access to that class.",
+            )
+        selected_class_id = class_row.class_id
     scope = _scope_from_runtime_seat(actor=actor, selected_class_id=selected_class_id)
     if scope is not None:
         return scope

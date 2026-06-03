@@ -65,7 +65,7 @@ Normative (Tier 2). This document derives from constitutional and domain constra
 - If system malfunction is suspected, ticket transitions to `ESCALATED_TO_DEV`.
 
 ### 3. Teacher Escalation (`ESCALATED_TO_DEV`)
-- Escalation must attach relevant evidence where available, including `related_transaction_ids`, incident timestamp, student opaque identifier, and endpoint name or route reference.
+- Escalation must attach relevant evidence where available, including `related_transaction_ids`, incident timestamp, seat public actor identifier, and endpoint name or route reference.
 - Teacher notes are permitted while escalated.
 - Teacher resolution actions are blocked while escalated.
 
@@ -102,7 +102,7 @@ Developer transition to `CLOSED` is prohibited.
 ### 1. Required Fields
 - `ticket_id`
 - `join_code`
-- `student_opaque_id`
+- `actor_public_id` — UUID-encoded `Seat.public_id` under the ticket's `class_id`
 - `ticket_type`
 - `status`
 - `description`
@@ -143,7 +143,7 @@ Developer transition to `CLOSED` is prohibited.
 ## XIII. Anti-Goals
 - Ledger editing capability is prohibited.
 - Developer closure capability is prohibited.
-- Exposure of student identity outside scoped opaque identifiers and class context is prohibited.
+- Exposure of student identity outside class-scoped seat public identifiers and class context is prohibited.
 - Teacher mutation of system logs is prohibited.
 
 ## XIV. Amendment

@@ -1718,23 +1718,20 @@ def rotate_hall_pass_verify_token():
 @api_bp.route('/hall-pass/available-types', methods=['GET'])
 @login_required
 def get_available_hall_pass_types():
-    """Get available pass types for the current class or public teacher identity.
+    """Get available pass types for the current class.
 
     Authority: class_id is canonical and required.
     """
     requested_class_id = (request.args.get('class_id') or '').strip() or None
-    teacher_public_id = (request.args.get('teacher_public_id') or '').strip()
+    if request.args.get('teacher_public_id'):
+        return jsonify({
+            "status": "error",
+            "message": "teacher_public_id is not supported"
+        }), 400
 
     resolved_teacher_id = None
     resolved_class_id = None
     context = get_current_class_context()
-
-    # Public lookup mode still requires explicit class selector; do not infer from session context.
-    if teacher_public_id and not requested_class_id:
-        return jsonify({
-            "status": "error",
-            "message": "class_id is required"
-        }), 400
 
     if context:
         # Session class context is authoritative for logged-in student/admin flows.
@@ -1748,11 +1745,6 @@ def get_available_hall_pass_types():
             resolved_teacher_id = class_row.teacher_id
             resolved_class_id = class_row.class_id
 
-    if not resolved_teacher_id and teacher_public_id:
-        teacher = Admin.query.filter_by(teacher_public_id=teacher_public_id).first()
-        if teacher:
-            resolved_teacher_id = teacher.id
-
     if not resolved_teacher_id:
         return jsonify({
             "status": "error",
@@ -1765,12 +1757,6 @@ def get_available_hall_pass_types():
         class_row = ClassEconomy.query.filter_by(class_id=resolved_class_id).first()
         resolved_join_code = class_row.join_code if class_row else None
         settings = HallPassSettings.query.filter_by(class_id=resolved_class_id).first()
-    elif teacher_public_id:
-        return jsonify({
-            "status": "error",
-            "message": "class_id is required"
-        }), 400
-
     feature_scope = resolve_feature_class(
         resolved_teacher_id,
         'hall_pass',
@@ -1802,24 +1788,23 @@ def get_available_hall_pass_types():
 
 @api_bp.route('/hall-pass/verification/active', methods=['GET'])
 def hall_pass_verification_active():
-    """Return active/recent hall passes for a teacher identified by public ID."""
-    teacher_public_id = (request.args.get('teacher') or '').strip()
-    if not teacher_public_id:
-        return jsonify({"status": "error", "message": "teacher is required"}), 400
+    """Return active/recent hall passes for one class-scoped teacher seat."""
+    actor_public_id = (request.args.get('actor') or '').strip()
+    class_id = (request.args.get('class_id') or '').strip()
+    if not actor_public_id or not class_id:
+        return jsonify({"status": "error", "message": "actor and class_id are required"}), 400
 
-    teacher = Admin.query.filter(
-        sa.or_(
-            Admin.teacher_public_id == teacher_public_id,
-            Admin.public_id == teacher_public_id,
-        )
+    teacher_seat = Seat.query.filter_by(
+        public_id=actor_public_id,
+        class_id=class_id,
+        role="teacher",
     ).first()
-    if not teacher:
-        return jsonify({"status": "error", "message": "Teacher not found"}), 404
+    if not teacher_seat:
+        return jsonify({"status": "error", "message": "Teacher seat not found"}), 404
 
-    class_id_scope, _ = _get_teacher_class_scope(teacher.id)
     passes = (
         HallPassLog.query
-        .filter(HallPassLog.class_id.in_(sa.select(class_id_scope)))
+        .filter(HallPassLog.class_id == class_id)
         .order_by(HallPassLog.request_time.desc())
         .all()
     )

@@ -9,6 +9,18 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Changed
+- **Support issue actor reference now uses canonical public actor naming** — Support
+  issue rows now expose the filing seat's UUID `Seat.public_id` as
+  `issues.actor_public_id`, matching the same actor-public identity language as TLCP.
+- **TLCP support correlation now uses seat public IDs at runtime** — Request traces,
+  error events, support-ticket correlation packs, and student recent-error prompts now
+  use the active class-scoped `Seat.public_id` value instead of generating a separate
+  student-wide actor marker. Physical TLCP columns, indexes, log labels, tests, and
+  sysadmin copy affordances now use `actor_public_id`.
+- **Class-scoped teacher public lookups now use teacher-seat UUIDs** — New class anchors provision a teacher `Seat`, `/api/hall-pass/verification/active` now requires one explicit `class_id` plus that teacher seat's UUID `public_id`, and the obsolete `/student/switch-teacher/<teacher_public_id>` route now returns `404`. Hall-pass pass-type lookup rejects `teacher_public_id` input, and explicit invalid `join_code` aliases now fail closed instead of falling back to another claimed seat.
+- **Seat public identity formalized as one UUID family** — Added the normative v2 identity ownership model: `users.id` authenticates, `seats.id` acts, `classes.class_id` scopes, and UUID-encoded `seats.public_id` is the single deidentified public actor identifier for both teacher and student seats. Role-specific public-ID fields and separate TLCP actor identity families are now classified as invalid v2 residue rather than supported identity alternatives.
+- **Class-period metadata is being formalized as `section` on `classes`** — The v2 architecture docs now explicitly define `section` as the canonical metadata field for labels such as `2`, `Block A`, and `Period 1`, while `display_name` remains the human-facing class title such as `Honors Chemistry`. Remaining `block` fields are transitional naming debt and should not be treated as canonical identity or authority.
+- **Teacher student-detail URLs now expose class-local seat public IDs only** — Numeric `/admin/students/<student_id>` detail URLs now return `404`. Teacher-facing student-detail links use signed, short-lived navigation URLs carrying `seats.public_id`, and route resolution requires the seat public ID, signed token class, teacher ownership, and active `current_class_id` to identify the same seat. This prevents cross-class seat selection for shared students, including when one teacher owns both classes.
 - **Class-scoped feature authority and disabled-route behavior tightened** — Admin feature pages now enforce class-scoped feature toggles as the sole authority and render a dedicated disabled page with a direct link to feature settings; student feature-gated routes now return hard `404` when disabled. Feature settings UI is now per-period only.
 - **Runtime settings normalization toward `class_id` authority** — Payroll, analytics, student banking settings, rebalance activation, and admin settings cleanup paths were updated to resolve class scope and query settings rows by `class_id`, reducing reliance on teacher/global settings reads in active runtime paths.
 - **Class-scoped test fixtures aligned with clean-break semantics** — Rent waiver tests now seed canonical `RentSettings` scope (`class_id` + `join_code`) to match runtime authority.

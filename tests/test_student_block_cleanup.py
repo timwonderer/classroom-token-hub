@@ -318,7 +318,7 @@ def test_delete_student_clears_cross_issue_transaction_references(client):
         student_id=reporter_student.id,
         student_first_name=reporter_student.first_name,
         student_last_initial=reporter_student.last_initial,
-        opaque_student_reference="opaque-ref-123",
+        actor_public_id="seat-public-ref-123",
         teacher_id=teacher.id,
         join_code="JOIN1",
         category_id=category.id,
@@ -352,6 +352,7 @@ def test_delete_student_clears_cross_issue_transaction_references(client):
     )
     assert response.status_code == 200
 
+    db.session.expire_all()
     assert db.session.get(Student, deleted_student_id) is None
     assert db.session.get(Transaction, tx_id) is None
 
