@@ -281,7 +281,10 @@ def verify_hall_pass(teacher_public_token):
             .all()
         )
     except SQLAlchemyError:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         current_app.logger.exception("Hall pass verification database unavailable")
         return _unavailable(503)
 
@@ -372,7 +375,10 @@ def verify_hall_pass(teacher_public_token):
                 # Ambiguous: stop early.
                 break
     except SQLAlchemyError:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         current_app.logger.exception("Hall pass verification database unavailable")
         return _unavailable(503)
 
