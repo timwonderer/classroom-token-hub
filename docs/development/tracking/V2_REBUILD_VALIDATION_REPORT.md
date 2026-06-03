@@ -880,7 +880,7 @@ The first report contained several characterizations that this deeper analysis r
 
 4. ~~**Execute final Wave 6 table cutover tasks**~~ — **RESOLVED** (2026-05-30): payroll/admin batch attendance reads now use canonical sessions; daily-limit batch helper no longer writes legacy tap rows; `TapEvent.student_id` made nullable with migration `e4a2b7c9d1f0`; DB downgrade/re-upgrade validated through current head.
 
-5. **Update `test_smoke.py`** — add `PolicyVersion` and `PolicyTransition` to the import list and bump the assertion to 46 (2-line fix).
+5. ~~**Update `test_smoke.py`**~~ — **RESOLVED**: `PolicyVersion` and `PolicyTransition` added to canonical list and assertion bumped to 46.
 
 6. **Close INV-ARC-014 (`block` as routing key)** — `RentSettings.block` column needs to be resolved to `class_id` alone. Tracked in `V2_CLASS_ID_INVARIANT_BACKLOG.md`.
 

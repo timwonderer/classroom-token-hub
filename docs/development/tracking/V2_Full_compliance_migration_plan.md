@@ -21,15 +21,15 @@ Target state:
 | Dimension | Status |
 |---|---|
 | Models | 54+ classes; 44 dual-scoped, 5 pure v1, ~5 pure v2 |
-| Migration files | 196 in `migrations/versions/`; single head `db80eb72e775` |
-| Test files | 117; ~708 passing, ~123 failing (active stabilization) |
-| Feats | 8 active (`transfer`, `store_purchase`, `rent_payment`, `transaction_void`, `insurance_claim`, `insurance_purchase`, `admin_adjustment`, `base`) |
+| Migration files | 16 in `migrations/versions/`; single head `f7b8c9d0e1f2` |
+| Test files | 117 test files; ~798 total tests (617 passed, 174 failed, 1 skipped, 6 errors) |
+| Feats | 19 registered FEAT codes in canonical registry |
 | Services | 8 (`access_policy`, `attendance`, `balance`, `identity`, `ledger`, `obligations`, `store`, `tlcp`) |
 | Blueprints | 8 (`admin` 514K lines, `student` 178K, `api` 120K, `system_admin` 78K, `docs` 30K, `analytics` 19K, `main` 14K, `recovery` 8.6K) |
 | Target canonical tables | 44 across 9 domains (DOM-CORE-002) |
 | Auth | `User` model exists but inactive; `Admin`/`Student`/`SystemAdmin` are still primary |
 | `Seat` | Partially active; bridges to `Student` via `student_id` FK |
-| `ClassEconomy` | Active v2 class anchor (`class_id` UUID); table name `class_economies` vs target `classes` |
+| `ClassEconomy` | Active v2 class anchor (`class_id` UUID); table name renamed to target `classes` |
 
 ---
 
