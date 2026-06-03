@@ -11,6 +11,7 @@ from datetime import timezone
 from flask import Blueprint, redirect, url_for, jsonify, current_app, session, request
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import selectinload
 
 from app.extensions import db, limiter
 from app.models import Admin
@@ -347,7 +348,9 @@ def verify_hall_pass(teacher_public_token):
     try:
         # Query today's hall pass records for this join_code.
         # Only include actionable statuses (not pending/rejected).
-        passes_query = HallPassLog.query.filter(
+        passes_query = HallPassLog.query.options(
+            selectinload(HallPassLog.student)
+        ).filter(
             HallPassLog.join_code == selected_join_code,
             HallPassLog.request_time >= today_start_db,
             HallPassLog.request_time <= today_end_db,
