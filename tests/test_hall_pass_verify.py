@@ -14,6 +14,7 @@ Validates the privacy-respecting single-student verification per spec v1.0:
 import pytest
 import unicodedata
 from datetime import datetime, timezone, timedelta
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db
 from app.models import Admin, Student, StudentTeacher, TeacherBlock, HallPassLog
@@ -106,6 +107,27 @@ def test_get_verify_page_invalid_token(client):
     html = resp.data.decode()
     assert "Verification page not available" in html
     # Must not expose any teacher info
+    assert "teacher_id" not in html.lower()
+
+
+def test_get_verify_page_db_disconnect_fails_closed(client, monkeypatch):
+    """A database disconnect during token lookup returns a generic unavailable response."""
+    import app.routes.main as main_routes
+
+    class BrokenQuery:
+        def filter_by(self, **kwargs):
+            raise SQLAlchemyError("SSL connection has been closed unexpectedly")
+
+    class BrokenAdmin:
+        query = BrokenQuery()
+
+    monkeypatch.setattr(main_routes, "Admin", BrokenAdmin)
+
+    resp = client.get("/verify/hallpass/deadbeef1234deadbeef1234deadbeef1234deadbeef1234deadbeef1234dead")
+    assert resp.status_code == 503
+    html = resp.data.decode()
+    assert "Verification page not available" in html
+    assert "SSL connection" not in html
     assert "teacher_id" not in html.lower()
 
 

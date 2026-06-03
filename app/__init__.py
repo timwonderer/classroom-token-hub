@@ -332,6 +332,10 @@ def create_app():
         ENV=flask_env,
         SECRET_KEY=os.environ["SECRET_KEY"],
         SQLALCHEMY_DATABASE_URI=os.environ["DATABASE_URL"],
+        SQLALCHEMY_ENGINE_OPTIONS={
+            "pool_pre_ping": True,
+            "pool_recycle": int(os.getenv("SQLALCHEMY_POOL_RECYCLE_SECONDS", "1800")),
+        },
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SESSION_COOKIE_SECURE=flask_env == "production",  # Only require HTTPS in production
         SESSION_COOKIE_HTTPONLY=True,
