@@ -26,7 +26,7 @@ import pyotp
 
 from app.extensions import db, limiter
 from app.models import (
-    SystemAdmin, SystemAdminCredential, Admin, Student, ErrorLog,
+    Seat, SystemAdmin, SystemAdminCredential, Admin, Student, ErrorLog,
     Transaction, TransactionStatus, TapEvent, HallPassLog, StudentItem, RentPayment,
     StudentInsurance, InsuranceClaim, StudentTeacher, TeacherBlock, StudentBlock, UserReport,
     FeatureSettings, RentSettings, BankingSettings,
@@ -894,7 +894,12 @@ def delete_admin(admin_id):
             ).delete(synchronize_session=False)
 
         if exclusive_student_ids:
-            Transaction.query.filter(Transaction.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
+            exclusive_seat_ids = [
+                s_id for (s_id,) in db.session.query(Seat.id)
+                .filter(Seat.student_id.in_(exclusive_student_ids))
+            ]
+            if exclusive_seat_ids:
+                Transaction.query.filter(Transaction.seat_id.in_(exclusive_seat_ids)).delete(synchronize_session=False)
             TapEvent.query.filter(TapEvent.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
             HallPassLog.query.filter(HallPassLog.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
             StudentItem.query.filter(StudentItem.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)

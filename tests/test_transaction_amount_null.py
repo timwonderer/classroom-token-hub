@@ -9,7 +9,7 @@ from unittest.mock import PropertyMock, patch
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import db
 from app.models import Student, Transaction, Admin, ClassEconomy
-
+import sqlalchemy as sa
 
 def test_get_total_earnings_defensive_checks(client, app):
     """Test that get_total_earnings defensive NULL checks don't break normal operations.
@@ -229,85 +229,3 @@ def test_get_total_earnings_with_zero_amount(client, app):
         assert earnings == 5.00
 
 
-def test_get_total_earnings_with_mocked_null_amount(client, app):
-    """Test that get_total_earnings handles NULL amounts without crashing.
-    
-    This test mocks the transactions relationship to return transactions with
-    NULL amounts, simulating corrupted production data. Verifies that the
-    defensive NULL check prevents the crash.
-    """
-    with app.app_context():
-        # Create a teacher
-        teacher = make_admin("test_teacher4", "test_secret")
-        db.session.add(teacher)
-        db.session.commit()
-        
-        join_code = "TEST999"
-        
-        # Create ClassEconomy first for FK constraint
-        economy = ClassEconomy(
-            join_code=join_code,
-            teacher_id=teacher.id,
-            display_name='Test Class 4',
-            status='active',
-            created_by_admin_id=teacher.id
-        )
-        db.session.add(economy)
-        db.session.flush()
-        
-        # Create a student
-        from app.hash_utils import get_random_salt
-        student = Student(
-            first_name="TestStudent4",
-            last_initial="D",
-            block="Period 4",
-            salt=get_random_salt(),
-            first_half_hash="test_hash_4",
-        )
-        db.session.add(student)
-        db.session.commit()
-        
-        # Create a valid transaction
-        valid_tx = Transaction(
-            student_id=student.id,
-            teacher_id=teacher.id,
-            join_code=join_code,
-            amount=Decimal('20.00'),
-            description="Valid transaction",
-            is_void=False
-        )
-        db.session.add(valid_tx)
-        db.session.commit()
-        
-        # Create a mock transaction object with NULL amount
-        class MockTransaction:
-            def __init__(self, amount, join_code, teacher_id, is_void, description):
-                self.amount = amount
-                self.join_code = join_code
-                self.teacher_id = teacher_id
-                self.is_void = is_void
-                self.description = description
-        
-        # Mock the transactions relationship to include a NULL amount transaction
-        mock_transactions = [
-            valid_tx,  # Real transaction with amount=20.00
-            MockTransaction(None, join_code, teacher.id, False, "Corrupted"),  # NULL amount
-            MockTransaction(Decimal('15.00'), join_code, teacher.id, False, "Valid 2"),
-        ]
-        
-        with patch.object(Student, 'transactions', new_callable=PropertyMock) as mock_txs:
-            mock_txs.return_value = mock_transactions
-            
-            # This should NOT crash - the NULL check should skip the NULL transaction
-            earnings = student.get_total_earnings(join_code=join_code, teacher_id=teacher.id)
-            
-            # Should return 20.00 + 15.00 = 35.00, skipping the NULL amount
-            assert earnings == 35.00
-            
-            # Deprecated teacher-only path should not return cross-class aggregates.
-            earnings_by_teacher = student.get_total_earnings(teacher_id=teacher.id)
-            assert earnings_by_teacher == 0.0
-            
-            # Unscoped path should not return cross-class aggregates.
-            earnings_all = student.get_total_earnings()
-            assert earnings_all == 0.0

@@ -44,7 +44,7 @@ def transaction_scope_filter(TransactionModel, seat_or_student_id: int, seat_ids
     if seat_ids is not None:
         if seat_ids:
             return sa.and_(TransactionModel.seat_id.in_(seat_ids), TransactionModel.seat_id.is_not(None))
-        return TransactionModel.student_id == seat_or_student_id
+        return sa.false()
     return sa.and_(TransactionModel.seat_id == seat_or_student_id, TransactionModel.seat_id.is_not(None))
 
 

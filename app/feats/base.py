@@ -481,12 +481,14 @@ def init_feat_enforcement(app):
                     f"New={len(session.new)}, Dirty={len(session.dirty)}, Deleted={len(session.deleted)}."
                 )
         # Hard atomicity rule: only FEAT orchestrator may commit.
+        # Savepoints (nested transactions) do not count as top-level commits.
         if (
             not is_bypass
             and not is_system_audit_authority()
             and is_feat_active()
             and session.info.get("feat_context_active")
             and not session.info.get("feat_orchestrator_commit")
+            and not session.in_nested_transaction()
         ):
             raise FEATContextError(
                 "MANDATORY FEAT ATOMICITY VIOLATION (COMMIT): "

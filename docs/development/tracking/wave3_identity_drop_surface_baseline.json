@@ -3,7 +3,6 @@
     "admin_id": [
       "app/__init__.py",
       "app/auth.py",
-      "app/payroll.py",
       "app/routes/admin.py",
       "app/routes/analytics.py",
       "app/routes/recovery.py",
@@ -30,6 +29,7 @@
     "Admin": [
       "app/__init__.py",
       "app/auth.py",
+      "app/feats/attendance.py",
       "app/routes/admin.py",
       "app/routes/analytics.py",
       "app/routes/api.py",
@@ -55,7 +55,6 @@
       "app/scheduled_tasks.py",
       "app/services/identity_service.py",
       "app/services/store_service.py",
-      "app/services/tlcp.py",
       "app/utils/analytics_engine.py",
       "app/utils/deletion.py",
       "app/utils/issue_helpers.py",
@@ -64,10 +63,12 @@
     ],
     "StudentBlock": [
       "app/attendance.py",
+      "app/feats/attendance.py",
       "app/routes/admin.py",
       "app/routes/analytics.py",
       "app/routes/api.py",
       "app/routes/system_admin.py",
+      "app/services/attendance_service.py",
       "app/services/identity_service.py",
       "app/utils/deletion.py",
       "app/utils/issue_helpers.py",
@@ -82,7 +83,6 @@
       "app/routes/api.py",
       "app/routes/student.py",
       "app/routes/system_admin.py",
-      "app/services/attendance_service.py",
       "app/utils/deletion.py",
       "app/utils/student_deletion.py"
     ],
@@ -90,7 +90,7 @@
       "app/__init__.py",
       "app/attendance.py",
       "app/cli_commands.py",
-      "app/payroll.py",
+      "app/feats/attendance.py",
       "app/routes/admin.py",
       "app/routes/analytics.py",
       "app/routes/api.py",

@@ -21,6 +21,7 @@ from app.models import (
     IssueCategory,
     Issue,
     IssueResolutionAction,
+    ClassEconomy,
 )
 from app.hash_utils import get_random_salt, hash_hmac
 
@@ -63,6 +64,12 @@ def _create_student_with_student_block(first_name: str, teacher: Admin, block: s
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
 
     join_code = f"JOIN{teacher.id}{block}"
+    class_economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+    if not class_economy:
+        class_economy = ClassEconomy(join_code=join_code, teacher_id=teacher.id)
+        db.session.add(class_economy)
+        db.session.flush()
+    
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
         block=block,
@@ -73,6 +80,7 @@ def _create_student_with_student_block(first_name: str, teacher: Admin, block: s
         salt=salt,
         first_half_hash=first_half_hash,
         join_code=join_code,
+        class_id=class_economy.class_id,
         is_claimed=True,
         student_id=student.id,
     ))
@@ -82,6 +90,7 @@ def _create_student_with_student_block(first_name: str, teacher: Admin, block: s
         student_id=student.id,
         period=period,
         join_code=join_code,
+        class_id=class_economy.class_id,
         tap_enabled=True,
     )
     db.session.add(student_block)
@@ -131,6 +140,7 @@ def test_delete_student_removes_student_and_student_block(client):
     )
     
     assert response.status_code == 200
+    db.session.expire_all()
     
     # Verify student is deleted
     assert db.session.get(Student, student_id) is None
@@ -165,6 +175,7 @@ def test_bulk_delete_students_removes_students_and_student_blocks(client):
     )
     
     assert response.status_code == 200
+    db.session.expire_all()
     
     # Verify students are deleted
     assert db.session.get(Student, student1_id) is None
@@ -199,6 +210,7 @@ def test_delete_block_removes_student_blocks(client):
     )
     
     assert response.status_code == 200
+    db.session.expire_all()
     
     # Verify all StudentBlocks for students in block X are deleted
     assert db.session.get(StudentBlock, sb1_id) is None
@@ -250,6 +262,7 @@ def test_bulk_delete_legacy_unclaimed_deletes_students(client):
     )
     
     assert response.status_code == 200
+    db.session.expire_all()
     
     # Verify student is deleted
     assert db.session.get(Student, student_id) is None
@@ -283,6 +296,7 @@ def test_sysadmin_delete_admin_removes_student_blocks(client):
     )
     
     assert response.status_code == 200
+    db.session.expire_all()
     
     # Verify StudentBlocks are deleted
     assert db.session.get(StudentBlock, sb1_id) is None
@@ -292,8 +306,10 @@ def test_sysadmin_delete_admin_removes_student_blocks(client):
 def test_delete_student_clears_cross_issue_transaction_references(client):
     """Deleting a student should null cross-issue tx refs and remove student tx rows."""
     teacher, secret = _create_admin("teacher-issue-fk")
-    student_to_delete, _ = _create_student_with_student_block("Alice", teacher, period="1")
-    reporter_student, _ = _create_student_with_student_block("Riley", teacher, period="2")
+    student_to_delete, s_sb = _create_student_with_student_block("Alice", teacher, period="1")
+    reporter_student, r_sb = _create_student_with_student_block("Riley", teacher, period="2")
+
+    join_code = s_sb.join_code
 
     tx = Transaction(
         student_id=student_to_delete.id,
@@ -301,7 +317,7 @@ def test_delete_student_clears_cross_issue_transaction_references(client):
         amount=25,
         account_type="checking",
         description="Seed transaction for FK regression",
-        join_code="JOIN1",
+        join_code=join_code,
     )
     db.session.add(tx)
     db.session.flush()
@@ -320,7 +336,7 @@ def test_delete_student_clears_cross_issue_transaction_references(client):
         student_last_initial=reporter_student.last_initial,
         actor_public_id="seat-public-ref-123",
         teacher_id=teacher.id,
-        join_code="JOIN1",
+        join_code=join_code,
         category_id=category.id,
         issue_type="transaction",
         student_explanation="Transaction appears wrong",

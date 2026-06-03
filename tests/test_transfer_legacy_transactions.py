@@ -58,6 +58,11 @@ def setup_student_with_legacy_transactions(client):
     db.session.add(economy)
     db.session.flush()
     
+    from app.models import ClassFeature
+    if not ClassFeature.query.filter_by(class_id=economy.class_id, feature_name="banking").first():
+        db.session.add(ClassFeature(class_id=economy.class_id, feature_name="banking"))
+        db.session.flush()
+    
     # Create TeacherBlock entry (claimed seat)
     seat = TeacherBlock(
         teacher_id=teacher.id,
@@ -74,31 +79,55 @@ def setup_student_with_legacy_transactions(client):
         claimed_at=datetime.now(timezone.utc)
     )
     db.session.add(seat)
-    db.session.add(Seat(
+    seat_record = Seat(
         student_id=student.id,
         class_id=economy.class_id,
         join_code=join_code,
         block="Period1",
         role="student",
-    ))
+        claimed_at=datetime.now(timezone.utc),
+    )
+    db.session.add(seat_record)
     db.session.commit()
 
-    # Add first transaction as a legacy row with NULL join_code.
-    # It should be excluded from class-scoped balance calculations.
-    tx1 = Transaction(
-        student_id=student.id,
+    import uuid
+    other_class_id = str(uuid.uuid4())
+    other_economy = ClassEconomy(
+        class_id=other_class_id,
         teacher_id=teacher.id,
-        join_code=None,
+        join_code="OTHER1",
+        display_name="Other Class"
+    )
+    db.session.add(other_economy)
+    
+    other_seat = Seat(
+        student_id=student.id,
+        class_id=other_class_id,
+        join_code="OTHER1",
+        block="Period2",
+        role="student",
+        claimed_at=datetime.now(timezone.utc),
+    )
+    db.session.add(other_seat)
+    db.session.flush()
+
+    # Add first transaction as a legacy row from another class context.
+    # It should be excluded from current class-scoped balance calculations.
+    tx1 = Transaction(
+        seat_id=other_seat.id,
+        class_id=other_class_id,
+        teacher_id=teacher.id,
         amount=100.0,
         account_type='checking',
         status=TransactionStatus.POSTED,
         type='Initial',
-        description='Legacy balance without join_code'
+        description='Legacy balance from another class'
     )
     
     # Add second transaction with current class join_code.
     tx2 = Transaction(
         student_id=student.id,
+        seat_id=seat_record.id,
         teacher_id=teacher.id,
         join_code=join_code,
         amount=50.0,
@@ -114,7 +143,9 @@ def setup_student_with_legacy_transactions(client):
     return {
         'teacher': teacher,
         'student': student,
-        'join_code': join_code
+        'join_code': join_code,
+        'seat_id': seat.id,
+        'class_id': economy.class_id
     }
 
 
@@ -147,8 +178,8 @@ def test_transfer_with_legacy_transactions(client, setup_student_with_legacy_tra
     
     # Verify transactions were created
     transactions = Transaction.query.filter_by(
-        student_id=student.id,
-        join_code=join_code
+        seat_id=data['seat_id'],
+        class_id=data['class_id']
     ).order_by(Transaction.timestamp.desc()).limit(2).all()
     
     # Should have 2 new transactions (withdrawal and deposit)

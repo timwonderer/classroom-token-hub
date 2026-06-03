@@ -222,9 +222,7 @@ def collapse_universe(class_id: str, reason: str, actor_membership_id: Optional[
                     logger.info(f"Student Erasure Rule triggered for student_id={s_id}")
                     # Remove any leftover bridge rows
                     StudentTeacher.query.filter_by(student_id=s_id).delete(synchronize_session=False)
-                    # Clean up all remaining orphaned transactions for this student
-                    Transaction.query.filter_by(student_id=s_id).delete(synchronize_session=False)
-                    # The delete will cascade to other student-specific data
+                    # Orphaned transactions will be deleted via ON DELETE CASCADE from Seats when Student is deleted.
                     Student.query.filter_by(id=s_id).delete(synchronize_session=False)
 
         # 8. Post-collapse: Settings Cleanup

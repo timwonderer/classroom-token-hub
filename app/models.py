@@ -453,18 +453,8 @@ class Student(db.Model):
     def display_last_initial(self):
         return self.identity_profile.last_initial if self.identity_profile else ""
 
-    transactions = db.relationship('Transaction', backref='student', lazy=True)
-
-
-    @property
-    def checking_balance(self):
-        total = sum((_quantize_currency(tx.amount) for tx in self.transactions if tx.account_type == 'checking' and not tx.is_void), Decimal('0.00'))
-        return _quantize_currency(total)
-
-    @property
-    def savings_balance(self):
-        total = sum((_quantize_currency(tx.amount) for tx in self.transactions if tx.account_type == 'savings' and not tx.is_void), Decimal('0.00'))
-        return _quantize_currency(total)
+    # Student transactions relationship severed in V2.
+    # checking_balance and savings_balance properties severed in V2.
 
     def get_active_insurance(self, teacher_id=None, class_id=None):
         """
@@ -517,13 +507,15 @@ class Student(db.Model):
         """
         if join_code:
             # Proper scoping by join_code (period-level isolation)
-            return float(round(sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.join_code == join_code
-                and tx.amount is not None and _quantize_currency(tx.amount) > Decimal('0') and not tx.is_void
-                and not (tx.description or "").startswith("Transfer")),
-                Decimal('0.00')
-            ), 2))
+            from app.models import Transaction, Seat
+            total = db.session.query(db.func.sum(Transaction.amount)).join(Seat, Transaction.seat_id == Seat.id).filter(
+                Seat.student_id == self.id,
+                Transaction.join_code == join_code,
+                Transaction.amount > 0,
+                Transaction.is_void == False,
+                ~Transaction.description.startswith("Transfer")
+            ).scalar()
+            return float(round(_quantize_currency(total), 2)) if total else 0.0
         elif teacher_id:
             # Deprecated teacher-only lookups are intentionally disabled to avoid
             # cross-class aggregation leaks during the join-code migration.
@@ -544,29 +536,24 @@ class Student(db.Model):
 
     @property
     def total_earnings(self):
-        return float(round(sum(
-            (tx.amount for tx in self.transactions
-            if tx.amount is not None and tx.amount.is_finite() and tx.amount > Decimal('0') and not tx.is_void
-            and not (tx.description or "").startswith("Transfer")),
-            Decimal('0.00')
-        ), 2))
+        # Deprecated: Use get_total_earnings(join_code=...) instead for class-scoped aggregation.
+        return self.get_total_earnings()
 
     @property
     def recent_deposits(self):
         now = utc_now()
         recent_timeframe = now - timedelta(days=2)
 
-        deposits = []
-        for tx in self.transactions:
-            # Skip transactions with NULL amounts (corrupted data)
-            if tx.amount is None or not tx.amount.is_finite() or tx.amount <= Decimal('0') or tx.is_void:
-                continue
-            if (tx.description or "").lower().startswith("transfer"):
-                continue
-            tx_time = ensure_utc(tx.timestamp)
-            if not tx_time or tx_time < recent_timeframe:
-                continue
-            deposits.append(tx)
+        deposits = (
+            db.session.query(Transaction)
+            .join(Seat, Seat.id == Transaction.seat_id)
+            .filter(Seat.student_id == self.id)
+            .filter(Transaction.amount > 0)
+            .filter(Transaction.is_void == False)
+            .filter(~db.func.lower(Transaction.description).like('transfer%'))
+            .filter(Transaction.timestamp >= recent_timeframe)
+            .all()
+        )
         return deposits
 
     @property
@@ -815,9 +802,7 @@ class SystemAdminCredential(db.Model):
 class Transaction(db.Model):
     __tablename__ = 'ledger_transaction'
     id = db.Column(db.Integer, primary_key=True)
-    # student_id is DEPRECATED in favor of seat_id. 
-    # V2 Domain Law requires activity to be anchored to a Seat.
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
+    # student_id has been formally severed in favor of seat_id. 
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True)
 
@@ -874,8 +859,6 @@ class Transaction(db.Model):
     seat = db.relationship('Seat', backref=db.backref('transactions', lazy='dynamic'))
 
     __table_args__ = (
-        db.Index('ix_transaction_ledger_scope', 'join_code', 'student_id', 'status', 'account_type'),
-        db.Index('ix_transaction_student_ledger', 'join_code', 'student_id'),
         db.Index('ix_transaction_seat_ledger', 'join_code', 'seat_id', 'status', 'account_type'),
         db.Index(
             'uq_insurance_reimbursement_source_policy',
@@ -935,18 +918,7 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
         from app.feats.base import FEATContextError
         raise FEATContextError("MANDATORY FEAT CONSTITUTIONAL VIOLATION: Ledger mutation outside of FEAT context.")
 
-    # 4. Auto-populate seat_id, class_id, and student_id if possible
-    if not target.seat_id and target.student_id:
-        existing_seat_id = _connection.execute(
-            sa.text("SELECT id FROM seats WHERE student_id = :student_id ORDER BY id ASC LIMIT 1"),
-            {"student_id": target.student_id},
-        ).scalar()
-        if existing_seat_id:
-            target.seat_id = int(existing_seat_id)
-
-    if not target.seat_id and target.student_id:
-        target.seat_id = _resolve_seat_id(_connection, target.student_id, class_id=target.class_id, join_code=target.join_code)
-    
+    # 4. Auto-populate seat_id, class_id if possible
     if not target.class_id and target.join_code:
         class_row = _connection.execute(
             sa.text("SELECT class_id FROM classes WHERE join_code = :jc LIMIT 1"),
@@ -954,8 +926,6 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
         ).fetchone()
         if class_row:
             target.class_id = class_row[0]
-            if not target.seat_id and target.student_id:
-                target.seat_id = _resolve_seat_id(_connection, target.student_id, class_id=target.class_id)
 
     if not target.class_id and target.seat_id:
         seat_class_id = _connection.execute(
@@ -972,41 +942,6 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
         ).scalar()
         if resolved_join_code:
             target.join_code = str(resolved_join_code)
-
-    if not target.student_id and target.seat_id:
-        student_id = _connection.execute(
-            sa.text("SELECT student_id FROM seats WHERE id = :seat_id LIMIT 1"),
-            {"seat_id": target.seat_id},
-        ).scalar()
-        if student_id:
-            target.student_id = int(student_id)
-
-    if not target.seat_id and target.student_id:
-        legacy_join_code = target.join_code or f"LEGACY_{target.student_id}"
-        legacy_block = _connection.execute(
-            sa.text("SELECT COALESCE(block, 'A') FROM students WHERE id = :student_id LIMIT 1"),
-            {"student_id": target.student_id},
-        ).scalar() or "A"
-        legacy_seat_id = _connection.execute(
-            sa.text(
-                "INSERT INTO seats (public_id, user_id, class_id, role, block_identifier, roster_fingerprint, dedupe_code, claimed_at, has_received_rent_exemption, join_code, student_id, block, created_at, updated_at) "
-                "VALUES (:public_id, NULL, NULL, :role, :block_identifier, NULL, NULL, NULL, :has_received_rent_exemption, :join_code, :student_id, :block, :created_at, :updated_at) "
-                "RETURNING id"
-            ),
-            {
-                "public_id": str(uuid.uuid4()),
-                "role": "student",
-                "block_identifier": legacy_block,
-                "has_received_rent_exemption": False,
-                "join_code": legacy_join_code,
-                "student_id": target.student_id,
-                "block": legacy_block,
-                "created_at": utc_now(),
-                "updated_at": utc_now(),
-            },
-        ).scalar()
-        if legacy_seat_id:
-            target.seat_id = int(legacy_seat_id)
 
     # 5. Global Format Validation
     state = sa.inspect(target)
@@ -1031,7 +966,7 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
         meta = FEAT_REGISTRY.get(feat_name, {})
         is_tier_1 = meta.get("blast_radius") == "HIGH" or (feat_name and feat_name.startswith("FEAT-LED"))
         if is_tier_1 and not target.class_id:
-             raise ValueError(f"FATAL: Ledger mutation for student {target.student_id} missing mandatory class_id in {feat_name}. Clean break V2 requires explicit class anchoring.")
+             raise ValueError(f"FATAL: Ledger mutation missing mandatory class_id in {feat_name}. Clean break V2 requires explicit class anchoring.")
         if not target.correlation_id or target.correlation_id == "NO-CORRELATION":
             raise ValueError(f"FATAL: Ledger mutation missing correlation_id in {feat_name}.")
 
@@ -1082,7 +1017,6 @@ class BalanceCache(db.Model):
     __tablename__ = 'ledger_balance_snapshot'
 
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=True)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True)
@@ -1434,6 +1368,22 @@ class StoreItem(db.Model):
                 StoreItemBlock(store_item_id=self.id, block=block.strip().upper())
                 for block in block_list
             ])
+
+
+@sa.event.listens_for(StoreItem, "before_insert")
+@sa.event.listens_for(StoreItem, "before_update")
+def _sync_store_item_scope(_mapper, connection, target):
+    """Dual-write bridge for store_items class scope."""
+    class_id = getattr(target, "class_id", None)
+    join_code = getattr(target, "join_code", None)
+
+    if not class_id and join_code:
+        class_id = connection.execute(
+            sa.text("SELECT class_id FROM classes WHERE join_code = :join_code LIMIT 1"),
+            {"join_code": join_code},
+        ).scalar()
+        if class_id:
+            target.class_id = str(class_id)
 
 
 class StoreItemBlock(db.Model):

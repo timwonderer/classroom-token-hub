@@ -170,19 +170,24 @@ class AnalyticsEngine:
         # Count students with any activity (transactions or attendance)
         active_student_ids = set()
         
-        # Check for transactions in window (distinct student IDs)
-        transaction_student_rows = (
-            Transaction.query.with_entities(Transaction.student_id)
+        student_id_by_seat = {seat_id: student_id for student_id, seat_id in seat_id_by_student.items()}
+        
+        # Check for transactions in window (distinct seat IDs)
+        transaction_seat_rows = (
+            Transaction.query.with_entities(Transaction.seat_id)
             .filter(
                 Transaction.class_id == self.class_id,
                 Transaction.timestamp >= window_start,
                 Transaction.timestamp < window_end,
+                Transaction.seat_id.isnot(None)
             )
             .distinct()
             .all()
         )
-        for (student_id,) in transaction_student_rows:
-            active_student_ids.add(student_id)
+        for (seat_id,) in transaction_seat_rows:
+            student_id = student_id_by_seat.get(seat_id)
+            if student_id:
+                active_student_ids.add(student_id)
         
         # Check for attendance in window (distinct student IDs)
         tap_event_student_rows = (

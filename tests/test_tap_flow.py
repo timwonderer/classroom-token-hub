@@ -41,7 +41,7 @@ def create_claimed_seat(teacher_id, student_id, block, join_code, salt=None):
     )
     if not identity_user:
         identity_user = User(
-            username=f"tapflow_{student_id}_{join_code.lower()}",
+            username_hash=hash_username(f"tapflow_{student_id}_{join_code.lower()}", salt),
             password_hash=generate_password_hash("test-passphrase"),
             last_active_class_id=class_economy.class_id,
         )

@@ -574,8 +574,8 @@ def student_drill_down(student_id):
     # Get recent transactions (last 30 days)
     thirty_days_ago = utc_now() - timedelta(days=30)
     recent_transactions = Transaction.query.filter(
-        Transaction.student_id == student_id,
-        Transaction.join_code == join_code,
+        Transaction.seat_id == seat.id,
+        Transaction.class_id == class_id,
         Transaction.timestamp >= thirty_days_ago,
         Transaction.is_void.is_(False)
     ).order_by(Transaction.timestamp.desc()).limit(50).all()

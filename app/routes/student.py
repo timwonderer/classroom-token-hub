@@ -1739,11 +1739,11 @@ def transfer():
             flash("Transfer completed successfully!", "transfer_success")
             return redirect(url_for('student.dashboard'))
 
-    # CRITICAL FIX v2: Get transactions for display - strict join_code scoping.
+    # CRITICAL FIX v2: Get transactions for display - strict class_id/seat_id scoping.
     transactions = Transaction.query.filter(
-        Transaction.student_id == student.id,
+        Transaction.seat_id == context.get('seat_id'),
+        Transaction.class_id == context.get('class_id'),
         Transaction.is_void == False,
-        Transaction.join_code == join_code
     ).order_by(Transaction.timestamp.desc()).all()
     checking_transactions = [t for t in transactions if t.account_type == 'checking']
     savings_transactions = [t for t in transactions if t.account_type == 'savings']
@@ -2205,7 +2205,8 @@ def file_claim(policy_id):
         effective_time_limit_days = int(claim_time_limit_days) if claim_time_limit_days is not None else None
         tx_query = (
             Transaction.query
-            .filter(Transaction.student_id == student.id)
+            .filter(Transaction.seat_id == scope['seat_id'])
+            .filter(Transaction.class_id == scope['class_id'])
             .filter(Transaction.is_void == False)
             .filter(Transaction.status == TransactionStatus.POSTED)
             .filter(Transaction.amount < Decimal('0'))
@@ -2269,7 +2270,8 @@ def file_claim(policy_id):
             selected_transaction = (
                 Transaction.query
                 .filter(Transaction.id == form.transaction_id.data)
-                .filter(Transaction.student_id == student.id)
+                .filter(Transaction.seat_id == scope['seat_id'])
+                .filter(Transaction.class_id == scope['class_id'])
                 .filter(Transaction.is_void == False)
                 .filter(Transaction.status == TransactionStatus.POSTED)
                 .filter(Transaction.amount < Decimal('0'))
@@ -2938,9 +2940,9 @@ def _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date):
 
     for payment in cycle_payments:
         txn = Transaction.query.filter(
-            Transaction.student_id == payment.student_id,
+            Transaction.seat_id == payment.seat_id,
+            Transaction.class_id == payment.class_id,
             Transaction.type == 'Rent Payment',
-            Transaction.join_code == join_code,
             Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
             Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
             Transaction.amount == -payment.amount_paid,
@@ -3120,30 +3122,27 @@ def _build_rent_coverage_context(
     # Preload candidate rent transactions once and reuse the same matching rules.
     payment_dates = [p.payment_date for p in coverage_payments if p.payment_date]
     payment_amounts = {-(p.amount_paid) for p in coverage_payments if p.amount_paid is not None}
-    txns_by_student = defaultdict(list)
+    txns_by_seat = defaultdict(list)
     if payment_dates and payment_amounts:
         window_start = min(payment_dates) - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS)
         window_end = max(payment_dates) + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS)
         candidate_txns = Transaction.query.filter(
-            Transaction.student_id.in_(list(student_id_by_seat.values())),
+            Transaction.seat_id.in_(list(student_id_by_seat.keys())),
+            Transaction.class_id == class_id,
             Transaction.type == 'Rent Payment',
-            Transaction.join_code == join_code,
             Transaction.timestamp >= window_start,
             Transaction.timestamp <= window_end,
             Transaction.amount.in_(payment_amounts),
         ).all()
         for txn in candidate_txns:
-            txns_by_student[txn.student_id].append(txn)
+            if txn.seat_id:
+                txns_by_seat[txn.seat_id].append(txn)
 
     valid_payments_by_seat = {}
     for seat_id, payments in payments_by_seat.items():
-        student_id = student_id_by_seat.get(seat_id)
-        if not student_id:
-            valid_payments_by_seat[seat_id] = []
-            continue
         valid_payments_by_seat[seat_id] = _match_valid_rent_payments(
             payments,
-            txns_by_student.get(student_id, []),
+            txns_by_seat.get(seat_id, []),
         )
 
     return {

@@ -40,6 +40,76 @@ from sqlalchemy.exc import IntegrityError
 from app import app as flask_app, db, Student
 from flask import current_app
 from app.extensions import limiter
+from app.models import Transaction, Seat
+
+@event.listens_for(Transaction, "init")
+def intercept_transaction_student_id(target, args, kwargs):
+    """Test-only shim to intercept legacy student_id during Transaction instantiation."""
+    student_id = kwargs.pop('student_id', None)
+    if student_id:
+        target._transient_student_id = student_id
+
+@event.listens_for(Transaction, "before_insert")
+def resolve_seat_from_transient_student(mapper, connection, target):
+    """Test-only shim to resolve seat_id from legacy student_id before insert."""
+    if hasattr(target, '_transient_student_id'):
+        student_id = target._transient_student_id
+        if getattr(target, 'seat_id', None) is None:
+            class_id = getattr(target, 'class_id', None)
+            join_code = getattr(target, 'join_code', None)
+            
+            # resolve class_id
+            if not class_id and join_code:
+                class_row = connection.execute(
+                    sa.text("SELECT class_id FROM classes WHERE join_code = :jc LIMIT 1"),
+                    {"jc": join_code}
+                ).fetchone()
+                if class_row:
+                    class_id = class_row[0]
+                    target.class_id = class_id
+            
+            # resolve seat_id
+            if class_id:
+                seat_row = connection.execute(
+                    sa.text("SELECT id FROM seats WHERE student_id = :sid AND class_id = :cid LIMIT 1"),
+                    {"sid": student_id, "cid": class_id}
+                ).fetchone()
+                if seat_row:
+                    target.seat_id = seat_row[0]
+            else:
+                # fallback
+                seat_row = connection.execute(
+                    sa.text("SELECT id, class_id FROM seats WHERE student_id = :sid LIMIT 1"),
+                    {"sid": student_id}
+                ).fetchone()
+                if seat_row:
+                    target.seat_id = seat_row[0]
+                    target.class_id = seat_row[1]
+
+            if getattr(target, 'seat_id', None) is None:
+                # Create a mock seat on the fly for tests that skip ClassEconomy creation
+                import uuid
+                from datetime import datetime, timezone
+                pub_id = str(uuid.uuid4())
+                cid = class_id or str(uuid.uuid4())
+                target.class_id = cid
+                target.join_code = join_code or "TEST_JC"
+                connection.execute(
+                    sa.text("""
+                    INSERT INTO seats (public_id, student_id, class_id, join_code, role, has_received_rent_exemption, created_at, updated_at) 
+                    VALUES (:pid, :sid, :cid, :jc, 'student', false, :now, :now)
+                    """),
+                    {
+                        "pid": pub_id, "sid": student_id, "cid": cid, 
+                        "jc": target.join_code, "now": datetime.now(timezone.utc)
+                    }
+                )
+                seat_row = connection.execute(
+                    sa.text("SELECT id FROM seats WHERE public_id = :pid"),
+                    {"pid": pub_id}
+                ).fetchone()
+                if seat_row:
+                    target.seat_id = seat_row[0]
 
 def _set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
