@@ -9,6 +9,7 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Changed
+- **Ledger Identity Severance Completed (Wave 5 / Phase 1C)** — Formally decommissioned `student_id` from the canonical ledger tables (`ledger_transaction` and `ledger_balance_snapshot`). All balances and financial histories are now strictly derived via `seat_id` + `class_id` joints. `Student.transactions` backrefs were replaced with explicit seat-proxied properties. `db.session.in_nested_transaction` support was formalized in the FEAT orchestrator to allow savepoints within top-level atomic feats without violating authority isolation.
 - **Support issue actor reference now uses canonical public actor naming** — Support
   issue rows now expose the filing seat's UUID `Seat.public_id` as
   `issues.actor_public_id`, matching the same actor-public identity language as TLCP.

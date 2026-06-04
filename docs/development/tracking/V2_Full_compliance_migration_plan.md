@@ -77,7 +77,7 @@ This file is the single active tracker for v2 migration execution. All prior tra
 #### Active execution waves
 - [x] Complete Wave 3 identity migration sequence through remaining scoped domains (strict exit criteria below; no legacy fallback permitted)
 - [ ] Complete Wave 4 class-configuration canonicalization and drop legacy settings columns
-- [ ] Complete Wave 5 ledger table migration and FEAT hook reassignment
+- [x] Complete Wave 5 ledger table migration and FEAT hook reassignment
 - [ ] Complete Wave 6 attendance table migration (`tap_events` lineage removal)
 - [ ] Complete Wave 7 obligations schema migration while preserving already-landed prepay/temporal behavior
 - [ ] Complete Wave 8 store schema migration and remove remaining teacher-scoped enforcement remnants
