@@ -314,7 +314,8 @@ class TestDecimalTypeErrors:
 
         # Create banking settings with compound interest (daily frequency - most likely to trigger bug)
         banking_settings = BankingSettings(
-            teacher_id=teacher.id,
+            class_id=class_economy.class_id,
+            block='A',
             savings_apy=4.5,  # 4.5% APY
             interest_calculation_type='compound',
             compound_frequency='daily'
@@ -326,7 +327,9 @@ class TestDecimalTypeErrors:
         mock_context = {
             'teacher_id': teacher.id,
             'join_code': join_code,
-            'student_teacher_id': teacher.id
+            'student_teacher_id': teacher.id,
+            'class_id': class_economy.class_id,
+            'block': 'A',
         }
         
         # This should NOT raise TypeError

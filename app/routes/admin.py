@@ -6468,9 +6468,7 @@ def rent_settings():
                 block_settings = RentSettings.query.filter_by(class_id=scope_for_block['class_id'], block=block).first()
                 if not block_settings:
                     block_settings = RentSettings(
-                        teacher_id=admin_id,
                         class_id=scope_for_block['class_id'],
-                        join_code=scope_for_block['join_code'],
                         block=block,
                     )
                     db.session.add(block_settings)
@@ -9263,7 +9261,7 @@ def payroll_settings():
 
                 setting = PayrollSettings.query.filter_by(class_id=class_id, block=block_value).first()
                 if not setting:
-                    setting = PayrollSettings(teacher_id=admin_id, class_id=class_id, block=block_value)
+                    setting = PayrollSettings(class_id=class_id, block=block_value)
 
                 # Update all fields
                 for key, value in settings_data.items():
@@ -9289,12 +9287,14 @@ def payroll_settings():
 @admin_required
 def update_expected_weekly_hours():
     """Update the expected weekly hours for CWI calculation for a specific block or all blocks."""
+    redirect_block = (request.form.get('cwi_block') or request.form.get('block') or '').strip().upper()
     try:
         from app.models import _quantize_currency
         selected_scope = _require_payroll_feature_scope_from_request()
         expected_weekly_hours = _quantize_currency(request.form.get('expected_weekly_hours', '5.0'))
         cwi_block = selected_scope['block']
         apply_to_all = request.form.get('apply_to_all', 'false').lower() == 'true'
+        admin_id = session.get("admin_id")
         feature_options = get_admin_feature_join_code_options('payroll', admin_id=admin_id)
         enabled_blocks = {option['block'] for option in feature_options if option.get('block')}
         class_id_by_block = {
@@ -9347,7 +9347,6 @@ def update_expected_weekly_hours():
                     if not class_id:
                         abort(404)
                     new_setting = PayrollSettings(
-                        teacher_id=admin_id,
                         class_id=class_id,
                         block=cwi_block,
                         pay_rate=0.25,  # Default $0.25/min = $15/hour
@@ -9370,7 +9369,6 @@ def update_expected_weekly_hours():
                 else:
                     # Create new setting for this block
                     new_setting = PayrollSettings(
-                        teacher_id=admin_id,
                         class_id=class_id,
                         block=cwi_block,
                         pay_rate=0.25,  # Default $0.25/min = $15/hour
@@ -9395,6 +9393,8 @@ def update_expected_weekly_hours():
     if next_url and is_safe_url(next_url, request.host_url):
         return redirect(next_url)  # nosec # Safe: validated by is_safe_url()
 
+    if redirect_block:
+        return redirect(url_for('admin.payroll', cwi_block=redirect_block))
     return redirect(url_for('admin.payroll'))
 
 
@@ -10759,9 +10759,7 @@ def banking_settings_update():
                     ).first()
                     if not settings:
                         settings = BankingSettings(
-                            teacher_id=admin_id,
                             class_id=scope_for_block['class_id'],
-                            join_code=scope_for_block['join_code'],
                             block=block,
                         )
                         db.session.add(settings)

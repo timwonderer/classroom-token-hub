@@ -54,8 +54,8 @@ def test_shared_student_diff_teacher_diff_period(client):
     assert seat_2 is not None
     
     # Settings: Both pay $10/hr ($600/60min)
-    db.session.add(PayrollSettings(teacher_id=t1.id, class_id=class_1.class_id, join_code="JC1", pay_rate=10, is_active=True))
-    db.session.add(PayrollSettings(teacher_id=t2.id, class_id=class_2.class_id, join_code="JC2", pay_rate=10, is_active=True))
+    db.session.add(PayrollSettings(class_id=class_1.class_id, pay_rate=10, is_active=True))
+    db.session.add(PayrollSettings(class_id=class_2.class_id, pay_rate=10, is_active=True))
     db.session.commit()
 
     # 2. Attendance sessions
@@ -139,8 +139,8 @@ def test_same_teacher_same_block_diff_context(client):
     assert seat_2 is not None
     
     # Settings: class-scoped and equal across both classes.
-    db.session.add(PayrollSettings(teacher_id=t1.id, class_id=class_1.class_id, join_code="JC1", pay_rate=10, is_active=True))
-    db.session.add(PayrollSettings(teacher_id=t1.id, class_id=class_2.class_id, join_code="JC2", pay_rate=10, is_active=True))
+    db.session.add(PayrollSettings(class_id=class_1.class_id, pay_rate=10, is_active=True))
+    db.session.add(PayrollSettings(class_id=class_2.class_id, pay_rate=10, is_active=True))
     db.session.commit()
 
     # 2. Attendance in JC1 only.

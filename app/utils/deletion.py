@@ -232,8 +232,6 @@ def collapse_universe(class_id: str, reason: str, actor_membership_id: Optional[
                 remaining_blocks = db.session.query(TeacherBlock.id).filter_by(block=block_name, teacher_id=teacher_id).count()
                 if remaining_blocks == 0:
                     logger.info(f"Settings Cleanup Rule triggered for block={block_name}, teacher={teacher_id}")
-                    PayrollSettings.query.filter_by(teacher_id=teacher_id, block=block_name).delete(synchronize_session=False)
-                    RentSettings.query.filter_by(teacher_id=teacher_id, block=block_name).delete(synchronize_session=False)
                     InsurancePolicyBlock.query.filter_by(block=block_name).delete(synchronize_session=False) # Simplified, might need teacher_id scoping depending on model
 
         db.session.flush()  # FEAT-AUTHORIZED-SHELL

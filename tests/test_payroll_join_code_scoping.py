@@ -32,9 +32,7 @@ def test_pay_rate_isolation_by_class_id(client):
 
     db.session.add(
         PayrollSettings(
-            teacher_id=teacher.id,
             class_id=class_a.class_id,
-            join_code=class_a.join_code,
             block="Period 1",
             pay_rate=Decimal("0.50"),
             is_active=True,
@@ -60,9 +58,7 @@ def test_daily_limit_isolation_by_class_id(client):
 
     db.session.add(
         PayrollSettings(
-            teacher_id=teacher.id,
             class_id=class_x.class_id,
-            join_code=class_x.join_code,
             block="Period 1",
             settings_mode="simple",
             daily_limit_hours=2.0,
@@ -94,17 +90,13 @@ def test_duplicate_active_settings_fail_closed(client):
     db.session.add_all(
         [
             PayrollSettings(
-                teacher_id=teacher.id,
                 class_id=class_a.class_id,
-                join_code=class_a.join_code,
                 block="Period 1",
                 pay_rate=Decimal("0.50"),
                 is_active=True,
             ),
             PayrollSettings(
-                teacher_id=teacher.id,
                 class_id=class_a.class_id,
-                join_code=class_a.join_code,
                 block="Period 1",
                 pay_rate=Decimal("0.65"),
                 is_active=True,

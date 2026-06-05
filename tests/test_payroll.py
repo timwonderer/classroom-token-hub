@@ -281,7 +281,6 @@ def test_get_pay_rate_for_block_block_specific(test_teacher, test_class):
     # Create block-specific payroll settings
     # pay_rate is stored in database as $ per minute
     block_setting = PayrollSettings(
-        teacher_id=test_teacher.id,
         class_id=test_class.class_id,
         block="A",
         pay_rate=Decimal("0.50"),  # $0.50 per minute
@@ -307,7 +306,6 @@ def test_get_pay_rate_for_block_global_fallback(test_teacher, test_class):
 
     # Create global payroll settings (block=None)
     global_setting = PayrollSettings(
-        teacher_id=test_teacher.id,
         class_id=test_class.class_id,
         block=None,  # Global setting
         pay_rate=Decimal("0.30"),  # $0.30 per minute
@@ -334,7 +332,6 @@ def test_get_pay_rate_for_block_precedence(test_teacher, test_class):
 
     # Create global setting
     global_setting = PayrollSettings(
-        teacher_id=test_teacher.id,
         class_id=test_class.class_id,
         block=None,
         pay_rate=Decimal("0.25"),  # $0.25 per minute
@@ -343,7 +340,6 @@ def test_get_pay_rate_for_block_precedence(test_teacher, test_class):
 
     # Create block-specific setting (should take precedence)
     block_setting = PayrollSettings(
-        teacher_id=test_teacher.id,
         class_id=test_class.class_id,
         block="A",
         pay_rate=Decimal("0.75"),  # $0.75 per minute
@@ -370,7 +366,6 @@ def test_get_pay_rate_for_block_per_minute_to_per_second_conversion(test_teacher
 
     # Create setting with exact value that's easy to verify
     setting = PayrollSettings(
-        teacher_id=test_teacher.id,
         class_id=test_class.class_id,
         block="A",
         pay_rate=Decimal("1.20"),  # $1.20 per minute
@@ -396,7 +391,6 @@ def test_get_pay_rate_for_block_json_serialization(test_teacher, test_class):
 
     # Create setting
     setting = PayrollSettings(
-        teacher_id=test_teacher.id,
         class_id=test_class.class_id,
         block="A",
         pay_rate=Decimal("0.45"),
@@ -428,7 +422,6 @@ def test_get_pay_rate_for_block_inactive_settings_ignored(test_teacher, test_cla
 
     # Create an inactive setting
     inactive_setting = PayrollSettings(
-        teacher_id=test_teacher.id,
         class_id=test_class.class_id,
         block="A",
         pay_rate=Decimal("0.99"),
@@ -516,7 +509,6 @@ def test_get_cached_payroll_with_meta(client):
     # Verify Cache Entry Exists
     cache = PayrollCache.query.filter_by(class_id=class_economy.class_id).first()
     assert cache is not None
-    assert cache.join_code == "CACHE1"
     assert str(seat.id) in cache.cached_breakdown
 
     # 2. Second Call: Cache Hit (Verify Staleness)

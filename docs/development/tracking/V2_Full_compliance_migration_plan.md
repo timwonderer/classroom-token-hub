@@ -76,7 +76,7 @@ This file is the single active tracker for v2 migration execution. All prior tra
 
 #### Active execution waves
 - [x] Complete Wave 3 identity migration sequence through remaining scoped domains (strict exit criteria below; no legacy fallback permitted)
-- [ ] Complete Wave 4 class-configuration canonicalization and drop legacy settings columns
+- [x] Complete Wave 4 class-configuration canonicalization and drop legacy settings columns
 - [x] Complete Wave 5 ledger table migration and FEAT hook reassignment
 - [ ] Complete Wave 6 attendance table migration (`tap_events` lineage removal)
 - [ ] Complete Wave 7 obligations schema migration while preserving already-landed prepay/temporal behavior
@@ -1597,6 +1597,115 @@ Focused validation:
   - `pytest -q tests/test_economy_policy_mode.py -k "activate_due_rebalances"` → `5 passed`, `17 deselected`
   - `pytest -q tests/test_analytics.py -k "policy_mode_resolves_by_class_id or budget_survival_uses_policy_mode_min_savings_ratio"` → `2 passed`, `14 deselected`
   - `pytest -q tests/test_feature_settings.py -k "feature_settings_to_dict_reads_class_features or class_feature_defaults"` → `2 passed`, `15 deselected`
+
+### Status Update (2026-06-05): Wave 4 Resume Slice — BankingSettings Legacy Scope Retirement
+
+- Removed remaining legacy scope write dependence from runtime `BankingSettings` handling:
+  - `app/models.py`
+    - dropped `BankingSettings.teacher_id` and `BankingSettings.join_code`
+    - made the ORM contract explicit that banking settings are class-authoritative via non-null `class_id`
+  - `app/routes/admin.py`
+    - `/admin/banking/settings` now creates banking settings rows from `class_id + block` only
+    - removed legacy write-through of `teacher_id` and `join_code` during settings creation
+- Added migration to retire schema columns:
+  - `migrations/versions/1f6c2b8d4e90_drop_banking_settings_legacy_scope_.py`
+    - drops `banking_settings.teacher_id`, `banking_settings.join_code`, the legacy indexes, and dependent RLS policies before column retirement
+    - idempotent downgrade restores columns and indexes as nullable compatibility fields
+- Updated focused tests to canonical banking scope semantics:
+  - `tests/test_settings_fallback_removal.py`
+    - banking helper coverage now asserts strict `class_id` isolation rather than join-code-era fallback behavior
+  - `tests/test_banking_settings_class_scope.py`
+    - added canonical admin route regression proving `/admin/banking/settings` persists rows by `class_id + block`
+- Validation:
+  - `python3 -m py_compile app/models.py app/routes/admin.py tests/test_settings_fallback_removal.py tests/test_banking_settings_class_scope.py migrations/versions/1f6c2b8d4e90_drop_banking_settings_legacy_scope_.py` → pass
+  - `pytest -q tests/test_settings_fallback_removal.py::test_banking_settings_ignores_other_class_row tests/test_settings_fallback_removal.py::test_banking_settings_returns_scoped_row tests/test_settings_fallback_removal.py::test_banking_settings_returns_none_for_missing_context tests/test_banking_settings_class_scope.py` → `4 passed`
+  - `flask db downgrade e0babef88934` → pass
+  - `flask db upgrade` → pass
+  - `flask db heads` → `1f6c2b8d4e90 (head)`
+
+### Status Update (2026-06-05): Wave 4 Resume Slice — PayrollSettings and PayrollCache Legacy Scope Retirement
+
+- Removed remaining legacy scope write dependence from runtime payroll configuration and cache handling:
+  - `app/models.py`
+    - dropped `PayrollSettings.teacher_id`, `PayrollSettings.join_code`, `PayrollCache.teacher_id`, and `PayrollCache.join_code`
+    - made `PayrollSettings.class_id` explicitly non-null in the ORM contract
+    - simplified repr/runtime ownership to class-authoritative scope
+  - `app/routes/admin.py`
+    - `/admin/payroll/settings` and `/admin/payroll/update-expected-hours` now create settings rows from `class_id + block` only
+    - removed legacy write-through of `teacher_id` during payroll settings creation
+  - `app/payroll.py`
+    - payroll cache write path now creates and refreshes `PayrollCache` by `class_id` only
+    - removed legacy teacher/join-code cache write-through
+  - `app/utils/deletion.py`
+    - removed obsolete teacher/block payroll-settings cleanup path because class-scoped payroll settings now delete with class cascade
+- Added migration to retire payroll schema columns:
+  - `migrations/versions/2a4f6c8d0e21_drop_payroll_legacy_scope_columns.py`
+    - drops `payroll_settings.teacher_id`, `payroll_settings.join_code`, `payroll_cache.teacher_id`, and `payroll_cache.join_code`
+    - drops dependent payroll-settings tenant-isolation policies and legacy indexes before column retirement
+    - idempotent downgrade restores columns and indexes as nullable compatibility fields
+- Updated focused tests to canonical payroll scope semantics:
+  - `tests/test_payroll_join_code_scoping.py`
+  - `tests/test_shared_student_payroll.py`
+  - `tests/test_payroll.py`
+  - `tests/test_payroll_settings_class_scope.py`
+- Validation:
+  - `python3 -m py_compile app/models.py app/payroll.py app/routes/admin.py app/utils/deletion.py tests/test_payroll.py tests/test_payroll_join_code_scoping.py tests/test_shared_student_payroll.py tests/test_payroll_settings_class_scope.py migrations/versions/2a4f6c8d0e21_drop_payroll_legacy_scope_columns.py` → pass
+  - `pytest -q tests/test_payroll_join_code_scoping.py tests/test_shared_student_payroll.py tests/test_payroll_settings_class_scope.py tests/test_payroll.py -k "get_pay_rate_for_block or cache or requires_class_scope or daily_limit"` → `11 passed`, `10 deselected`
+  - `flask db downgrade -- -1` → pass
+  - `flask db upgrade` → pass
+  - `flask db current` → `2a4f6c8d0e21 (head)`
+  - `flask db heads` → `2a4f6c8d0e21 (head)`
+
+### Status Update (2026-06-05): Wave 4 Resume Slice — RentSettings Legacy Scope Retirement
+
+- Removed remaining legacy scope write dependence from runtime `RentSettings` handling:
+  - `app/models.py`
+    - dropped `RentSettings.teacher_id` and `RentSettings.join_code`
+    - made `RentSettings.class_id` explicitly non-null in the ORM contract
+    - added a narrow transitional fixture bridge that can backfill `class_id` from legacy `join_code` or a unique `teacher_id + block` mapping when stale tests still construct the model with deprecated kwargs
+  - `app/routes/admin.py`
+    - `/admin/rent-settings` now creates settings rows from `class_id + block` only
+    - removed legacy write-through of `teacher_id` and `join_code` during rent settings creation
+  - `app/utils/deletion.py`
+    - removed obsolete teacher/block rent-settings cleanup path because class-scoped rent settings now delete with class cascade
+- Added migration to retire rent schema columns:
+  - `migrations/versions/3c7d9e1f2a43_drop_rent_settings_legacy_scope_columns.py`
+    - drops `rent_settings.teacher_id`, `rent_settings.join_code`, dependent tenant-isolation policies, and legacy indexes
+    - enforces non-null `rent_settings.class_id`
+    - idempotent downgrade restores columns/indexes as nullable compatibility fields
+- Updated focused tests to canonical rent scope semantics:
+  - `tests/test_settings_fallback_removal.py`
+  - `tests/test_rent_settings_class_scope.py`
+- Validation:
+  - `python3 -m py_compile app/models.py app/routes/admin.py app/utils/deletion.py tests/test_settings_fallback_removal.py tests/test_rent_settings_class_scope.py migrations/versions/3c7d9e1f2a43_drop_rent_settings_legacy_scope_columns.py` → pass
+  - `pytest -q tests/test_settings_fallback_removal.py::test_rent_settings_ignores_legacy_global_row tests/test_settings_fallback_removal.py::test_rent_settings_returns_scoped_row tests/test_rent_settings_class_scope.py` → `3 passed`
+  - `flask db downgrade 2a4f6c8d0e21` → pass
+  - `flask db upgrade` → pass
+  - `flask db current --verbose` → `3c7d9e1f2a43 (head)`
+
+### Status Update (2026-06-05): Wave 4 Closure — Active Class-Config Tables Fully Class-Scoped
+
+- Added final schema hardening for `banking_settings`:
+  - `migrations/versions/4b1e8f2c6d90_make_banking_settings_class_id_not_null.py`
+    - enforces non-null `banking_settings.class_id` to match the already-canonical ORM/runtime contract
+- Closure audit evidence:
+  - DB schema check now shows exactly these active class-config tables and no legacy scope columns:
+    - `class_features`
+    - `feature_settings`
+    - `hall_pass_settings`
+    - `banking_settings`
+    - `payroll_settings`
+    - `payroll_cache`
+    - `rent_settings`
+  - `information_schema.columns` confirms:
+    - no `teacher_id` columns remain on those tables
+    - no `join_code` columns remain on those tables
+    - `class_id` is non-null on all seven tables
+  - `flask db current --verbose` → `4b1e8f2c6d90 (head)`
+  - `flask db heads` → `4b1e8f2c6d90 (head)`
+- Interpretation:
+  - The main Wave 4 execution objective is complete: active class-configuration runtime + schema are now class-authoritative and legacy settings scope columns have been retired.
+  - The separate DOM-ECON integrated checklist remains tracked as an architecture/governance follow-up, not as a blocker for the legacy column-retirement closeout.
 
 ### Status Update (2026-05-20): Spec Coverage Audit — Banking/Balance/Overdraft/Rent Touchpoints
 

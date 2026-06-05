@@ -249,8 +249,6 @@ def _get_cached_payroll_with_meta_legacy(class_id, seat_ids, last_payroll_time):
     economy = ClassEconomy.query.filter_by(class_id=class_id).first()
     if not economy:
         raise ValueError(f"No class found for class_id {class_id}")
-    scoped_join_code = economy.join_code
-    derived_teacher_id = economy.teacher_id
 
     cache_entry = PayrollCache.query.filter_by(class_id=class_id).first()
     now = utc_now()
@@ -284,14 +282,10 @@ def _get_cached_payroll_with_meta_legacy(class_id, seat_ids, last_payroll_time):
  
         if not cache_entry:
             cache_entry = PayrollCache(
-                teacher_id=derived_teacher_id,
-                join_code=scoped_join_code,
                 class_id=class_id,
             )
             db.session.add(cache_entry)
         else:
-            cache_entry.teacher_id = derived_teacher_id
-            cache_entry.join_code = scoped_join_code
             cache_entry.class_id = class_id
  
         cache_entry.cached_breakdown = cache_data

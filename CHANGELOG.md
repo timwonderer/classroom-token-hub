@@ -9,6 +9,28 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Changed
+- **Wave 4 class-configuration canonicalization completed** — The active class
+  configuration tables now align on `class_id` as the runtime and schema
+  boundary: `class_features`, `feature_settings`, `hall_pass_settings`,
+  `banking_settings`, `payroll_settings`, `payroll_cache`, and `rent_settings`
+  no longer carry live `teacher_id` / `join_code` scope columns, and all seven
+  now require non-null `class_id` in the database. This closes the legacy
+  settings-column retirement lane for Wave 4.
+- **PayrollSettings and PayrollCache moved further into canonical Wave 4 scope** —
+  `payroll_settings` now treats `class_id + block` as its only runtime authority,
+  and `payroll_cache` is now class-owned only. The model, payroll cache writer,
+  payroll settings admin writes, and class-deletion cleanup path no longer depend
+  on legacy `teacher_id` / `join_code` scope fields. Migration
+  `2a4f6c8d0e21` drops those legacy columns from `payroll_settings` and
+  `payroll_cache`, including dependent payroll-settings RLS policy cleanup.
+  Focused payroll helper, cache, shared-student, and admin route tests were
+  updated to assert class-scoped behavior directly.
+- **BankingSettings moved further into canonical Wave 4 scope** — `banking_settings`
+  now treats `class_id + block` as the runtime authority contract. The model and
+  admin banking settings write path no longer create or depend on legacy
+  `teacher_id` / `join_code` scope fields, and migration `1f6c2b8d4e90` drops
+  those columns from the schema. Focused banking helper and admin route tests were
+  updated to assert class-scoped behavior directly.
 - **Canonical auth and roster-provisioning docs aligned** — Updated active v2
   identity, recovery, lifecycle, schema, session, README, and development docs so
   `User` owns authentication/recovery/passkey capability, `Seat` owns class-local

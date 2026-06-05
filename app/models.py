@@ -1329,10 +1329,7 @@ class HallPassLog(db.Model):
 class HallPassSettings(db.Model):
     __tablename__ = 'hall_pass_settings'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
-    join_code = db.Column(db.String(20), nullable=False, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
-    block = db.Column(db.String(10), nullable=False)
 
     # Queue system toggle
     queue_enabled = db.Column(db.Boolean, default=True, nullable=False)
@@ -1345,9 +1342,6 @@ class HallPassSettings(db.Model):
 
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
-
-    # Relationships
-    teacher = db.relationship('Admin', backref=db.backref('hall_pass_settings', lazy='dynamic'))
 
     @staticmethod
     def get_default_pass_types():
@@ -1378,16 +1372,12 @@ class PayrollCache(db.Model):
     __tablename__ = 'payroll_cache'
 
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False, index=True)
-    join_code = db.Column(db.String(20), nullable=True, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
     cached_breakdown = db.Column(db.JSON, nullable=True)  # Stores the breakdown: {"(id, code)": amount}
     last_calculated_at = db.Column(db.DateTime(timezone=True), default=utc_now)
 
-    teacher = db.relationship('Admin', backref=db.backref('payroll_caches', lazy='dynamic', cascade='all, delete-orphan'))
-
     def __repr__(self):
-        return f'<PayrollCache teacher_id={self.teacher_id} class_id={self.class_id} updated={self.last_calculated_at}>'
+        return f'<PayrollCache class_id={self.class_id} updated={self.last_calculated_at}>'
 
 
 # -------------------- STORE MODELS --------------------
@@ -1610,9 +1600,7 @@ class RedemptionAuditLog(db.Model):
 class RentSettings(db.Model):
     __tablename__ = 'rent_settings'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
-    join_code = db.Column(db.String(20), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
 
     # Main toggle
@@ -1647,13 +1635,50 @@ class RentSettings(db.Model):
     cycle_length_days = db.Column(db.Integer, nullable=False, default=30)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
-    # Relationships
-    teacher = db.relationship('Admin', backref=db.backref('rent_settings', lazy='dynamic'))
-
     # Keep old field names for backward compatibility (deprecated)
     @property
     def late_fee(self):
         return self.late_penalty_amount
+
+    def __init__(self, **kwargs):
+        legacy_join_code = kwargs.pop('join_code', None)
+        legacy_teacher_id = kwargs.pop('teacher_id', None)
+        super().__init__(**kwargs)
+        self._legacy_join_code = legacy_join_code
+        self._legacy_teacher_id = legacy_teacher_id
+
+
+@event.listens_for(RentSettings, "before_insert")
+@event.listens_for(RentSettings, "before_update")
+def _sync_rent_settings_scope(mapper, connection, target):
+    """Best-effort class scope backfill for transitional join-code seeded fixtures."""
+    legacy_join_code = getattr(target, "_legacy_join_code", None)
+    if getattr(target, "class_id", None) is None and legacy_join_code:
+        class_id = connection.execute(
+            sa.text("SELECT class_id FROM classes WHERE join_code = :join_code"),
+            {"join_code": legacy_join_code},
+        ).scalar()
+        if class_id:
+            target.class_id = str(class_id)
+            return
+
+    legacy_teacher_id = getattr(target, "_legacy_teacher_id", None)
+    legacy_block = getattr(target, "block", None)
+    if getattr(target, "class_id", None) is None and legacy_teacher_id and legacy_block:
+        rows = connection.execute(
+            sa.text(
+                """
+                SELECT DISTINCT class_id
+                FROM teacher_blocks
+                WHERE teacher_id = :teacher_id
+                  AND block = :block
+                  AND class_id IS NOT NULL
+                """
+            ),
+            {"teacher_id": legacy_teacher_id, "block": legacy_block},
+        ).scalars().all()
+        if len(rows) == 1:
+            target.class_id = str(rows[0])
 
 
 class RentPayment(db.Model):
@@ -2841,9 +2866,7 @@ class StudentRecoveryCode(db.Model):
 class PayrollSettings(db.Model):
     __tablename__ = 'payroll_settings'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
-    join_code = db.Column(db.String(20), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global/default settings
     pay_rate = db.Column(db.Numeric(precision=12, scale=2), nullable=False, default=0.25)  # $ per minute
     payroll_frequency_days = db.Column(db.Integer, nullable=False, default=14)
@@ -2880,11 +2903,8 @@ class PayrollSettings(db.Model):
     # NOTE: This is NOT used for actual payroll calculations - only for economy balance validation
     expected_weekly_hours = db.Column(db.Float, nullable=True, default=5.0)  # Expected class hours per week
 
-    # Relationships
-    teacher = db.relationship('Admin', backref=db.backref('payroll_settings', lazy='dynamic'))
-
     def __repr__(self):
-        return f'<PayrollSettings {self.block or "Global"}>'
+        return f'<PayrollSettings class_id={self.class_id} block={self.block or "Global"}>'
 
 
 # ---- Saved Adjustment Model ----
@@ -2912,9 +2932,7 @@ class SavedAdjustment(db.Model):
 class BankingSettings(db.Model):
     __tablename__ = 'banking_settings'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
-    join_code = db.Column(db.String(20), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
 
     # Interest settings for savings
@@ -2946,9 +2964,6 @@ class BankingSettings(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
-
-    # Relationships
-    teacher = db.relationship('Admin', backref=db.backref('banking_settings', lazy='dynamic'))
 
     def __repr__(self):
         return f'<BankingSettings APY:{self.savings_apy}% OD:{self.overdraft_protection_enabled}>'

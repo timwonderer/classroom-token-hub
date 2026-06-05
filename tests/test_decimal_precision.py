@@ -80,15 +80,6 @@ class TestDecimalPrecision:
         )
         db.session.add(block)
 
-        # Create banking settings with overdraft fees
-        banking_settings = BankingSettings(
-            teacher_id=teacher.id,
-            overdraft_fee_enabled=True,
-            overdraft_fee_type='flat',
-            overdraft_fee_flat_amount=Decimal('35.00')
-        )
-        db.session.add(banking_settings)
-
         # Create student
         student = Student(
             first_name='Test',
@@ -107,6 +98,14 @@ class TestDecimalPrecision:
         )
         db.session.add(student_block)
         class_id, seat_id = _attach_class_scope(teacher, student, join_code, block='A')
+        banking_settings = BankingSettings(
+            class_id=class_id,
+            block='A',
+            overdraft_fee_enabled=True,
+            overdraft_fee_type='flat',
+            overdraft_fee_flat_amount=Decimal('35.00')
+        )
+        db.session.add(banking_settings)
         db.session.commit()
 
         # Give student $100.00 in checking
@@ -370,15 +369,6 @@ class TestDecimalPrecision:
         )
         db.session.add(block)
 
-        # Create banking settings with overdraft fees
-        banking_settings = BankingSettings(
-            teacher_id=teacher.id,
-            overdraft_fee_enabled=True,
-            overdraft_fee_type='flat',
-            overdraft_fee_flat_amount=Decimal('35.00')
-        )
-        db.session.add(banking_settings)
-
         # Create student
         student = Student(
             first_name='Zero',
@@ -397,6 +387,14 @@ class TestDecimalPrecision:
         )
         db.session.add(student_block)
         class_id, seat_id = _attach_class_scope(teacher, student, join_code, block='A')
+        banking_settings = BankingSettings(
+            class_id=class_id,
+            block='A',
+            overdraft_fee_enabled=True,
+            overdraft_fee_type='flat',
+            overdraft_fee_flat_amount=Decimal('35.00')
+        )
+        db.session.add(banking_settings)
         db.session.commit()
 
         # Test various near-zero balances
@@ -463,15 +461,6 @@ class TestDecimalPrecision:
         )
         db.session.add(block)
 
-        # Create banking settings with overdraft fees
-        banking_settings = BankingSettings(
-            teacher_id=teacher.id,
-            overdraft_fee_enabled=True,
-            overdraft_fee_type='flat',
-            overdraft_fee_flat_amount=Decimal('35.00')
-        )
-        db.session.add(banking_settings)
-
         # Create student
         student = Student(
             first_name='Negative',
@@ -490,6 +479,14 @@ class TestDecimalPrecision:
         )
         db.session.add(student_block)
         class_id, seat_id = _attach_class_scope(teacher, student, join_code, block='A')
+        banking_settings = BankingSettings(
+            class_id=class_id,
+            block='A',
+            overdraft_fee_enabled=True,
+            overdraft_fee_type='flat',
+            overdraft_fee_flat_amount=Decimal('35.00')
+        )
+        db.session.add(banking_settings)
 
         # Create a genuinely negative balance (-$10.00)
         negative_tx = Transaction(
