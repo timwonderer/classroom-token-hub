@@ -19,6 +19,12 @@ depends_on = None
 # IDEMPOTENCY HELPERS (REQUIRED)
 # ============================================================================
 
+def table_exists(table_name):
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return table_name in inspector.get_table_names()
+
+
 def column_exists(table_name, column_name):
     conn = op.get_bind()
     inspector = sa.inspect(conn)
@@ -66,6 +72,11 @@ def get_foreign_keys_by_column(table_name, column_name):
 # ============================================================================
 
 def upgrade():
+    # Fresh squash-bootstrap databases create the final ledger table directly.
+    # Its runtime metadata already includes these lineage fields.
+    if table_exists('ledger_transaction') and not table_exists('transaction'):
+        return
+
     # lineage_event_id — FK to audit_events; nullable (pre-rollout rows are UNVERIFIED)
     if not column_exists('transaction', 'lineage_event_id'):
         with op.batch_alter_table('transaction') as batch_op:

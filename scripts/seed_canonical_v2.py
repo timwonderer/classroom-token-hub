@@ -9,13 +9,14 @@ import sqlalchemy as sa
 random.seed('CTH_CANONICAL_V2')
 
 from app import create_app, db
+from app.hash_utils import hash_username_lookup
 from app.models import (
     User, Admin, ClassEconomy, IdentityProfile, Student, Seat, 
     InsurancePolicy, Transaction, Issue, IssueCategory, 
-    AnalyticsSnapshot, TeacherBlock, StudentTeacher, AdminCredential,
-    TransactionStatus, BalanceCache
+    AnalyticsSnapshot, TeacherBlock, StudentTeacher,
+    TransactionStatus, BalanceCache, UserRole
 )
-from app.feats.base import FEATContext, FEATBypass
+from app.feats.base import FEATBypass
 
 def record_posted_transaction(seat_id, class_id, amount, account_type, description, type="Adjustment"):
     """Helper to record a POSTED transaction and update the balance cache."""
@@ -57,9 +58,6 @@ def seed():
     with app.app_context():
         with FEATBypass():
             print(f"ACTIVE DATABASE_URL: {app.config['SQLALCHEMY_DATABASE_URI']}")
-            print("Ensuring tables exist (create_all)...")
-            db.create_all()
-        with FEATBypass():
             inspector = sa.inspect(db.engine)
             actual_tables = inspector.get_table_names()
             print(f"ACTUAL DB TABLES: {actual_tables}")
@@ -83,7 +81,7 @@ def seed():
 
             print("Seeding foundational entities...")
             
-            # 1. Teachers (Admins)
+            # 1. Legacy teacher compatibility shadows.
             teacher_happy = Admin(
                 public_id="adm_happy_001",
                 teacher_public_id="HAPPY-TEACHER",
@@ -101,30 +99,62 @@ def seed():
             db.session.add_all([teacher_happy, teacher_adversarial])
             db.session.flush()
 
-            # 2. Class Economy
+            # 2. Class universe.
             economy = ClassEconomy(
                 class_id=str(uuid.uuid4()),
                 join_code="GOLDEN-V2",
+                join_code_token="GOLDEN-V2",
                 display_name="Canonical V2 Simulation",
+                section="Period 1",
                 teacher_id=teacher_happy.id,
                 class_timezone="UTC"
             )
             db.session.add(economy)
             db.session.flush()
 
-            # 3. Users (Unified Identity)
+            # 3. Canonical global users.
+            user_happy_teacher = User(
+                user_role=UserRole.TEACHER,
+                username_hash=hash_username_lookup("teacher_happy"),
+                username_lookup_hash=hash_username_lookup("teacher_happy"),
+                totp_secret_encrypted=teacher_happy.totp_secret,
+                has_completed_setup=True,
+            )
+            user_adversarial_teacher = User(
+                user_role=UserRole.TEACHER,
+                username_hash=hash_username_lookup("teacher_adversarial"),
+                username_lookup_hash=hash_username_lookup("teacher_adversarial"),
+                totp_secret_encrypted=teacher_adversarial.totp_secret,
+                has_completed_setup=True,
+            )
             user_happy_student = User(
-                username="student_happy",
-                password_hash="pbkdf2:sha256:260000$hashedpassword"
+                user_role=UserRole.STUDENT,
+                username_hash=hash_username_lookup("student_happy"),
+                username_lookup_hash=hash_username_lookup("student_happy"),
+                passphrase_hash="pbkdf2:sha256:260000$hashedpassword",
+                has_completed_setup=True,
             )
             user_adv_student = User(
-                username="student_adversarial",
-                password_hash="pbkdf2:sha256:260000$hashedpassword"
+                user_role=UserRole.STUDENT,
+                username_hash=hash_username_lookup("student_adversarial"),
+                username_lookup_hash=hash_username_lookup("student_adversarial"),
+                passphrase_hash="pbkdf2:sha256:260000$hashedpassword",
+                has_completed_setup=True,
             )
-            db.session.add_all([user_happy_student, user_adv_student])
+            db.session.add_all([
+                user_happy_teacher,
+                user_adversarial_teacher,
+                user_happy_student,
+                user_adv_student,
+            ])
             db.session.flush()
 
-            # 4. Identity Profiles & Students
+            # 4. Display profiles and legacy student compatibility shadows.
+            ip_teacher = IdentityProfile(
+                profile_type="teacher",
+                first_name="Happy",
+                last_initial="T",
+            )
             ip_happy = IdentityProfile(
                 profile_type="student",
                 first_name="Happy",
@@ -135,7 +165,12 @@ def seed():
                 first_name="Adversarial",
                 last_initial="A"
             )
-            db.session.add_all([ip_happy, ip_adv])
+            ip_unclaimed = IdentityProfile(
+                profile_type="student",
+                first_name="Unclaimed",
+                last_initial="S",
+            )
+            db.session.add_all([ip_teacher, ip_happy, ip_adv, ip_unclaimed])
             db.session.flush()
             
             student_happy = Student(
@@ -164,13 +199,23 @@ def seed():
             db.session.add_all([link_happy, link_adv])
             db.session.flush()
 
-            # 5. Seats
+            # 5. Canonical class-local seats.
+            teacher_seat = Seat(
+                user_id=user_happy_teacher.id,
+                class_id=economy.class_id,
+                join_code=economy.join_code,
+                role="teacher",
+                claimed_at=datetime.utcnow(),
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
             seat_happy = Seat(
                 user_id=user_happy_student.id,
                 student_id=student_happy.id,
                 class_id=economy.class_id,
                 join_code=economy.join_code,
                 role="student",
+                claimed_at=datetime.utcnow(),
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
             )
@@ -180,10 +225,30 @@ def seed():
                 class_id=economy.class_id,
                 join_code=economy.join_code,
                 role="student",
+                claimed_at=datetime.utcnow(),
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
             )
-            db.session.add_all([seat_happy, seat_adv])
+            unclaimed_seat = Seat(
+                user_id=None,
+                class_id=economy.class_id,
+                join_code=economy.join_code,
+                role="student",
+                claim_first_name_hash=hash_username_lookup("unclaimed"),
+                claim_last_name_hash=hash_username_lookup("student"),
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+            db.session.add_all([teacher_seat, seat_happy, seat_adv, unclaimed_seat])
+            db.session.flush()
+
+            ip_teacher.seat_id = teacher_seat.id
+            ip_happy.seat_id = seat_happy.id
+            ip_adv.seat_id = seat_adv.id
+            ip_unclaimed.seat_id = unclaimed_seat.id
+            user_happy_teacher.last_active_seat_id = teacher_seat.id
+            user_happy_student.last_active_seat_id = seat_happy.id
+            user_adv_student.last_active_seat_id = seat_adv.id
             db.session.flush()
 
             # 6. Insurance Policies
@@ -257,7 +322,7 @@ def seed():
                 student_id=student_adv.id,
                 student_first_name="Chaos",
                 student_last_initial="A",
-                opaque_student_reference="opaque_chaos_123",
+                actor_public_id=seat_adv.public_id,
                 teacher_id=teacher_adversarial.id,
                 class_id=economy.class_id,
                 seat_id=seat_adv.id,
@@ -270,8 +335,8 @@ def seed():
             db.session.add(issue)
             db.session.flush()
 
-            # 9. Analytics & Blocks
-            print("Seeding analytics and blocks...")
+            # 9. Analytics and legacy roster compatibility shadow.
+            print("Seeding analytics and legacy roster shadow...")
             snapshot = AnalyticsSnapshot(
                 teacher_id=teacher_happy.id,
                 class_id=economy.class_id,
@@ -294,7 +359,7 @@ def seed():
                 class_label="Period 1",
                 first_name="Unclaimed",
                 last_initial="S",
-                identity_id=ip_happy.id,
+                identity_id=ip_unclaimed.id,
                 salt=os.urandom(16),
                 first_half_hash="dummy_hash_" + str(uuid.uuid4())
             )

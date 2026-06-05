@@ -54,7 +54,8 @@ def upgrade():
     if not column_exists('users', 'username_hash'):
         op.add_column('users', sa.Column('username_hash', sa.String(length=64), nullable=True))
     
-    op.execute("UPDATE users SET username_hash = username WHERE username_hash IS NULL")
+    if column_exists('users', 'username'):
+        op.execute("UPDATE users SET username_hash = username WHERE username_hash IS NULL")
     
     if index_exists('users', 'ix_users_username'):
         op.drop_index(op.f('ix_users_username'), table_name='users')
@@ -98,4 +99,3 @@ def downgrade():
     op.alter_column('users', 'public_id', nullable=False)
     if not index_exists('users', 'ix_users_public_id'):
         op.create_index(op.f('ix_users_public_id'), 'users', ['public_id'], unique=True)
-

@@ -57,18 +57,27 @@ from app.access import AccessScopeDenied, resolve_scope
 from app.models import (
     Student, Admin, ClassEconomy, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
-    StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
+    StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, SavedAdjustment,
     BankingSettings, TeacherBlock,
     UserReport, FeatureSettings, StudentBlock,
     Announcement, RedemptionAuditLog, RedemptionAuditAction,
     RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent, Seat,
-    BalanceCache, ClassMembership, ClassEconomy, EconomySnapshot, _quantize_currency,
+    BalanceCache, ClassMembership, ClassEconomy, EconomySnapshot, User, UserRole, _quantize_currency,
 )
-from app.auth import admin_required, get_admin_student_query, get_current_admin, get_student_for_admin
+from app.auth import (
+    admin_required,
+    find_canonical_user_by_auth_username,
+    get_admin_student_query,
+    get_current_admin,
+    get_current_user,
+    get_student_for_admin,
+    resolve_admin_shadow_for_user,
+    set_canonical_user_session,
+)
 from app.forms import (
     AdminLoginForm, AdminSignupForm, AdminTOTPConfirmForm, AdminRecoveryForm, AdminResetCredentialsForm, StoreItemForm,
     InsurancePolicyForm, AdminClaimProcessForm, PayrollSettingsForm,
-    PayrollRewardForm, PayrollFineForm, ManualPaymentForm, BankingSettingsForm
+    ManualPaymentForm, BankingSettingsForm
 )
 # Import utility functions
 from app.utils.helpers import is_safe_url, format_utc_iso, generate_anonymous_code, render_template_with_fallback as render_template
@@ -766,6 +775,18 @@ def _find_admin_by_auth_username(username: str):
 
 
 def _auth_username_exists(username: str, *, exclude_admin_id: int | None = None) -> bool:
+    normalized = normalize_auth_username(username)
+    if not normalized:
+        return False
+    lookup_hash = hash_username_lookup(normalized)
+    user = User.query.filter_by(username_lookup_hash=lookup_hash).first()
+    if user:
+        if exclude_admin_id is not None:
+            excluded_admin = db.session.get(Admin, exclude_admin_id)
+            if excluded_admin and excluded_admin.username_lookup_hash == lookup_hash:
+                return False
+        return True
+
     admin = _find_admin_by_auth_username(username)
     if not admin:
         return False
@@ -936,19 +957,19 @@ def _build_payroll_preview_state(students, join_codes_by_block):
 
     for join_code, students_map in students_by_join_code.items():
         class_students = list(students_map.values())
-        
+
         economy = ClassEconomy.query.filter_by(join_code=join_code).first()
         if not economy:
             continue
-            
+
         class_id = economy.class_id
         student_ids = [s.id for s in class_students]
         seats = Seat.query.filter(Seat.student_id.in_(student_ids), Seat.class_id == class_id).all()
         seat_ids = [s.id for s in seats]
-        
+
         # map seat_id to student_id to preserve backward compatibility of the preview payload
         seat_to_student = {s.id: s.student_id for s in seats if s.student_id}
-        
+
         anchor = None
         if getattr(g, "read_only", False):
             seat_summary = calculate_payroll_breakdown(class_id, seat_ids, anchor)
@@ -959,7 +980,7 @@ def _build_payroll_preview_state(students, join_codes_by_block):
                 seat_ids,
                 anchor
             )
-            
+
         # Remap to student_id to preserve downstream view templates expecting student IDs
         summary = {}
         for s_id, amt in seat_summary.items():
@@ -1030,14 +1051,87 @@ def _get_claimed_teacher_block_for_join_code(student_id: int, teacher_id: int, j
     )
 
 
-def _require_payroll_feature_scope_from_request(admin_id: int, *, allow_default: bool = True) -> dict:
-    """Resolve the canonical payroll class scope from request data."""
-    return require_admin_feature_scope(
-        'payroll',
-        admin_id=admin_id,
-        requested_block=request.values.get('cwi_block') or request.values.get('block'),
-        allow_default=allow_default,
+def _require_payroll_feature_scope_from_request(
+    class_id: str | None = None,
+    seat_id: int | None = None,
+    *,
+    allow_default: bool = True,
+) -> dict:
+    """Resolve the canonical payroll class scope starting from class_id and seat_id.
+
+    This function implements the V2 authority flow:
+    1. Retrieve/resolve class_id and seat_id context.
+    2. Load and verify the Seat corresponding to the requested class_id.
+    3. Ensure the Seat has teacher role/authority.
+    4. Construct the scoped features and options based on the class boundary.
+    """
+    from flask import request, session
+    from app.models import Seat, ClassFeature, TeacherBlock
+    from app.feats.base import InvariantViolation
+
+    # 1. Resolve canonical context variables
+    resolved_class_id = class_id or request.values.get('class_id') or session.get('current_class_id')
+    resolved_seat_id = seat_id or request.values.get('seat_id') or request.values.get('teacher_seat_id') or session.get('current_seat_id')
+
+    if not resolved_class_id:
+        raise InvariantViolation("Missing canonical class_id context.")
+
+    if not resolved_seat_id:
+        raise InvariantViolation("Missing canonical seat_id context.")
+
+    # 2. Retrieve Seat first to verify against the class_id before anything else
+    teacher_seat = Seat.query.filter_by(id=resolved_seat_id).first()
+    if not teacher_seat:
+        raise InvariantViolation(
+            f"Seat not found for seat_id={resolved_seat_id}. "
+            "Canonical context construction failed."
+        )
+
+    # Verify the seat.seat_id against the class_id before anything else
+    if teacher_seat.class_id != resolved_class_id:
+        raise InvariantViolation(
+            f"Seat class mismatch: seat.class_id={teacher_seat.class_id} != requested class_id={resolved_class_id}"
+        )
+
+    # 3. Ensure the Seat has teacher role/authority
+    if teacher_seat.role != 'teacher':
+        raise InvariantViolation(
+            f"Insufficient authority: Seat {teacher_seat.id} is role='{teacher_seat.role}', not 'teacher'."
+        )
+
+    # 4. Resolve block from TeacherBlock
+    requested_block = (request.values.get('cwi_block') or request.values.get('block') or '').strip().upper()
+
+    # Query TeacherBlocks for this class to get blocks
+    blocks = (
+        TeacherBlock.query.with_entities(TeacherBlock.block)
+        .filter(TeacherBlock.class_id == resolved_class_id)
+        .order_by(TeacherBlock.block.asc(), TeacherBlock.id.asc())
+        .all()
     )
+    available_blocks = [r[0] for r in blocks if r[0]]
+
+    if requested_block:
+        if requested_block not in available_blocks:
+            raise InvariantViolation(f"Block '{requested_block}' is not associated with class_id '{resolved_class_id}'.")
+        resolved_block = requested_block
+    else:
+        # Fallback to the first available block, or default
+        resolved_block = available_blocks[0] if available_blocks else None
+        if not resolved_block and not allow_default:
+            raise InvariantViolation("No blocks found and default block is not allowed.")
+
+    # 5. Verify feature is enabled
+    enabled = "payroll" in ClassFeature.enabled_names_for_class(resolved_class_id)
+
+    return {
+        'join_code': teacher_seat.join_code,
+        'class_id': resolved_class_id,
+        'block': resolved_block,
+        'teacher_seat': teacher_seat,
+        'enabled': enabled,
+    }
+
 
 
 def _join_code_exists(join_code):
@@ -1330,11 +1424,8 @@ def _delete_teacher_settings_activity_and_audit_rows(teacher_id):
     HallPassSettings.query.filter(
         HallPassSettings.class_id.in_(sa.select(class_ids_subq))
     ).delete(synchronize_session=False)
-    PayrollFine.query.filter(
-        PayrollFine.class_id.in_(sa.select(class_ids_subq))
-    ).delete(synchronize_session=False)
-    PayrollReward.query.filter(
-        PayrollReward.class_id.in_(sa.select(class_ids_subq))
+    SavedAdjustment.query.filter(
+        SavedAdjustment.class_id.in_(sa.select(class_ids_subq))
     ).delete(synchronize_session=False)
     PayrollSettings.query.filter(
         PayrollSettings.class_id.in_(sa.select(class_ids_subq))
@@ -2798,7 +2889,7 @@ def dashboard():
         ).all()
         if class_id
     ]
-    
+
     seats = Seat.query.filter(Seat.class_id.in_(teacher_class_ids), Seat.role == 'student').all()
     class_seat_pairs = [(seat.class_id, seat.id) for seat in seats]
     batch_balances = get_batch_balances_by_class_seat(class_seat_pairs)
@@ -2988,7 +3079,7 @@ def dashboard():
 def give_bonus_all():
     """Give bonus or payroll adjustment to all students."""
     from app.models import _quantize_currency
-    
+
     title = request.form.get('title')
     amount = _quantize_currency(request.form.get('amount'))
     tx_type = request.form.get('type')
@@ -3035,25 +3126,38 @@ def login():
     """Admin login with TOTP authentication."""
     session.pop("is_admin", None)
     session.pop("admin_id", None)
+    session.pop("user_id", None)
     session.pop("last_activity", None)
     session.pop("force_admin_username_migration", None)
     form = AdminLoginForm()
     if form.validate_on_submit():
         username = normalize_auth_username(form.username.data)
         totp_code = form.totp_code.data.strip()
-        admin = _find_admin_by_auth_username(username)
-        if admin:
+        user = find_canonical_user_by_auth_username(username, expected_role="teacher")
+        if user:
             try:
-                decrypted_secret = decrypt_totp(admin.totp_secret)
-            except ValueError:
-                current_app.logger.warning("Admin login failed: invalid encrypted TOTP secret for admin_id=%s", admin.id)
+                decrypted_secret = decrypt_totp(user.totp_secret_encrypted)
+            except (TypeError, ValueError):
+                current_app.logger.warning("Admin login failed: invalid encrypted TOTP secret for user_id=%s", user.id)
                 decrypted_secret = None
 
             if decrypted_secret:
-                totp = pyotp.TOTP(decrypted_secret)
-                if totp.verify(totp_code, valid_window=1):
+                try:
+                    totp_valid = pyotp.TOTP(decrypted_secret).verify(totp_code, valid_window=1)
+                except (TypeError, ValueError):
+                    totp_valid = False
+                if totp_valid:
+                    admin = resolve_admin_shadow_for_user(user)
+                    if not admin:
+                        current_app.logger.error(
+                            "Admin login failed: canonical teacher user_id=%s has no unique legacy route shadow",
+                            user.id,
+                        )
+                        flash("Invalid credentials or TOTP code.", "error")
+                        return redirect(url_for("admin.login", next=request.args.get("next")))
                     session["is_admin"] = True
                     session["admin_id"] = admin.id
+                    session["user_id"] = user.id
                     session["admin_auth_username"] = username
                     session["last_activity"] = utc_now().isoformat()
                     set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
@@ -3131,6 +3235,10 @@ def username_migration():
         admin.salt = salt
         admin.username_hash = username_hash
         admin.username_lookup_hash = username_lookup_hash
+        user = find_canonical_user_by_auth_username(legacy_username, expected_role="teacher")
+        if user:
+            user.username_hash = username_hash
+            user.username_lookup_hash = username_lookup_hash
         if not admin.teacher_public_id:
             admin.teacher_public_id = _generate_unique_teacher_public_id()
         if not admin.hall_pass_verify_token:
@@ -3313,12 +3421,19 @@ def signup():
             tos_accepted=True,
             tos_accepted_at=utc_now()
         )
+        new_user = User(
+            user_role=UserRole.TEACHER,
+            username_hash=username_hash,
+            username_lookup_hash=username_lookup_hash,
+            totp_secret_encrypted=encrypted_totp_secret,
+            has_completed_setup=True,
+        )
         # Close any read-only transaction opened during validation before FEAT entry.
         db.session.rollback()
 
         signup_idempotency_key = f"feat:iden:admin-signup:{username}"
         with FEATContext("FEAT-IDEN-001", idempotency_key=signup_idempotency_key):
-            db.session.add(new_admin)
+            db.session.add_all([new_admin, new_user])
             db.session.flush()
         current_app.logger.info(f"Admin account created successfully")
         # Clear session
@@ -3674,12 +3789,21 @@ def confirm_reset():
         return redirect(url_for('admin.reset_credentials'))
 
     # Update teacher account
+    previous_username_lookup_hash = teacher.username_lookup_hash
+    user = User.query.filter_by(username_lookup_hash=previous_username_lookup_hash).first()
+    if not user:
+        flash("Canonical account identity is missing. Contact support.", "error")
+        return redirect(url_for('admin.recover'))
+
     salt, username_hash, username_lookup_hash = _build_admin_auth_fields(new_username, existing_salt=teacher.salt)
     teacher.salt = salt
     teacher.username = None
     teacher.username_hash = username_hash
     teacher.username_lookup_hash = username_lookup_hash
     teacher.totp_secret = encrypt_totp(totp_secret)  # Encrypt before storing
+    user.username_hash = username_hash
+    user.username_lookup_hash = username_lookup_hash
+    user.totp_secret_encrypted = teacher.totp_secret
 
     # Mark recovery request as completed
     mark_recovery_request_verified(recovery_request.id, utc_now())
@@ -3852,6 +3976,7 @@ def logout():
     clear_admin_display_name_cache()
     session.pop("is_admin", None)
     session.pop("admin_id", None)
+    session.pop("user_id", None)
     session.pop("admin_auth_username", None)
     session.pop("last_activity", None)
     session.pop("force_admin_username_migration", None)
@@ -4707,7 +4832,7 @@ def edit_student():
                         )
                         if not old_seat_id:
                             continue
-                            
+
                         update_values = {
                             'join_code': target_join_code,
                             # Ensure seat scope tracks the transferred join_code.
@@ -4761,7 +4886,7 @@ def edit_student():
     # Handle block changes - update TeacherBlock entries
     removed_blocks = old_blocks - new_blocks_set
     added_blocks = new_blocks_set - old_blocks
-    
+
     # For legacy students (those being upgraded), ensure TeacherBlock entries exist
     # for ALL their blocks, not just newly added ones
     # Check if this is a legacy student being upgraded (had no TeacherBlock entries)
@@ -4769,7 +4894,7 @@ def edit_student():
         student_id=student.id,
         teacher_id=current_admin_id
     ).count()
-    
+
     if existing_tb_count == 0:
         # This is a legacy student - ensure TeacherBlock entries for ALL blocks
         blocks_to_ensure = new_blocks_set
@@ -4793,14 +4918,14 @@ def edit_student():
             block=block,
             student_id=student.id
         ).first()
-        
+
         if not existing_tb:
             # Get join code for this block (from existing TeacherBlock in this block)
             existing_block_tb = TeacherBlock.query.filter_by(
                 teacher_id=current_admin_id,
                 block=block
             ).first()
-            
+
             if existing_block_tb:
                 join_code = existing_block_tb.join_code
             else:
@@ -4828,10 +4953,10 @@ def edit_student():
                     "Student %s has no first_half_hash during edit; preserving as-is",
                     student.id,
                 )
-            
+
             # Student is claimed if they have a username set
             is_claimed = bool(student.username_hash)
-                
+
             # Create new TeacherBlock entry
             # Always link to the student record since it exists
             new_tb = TeacherBlock(
@@ -5070,7 +5195,7 @@ def delete_join_code():
 def delete_pending_student():
     """
     Delete a single pending student (unclaimed TeacherBlock entry).
-    
+
     Pending students are roster entries that have not yet been claimed by students.
     This route ensures comprehensive cleanup with no leftover traces.
     """
@@ -5081,7 +5206,7 @@ def delete_pending_student():
             teacher_block_id = int(teacher_block_id)
         except (ValueError, TypeError):
             return jsonify({"status": "error", "message": "Invalid teacher block ID."}), 400
-    
+
     current_admin_id = session.get('admin_id')
 
     if not teacher_block_id:
@@ -5105,7 +5230,7 @@ def delete_pending_student():
             }), 400
 
         student_name = f"{teacher_block.first_name} {teacher_block.last_initial}."
-        
+
         # Delete the TeacherBlock entry (this is the only record for unclaimed seats)
         db.session.delete(teacher_block)
         return jsonify({
@@ -5124,7 +5249,7 @@ def delete_pending_student():
 def bulk_delete_pending_students():
     """
     Delete multiple pending students (unclaimed TeacherBlock entries) at once.
-    
+
     This route ensures comprehensive cleanup with no leftover traces.
     Accepts a list of TeacherBlock IDs or a block name to delete all pending students in that block.
     """
@@ -5185,7 +5310,7 @@ def bulk_delete_pending_students():
 def bulk_delete_legacy_unclaimed_students():
     """
     Delete multiple legacy unclaimed students (Student records without username_hash) at once.
-    
+
     Legacy unclaimed students are Student records that exist but don't have a username_hash set yet.
     This route removes students from this teacher and hard-deletes true orphans.
     Accepts a block name to delete all legacy unclaimed students in that block.
@@ -5206,7 +5331,7 @@ def bulk_delete_legacy_unclaimed_students():
             Student.block == block,
             Student.username_hash.is_(None)
         ).all()
-        
+
         removed_count = 0
         deleted_count = 0
         for student in students:
@@ -5309,10 +5434,10 @@ def add_individual_student():
         db.session.add(new_student)
         db.session.flush()
         db.session.add(StudentTeacher(student_id=new_student.id, teacher_id=current_admin_id, join_code=join_code))
-        
+
         # Ensure ClassEconomy record exists before creating TeacherBlock
         _ensure_join_code_anchors(current_admin_id, join_code)
-        
+
         new_tb = TeacherBlock(
             teacher_id=current_admin_id,
             block=block,
@@ -5329,7 +5454,7 @@ def add_individual_student():
             student_id=new_student.id,
         )
         db.session.add(new_tb)
-        
+
         if class_context.get('class_created'):
             _queue_pending_class_timezone_confirmation(class_context.get('class_row'))
 
@@ -5477,13 +5602,13 @@ def add_manual_student():
         db.session.add(new_student)
         db.session.flush()
         db.session.add(StudentTeacher(student_id=new_student.id, teacher_id=current_admin_id, join_code=join_code))
-        
+
         # Ensure ClassEconomy record exists before creating TeacherBlock
         _ensure_join_code_anchors(current_admin_id, join_code)
-        
+
         # Student is claimed if they have a username set
         is_claimed = bool(username)
-        
+
         new_tb = TeacherBlock(
             teacher_id=current_admin_id,
             block=block,
@@ -5501,7 +5626,7 @@ def add_manual_student():
             claimed_at=utc_now() if is_claimed else None,
         )
         db.session.add(new_tb)
-        
+
         if class_context.get('class_created'):
             _queue_pending_class_timezone_confirmation(class_context.get('class_row'))
 
@@ -5545,7 +5670,7 @@ def store_management():
     # Limit store scope to classes where the feature is enabled.
     blocks = [option['block'] for option in feature_options if option.get('block')]
     form.blocks.choices = [(block, f"Period {block}") for block in blocks]
-    
+
     # Build class_labels_by_block dictionary for template
     class_labels_by_block = _get_class_labels_for_blocks(admin_id, blocks)
 
@@ -5669,7 +5794,7 @@ def store_management():
         teacher_blocks = TeacherBlock.query.filter_by(class_id=selected_scope['class_id'], is_claimed=True).all()
         join_code_to_block = {}
         join_code_to_label = {}
-        
+
         # Count unique students per join_code instead of TeacherBlock seats
         class_sizes = {}
         class_size_query = (
@@ -5687,7 +5812,7 @@ def store_management():
             .all()
         )
         class_sizes = {row.join_code: int(row.student_count or 0) for row in class_size_query}
-        
+
         for seat in teacher_blocks:
             if not seat.join_code:
                 continue
@@ -6404,7 +6529,7 @@ def rent_settings():
             name = request.form.get(f'rent_item_name_{idx}', '').strip()
             if not name:
                 continue
-            
+
             rent_item_type = request.form.get(f'rent_item_type_{idx}', 'privilege') # Default to privilege if missing
             if rent_item_type == 'privilege':
                 purchase_duration = 'per_period'
@@ -6444,7 +6569,7 @@ def rent_settings():
                 'use_limit': use_limit,
                 'hall_pass_count': hall_pass_count
             }
-            
+
             # Validation logic reuse
             store_price = None
             if item_data['is_available']:
@@ -6463,12 +6588,12 @@ def rent_settings():
                         flash(f"Invalid store price for '{name}'.", 'error')
                         item_data['is_available'] = False
                         store_price = None
-            
+
             item_data['store_price'] = store_price
             parsed_items.append(item_data)
 
         from app.models import RentItem
-        
+
         # Apply parsed items to each block
         for block in blocks_to_update:
                 # Re-fetch settings for this block to ensure we have the object attached to session
@@ -8380,11 +8505,11 @@ def payroll_history():
     """View payroll history with filtering."""
     current_app.logger.info("Entered admin_payroll_history route")
     admin_id = session.get("admin_id")
-    
+
     block = request.args.get("block")
     start_date_str = request.args.get("start_date")
     end_date_str = request.args.get("end_date")
-    
+
     teacher_join_codes = _get_admin_owned_join_codes(admin_id)
     teacher_class_ids = [
         class_id for (class_id,) in db.session.query(ClassEconomy.class_id)
@@ -8482,7 +8607,7 @@ def _run_payroll_legacy():
     try:
         # Get current admin's teacher_id for proper transaction scoping
         current_admin_id = session.get('admin_id')
- 
+
         if not current_admin_id:
             error_msg = "No admin_id in session"
             current_app.logger.error(f"Payroll error: {error_msg}")
@@ -8490,10 +8615,10 @@ def _run_payroll_legacy():
                 return jsonify(status="error", message=error_msg), 401
             flash(error_msg, "admin_error")
             return redirect(url_for('admin.dashboard'))
- 
-        selected_scope = _require_payroll_feature_scope_from_request(current_admin_id)
+
+        selected_scope = _require_payroll_feature_scope_from_request()
         selected_join_code = selected_scope['join_code']
- 
+
         # Get last payroll for the selected class only.
         last_payroll_tx = Transaction.query.filter_by(
             type="payroll",
@@ -8502,7 +8627,7 @@ def _run_payroll_legacy():
         ).order_by(Transaction.timestamp.desc()).first()
         last_payroll_time = last_payroll_tx.timestamp if last_payroll_tx else None
         current_app.logger.info(f"Run payroll: last payroll at {last_payroll_time}")
- 
+
         students_query = (
             _scoped_students(include_unassigned=False)
             .join(TeacherBlock, TeacherBlock.student_id == Student.id)
@@ -8515,17 +8640,17 @@ def _run_payroll_legacy():
         )
         # We fetch students merely to maintain parity with the V1 adjustment creation below
         # but the actual payroll computation is bound purely by the canonical class_id.
-        
+
         class_id = selected_scope['class_id']
         seats = Seat.query.filter_by(class_id=class_id, role='student').all()
         seat_ids = [s.id for s in seats]
-        
+
         summary = calculate_payroll_breakdown(
             class_id,
             seat_ids,
             last_payroll_time,
         )
- 
+
         adjustments = []
         for seat_id, amount in summary.items():
             seat = db.session.get(Seat, seat_id)
@@ -8539,9 +8664,9 @@ def _run_payroll_legacy():
                 'type': 'payroll',
                 'account_type': 'checking',
             })
- 
+
         result = execute_admin_adjustments(adjustments=adjustments)
- 
+
         scheduled_rebalances_applied, _scheduled_labels = activate_due_rebalances(
             current_admin_id,
             class_id=selected_scope['class_id'],
@@ -8672,7 +8797,7 @@ def payroll():
     payroll_updated_at = payroll_preview["latest_updated_at"]
     payroll_anchor_by_join_code = payroll_preview["anchor_by_join_code"]
     payroll_summary_by_join_code = payroll_preview["summary_by_join_code"]
-    
+
     recent_payrolls = (
         Transaction.query
         .filter(Transaction.class_id.in_(my_class_ids))
@@ -8842,20 +8967,13 @@ def payroll():
             'total_earned': earnings_map.get(student.id, Decimal('0.00'))
         })
 
-    # Get rewards and fines for this class scope
-    rewards = (
-        PayrollReward.query
+    # Get saved templates for this class scope
+    saved_adjustments = (
+        SavedAdjustment.query
         .filter_by(class_id=selected_scope['class_id'])
-        .order_by(PayrollReward.created_at.desc())
+        .order_by(SavedAdjustment.created_at.desc())
         .all()
     )
-    fines = (
-        PayrollFine.query
-        .filter_by(class_id=selected_scope['class_id'])
-        .order_by(PayrollFine.created_at.desc())
-        .all()
-    )
-
     # Initialize forms
     settings_form = PayrollSettingsForm()
     settings_form.block.choices = (
@@ -8863,10 +8981,7 @@ def payroll():
         if selected_block else []
     )
 
-    reward_form = PayrollRewardForm()
-    fine_form = PayrollFineForm()
     manual_payment_form = ManualPaymentForm()
-
     # Quick stats
     avg_payout = total_payroll_estimate / len(students) if students else 0
 
@@ -8942,11 +9057,8 @@ def payroll():
         # Students tab
         student_stats=student_stats,
         scoped_balances_by_student=scoped_balances_by_student,
-        # Rewards & Fines tab
-        rewards=rewards,
-        fines=fines,
-        reward_form=reward_form,
-        fine_form=fine_form,
+        # Saved Adjustments
+        saved_adjustments=saved_adjustments,
         # Manual Payment tab
         manual_payment_form=manual_payment_form,
         all_students=students,
@@ -8985,7 +9097,7 @@ def payroll_settings():
             admin_id=admin_id,
             requested_block=request.form.get('cwi_block') or request.form.get('block'),
         )
-        
+
         # Derive assignable blocks from canonical feature scopes, not legacy student.block text.
         blocks = enabled_blocks
 
@@ -9179,8 +9291,7 @@ def update_expected_weekly_hours():
     """Update the expected weekly hours for CWI calculation for a specific block or all blocks."""
     try:
         from app.models import _quantize_currency
-        admin_id = session.get("admin_id")
-        selected_scope = _require_payroll_feature_scope_from_request(admin_id)
+        selected_scope = _require_payroll_feature_scope_from_request()
         expected_weekly_hours = _quantize_currency(request.form.get('expected_weekly_hours', '5.0'))
         cwi_block = selected_scope['block']
         apply_to_all = request.form.get('apply_to_all', 'false').lower() == 'true'
@@ -9290,239 +9401,6 @@ def update_expected_weekly_hours():
 # -------------------- PAYROLL REWARDS & FINES --------------------
 
 @admin_bp.route('/payroll/rewards/add', methods=['POST'])
-@admin_required
-def payroll_add_reward():
-    """Add a new payroll reward."""
-    form = PayrollRewardForm()
-    admin_id = session.get("admin_id")
-    selected_scope = _require_payroll_feature_scope_from_request(admin_id)
-
-    if form.validate_on_submit():
-        try:
-            payload_hash = hashlib.sha256(
-                json.dumps(
-                    {
-                        "class_id": selected_scope["class_id"],
-                        "name": form.name.data,
-                        "amount": str(form.amount.data),
-                        "is_active": bool(form.is_active.data),
-                    },
-                    sort_keys=True,
-                    default=str,
-                ).encode("utf-8")
-            ).hexdigest()[:16]
-            idempotency_key = (
-                f"feat:class:payroll-reward:add:{selected_scope['class_id']}:{payload_hash}"
-            )
-            db.session.rollback()
-            with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
-                reward = PayrollReward(
-                    teacher_id=admin_id,
-                    class_id=selected_scope['class_id'],
-                    name=form.name.data,
-                    description=form.description.data,
-                    amount=form.amount.data,
-                    is_active=form.is_active.data
-                )
-                db.session.add(reward)
-            flash(f'Reward "{reward.name}" created successfully!', 'success')
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error creating reward: {e}")
-            flash('Error creating reward. Please try again.', 'error')
-    else:
-        flash('Invalid form data. Please check your inputs.', 'error')
-
-    return redirect(url_for('admin.payroll'))
-
-
-@admin_bp.route('/payroll/rewards/<int:reward_id>/delete', methods=['POST'])
-@admin_required
-def payroll_delete_reward(reward_id):
-    """Delete a payroll reward."""
-    try:
-        selected_scope = _require_payroll_feature_scope_from_request(session.get("admin_id"))
-        admin_id = session.get("admin_id")
-        reward = PayrollReward.query.filter_by(
-            id=reward_id,
-            teacher_id=admin_id,
-            class_id=selected_scope['class_id'],
-        ).first_or_404()
-        idempotency_key = f"feat:class:payroll-reward:delete:{selected_scope['class_id']}:{reward.id}"
-        db.session.rollback()
-        with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
-            reward = PayrollReward.query.filter_by(
-                id=reward_id,
-                teacher_id=admin_id,
-                class_id=selected_scope['class_id'],
-            ).first_or_404()
-            db.session.delete(reward)
-        return jsonify({'success': True, 'message': 'Reward deleted successfully'})
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error deleting reward: {e}")
-        return jsonify({'success': False, 'message': 'Error deleting reward'}), 500
-
-
-@admin_bp.route('/payroll/fines/add', methods=['POST'])
-@admin_required
-def payroll_add_fine():
-    """Add a new payroll fine."""
-    form = PayrollFineForm()
-    admin_id = session.get("admin_id")
-    selected_scope = _require_payroll_feature_scope_from_request(admin_id)
-
-    if form.validate_on_submit():
-        try:
-            payload_hash = hashlib.sha256(
-                json.dumps(
-                    {
-                        "class_id": selected_scope["class_id"],
-                        "name": form.name.data,
-                        "amount": str(form.amount.data),
-                        "is_active": bool(form.is_active.data),
-                    },
-                    sort_keys=True,
-                    default=str,
-                ).encode("utf-8")
-            ).hexdigest()[:16]
-            idempotency_key = (
-                f"feat:class:payroll-fine:add:{selected_scope['class_id']}:{payload_hash}"
-            )
-            db.session.rollback()
-            with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
-                fine = PayrollFine(
-                    teacher_id=admin_id,
-                    class_id=selected_scope['class_id'],
-                    name=form.name.data,
-                    description=form.description.data,
-                    amount=form.amount.data,
-                    is_active=form.is_active.data
-                )
-                db.session.add(fine)
-            flash(f'Fine "{fine.name}" created successfully!', 'success')
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error creating fine: {e}")
-            flash('Error creating fine. Please try again.', 'error')
-    else:
-        flash('Invalid form data. Please check your inputs.', 'error')
-
-    return redirect(url_for('admin.payroll'))
-
-
-@admin_bp.route('/payroll/fines/<int:fine_id>/delete', methods=['POST'])
-@admin_required
-def payroll_delete_fine(fine_id):
-    """Delete a payroll fine."""
-    try:
-        selected_scope = _require_payroll_feature_scope_from_request(session.get("admin_id"))
-        admin_id = session.get("admin_id")
-        fine = PayrollFine.query.filter_by(
-            id=fine_id,
-            teacher_id=admin_id,
-            class_id=selected_scope['class_id'],
-        ).first_or_404()
-        idempotency_key = f"feat:class:payroll-fine:delete:{selected_scope['class_id']}:{fine.id}"
-        db.session.rollback()
-        with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
-            fine = PayrollFine.query.filter_by(
-                id=fine_id,
-                teacher_id=admin_id,
-                class_id=selected_scope['class_id'],
-            ).first_or_404()
-            db.session.delete(fine)
-        return jsonify({'success': True, 'message': 'Fine deleted successfully'})
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error deleting fine: {e}")
-        return jsonify({'success': False, 'message': 'Error deleting fine'}), 500
-
-
-@admin_bp.route('/payroll/rewards/<int:reward_id>/edit', methods=['POST'])
-@admin_required
-def payroll_edit_reward(reward_id):
-    """Edit an existing reward."""
-    try:
-        from app.models import _quantize_currency
-        selected_scope = _require_payroll_feature_scope_from_request(session.get("admin_id"))
-        admin_id = session.get("admin_id")
-        reward = PayrollReward.query.filter_by(
-            id=reward_id,
-            teacher_id=admin_id,
-            class_id=selected_scope['class_id'],
-        ).first_or_404()
-        data = request.get_json()
-
-        payload_hash = hashlib.sha256(
-            json.dumps(data, sort_keys=True, default=str).encode("utf-8")
-        ).hexdigest()[:16]
-        idempotency_key = (
-            f"feat:class:payroll-reward:edit:{selected_scope['class_id']}:{reward.id}:{payload_hash}"
-        )
-        db.session.rollback()
-        with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
-            reward = PayrollReward.query.filter_by(
-                id=reward_id,
-                teacher_id=admin_id,
-                class_id=selected_scope['class_id'],
-            ).first_or_404()
-            reward.name = data.get('name', reward.name)
-            reward.description = data.get('description', reward.description)
-            reward.amount = _quantize_currency(data.get('amount', str(reward.amount)))
-            reward.is_active = data.get('is_active', reward.is_active)
-        return jsonify({'success': True, 'message': 'Reward updated successfully'})
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error editing reward: {e}")
-        return jsonify({'success': False, 'message': 'Error editing reward'}), 500
-
-
-@admin_bp.route('/payroll/fines/<int:fine_id>/edit', methods=['POST'])
-@admin_required
-def payroll_edit_fine(fine_id):
-    """Edit an existing fine."""
-    try:
-        from app.models import _quantize_currency
-        selected_scope = _require_payroll_feature_scope_from_request(session.get("admin_id"))
-        admin_id = session.get("admin_id")
-        fine = PayrollFine.query.filter_by(
-            id=fine_id,
-            teacher_id=admin_id,
-            class_id=selected_scope['class_id'],
-        ).first_or_404()
-        data = request.get_json()
-
-        payload_hash = hashlib.sha256(
-            json.dumps(data, sort_keys=True, default=str).encode("utf-8")
-        ).hexdigest()[:16]
-        idempotency_key = (
-            f"feat:class:payroll-fine:edit:{selected_scope['class_id']}:{fine.id}:{payload_hash}"
-        )
-        db.session.rollback()
-        with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
-            fine = PayrollFine.query.filter_by(
-                id=fine_id,
-                teacher_id=admin_id,
-                class_id=selected_scope['class_id'],
-            ).first_or_404()
-            fine.name = data.get('name', fine.name)
-            fine.description = data.get('description', fine.description)
-            fine.amount = _quantize_currency(data.get('amount', str(fine.amount)))
-            fine.is_active = data.get('is_active', fine.is_active)
-        return jsonify({'success': True, 'message': 'Fine updated successfully'})
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error editing fine: {e}")
-        return jsonify({'success': False, 'message': 'Error editing fine'}), 500
 
 
 @admin_bp.route('/payroll/transactions/<int:transaction_id>/void', methods=['POST'])
@@ -9530,7 +9408,7 @@ def payroll_edit_fine(fine_id):
 def void_payroll_transaction(transaction_id):
     """Void a single transaction from payroll interface."""
     try:
-        selected_scope = _require_payroll_feature_scope_from_request(session.get("admin_id"))
+        selected_scope = _require_payroll_feature_scope_from_request()
         transaction = (
             Transaction.query
             .filter(Transaction.id == transaction_id)
@@ -9574,7 +9452,7 @@ def void_transactions_bulk():
     try:
         data = request.get_json()
         transaction_ids = data.get('transaction_ids', [])
-        selected_scope = _require_payroll_feature_scope_from_request(session.get("admin_id"))
+        selected_scope = _require_payroll_feature_scope_from_request()
 
         if not transaction_ids:
             return jsonify({'success': False, 'message': 'No transactions selected'}), 400
@@ -9617,137 +9495,55 @@ def void_transactions_bulk():
         return jsonify({'success': False, 'message': 'Error voiding transactions'}), 500
 
 
-@admin_bp.route('/payroll/rewards/<int:reward_id>/apply', methods=['POST'])
-@admin_required
-def payroll_apply_reward(reward_id):
-    """Apply a reward to selected students."""
-    try:
-        current_admin_id = session.get('admin_id')
-        selected_scope = _require_payroll_feature_scope_from_request(current_admin_id)
-        reward = (
-            PayrollReward.query
-            .filter_by(
-                id=reward_id,
-                teacher_id=current_admin_id,
-                class_id=selected_scope['class_id'],
-            )
-            .first_or_404()
-        )
-        student_ids = request.form.getlist('student_ids')
-
-        if not student_ids:
-            return jsonify({'success': False, 'message': 'Please select at least one student'}), 400
-
-        selected_join_code = selected_scope['join_code']
-
-        adjustments = []
-        for student_id in student_ids:
-            student = _get_student_or_404(int(student_id))
-            if student:
-                seat = Seat.query.filter_by(student_id=student.id, class_id=selected_scope['class_id']).first()
-                if not seat:
-                    return jsonify({'success': False, 'message': 'Student is outside the selected class scope'}), 404
-
-                adjustments.append({
-                    'seat': seat,
-                    'teacher_id': current_admin_id,
-                    'amount': reward.amount,
-                    'description': f"Reward: {reward.name}",
-                    'account_type': 'checking',
-                    'type': 'reward',
-                })
-
-        result = execute_admin_adjustments(adjustments=adjustments)
-        return jsonify({'success': True, 'message': f'Reward "{reward.name}" applied to {result.applied_count} student(s)!'})
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error applying reward: {e}")
-        return jsonify({'success': False, 'message': 'Error applying reward'}), 500
-
-
-@admin_bp.route('/payroll/fines/<int:fine_id>/apply', methods=['POST'])
-@admin_required
-def payroll_apply_fine(fine_id):
-    """Apply a fine to selected students."""
-    try:
-        current_admin_id = session.get('admin_id')
-        selected_scope = _require_payroll_feature_scope_from_request(current_admin_id)
-        fine = (
-            PayrollFine.query
-            .filter_by(
-                id=fine_id,
-                teacher_id=current_admin_id,
-                class_id=selected_scope['class_id'],
-            )
-            .first_or_404()
-        )
-        student_ids = request.form.getlist('student_ids')
-
-        if not student_ids:
-            return jsonify({'success': False, 'message': 'Please select at least one student'}), 400
-
-        selected_join_code = selected_scope['join_code']
-        banking_settings = BankingSettings.query.filter_by(
-            teacher_id=current_admin_id,
-            block=selected_scope['block'],
-        ).first()
-
-        adjustments = []
-        for student_id in student_ids:
-            student = _get_student_or_404(int(student_id))
-            if student:
-                seat = Seat.query.filter_by(student_id=student.id, class_id=selected_scope['class_id']).first()
-                if not seat:
-                    return jsonify({'success': False, 'message': 'Student is outside the selected class scope'}), 404
-
-                adjustments.append({
-                    'seat': seat,
-                    'teacher_id': current_admin_id,
-                    'amount': -abs(fine.amount),
-                    'description': f"Fine: {fine.name}",
-                    'account_type': 'checking',
-                    'type': 'fine',
-                })
-
-        result = execute_admin_adjustments(adjustments=adjustments, banking_settings=banking_settings)
-        message = f'Fine "{fine.name}" applied to {result.applied_count} student(s)!'
-        if result.declined_count:
-            message += f" {result.declined_count} declined for insufficient funds."
-        if result.fee_count:
-            message += f" Overdraft fee charged for {result.fee_count}."
-        return jsonify({'success': True, 'message': message})
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error applying fine: {e}")
-        return jsonify({'success': False, 'message': 'Error applying fine'}), 500
 
 
 @admin_bp.route('/payroll/manual-payment', methods=['POST'])
 @admin_required
 def payroll_manual_payment():
-    """Send manual payments to selected students."""
+    """Send manual payments to selected students and optionally save as a template."""
     form = ManualPaymentForm()
 
     if form.validate_on_submit():
         try:
             student_ids = request.form.getlist('student_ids')
-
-            if not student_ids:
-                flash('Please select at least one student.', 'warning')
-                return redirect(url_for('admin.payroll'))
+            save_action = request.form.get('save_action', 'apply_only') # apply_only, save_and_apply, save_only
+            payment_type = request.form.get('payment_type', 'deposit') # deposit or deduction
 
             description = form.description.data
             amount = form.amount.data
             account_type = form.account_type.data
 
+            # Amount logic: deduction means negative amount for transactions
+            transaction_amount = amount if payment_type == 'deposit' else -amount
+
+            if save_action in ['apply_only', 'save_and_apply'] and not student_ids:
+                flash('Please select at least one student to apply the payment.', 'warning')
+                return redirect(url_for('admin.payroll'))
+
             # Get current admin ID for teacher_id
-            current_admin_id = session.get('admin_id')
-            selected_scope = _require_payroll_feature_scope_from_request(current_admin_id)
+            selected_scope = _require_payroll_feature_scope_from_request()
             selected_join_code = selected_scope['join_code']
+            selected_class_id = selected_scope['class_id']
+            teacher_seat = selected_scope['teacher_seat']
+
+            # Save Template Logic
+            if save_action in ['save_only', 'save_and_apply']:
+                saved_adj = SavedAdjustment(
+                    seat_id=teacher_seat.id,
+                    class_id=selected_class_id,
+                    join_code=selected_join_code,
+                    name=description,
+                    description=description,
+                    amount=amount,
+                    type=payment_type,
+                    is_active=True
+                )
+                db.session.add(saved_adj)
+                db.session.commit()
+                if save_action == 'save_only':
+                    flash(f'Template "{description}" saved successfully!', 'success')
+                    return redirect(url_for('admin.payroll'))
+
             banking_settings = BankingSettings.query.filter_by(
                 teacher_id=current_admin_id,
                 block=selected_scope['block'],
@@ -9757,7 +9553,7 @@ def payroll_manual_payment():
             for student_id in student_ids:
                 student = _get_student_or_404(int(student_id))
                 if student:
-                    seat = Seat.query.filter_by(student_id=student.id, class_id=selected_scope['class_id']).first()
+                    seat = Seat.query.filter_by(student_id=student.id, class_id=selected_class_id).first()
                     if not seat:
                         flash('One or more selected students are outside the selected class scope.', 'error')
                         return redirect(url_for('admin.payroll'))
@@ -9765,29 +9561,39 @@ def payroll_manual_payment():
                     adjustments.append({
                         'seat': seat,
                         'teacher_id': current_admin_id,
-                        'amount': amount,
+                        'amount': transaction_amount,
                         'description': f"Manual Payment: {description}",
                         'account_type': account_type,
                         'type': 'manual_payment',
                     })
 
             result = execute_admin_adjustments(adjustments=adjustments, banking_settings=banking_settings)
-            message = f'Manual payment of ${amount:.2f} sent to {result.applied_count} student(s)!'
+
+            # Message formatting
+            action_verb = "Deposit" if payment_type == 'deposit' else "Deduction"
+            message = f'{action_verb} of ${amount:.2f} applied to {result.applied_count} student(s)!'
+            if save_action == 'save_and_apply':
+                message = f'Template saved and {action_verb.lower()} applied to {result.applied_count} student(s)!'
+
             if result.declined_count:
                 message += f" {result.declined_count} declined for insufficient funds."
             if result.fee_count:
                 message += f" Overdraft fee charged for {result.fee_count}."
             flash(message, 'warning' if result.declined_count else 'success')
+
         except HTTPException:
             raise
         except Exception as e:
+            from app.feats.base import InvariantViolation
+            if isinstance(e, InvariantViolation):
+                raise
+
             db.session.rollback()
-            current_app.logger.error(f"Error sending manual payments: {e}")
-            flash('Error sending manual payments. Please try again.', 'error')
+            current_app.logger.error(f"Error processing manual payment: {e}")
+            flash('Error processing manual payment. Please try again.', 'error')
     else:
         flash('Invalid form data. Please check your inputs.', 'error')
 
-    selected_scope = _require_payroll_feature_scope_from_request(session.get('admin_id'))
     return redirect(url_for('admin.payroll'))
 
 
@@ -9799,7 +9605,7 @@ def attendance_log():
     """View complete attendance log."""
     # Get accessible student IDs for tenant scoping
     student_ids_subq = _student_scope_subquery(include_unassigned=False)
-    
+
     # Get distinct periods from TapEvents for this admin's students
     periods_query = (
         db.session.query(TapEvent.period)
@@ -9809,7 +9615,7 @@ def attendance_log():
         .order_by(TapEvent.period)
     )
     periods = [p[0] for p in periods_query.all() if p[0]]
-    
+
     # Get distinct blocks from Students for this admin's students
     blocks = _get_teacher_blocks()
 
@@ -10437,7 +10243,7 @@ def tap_out_students():
                 join_code=join_code
             )
             db.session.add(tap_out_event)
-            
+
             tapped_out.append(student.full_name)
 
             current_app.logger.info(
@@ -12294,13 +12100,15 @@ def passkey_register_start():
     Official SDK Pattern: Create RegisterToken and get token from passwordless.dev
     """
     try:
-        admin_id = session.get('admin_id')
-        admin = db.session.get(Admin, admin_id)
-        if not admin:
+        user = get_current_user()
+        if not user or getattr(user.user_role, "value", user.user_role) != "teacher":
+            abort(404)
+        admin = resolve_admin_shadow_for_user(user)
+        if not admin or admin.id != session.get('admin_id'):
             abort(404)
 
         # Generate registration token using official SDK
-        user_id = f"admin_{admin.id}"
+        user_id = f"user_{user.id}"
         username = session.get("admin_auth_username") or admin.teacher_public_id or f"teacher_{admin.id}"
         displayname = admin.get_display_name()
 
@@ -12372,17 +12180,20 @@ def passkey_auth_start():
 
         username = normalize_auth_username(data['username'])
 
-        # Verify user exists
-        admin = _find_admin_by_auth_username(username)
-        if not admin:
+        user = find_canonical_user_by_auth_username(username, expected_role="teacher")
+        if not user:
             return jsonify({"error": "Invalid credentials"}), 401
 
-        session['passkey_auth_username'] = username
+        admin = resolve_admin_shadow_for_user(user)
+        if not admin:
+            return jsonify({"error": "Invalid credentials"}), 401
 
         # Check if user has passkeys
         has_passkeys = admin_has_passkeys(admin.id)
         if not has_passkeys:
             return jsonify({"error": "Invalid credentials"}), 401
+
+        session['passkey_auth_username'] = username
 
         return jsonify({
             "apiKey": get_public_api_key()
@@ -12413,19 +12224,21 @@ def passkey_auth_finish():
         # Verify token using official SDK
         verified_user = verify_signin_token(data['token'])
 
-        # Extract admin ID from user_id (format: "admin_{id}")
-        user_id = verified_user.user_id
-        if not user_id or not user_id.startswith('admin_'):
+        # Extract canonical user ID from Passwordless user_id (format: "user_{id}").
+        external_user_id = verified_user.user_id
+        if not external_user_id or not external_user_id.startswith('user_'):
             return jsonify({"error": "Invalid user ID"}), 401
 
         try:
-            admin_id = int(user_id.replace('admin_', ''))
+            canonical_user_id = int(external_user_id.replace('user_', ''))
         except ValueError:
-            current_app.logger.error(f"Invalid userId format: {user_id}")
+            current_app.logger.error(f"Invalid userId format: {external_user_id}")
             return jsonify({"error": "Invalid user ID format"}), 401
 
-        # Verify admin exists
-        admin = db.session.get(Admin, admin_id)
+        user = db.session.get(User, canonical_user_id)
+        if not user or getattr(user.user_role, "value", user.user_role) != "teacher":
+            return jsonify({"error": "Invalid user ID"}), 401
+        admin = resolve_admin_shadow_for_user(user)
         if not admin:
             return jsonify({"error": "Admin not found"}), 401
 
@@ -12433,7 +12246,7 @@ def passkey_auth_finish():
         # Credentials are stored without credential_id (managed by passwordless.dev),
         # so update last_used for all credentials belonging to this admin.
         now = utc_now()
-        touch_admin_credentials_last_used(admin_id, now)
+        touch_admin_credentials_last_used(admin.id, now)
 
         admin.last_login = now
         db.session.flush()
@@ -12443,6 +12256,7 @@ def passkey_auth_finish():
         session.clear()
         session['admin_id'] = admin.id
         session['is_admin'] = True
+        session["user_id"] = user.id
         session['admin_auth_username'] = auth_username or admin.teacher_public_id
         session['last_activity'] = now.isoformat()
         set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())

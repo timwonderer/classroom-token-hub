@@ -4,13 +4,19 @@ from datetime import datetime, timezone
 
 from app import db
 from app.auth import ensure_admin_join_code, get_current_admin
-from app.models import Admin, IdentityProfile, TeacherBlock
+from app.models import Admin, IdentityProfile, TeacherBlock, User, UserRole
 
 
 def test_admin_login_sets_session_identity(client):
     secret = pyotp.random_base32()
     admin = make_admin("teacher1", secret)
-    db.session.add(admin)
+    user = User(
+        user_role=UserRole.TEACHER,
+        username_hash=admin.username_hash,
+        username_lookup_hash=admin.username_lookup_hash,
+        totp_secret_encrypted=admin.totp_secret,
+    )
+    db.session.add_all([admin, user])
     db.session.commit()
 
     response = client.post(
@@ -23,6 +29,7 @@ def test_admin_login_sets_session_identity(client):
     with client.session_transaction() as sess:
         assert sess.get("is_admin") is True
         assert sess.get("admin_id") == admin.id
+        assert sess.get("user_id") == user.id
         assert "last_activity" in sess
 
     with client.application.test_request_context('/'):
@@ -30,6 +37,7 @@ def test_admin_login_sets_session_identity(client):
 
         session["is_admin"] = True
         session["admin_id"] = admin.id
+        session["user_id"] = user.id
         assert get_current_admin().id == admin.id
 
 
@@ -44,7 +52,7 @@ def test_admin_required_blocks_missing_identity(client):
     assert "/admin/login" in response.headers.get("Location", "")
 
 
-def test_ensure_admin_join_code_falls_back_when_membership_table_missing(client, monkeypatch):
+def test_ensure_admin_join_code_does_not_use_teacher_block_as_authority(client, monkeypatch):
     admin = make_admin("teacher_fallback", "TESTSECRET123456")
     db.session.add(admin)
     db.session.flush()
@@ -77,4 +85,4 @@ def test_ensure_admin_join_code_falls_back_when_membership_table_missing(client,
 
         ensure_admin_join_code(admin.id)
 
-        assert session["current_join_code"] == "LEGACY123"
+        assert "current_join_code" not in session

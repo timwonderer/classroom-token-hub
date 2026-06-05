@@ -25,6 +25,28 @@ class TimestampMixin:
 class User(Base, TimestampMixin):
     __tablename__ = "users"
     id = sa.Column(sa.Integer, primary_key=True)
+    user_role = sa.Column(
+        sa.Enum("student", "teacher", "sysadmin", name="user_role_enum"),
+        nullable=True,
+        index=True,
+    )
+    username_hash = sa.Column(sa.String(64), unique=True, nullable=False, index=True)
+    username_lookup_hash = sa.Column(sa.String(64), unique=True, nullable=True, index=True)
+    password_hash = sa.Column(sa.Text, nullable=True)
+    totp_secret_encrypted = sa.Column(sa.String(200), nullable=True)
+    pin_hash = sa.Column(sa.Text, nullable=True)
+    passphrase_hash = sa.Column(sa.Text, nullable=True)
+    current_session_started_at = sa.Column(sa.DateTime(timezone=True), nullable=True)
+    current_session_expires_at = sa.Column(sa.DateTime(timezone=True), nullable=True)
+    current_session_nonce = sa.Column(sa.String(128), nullable=True, index=True)
+    money_action_cooldown_until = sa.Column(sa.DateTime(timezone=True), nullable=True)
+    has_completed_setup = sa.Column(sa.Boolean, nullable=False, server_default=sa.text("false"))
+    last_active_seat_id = sa.Column(
+        sa.Integer,
+        sa.ForeignKey("seats.id", ondelete="SET NULL", use_alter=True, name="fk_users_last_active_seat_id_seats"),
+        nullable=True,
+        index=True,
+    )
 
 
 class Seat(Base, TimestampMixin):
@@ -37,27 +59,58 @@ class Seat(Base, TimestampMixin):
         index=True,
         default=lambda: str(uuid.uuid4()),
     )
+    user_id = sa.Column(sa.Integer, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    class_id = sa.Column(sa.String(36), sa.ForeignKey("classes.class_id", ondelete="CASCADE"), nullable=False, index=True)
+    role = sa.Column(sa.String(20), nullable=False)
+    roster_fingerprint = sa.Column(sa.String(128), nullable=True, index=True)
+    dedupe_code = sa.Column(sa.String(8), nullable=True)
+    claim_first_name_hash = sa.Column(sa.String(128), nullable=True, index=True)
+    claim_last_name_hash = sa.Column(sa.String(128), nullable=True, index=True)
+    claimed_at = sa.Column(sa.DateTime(timezone=True), nullable=True)
+    __table_args__ = (
+        sa.UniqueConstraint("user_id", "class_id", name="uq_seats_user_class"),
+    )
 
 
 class Class_(Base, TimestampMixin):
     __tablename__ = "classes"
-    id = sa.Column(sa.Integer, primary_key=True)
-    class_id = sa.Column(sa.String(36), unique=True, nullable=False, index=True)
+    class_id = sa.Column(sa.String(36), primary_key=True)
+    join_code_token = sa.Column(sa.String(20), unique=True, nullable=True, index=True)
+    section = sa.Column(sa.String(50), nullable=True)
+    display_name = sa.Column(sa.String(100), nullable=True)
 
 
 class IdentityProfile(Base, TimestampMixin):
     __tablename__ = "identity_profiles"
     id = sa.Column(sa.Integer, primary_key=True)
+    seat_id = sa.Column(sa.Integer, sa.ForeignKey("seats.id", ondelete="CASCADE"), unique=True, nullable=True, index=True)
+    first_name = sa.Column(sa.LargeBinary, nullable=False)
+    last_initial = sa.Column(sa.String(1), nullable=False)
 
 
 class UserInviteToken(Base, TimestampMixin):
     __tablename__ = "user_invite_tokens"
     id = sa.Column(sa.Integer, primary_key=True)
+    token_hash = sa.Column(sa.String(128), unique=True, nullable=False, index=True)
+    user_role = sa.Column(
+        sa.Enum("student", "teacher", "sysadmin", name="user_role_enum"),
+        nullable=False,
+    )
+    issued_by_user_id = sa.Column(sa.Integer, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    expires_at = sa.Column(sa.DateTime(timezone=True), nullable=False, index=True)
+    used_at = sa.Column(sa.DateTime(timezone=True), nullable=True)
+    revoked_at = sa.Column(sa.DateTime(timezone=True), nullable=True)
 
 
 class UserRecoveryToken(Base, TimestampMixin):
     __tablename__ = "user_recovery_tokens"
     id = sa.Column(sa.Integer, primary_key=True)
+    user_id = sa.Column(sa.Integer, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = sa.Column(sa.String(128), unique=True, nullable=False, index=True)
+    issued_by_user_id = sa.Column(sa.Integer, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    expires_at = sa.Column(sa.DateTime(timezone=True), nullable=False, index=True)
+    used_at = sa.Column(sa.DateTime(timezone=True), nullable=True)
+    revoked_at = sa.Column(sa.DateTime(timezone=True), nullable=True)
 
 
 class ClassFeature(Base, TimestampMixin):
@@ -95,13 +148,8 @@ class PayrollSetting(Base, TimestampMixin):
     id = sa.Column(sa.Integer, primary_key=True)
 
 
-class PayrollReward(Base, TimestampMixin):
-    __tablename__ = "payroll_rewards"
-    id = sa.Column(sa.Integer, primary_key=True)
-
-
-class PayrollFine(Base, TimestampMixin):
-    __tablename__ = "payroll_fines"
+class SavedAdjustment(Base, TimestampMixin):
+    __tablename__ = "saved_adjustments"
     id = sa.Column(sa.Integer, primary_key=True)
 
 
@@ -274,8 +322,7 @@ __all__ = [
     "HallPassSetting",
     "RentSetting",
     "PayrollSetting",
-    "PayrollReward",
-    "PayrollFine",
+    "SavedAdjustment",
     "BankingSetting",
     "AttendanceSession",
     "HallPassLog",

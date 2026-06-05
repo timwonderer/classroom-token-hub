@@ -224,15 +224,9 @@
     </button>
   </li>
   <li class="nav-item" role="presentation">
-    <button class="nav-link" id="rewards-fines-tab" data-bs-toggle="tab" data-bs-target="#rewards-fines" type="button"
-      role="tab">
-      <span class="material-symbols-outlined me-1">star</span>Rewards & Fines
-    </button>
-  </li>
-  <li class="nav-item" role="presentation">
     <button class="nav-link" id="manual-payment-tab" data-bs-toggle="tab" data-bs-target="#manual-payment" type="button"
       role="tab">
-      <span class="material-symbols-outlined me-1">payments</span>Manual
+      <span class="material-symbols-outlined me-1">payments</span>Manual Payments
     </button>
   </li>
 </ul>
@@ -953,146 +947,6 @@
     </div>
   </div>
 
-  <!-- REWARDS & FINES TAB -->
-  <div class="tab-pane fade" id="rewards-fines" role="tabpanel">
-    <div class="row">
-      <!-- Rewards Section -->
-      <div class="col-lg-6 mb-4">
-        <div class="card shadow h-100">
-          <div class="card-header bg-success text-white">
-            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white">military_tech</span>Rewards</h5>
-          </div>
-          <div class="card-body">
-            <!-- Add Reward Form -->
-            <form method="POST" action="{{ url_for('admin.payroll_add_reward') }}" class="mb-4">
-              {{ reward_form.hidden_tag() }}
-              <div class="mb-2">
-                <label for="reward_name" class="form-label visually-hidden">Reward Name</label>
-                {{ reward_form.name(class="form-control form-control-sm", placeholder="Reward Name", id="reward_name")
-                }}
-              </div>
-              <div class="mb-2">
-                <label for="reward_description" class="form-label visually-hidden">Description</label>
-                {{ reward_form.description(class="form-control form-control-sm", rows=2, placeholder="Description
-                (optional)", id="reward_description") }}
-              </div>
-              <div class="input-group input-group-sm mb-2">
-                <span class="input-group-text">$</span>
-                <label for="reward_amount" class="form-label visually-hidden">Amount</label>
-                {{ reward_form.amount(class="form-control", placeholder="Amount", step="0.01", id="reward_amount") }}
-              </div>
-              <div class="form-check form-switch mb-2">
-                {{ reward_form.is_active(class="form-check-input", role="switch", checked="checked",
-                id="reward_is_active") }}
-                {{ reward_form.is_active.label(class="form-check-label", **{"for": "reward_is_active"}) }}
-              </div>
-              {{ reward_form.submit(class="btn btn-success btn-sm w-100", id="reward_submit") }}
-            </form>
-
-            <!-- Existing Rewards -->
-            <hr>
-            <h6>Existing Rewards</h6>
-            {% if rewards %}
-            <ul class="list-group list-group-flush">
-              {% for reward in rewards %}
-              <li class="list-group-item d-flex justify-content-between align-items-center">
-                <div>
-                  <strong>{{ reward.name }}</strong>
-                  {% if reward.description %}
-                  <br><small class="text-muted">{{ reward.description }}</small>
-                  {% endif %}
-                </div>
-                <div class="text-end">
-                  <span class="badge bg-success">${{ "%.2f"|format(reward.amount) }}</span>
-                  {% if not reward.is_active %}
-                  <span class="badge bg-secondary">Inactive</span>
-                  {% endif %}
-                  <br>
-                  <button class="btn btn-sm btn-outline-primary mt-1 me-1"
-                    onclick="editReward({{ reward.id }}, '{{ reward.name|replace("'", "\\'") }}', '{{ reward.description|replace("'", "\\'")|default('') }}', {{ reward.amount }}, {{ reward.is_active|lower }})">
-                    <span class="material-symbols-outlined me-1">edit</span>Edit
-                  </button>
-                  <button class="btn btn-sm btn-outline-danger mt-1"
-                    onclick="deleteReward({{ reward.id }})">Delete</button>
-                </div>
-              </li>
-              {% endfor %}
-            </ul>
-            {% else %}
-            <p class="text-muted small">No rewards created yet.</p>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-
-      <!-- Fines Section -->
-      <div class="col-lg-6 mb-4">
-        <div class="card shadow h-100">
-          <div class="card-header bg-danger ">
-            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white">warning</span>Fines</h5>
-          </div>
-          <div class="card-body">
-            <!-- Add Fine Form -->
-            <form method="POST" action="{{ url_for('admin.payroll_add_fine') }}" class="mb-4">
-              {{ fine_form.hidden_tag() }}
-              <div class="mb-2">
-                <label for="fine_name" class="form-label visually-hidden">Fine Name</label>
-                {{ fine_form.name(class="form-control form-control-sm", placeholder="Fine Name", id="fine_name") }}
-              </div>
-              <div class="mb-2">
-                <label for="fine_description" class="form-label visually-hidden">Description</label>
-                {{ fine_form.description(class="form-control form-control-sm", rows=2, placeholder="Description
-                (optional)", id="fine_description") }}
-              </div>
-              <div class="input-group input-group-sm mb-2">
-                <span class="input-group-text">$</span>
-                <label for="fine_amount" class="form-label visually-hidden">Amount</label>
-                {{ fine_form.amount(class="form-control", placeholder="Amount", step="0.01", id="fine_amount") }}
-              </div>
-              <div class="form-check form-switch mb-2">
-                {{ fine_form.is_active(class="form-check-input", role="switch", checked="checked", id="fine_is_active")
-                }}
-                {{ fine_form.is_active.label(class="form-check-label", **{"for": "fine_is_active"}) }}
-              </div>
-              {{ fine_form.submit(class="btn btn-danger btn-sm w-100", id="fine_submit") }}
-            </form>
-
-            <!-- Existing Fines -->
-            <hr>
-            <h6>Existing Fines</h6>
-            {% if fines %}
-            <ul class="list-group list-group-flush">
-              {% for fine in fines %}
-              <li class="list-group-item d-flex justify-content-between align-items-center">
-                <div>
-                  <strong>{{ fine.name }}</strong>
-                  {% if fine.description %}
-                  <br><small class="text-muted">{{ fine.description }}</small>
-                  {% endif %}
-                </div>
-                <div class="text-end">
-                  <span class="badge bg-danger">-${{ "%.2f"|format(fine.amount) }}</span>
-                  {% if not fine.is_active %}
-                  <span class="badge bg-secondary">Inactive</span>
-                  {% endif %}
-                  <br>
-                  <button class="btn btn-sm btn-outline-primary mt-1 me-1"
-                    onclick="editFine({{ fine.id }}, '{{ fine.name|replace("'", "\\'") }}', '{{ fine.description|replace("'", "\\'")|default('') }}', {{ fine.amount }}, {{ fine.is_active|lower }})">
-                    <span class="material-symbols-outlined me-1">edit</span>Edit
-                  </button>
-                  <button class="btn btn-sm btn-outline-danger mt-1" onclick="deleteFine({{ fine.id }})">Delete</button>
-                </div>
-              </li>
-              {% endfor %}
-            </ul>
-            {% else %}
-            <p class="text-muted small">No fines created yet.</p>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- MANUAL PAYMENT TAB -->
   <div class="tab-pane fade" id="manual-payment" role="tabpanel">
@@ -1187,56 +1041,64 @@
             <form id="manualPaymentForm">
               {{ manual_payment_form.hidden_tag() }}
 
-              <!-- Preset Reward/Fine Selector -->
+              <!-- Preset Saved Adjustment Selector -->
               <div class="mb-3">
-                <label for="presetSelector" class="form-label fw-bold">Use Preset (Optional):</label>
-                <select id="presetSelector" class="form-select">
-                  <option value="">-- Select Preset --</option>
-                  <optgroup label="Rewards">
-                    {% for reward in rewards %}
-                    {% if reward.is_active %}
-                    <option value="reward_{{ reward.id }}" data-description="{{ reward.name }}"
-                      data-amount="{{ reward.amount }}" data-type="reward">
-                      {{ reward.name }} (+${{ "%.2f"|format(reward.amount) }})
+                <label for="presetSelector" class="form-label fw-bold">Use Saved Template (Optional):</label>
+                <div class="input-group">
+                  <select id="presetSelector" class="form-select">
+                    <option value="">-- Select Saved Payment --</option>
+                    {% for adj in saved_adjustments %}
+                    {% if adj.is_active %}
+                    <option value="{{ adj.id }}" data-description="{{ adj.name }}"
+                      data-amount="{{ adj.amount }}" data-type="{% if adj.type == 'deposit' %}deposit{% else %}deduction{% endif %}">
+                      {{ adj.name }} ({% if adj.type == 'deposit' %}+{% else %}-{% endif %}${{ "%.2f"|format(adj.amount) }})
                     </option>
                     {% endif %}
                     {% endfor %}
-                  </optgroup>
-                  <optgroup label="Fines">
-                    {% for fine in fines %}
-                    {% if fine.is_active %}
-                    <option value="fine_{{ fine.id }}" data-description="{{ fine.name }}"
-                      data-amount="-{{ fine.amount }}" data-type="fine">
-                      {{ fine.name }} (-${{ "%.2f"|format(fine.amount) }})
-                    </option>
-                    {% endif %}
-                    {% endfor %}
-                  </optgroup>
-                </select>
-                <small class="text-muted">Selecting a preset will auto-fill description and amount (you can
-                  override)</small>
+                  </select>
+                  <button class="btn btn-outline-secondary" type="button" id="clearFormBtn" title="Clear Form">Clear</button>
+                </div>
               </div>
+
+              <hr>
 
               <!-- Description -->
               <div class="mb-3">
                 {{ manual_payment_form.description.label(class="form-label fw-bold") }}
-                {{ manual_payment_form.description(class="form-control", id="manualDescription", placeholder="e.g.,
-                Bonus for excellent attendance") }}
+                {{ manual_payment_form.description(class="form-control form-control-lg", id="manualDescription", placeholder="What shows up in the ledger") }}
               </div>
 
-              <!-- Amount (overrides preset) -->
+              <!-- Action Type (Deposit / Deduction) -->
+              <div class="mb-3">
+                <label class="form-label fw-bold">Action:</label>
+                <div class="d-flex gap-3">
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input payment-type-radio" type="radio" name="payment_type" id="typeDeposit" value="deposit" checked>
+                    <label class="form-check-label text-success fw-bold" for="typeDeposit">
+                      <span class="material-symbols-outlined align-text-bottom fs-5">add_circle</span> Deposit
+                    </label>
+                  </div>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input payment-type-radio" type="radio" name="payment_type" id="typeDeduction" value="deduction">
+                    <label class="form-check-label text-danger fw-bold" for="typeDeduction">
+                      <span class="material-symbols-outlined align-text-bottom fs-5">do_not_disturb_on</span> Deduction
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Amount -->
               <div class="mb-3">
                 {{ manual_payment_form.amount.label(class="form-label fw-bold") }}
-                <div class="input-group">
+                <div class="input-group input-group-lg">
+                  <span class="input-group-text fw-bold" id="amountSignSymbol" style="width: 45px; justify-content: center; color: var(--bs-success);">+</span>
                   <span class="input-group-text">$</span>
-                  {{ manual_payment_form.amount(class="form-control", id="manualAmount", placeholder="0.00",
-                  step="0.01") }}
+                  {{ manual_payment_form.amount(class="form-control fw-bold", id="manualAmount", placeholder="0.00", step="0.01") }}
                 </div>
-                <small class="text-muted">This overrides the preset amount if filled</small>
               </div>
 
               <!-- Account Type -->
-              <div class="mb-3">
+              <div class="mb-4">
                 {{ manual_payment_form.account_type.label(class="form-label fw-bold") }}
                 {{ manual_payment_form.account_type(class="form-select") }}
               </div>
@@ -1244,13 +1106,20 @@
               <hr>
 
               <!-- Action Buttons -->
-              <div class="d-grid gap-2">
-                <button type="button" id="applyToSelected" class="btn btn-primary btn-lg">
-                  <span class="material-symbols-outlined me-2">check_circle</span>Apply to Selected
-                </button>
-                <button type="button" id="applyToAll" class="btn btn-outline-primary">
-                  <span class="material-symbols-outlined me-2">check_circle</span>Apply to All in Period
-                </button>
+              <div class="d-flex gap-2 justify-content-end">
+                <div class="btn-group">
+                  <button type="button" id="applyBtn" class="btn btn-primary btn-lg">
+                    Apply Payment
+                  </button>
+                  <button type="button" class="btn btn-primary btn-lg dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                    <span class="visually-hidden">Toggle Dropdown</span>
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="#" id="saveAndApplyBtn"><span class="material-symbols-outlined align-text-bottom me-2 fs-6">save</span>Save Template & Apply</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="#" id="saveOnlyBtn"><span class="material-symbols-outlined align-text-bottom me-2 fs-6">bookmark</span>Save Template Only</a></li>
+                  </ul>
+                </div>
               </div>
             </form>
           </div>
@@ -1260,85 +1129,7 @@
   </div>
 </div>
 
-<!-- Edit Reward Modal -->
-<div class="modal fade" id="editRewardModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Edit Reward</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="editRewardId">
-        <div class="mb-3">
-          <label for="editRewardName" class="form-label fw-bold">Name:</label>
-          <input type="text" class="form-control" id="editRewardName" required>
-        </div>
-        <div class="mb-3">
-          <label for="editRewardDescription" class="form-label fw-bold">Description:</label>
-          <textarea class="form-control" id="editRewardDescription" rows="2"></textarea>
-        </div>
-        <div class="mb-3">
-          <label for="editRewardAmount" class="form-label fw-bold">Amount:</label>
-          <div class="input-group">
-            <span class="input-group-text">$</span>
-            <input type="number" class="form-control" id="editRewardAmount" step="0.01" required>
-          </div>
-        </div>
-        <div class="mb-3">
-          <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="editRewardActive">
-            <label class="form-check-label" for="editRewardActive">Active</label>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-primary" onclick="saveReward()">Save Changes</button>
-      </div>
-    </div>
-  </div>
-</div>
 
-<!-- Edit Fine Modal -->
-<div class="modal fade" id="editFineModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Edit Fine</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="editFineId">
-        <div class="mb-3">
-          <label for="editFineName" class="form-label fw-bold">Name:</label>
-          <input type="text" class="form-control" id="editFineName" required>
-        </div>
-        <div class="mb-3">
-          <label for="editFineDescription" class="form-label fw-bold">Description:</label>
-          <textarea class="form-control" id="editFineDescription" rows="2"></textarea>
-        </div>
-        <div class="mb-3">
-          <label for="editFineAmount" class="form-label fw-bold">Amount:</label>
-          <div class="input-group">
-            <span class="input-group-text">$</span>
-            <input type="number" class="form-control" id="editFineAmount" step="0.01" required>
-          </div>
-        </div>
-        <div class="mb-3">
-          <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="editFineActive">
-            <label class="form-check-label" for="editFineActive">Active</label>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-primary" onclick="saveFine()">Save Changes</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- JavaScript -->
 <script>
@@ -1438,6 +1229,26 @@
   const presetSelector = document.getElementById('presetSelector');
   const manualDescription = document.getElementById('manualDescription');
   const manualAmount = document.getElementById('manualAmount');
+  const typeDepositRadio = document.getElementById('typeDeposit');
+  const typeDeductionRadio = document.getElementById('typeDeduction');
+  const amountSignSymbol = document.getElementById('amountSignSymbol');
+  const clearFormBtn = document.getElementById('clearFormBtn');
+
+  // Toggle the visual sign and color based on payment type
+  function updateAmountSign() {
+    if (typeDepositRadio && typeDepositRadio.checked) {
+      amountSignSymbol.textContent = '+';
+      amountSignSymbol.style.color = 'var(--bs-success)';
+    } else {
+      amountSignSymbol.textContent = '-';
+      amountSignSymbol.style.color = 'var(--bs-danger)';
+    }
+  }
+
+  if (typeDepositRadio && typeDeductionRadio) {
+    typeDepositRadio.addEventListener('change', updateAmountSign);
+    typeDeductionRadio.addEventListener('change', updateAmountSign);
+  }
 
   if (presetSelector) {
     presetSelector.addEventListener('change', function () {
@@ -1445,10 +1256,30 @@
       if (selectedOption.value) {
         const description = selectedOption.dataset.description;
         const amount = selectedOption.dataset.amount;
+        const type = selectedOption.dataset.type; // 'deposit' or 'deduction'
 
         if (manualDescription) manualDescription.value = description;
-        if (manualAmount) manualAmount.value = Math.abs(parseFloat(amount));
+        if (manualAmount) manualAmount.value = Math.abs(parseFloat(amount)).toFixed(2);
+
+        if (type === 'deposit') {
+            typeDepositRadio.checked = true;
+        } else if (type === 'deduction') {
+            typeDeductionRadio.checked = true;
+        }
+        updateAmountSign();
       }
+    });
+  }
+
+  if (clearFormBtn) {
+    clearFormBtn.addEventListener('click', function() {
+        if (presetSelector) presetSelector.value = '';
+        if (manualDescription) manualDescription.value = '';
+        if (manualAmount) manualAmount.value = '';
+        if (typeDepositRadio) {
+            typeDepositRadio.checked = true;
+            updateAmountSign();
+        }
     });
   }
 
@@ -2018,68 +1849,62 @@
       .catch(err => showToast('Error deleting fine', 'error'));
   }
 
-  // Manual Payment: Apply to Selected
-  document.getElementById('applyToSelected')?.addEventListener('click', async function () {
+  // Helper to gather form data for manual payment
+  function getManualPaymentData(saveAction) {
     const selectedStudents = Array.from(document.querySelectorAll('.student-checkbox:checked')).map(cb => cb.value);
 
-    if (selectedStudents.length === 0) {
-      alert('Please select at least one student.');
-      return;
+    // For save_only, student selection is optional, but for apply we need students
+    if (saveAction !== 'save_only' && selectedStudents.length === 0) {
+      alert('Please select at least one student to apply the payment.');
+      return null;
     }
 
     const description = document.getElementById('manualDescription').value;
     const amount = document.getElementById('manualAmount').value;
     const accountType = document.querySelector('select[name="account_type"]').value;
+    const paymentType = document.getElementById('typeDeposit')?.checked ? 'deposit' : 'deduction';
 
     if (!description || !amount) {
-      alert('Please fill in description and amount.');
-      return;
+      alert('Please fill in the description and amount.');
+      return null;
     }
 
-    await submitManualPayment(selectedStudents, description, amount, accountType);
+    return { selectedStudents, description, amount, accountType, paymentType, saveAction };
+  }
+
+  // Button Handlers
+  document.getElementById('applyBtn')?.addEventListener('click', async function () {
+    const data = getManualPaymentData('apply_only');
+    if (data) await submitManualPayment(data);
   });
 
-  // Manual Payment: Apply to All in Period
-  document.getElementById('applyToAll')?.addEventListener('click', async function () {
-    const selectedBlock = document.getElementById('studentBlockFilter').value;
+  document.getElementById('saveAndApplyBtn')?.addEventListener('click', async function (e) {
+    e.preventDefault();
+    const data = getManualPaymentData('save_and_apply');
+    if (data) await submitManualPayment(data);
+  });
 
-    if (!selectedBlock) {
-      alert('Please select a specific period/block first.');
-      return;
-    }
-
-    const allStudentsInPeriod = Array.from(document.querySelectorAll('.student-row'))
-      .filter(row => row.style.display !== 'none')
-      .map(row => row.querySelector('.student-checkbox').value);
-
-    if (allStudentsInPeriod.length === 0) {
-      alert('No students found in the selected period.');
-      return;
-    }
-
-    const description = document.getElementById('manualDescription').value;
-    const amount = document.getElementById('manualAmount').value;
-    const accountType = document.querySelector('select[name="account_type"]').value;
-
-    if (!description || !amount) {
-      alert('Please fill in description and amount.');
-      return;
-    }
-
-    if (!confirm(`Apply payment to all ${allStudentsInPeriod.length} students in this period?`)) return;
-
-    await submitManualPayment(allStudentsInPeriod, description, amount, accountType);
+  document.getElementById('saveOnlyBtn')?.addEventListener('click', async function (e) {
+    e.preventDefault();
+    const data = getManualPaymentData('save_only');
+    if (data) await submitManualPayment(data);
   });
 
   // Submit Manual Payment
-  async function submitManualPayment(studentIds, description, amount, accountType) {
+  async function submitManualPayment(data) {
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
     const formData = new FormData();
-    formData.append('description', description);
-    formData.append('amount', amount);
-    formData.append('account_type', accountType);
-    studentIds.forEach(id => formData.append('student_ids', id));
+    formData.append('description', data.description);
+    formData.append('amount', data.amount);
+    formData.append('account_type', data.accountType);
+    formData.append('save_action', data.saveAction);
+    formData.append('payment_type', data.paymentType);
+
+    // Append selected students (might be empty if save_only)
+    if (data.selectedStudents) {
+      data.selectedStudents.forEach(id => formData.append('student_ids', id));
+    }
 
     try {
       const resp = await fetch('{{ url_for("admin.payroll_manual_payment") }}', {
@@ -2091,15 +1916,15 @@
       });
 
       if (resp.redirected) {
-        showToast('Payment applied successfully!', 'success');
-        setTimeout(() => location.reload(), 1000);
+        showToast('Payment action successful!', 'success');
+        setTimeout(() => location.reload(), 800);
       } else {
-        const data = await resp.json();
-        if (data.success) {
-          showToast(data.message || 'Payment applied successfully!', 'success');
-          setTimeout(() => location.reload(), 1000);
+        const result = await resp.json();
+        if (result.success) {
+          showToast(result.message || 'Payment action successful!', 'success');
+          setTimeout(() => location.reload(), 800);
         } else {
-          showToast(data.message || 'Failed to apply payment', 'error');
+          showToast(result.message || 'Failed to apply action', 'error');
         }
       }
     } catch (err) {

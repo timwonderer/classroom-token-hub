@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from app.extensions import db
+from app.models import User, UserRole
 from app.services.admin_identity_bridge_service import (
     admin_has_passkeys,
     count_active_admin_invite_codes,
@@ -31,13 +32,19 @@ from tests.helpers.v2_fixtures import make_admin
 
 def _seed_teacher():
     teacher = make_admin("admin-identity-bridge", "test-secret")
-    db.session.add(teacher)
+    user = User(
+        user_role=UserRole.TEACHER,
+        username_hash=teacher.username_hash,
+        username_lookup_hash=teacher.username_lookup_hash,
+        totp_secret_encrypted=teacher.totp_secret,
+    )
+    db.session.add_all([teacher, user])
     db.session.flush()
-    return teacher
+    return teacher, user
 
 
 def test_onboarding_bridge_create_and_updates(client):
-    teacher = _seed_teacher()
+    teacher, _user = _seed_teacher()
     now = utc_now()
 
     assert get_teacher_onboarding(teacher.id) is None
@@ -64,7 +71,7 @@ def test_onboarding_bridge_create_and_updates(client):
 
 
 def test_onboarding_bridge_legacy_completed_create(client):
-    teacher = _seed_teacher()
+    teacher, _user = _seed_teacher()
     completed = create_legacy_completed_teacher_onboarding(teacher.id, utc_now())
     db.session.commit()
 
@@ -75,13 +82,14 @@ def test_onboarding_bridge_legacy_completed_create(client):
 
 
 def test_admin_credential_bridge_lifecycle(client):
-    teacher = _seed_teacher()
+    teacher, user = _seed_teacher()
     assert admin_has_passkeys(teacher.id) is False
 
     created = create_admin_credential(teacher.id, authenticator_name="My Passkey")
     db.session.flush()
 
     assert created.teacher_id == teacher.id
+    assert created.user_id == user.id
     assert admin_has_passkeys(teacher.id) is True
 
     listed = list_admin_credentials(teacher.id)
@@ -103,7 +111,7 @@ def test_admin_credential_bridge_lifecycle(client):
 
 
 def test_admin_identity_bridge_bulk_deletes(client):
-    teacher = _seed_teacher()
+    teacher, _user = _seed_teacher()
     now = utc_now()
     get_or_create_teacher_onboarding(teacher.id, now)
     create_admin_credential(teacher.id, authenticator_name="Key 1")

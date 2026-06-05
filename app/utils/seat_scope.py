@@ -39,6 +39,21 @@ def get_seat_id_for_class(student_id: int, class_id: str) -> int | None:
     return seat.id if seat else None
 
 
+def resolve_active_teacher_seat(teacher_id: int, class_id: str):
+    """Resolve the canonical teacher seat for a given admin and class context.
+
+    In the V2 architecture, this relies on finding a Seat with role='teacher'
+    bound to this class_id. In legacy contexts, this maps back to the admin_id,
+    but the Seat itself must exist as the canonical activity anchor.
+    """
+    from app.models import Seat
+
+    # Until the User/Seat identity migration fully populates user_id on teacher seats,
+    # we resolve the teacher seat by class_id and role.
+    # Once fully migrated, this should query by user_id = current_user.id.
+    return Seat.query.filter_by(role='teacher', class_id=class_id).first()
+
+
 def transaction_scope_filter(TransactionModel, seat_or_student_id: int, seat_ids: list[int] | None = None):
     """Return a seat-scoped filter, with a legacy fallback for old call sites."""
     if seat_ids is not None:

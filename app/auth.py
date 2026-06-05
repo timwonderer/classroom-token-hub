@@ -15,6 +15,7 @@ from flask import session, flash, redirect, url_for, request, current_app, jsoni
 from werkzeug.security import generate_password_hash
 from app.extensions import db
 from app.hash_utils import hash_username_lookup
+from app.utils.auth_username import normalize_auth_username
 
 
 # -------------------- SESSION CONFIGURATION --------------------
@@ -82,6 +83,7 @@ def _is_grafana_proxy_subrequest() -> bool:
 def _expire_system_admin_session():
     session.pop("is_system_admin", None)
     session.pop("sysadmin_id", None)
+    session.pop("user_id", None)
     session.pop("last_activity", None)
     session.pop("sysadmin_auth_username", None)
     session.pop("passkey_sysadmin_auth_username", None)
@@ -133,7 +135,7 @@ def login_required(f):
         if not login_time_str:
             # Clear student-specific keys but preserve CSRF token
             session.pop('student_id', None)
-            session.pop('student_user_id', None)
+            session.pop('user_id', None)
             session.pop('current_seat_id', None)
             session.pop('seat_id', None)
             session.pop('class_id', None)
@@ -150,7 +152,7 @@ def login_required(f):
         if (utc_now() - login_time) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
             # Clear student-specific keys but preserve CSRF token
             session.pop('student_id', None)
-            session.pop('student_user_id', None)
+            session.pop('user_id', None)
             session.pop('current_seat_id', None)
             session.pop('seat_id', None)
             session.pop('class_id', None)
@@ -169,7 +171,7 @@ def login_required(f):
         student = get_logged_in_student()
         if not student:
             session.pop('student_id', None)
-            session.pop('student_user_id', None)
+            session.pop('user_id', None)
             session.pop('current_seat_id', None)
             session.pop('seat_id', None)
             session.pop('class_id', None)
@@ -186,7 +188,7 @@ def login_required(f):
         seat = sync_student_session_context(student)
         if had_explicit_seat and seat is None:
             session.pop('student_id', None)
-            session.pop('student_user_id', None)
+            session.pop('user_id', None)
             session.pop('current_seat_id', None)
             session.pop('seat_id', None)
             session.pop('class_id', None)
@@ -287,13 +289,78 @@ def is_student_account_active(student):
 
 
 def get_logged_in_user():
-    """Return the logged-in credential identity for the student session, if present."""
+    """Return the logged-in canonical credential identity, if present."""
+    return get_current_user()
+
+
+def set_canonical_user_session(*, username_lookup_hash: str | None, expected_role: str):
+    """Set the canonical user session anchor for a migrated credential principal."""
     from app.models import User
 
-    user_id = session.get('student_user_id')
-    if not user_id:
+    session.pop("user_id", None)
+    if not username_lookup_hash:
         return None
-    return db.session.get(User, user_id)
+
+    user = User.query.filter_by(username_lookup_hash=username_lookup_hash).first()
+    if not user or getattr(user.user_role, "value", user.user_role) != expected_role:
+        return None
+
+    session["user_id"] = user.id
+    return user
+
+
+def find_canonical_user_by_auth_username(username: str, *, expected_role: str):
+    """Return the canonical credential principal for a normalized login name."""
+    from app.models import User
+
+    normalized = normalize_auth_username(username)
+    if not normalized:
+        return None
+
+    user = User.query.filter_by(username_lookup_hash=hash_username_lookup(normalized)).first()
+    if not user or getattr(user.user_role, "value", user.user_role) != expected_role:
+        return None
+    return user
+
+
+def resolve_admin_shadow_for_user(user):
+    """Resolve the unique legacy teacher row needed by compatibility routes."""
+    from app.models import Admin
+
+    if not user or not user.username_lookup_hash:
+        return None
+    return Admin.query.filter_by(username_lookup_hash=user.username_lookup_hash).first()
+
+
+def resolve_system_admin_shadow_for_user(user):
+    """Resolve the unique legacy system-admin row needed by compatibility routes."""
+    from app.models import SystemAdmin
+
+    if not user or not user.username_lookup_hash:
+        return None
+    return SystemAdmin.query.filter_by(username_lookup_hash=user.username_lookup_hash).first()
+
+
+def resolve_student_shadow_for_user(user):
+    """Resolve one legacy student shadow through the canonical user's owned seats."""
+    from app.models import Seat, Student
+
+    if not user:
+        return None
+
+    students = (
+        Student.query
+        .join(Seat, Seat.student_id == Student.id)
+        .filter(
+            Seat.user_id == user.id,
+            Seat.role == "student",
+            Seat.claimed_at.isnot(None),
+        )
+        .distinct()
+        .limit(2)
+        .all()
+    )
+    return students[0] if len(students) == 1 else None
 
 
 def get_current_student_seat():
@@ -307,8 +374,8 @@ def get_current_student_seat():
     if not seat:
         return None
 
-    student_id = session.get('student_id')
-    if student_id and seat.student_id != student_id:
+    user = get_current_user()
+    if user and seat.user_id != user.id:
         return None
 
     if not getattr(seat, "claimed_at", None):
@@ -393,7 +460,7 @@ def get_current_user():
     Return the current User from session/seat context.
 
     Resolution order:
-    1) user_id/current_user_id (and legacy student_user_id bridge)
+    1) canonical user_id session key
     2) get_current_seat().user
     Returns None when unavailable.
     """
@@ -402,7 +469,7 @@ def get_current_user():
     if hasattr(g, "_auth_current_user_cache"):
         return g._auth_current_user_cache
 
-    user_id = _safe_int_id(_first_present_session_value('user_id', 'current_user_id', 'student_user_id'))
+    user_id = _safe_int_id(session.get('user_id'))
     if user_id:
         user = db.session.get(User, user_id)
         if user:
@@ -474,7 +541,7 @@ def sync_student_session_context(
     if student is None and 'student_id' in session:
         student = get_logged_in_student()
     if not student:
-        session.pop('student_user_id', None)
+        session.pop('user_id', None)
         session.pop('current_seat_id', None)
         session.pop('current_class_id', None)
         session.pop('seat_id', None)
@@ -568,10 +635,10 @@ def sync_student_session_context(
         session['seat_id'] = seat.id
         session['class_id'] = seat.class_id
         if seat.user_id:
-            session['student_user_id'] = seat.user_id
+            session['user_id'] = seat.user_id
     else:
         session.pop('current_seat_id', None)
-        session.pop('student_user_id', None)
+        session.pop('user_id', None)
         session.pop('current_class_id', None)
         session.pop('current_join_code', None)
         session.pop('seat_id', None)
@@ -582,48 +649,75 @@ def sync_student_session_context(
 
 def get_logged_in_student():
     """
-    Get the currently logged-in student from the session.
+    Get the currently logged-in legacy student shadow from canonical session state.
 
     Returns:
-        Student: The logged-in Student object, or None if not logged in.
+        Student: The route compatibility Student object, or None if not logged in.
     """
-    # Import here to avoid circular imports
-    from app.models import Student
-    if 'student_id' not in session:
+    user = get_current_user()
+    if not user:
         return None
-    student = db.session.get(Student, session['student_id'])
+
+    if getattr(user.user_role, "value", user.user_role) != "student":
+        return None
+
+    student = resolve_student_shadow_for_user(user)
+    if not student:
+        return None
+
+    session_student_id = _safe_int_id(session.get("student_id"))
+    if session_student_id and session_student_id != student.id:
+        return None
+
+    session["student_id"] = student.id
     if not is_student_account_active(student):
         return None
     return student
 
 
 def get_current_admin():
-    """Return the logged-in admin based on the session state."""
+    """Return the legacy admin route shadow for the current canonical teacher user."""
     if not session.get("is_admin"):
         return None
-    admin_id = session.get("admin_id")
-    if not admin_id:
+
+    user = get_current_user()
+    if not user or getattr(user.user_role, "value", user.user_role) != "teacher":
         return None
-    from app.models import Admin  # Imported lazily to avoid circular import
-    return db.session.get(Admin, admin_id)
+
+    admin = resolve_admin_shadow_for_user(user)
+    if not admin:
+        return None
+
+    session_admin_id = _safe_int_id(session.get("admin_id"))
+    if session_admin_id and session_admin_id != admin.id:
+        return None
+
+    session["admin_id"] = admin.id
+    return admin
 
 
 def get_current_system_admin():
-    """Return the logged-in system admin based on the session state."""
+    """Return the legacy sysadmin route shadow for the current canonical sysadmin user."""
     if hasattr(g, "_auth_current_system_admin_cache"):
         return g._auth_current_system_admin_cache
 
     if not session.get("is_system_admin"):
         return None
 
-    sysadmin_id = _safe_int_id(session.get("sysadmin_id"))
-    if not sysadmin_id:
+    user = get_current_user()
+    if not user or getattr(user.user_role, "value", user.user_role) != "sysadmin":
         return None
 
-    from app.models import SystemAdmin  # Imported lazily to avoid circular import
-    sysadmin = db.session.get(SystemAdmin, sysadmin_id)
-    if sysadmin:
-        g._auth_current_system_admin_cache = sysadmin
+    sysadmin = resolve_system_admin_shadow_for_user(user)
+    if not sysadmin:
+        return None
+
+    session_sysadmin_id = _safe_int_id(session.get("sysadmin_id"))
+    if session_sysadmin_id and session_sysadmin_id != sysadmin.id:
+        return None
+
+    session["sysadmin_id"] = sysadmin.id
+    g._auth_current_system_admin_cache = sysadmin
     return sysadmin
 
 

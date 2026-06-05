@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Set up Flask app context
 from app import app
 from app.extensions import db
-from app.models import SystemAdmin, Admin
+from app.models import SystemAdmin, Admin, User, UserRole
 from app.utils.encryption import encrypt_totp
 from app.utils.admin_identity import (
     load_teacher_id_words,
@@ -62,15 +62,23 @@ def create_system_admin(username):
 
         # Create the admin
         salt, username_hash, username_lookup_hash = build_hashed_username_fields(username)
+        encrypted_totp_secret = encrypt_totp(totp_secret)
         admin = SystemAdmin(
             username_hash=username_hash,
             username_lookup_hash=username_lookup_hash,
             salt=salt,
-            totp_secret=encrypt_totp(totp_secret)  # Encrypt before storing
+            totp_secret=encrypted_totp_secret,
+        )
+        user = User(
+            user_role=UserRole.SYSADMIN,
+            username_hash=username_hash,
+            username_lookup_hash=username_lookup_hash,
+            totp_secret_encrypted=encrypted_totp_secret,
+            has_completed_setup=True,
         )
         db.session.rollback()
         with FEATBypass():
-            db.session.add(admin)
+            db.session.add_all([admin, user])
             db.session.commit()
 
         print("=" * 70)
@@ -139,18 +147,26 @@ def create_regular_admin(username):
                     break
 
         # Create the admin
+        encrypted_totp_secret = encrypt_totp(totp_secret)
         admin = Admin(
             username_hash=username_hash,
             username_lookup_hash=lookup_hash,
             teacher_public_id=teacher_public_id,
             public_id=secrets.token_urlsafe(18),
-            totp_secret=encrypt_totp(totp_secret),  # Encrypt before storing
+            totp_secret=encrypted_totp_secret,
             salt=salt,
             hall_pass_verify_token=Admin.generate_verify_token(),
         )
+        user = User(
+            user_role=UserRole.TEACHER,
+            username_hash=username_hash,
+            username_lookup_hash=lookup_hash,
+            totp_secret_encrypted=encrypted_totp_secret,
+            has_completed_setup=True,
+        )
         db.session.rollback()
         with FEATBypass():
-            db.session.add(admin)
+            db.session.add_all([admin, user])
             db.session.commit()
 
         print("=" * 70)

@@ -19,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 from app.utils.time import utc_now, ensure_utc
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app, jsonify, Response
+from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app, jsonify, Response, abort
 from sqlalchemy import delete, or_, case
 from werkzeug.exceptions import BadRequest, Unauthorized, Forbidden, NotFound, ServiceUnavailable
 import pyotp
@@ -30,19 +30,23 @@ from app.models import (
     Transaction, TransactionStatus, TapEvent, HallPassLog, StudentItem, RentPayment,
     StudentInsurance, InsuranceClaim, StudentTeacher, TeacherBlock, StudentBlock, UserReport,
     FeatureSettings, RentSettings, BankingSettings,
-    HallPassSettings, PayrollFine, PayrollReward,
-    PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory, IssueResolutionAction
+    HallPassSettings, SavedAdjustment,
+    PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory, IssueResolutionAction, User
 )
 from app.auth import (
     system_admin_required,
     _expire_system_admin_session,
     _system_admin_timeout_expired,
+    find_canonical_user_by_auth_username,
+    get_current_user,
+    resolve_system_admin_shadow_for_user,
+    set_canonical_user_session,
 )
 from app.forms import SystemAdminLoginForm, SystemAdminInviteForm
 
 # Import utility functions
 from app.utils.helpers import is_safe_url, format_utc_iso
-from app.utils.encryption import encrypt_totp, decrypt_totp, is_totp_encrypted
+from app.utils.encryption import encrypt_totp, decrypt_totp
 from app.hash_utils import hash_username_lookup
 from app.services import ledger_service
 from app.utils.passwordless_client import (
@@ -78,6 +82,18 @@ def _find_sysadmin_by_auth_username(username: str):
 
 
 def _sysadmin_auth_username_exists(username: str, *, exclude_sysadmin_id: int | None = None) -> bool:
+    normalized = normalize_auth_username(username)
+    if not normalized:
+        return False
+    lookup_hash = hash_username_lookup(normalized)
+    user = User.query.filter_by(username_lookup_hash=lookup_hash).first()
+    if user:
+        if exclude_sysadmin_id is not None:
+            excluded_admin = db.session.get(SystemAdmin, exclude_sysadmin_id)
+            if excluded_admin and excluded_admin.username_lookup_hash == lookup_hash:
+                return False
+        return True
+
     admin = _find_sysadmin_by_auth_username(username)
     if not admin:
         return False
@@ -145,19 +161,23 @@ def login():
     """System admin login with TOTP authentication."""
     session.pop("is_system_admin", None)
     session.pop("sysadmin_id", None)
+    session.pop("user_id", None)
     session.pop("last_activity", None)
     session.pop("force_sysadmin_username_migration", None)  # noqa: safety — no-op if key absent
     form = SystemAdminLoginForm()
     if form.validate_on_submit():
         username = normalize_auth_username(form.username.data)
         totp_code = form.totp_code.data.strip()
-        admin = _find_sysadmin_by_auth_username(username)
-        if admin:
+        user = find_canonical_user_by_auth_username(username, expected_role="sysadmin")
+        if user:
             try:
-                decrypted_secret = decrypt_totp(admin.totp_secret)
-            except ValueError:
-                # Legacy plaintext TOTP secret - verify once, then migrate to encrypted storage.
-                decrypted_secret = admin.totp_secret
+                decrypted_secret = decrypt_totp(user.totp_secret_encrypted)
+            except (TypeError, ValueError):
+                current_app.logger.warning(
+                    "System admin login failed: invalid encrypted TOTP secret for user_id=%s",
+                    user.id,
+                )
+                decrypted_secret = None
             if decrypted_secret:
                 totp_valid = False
                 try:
@@ -166,16 +186,21 @@ def login():
                 except (binascii.Error, TypeError, ValueError):
                     current_app.logger.warning(
                         "System admin login failed: TOTP secret is not valid base32 for sysadmin_id=%s",
-                        admin.id,
+                        user.id,
                     )
                     totp_valid = False
                 if totp_valid:
-                    # Encrypt any plaintext TOTP secret on successful auth.
-                    if not is_totp_encrypted(admin.totp_secret):
-                        admin.totp_secret = encrypt_totp(decrypted_secret)
-                        db.session.flush()
+                    admin = resolve_system_admin_shadow_for_user(user)
+                    if not admin:
+                        current_app.logger.error(
+                            "System admin login failed: canonical user_id=%s has no unique legacy route shadow",
+                            user.id,
+                        )
+                        flash("Invalid credentials or TOTP.", "error")
+                        return redirect(url_for("sysadmin.login"))
                     session["is_system_admin"] = True
                     session["sysadmin_id"] = admin.id
+                    session["user_id"] = user.id
                     session["sysadmin_auth_username"] = username
                     session['last_activity'] = utc_now().isoformat()
                     # Establish global maintenance bypass for subsequent role testing.
@@ -204,6 +229,7 @@ def logout():
     """System admin logout."""
     session.pop("is_system_admin", None)
     session.pop("sysadmin_id", None)
+    session.pop("user_id", None)
     session.pop("last_activity", None)
     session.pop("sysadmin_auth_username", None)
     session.pop("passkey_sysadmin_auth_username", None)
@@ -225,11 +251,15 @@ def passkey_register_start():
     Official SDK Pattern: Create RegisterToken and get token from passwordless.dev
     """
     try:
-        sysadmin_id = session.get("sysadmin_id")
-        admin = db.get_or_404(SystemAdmin, sysadmin_id)
+        user = get_current_user()
+        if not user or getattr(user.user_role, "value", user.user_role) != "sysadmin":
+            abort(404)
+        admin = resolve_system_admin_shadow_for_user(user)
+        if not admin or admin.id != session.get("sysadmin_id"):
+            abort(404)
 
         # Generate registration token using official SDK
-        user_id = f"sysadmin_{admin.id}"
+        user_id = f"user_{user.id}"
         username = session.get("sysadmin_auth_username") or admin.get_display_username()
         displayname = f"System Admin: {admin.get_display_username()}"
 
@@ -259,6 +289,9 @@ def passkey_register_finish():
     """
     try:
         sysadmin_id = session.get("sysadmin_id")
+        user = get_current_user()
+        if not user or getattr(user.user_role, "value", user.user_role) != "sysadmin":
+            return jsonify({"error": "Canonical system admin identity is missing"}), 409
         data = request.get_json()
 
         # No token is required in the payload for registration finish; nothing to check here.
@@ -270,6 +303,7 @@ def passkey_register_finish():
         # Save credential metadata (credential_id is optional, stored on passwordless.dev)
         credential = SystemAdminCredential(
             sysadmin_id=sysadmin_id,  # Correct column name is sysadmin_id, not system_admin_id
+            user_id=user.id,
             credential_id=None,  # Not needed - stored on passwordless.dev servers
             authenticator_name=authenticator_name
         )
@@ -303,13 +337,15 @@ def passkey_auth_start():
 
         username = normalize_auth_username(data['username'])
 
-        # Verify user exists
-        admin = _find_sysadmin_by_auth_username(username)
+        user = find_canonical_user_by_auth_username(username, expected_role="sysadmin")
+        if not user:
+            return jsonify({"error": "Invalid credentials"}), 401
+        admin = resolve_system_admin_shadow_for_user(user)
         if not admin:
             return jsonify({"error": "Invalid credentials"}), 401
 
         # Check if user has passkeys
-        has_passkeys = SystemAdminCredential.query.filter_by(sysadmin_id=admin.id).first() is not None
+        has_passkeys = SystemAdminCredential.query.filter_by(user_id=user.id).first() is not None
         if not has_passkeys:
             return jsonify({"error": "Invalid credentials"}), 401
 
@@ -344,19 +380,21 @@ def passkey_auth_finish():
         # Verify token using official SDK
         verified_user = verify_signin_token(data['token'])
 
-        # Extract sysadmin ID from user_id (format: "sysadmin_{id}")
-        user_id = verified_user.user_id
-        if not user_id or not user_id.startswith('sysadmin_'):
+        # Extract canonical user ID from Passwordless user_id (format: "user_{id}").
+        external_user_id = verified_user.user_id
+        if not external_user_id or not external_user_id.startswith('user_'):
             return jsonify({"error": "Invalid user ID"}), 401
 
         try:
-            sysadmin_id = int(user_id.replace('sysadmin_', ''))
+            canonical_user_id = int(external_user_id.replace('user_', ''))
         except ValueError:
-            current_app.logger.error(f"Invalid userId format: {user_id}")
+            current_app.logger.error(f"Invalid userId format: {external_user_id}")
             return jsonify({"error": "Invalid user ID format"}), 401
 
-        # Verify system admin exists
-        admin = db.session.get(SystemAdmin, sysadmin_id)
+        user = db.session.get(User, canonical_user_id)
+        if not user or getattr(user.user_role, "value", user.user_role) != "sysadmin":
+            return jsonify({"error": "Invalid user ID"}), 401
+        admin = resolve_system_admin_shadow_for_user(user)
         if not admin:
             return jsonify({"error": "Admin not found"}), 401
 
@@ -364,7 +402,7 @@ def passkey_auth_finish():
         # Credentials are stored without credential_id (managed by passwordless.dev),
         # so update last_used for all credentials belonging to this sysadmin.
         now = utc_now()
-        SystemAdminCredential.query.filter_by(sysadmin_id=sysadmin_id).update(
+        SystemAdminCredential.query.filter_by(user_id=user.id).update(
             {'last_used': now},
             synchronize_session=False,
         )
@@ -374,6 +412,7 @@ def passkey_auth_finish():
         # Create session
         session["is_system_admin"] = True
         session["sysadmin_id"] = admin.id
+        session["user_id"] = user.id
         session["sysadmin_auth_username"] = (
             session.get("passkey_sysadmin_auth_username") or admin.get_display_username()
         )
@@ -402,8 +441,10 @@ def passkey_auth_finish():
 def passkey_list():
     """List all passkeys for current system admin."""
     try:
-        sysadmin_id = session.get("sysadmin_id")
-        credentials = SystemAdminCredential.query.filter_by(sysadmin_id=sysadmin_id).order_by(SystemAdminCredential.created_at.desc()).all()
+        user = get_current_user()
+        if not user:
+            return jsonify({"error": "Canonical system admin identity is missing"}), 409
+        credentials = SystemAdminCredential.query.filter_by(user_id=user.id).order_by(SystemAdminCredential.created_at.desc()).all()
 
         return jsonify([{
             "id": cred.id,
@@ -423,8 +464,10 @@ def passkey_list():
 def passkey_delete(credential_id):
     """Delete a passkey."""
     try:
-        sysadmin_id = session.get("sysadmin_id")
-        credential = SystemAdminCredential.query.filter_by(id=credential_id, sysadmin_id=sysadmin_id).first()
+        user = get_current_user()
+        if not user:
+            return jsonify({"error": "Canonical system admin identity is missing"}), 409
+        credential = SystemAdminCredential.query.filter_by(id=credential_id, user_id=user.id).first()
 
         if not credential:
             return jsonify({"error": "Passkey not found"}), 404
@@ -447,7 +490,15 @@ def passkey_settings():
     """Passkey management page."""
     sysadmin_id = session.get("sysadmin_id")
     admin = db.get_or_404(SystemAdmin, sysadmin_id)
-    credentials = SystemAdminCredential.query.filter_by(sysadmin_id=sysadmin_id).order_by(SystemAdminCredential.created_at.desc()).all()
+    user = get_current_user()
+    if not user:
+        abort(404)
+    credentials = (
+        SystemAdminCredential.query
+        .filter_by(user_id=user.id)
+        .order_by(SystemAdminCredential.created_at.desc())
+        .all()
+    )
 
     return render_template("system_admin_passkey_settings.html",
                          admin=admin,
@@ -823,7 +874,11 @@ def reset_teacher_totp(admin_id):
     try:
         # Generate new secret
         new_secret = pyotp.random_base32()
+        user = User.query.filter_by(username_lookup_hash=admin.username_lookup_hash).first()
+        if not user:
+            return jsonify({"status": "error", "message": "Canonical teacher identity is missing."}), 409
         admin.totp_secret = encrypt_totp(new_secret)  # Encrypt before storing
+        user.totp_secret_encrypted = admin.totp_secret
         db.session.flush()
         stored_secret = admin.totp_secret
 

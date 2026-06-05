@@ -197,15 +197,27 @@ def _account_lookup_legacy():
         # first_name and last_initial are preserved; they are managed by the teacher.
         if linked_block and linked_block.is_claimed and linked_block.claimed_at is None:
             linked_block.claimed_at = utc_now()
- 
+
+        linked_user = _find_linked_user_for_student(student.id)
+        if not linked_user:
+            current_app.logger.error(
+                "Recovery lookup failed closed: student_id=%s has no canonical user principal",
+                student.id,
+            )
+            flash("Account identity is incomplete. Contact support.", "error")
+            return redirect(url_for('recovery.account_lookup'))
+
         student.username_hash = None
         student.username_lookup_hash = None
         student.pin_hash = None
         student.passphrase_hash = None
         student.has_completed_setup = False
- 
+        linked_user.username_lookup_hash = None
+        linked_user.pin_hash = None
+        linked_user.passphrase_hash = None
+        linked_user.has_completed_setup = False
+
         bridge_seat = _get_or_create_bridge_seat_for_teacher_block(linked_block)
-        linked_user = _find_linked_user_for_student(student.id)
         if bridge_seat and linked_user and bridge_seat.user_id != linked_user.id:
             bridge_seat.user_id = linked_user.id
  

@@ -1,21 +1,52 @@
-import pytest
+import pyotp
 from app import db, Student
 from werkzeug.security import generate_password_hash
-from app.hash_utils import hash_username, get_random_salt
+from app.hash_utils import hash_username, hash_username_lookup, get_random_salt
+from app.models import ClassEconomy, IdentityProfile, Seat, User, UserRole
+from app.utils.time import utc_now
+from tests.helpers.v2_fixtures import make_admin
 
 def test_student_login_next_redirect(client):
     salt = get_random_salt()
     username = "stu1"
+    admin = make_admin("login_redirect_teacher", pyotp.random_base32())
+    db.session.add(admin)
+    db.session.flush()
+    class_row = ClassEconomy(join_code="LOGIN-REDIRECT", teacher_id=admin.id, display_name="Login")
+    profile = IdentityProfile(profile_type="student", first_name="Stu", last_initial="S")
+    db.session.add_all([class_row, profile])
+    db.session.flush()
     stu = Student(
         first_name="Stu",
         last_initial="S",
+        identity_id=profile.id,
         block="A",
+        join_code=class_row.join_code,
+        class_id=class_row.class_id,
         salt=salt,
         username_hash=hash_username(username, salt),
+        username_lookup_hash=hash_username_lookup(username),
         pin_hash=generate_password_hash("1234"),
         has_completed_setup=True,
     )
-    db.session.add(stu)
+    user = User(
+        user_role=UserRole.STUDENT,
+        username_hash=hash_username_lookup(username),
+        username_lookup_hash=hash_username_lookup(username),
+        pin_hash=generate_password_hash("1234"),
+        has_completed_setup=True,
+        last_active_class_id=class_row.class_id,
+    )
+    db.session.add_all([stu, user])
+    db.session.flush()
+    db.session.add(Seat(
+        user_id=user.id,
+        student_id=stu.id,
+        class_id=class_row.class_id,
+        join_code=class_row.join_code,
+        role="student",
+        claimed_at=utc_now(),
+    ))
     db.session.commit()
 
     # Access protected route

@@ -1,7 +1,7 @@
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import db, Student
 from werkzeug.security import generate_password_hash
-from app.hash_utils import hash_username, get_random_salt
+from app.hash_utils import hash_username, hash_username_lookup, get_random_salt
 from bs4 import BeautifulSoup
 import json
 from datetime import datetime, timezone
@@ -14,8 +14,8 @@ def parse_server_state(html):
     script = soup.find(id='serverState')
     return json.loads(script.string)
 
-def create_claimed_seat(teacher_id, student_id, block, join_code, salt=None):
-    from app.models import TeacherBlock, ClassEconomy, Seat, User
+def create_claimed_seat(teacher_id, student_id, block, join_code, salt=None, username=None, pin=None):
+    from app.models import TeacherBlock, ClassEconomy, Seat, User, UserRole
     if salt is None:
         salt = get_random_salt()
 
@@ -41,8 +41,11 @@ def create_claimed_seat(teacher_id, student_id, block, join_code, salt=None):
     )
     if not identity_user:
         identity_user = User(
+            user_role=UserRole.STUDENT,
             username_hash=hash_username(f"tapflow_{student_id}_{join_code.lower()}", salt),
+            username_lookup_hash=hash_username_lookup(username) if username else None,
             password_hash=generate_password_hash("test-passphrase"),
+            pin_hash=generate_password_hash(pin) if pin else None,
             last_active_class_id=class_economy.class_id,
         )
         db.session.add(identity_user)
@@ -107,7 +110,7 @@ def test_dynamic_blocks_and_tap_flow(client):
     db.session.add(st)
 
     # Create TeacherBlocks for the student (required for join_code context)
-    create_claimed_seat(teacher.id, stu.id, "A", "JOIN-A", salt)
+    create_claimed_seat(teacher.id, stu.id, "A", "JOIN-A", salt, username=username, pin="0000")
     create_claimed_seat(teacher.id, stu.id, "C", "JOIN-C", salt)
 
     db.session.commit()
@@ -164,7 +167,7 @@ def test_invalid_period_and_action(client):
     db.session.add(StudentTeacher(student_id=stu.id, teacher_id=teacher.id))
 
     # Create TeacherBlock
-    create_claimed_seat(teacher.id, stu.id, "A", "JOIN-T2", salt)
+    create_claimed_seat(teacher.id, stu.id, "A", "JOIN-T2", salt, username=username, pin="0000")
 
     db.session.commit()
     login(client, username, "0000")
@@ -207,7 +210,7 @@ def test_server_state_json(client):
     db.session.add(st)
 
     # Create TeacherBlock
-    create_claimed_seat(teacher.id, stu.id, "A", "JOIN-A", salt)
+    create_claimed_seat(teacher.id, stu.id, "A", "JOIN-A", salt, username=username, pin="0000")
 
     db.session.commit()
 
@@ -296,7 +299,7 @@ def test_student_status_get_is_read_only_and_reconcile_is_explicit_mutation(clie
     db.session.flush()
 
     db.session.add(StudentTeacher(student_id=stu.id, teacher_id=teacher.id))
-    create_claimed_seat(teacher.id, stu.id, "A", "JOIN-A", salt)
+    create_claimed_seat(teacher.id, stu.id, "A", "JOIN-A", salt, username=username, pin="0000")
     db.session.commit()
     class_row = ClassEconomy.query.filter_by(join_code="JOIN-A").first()
     seat = Seat.query.filter_by(student_id=stu.id, class_id=class_row.class_id).first()

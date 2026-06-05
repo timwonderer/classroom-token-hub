@@ -16,8 +16,11 @@ import re
 import pytest
 from datetime import timedelta
 from app import db
-from app.models import Student, TeacherBlock, Admin, StudentTeacher, Transaction, StudentBlock
-from app.hash_utils import get_random_salt, hash_username
+from app.models import (
+    ClassEconomy, IdentityProfile, Seat, Student, TeacherBlock, Admin,
+    StudentTeacher, Transaction, StudentBlock, User, UserRole,
+)
+from app.hash_utils import get_random_salt, hash_username, hash_username_lookup
 from app.utils.money_guard import check_financial_cooldown
 from app.utils.time import ensure_utc, utc_now
 
@@ -29,43 +32,89 @@ from app.utils.time import ensure_utc, utc_now
 def recovery_data(client):
     """Setup a teacher, student, and class for recovery tests."""
     teacher = make_admin("teacher_rec", "base32secret3232")
-    db.session.add(teacher)
-    db.session.commit()
+    teacher_user = User(
+        user_role=UserRole.TEACHER,
+        username_hash=teacher.username_hash,
+        username_lookup_hash=teacher.username_lookup_hash,
+        totp_secret_encrypted=teacher.totp_secret,
+    )
+    db.session.add_all([teacher, teacher_user])
+    db.session.flush()
+
+    join_code = "A123"
+    class_row = ClassEconomy(
+        join_code=join_code,
+        teacher_id=teacher.id,
+        display_name="Recovery Class",
+    )
+    profile = IdentityProfile(profile_type="student", first_name="Original", last_initial="O")
+    db.session.add_all([class_row, profile])
+    db.session.flush()
 
     salt = get_random_salt()
     student = Student(
         first_name="Original",
         last_initial="O",
+        identity_id=profile.id,
         block="A",
+        join_code=join_code,
+        class_id=class_row.class_id,
         salt=salt,
         username_hash=hash_username("orig_user", salt),
+        username_lookup_hash=hash_username_lookup("orig_user"),
         first_half_hash="hash1",
         recovery_status='active',
     )
-    db.session.add(student)
-    db.session.commit()
+    user = User(
+        user_role=UserRole.STUDENT,
+        username_hash=hash_username_lookup("orig_user"),
+        username_lookup_hash=hash_username_lookup("orig_user"),
+        has_completed_setup=True,
+    )
+    db.session.add_all([student, user])
+    db.session.flush()
 
-    join_code = "A123"
     tb = TeacherBlock(
         teacher_id=teacher.id,
         block="A",
         join_code=join_code,
+        class_id=class_row.class_id,
         first_name="Original",
         last_initial="O",
+        identity_id=profile.id,
         last_name_hash_by_part=None,
         dob_sum_hash=None,
         salt=salt,
         first_half_hash="hash1",
         student_id=student.id,
         is_claimed=True,
+        claimed_at=utc_now(),
     )
-    db.session.add(tb)
-    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
+    seat = Seat(
+        user_id=user.id,
+        student_id=student.id,
+        class_id=class_row.class_id,
+        join_code=join_code,
+        role="student",
+        claimed_at=utc_now(),
+    )
+    db.session.add_all([
+        tb,
+        seat,
+        StudentTeacher(
+            student_id=student.id,
+            teacher_id=teacher.id,
+            class_id=class_row.class_id,
+            join_code=join_code,
+        ),
+    ])
     db.session.commit()
 
     return {
         "teacher": teacher,
+        "teacher_user": teacher_user,
         "student": student,
+        "seat": seat,
         "join_code": join_code,
     }
 
@@ -81,6 +130,7 @@ def test_teacher_generates_reset_code(client, recovery_data):
 
     with client.session_transaction() as sess:
         sess["admin_id"] = teacher.id
+        sess["user_id"] = recovery_data["teacher_user"].id
         sess["is_admin"] = True
 
     resp = client.post(
@@ -104,6 +154,7 @@ def test_multiple_resets_invalidate_prior_codes(client, recovery_data):
 
     with client.session_transaction() as sess:
         sess["admin_id"] = teacher.id
+        sess["user_id"] = recovery_data["teacher_user"].id
         sess["is_admin"] = True
 
     # First reset
@@ -315,6 +366,7 @@ def test_recovery_preserves_identity(client, recovery_data):
 def test_recovery_preserves_balance_and_transactions(client, recovery_data):
     """Balance and transaction count unchanged through recovery."""
     student = recovery_data["student"]
+    seat = recovery_data["seat"]
     teacher = recovery_data["teacher"]
     join_code = recovery_data["join_code"]
 
@@ -337,7 +389,7 @@ def test_recovery_preserves_balance_and_transactions(client, recovery_data):
     db.session.commit()
 
     tx_count_before = Transaction.query.filter_by(
-        student_id=student.id, join_code=join_code
+        seat_id=seat.id, join_code=join_code
     ).count()
 
     student.reset_code = "PRESRV01"
@@ -353,13 +405,13 @@ def test_recovery_preserves_balance_and_transactions(client, recovery_data):
 
     # Verify economic data untouched
     tx_count_after = Transaction.query.filter_by(
-        student_id=student.id, join_code=join_code
+        seat_id=seat.id, join_code=join_code
     ).count()
     assert tx_count_after == tx_count_before
 
     # No new economic transactions created during recovery
     recovery_txns = Transaction.query.filter_by(
-        student_id=student.id, type='recovery'
+        seat_id=seat.id, type='recovery'
     ).count()
     assert recovery_txns == 0
 
@@ -415,6 +467,7 @@ def test_only_one_active_reset_code_per_student(client, recovery_data):
 
     with client.session_transaction() as sess:
         sess["admin_id"] = teacher.id
+        sess["user_id"] = recovery_data["teacher_user"].id
         sess["is_admin"] = True
 
     # Generate first code

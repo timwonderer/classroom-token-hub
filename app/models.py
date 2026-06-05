@@ -84,6 +84,11 @@ class AccountType(str, enum.Enum):
     CHECKING = 'checking'
     SAVINGS = 'savings'
 
+class UserRole(str, enum.Enum):
+    STUDENT = 'student'
+    TEACHER = 'teacher'
+    SYSADMIN = 'sysadmin'
+
 # -------------------- ANALYTICS ALERT MODEL --------------------
 
 class AnalyticsAlert(db.Model):
@@ -172,22 +177,35 @@ class AnalyticsAlert(db.Model):
 
 
 class User(db.Model):
-    """
-    Global login principal for V2.0+ unified identity architecture.
-    
-    NOTE: Not yet active in v2.0 launch. Current authentication uses
-    separate Admin/Student/SystemAdmin tables. This table exists for
-    future migration to unified identity model where one user can have
-    multiple seats (roles) across different join codes.
-    
-    Planned usage: One user → many seats (e.g., teacher in Period 1, student in Period 2)
-    """
+    """Global authentication, recovery, and session principal."""
 
     __tablename__ = 'users'
 
     id = db.Column(db.Integer, primary_key=True)
+    user_role = db.Column(
+        db.Enum(UserRole, values_callable=lambda x: [e.value for e in x], name='user_role_enum'),
+        nullable=True,
+        index=True,
+    )
     username_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.Text, nullable=False)
+    username_lookup_hash = db.Column(db.String(64), unique=True, nullable=True, index=True)
+    password_hash = db.Column(db.Text, nullable=True)
+    totp_secret_encrypted = db.Column(db.String(200), nullable=True)
+    pin_hash = db.Column(db.Text, nullable=True)
+    passphrase_hash = db.Column(db.Text, nullable=True)
+    current_session_started_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    current_session_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    current_session_nonce = db.Column(db.String(128), nullable=True, index=True)
+    money_action_cooldown_until = db.Column(db.DateTime(timezone=True), nullable=True)
+    has_completed_setup = db.Column(db.Boolean, nullable=False, default=False, server_default=sa.text('false'))
+    last_active_seat_id = db.Column(
+        db.Integer,
+        db.ForeignKey('seats.id', ondelete='SET NULL', use_alter=True, name='fk_users_last_active_seat_id_seats'),
+        nullable=True,
+        index=True,
+    )
+
+    # Transitional pointer until session restoration is fully seat-based.
     last_active_class_id = db.Column(
         db.String(36),
         db.ForeignKey('classes.class_id', ondelete='SET NULL'),
@@ -197,15 +215,35 @@ class User(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
-    seats = db.relationship('Seat', backref='user', lazy='dynamic', cascade='all, delete-orphan', passive_deletes=True)
+    seats = db.relationship(
+        'Seat',
+        backref='user',
+        lazy='dynamic',
+        cascade='all, delete-orphan',
+        passive_deletes=True,
+        foreign_keys='Seat.user_id',
+    )
+    last_active_seat = db.relationship('Seat', foreign_keys=[last_active_seat_id], post_update=True)
+
+    @validates('totp_secret_encrypted')
+    def _validate_totp_secret_encrypted(self, _key, value):
+        return normalize_totp_for_storage(value) if value else None
 
 
 class IdentityProfile(db.Model):
-    """Canonical identity record used by student-facing entities for display."""
+    """Seat-bound display identity with no authentication or authority semantics."""
 
     __tablename__ = 'identity_profiles'
 
     id = db.Column(db.Integer, primary_key=True)
+    seat_id = db.Column(
+        db.Integer,
+        db.ForeignKey('seats.id', ondelete='CASCADE'),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+    # Transitional discriminator until every profile is bound to a seat.
     profile_type = db.Column(db.String(32), nullable=False, index=True)
     first_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=False)
     last_initial = db.Column(db.String(1), nullable=False)
@@ -219,6 +257,45 @@ class IdentityProfile(db.Model):
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_initial}."
+
+
+class UserInviteToken(db.Model):
+    """Short-lived capability for provisioning a teacher user."""
+
+    __tablename__ = 'user_invite_tokens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    token_hash = db.Column(db.String(128), unique=True, nullable=False, index=True)
+    user_role = db.Column(
+        db.Enum(UserRole, values_callable=lambda x: [e.value for e in x], name='user_role_enum'),
+        nullable=False,
+        default=UserRole.TEACHER,
+    )
+    issued_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+
+class UserRecoveryToken(db.Model):
+    """Time-limited recovery capability owned by a user."""
+
+    __tablename__ = 'user_recovery_tokens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    token_hash = db.Column(db.String(128), unique=True, nullable=False, index=True)
+    issued_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+    user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('recovery_tokens', lazy='dynamic'))
+    issued_by_user = db.relationship('User', foreign_keys=[issued_by_user_id])
 
 
 class Seat(db.Model):
@@ -236,6 +313,8 @@ class Seat(db.Model):
     block_identifier = db.Column(db.String(10), nullable=True)
     roster_fingerprint = db.Column(db.String(128), nullable=True, index=True)
     dedupe_code = db.Column(db.String(8), nullable=True)
+    claim_first_name_hash = db.Column(db.String(128), nullable=True, index=True)
+    claim_last_name_hash = db.Column(db.String(128), nullable=True, index=True)
     claimed_at = db.Column(db.DateTime(timezone=True), nullable=True)
     has_received_rent_exemption = db.Column(db.Boolean, nullable=False, default=False)
 
@@ -250,6 +329,14 @@ class Seat(db.Model):
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
     student = db.relationship('Student', backref=db.backref('seats', lazy='dynamic'))
+    identity_profile = db.relationship(
+        'IdentityProfile',
+        backref=db.backref('seat', uselist=False),
+        uselist=False,
+        foreign_keys='IdentityProfile.seat_id',
+        cascade='all, delete-orphan',
+        passive_deletes=True,
+    )
 
     __table_args__ = (
         db.UniqueConstraint('user_id', 'class_id', name='uq_seats_user_class'),
@@ -605,6 +692,8 @@ class ClassEconomy(db.Model):
 
     class_id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     join_code = db.Column(db.String(20), unique=True, nullable=False, index=True)
+    join_code_token = db.Column(db.String(20), unique=True, nullable=True, index=True)
+    section = db.Column(db.String(50), nullable=True)
     teacher_id = db.Column(
         db.Integer,
         db.ForeignKey('teachers.id', ondelete='CASCADE'),
@@ -783,6 +872,7 @@ class SystemAdminCredential(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     sysadmin_id = db.Column(db.Integer, db.ForeignKey('system_admins.id', ondelete='CASCADE'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True, index=True)
 
     # Credential metadata
     credential_id = db.Column(db.Text, unique=False, nullable=True, index=False)  # Optional: not needed for passwordless.dev SaaS
@@ -794,6 +884,7 @@ class SystemAdminCredential(db.Model):
 
     # Relationships
     sysadmin = db.relationship('SystemAdmin', backref=db.backref('credentials', lazy='dynamic', cascade='all, delete-orphan'))
+    user = db.relationship('User', backref=db.backref('system_admin_credentials', lazy='dynamic', cascade='all, delete-orphan'))
 
     def __repr__(self):
         return f'<SystemAdminCredential {self.authenticator_name or "Unnamed"} for SysAdmin {self.sysadmin_id}>'
@@ -2677,6 +2768,7 @@ class AdminCredential(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True, index=True)
 
     # Credential metadata
     credential_id = db.Column(db.Text, unique=False, nullable=True, index=False)  # Optional: not needed for passwordless.dev SaaS
@@ -2688,6 +2780,7 @@ class AdminCredential(db.Model):
 
     # Relationships
     teacher = db.relationship('Admin', backref=db.backref('credentials', lazy='dynamic', cascade='all, delete-orphan'))
+    user = db.relationship('User', backref=db.backref('teacher_credentials', lazy='dynamic', cascade='all, delete-orphan'))
 
     def __repr__(self):
         return f'<AdminCredential {self.authenticator_name or "Unnamed"} for Teacher {self.teacher_id}>'
@@ -2794,44 +2887,25 @@ class PayrollSettings(db.Model):
         return f'<PayrollSettings {self.block or "Global"}>'
 
 
-# ---- Payroll Reward Model ----
-class PayrollReward(db.Model):
-    __tablename__ = 'payroll_rewards'
+# ---- Saved Adjustment Model ----
+class SavedAdjustment(db.Model):
+    __tablename__ = 'saved_adjustments'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
     amount = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+    type = db.Column(db.String(20), nullable=False, default='manual_payment')
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
 
     # Relationships
-    teacher = db.relationship('Admin', backref=db.backref('payroll_rewards', lazy='dynamic'))
+    seat = db.relationship('Seat', backref=db.backref('saved_adjustments', lazy='dynamic'))
 
     def __repr__(self):
-        return f'<PayrollReward {self.name}: ${self.amount}>'
-
-
-# ---- Payroll Fine Model ----
-class PayrollFine(db.Model):
-    __tablename__ = 'payroll_fines'
-    id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False)
-    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
-    join_code = db.Column(db.String(20), nullable=True, index=True)
-    name = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text, nullable=True)
-    amount = db.Column(db.Numeric(precision=12, scale=2), nullable=False)  # Positive value, will be deducted
-    is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
-
-    # Relationships
-    teacher = db.relationship('Admin', backref=db.backref('payroll_fines', lazy='dynamic'))
-
-    def __repr__(self):
-        return f'<PayrollFine {self.name}: -${self.amount}>'
+        return f'<SavedAdjustment {self.name}: ${self.amount} ({self.type})>'
 
 
 # ---- Banking Settings Model ----

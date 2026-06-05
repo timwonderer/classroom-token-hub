@@ -29,8 +29,6 @@ from app.models_canonical import (
     ObligationReversal,
     ObligationSatisfaction,
     OperationalEvent,
-    PayrollFine,
-    PayrollReward,
     PayrollSetting,
     PolicyTransition,
     PolicyVersion,
@@ -63,8 +61,6 @@ def test_canonical_models_importable():
         HallPassSetting,
         RentSetting,
         PayrollSetting,
-        PayrollReward,
-        PayrollFine,
         BankingSetting,
         AttendanceSession,
         HallPassLog,
@@ -97,4 +93,4 @@ def test_canonical_models_importable():
         Announcement,
         IssueCategory,
     ]
-    assert len(models) == 46
+    assert len(models) == 44

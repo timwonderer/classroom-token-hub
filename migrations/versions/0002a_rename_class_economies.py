@@ -40,18 +40,18 @@ def _inspector():
     return sa.inspect(op.get_bind())
 
 
-def _table_exists(name: str) -> bool:
+def table_exists(name: str) -> bool:
     return name in _inspector().get_table_names()
 
 
-def _index_exists(table: str, index_name: str) -> bool:
+def index_exists(table: str, index_name: str) -> bool:
     try:
         return index_name in [i["name"] for i in _inspector().get_indexes(table)]
     except Exception:
         return False
 
 
-def _fk_exists(table: str, fk_name: str) -> bool:
+def foreign_key_exists(table: str, fk_name: str) -> bool:
     try:
         return fk_name in [fk["name"] for fk in _inspector().get_foreign_keys(table)]
     except Exception:
@@ -136,12 +136,18 @@ INDEX_RENAMES = [
 def upgrade():
     bind = op.get_bind()
 
+    # Fresh squash-bootstrap databases are built from live runtime metadata.
+    # Once ClassEconomy declares __tablename__ = "classes", 0001 creates the
+    # fully referenced target table directly and there is nothing to rename.
+    if table_exists("classes") and not table_exists("class_economies"):
+        return
+
     # ------------------------------------------------------------------ #
     # Step 0: drop the canonical-stub `classes` table that was created by  #
     # the bootstrap migration (models_canonical.py Class_ placeholder).    #
     # It has no FKs pointing at it and no data; safe to drop.             #
     # ------------------------------------------------------------------ #
-    if _table_exists("classes"):
+    if table_exists("classes"):
         # Verify it really is the empty stub (no FKs referencing it)
         fks_referencing_classes = [
             fk
@@ -161,15 +167,15 @@ def upgrade():
     # class_economies.class_id (they will be recreated in step 3).        #
     # ------------------------------------------------------------------ #
     for child_table, old_fk, _new_fk, _col, _ondelete in FK_CATALOGUE:
-        if not _table_exists(child_table):
+        if not table_exists(child_table):
             continue
-        if _fk_exists(child_table, old_fk):
+        if foreign_key_exists(child_table, old_fk):
             op.drop_constraint(old_fk, child_table, type_="foreignkey")
 
     # ------------------------------------------------------------------ #
     # Step 2: rename the table.                                            #
     # ------------------------------------------------------------------ #
-    if _table_exists("class_economies") and not _table_exists("classes"):
+    if table_exists("class_economies") and not table_exists("classes"):
         op.rename_table("class_economies", "classes")
 
     # ------------------------------------------------------------------ #
@@ -178,16 +184,16 @@ def upgrade():
     for old_idx, new_idx, table in INDEX_RENAMES:
         # After rename the indexes live on 'classes' but Postgres tracks
         # index names globally – pass the post-rename table name.
-        if _index_exists(table, old_idx):
+        if index_exists(table, old_idx):
             op.execute(f'ALTER INDEX "{old_idx}" RENAME TO "{new_idx}"')
 
     # ------------------------------------------------------------------ #
     # Step 4: recreate FK constraints pointing at the renamed table.       #
     # ------------------------------------------------------------------ #
     for child_table, _old_fk, new_fk, col, ondelete in FK_CATALOGUE:
-        if not _table_exists(child_table):
+        if not table_exists(child_table):
             continue
-        if not _fk_exists(child_table, new_fk):
+        if not foreign_key_exists(child_table, new_fk):
             op.create_foreign_key(
                 new_fk,
                 child_table,
@@ -207,9 +213,9 @@ def downgrade():
     # Step 1: drop the new FK constraints.                                 #
     # ------------------------------------------------------------------ #
     for child_table, _old_fk, new_fk, _col, _ondelete in FK_CATALOGUE:
-        if not _table_exists(child_table):
+        if not table_exists(child_table):
             continue
-        if _fk_exists(child_table, new_fk):
+        if foreign_key_exists(child_table, new_fk):
             op.drop_constraint(new_fk, child_table, type_="foreignkey")
 
     # ------------------------------------------------------------------ #
@@ -218,22 +224,22 @@ def downgrade():
     # After downgrade the table is called 'class_economies' again, but the
     # indexes are still globally named; use the intermediate table name.
     for old_idx, new_idx, _table in INDEX_RENAMES:
-        if _index_exists("class_economies", new_idx) or _index_exists("classes", new_idx):
+        if index_exists("class_economies", new_idx) or index_exists("classes", new_idx):
             op.execute(f'ALTER INDEX "{new_idx}" RENAME TO "{old_idx}"')
 
     # ------------------------------------------------------------------ #
     # Step 3: rename table back.                                           #
     # ------------------------------------------------------------------ #
-    if _table_exists("classes") and not _table_exists("class_economies"):
+    if table_exists("classes") and not table_exists("class_economies"):
         op.rename_table("classes", "class_economies")
 
     # ------------------------------------------------------------------ #
     # Step 4: recreate the original FK constraints.                        #
     # ------------------------------------------------------------------ #
     for child_table, old_fk, _new_fk, col, ondelete in FK_CATALOGUE:
-        if not _table_exists(child_table):
+        if not table_exists(child_table):
             continue
-        if not _fk_exists(child_table, old_fk):
+        if not foreign_key_exists(child_table, old_fk):
             op.create_foreign_key(
                 old_fk,
                 child_table,
@@ -247,7 +253,7 @@ def downgrade():
     # Step 5: recreate the canonical-stub `classes` table that was dropped  #
     # during upgrade (mirrors models_canonical.py Class_).                 #
     # ------------------------------------------------------------------ #
-    if not _table_exists("classes"):
+    if not table_exists("classes"):
         op.create_table(
             "classes",
             sa.Column("id", sa.Integer, primary_key=True),
@@ -257,4 +263,5 @@ def downgrade():
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False,
                       server_default=sa.func.now()),
         )
-        op.create_index("ix_classes_class_id", "classes", ["class_id"], unique=True)
+        if not index_exists("classes", "ix_classes_class_id"):
+            op.create_index("ix_classes_class_id", "classes", ["class_id"], unique=True)

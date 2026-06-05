@@ -75,9 +75,10 @@ from app.models import (
     InsuranceClaim,
     ErrorLog,
     Admin,
+    User,
+    UserRole,
     PayrollSettings,
-    PayrollReward,
-    PayrollFine
+    SavedAdjustment
 )
 
 # Auth utilities (Stage 3)
@@ -207,14 +208,21 @@ def create_sysadmin():
 
     # Save to database with encrypted secret
     salt, username_hash, username_lookup_hash = build_hashed_username_fields(username)
+    encrypted_totp_secret = encrypt_totp(totp_secret)
     sysadmin = SystemAdmin(
-        username=None,
         username_hash=username_hash,
         username_lookup_hash=username_lookup_hash,
         salt=salt,
-        totp_secret=encrypt_totp(totp_secret),
+        totp_secret=encrypted_totp_secret,
     )
-    db.session.add(sysadmin)
+    user = User(
+        user_role=UserRole.SYSADMIN,
+        username_hash=username_hash,
+        username_lookup_hash=username_lookup_hash,
+        totp_secret_encrypted=encrypted_totp_secret,
+        has_completed_setup=True,
+    )
+    db.session.add_all([sysadmin, user])
     db.session.commit()
 
     # Display results

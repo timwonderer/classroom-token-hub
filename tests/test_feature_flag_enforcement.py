@@ -9,7 +9,7 @@ from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
-from app.models import Student, Admin, Transaction, TeacherBlock, ClassEconomy, ClassFeature, ClassMembership, PayrollReward, StoreItem, Seat
+from app.models import Student, Admin, Transaction, TeacherBlock, ClassEconomy, ClassFeature, ClassMembership, StoreItem, Seat
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 from tests.helpers.admin_context import login_admin
@@ -70,7 +70,7 @@ def setup_student_with_disabled_banking(client):
         claimed_at=datetime.now(timezone.utc)
     )
     db.session.add(seat)
-    db.session.add(Seat(
+    student_seat = Seat(
         class_id=economy.class_id,
         role='student',
         join_code=join_code,
@@ -78,14 +78,16 @@ def setup_student_with_disabled_banking(client):
         block="Period1",
         block_identifier="Period1",
         claimed_at=datetime.now(timezone.utc),
-    ))
+    )
+    db.session.add(student_seat)
     db.session.commit()
 
     # Add some money to checking account
     tx = Transaction(
-        student_id=student.id,
         teacher_id=teacher.id,
         join_code=join_code,
+        class_id=economy.class_id,
+        seat_id=student_seat.id,
         amount=100.0,
         account_type='checking',
         type='Initial',
@@ -104,7 +106,9 @@ def setup_student_with_disabled_banking(client):
     return {
         'teacher': teacher,
         'student': student,
-        'join_code': join_code
+        'join_code': join_code,
+        'class_id': economy.class_id,
+        'seat_id': student_seat.id,
     }
 
 
@@ -155,7 +159,7 @@ def test_transfer_post_blocked_when_banking_disabled(client, setup_student_with_
     # Verify no transactions were created
     
     # Should only have the initial transaction, no transfer
-    all_transactions = Transaction.query.filter_by(student_id=student.id).all()
+    all_transactions = Transaction.query.filter_by(seat_id=data['seat_id']).all()
     assert len(all_transactions) == 1
     assert all_transactions[0].type == 'Initial'
 
@@ -234,7 +238,7 @@ def setup_student_with_enabled_banking(client):
         claimed_at=datetime.now(timezone.utc)
     )
     db.session.add(seat)
-    db.session.add(Seat(
+    student_seat = Seat(
         class_id=economy.class_id,
         role='student',
         join_code=join_code,
@@ -242,14 +246,16 @@ def setup_student_with_enabled_banking(client):
         block="Period2",
         block_identifier="Period2",
         claimed_at=datetime.now(timezone.utc),
-    ))
+    )
+    db.session.add(student_seat)
     db.session.commit()
 
     # Add some money to checking account
     tx = Transaction(
-        student_id=student.id,
         teacher_id=teacher.id,
         join_code=join_code,
+        class_id=economy.class_id,
+        seat_id=student_seat.id,
         amount=100.0,
         account_type='checking',
         type='Initial',
@@ -263,7 +269,9 @@ def setup_student_with_enabled_banking(client):
     return {
         'teacher': teacher,
         'student': student,
-        'join_code': join_code
+        'join_code': join_code,
+        'class_id': economy.class_id,
+        'seat_id': student_seat.id,
     }
 
 
@@ -448,34 +456,6 @@ def test_admin_payroll_rejects_disabled_class_scope(client):
     assert b"is disabled for this class" in response.data
 
 
-def test_admin_payroll_reward_delete_rejects_disabled_class_scope(client):
-    teacher = make_admin("teacher_admin_payroll_reward_scope", "secret_payroll_reward_scope")
-    db.session.add(teacher)
-    db.session.commit()
-
-    _create_admin_feature_scope(teacher, join_code="PRW1", block="1", feature_name="payroll", enabled=True)
-    _create_admin_feature_scope(teacher, join_code="PRW2", block="2", feature_name="payroll", enabled=False)
-    reward = PayrollReward(
-        teacher_id=teacher.id,
-        name="Bonus",
-        amount=5,
-        is_active=True,
-    )
-    db.session.add(reward)
-    db.session.commit()
-
-    with client.session_transaction() as sess:
-        sess['is_admin'] = True
-        sess['admin_id'] = teacher.id
-        sess['current_join_code'] = 'PRW2'
-
-    response = client.post(
-        f'/admin/payroll/rewards/{reward.id}/delete',
-        data={'join_code': 'PRW2'},
-    )
-    assert response.status_code == 302
-    db.session.refresh(reward)
-    assert reward.is_active is True
 
 
 def test_admin_store_delete_rejects_disabled_class_scope(client):
@@ -484,9 +464,10 @@ def test_admin_store_delete_rejects_disabled_class_scope(client):
     db.session.commit()
 
     _create_admin_feature_scope(teacher, join_code="STD1", block="1", feature_name="store", enabled=True)
-    _create_admin_feature_scope(teacher, join_code="STD2", block="2", feature_name="store", enabled=False)
+    disabled_economy = _create_admin_feature_scope(teacher, join_code="STD2", block="2", feature_name="store", enabled=False)
     store_item = StoreItem(
         teacher_id=teacher.id,
+        class_id=disabled_economy.class_id,
         name="Pencil",
         description="Simple item",
         price=1,
@@ -500,13 +481,14 @@ def test_admin_store_delete_rejects_disabled_class_scope(client):
         sess['is_admin'] = True
         sess['admin_id'] = teacher.id
         sess['current_join_code'] = 'STD2'
+        sess['current_class_id'] = disabled_economy.class_id
 
     response = client.post(
         f'/admin/store/delete/{store_item.id}',
         data={'join_code': 'STD2'},
         follow_redirects=False,
     )
-    assert response.status_code == 302
+    assert response.status_code == 404
     db.session.refresh(store_item)
     assert store_item.is_active is True
 

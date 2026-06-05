@@ -26,7 +26,7 @@ from app.extensions import db, limiter
 from app.models import (
     Student, Transaction, TransactionStatus, TapEvent, StoreItem, StoreItemBlock, StudentItem,
     RentSettings, RentPayment, RentWaiver, InsurancePolicy, StudentInsurance, InsuranceClaim,
-    BankingSettings, UserReport, FeatureSettings, Issue, Seat, User, StudentTeacher,
+    BankingSettings, UserReport, FeatureSettings, Issue, Seat, User, UserRole, StudentTeacher,
     ClassMembership, ClassEconomy, TeacherBlock, _quantize_currency
 )
 from app.auth import (
@@ -35,9 +35,11 @@ from app.auth import (
     get_current_seat,
     get_current_user,
     get_current_student_seat,
+    find_canonical_user_by_auth_username,
     login_required,
     get_logged_in_student,
     is_student_account_active,
+    resolve_student_shadow_for_user,
     SESSION_TIMEOUT_MINUTES,
     sync_student_session_context,
 )
@@ -206,6 +208,7 @@ def _get_or_create_setup_user_for_student(student_id: int | None) -> User | None
         return user
 
     user = User(
+        user_role=UserRole.STUDENT,
         username_hash=hash_username_lookup(f"pending_{student_id}_{secrets.token_urlsafe(8)}"),
         password_hash=generate_password_hash(secrets.token_urlsafe(24)),
     )
@@ -884,6 +887,7 @@ def create_username():
         user = user or _find_linked_user_for_student(student.id)
         if not user:
             user = User(
+                user_role=UserRole.STUDENT,
                 username_hash=hash_username_lookup(username),
                 password_hash=generate_password_hash(secrets.token_urlsafe(24)),
             )
@@ -891,6 +895,8 @@ def create_username():
             db.session.flush()
         else:
             user.username_hash = hash_username_lookup(username)
+        user.user_role = UserRole.STUDENT
+        user.username_lookup_hash = hash_username_lookup(username)
 
         if seat and seat.user_id != user.id:
             seat.user_id = user.id
@@ -939,6 +945,9 @@ def setup_pin_passphrase():
         student.has_completed_setup = True
         if user:
             user.password_hash = generate_password_hash(passphrase)
+            user.pin_hash = student.pin_hash
+            user.passphrase_hash = student.passphrase_hash
+            user.has_completed_setup = True
         if seat and user and seat.user_id != user.id:
             seat.user_id = user.id
         if seat and not seat.claimed_at:
@@ -1648,7 +1657,8 @@ def transfer():
             return redirect(url_for("student.transfer"))
 
         passphrase = request.form.get("passphrase")
-        if not check_password_hash(student.passphrase_hash or '', passphrase):
+        user = get_current_user()
+        if not user or not check_password_hash(user.passphrase_hash or '', passphrase):
             if is_json:
                 return jsonify(status="error", message="Incorrect passphrase"), 400
             flash("Incorrect passphrase. Transfer canceled.", "transfer_error")
@@ -3985,30 +3995,11 @@ def login():
         username = form.username.data.strip()
         pin = form.pin.data.strip()
         
-        # Lookup student by username
-        lookup_hash = hash_username_lookup(username)
-        student = Student.query.filter_by(username_lookup_hash=lookup_hash).first()
+        user = find_canonical_user_by_auth_username(username, expected_role="student")
 
         try:
-            # Fallback for legacy accounts without deterministic lookup hashes
-            if not student:
-                legacy_students_missing_lookup_hash = Student.query.filter(
-                    Student.username_lookup_hash.is_(None),
-                    Student.username_hash.isnot(None),
-                )
-
-                # Short-circuit if there are no legacy rows to scan
-                if legacy_students_missing_lookup_hash.limit(1).first():
-                    for s in legacy_students_missing_lookup_hash.yield_per(50):
-                        candidate_hash = hash_username(username, s.salt)
-                        if candidate_hash == s.username_hash:
-                            student = s
-                            break
-
-            # Validate PIN
-            pin_valid = False
-            if student:
-                pin_valid = check_password_hash(student.pin_hash or '', pin)
+            pin_valid = bool(user and check_password_hash(user.pin_hash or '', pin))
+            student = resolve_student_shadow_for_user(user) if pin_valid else None
 
             if not student or not pin_valid:
                 if is_json:
@@ -4022,10 +4013,6 @@ def login():
                 flash("Your account is inactive. Contact your teacher.", "error")
                 return redirect(url_for('student.login', next=request.args.get('next')))
 
-            if not student.username_lookup_hash:
-                student.username_lookup_hash = lookup_hash
-                db.session.flush()
-
         except Exception as e:
             db.session.rollback()
             current_app.logger.error("Error during student login authentication")
@@ -4037,7 +4024,7 @@ def login():
         # --- Set session timeout ---
         # Clear old student-specific session keys without wiping the CSRF token
         session.pop('student_id', None)
-        session.pop('student_user_id', None)
+        session.pop('user_id', None)
         session.pop('current_seat_id', None)
         session.pop('login_time', None)
         session.pop('last_activity', None)
@@ -4053,16 +4040,8 @@ def login():
         session['login_time'] = utc_now().isoformat()
         session['last_activity'] = session['login_time']
 
-        linked_user = (
-            User.query
-            .join(Seat, Seat.user_id == User.id)
-            .filter(
-                Seat.student_id == student.id,
-                Seat.user_id.isnot(None),
-            )
-            .order_by(Seat.id.asc())
-            .first()
-        )
+        linked_user = user
+        session['user_id'] = linked_user.id
 
         if linked_user and linked_user.last_active_class_id:
             has_active_class_seat = Seat.query.filter_by(
@@ -4083,7 +4062,7 @@ def login():
                 student.id,
             )
             session.pop('student_id', None)
-            session.pop('student_user_id', None)
+            session.pop('user_id', None)
             session.pop('current_seat_id', None)
             session.pop('current_class_id', None)
             session.pop('current_join_code', None)
@@ -4099,7 +4078,7 @@ def login():
         seat = sync_student_session_context(student, allow_writes=True)
         if seat is None:
             session.pop('student_id', None)
-            session.pop('student_user_id', None)
+            session.pop('user_id', None)
             session.pop('current_seat_id', None)
             session.pop('current_class_id', None)
             session.pop('current_join_code', None)
@@ -4543,7 +4522,8 @@ def verify_recovery(code_id):
                                  student=student)
 
         # Verify passphrase
-        if not student.passphrase_hash or not check_password_hash(student.passphrase_hash, passphrase):
+        user = get_current_user()
+        if not user or not user.passphrase_hash or not check_password_hash(user.passphrase_hash, passphrase):
             current_app.logger.warning(f"Recovery verification failed: incorrect passphrase for student {student.id}")
             flash("Incorrect passphrase. Please try again.", "error")
             return render_template('student_verify_recovery.html',

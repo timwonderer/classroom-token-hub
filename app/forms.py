@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField
 from wtforms.validators import DataRequired, ValidationError, Length
-from wtforms import HiddenField, TextAreaField, FloatField, SelectField, IntegerField, DateField, BooleanField, SelectMultipleField
+from wtforms import HiddenField, TextAreaField, FloatField, SelectField, IntegerField, DateField, BooleanField, SelectMultipleField, RadioField
 from wtforms.validators import Optional
 
 from wtforms import SubmitField
@@ -270,31 +270,21 @@ class PayrollSettingsForm(FlaskForm):
     submit = SubmitField('Save Settings')
 
 
-class PayrollRewardForm(FlaskForm):
-    name = StringField('Reward Name', validators=[DataRequired()])
-    description = TextAreaField('Description', validators=[Optional()])
-    amount = FloatField('Amount ($)', validators=[DataRequired()])
-    is_active = BooleanField('Active', default=True)
-    submit = SubmitField('Save Reward')
-
-
-class PayrollFineForm(FlaskForm):
-    name = StringField('Fine Name', validators=[DataRequired()])
-    description = TextAreaField('Description', validators=[Optional()])
-    amount = FloatField('Amount ($)', validators=[DataRequired()])
-    is_active = BooleanField('Active', default=True)
-    submit = SubmitField('Save Fine')
-
-
 class ManualPaymentForm(FlaskForm):
+    saved_adjustment_id = HiddenField('Saved Adjustment ID', validators=[Optional()])
+    action_type = HiddenField('Action Type', default='apply')
     description = StringField('Payment Description', validators=[DataRequired()])
+    is_deposit = RadioField('Type', choices=[
+        ('True', 'Deposit (+)'),
+        ('False', 'Deduction (-)')
+    ], default='True', validators=[DataRequired()])
     amount = FloatField('Amount ($)', validators=[DataRequired()])
     account_type = SelectField('Account Type', choices=[
         ('checking', 'Checking'),
         ('savings', 'Savings')
     ], default='checking', validators=[DataRequired()])
     # student_ids will be handled in the template with checkboxes
-    submit = SubmitField('Send Payment')
+    submit = SubmitField('Apply')
 
 
 # -------------------- BANKING FORMS --------------------

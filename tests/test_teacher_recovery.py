@@ -3,7 +3,7 @@ import pytest
 import pyotp
 import bcrypt
 from datetime import datetime, timezone, timedelta
-from app.models import Admin, Student, RecoveryRequest, StudentRecoveryCode, StudentTeacher, TeacherBlock, ClassEconomy
+from app.models import Admin, Student, RecoveryRequest, StudentRecoveryCode, StudentTeacher, TeacherBlock, ClassEconomy, User, UserRole
 from app.extensions import db
 from app.hash_utils import hash_username_lookup, get_random_salt, hash_hmac
 
@@ -16,6 +16,15 @@ def create_teacher(username="teacher1"):
     )
     db.session.add(teacher)
     db.session.flush()
+    user = User(
+        user_role=UserRole.TEACHER,
+        username_hash=teacher.username_hash,
+        username_lookup_hash=teacher.username_lookup_hash,
+        totp_secret_encrypted=teacher.totp_secret,
+    )
+    db.session.add(user)
+    db.session.flush()
+    teacher._canonical_user_id_for_test = user.id
     return teacher
 
 # Helper to create student
@@ -118,6 +127,7 @@ def test_setup_recovery_flow(client, app):
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = teacher.id
+        sess['user_id'] = teacher._canonical_user_id_for_test
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
 
     # Check dashboard for prompt (should NOT be there in v2)
@@ -129,4 +139,3 @@ def test_setup_recovery_flow(client, app):
     response = client.post('/admin/setup-recovery', data={}, follow_redirects=True)
     assert response.status_code == 200
     assert b"Recovery setup is already enabled without date-of-birth requirements." in response.data
-
