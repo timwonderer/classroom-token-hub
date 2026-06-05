@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-003     | 1.0     | 2026-04-22     | ARC-IDEN-001 v2.0 | Normative |
+| DOM-IDEN-003     | 1.1     | 2026-06-05     | 1.0 | Normative |
 
 ## I. Purpose
 
@@ -59,11 +59,11 @@ Key fields:
 - `username_hash` — HMAC of the normalized username; primary auth lookup key
 - `username_lookup_hash` — secondary lookup index (indexed separately)
 - `totp_secret_encrypted` — **teacher only**; base64-encoded encrypted TOTP seed
-- `passkey_credential_id` — **teacher only, optional**; opaque reference to passkey
-  registration (e.g. via passwordless.dev); nullable until enrolled
+- passkey capability — **teacher/sysadmin only, optional**; implemented by
+  credential metadata rows owned by `users.id`
 - `pin_hash` — **student only**; hashed PIN used for login
 - `passphrase_hash` — **student only**; hashed passphrase used to gate financial actions
-- `reset_code_hash` — hashed recovery code; applicable to both roles
+- recovery capability — implemented by canonical recovery-token lifecycle state
 - `reset_code_expires_at`
 - `current_session_started_at`
 - `current_session_expires_at` — fixed window set at login, does not slide forward
@@ -83,6 +83,27 @@ Rules:
 - A teacher user may own multiple seats across multiple classes (one seat per class).
 - Session window fields behave identically for both roles.
 - Only one active session is supported per user identity.
+- Passkey credential metadata may live in compatibility tables during migration, but
+  the credential owner is always `users.id`.
+
+### Passkey Credential Metadata
+
+Passkey credentials are an authentication capability owned by `users`.
+
+During the compatibility bridge, passkey metadata is implemented in:
+
+- `teacher_credentials.user_id`
+- `system_admin_credentials.user_id`
+
+Rules:
+
+- Passwordless external IDs use `user_<User.id>`.
+- Legacy external IDs such as `admin_<id>` and `sysadmin_<id>` are invalid v2
+  principals.
+- Legacy `teacher_id` and `sysadmin_id` columns on credential metadata tables are
+  route compatibility shadows only.
+- Passkey metadata tables do not authorize class access, seat access, recovery, or
+  economic actions.
 
 ### Classes
 
@@ -203,8 +224,8 @@ The following patterns are explicitly excluded from the v2 teacher identity mode
 - **`teacher_public_id` as a separate field** — display identity lives in `identity_profiles`
 - **`dob_sum_hash` / `salt` for DOB** — removed; no DOB recovery mechanism
 - **`has_assigned_students` flag** — setup state belongs on `has_completed_setup`
-- **`AdminCredential` as a separate table for passkeys** — passkey enrollment reference
-  lives on the `users` row directly
+- **Passkeys owned by role-specific principal IDs** — passkey metadata may be stored
+  in compatibility tables, but ownership is `users.id`
 
 ---
 
@@ -214,10 +235,10 @@ The following patterns are explicitly excluded from the v2 teacher identity mode
 |------------|---------|---------|
 | Username | `username_hash` / `username_lookup_hash` | `username_hash` / `username_lookup_hash` |
 | Primary auth factor | TOTP (`totp_secret_encrypted`) | PIN (`pin_hash`) |
-| Secondary / optional factor | Passkey (`passkey_credential_id`) | Passphrase (`passphrase_hash`) |
+| Secondary / optional factor | Passkey metadata owned by `users.id` | Passphrase (`passphrase_hash`) |
 | Passphrase use | N/A | Gates financial actions only |
 | DOB | **Not stored** | **Not stored** |
-| Recovery | `reset_code_hash` | `reset_code_hash` |
+| Recovery | User-owned recovery-token lifecycle | User-owned recovery-token lifecycle |
 | Session | Nonce + expiry window | Nonce + expiry window |
 
 ---

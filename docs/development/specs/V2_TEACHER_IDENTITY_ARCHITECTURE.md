@@ -33,7 +33,9 @@ Purpose: authentication, session security, recovery, and global account state.
 Required role law:
 
 - Teacher identity is a `users` row with `user_role='teacher'`.
-- Teacher credentials and recovery state live on `users`.
+- Teacher credentials and recovery capability are owned by `users`.
+- Passkey metadata may be implemented by compatibility credential tables only when
+  ownership is keyed by `users.id`.
 - DOB and other forbidden claim-era PII are not part of teacher identity.
 
 Sticky context law:

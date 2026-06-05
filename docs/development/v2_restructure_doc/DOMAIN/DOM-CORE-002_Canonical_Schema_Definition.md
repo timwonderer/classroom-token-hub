@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002     | 1.1     | 2026-04-25     | 1.0        | Constitutional |
+| DOM-CORE-002     | 1.2     | 2026-06-05     | 1.1        | Constitutional |
 
 ---
 
@@ -142,7 +142,16 @@ The system guarantees:
 - `user_invite_tokens` — short-lived provisioning tokens for teacher account creation; CASCADE-deleted on first use
 - `user_recovery_tokens` — time-limited credential recovery tokens; CASCADE-deleted on redemption
 
-**Invariant:** `User.user_role = SYSADMIN` is the sole expression of system-administrator identity. No separate `system_admins`, `admin_credentials`, or `system_admin_credentials` tables exist.
+**Invariant:** `User.user_role = SYSADMIN` is the sole expression of system-administrator
+identity. No separate `system_admins`, `admin_credentials`, or
+`system_admin_credentials` table may define identity authority.
+
+**Compatibility bridge rule:** During the v1-to-v2 runtime cutover, implementation
+tables such as `teacher_credentials` and `system_admin_credentials` may remain as
+passkey metadata stores only when they carry canonical `user_id` ownership. Their
+legacy role-specific principal columns are route compatibility shadows and do not
+grant identity, class, recovery, or credential authority. Any bridge table without a
+canonical `user_id` owner is non-compliant.
 
 ---
 
@@ -302,4 +311,3 @@ Any modification to the canonical schema requires:
 - Version increment
 - Updated Effective Date
 - Explicit justification tied to domain authority
-

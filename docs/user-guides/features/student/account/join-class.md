@@ -13,14 +13,14 @@ related:
 # Join or Add a Class
 
 ## Overview
-Each class is its own join-code economy in v2.0. If you already have an account and need to join another class, you add that class with the join code your teacher gives you.
+Each class is its own class economy in v2.0. If you already have an account and need to join another class, you add that class with the join code your teacher gives you.
 
 ## Step-by-Step Instructions
 
 ### Adding a New Class
 1. Go to **Add Class** from the student sidebar.
 2. Enter the unique **Join Code** provided by your new teacher.
-3. Enter your first name, last name, and date of birth. These must match the teacher’s roster entry exactly.
+3. Enter your roster name details exactly as your teacher entered them.
 4. Submit the form to link the new class to your existing account.
 
 ### What Happens Next

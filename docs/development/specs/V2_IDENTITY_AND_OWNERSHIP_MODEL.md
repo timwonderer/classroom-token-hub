@@ -1,7 +1,7 @@
 # CTH Identity and Ownership Model
 
 **Status:** Normative v2 target  
-**Effective Date:** 2026-06-02
+**Effective Date:** 2026-06-05
 
 ## Core Principle
 
@@ -39,6 +39,11 @@ No identifier answers more than its assigned question.
 - economy operations
 - student interactions
 - support tickets
+- class-local claim verification artifacts
+- display identity
+
+Passkey metadata may be implemented by dedicated credential tables, but the owning
+principal is always `users.id`.
 
 ## 2. Operational Actor
 
@@ -58,6 +63,17 @@ No identifier answers more than its assigned question.
 - support tickets
 - student detail pages
 - classroom actions
+
+`seats` also owns class-local claim state:
+
+- claim lifecycle
+- claim verification hashes
+- claimed/unclaimed state
+- authority to bind one user to one participant position in one class
+
+Name-lookup hashes used during roster claim belong on the seat because they prove
+entitlement to a specific class-local participant position. They are not global user
+identity and they are not display identity.
 
 Teacher seats and student seats follow the same actor model.
 
@@ -129,6 +145,9 @@ visible identity attributes.
 Display identity does not participate in authentication, authority, ownership
 resolution, or actor lookup.
 
+Do not store claim artifacts, credential artifacts, or class authority in
+`identity_profiles`.
+
 ## 6. Capability Tokens
 
 Capability tokens grant permission to perform one defined action. They are not users,
@@ -139,16 +158,41 @@ Examples:
 - `hall_pass_verify_token`
 - recovery tokens
 - claim tokens
+- passkey credential metadata
 
 Every capability design must answer two questions explicitly:
 
 1. Which object owns the token?
 2. Which `class_id`, if any, constrains its use?
 
+Settled ownership:
+
+- recovery capability is owned by `users` and implemented by `user_recovery_tokens`
+- passkey capability is owned by `users`; compatibility credential metadata tables
+  must key ownership by `user_id`
+- roster claim verification is owned by `seats`
+
 Ownership of `hall_pass_verify_token` remains under investigation. Its current
 teacher-table ownership is not accepted as the final v2 design.
 
-## 7. Runtime Context
+## 7. Roster Provisioning and Seat Claim
+
+Roster upload provisions a future participant position. It does not create a
+student-authenticated principal.
+
+When a teacher uploads a roster:
+
+1. A class exists or is created.
+2. A `users` row is provisioned as an inactive authentication shell.
+3. A `seats` row is provisioned and bound to the class.
+4. An `identity_profiles` row is provisioned and bound one-to-one to the seat.
+5. Claim artifacts are stored on the seat.
+6. No credentials are activated yet.
+
+Claim/setup later proves entitlement to the seat and activates credentials on
+`users`.
+
+## 8. Runtime Context
 
 The authenticated principal and active classroom context remain separate:
 
@@ -169,10 +213,12 @@ is available.
 - `seats.public_id` = canonical deidentified public actor identity
 - `identity_profiles` = display-only identity
 - `join_code` = boundary alias that resolves to `class_id`
+- roster lookup hashes = seat-owned claim verification artifacts
+- recovery tokens = user-owned recovery capability
+- passkey metadata = user-owned authentication capability
 
 ## Open Decisions
 
-- capability ownership model
 - `hall_pass_verify_token` ownership and boundary scope
 - invalid public identifier residue removal order
 - bridge-table retirement order

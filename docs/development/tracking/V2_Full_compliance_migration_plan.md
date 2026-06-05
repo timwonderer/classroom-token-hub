@@ -2,7 +2,7 @@
 
 ## Context
 
-The `codex/v2.0` branch is an active v2 rebuild that introduced the capability-based authority model (INV→DOM→FEAT), `seat_id`/`class_id` canonical scoping, and the FEAT execution layer. However, the codebase is in a transitional state: 44 of 54+ SQLAlchemy models are **dual-scoped** (carry both v1 `student_id`/`teacher_id`/`join_code` and v2 `seat_id`/`class_id` columns), 5 models are pure v1 legacy (Admin, AdminCredential, RecoveryRequest, StudentRecoveryCode, TeacherOnboarding), and the `User` auth model exists but is inactive.
+The `codex/v2.0` branch is an active v2 rebuild that introduced the capability-based authority model (INV→DOM→FEAT), `seat_id`/`class_id` canonical scoping, and the FEAT execution layer. The codebase remains transitional: many runtime models still carry v1 compatibility columns and deprecated principal rows still exist for route rendering. However, canonical auth is now active for credential verification: `User` owns teacher/sysadmin TOTP, student PIN/passphrase, session anchoring, recovery capability, and passkey capability; `Seat + Class` owns class-local actor authority; `IdentityProfile` owns display only.
 
 **V2 is a clean break from V1. No data migration is required. Old tables are dropped as each domain is ported, not carried forward.** The goal is a fresh system that complies fully with DOM-CORE-002 (44 canonical tables only) from the ground up.
 
@@ -27,9 +27,9 @@ Target state:
 | Services | 8 (`access_policy`, `attendance`, `balance`, `identity`, `ledger`, `obligations`, `store`, `tlcp`) |
 | Blueprints | 8 (`admin` 514K lines, `student` 178K, `api` 120K, `system_admin` 78K, `docs` 30K, `analytics` 19K, `main` 14K, `recovery` 8.6K) |
 | Target canonical tables | 44 across 9 domains (DOM-CORE-002) |
-| Auth | `User` model exists but inactive; `Admin`/`Student`/`SystemAdmin` are still primary |
-| `Seat` | Partially active; bridges to `Student` via `student_id` FK |
-| `ClassEconomy` | Active v2 class anchor (`class_id` UUID); table name renamed to target `classes` |
+| Auth | `User` is active for teacher/sysadmin TOTP, student PIN/passphrase, passkey ownership, and session `user_id`; `Admin`/`Student`/`SystemAdmin` remain route compatibility shadows |
+| `Seat` | Active class-local actor anchor; remaining `student_id` bridges are compatibility only |
+| `Class` | `classes.class_id` is the canonical class boundary; `join_code` is a public alias |
 
 ---
 
@@ -113,11 +113,13 @@ This file is the single active tracker for v2 migration execution. All prior tra
 - `V2_AUTHORITY_EXTRACTION_PLAN.md`
 - `V2_BANKING_LEDGER_SETTLEMENT_PLAN.md`
 - `V2_BALANCE_SCOPE_AND_SETTLEMENT_CONTRACT.md`
+- `V2_CANONICAL_AUTH_RUNTIME_CUTOVER.md`
 - `V2_CAPABILITY-BASED_ARCHITECTURE_REBUILD.md`
 - `V2_CLASS_ID_INVARIANT_BACKLOG.md`
 - `V2_Class_Scope_Normalization_Target.md`
 - `DOM-ECON-000_ECONOMY_GOVERNANCE_FOUNDATION.md`
 - `V2_DOCS_PLATFORM_SPLIT.md`
+- `V2_IDENTITY_AND_OWNERSHIP_MODEL.md`
 - `V2_SESSION_MUTATION_SAFETY.md`
 - `V2_STUDENT_BLOCKS_REDESIGN_NOTE.md`
 - `V2_STUDENT_IDENTITY_ARCHITECTURE.md`
@@ -400,6 +402,163 @@ Operational note:
 - Account recovery flow end-to-end functional
 - System admin login functional
 - `flask db heads` → `0002`; schema has `classes` table, no `class_economies`, no `teachers`/`students`
+
+### Status Update (2026-06-04): Canonical Identity Foundation Schema
+
+- Added migration `a6d9c2e4f1b7_add_canonical_identity_foundation.py` after the
+  current rebuild head.
+- Expanded `users` to represent global auth, credential, recovery, session, role,
+  and last-active-seat state.
+- Added `seats.claim_first_name_hash` and `seats.claim_last_name_hash` as
+  class-local seat claim artifacts. These hashes do not belong to `users`.
+- Added nullable `identity_profiles.seat_id` as the one-to-one display identity
+  binding and completed lifecycle fields for `user_invite_tokens` and
+  `user_recovery_tokens`.
+- Added `classes.section` and the transitional `classes.join_code_token` alias.
+- This is an additive foundation only. It does not infer `User`, `Seat`, or
+  `IdentityProfile` bindings from deprecated `Student`, `Admin`, `TeacherBlock`,
+  `ClassMembership`, or `classes.teacher_id` authority.
+- Audited identity backfill, runtime auth cutover, legacy authority removal, and
+  final non-null constraints remain pending.
+- Repaired the empty-database rebuild path where `0001_bootstrap.py` creates live
+  final metadata but later migrations still assumed historical table or column
+  shapes:
+  - `0002a` now accepts an already-final referenced `classes` table.
+  - `53e7c7148fea` accepts an already-final `ledger_transaction` table.
+  - `8357d4036478` idempotently handles an existing
+    `users.last_active_class_id`.
+  - `ebb7b66b2176` no longer reads a removed `users.username` column.
+- `scripts/seed_canonical_v2.py` no longer calls `db.create_all()`. It seeds
+  canonical teacher/student users, teacher/student/unclaimed seats, one
+  `IdentityProfile` per seat, and seat-owned claim hashes. Deprecated identity
+  rows remain explicitly labeled compatibility shadows until their runtime
+  constraints are removed.
+
+Focused validation:
+
+- `python -m py_compile app/models.py app/models_canonical.py migrations/versions/a6d9c2e4f1b7_add_canonical_identity_foundation.py`
+- `python scripts/lint_migrations.py migrations/versions/a6d9c2e4f1b7_add_canonical_identity_foundation.py`
+- `flask db upgrade`
+- `flask db downgrade 4e85bf5c5594`
+- `flask db upgrade`
+- `pytest -q tests/domain/test_identity_schema.py tests/domain/test_smoke.py`
+  - Result: `4 passed`
+- `flask db current` and `flask db heads`
+  - Result: `a6d9c2e4f1b7 (head)`
+- Empty disposable PostgreSQL database:
+  - `flask db upgrade` from no schema to `a6d9c2e4f1b7`
+  - `python scripts/seed_canonical_v2.py`
+  - Result: `4` canonical users, `4` seats, `4` seat-bound profiles, and `1`
+    unclaimed student seat with both claim hashes.
+
+### Status Update (2026-06-04): Canonical Principal Backfill and Session Anchor
+
+- Added irreversible migration
+  `b7e4c1d9a2f6_backfill_canonical_identity_principals.py`.
+- The migration uses legacy principal tables as migration input only:
+  - credentialed teachers, students, and system admins are copied into `users`
+  - existing bound seats receive canonical role and `claimed_at` state
+  - teacher seats are created only for credentialed teachers' owned classes
+  - student `IdentityProfile` rows are bound or copied one-to-one per seat
+- The migration fails closed on duplicate username lookup hashes, students bound
+  to multiple users, mixed-role users, and conflicting teacher-seat ownership.
+- It does not create users for roster placeholders, derive claim state from
+  `TeacherBlock`, or bind `teacher_block` profiles as teacher identity.
+- Successful teacher, student, and system-admin login flows now write canonical
+  `session["user_id"]` when a migrated user exists.
+- `get_current_user()` now accepts only canonical `user_id` plus an owned seat
+  resolution path. `student_user_id` and `current_user_id` are no longer active
+  user-session aliases.
+- Legacy `admin_id`, `student_id`, and `sysadmin_id` remain route compatibility
+  shadows.
+
+### Status Update (2026-06-04): Canonical Credential Verification Cutover
+
+- Teacher TOTP, student PIN, and system-admin TOTP login now resolve `User` by
+  canonical username lookup hash and verify credentials from `users`.
+- Deprecated `Admin`, `Student`, and `SystemAdmin` rows are resolved only after
+  successful `User` authentication as route compatibility shadows.
+- Legacy-only principals, role mismatches, missing route shadows, and ambiguous
+  student shadows fail closed.
+- Student claim/setup, teacher signup/reset, system-admin provisioning, teacher
+  TOTP reset, and student recovery now synchronize or invalidate canonical
+  credential fields.
+- Student transfer and recovery passphrase checks now read `User.passphrase_hash`.
+- Remaining auth work is removal of `admin_id`, `student_id`, and `sysadmin_id`
+  route-session compatibility shadows.
+
+### Status Update (2026-06-04): Canonical Passkey Ownership Cutover
+
+- Added migration `c8f1e2d3a4b5_add_canonical_passkey_credential_owners.py`.
+- `teacher_credentials` and `system_admin_credentials` now carry canonical
+  `user_id` ownership with `users.id` foreign keys.
+- Existing passkey metadata is backfilled from legacy teacher/sysadmin shadows
+  to the canonical `User`; unmapped credential rows fail the migration.
+- Passwordless registration now creates external users as `user_<User.id>`.
+- Passwordless authentication finish now accepts only `user_<User.id>`, resolves
+  the canonical `User`, then resolves the legacy route shadow.
+- Legacy `admin_<id>` and `sysadmin_<id>` Passwordless principals are rejected.
+- Remaining auth work is to remove `admin_id`, `student_id`, and `sysadmin_id`
+  route-session compatibility shadows and move route resolvers fully to
+  `User`/`Seat`.
+
+### Status Update (2026-06-05): Canonical Resolver Gate Cutover
+
+- `get_current_admin()`, `get_current_system_admin()`, and
+  `get_logged_in_student()` now require a canonical `User` identity before
+  resolving deprecated route shadows.
+- Legacy `admin_id`, `sysadmin_id`, and `student_id` session values are still
+  written for route compatibility, but they no longer establish identity when
+  `session["user_id"]` is missing.
+- Resolver mismatch between canonical user and legacy route shadow fails closed.
+- Focused fixtures now seed canonical users and set `session["user_id"]` when
+  simulating authenticated teacher/sysadmin/student sessions.
+- Remaining work is broad route cleanup: remove direct `session["admin_id"]`,
+  `session["student_id"]`, and `session["sysadmin_id"]` consumers in favor of
+  resolver-owned context and `User + Seat + Class` scope.
+
+Focused validation for resolver gate:
+
+- `pytest -q tests/test_canonical_auth_session.py tests/test_admin_auth.py tests/test_login_redirect.py tests/test_tap_flow.py tests/test_student_recovery.py tests/test_teacher_recovery.py tests/test_admin_identity_bridge_service.py`
+  - Result: `54 passed, 1 skipped`
+- `python -m py_compile app/auth.py tests/test_canonical_auth_session.py tests/test_admin_auth.py tests/test_student_recovery.py tests/test_teacher_recovery.py`
+- `python scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: clean
+
+Focused validation:
+
+- `python scripts/lint_migrations.py migrations/versions/b7e4c1d9a2f6_backfill_canonical_identity_principals.py`
+  - Result: clean
+- `flask db downgrade a6d9c2e4f1b7 && flask db upgrade`
+  - Result: idempotent backfill re-run with no duplicate users, seats, or profiles
+- `pytest -q tests/test_canonical_auth_session.py tests/domain/test_identity_schema.py tests/domain/test_smoke.py tests/test_migration_idempotency.py tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result before credential verification cutover: `14 passed`
+- `pytest -q tests/test_canonical_auth_session.py tests/domain/test_identity_schema.py tests/domain/test_smoke.py tests/test_migration_idempotency.py tests/test_wave3_identity_drop_surface_guardrail.py`
+  - Result after credential verification cutover: `18 passed`
+- `pytest -q tests/test_student_recovery.py tests/test_teacher_recovery.py tests/test_admin_auth.py tests/test_canonical_auth_session.py`
+  - Result: `34 passed, 1 skipped`
+- `pytest -q tests/test_login_redirect.py tests/test_tap_flow.py`
+  - Result: `6 passed`
+- Combined auth, recovery, login, identity-schema, migration, and Wave 3 guardrail
+  regression run:
+  - Result: `51 passed, 1 skipped`
+- Passkey cutover validation:
+  - `python scripts/lint_migrations.py migrations/versions/c8f1e2d3a4b5_add_canonical_passkey_credential_owners.py`
+    - Result: clean
+  - `flask db downgrade b7e4c1d9a2f6 && flask db upgrade`
+    - Result: clean, final head `c8f1e2d3a4b5`
+  - Combined auth, passkey, recovery, login, identity-schema, migration, and
+    Wave 3 guardrail regression run:
+    - Result: `61 passed, 1 skipped`
+- `python scripts/wave3_identity_drop_surface_guardrail.py`
+  - Result: clean, no expansion
+- Empty disposable PostgreSQL database:
+  - `flask db upgrade` from no schema to `b7e4c1d9a2f6`
+  - `python scripts/seed_canonical_v2.py`
+  - Result: `4` canonical users, `4` seats, and `4` seat-bound profiles
+- Development database:
+  - `flask db current` and `flask db heads`
+  - Result: `b7e4c1d9a2f6 (head)`
 
 ### Status Update (2026-05-02): Wave 3C.2–3C.6 Identity Compatibility Bridge
 

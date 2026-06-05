@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-004     | 2.0     | 2026-04-22     | LOG-ARC-011 v1.1 | Normative |
+| DOM-IDEN-004     | 2.1     | 2026-06-05     | 2.0 | Normative |
 
 ## I. Purpose
 
@@ -103,7 +103,7 @@ Does not apply to:
 Recovery state is tracked via two models:
 
 ### `RecoveryRequest`
-- `teacher_id` — FK to teacher identity (`users` table)
+- `user_id` — FK to teacher identity (`users` table)
 - `status` — `pending` | `verified` | `expired`
 - `expires_at` — UTC, 5-day TTL from creation
 - `partial_codes` — DB-persisted list of codes entered so far (for cross-session resume)
@@ -112,7 +112,7 @@ Recovery state is tracked via two models:
 
 ### `StudentRecoveryCode`
 - `recovery_request_id` — FK to `RecoveryRequest`
-- `student_id` — FK to student who will verify (`seats` table)
+- `seat_id` — FK to student seat that will verify
 - `code_hash` — `HMAC(6-digit-code, b'')` — set when student completes verification;
   `NULL` means student has not yet generated their code
 - `verified_at` — timestamp when student completed their verification
@@ -217,8 +217,9 @@ When the teacher submits all entered codes:
 If all codes match:
 - Teacher enters new username and scans a newly generated TOTP QR code.
 - TOTP code from the new device is verified before credentials are written.
-- All previously enrolled passkeys are revoked.
-- New `username_hash`, `username_lookup_hash`, and `totp_secret` are written atomically.
+- All previously enrolled user-owned passkeys are revoked.
+- New `users.username_hash`, `users.username_lookup_hash`, and
+  `users.totp_secret_encrypted` are written atomically.
 - `RecoveryRequest.status` is set to `verified`.
 
 ### Step 5 — Completion
@@ -256,6 +257,25 @@ On expiry:
 | Passphrase gate on students | Student must re-enter passphrase to generate their code |
 | No contact PII | No email, phone used at any stage |
 | No DOB | No date of birth used anywhere |
+
+---
+
+## VIII-A. Canonical Credential Ownership
+
+Teacher recovery targets the canonical `users` row. The authenticated credential
+state is:
+
+- `users.username_hash`
+- `users.username_lookup_hash`
+- `users.totp_secret_encrypted`
+- user-owned passkey metadata
+
+Legacy teacher/admin rows may be synchronized during the migration bridge so existing
+routes continue to render, but they are not credential authority. Passkey revocation
+must revoke credential metadata where `user_id` is the recovered teacher user.
+
+Any implementation that can reset a teacher username or TOTP secret without resolving
+the canonical `users.id` first is non-compliant.
 
 ---
 

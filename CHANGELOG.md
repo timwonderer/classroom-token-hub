@@ -9,6 +9,55 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Changed
+- **Canonical auth and roster-provisioning docs aligned** — Updated active v2
+  identity, recovery, lifecycle, schema, session, README, and development docs so
+  `User` owns authentication/recovery/passkey capability, `Seat` owns class-local
+  actor authority and claim hashes, `IdentityProfile` remains display-only, and
+  roster upload is documented as provisioning an inactive participant position
+  rather than creating a student. Added `V2_CANONICAL_AUTH_RUNTIME_CUTOVER.md` to
+  separate current bridge implementation facts from constitutional target docs, then
+  updated the active migration tracker, development docs index, authority extraction
+  plan, and Wave 3 risk doc to stop presenting pre-cutover v1 auth as current
+  runtime guidance. Refreshed active teacher/student user guides that still described
+  DOB-based claim or recovery flows.
+- **Canonical identity foundation schema added** — Expanded `users` with unified
+  auth, credential, session, role, and last-active-seat fields; added seat-owned
+  claim verification hashes; made `identity_profiles` seat-bindable; and completed
+  lifecycle fields for `user_invite_tokens` and `user_recovery_tokens`. Migration
+  `a6d9c2e4f1b7` is additive and intentionally does not infer canonical bindings
+  from deprecated `Student`, `Admin`, `TeacherBlock`, or class teacher ownership.
+- **Fresh canonical database rebuild path repaired** — Hardened squash-era
+  migrations that assumed historical `classes`, `transaction`, `users.username`,
+  or `users.last_active_class_id` shapes even though `0001_bootstrap.py` creates
+  live runtime metadata. The canonical seed no longer calls `db.create_all()` and
+  now provisions canonical user, seat, seat-bound profile, and unclaimed-seat
+  claim state before adding explicit legacy compatibility shadows.
+- **Canonical identity principal backfill added** — Migration `b7e4c1d9a2f6`
+  deterministically migrates credentialed legacy principals into `users`,
+  normalizes existing bound-seat claim state, creates teacher seats for
+  credentialed teachers' classes, and binds student display profiles to seats.
+  The migration fails on username, role, or seat-binding ambiguity and does not
+  derive authority from `TeacherBlock`. Successful login sessions now populate
+  canonical `user_id` when a migrated user exists, and deprecated user-session
+  aliases are no longer read or written.
+- **Canonical User credential login activated for TOTP and PIN flows** — Teacher,
+  student, and system-admin login now resolve and verify credentials from `users`
+  before resolving deprecated principal rows as route compatibility shadows.
+  Student claim/setup, teacher signup/reset, system-admin provisioning, and
+  student recovery now keep canonical credentials synchronized; legacy-only
+  principals and missing canonical recovery identities fail closed. Passkey
+  external IDs remain a separate legacy-backed cutover.
+- **Passkey credential ownership moved to canonical users** — Added migration
+  `c8f1e2d3a4b5` to store canonical `user_id` owners on teacher and system-admin
+  passkey metadata, backfill existing credentials, and fail closed on unmapped
+  rows. Passwordless registration/authentication now uses `user_<User.id>`
+  external IDs; legacy `admin_<id>` and `sysadmin_<id>` passkey principals are
+  rejected.
+- **Auth resolvers now require canonical user identity** — `get_current_admin()`,
+  `get_current_system_admin()`, and `get_logged_in_student()` now resolve the
+  canonical `User` first and only then hydrate deprecated `Admin`, `SystemAdmin`,
+  or `Student` route shadows. Raw legacy session IDs alone no longer establish
+  resolver identity.
 - **Ledger Identity Severance Completed (Wave 5 / Phase 1C)** — Formally decommissioned `student_id` from the canonical ledger tables (`ledger_transaction` and `ledger_balance_snapshot`). All balances and financial histories are now strictly derived via `seat_id` + `class_id` joints. `Student.transactions` backrefs were replaced with explicit seat-proxied properties. `db.session.in_nested_transaction` support was formalized in the FEAT orchestrator to allow savepoints within top-level atomic feats without violating authority isolation.
 - **Support issue actor reference now uses canonical public actor naming** — Support
   issue rows now expose the filing seat's UUID `Seat.public_id` as

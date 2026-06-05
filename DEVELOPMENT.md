@@ -46,9 +46,9 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 
 ### Ready Now
 
-- `ClassEconomy` and `ClassMembership` are live ORM models and DB-backed authority for class scope.
-- `join_code` is the runtime class boundary for student/admin/API flows.
-- `student_teachers` remains the teacher-student ownership model, but it is not the class-boundary authority.
+- `classes.class_id` is the canonical class boundary; `join_code` is a public alias.
+- `Seat + Class` is the runtime class-scoped authority for student/admin/API flows.
+- Legacy `ClassMembership`, `student_teachers`, and principal columns may still support compatibility paths, but they are not the identity or class-boundary authority.
 - Branch consolidation is complete: prior merge-prep branches were folded into `codex/v2.0` and pruned.
 - Migration heads are resolved in repo with `e8f1a2b3c4d5_merge_remaining_v2_heads.py`.
 - Full-suite validation succeeded on the PostgreSQL test database.
@@ -92,10 +92,12 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 
 ## v2.0 Technical Direction
 
-- `ClassMembership` and `ClassEconomy` are the source of truth for class access.
-- `current_join_code` is the selected class context for both teacher and student sessions.
-- Class-scoped reads and writes are membership-gated, not `teacher_id`-gated.
-- Public teacher identity uses `Admin.public_id` / `teacher_public_id`, not numeric teacher IDs.
+- `users.id` is the authentication principal; legacy role-specific session keys are route compatibility shadows only.
+- `seats.id` plus `classes.class_id` is the class-scoped runtime authority.
+- `join_code` is a public class alias and must resolve to `class_id` before authority-sensitive work.
+- Class-scoped reads and writes are seat/class-gated, not `teacher_id`-, `student_id`-, block-, or `TeacherBlock`-gated.
+- Public actor identity uses UUID-encoded `Seat.public_id`, not role-specific public-ID families.
+- Roster upload provisions an inactive `User`, class-local `Seat`, seat-bound `IdentityProfile`, and seat-owned claim artifacts; it does not create an authenticated student.
 - v2 documentation should not describe TeacherBlock fallback as intended runtime behavior.
 - Use `db.session.get(Model, id)`, not `Model.query.get(id)`. Treat `Query.get()` as banned in new development.
 

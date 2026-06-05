@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| MAP-IDEN-001     | 1.0     | 2026-04-23     | DOM-IDEN-005 | Informative     |
+| MAP-IDEN-001     | 1.1     | 2026-06-05     | 1.0 | Informative     |
 
 ---
 
@@ -22,11 +22,12 @@ Teacher accounts are long-lived global identities that act as class operators.
 
 ## II. Student Lifecycle Overview
 
-Student accounts transition from roster entries to authenticated global users.
+Student accounts transition from roster-provisioned participant positions to
+credentialed global users.
 
-1.  **Rostering**: A `seats` row is created by a roster upload. The student exists in the class economy but has no global user identity yet.
-2.  **Binding (The First Claim)**: The student claims their seat. A global `users` record is created and bound to the existing `seats.user_id`.
-3.  **Active Participation**: The student sets their PIN/Passphrase and becomes a full economic actor.
+1.  **Rostering**: A class exists or is created, an inactive `users` auth shell is provisioned, a `seats` row is bound to the class, an `identity_profiles` row is bound one-to-one to the seat, and claim artifacts are stored on the seat. No credentials are active.
+2.  **Binding (The First Claim)**: The student proves entitlement to the seat using class-local claim artifacts. The claim binds the seat to the same `users` row or to an already-authenticated compatible `users` row.
+3.  **Credential Activation**: The student sets their PIN/passphrase on `users` and becomes a full economic actor through `seat_id + class_id`.
 4.  **Cross-Class Participation**: The student claims a seat in a *second* class. The new `seats` row binds to the *same* existing `users` record.
 5.  **Recovery**: If credentials are lost, a teacher generates a reset code. The student re-sets their credentials on the same identity.
 
@@ -35,9 +36,9 @@ Student accounts transition from roster entries to authenticated global users.
 | Action | Impact | Primary Domain |
 | :--- | :--- | :--- |
 | **Initialize Teacher** | Creates `users` row. | `DOM-IDEN-003` |
-| **Upload Roster** | Creates `seats` row(s). | `DOM-IDEN-001` |
-| **Claim Seat** | Binds `user_id` to `seat_id`. | `DOM-IDEN-001` |
-| **Setup PIN** | Activates global login capability. | `DOM-IDEN-001` |
+| **Upload Roster** | Provisions inactive `users`, `seats`, `identity_profiles`, and seat-owned claim artifacts. | `DOM-IDEN-001` |
+| **Claim Seat** | Proves entitlement to a class-local seat and binds `user_id` to `seat_id`. | `DOM-IDEN-001` |
+| **Setup PIN** | Activates global login capability on `users`. | `DOM-IDEN-001` |
 | **Initiate Reset** | Initiates a recovery process targeting the existing `users` record. | `DOM-IDEN-002` / `004` |
 | **Switch Class** | Initiates a recovery process targeting the existing `users` record. | `DOM-IDEN-001` |
 

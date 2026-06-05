@@ -39,7 +39,7 @@ This platform is designed for classrooms, not commerce. Every feature prioritize
 ### 2. Privacy & Security
 
 - **Student data is encrypted at rest** - All personally identifiable information (PII) is protected
-- **Post-claim PII minimisation** - Identity verification hashes (date of birth, name) used only for the one-time account claim are automatically deleted immediately after account setup completes, reducing the long-term sensitive-data footprint
+- **Post-claim PII minimisation** - Name-based claim verification artifacts are used only for seat claim and are minimized after setup, reducing the long-term sensitive-data footprint
 - **Minimal data collection** - We only collect what's necessary for the classroom economy simulation
 - **No tracking or analytics** - No third-party analytics or advertising
 - **Teacher ownership** - Teachers control their data and can export or delete it at any time

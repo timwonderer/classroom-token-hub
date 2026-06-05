@@ -51,8 +51,7 @@ Typical fields:
 - `username_lookup_hash`
 - `pin_hash`
 - `passphrase_hash`
-- `reset_code_hash`
-- `reset_code_expires_at`
+- recovery capability fields or related `user_recovery_tokens`
 - `current_session_started_at`
 - `current_session_expires_at`
 - `current_session_nonce`
@@ -67,10 +66,13 @@ Rules:
 - A user row owns credentials, recovery, and global security state.
 - A user row does not represent class membership.
 - A user may own multiple seats across one or more classes.
-- A user may temporarily exist with no seats during claim/setup flow.
+- A user may temporarily exist with no active credentials during roster provisioning
+  and claim/setup flow.
 - A user with no remaining seats may be garbage collected.
-- A user row is finalized when a student claims a seat and completes setup.
-- Recovery/reset data belongs on `users`, not on `seats` or `classes`.
+- A user row may be provisioned before claim; credentials are activated when a student
+  claims a seat and completes setup.
+- Recovery capability belongs to `users` and is implemented by `user_recovery_tokens`,
+  not by `seats`, `classes`, or display profiles.
 - Session window data belongs on `users`, not on `seats` or `classes`.
 
 Identifier guidance:
@@ -135,6 +137,7 @@ Typical fields:
 - `role`
 - `block_identifier`
 - `roster_fingerprint`
+- claim first-name/last-name lookup hashes
 - `dedupe_code`
 - `claimed_at`
 - `created_at`
@@ -159,6 +162,8 @@ Rules:
   classes belong to the same teacher.
 - A role-specific public ID and a legacy numeric student ID MUST NOT be accepted as
   substitutes for `seats.public_id` on class-scoped participant routes.
+- Claim lookup hashes belong on the seat because they prove entitlement to this
+  class-local participant position.
 
 Recommended constraints:
 
@@ -183,6 +188,7 @@ Rules:
 - One profile per seat.
 - Profiles contain display identity only.
 - Profiles do not replace the seat as the canonical actor.
+- Profiles do not store claim lookup hashes, credentials, or recovery artifacts.
 
 ## Target Table Reference Map
 
@@ -384,6 +390,8 @@ CTH does not need a separate `claim_identity`, `roster_entry`, or enrollment sta
 table because:
 
 - roster upload already creates the participant record
+- roster upload may provision the inactive `users` auth shell that will later own
+  credentials
 - there is no separate approval or enrollment staging workflow
 - historical enrollment tracking is intentionally out of scope
 - editing a pending participant can be handled by deleting or replacing the seat
@@ -405,6 +413,8 @@ The invariant is simple:
 Claim data stored on `seats`:
 
 - `roster_fingerprint`
+- `claim_first_name_hash`
+- `claim_last_name_hash`
 - `dedupe_code`
 - `claimed_at`
 - `user_id`
@@ -425,6 +435,7 @@ Claim data stored on `seats`:
 5. If exactly one seat matches, claim proceeds.
 6. If duplicate-name seats exist, dedupe code is required to disambiguate.
 7. On successful claim, the seat is bound to `user_id` and marked with `claimed_at`.
+8. Credential setup activates login on `users`.
 
 ## Roster Fingerprint
 

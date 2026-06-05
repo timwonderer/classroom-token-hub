@@ -1,6 +1,6 @@
 # V2 Session Mutation Safety
 
-**Status:** Draft target-state policy
+**Status:** Draft target-state policy with current runtime bridge notes
 
 ## Purpose
 
@@ -38,6 +38,30 @@ Rules:
 - `current_session_nonce` is regenerated at sign-in.
 - These values do not slide forward on activity.
 - A new sign-in replaces all three values.
+
+## Current Runtime Bridge
+
+During the identity cutover, the Flask session may carry:
+
+- `user_id` — canonical authenticated principal
+- `admin_id`, `student_id`, or `sysadmin_id` — route compatibility shadows
+- `current_class_id` / `current_join_code` — active class context mirrors
+- `current_seat_id` — class-local actor context where available
+
+Only `user_id` authenticates the principal. Legacy role-specific IDs may be used to
+load existing templates or route helpers, but they must be resolved from the canonical
+user and must not drive credential verification, recovery authority, class scope, or
+money-affecting authorization.
+
+Credential verification must read from `users`:
+
+- teacher/sysadmin username and TOTP
+- student username and PIN
+- student passphrase gates
+- user-owned passkey metadata
+
+Any route that accepts a legacy session key without resolving the canonical `users.id`
+first is bridge debt, not an acceptable v2 authority pattern.
 
 ## Request Validation Rule
 

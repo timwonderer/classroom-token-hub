@@ -24,11 +24,11 @@ The Students hub is your central location to add, update, move, and remove stude
 
 ### Editing or Moving Students
 1. Locate the student in your Class Roster list.
-2. Click **Edit** to update their name or date of birth.
+2. Click **Edit** to update their roster display name or class assignment details.
 3. From this same edit menu, you can reassign the student to a different class section if they change periods.
 
 ### Resetting or Removing Accounts
-1. If a student forgets their credentials, use the **Reset** option. This preserves their financial data but forces them to claim their account again.
+1. If a student forgets their credentials, use the **Reset** option. This preserves their class financial data and lets them re-establish login credentials.
 2. If a student leaves the class permanently, use the **Remove** option to delete them from your roster.
 
 ## Important Notes

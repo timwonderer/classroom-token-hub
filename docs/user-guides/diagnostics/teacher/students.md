@@ -24,8 +24,8 @@ Diagnostic guide for resolving roster syncing, account claiming, and CSV upload 
 - **Fix:** Join codes are specific to each class period. Provide the code for their exact block.
 
 **Cause 2: Roster data mismatch**
-- **Check:** Look at the student's exact first name, last name, and DOB in the roster.
-- **Fix:** The student must type their first initial, full last name, and date of birth exactly as it appears in the roster to verify their identity.
+- **Check:** Look at the student's exact roster name for that class.
+- **Fix:** The student must type their roster details exactly as they appear for that class to verify the seat claim.
 
 **Cause 3: Seat already claimed**
 - **Check:** Check the student list to see if the row already has a linked username.
@@ -39,11 +39,11 @@ Diagnostic guide for resolving roster syncing, account claiming, and CSV upload 
 ### Causes & Solutions
 **Cause 1: Missing required columns**
 - **Check:** Open the CSV in Excel or Notepad.
-- **Fix:** Ensure the header contains exactly `first_name`, `last_name`, `date_of_birth`, and `block`.
+- **Fix:** Ensure the header matches the current roster template before uploading.
 
-**Cause 2: Date format errors**
-- **Check:** Look at the `date_of_birth` column format.
-- **Fix:** Date of birth must match the expected `MM/DD/YYYY` or `YYYY-MM-DD` format described in the template.
+**Cause 2: Name formatting errors**
+- **Check:** Look for extra spaces, misspellings, or swapped first/last-name fields.
+- **Fix:** Correct the roster names and upload again.
 
 **Cause 3: Duplicate rows**
 - **Check:** Look for exact duplicate students in the file.

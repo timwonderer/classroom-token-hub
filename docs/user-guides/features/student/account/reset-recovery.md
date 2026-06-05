@@ -19,9 +19,9 @@ If you forget your username, forget your PIN, or simply cannot log in, your teac
 
 ### Recovering Your Account
 1. Contact your teacher directly and ask them to "reset" your account.
-2. Once your teacher confirms they have reset it, go to the student login page and select **Claim Account**.
-3. You will need to claim your account as if it were your first time, using your join code, name, and date of birth.
-4. You will then be prompted to enter a new theme word and create a new PIN. The system will generate a new username using that word, a random 4-digit number, and your initials. Your money and transaction history are automatically saved and restored.
+2. Your teacher will give you a short reset code.
+3. Go to the student recovery page and enter your join code and reset code.
+4. You will then be prompted to enter a new theme word and create a new PIN. The system will generate a new username using that word, a random 4-digit number, and your initials. Your money and transaction history stay attached to your existing class seat.
 
 ## Important Notes
 > [!TIP]

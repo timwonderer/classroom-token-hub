@@ -14,7 +14,7 @@ If something doesn't look right with your Classes and Join Codes, check this gui
 ## If you cannot join a class, check these first:
 - Join codes are required and come from your teacher, one per class period.
 - If you are already logged in, use Add Class (not Claim Account).
-- Your first initial, last name, and date of birth must match your existing account.
+- Your roster details must match the seat your teacher created for that class.
 - The seat for that join code might already be claimed by someone else.
 
 ## If your class list or balances look wrong, check these first:
@@ -30,5 +30,5 @@ If something doesn't look right with your Classes and Join Codes, check this gui
 ## When to report an issue to your teacher
 If you've checked everything above and the problem is still occurring:
 - Tell them the join code you used and the block/period it belongs to.
-- Tell them the exact name and birth date you entered on the form.
+- Tell them the exact roster name you entered on the form.
 - Use the "Report Issue" button on the Help page.

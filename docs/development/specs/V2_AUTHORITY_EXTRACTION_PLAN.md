@@ -43,7 +43,8 @@ The implemented guarantees in this branch are:
 - Admin routes use FEAT entrypoints for insurance claim approval, transaction void, payroll/manual adjustments, and related money-affecting flows.
 - FEAT modules do not construct transactions or persist cross-domain rows directly.
 - Attendance returns attendance facts only and no longer computes payroll policy or internal ledger anchors.
-- Transfer creation is centralized and zero-sum behavior is enforced by a critical smoke test scoped by `join_code`.
+- Transfer creation is centralized and zero-sum behavior is enforced by a critical
+  smoke test scoped by `class_id + seat_id`.
 
 These are hard rules, not conventions.
 
@@ -205,19 +206,22 @@ This front-loads the laws that later subsystems depend on.
 Define these internal types as plain dataclasses or typed dicts:
 
 - `ResolvedClassScope`
-  Fields: `actor_type`, `actor_id`, `teacher_id`, `join_code`, `class_id`, `block`, `seat_id`
+  Fields: `actor_type`, `user_id`, `seat_id`, `class_id`, optional `join_code`
+  display alias, optional legacy route-shadow IDs
 - `ScopeResolutionResult`
   Fields: `status`, `scope`, `reason_code`
 - `AccessDecision`
   Fields: `allowed`, `reason_code`, `scope`
 - `TransferRequest`
-  Fields: `student_id`, `scope`, `from_account`, `to_account`, `amount`, `submission_token`
+  Fields: `user_id`, `seat_id`, `class_id`, `scope`, `from_account`, `to_account`,
+  `amount`, `submission_token`
 - `TransferResult`
   Fields: `status`, `message`, `checking_balance`, `savings_balance`, `fee_charged`, `fee_amount`
 - `CWIAnalysisResult`
   Fields: `cwi`, `breakdown`, `warnings`, `recommendations`, `policy_mode`
 - `CollectiveGoalProgress`
-  Fields: `store_item_id`, `join_code`, `instance_code`, `count`, `target`, `remaining`, `percent`, `is_complete`
+  Fields: `store_item_id`, `class_id`, `instance_code`, `count`, `target`,
+  `remaining`, `percent`, `is_complete`
 
 No Flask request/session/response objects cross the service boundary.
 

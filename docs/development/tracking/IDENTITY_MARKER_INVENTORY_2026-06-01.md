@@ -18,7 +18,7 @@ The codebase currently mixes four identity layers:
    - `Seat.public_id`
    - `User.id`
 
-2. **Legacy active principals still used for auth/session**
+2. **Legacy route compatibility principals still used after authentication**
    - `Admin.id`
    - `Student.id`
    - `SystemAdmin.id`
@@ -64,15 +64,22 @@ These are the markers that most closely match the intended v2 authority model.
 | `Seat.id` / `seat_id` | Canonical class-local actor anchor | Primary scoped activity identity |
 | `ClassEconomy.class_id` / `class_id` | Canonical class boundary | Primary class scope identity |
 | `Seat.public_id` | UUID-encoded deidentified public actor identity | Canonical public marker for teacher and student seats |
-| `User.id` / `user_id` | Global human identity | Intended global principal, but not yet universal runtime auth |
+| `User.id` / `user_id` | Global human identity | Canonical TOTP/PIN authentication principal and session anchor |
 | `IdentityProfile.id` / `identity_id` | Display-identity record | Human-facing display binding, not activity scope |
+| `Seat.claim_first_name_hash` / `claim_last_name_hash` | Seat claim verification artifacts | Prove entitlement to one unclaimed seat inside one class |
 
 Notes:
 
 - `Seat.public_id` is the single canonical deidentified public actor identifier. It is
   a UUID encoded as a 36-character string.
-- `User.id` exists, but the app still does not use `User` as the sole auth principal end-to-end.
+- `User.id` is authoritative for teacher TOTP, student PIN, system-admin TOTP,
+  and passkey credential verification. Route compatibility still prevents a
+  complete end-to-end legacy-principal removal.
 - `identity_id` is identity-display linkage, not an activity anchor.
+- `IdentityProfile` is one-to-one with `Seat`; it must not own authentication,
+  claim verification, or authority state.
+- Claim name lookup hashes belong to `Seat`, not `User`, because they verify
+  entitlement to a class-local participant position and should disappear with it.
 
 ## Public or externally exposed identity markers
 
@@ -95,20 +102,20 @@ Key weirdness:
 - TLCP runtime and schema now use `actor_public_id`, backed by the class-scoped
   `Seat.public_id` value.
 
-## Legacy active human principal IDs
+## Legacy route compatibility human principal IDs
 
-These are still load-bearing in runtime auth and route logic.
+These are still load-bearing in route logic after canonical authentication.
 
 | Marker | Owner | Meaning | Status |
 |---|---|---|---|
-| `Admin.id` / `admin_id` | Teacher principal | Active teacher auth/session ID | Still primary runtime teacher principal |
-| `Student.id` / `student_id` | Student principal | Active student auth/session ID | Still primary runtime student principal |
-| `SystemAdmin.id` / `sysadmin_id` | Sysadmin principal | Active sysadmin auth/session ID | Still primary runtime sysadmin principal |
+| `Admin.id` / `admin_id` | Teacher compatibility shadow | Route/session compatibility ID | Not a TOTP authentication decision |
+| `Student.id` / `student_id` | Student compatibility shadow | Route/session compatibility ID | Not a PIN authentication decision |
+| `SystemAdmin.id` / `sysadmin_id` | Sysadmin compatibility shadow | Route/session compatibility ID | Not a TOTP authentication decision |
 | `teacher_id` | Many models | Usually teacher owner FK | Legacy naming still widespread |
 
 Important distinction:
 
-- `admin_id` is the **session/auth language** for teachers.
+- `admin_id` is still a route-session compatibility language for teachers.
 - `teacher_id` is the **model/ownership language** for teachers.
 - That split is semantically understandable, but still increases identity-surface complexity.
 
@@ -138,14 +145,13 @@ These are not harmless metadata. Several of them still participate in resolution
 | Session key | Meaning | Status |
 |---|---|---|
 | `student_id` | Logged-in legacy student principal | Active |
-| `student_user_id` | Linked `User.id` bridge | Transitional |
+| `user_id` | Logged-in canonical `User.id` | Canonical auth session anchor |
 | `current_seat_id` | Active seat context | Canonical session scope |
 | `seat_id` | Alternate seat context key | Legacy alias still accepted |
 | `current_class_id` | Active class context | Canonical session scope |
 | `class_id` | Alternate class context key | Legacy alias still accepted |
 | `current_join_code` | Active public class alias | Transitional alias |
 | `join_code` | Alternate join-code key | Legacy alias still accepted |
-| `user_id` / `current_user_id` | Generic user session keys | Rare bridge path only |
 | `claimed_student_id` / `claimed_seat_id` / `claimed_user_id` | Recovery/claim flow handoff keys | Transitional flow-specific |
 | `recovery_student_id` | Recovery flow marker | Transitional |
 
@@ -154,6 +160,7 @@ These are not harmless metadata. Several of them still participate in resolution
 | Session key | Meaning | Status |
 |---|---|---|
 | `admin_id` | Logged-in teacher principal | Active |
+| `user_id` | Logged-in canonical `User.id` | Canonical auth session anchor |
 | `current_class_id` | Active teacher class context | Canonical class scope |
 | `current_join_code` | Active class alias | Transitional/public alias |
 | `is_admin` | Teacher auth role flag | Active |
@@ -164,13 +171,15 @@ These are not harmless metadata. Several of them still participate in resolution
 | Session key | Meaning | Status |
 |---|---|---|
 | `sysadmin_id` | Logged-in sysadmin principal | Active |
+| `user_id` | Logged-in canonical `User.id` | Canonical auth session anchor |
 | `is_system_admin` | Sysadmin role flag | Active |
 
 Session ambiguity still present:
 
 - `get_current_seat()` accepts both `seat_id` and `current_seat_id`.
 - `get_current_class_id()` accepts both `class_id` and `current_class_id`.
-- `get_current_user()` accepts `user_id`, `current_user_id`, and `student_user_id`.
+- `get_current_user()` accepts canonical `user_id` and may resolve the same user
+  from an already validated owned seat.
 
 That means the session model still has **alias acceptance**, not one canonical key per concept.
 
@@ -305,15 +314,17 @@ This is not a general actor identity marker; it is a capability token. The open 
 
 Right now it is still anchored to the legacy teacher principal.
 
-### 6. Generic `user_id` session support still exists
+### 6. Canonical `user_id` session support
 
-`get_current_user()` still accepts:
+`get_current_user()` now accepts only canonical `user_id`, with an owned-seat
+resolution path for already validated class context. Deprecated user-principal
+session aliases are no longer read or written.
 
-- `user_id`
-- `current_user_id`
-- `student_user_id`
-
-This suggests the runtime still tolerates multiple user-principal session dialects.
+Teacher TOTP, student PIN, and system-admin TOTP login now authenticate `User`
+first. Legacy principal IDs are populated only after a unique route shadow is
+resolved. Passkey registration and authentication now use `user_<User.id>` as
+the Passwordless external identity and reject legacy `admin_<id>` /
+`sysadmin_<id>` external principals.
 
 ## Current classification
 
@@ -345,7 +356,6 @@ This suggests the runtime still tolerates multiple user-principal session dialec
 - `TeacherBlock.*`
 - `ClassMembership.admin_id`
 - `ClassMembership.student_id`
-- `student_user_id`
 - `seat_id` session alias
 - `class_id` session alias
 - `join_code` session alias

@@ -20,9 +20,9 @@ If something doesn't look right with your Login and Setup, check this guide firs
 - Are you trying to use your passphrase at login? Passphrases are only for purchases and transfers.
 
 ## This is normal and expected when:
-- You are sent to Complete Profile if your account is missing birth date details.
+- You are asked to finish setup if your claimed seat does not have active login credentials yet.
 - Login is temporarily blocked after too many attempts (rate limit).
-- You see a Claim Account button if your teacher created your account but you have not claimed it yet.
+- You see a Claim Account button if your teacher created a roster seat but you have not claimed it yet.
 
 ## When to report an issue to your teacher
 If you've checked everything above and the problem is still occurring:

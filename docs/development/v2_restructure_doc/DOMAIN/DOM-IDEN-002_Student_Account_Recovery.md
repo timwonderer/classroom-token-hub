@@ -1,14 +1,15 @@
 # DOM-IDEN-002 Student Account Recovery
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-002     | 2.0     | 2026-04-22     | ARC-IDEN-002 v1.1 | Normative |
+| DOM-IDEN-002     | 2.1     | 2026-06-05     | 2.0 | Normative |
 
 ## I. Purpose
 
 This document defines the v2 account recovery architecture for student principals.
 
-Recovery restores credential access to an existing student identity. It is an **identity
-rebinding operation only** — it never alters economic history or creates new records.
+Recovery restores credential access to an existing student `users` identity and its
+claimed class-local seat. It is an **identity rebinding operation only** — it never
+alters economic history or creates a new participant record.
 
 For teacher account recovery, see `DOM-IDEN-004_Teacher_Account_Recovery.md`.
 
@@ -32,8 +33,9 @@ Supersedes `docs/ARCHITECTURE/IDENTITY/ARC-IDEN-002_Account_Recovery.md`.
    historical economic records. No transactions, balances, item holdings, insurance
    records, or audit logs may be altered during recovery.
 
-3. **Identity rebinding only.** Recovery replaces credential access on the same identity
-   record. It does not create a new record, merge two records, or transfer economic state.
+3. **Identity rebinding only.** Recovery replaces credential access on the same `users`
+   record. It does not create a new user, create a new seat, merge two records, or
+   transfer economic state.
 
 4. **Single active code.** Only one active reset code per student identity at any time.
 
@@ -56,8 +58,8 @@ Does not apply to:
 
 ## V. What Is Recoverable
 
-Student recovery restores access to an existing `users` row (target model) or `students`
-row (current runtime). All economic state remains attached to the same identity.
+Student recovery restores access to an existing `users` row. All economic state remains
+attached to the same `seat_id` and `class_id`.
 
 Credentials that are fully replaced during recovery:
 - `username_hash` / `username_lookup_hash`
@@ -74,7 +76,21 @@ Records that are NOT touched during recovery:
 
 ## VI. Recovery State
 
-Recovery state lives on the student identity record:
+Recovery capability is owned by `users` and implemented by canonical recovery-token
+state. Short-lived teacher-visible reset codes may be mirrored into route compatibility
+fields during the migration bridge, but those fields do not become identity authority.
+
+Canonical recovery-token lifecycle fields:
+
+- `user_id` — recovered user
+- `token_hash` or `code_hash` — verifier for the recovery artifact
+- `created_at`
+- `expires_at`
+- `used_at`
+- `revoked_at`
+- `issued_by`
+
+Current bridge reset-code fields:
 
 - `reset_code` — plaintext 8-character alphanumeric reset code
 - `reset_code_expires_at` — UTC timestamp; hard TTL of 10 minutes from generation
@@ -147,6 +163,9 @@ On successful credential setup:
 - Clear `reset_code_expires_at`
 - Set `recovery_status → active`
 - Regenerate `current_session_nonce`
+- Replace `users.username_hash`, `users.username_lookup_hash`, `users.pin_hash`, and
+  `users.passphrase_hash` atomically
+- Mark any canonical recovery token as `used_at`
 - Log successful reclaim event
 
 ---
@@ -201,14 +220,16 @@ The student recovery system must NOT:
 
 ## XI. Target Model vs. Current Runtime
 
-| Aspect | Target (Project 9) | Current Runtime |
-|--------|-------------------|-----------------|
-| Identity record | `users` row | `students` row |
-| Recovery state fields | On `users` | On `students` |
-| Reset code storage | `reset_code` plaintext on `users` | `reset_code` plaintext on `students` — correct |
+| Aspect | Canonical Runtime | Migration Bridge |
+|--------|-------------------|------------------|
+| Identity record | `users` row | `students` row is a route compatibility shadow only |
+| Credential replacement | `users.username_hash`, `users.username_lookup_hash`, `users.pin_hash`, `users.passphrase_hash` | legacy student credential fields may be cleared or synchronized only to preserve existing routes |
+| Recovery capability | `user_recovery_tokens` lifecycle rows | teacher-visible short-lived reset-code fields may remain until the bridge is retired |
+| Actor/economy state | `seat_id` + `class_id` | legacy `student_id` must not define recovery authority |
 
-The current runtime `students.reset_code` plaintext storage is correct and intentional.
-The field name and storage model carry forward directly into Project 9.
+Plaintext reset-code storage is acceptable only for the short-lived, teacher-visible
+handoff code described in this document. Durable recovery capability belongs in
+`user_recovery_tokens`.
 
 ---
 

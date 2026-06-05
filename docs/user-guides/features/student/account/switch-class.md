@@ -19,7 +19,7 @@ If you participate in multiple classroom economies, you can switch your active c
 ### Switching Between Active Classes
 1. Look at the top of the student sidebar for the **Current Class** drop-down menu.
 2. Click the menu to see a list of all the classes you are enrolled in.
-3. Select the class you want to view. The app updates to that class's `current_join_code` context.
+3. Select the class you want to view. The app updates your active class context.
 
 ### What Changes When You Switch
 

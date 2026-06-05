@@ -12,7 +12,7 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
-**Project Status:** Version 2.0.0 is the current live-test candidate. Class scope is defined by `ClassEconomy` and `ClassMembership`, session class context is driven by `current_join_code`, and public teacher references use `teacher_public_id` / `public_id` instead of numeric teacher IDs. The v2 authority rewrite now funnels money-affecting behavior through FEAT/domain services into `ledger_service`, with transaction construction structurally restricted to that service. See [DEVELOPMENT.md](DEVELOPMENT.md) for current readiness status and [CHANGELOG.md](CHANGELOG.md) for ongoing changes.
+**Project Status:** Version 2.0.0 is the current live-test candidate. Canonical identity/auth authority is `User + Seat + Class`: `users.id` authenticates, `seats.id` acts, `classes.class_id` scopes, and `seats.public_id` is the deidentified public actor reference. `join_code` remains a public class alias that resolves to `class_id`; legacy `admin_id`, `student_id`, `TeacherBlock`, and role-specific public IDs are compatibility shadows only. The v2 authority rewrite now funnels money-affecting behavior through FEAT/domain services into `ledger_service`, with transaction construction structurally restricted to that service. See [DEVELOPMENT.md](DEVELOPMENT.md) for current readiness status and [CHANGELOG.md](CHANGELOG.md) for ongoing changes.
 
 ---
 
@@ -25,7 +25,7 @@ An interactive banking and classroom management platform for teaching students a
 - **System Announcements** — Broadcast critical updates to all teachers or specific classes
 - **Analytics Dashboard** — System health metrics, CWI analysis, participation tracking, and trend monitoring
 - **Student Portal** — View balances, redeem store items, track attendance, and manage hall passes
-- **Join-Code Rosters** — Upload rosters and let students self-claim seats securely
+- **Seat-Claim Rosters** — Upload rosters to provision inactive user shells, class-local seats, display profiles, and seat-owned claim artifacts; students activate credentials only when they claim
 - **Shared Students** — Link multiple teachers to the same student via `student_teachers`
 - **Attendance Tracking** — Start Work/Break Done system with automatic time logging
 - **Automated Payroll** — Configurable pay rates, schedules, and rewards/fines

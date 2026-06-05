@@ -20,8 +20,8 @@ Diagnostic guide for resolving teacher login access, 2FA, and registration issue
 
 ### Causes & Solutions
 **Cause 1: Incorrect credentials**
-- **Check:** Ensure you are using the correct username and password.
-- **Fix:** Double-check spelling. Use the password reset feature if necessary.
+- **Check:** Ensure you are using the correct username and current authenticator code, or the correct registered passkey.
+- **Fix:** Double-check spelling, try a fresh authenticator code, or use a registered passkey if one is available.
 
 **Cause 2: Unsynchronized TOTP clock**
 - **Check:** Compare the time on your authenticator device with the actual time.
@@ -42,11 +42,11 @@ Diagnostic guide for resolving teacher login access, 2FA, and registration issue
 - **Check:** Verify the code provided by your Sysadmin.
 - **Fix:** An active, unused invite code is required for first-time admin registration. Request a new code if yours has expired.
 
-**Cause 2: Date format error**
-- **Check:** Look at the date of birth field on the signup form.
-- **Fix:** Date of birth must be entered in the exact expected format shown on the placeholder.
+**Cause 2: Authenticator setup not completed**
+- **Check:** Confirm you scanned the current QR code and entered a fresh code from the same authenticator app.
+- **Fix:** Restart setup with a valid invite code if the QR code or setup session expired.
 
 ## When to Contact Support
 Report this issue if:
-- You lose access to your authenticator app and have not registered a passkey. Sysadmins can review your identity and reset your 2FA requirement.
+- You lose access to your authenticator app and have not registered a passkey. Use the student-assisted teacher recovery flow when available.
 - The passkey prompt repeatedly fails on an authorized device.

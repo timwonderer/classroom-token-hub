@@ -1,5 +1,12 @@
 # Wave 3 Identity Domain — Risk & Dependency Analysis
 
+> [!IMPORTANT]
+> This is a pre-cutover risk analysis. It is still useful for dependency maps and
+> legacy-removal risk, but it is no longer the current runtime auth contract.
+> Canonical credential verification, session `user_id`, and passkey ownership are
+> now active. Use `docs/development/specs/V2_CANONICAL_AUTH_RUNTIME_CUTOVER.md`
+> for current bridge behavior.
+
 ## Scope
 
 This document analyzes the three sub-operations of Wave 3:
@@ -95,11 +102,14 @@ The `class_economies.class_id` column is the FK target for **30+ columns across 
 
 ## 2. Activating `User`/`Seat`/`Class_` as Primary Auth
 
-### 2.1 Current Auth Architecture
+### 2.1 Historical Auth Architecture
+
+The diagram below reflects the pre-cutover risk state. It is not current runtime
+guidance.
 
 ```mermaid
 flowchart TD
-    subgraph "Current Auth (v1)"
+    subgraph "Historical Auth (v1)"
         A["Student login"] --> B["session['student_id'] = Student.id"]
         C["Admin login"] --> D["session['admin_id'] = Admin.id<br>session['is_admin'] = True"]
         E["SysAdmin login"] --> F["session['is_system_admin'] = True<br>session['sysadmin_id']"]
