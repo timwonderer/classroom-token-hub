@@ -313,19 +313,25 @@ def apply_standard_tap_mutations(
         timestamp_utc=now,
     )
 
+    att_state = SeatAttendanceState.query.filter_by(
+        seat_id=seat_id,
+        class_id=class_id,
+        period=period,
+    ).first()
+
     today_local = get_class_now(class_id, reference_time_utc=now).date()
-    if student_block.done_for_day_date and student_block.done_for_day_date != today_local:
-        student_block.done_for_day_date = None
+    if att_state and att_state.done_for_day_date and att_state.done_for_day_date != today_local:
+        att_state.done_for_day_date = None
         if logger:
             logger.info("Cleared done_for_day_date for seat %s in period %s (new day)", seat_id, period)
 
-    if normalized_action == "stop_work":
+    if normalized_action == "stop_work" and att_state:
         if reason and reason.lower() in ["done", "done for the day"]:
-            student_block.done_for_day_date = today_local
+            att_state.done_for_day_date = today_local
             if logger:
                 logger.info("Seat %s marked as done for the day in period %s", seat_id, period)
-        elif student_block.done_for_day_date is not None:
-            student_block.done_for_day_date = None
+        elif att_state.done_for_day_date is not None:
+            att_state.done_for_day_date = None
             if logger:
                 logger.info(
                     "Cleared done_for_day_date for seat %s in period %s (reason: %s)",

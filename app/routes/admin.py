@@ -10035,23 +10035,6 @@ def enforce_daily_limits():
                 if today_attendance < daily_limit:
                     continue
 
-                student_block = StudentBlock.query.filter_by(
-                    seat_id=seat_id,
-                    class_id=class_id,
-                    period=period_upper,
-                ).first()
-                if not student_block:
-                    student_block = StudentBlock(
-                        student_id=student.id,
-                        seat_id=seat_id,
-                        class_id=class_id,
-                        period=period_upper,
-                        join_code=join_code,
-                        tap_enabled=True,
-                    )
-                    db.session.add(student_block)
-                student_block.done_for_day_date = today_local
-
                 student_tap(
                     student_id=student.id,
                     seat_id=seat_id,
@@ -10063,6 +10046,7 @@ def enforce_daily_limits():
                     reason_code=TapEventReasonCode.DAILY_LIMIT,
                     timestamp_utc=now_utc,
                 )
+                att_state.done_for_day_date = today_local
                 tapped_out.append(f"{student.full_name} (Period {period_upper})")
                 break
         except Exception as e:
@@ -10184,24 +10168,6 @@ def tap_out_students():
                 already_inactive.append(student.full_name)
                 continue
 
-            student_block = StudentBlock.query.filter_by(
-                seat_id=seat_id,
-                class_id=class_id,
-                period=period,
-            ).first()
-            if not student_block:
-                student_block = StudentBlock(
-                    student_id=student.id,
-                    seat_id=seat_id,
-                    class_id=class_id,
-                    period=period,
-                    join_code=join_code,
-                    tap_enabled=True,
-                )
-                db.session.add(student_block)
-
-            student_block.done_for_day_date = class_date(timestamp_utc=now_utc)
-
             student_tap(
                 student_id=student.id,
                 seat_id=seat_id,
@@ -10212,6 +10178,7 @@ def tap_out_students():
                 reason=reason,
                 timestamp_utc=now_utc,
             )
+            att_state.done_for_day_date = class_date(timestamp_utc=now_utc)
 
             tapped_out.append(student.full_name)
 
@@ -10309,23 +10276,6 @@ def tap_in_students():
             if att_state and att_state.is_active:
                 already_active.append(student.full_name)
                 continue
-
-            student_block = StudentBlock.query.filter_by(
-                seat_id=seat_id,
-                class_id=class_id,
-                period=period,
-            ).first()
-            if not student_block:
-                student_block = StudentBlock(
-                    student_id=student.id,
-                    seat_id=seat_id,
-                    class_id=class_id,
-                    period=period,
-                    join_code=join_code,
-                    tap_enabled=True,
-                )
-                db.session.add(student_block)
-            student_block.done_for_day_date = None
 
             student_tap(
                 student_id=student.id,

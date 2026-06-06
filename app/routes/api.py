@@ -2073,12 +2073,18 @@ def handle_tap():
     # --- Check "done for the day" lock ---
     if normalized_action == "start_work":
         today_local = get_class_now(class_id, reference_time_utc=now).date()
-
-        # Automatically clear "done for the day" lock if it's from a previous day
-        if student_block.done_for_day_date is not None and student_block.done_for_day_date < today_local:
-            student_block.done_for_day_date = None
+        att_state = SeatAttendanceState.query.filter_by(
+            seat_id=seat_id,
+            class_id=class_id,
+            period=period,
+        ).first()
+        done_date = att_state.done_for_day_date if att_state else None
+        if done_date is not None and done_date < today_local:
+            if att_state:
+                att_state.done_for_day_date = None
             db.session.flush()
-        if student_block.done_for_day_date == today_local:
+            done_date = None
+        if done_date == today_local:
             return jsonify({"error": "You are done for the day. You cannot Start Work again until tomorrow."}), 403
 
 
