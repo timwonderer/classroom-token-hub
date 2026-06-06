@@ -63,6 +63,7 @@ from app.models import (
     Announcement, RedemptionAuditLog, RedemptionAuditAction,
     RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent, Seat,
     BalanceCache, ClassMembership, ClassEconomy, EconomySnapshot, User, UserRole, _quantize_currency,
+    SeatAttendanceState, TapEventReasonCode,
 )
 from app.auth import (
     admin_required,
@@ -147,6 +148,7 @@ from app.utils.student_deletion import (
 from app.utils.seat_scope import get_seat_id_for_class, get_seat_ids_for_student_join, seat_scoped_filter, transaction_scope_filter
 from app.utils.transaction_idempotency import create_idempotent_transaction, void_refund_key
 from app.feats.admin_adjustment_feat import execute_admin_adjustments
+from app.feats.attendance import student_tap
 from app.feats.insurance_claim_feat import execute_insurance_claim_resolution
 from app.feats.transaction_void_feat import execute_void_transaction
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
@@ -10005,20 +10007,13 @@ def enforce_daily_limits():
                 seat_id = get_seat_id_for_class(student.id, class_id)
                 if not seat_id:
                     continue
-                tap_scope = seat_scoped_filter(TapEvent, seat_id)
+                att_state = SeatAttendanceState.query.filter_by(
+                    seat_id=seat_id,
+                    class_id=class_id,
+                    period=period_upper,
+                ).first()
 
-                latest_event = (
-                    TapEvent.query
-                    .filter(
-                        tap_scope,
-                        TapEvent.period == period_upper,
-                        TapEvent.is_deleted == False,
-                    )
-                    .order_by(TapEvent.timestamp.desc())
-                    .first()
-                )
-
-                if not latest_event or latest_event.status != "active":
+                if not att_state or not att_state.is_active:
                     continue
 
                 checked += 1
@@ -10032,62 +10027,26 @@ def enforce_daily_limits():
                 today_attendance = calculate_period_attendance_utc_range(
                     seat_id, class_id, period_upper, start_of_day_utc, end_of_day_utc
                 )
-                if latest_event.timestamp:
-                    last_tap_in_utc = ensure_utc(latest_event.timestamp)
+                if att_state.last_event_at:
+                    last_tap_in_utc = ensure_utc(att_state.last_event_at)
                     if start_of_day_utc <= last_tap_in_utc < end_of_day_utc:
                         today_attendance += (now_utc - last_tap_in_utc).total_seconds()
 
                 if today_attendance < daily_limit:
                     continue
 
-                existing_limit_tapout = TapEvent.query.filter(
-                    tap_scope,
-                    TapEvent.period == period_upper,
-                    TapEvent.status == "inactive",
-                    TapEvent.timestamp >= start_of_day_utc,
-                    TapEvent.timestamp < end_of_day_utc,
-                    TapEvent.reason.ilike("Daily limit%"),
-                    TapEvent.is_deleted == False,
-                ).first()
-                if existing_limit_tapout:
-                    continue
-
-                student_block = StudentBlock.query.filter_by(
-                    student_id=student.id,
-                    period=period_upper,
-                ).first()
-                if student_block and student_block.join_code and student_block.join_code != join_code:
-                    errors.append(
-                        f"Skipped {student.full_name} ({period_upper}): block settings belong to a different class scope"
-                    )
-                    continue
-                if student_block and not student_block.join_code:
-                    errors.append(
-                        f"Skipped {student.full_name} ({period_upper}): block settings missing class scope"
-                    )
-                    continue
-                if not student_block:
-                    student_block = StudentBlock(
-                        student_id=student.id,
-                        seat_id=seat_id,
-                        class_id=class_id,
-                        period=period_upper,
-                        join_code=join_code,
-                        tap_enabled=True,
-                    )
-                    db.session.add(student_block)
-                student_block.done_for_day_date = today_local
-
-                db.session.add(TapEvent(
+                student_tap(
                     student_id=student.id,
                     seat_id=seat_id,
                     class_id=class_id,
+                    join_code=join_code,
                     period=period_upper,
                     status="inactive",
-                    timestamp=now_utc,
                     reason=f"Daily limit reached ({daily_limit / 3600:.1f}h)",
-                    join_code=join_code,
-                ))
+                    reason_code=TapEventReasonCode.DAILY_LIMIT,
+                    timestamp_utc=now_utc,
+                )
+                att_state.done_for_day_date = today_local
                 tapped_out.append(f"{student.full_name} (Period {period_upper})")
                 break
         except Exception as e:
@@ -10153,16 +10112,21 @@ def tap_out_students():
                 if not join_code:
                     continue
 
-                # Check if student is currently active in this period
-                latest_event = (
-                    TapEvent.query
-                    .filter_by(student_id=student.id, period=period)
-                    .filter_by(join_code=join_code)
-                    .order_by(TapEvent.timestamp.desc())
-                    .first()
-                )
+                class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+                class_id_for_state = class_row.class_id if class_row else None
+                if not class_id_for_state:
+                    continue
+                seat_id_for_state = get_seat_id_for_class(student.id, class_id_for_state)
+                if not seat_id_for_state:
+                    continue
 
-                if latest_event and latest_event.status == "active":
+                att_state = SeatAttendanceState.query.filter_by(
+                    seat_id=seat_id_for_state,
+                    class_id=class_id_for_state,
+                    period=period,
+                ).first()
+
+                if att_state and att_state.is_active:
                     student_ids.append(student.id)
 
         # Process each student ID
@@ -10184,57 +10148,37 @@ def tap_out_students():
                 errors.append(f"{student.full_name} has no join code for period {period} in this class scope")
                 continue
 
-            # Check if student is currently active in this period
-            latest_event = (
-                TapEvent.query
-                .filter_by(student_id=student.id, period=period)
-                .filter_by(join_code=join_code)
-                .order_by(TapEvent.timestamp.desc())
-                .first()
-            )
+            class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+            class_id = class_row.class_id if class_row else None
+            if not class_id:
+                errors.append(f"{student.full_name} has no class record for join code {join_code}")
+                continue
+            seat_id = get_seat_id_for_class(student.id, class_id)
+            if not seat_id:
+                errors.append(f"{student.full_name} has no seat in class {class_id}")
+                continue
 
-            if not latest_event or latest_event.status != "active":
+            att_state = SeatAttendanceState.query.filter_by(
+                seat_id=seat_id,
+                class_id=class_id,
+                period=period,
+            ).first()
+
+            if not att_state or not att_state.is_active:
                 already_inactive.append(student.full_name)
                 continue
 
-            # Lock student out until midnight when teacher taps them out.
-            # Guard against cross-join updates when shared students have multiple classes.
-            student_block = StudentBlock.query.filter_by(
+            student_tap(
                 student_id=student.id,
-                period=period,
-            ).first()
-            if student_block and student_block.join_code and student_block.join_code != join_code:
-                errors.append(
-                    f"{student.full_name} block settings belong to a different class scope"
-                )
-                continue
-            if student_block and not student_block.join_code:
-                errors.append(
-                    f"{student.full_name} block settings missing class scope"
-                )
-                continue
-            if not student_block:
-                student_block = StudentBlock(
-                    student_id=student.id,
-                    period=period,
-                    join_code=join_code,
-                    tap_enabled=True,
-                )
-                db.session.add(student_block)
-
-            # Set done_for_day_date to lock them out until midnight
-            student_block.done_for_day_date = class_date(timestamp_utc=now_utc)
-
-            # Create tap-out event
-            tap_out_event = TapEvent(
-                student_id=student.id,
+                seat_id=seat_id,
+                class_id=class_id,
+                join_code=join_code,
                 period=period,
                 status="inactive",
-                timestamp=now_utc,
                 reason=reason,
-                join_code=join_code
+                timestamp_utc=now_utc,
             )
-            db.session.add(tap_out_event)
+            att_state.done_for_day_date = class_date(timestamp_utc=now_utc)
 
             tapped_out.append(student.full_name)
 
@@ -10313,54 +10257,36 @@ def tap_in_students():
                 errors.append(f"{student.full_name} has no join code for period {period} in this class scope")
                 continue
 
-            # Check if student is currently active in this period
-            latest_event = (
-                TapEvent.query
-                .filter_by(student_id=student.id, period=period)
-                .filter_by(join_code=join_code)
-                .order_by(TapEvent.timestamp.desc())
-                .first()
-            )
+            class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+            class_id = class_row.class_id if class_row else None
+            if not class_id:
+                errors.append(f"{student.full_name} has no class record for join code {join_code}")
+                continue
+            seat_id = get_seat_id_for_class(student.id, class_id)
+            if not seat_id:
+                errors.append(f"{student.full_name} has no seat in class {class_id}")
+                continue
 
-            if latest_event and latest_event.status == "active":
+            att_state = SeatAttendanceState.query.filter_by(
+                seat_id=seat_id,
+                class_id=class_id,
+                period=period,
+            ).first()
+
+            if att_state and att_state.is_active:
                 already_active.append(student.full_name)
                 continue
 
-            # Clear done-for-day lock in the same join-code scope only.
-            student_block = StudentBlock.query.filter_by(
+            student_tap(
                 student_id=student.id,
-                period=period,
-            ).first()
-            if student_block and student_block.join_code and student_block.join_code != join_code:
-                errors.append(
-                    f"{student.full_name} block settings belong to a different class scope"
-                )
-                continue
-            if student_block and not student_block.join_code:
-                errors.append(
-                    f"{student.full_name} block settings missing class scope"
-                )
-                continue
-            if not student_block:
-                student_block = StudentBlock(
-                    student_id=student.id,
-                    period=period,
-                    join_code=join_code,
-                    tap_enabled=True,
-                )
-                db.session.add(student_block)
-            student_block.done_for_day_date = None
-
-            # Create tap-in event
-            tap_in_event = TapEvent(
-                student_id=student.id,
+                seat_id=seat_id,
+                class_id=class_id,
+                join_code=join_code,
                 period=period,
                 status="active",
-                timestamp=now_utc,
                 reason="Teacher tap-in",
-                join_code=join_code
+                timestamp_utc=now_utc,
             )
-            db.session.add(tap_in_event)
             tapped_in.append(student.full_name)
 
             current_app.logger.info(
