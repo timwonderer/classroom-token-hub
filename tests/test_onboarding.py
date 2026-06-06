@@ -17,10 +17,24 @@ def login_admin(client, username='admin'):
         db.session.add(admin)
         db.session.commit()
 
+    # Ensure a User exists for this admin (required by get_current_admin() → get_current_user())
+    from app.models import User, UserRole
+    user = User.query.filter_by(username_lookup_hash=admin.username_lookup_hash).first()
+    if not user:
+        user = User(
+            username_hash=admin.username_lookup_hash,
+            username_lookup_hash=admin.username_lookup_hash,
+            user_role=UserRole.TEACHER,
+        )
+        db.session.add(user)
+        db.session.commit()
+
     # Simulate login by setting session
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin.id
+        sess['user_id'] = user.id
+        sess['last_activity'] = datetime.now(timezone.utc).isoformat()
         sess['_fresh'] = True
 
     return admin

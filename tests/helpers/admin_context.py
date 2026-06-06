@@ -10,6 +10,23 @@ def login_admin(
     class_id: str | None = None,
     seat_id: int | None = None,
 ) -> None:
+    # Ensure a User exists for this admin (required by get_current_admin() → get_current_user())
+    if user_id is None:
+        from app.extensions import db
+        from app.models import Admin, User, UserRole
+        admin = db.session.get(Admin, admin_id)
+        if admin and admin.username_lookup_hash:
+            user = User.query.filter_by(username_lookup_hash=admin.username_lookup_hash).first()
+            if not user:
+                user = User(
+                    username_hash=admin.username_lookup_hash,
+                    username_lookup_hash=admin.username_lookup_hash,
+                    user_role=UserRole.TEACHER,
+                )
+                db.session.add(user)
+                db.session.commit()
+            user_id = user.id
+
     with client.session_transaction() as sess:
         sess["is_admin"] = True
         sess["admin_id"] = admin_id

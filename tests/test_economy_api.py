@@ -56,10 +56,21 @@ def admin_with_payroll(client):
 @pytest.fixture
 def logged_in_admin_client(client, admin_with_payroll):
     """A client with a logged-in admin."""
+    from app.models import User, UserRole
     admin, _ = admin_with_payroll
+    user = User.query.filter_by(username_lookup_hash=admin.username_lookup_hash).first()
+    if not user:
+        user = User(
+            username_hash=admin.username_lookup_hash,
+            username_lookup_hash=admin.username_lookup_hash,
+            user_role=UserRole.TEACHER,
+        )
+        db.session.add(user)
+        db.session.commit()
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin.id
+        sess['user_id'] = user.id
         sess['is_system_admin'] = False
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
     return client
@@ -373,8 +384,6 @@ def test_different_expected_hours_per_block(client):
     )
 
     payroll_a = PayrollSettings(
-        teacher_id=admin.id,
-        join_code="ECONMULA",
         class_id=class_a.class_id,
         block="A",
         pay_rate=0.25,
@@ -385,8 +394,6 @@ def test_different_expected_hours_per_block(client):
     )
 
     payroll_b = PayrollSettings(
-        teacher_id=admin.id,
-        join_code="ECONMULB",
         class_id=class_b.class_id,
         block="B",
         pay_rate=0.25,
@@ -401,9 +408,20 @@ def test_different_expected_hours_per_block(client):
     db.session.commit()
 
     # Login as admin
+    from app.models import User, UserRole
+    user = User.query.filter_by(username_lookup_hash=admin.username_lookup_hash).first()
+    if not user:
+        user = User(
+            username_hash=admin.username_lookup_hash,
+            username_lookup_hash=admin.username_lookup_hash,
+            user_role=UserRole.TEACHER,
+        )
+        db.session.add(user)
+        db.session.commit()
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin.id
+        sess['user_id'] = user.id
         sess['is_system_admin'] = False
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
 
@@ -899,9 +917,20 @@ def test_analyze_endpoint_error_does_not_leak_exception_details(client):
     db.session.commit()
 
     # Login as admin
+    from app.models import User, UserRole
+    user = User.query.filter_by(username_lookup_hash=admin.username_lookup_hash).first()
+    if not user:
+        user = User(
+            username_hash=admin.username_lookup_hash,
+            username_lookup_hash=admin.username_lookup_hash,
+            user_role=UserRole.TEACHER,
+        )
+        db.session.add(user)
+        db.session.commit()
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin.id
+        sess['user_id'] = user.id
         sess['is_system_admin'] = False
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
 
@@ -932,15 +961,6 @@ def test_analyze_block_ignores_teacher_global_payroll_settings(client, caplog):
     db.session.add(admin)
     db.session.flush()
 
-    db.session.add(PayrollSettings(
-        teacher_id=admin.id,
-        block=None,
-        pay_rate=0.25,
-        expected_weekly_hours=7.0,
-        payroll_frequency_days=7,
-        settings_mode='simple',
-        is_active=True
-    ))
     db.session.add(TeacherBlock(
         teacher_id=admin.id,
         block="A",
@@ -957,9 +977,20 @@ def test_analyze_block_ignores_teacher_global_payroll_settings(client, caplog):
     ))
     db.session.commit()
 
+    from app.models import User, UserRole
+    user = User.query.filter_by(username_lookup_hash=admin.username_lookup_hash).first()
+    if not user:
+        user = User(
+            username_hash=admin.username_lookup_hash,
+            username_lookup_hash=admin.username_lookup_hash,
+            user_role=UserRole.TEACHER,
+        )
+        db.session.add(user)
+        db.session.commit()
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin.id
+        sess['user_id'] = user.id
         sess['is_system_admin'] = False
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
 
@@ -981,15 +1012,6 @@ def test_validate_block_ignores_teacher_global_payroll_settings(client, caplog):
     db.session.add(admin)
     db.session.flush()
 
-    db.session.add(PayrollSettings(
-        teacher_id=admin.id,
-        block=None,
-        pay_rate=0.25,
-        expected_weekly_hours=7.0,
-        payroll_frequency_days=7,
-        settings_mode='simple',
-        is_active=True
-    ))
     db.session.add(TeacherBlock(
         teacher_id=admin.id,
         block="A",
@@ -1006,9 +1028,20 @@ def test_validate_block_ignores_teacher_global_payroll_settings(client, caplog):
     ))
     db.session.commit()
 
+    from app.models import User, UserRole
+    user = User.query.filter_by(username_lookup_hash=admin.username_lookup_hash).first()
+    if not user:
+        user = User(
+            username_hash=admin.username_lookup_hash,
+            username_lookup_hash=admin.username_lookup_hash,
+            user_role=UserRole.TEACHER,
+        )
+        db.session.add(user)
+        db.session.commit()
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin.id
+        sess['user_id'] = user.id
         sess['is_system_admin'] = False
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
 
@@ -1052,21 +1085,8 @@ def test_analyze_block_prefers_join_code_scoped_payroll_settings(client):
         student_id=None,
         is_claimed=False
     ))
-    # Legacy block-only row: should lose precedence.
-    db.session.add(PayrollSettings(
-        teacher_id=admin.id,
-        join_code=None,
-        block="A",
-        pay_rate=0.25,
-        expected_weekly_hours=5.0,
-        payroll_frequency_days=7,
-        settings_mode='simple',
-        is_active=True
-    ))
     # Join-code scoped row: should win.
     db.session.add(PayrollSettings(
-        teacher_id=admin.id,
-        join_code="JOINA123",
         class_id=class_scope.class_id,
         block=None,
         pay_rate=0.25,
@@ -1077,9 +1097,20 @@ def test_analyze_block_prefers_join_code_scoped_payroll_settings(client):
     ))
     db.session.commit()
 
+    from app.models import User, UserRole
+    user = User.query.filter_by(username_lookup_hash=admin.username_lookup_hash).first()
+    if not user:
+        user = User(
+            username_hash=admin.username_lookup_hash,
+            username_lookup_hash=admin.username_lookup_hash,
+            user_role=UserRole.TEACHER,
+        )
+        db.session.add(user)
+        db.session.commit()
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin.id
+        sess['user_id'] = user.id
         sess['is_system_admin'] = False
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
 

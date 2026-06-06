@@ -103,9 +103,21 @@ def _orphaned_tx(student: Student, admin: Admin, amount: float = 50.0) -> Transa
 
 
 def _login_admin(client, admin: Admin) -> None:
+    from app.models import User, UserRole
+    user = User.query.filter_by(username_lookup_hash=admin.username_lookup_hash).first()
+    if not user:
+        user = User(
+            username_hash=admin.username_lookup_hash,
+            username_lookup_hash=admin.username_lookup_hash,
+            user_role=UserRole.TEACHER,
+        )
+        db.session.add(user)
+        db.session.commit()
+
     with client.session_transaction() as sess:
         sess["admin_id"] = admin.id
         sess["is_admin"] = True
+        sess["user_id"] = user.id
         sess["last_activity"] = datetime.now(timezone.utc).isoformat()
 
 

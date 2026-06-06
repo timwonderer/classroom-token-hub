@@ -144,12 +144,15 @@ def test_tenant_isolation_attendance_history(client):
     _link_student_to_teacher(student_b, admin_b, "JOIN-B")
     db.session.commit()
 
+    economy_a = ClassEconomy.query.filter_by(join_code="JOIN-A").first()
+    economy_b = ClassEconomy.query.filter_by(join_code="JOIN-B").first()
     tap_a = TapEvent(
         student_id=student_a.id,
         period="A",
         status="active",
         timestamp=datetime.now(timezone.utc),
         join_code="JOIN-A",
+        class_id=economy_a.class_id if economy_a else None,
     )
     tap_b = TapEvent(
         student_id=student_b.id,
@@ -157,6 +160,7 @@ def test_tenant_isolation_attendance_history(client):
         status="active",
         timestamp=datetime.now(timezone.utc),
         join_code="JOIN-B",
+        class_id=economy_b.class_id if economy_b else None,
     )
     db.session.add_all([tap_a, tap_b])
     db.session.commit()
@@ -178,6 +182,7 @@ def test_payroll_run_creates_payroll_transaction(client):
     db.session.commit()
 
     now = datetime.now(timezone.utc)
+    economy = ClassEconomy.query.filter_by(join_code="JOIN-PAY").first()
     db.session.add_all(
         [
             TapEvent(
@@ -186,6 +191,7 @@ def test_payroll_run_creates_payroll_transaction(client):
                 status="active",
                 timestamp=now - timedelta(minutes=60),
                 join_code="JOIN-PAY",
+                class_id=economy.class_id if economy else None,
             ),
             TapEvent(
                 student_id=student.id,
@@ -193,6 +199,7 @@ def test_payroll_run_creates_payroll_transaction(client):
                 status="inactive",
                 timestamp=now - timedelta(minutes=30),
                 join_code="JOIN-PAY",
+                class_id=economy.class_id if economy else None,
             ),
         ]
     )
@@ -211,12 +218,12 @@ def test_payroll_run_creates_payroll_transaction(client):
     )
     db.session.commit()
 
-    payroll_query = Transaction.query.filter_by(
-        student_id=student.id,
-        teacher_id=admin.id,
-        join_code="JOIN-PAY",
-        type="payroll",
-    )
+    seat = Seat.query.filter_by(student_id=student.id, join_code="JOIN-PAY").first()
+    payroll_query = Transaction.query.filter(
+        Transaction.seat_id == seat.id,
+        Transaction.join_code == "JOIN-PAY",
+        Transaction.type == "payroll",
+    ) if seat else Transaction.query.filter_by(id=-1)
     pre_payroll_count = payroll_query.count()
     pre_latest_payroll = payroll_query.order_by(Transaction.id.desc()).first()
     pre_latest_payroll_id = pre_latest_payroll.id if pre_latest_payroll is not None else None
@@ -224,12 +231,11 @@ def test_payroll_run_creates_payroll_transaction(client):
     response = client.post("/admin/run_payroll", json={})
 
     assert response.status_code == 200
-    post_payroll_query = Transaction.query.filter_by(
-        student_id=student.id,
-        teacher_id=admin.id,
-        join_code="JOIN-PAY",
-        type="payroll",
-    )
+    post_payroll_query = Transaction.query.filter(
+        Transaction.seat_id == seat.id,
+        Transaction.join_code == "JOIN-PAY",
+        Transaction.type == "payroll",
+    ) if seat else Transaction.query.filter_by(id=-1)
     assert post_payroll_query.count() > pre_payroll_count
     latest_payroll = post_payroll_query.order_by(Transaction.id.desc()).first()
     assert latest_payroll is not None

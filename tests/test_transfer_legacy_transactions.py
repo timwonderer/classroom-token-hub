@@ -79,6 +79,16 @@ def setup_student_with_legacy_transactions(client):
         claimed_at=datetime.now(timezone.utc)
     )
     db.session.add(seat)
+    # Create a User for the student (required by get_logged_in_student() → get_current_user())
+    from app.models import User, UserRole
+    student_user = User(
+        username_hash=student.username_hash,
+        username_lookup_hash=student.username_hash,
+        user_role=UserRole.STUDENT,
+    )
+    db.session.add(student_user)
+    db.session.flush()
+
     seat_record = Seat(
         student_id=student.id,
         class_id=economy.class_id,
@@ -86,6 +96,7 @@ def setup_student_with_legacy_transactions(client):
         block="Period1",
         role="student",
         claimed_at=datetime.now(timezone.utc),
+        user_id=student_user.id,
     )
     db.session.add(seat_record)
     db.session.commit()
@@ -145,7 +156,9 @@ def setup_student_with_legacy_transactions(client):
         'student': student,
         'join_code': join_code,
         'seat_id': seat.id,
-        'class_id': economy.class_id
+        'seat_record_id': seat_record.id,
+        'class_id': economy.class_id,
+        'student_user_id': student_user.id,
     }
 
 
@@ -154,12 +167,16 @@ def test_transfer_with_legacy_transactions(client, setup_student_with_legacy_tra
     data = setup_student_with_legacy_transactions
     student = data['student']
     join_code = data['join_code']
-    
+
     # Login as student
     with client.session_transaction() as sess:
         sess['student_id'] = student.id
         sess['current_join_code'] = join_code
+        sess['current_seat_id'] = data['seat_record_id']
+        sess['current_class_id'] = data['class_id']
+        sess['user_id'] = data['student_user_id']
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
+        sess['last_activity'] = datetime.now(timezone.utc).isoformat()
         sess['transfer_token'] = 'test-token-123'
     
     # Student has only $50 available in this class economy.
@@ -178,7 +195,7 @@ def test_transfer_with_legacy_transactions(client, setup_student_with_legacy_tra
     
     # Verify transactions were created
     transactions = Transaction.query.filter_by(
-        seat_id=data['seat_id'],
+        seat_id=data['seat_record_id'],
         class_id=data['class_id']
     ).order_by(Transaction.timestamp.desc()).limit(2).all()
     
@@ -203,12 +220,16 @@ def test_insufficient_funds_with_only_new_transactions(client, setup_student_wit
     data = setup_student_with_legacy_transactions
     student = data['student']
     join_code = data['join_code']
-    
+
     # Login as student
     with client.session_transaction() as sess:
         sess['student_id'] = student.id
         sess['current_join_code'] = join_code
+        sess['current_seat_id'] = data['seat_record_id']
+        sess['current_class_id'] = data['class_id']
+        sess['user_id'] = data['student_user_id']
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
+        sess['last_activity'] = datetime.now(timezone.utc).isoformat()
         sess['transfer_token'] = 'test-token-123'
     
     # Student has only $50 join_code-scoped checking.
@@ -231,12 +252,16 @@ def test_transfer_excludes_legacy_balance_without_join_code(client, setup_studen
     data = setup_student_with_legacy_transactions
     student = data['student']
     join_code = data['join_code']
-    
+
     # Login as student
     with client.session_transaction() as sess:
         sess['student_id'] = student.id
         sess['current_join_code'] = join_code
+        sess['current_seat_id'] = data['seat_record_id']
+        sess['current_class_id'] = data['class_id']
+        sess['user_id'] = data['student_user_id']
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
+        sess['last_activity'] = datetime.now(timezone.utc).isoformat()
         sess['transfer_token'] = 'test-token-123'
     
     # Transfer exceeds join_code-scoped $50 balance, so it must be rejected.

@@ -96,16 +96,39 @@ def resolve_seat_from_transient_student(mapper, connection, target):
                 from datetime import datetime, timezone
                 pub_id = str(uuid.uuid4())
                 cid = class_id or str(uuid.uuid4())
+                jc = join_code or f"MOCK-{cid[:8]}"
+                now = datetime.now(timezone.utc)
+
+                # Ensure the class row exists first (FK: seats.class_id → classes.class_id)
+                class_exists = connection.execute(
+                    sa.text("SELECT 1 FROM classes WHERE class_id = :cid LIMIT 1"),
+                    {"cid": cid}
+                ).fetchone()
+                if not class_exists:
+                    teacher_row = connection.execute(
+                        sa.text("SELECT teacher_id FROM student_teachers WHERE student_id = :sid LIMIT 1"),
+                        {"sid": student_id}
+                    ).fetchone()
+                    if teacher_row:
+                        connection.execute(
+                            sa.text("""
+                            INSERT INTO classes (class_id, teacher_id, join_code, created_at, updated_at)
+                            VALUES (:cid, :tid, :jc, :now, :now)
+                            ON CONFLICT DO NOTHING
+                            """),
+                            {"cid": cid, "tid": teacher_row[0], "jc": jc, "now": now}
+                        )
+
                 target.class_id = cid
-                target.join_code = join_code or "TEST_JC"
+                target.join_code = join_code or jc
                 connection.execute(
                     sa.text("""
-                    INSERT INTO seats (public_id, student_id, class_id, join_code, role, has_received_rent_exemption, created_at, updated_at) 
+                    INSERT INTO seats (public_id, student_id, class_id, join_code, role, has_received_rent_exemption, created_at, updated_at)
                     VALUES (:pid, :sid, :cid, :jc, 'student', false, :now, :now)
                     """),
                     {
-                        "pid": pub_id, "sid": student_id, "cid": cid, 
-                        "jc": target.join_code, "now": datetime.now(timezone.utc)
+                        "pid": pub_id, "sid": student_id, "cid": cid,
+                        "jc": target.join_code, "now": now
                     }
                 )
                 seat_row = connection.execute(

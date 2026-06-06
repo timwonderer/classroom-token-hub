@@ -54,16 +54,23 @@ def _create_legacy_student(first_name: str, teacher: Admin, block: str = "A") ->
 
 def _login_admin(client, admin: Admin, secret: str):
     """Helper to log in an admin."""
-    response = client.post(
-        "/admin/login",
-        data={"username": "teacher1", "totp_code": pyotp.TOTP(secret).now()},
-        follow_redirects=True,
-    )
+    from app.models import User, UserRole
+    user = User.query.filter_by(username_lookup_hash=admin.username_lookup_hash).first()
+    if not user:
+        user = User(
+            username_hash=admin.username_lookup_hash,
+            username_lookup_hash=admin.username_lookup_hash,
+            user_role=UserRole.TEACHER,
+        )
+        db.session.add(user)
+        db.session.commit()
+
     with client.session_transaction() as sess:
-        sess.setdefault("is_admin", True)
-        sess.setdefault("admin_id", admin.id)
+        sess["is_admin"] = True
+        sess["admin_id"] = admin.id
+        sess["user_id"] = user.id
         sess["last_activity"] = datetime.now(timezone.utc).isoformat()
-    return response
+    return None
 
 
 def test_new_student_can_claim_in_legacy_class(client):
