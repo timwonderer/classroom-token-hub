@@ -4,6 +4,8 @@ These tests verify the canonical obligation table definitions without requiring
 a live database connection. They check that models have the right columns,
 ForeignKey targets, and constraints to implement the DOM-OBL-001 spec.
 """
+from sqlalchemy import UniqueConstraint
+
 from app.models import (
     EntitlementEvent,
     InsuranceEnrollment,
@@ -22,7 +24,7 @@ def _column_names(model):
 
 
 def _unique_constraints(model):
-    return {c.name for c in model.__table__.constraints if hasattr(c, "columns")}
+    return {c.name for c in model.__table__.constraints if isinstance(c, UniqueConstraint)}
 
 
 # ---------------------------------------------------------------------------

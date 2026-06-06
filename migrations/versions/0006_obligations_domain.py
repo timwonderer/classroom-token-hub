@@ -93,18 +93,29 @@ def upgrade():
             sa.PrimaryKeyConstraint('id'),
             sa.UniqueConstraint('seat_id', 'class_id', 'cycle_idempotency_key', name='uq_obligation_assessment_idempotency'),
         )
-        op.create_index('ix_obligation_assessment_seat_id', 'obligation_assessment', ['seat_id'])
-        op.create_index('ix_obligation_assessment_class_id', 'obligation_assessment', ['class_id'])
-        op.create_index('ix_obligation_assessment_join_code', 'obligation_assessment', ['join_code'])
-        op.create_index('ix_obligation_assessment_period', 'obligation_assessment', ['period'])
-        op.create_index('ix_obligation_assessment_obligation_type', 'obligation_assessment', ['obligation_type'])
-        op.create_index('ix_obligation_assessment_coverage_start_time', 'obligation_assessment', ['coverage_start_time'])
-        op.create_index('ix_obligation_assessment_coverage_end_time', 'obligation_assessment', ['coverage_end_time'])
-        op.create_index('ix_obligation_assessment_cycle_idempotency_key', 'obligation_assessment', ['cycle_idempotency_key'])
-        op.create_index('ix_obligation_assessment_seat_class', 'obligation_assessment', ['seat_id', 'class_id'])
         print("✅ Created obligation_assessment")
     else:
-        print("⚠️  Table 'obligation_assessment' already exists, skipping...")
+        print("⚠️  Table 'obligation_assessment' already exists, skipping create...")
+
+    # Indexes for obligation_assessment (guarded independently for partial-run recovery)
+    if not index_exists('obligation_assessment', 'ix_obligation_assessment_seat_id'):
+        op.create_index('ix_obligation_assessment_seat_id', 'obligation_assessment', ['seat_id'])
+    if not index_exists('obligation_assessment', 'ix_obligation_assessment_class_id'):
+        op.create_index('ix_obligation_assessment_class_id', 'obligation_assessment', ['class_id'])
+    if not index_exists('obligation_assessment', 'ix_obligation_assessment_join_code'):
+        op.create_index('ix_obligation_assessment_join_code', 'obligation_assessment', ['join_code'])
+    if not index_exists('obligation_assessment', 'ix_obligation_assessment_period'):
+        op.create_index('ix_obligation_assessment_period', 'obligation_assessment', ['period'])
+    if not index_exists('obligation_assessment', 'ix_obligation_assessment_obligation_type'):
+        op.create_index('ix_obligation_assessment_obligation_type', 'obligation_assessment', ['obligation_type'])
+    if not index_exists('obligation_assessment', 'ix_obligation_assessment_coverage_start_time'):
+        op.create_index('ix_obligation_assessment_coverage_start_time', 'obligation_assessment', ['coverage_start_time'])
+    if not index_exists('obligation_assessment', 'ix_obligation_assessment_coverage_end_time'):
+        op.create_index('ix_obligation_assessment_coverage_end_time', 'obligation_assessment', ['coverage_end_time'])
+    if not index_exists('obligation_assessment', 'ix_obligation_assessment_cycle_idempotency_key'):
+        op.create_index('ix_obligation_assessment_cycle_idempotency_key', 'obligation_assessment', ['cycle_idempotency_key'])
+    if not index_exists('obligation_assessment', 'ix_obligation_assessment_seat_class'):
+        op.create_index('ix_obligation_assessment_seat_class', 'obligation_assessment', ['seat_id', 'class_id'])
 
     # 2. obligation_satisfaction — immutable payment/waiver record
     if not table_exists('obligation_satisfaction'):
@@ -123,11 +134,14 @@ def upgrade():
             sa.PrimaryKeyConstraint('id'),
             sa.UniqueConstraint('assessment_id', name='uq_obligation_satisfaction_assessment'),
         )
-        op.create_index('ix_obligation_satisfaction_assessment_id', 'obligation_satisfaction', ['assessment_id'])
-        op.create_index('ix_obligation_satisfaction_transaction_id', 'obligation_satisfaction', ['transaction_id'])
         print("✅ Created obligation_satisfaction")
     else:
-        print("⚠️  Table 'obligation_satisfaction' already exists, skipping...")
+        print("⚠️  Table 'obligation_satisfaction' already exists, skipping create...")
+
+    if not index_exists('obligation_satisfaction', 'ix_obligation_satisfaction_assessment_id'):
+        op.create_index('ix_obligation_satisfaction_assessment_id', 'obligation_satisfaction', ['assessment_id'])
+    if not index_exists('obligation_satisfaction', 'ix_obligation_satisfaction_transaction_id'):
+        op.create_index('ix_obligation_satisfaction_transaction_id', 'obligation_satisfaction', ['transaction_id'])
 
     # 3. obligation_reversal — immutable nullification record
     if not table_exists('obligation_reversal'):
@@ -143,10 +157,12 @@ def upgrade():
             sa.PrimaryKeyConstraint('id'),
             sa.UniqueConstraint('assessment_id', name='uq_obligation_reversal_assessment'),
         )
-        op.create_index('ix_obligation_reversal_assessment_id', 'obligation_reversal', ['assessment_id'])
         print("✅ Created obligation_reversal")
     else:
-        print("⚠️  Table 'obligation_reversal' already exists, skipping...")
+        print("⚠️  Table 'obligation_reversal' already exists, skipping create...")
+
+    if not index_exists('obligation_reversal', 'ix_obligation_reversal_assessment_id'):
+        op.create_index('ix_obligation_reversal_assessment_id', 'obligation_reversal', ['assessment_id'])
 
     # 4. insurance_enrollments — canonical seat-level insurance contracts
     if not table_exists('insurance_enrollments'):
@@ -179,14 +195,20 @@ def upgrade():
             sa.ForeignKeyConstraint(['policy_id'], ['insurance_policies.id']),
             sa.PrimaryKeyConstraint('id'),
         )
-        op.create_index('ix_insurance_enrollment_seat_id', 'insurance_enrollments', ['seat_id'])
-        op.create_index('ix_insurance_enrollment_class_id', 'insurance_enrollments', ['class_id'])
-        op.create_index('ix_insurance_enrollment_policy_id', 'insurance_enrollments', ['policy_id'])
-        op.create_index('ix_insurance_enrollment_join_code', 'insurance_enrollments', ['join_code'])
-        op.create_index('ix_insurance_enrollment_seat_class', 'insurance_enrollments', ['seat_id', 'class_id'])
         print("✅ Created insurance_enrollments")
     else:
-        print("⚠️  Table 'insurance_enrollments' already exists, skipping...")
+        print("⚠️  Table 'insurance_enrollments' already exists, skipping create...")
+
+    if not index_exists('insurance_enrollments', 'ix_insurance_enrollment_seat_id'):
+        op.create_index('ix_insurance_enrollment_seat_id', 'insurance_enrollments', ['seat_id'])
+    if not index_exists('insurance_enrollments', 'ix_insurance_enrollment_class_id'):
+        op.create_index('ix_insurance_enrollment_class_id', 'insurance_enrollments', ['class_id'])
+    if not index_exists('insurance_enrollments', 'ix_insurance_enrollment_policy_id'):
+        op.create_index('ix_insurance_enrollment_policy_id', 'insurance_enrollments', ['policy_id'])
+    if not index_exists('insurance_enrollments', 'ix_insurance_enrollment_join_code'):
+        op.create_index('ix_insurance_enrollment_join_code', 'insurance_enrollments', ['join_code'])
+    if not index_exists('insurance_enrollments', 'ix_insurance_enrollment_seat_class'):
+        op.create_index('ix_insurance_enrollment_seat_class', 'insurance_enrollments', ['seat_id', 'class_id'])
 
     # 5. entitlement_events — append-only perk grant/consumption stream
     if not table_exists('entitlement_events'):
@@ -205,14 +227,20 @@ def upgrade():
             sa.ForeignKeyConstraint(['assessment_id'], ['obligation_assessment.id'], ondelete='SET NULL'),
             sa.PrimaryKeyConstraint('id'),
         )
-        op.create_index('ix_entitlement_events_seat_id', 'entitlement_events', ['seat_id'])
-        op.create_index('ix_entitlement_events_class_id', 'entitlement_events', ['class_id'])
-        op.create_index('ix_entitlement_events_assessment_id', 'entitlement_events', ['assessment_id'])
-        op.create_index('ix_entitlement_events_trigger_id', 'entitlement_events', ['trigger_id'])
-        op.create_index('ix_entitlement_events_seat_class', 'entitlement_events', ['seat_id', 'class_id'])
         print("✅ Created entitlement_events")
     else:
-        print("⚠️  Table 'entitlement_events' already exists, skipping...")
+        print("⚠️  Table 'entitlement_events' already exists, skipping create...")
+
+    if not index_exists('entitlement_events', 'ix_entitlement_events_seat_id'):
+        op.create_index('ix_entitlement_events_seat_id', 'entitlement_events', ['seat_id'])
+    if not index_exists('entitlement_events', 'ix_entitlement_events_class_id'):
+        op.create_index('ix_entitlement_events_class_id', 'entitlement_events', ['class_id'])
+    if not index_exists('entitlement_events', 'ix_entitlement_events_assessment_id'):
+        op.create_index('ix_entitlement_events_assessment_id', 'entitlement_events', ['assessment_id'])
+    if not index_exists('entitlement_events', 'ix_entitlement_events_trigger_id'):
+        op.create_index('ix_entitlement_events_trigger_id', 'entitlement_events', ['trigger_id'])
+    if not index_exists('entitlement_events', 'ix_entitlement_events_seat_class'):
+        op.create_index('ix_entitlement_events_seat_class', 'entitlement_events', ['seat_id', 'class_id'])
 
 
 def downgrade():

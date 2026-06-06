@@ -57,7 +57,7 @@ from app.access import AccessScopeDenied, resolve_scope
 from app.models import (
     Student, Admin, ClassEconomy, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
-    StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, SavedAdjustment,
+    InsuranceEnrollment, StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, SavedAdjustment,
     BankingSettings, TeacherBlock,
     UserReport, FeatureSettings, StudentBlock,
     Announcement, RedemptionAuditLog, RedemptionAuditAction,
@@ -7644,10 +7644,13 @@ def delete_insurance_policy(policy_id):
             InsuranceClaim.student_id.in_(sa.select(student_ids_subq)),
         ).delete(synchronize_session=False)
 
-        # Delete all enrollments for this policy
+        # Delete all enrollments for this policy (legacy + canonical)
         enrollments_deleted = StudentInsurance.query.filter(
             StudentInsurance.policy_id == policy_id,
             StudentInsurance.student_id.in_(sa.select(student_ids_subq)),
+        ).delete(synchronize_session=False)
+        InsuranceEnrollment.query.filter(
+            InsuranceEnrollment.policy_id == policy_id,
         ).delete(synchronize_session=False)
 
         # Delete the policy itself

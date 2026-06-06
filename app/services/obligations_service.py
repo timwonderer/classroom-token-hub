@@ -41,7 +41,7 @@ def record_rent_payment(
     now = utc_now()
 
     # --- Canonical write ---
-    period_key = f"{period_year}-{coverage_month:02d}" if period_year and coverage_month else None
+    period_key = f"{coverage_year}-{coverage_month:02d}" if coverage_year is not None and coverage_month is not None else None
     assessment = ObligationAssessment(
         seat_id=seat_id,
         class_id=class_id,
@@ -107,7 +107,10 @@ def record_insurance_enrollment(
     """Obligations-owned mutation for insurance enrollment truth.
 
     Dual-writes to both the legacy student_insurance table and the canonical
-    insurance_enrollments table. Legacy table will be dropped in Wave 7-B.
+    insurance_enrollments table. Returns the legacy StudentInsurance row for
+    backward-compatible callers; canonical InsuranceEnrollment becomes the
+    primary return value in Wave 7-B once all reads are migrated.
+    Legacy table will be dropped in Wave 7-B.
     """
     # --- Canonical write ---
     enrollment = InsuranceEnrollment(
