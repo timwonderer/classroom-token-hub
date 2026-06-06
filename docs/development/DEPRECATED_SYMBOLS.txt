@@ -1,0 +1,12 @@
+# Deprecated symbols registry
+# One symbol per line. Lines starting with # are ignored.
+# The Schema Change Gate scans app/, templates/, and scripts/ for any symbol listed here.
+# Add symbols here when retiring models, functions, or constants to prevent re-introduction.
+#
+# Format: exact string to grep for (e.g. a class name, function name, or column reference)
+#
+# Example:
+#   OldModelName
+#   legacy_function_name
+#
+# Currently no symbols are deprecated.
