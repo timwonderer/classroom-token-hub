@@ -7,7 +7,6 @@ Create Date: 2026-06-05 04:08:52.796269
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # ============================================================================
 # IDEMPOTENCY HELPERS (REQUIRED)
@@ -77,6 +76,9 @@ depends_on = None
 
 
 def upgrade():
+    if not table_exists("hall_pass_settings"):
+        return
+
     op.execute("DROP POLICY IF EXISTS hall_pass_settings_tenant_isolation_select ON hall_pass_settings")
     op.execute("DROP POLICY IF EXISTS hall_pass_settings_tenant_isolation_insert ON hall_pass_settings")
     op.execute("DROP POLICY IF EXISTS hall_pass_settings_tenant_isolation_update ON hall_pass_settings")
@@ -100,6 +102,9 @@ def upgrade():
 
 
 def downgrade():
+    if not table_exists("hall_pass_settings"):
+        return
+
     if not column_exists('hall_pass_settings', 'teacher_id'):
         op.add_column('hall_pass_settings', sa.Column('teacher_id', sa.INTEGER(), autoincrement=False, nullable=True))
     if not column_exists('hall_pass_settings', 'join_code'):
@@ -111,3 +116,11 @@ def downgrade():
         op.create_index(op.f('ix_hall_pass_settings_teacher_id'), 'hall_pass_settings', ['teacher_id'], unique=False)
     if not index_exists('hall_pass_settings', 'ix_hall_pass_settings_join_code'):
         op.create_index(op.f('ix_hall_pass_settings_join_code'), 'hall_pass_settings', ['join_code'], unique=False)
+    if not foreign_key_exists('hall_pass_settings', op.f('fk_hall_pass_settings_teacher_id_teachers')):
+        op.create_foreign_key(
+            op.f('fk_hall_pass_settings_teacher_id_teachers'),
+            'hall_pass_settings',
+            'teachers',
+            ['teacher_id'],
+            ['id'],
+        )

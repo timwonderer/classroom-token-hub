@@ -95,7 +95,6 @@ from app.utils.economy_policy import (
     normalize_policy_mode,
     replace_enabled_class_features,
     resolve_class_scope,
-    resolve_feature_class,
     resolve_feature_class_for_class,
 )
 from app.utils.economy_rebalance import (
@@ -641,14 +640,17 @@ def get_admin_feature_settings_for_join_code(admin_id: int | None, join_code: st
 
 
 def is_admin_feature_enabled(feature_name: str, admin_id: int | None = None, join_code: str | None = None) -> bool:
-    class_id = (getattr(g, "admin_class_id", None) or session.get("current_class_id") or "").strip()
+    class_id = (getattr(g, "admin_class_id", None) or session.get("current_class_id") or "").strip() or None
+    if not class_id and join_code:
+        resolved_admin_id = admin_id or session.get('admin_id')
+        if resolved_admin_id:
+            class_row = (
+                ClassEconomy.query.with_entities(ClassEconomy.class_id)
+                .filter_by(join_code=join_code, teacher_id=resolved_admin_id)
+                .first()
+            )
+            class_id = class_row.class_id if class_row else None
     scope = resolve_feature_class_for_class(class_id, feature_name) if class_id else None
-    if scope is None and (admin_id or session.get('admin_id')):
-        scope = resolve_feature_class(
-            admin_id or session.get('admin_id'),
-            feature_name,
-            join_code=join_code,
-        )
     return bool(scope["enabled"]) if scope else False
 
 
@@ -7330,12 +7332,11 @@ def insurance_management():
     if not class_context:
         flash("Select a class from the sidebar before managing insurance.", "warning")
         return redirect(url_for('admin.dashboard'))
-    selected_scope = resolve_feature_class(admin_id, 'insurance', join_code=class_context['join_code'])
+    selected_class_id = class_context['class_id']
+    selected_join_code = class_context['join_code']
+    selected_scope = resolve_feature_class_for_class(selected_class_id, 'insurance')
     if not selected_scope or not selected_scope.get('enabled'):
         abort(404)
-    settings_block = selected_scope['block']
-    selected_join_code = selected_scope['join_code']
-    selected_class_id = selected_scope['class_id']
     teacher_block = (
         TeacherBlock.query
         .filter_by(
@@ -7345,6 +7346,7 @@ def insurance_management():
         .order_by(TeacherBlock.id.asc())
         .first()
     )
+    settings_block = teacher_block.block if teacher_block else None
     active_class_label = teacher_block.get_class_label() if teacher_block else selected_join_code
 
     # Populate blocks choices from teacher's students

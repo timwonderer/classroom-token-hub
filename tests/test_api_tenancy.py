@@ -22,6 +22,7 @@ from app.models import (
     StudentTeacher,
     TapEvent,
     TeacherBlock,
+    User,
 )
 from app.hash_utils import get_random_salt, hash_username
 from tests.helpers.class_scope import create_class_scope
@@ -56,6 +57,11 @@ def _create_student(first_name: str, primary_teacher: Admin = None, linked_teach
     )
     db.session.add(student)
     db.session.flush()
+    db.session.add(User(
+        user_role=UserRole.STUDENT,
+        username_hash=student.username_hash,
+        pin_hash=student.pin_hash,
+    ))
     
     # Add student_teachers links
     if linked_teachers:
@@ -152,11 +158,15 @@ def _create_claimed_seat(teacher: Admin, student: Student, join_code: str, block
 
 
 def _get_or_create_student_seat(student: Student, class_id: str, join_code: str):
+    user = User.query.filter_by(username_hash=student.username_hash).first()
+    assert user is not None
     seat = Seat.query.filter_by(student_id=student.id, class_id=class_id).first()
     if seat:
+        seat.user_id = user.id
         return seat
     seat = Seat(
         student_id=student.id,
+        user_id=user.id,
         class_id=class_id,
         join_code=join_code,
         role="student",
@@ -208,6 +218,12 @@ def _login_student(client, student: Student, join_code: str | None = None):
             class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
             if class_row:
                 sess["current_class_id"] = class_row.class_id
+                seat = Seat.query.filter_by(student_id=student.id, class_id=class_row.class_id).first()
+                if seat:
+                    sess["current_seat_id"] = seat.id
+                    sess["seat_id"] = seat.id
+                    sess["class_id"] = class_row.class_id
+                    sess["user_id"] = seat.user_id
 
 
 def test_attendance_history_api_scoped_to_teacher(client):
@@ -605,10 +621,7 @@ def test_hall_pass_available_types_accepts_class_id_without_teacher_id(client):
 
     economy = ClassEconomy.query.filter_by(join_code="HALLA1").first()
     db.session.add(HallPassSettings(
-        teacher_id=teacher.id,
-        join_code="HALLA1",
         class_id=economy.class_id,
-        block="A",
         pass_types=[
             {"name": "Bathroom", "enabled": True},
             {"name": "Office", "enabled": False},
@@ -634,10 +647,7 @@ def test_hall_pass_available_types_rejects_when_feature_disabled_for_class(clien
 
     economy = ClassEconomy.query.filter_by(join_code="HALLD1").first()
     db.session.add(HallPassSettings(
-        teacher_id=teacher.id,
-        join_code="HALLD1",
         class_id=economy.class_id,
-        block="A",
         pass_types=[{"name": "Bathroom", "enabled": True}],
     ))
     db.session.commit()

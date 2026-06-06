@@ -624,12 +624,14 @@ def resolve_feature_class_for_class(
     from app.models import ClassEconomy, ClassFeature
 
     class_row = ClassEconomy.query.with_entities(ClassEconomy.join_code).filter_by(class_id=class_id).first()
+    if not class_row:
+        return None
     enabled = feature_name in ClassFeature.enabled_names_for_class(class_id)
     return {
         "class_id": class_id,
         "enabled": bool(enabled),
         "feature_name": feature_name,
-        "join_code": class_row.join_code if class_row else None,
+        "join_code": class_row.join_code,
     }
 
 
@@ -640,7 +642,11 @@ def get_class_feature_settings_for_class(
     if not has_app_context() or not class_id:
         return None
 
-    from app.models import ClassFeature
+    from app.models import ClassEconomy, ClassFeature
+
+    class_exists = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(class_id=class_id).first()
+    if not class_exists:
+        return None
 
     return {
         "class_id": class_id,

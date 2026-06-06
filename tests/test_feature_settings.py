@@ -5,9 +5,12 @@ from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import os
 import pytest
 import pyotp
+from flask import session
+
 from app import app, db
-from app.models import Admin, ClassEconomy, ClassFeature, FeatureSettings, TeacherOnboarding, TeacherBlock
-from app.routes.admin import get_admin_feature_join_code_options
+from app.models import Admin, ClassEconomy, ClassFeature, FeatureSettings, TeacherOnboarding, TeacherBlock, User, UserRole
+from app.routes.admin import get_admin_feature_join_code_options, is_admin_feature_enabled
+from tests.helpers.admin_context import login_admin
 from app.utils.economy_policy import (
     get_class_feature_settings_for_class,
     resolve_feature_class_for_class,
@@ -45,6 +48,16 @@ def test_admin():
     admin = make_admin('test_teacher', pyotp.random_base32(),
     )
     db.session.add(admin)
+    db.session.flush()
+    user = User(
+        user_role=UserRole.TEACHER,
+        username_hash=admin.username_hash,
+        username_lookup_hash=admin.username_lookup_hash,
+        totp_secret_encrypted=admin.totp_secret,
+    )
+    db.session.add(user)
+    db.session.flush()
+    admin.user_id = user.id
     db.session.commit()
     return admin
 
@@ -140,6 +153,11 @@ class TestClassFeatures:
         assert scoped['features']['hall_pass_enabled'] is True
         assert scoped['features']['insurance_enabled'] is False
 
+    def test_explicit_class_feature_helpers_reject_unknown_class_id(self, client):
+        """Canonical feature helpers must not synthesize scope for a missing class."""
+        assert resolve_feature_class_for_class('missing-class', 'hall_pass') is None
+        assert get_class_feature_settings_for_class('missing-class') is None
+
     def test_admin_feature_join_code_options_do_not_depend_on_teacher_block(self, client, test_admin):
         """Enabled class options should come from class scope, not TeacherBlock discovery."""
         economy_a = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
@@ -159,6 +177,40 @@ class TestClassFeatures:
             'block': '',
             'label': economy_a.display_name,
         }]
+
+    def test_admin_feature_gate_resolves_join_code_through_class_scope(self, client, test_admin):
+        """Boundary join codes resolve through ClassEconomy without TeacherBlock authority."""
+        economy = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
+        db.session.add(ClassFeature(class_id=economy.class_id, feature_name='insurance'))
+        TeacherBlock.query.filter_by(
+            teacher_id=test_admin.id,
+            join_code=economy.join_code,
+        ).delete(synchronize_session=False)
+        db.session.commit()
+
+        with app.test_request_context('/admin/insurance'):
+            session['admin_id'] = test_admin.id
+            assert is_admin_feature_enabled(
+                'insurance',
+                admin_id=test_admin.id,
+                join_code=economy.join_code,
+            ) is True
+
+    def test_admin_feature_gate_prefers_active_class_id(self, client, test_admin):
+        """An explicit active class must not be overridden by another class's join code."""
+        economy_a = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
+        economy_b = _create_class_scope(test_admin, block='B', join_code='JOIN_B')
+        db.session.add(ClassFeature(class_id=economy_a.class_id, feature_name='insurance'))
+        db.session.commit()
+
+        with app.test_request_context('/admin/insurance'):
+            session['admin_id'] = test_admin.id
+            session['current_class_id'] = economy_b.class_id
+            assert is_admin_feature_enabled(
+                'insurance',
+                admin_id=test_admin.id,
+                join_code=economy_a.join_code,
+            ) is False
 
 
 class TestTeacherOnboarding:
@@ -254,9 +306,7 @@ class TestFeatureSettingsRoutes:
 
     def test_feature_settings_page_accessible_when_logged_in(self, client, test_admin):
         """Test that feature settings page is accessible when logged in."""
-        with client.session_transaction() as sess:
-            sess['is_admin'] = True
-            sess['admin_id'] = test_admin.id
+        login_admin(client, test_admin.id, user_id=test_admin.user_id)
 
         response = client.get('/admin/feature-settings')
         assert response.status_code == 200
@@ -277,9 +327,7 @@ class TestOnboardingRoutes:
         db.session.add(onboarding)
         db.session.commit()
 
-        with client.session_transaction() as sess:
-            sess['is_admin'] = True
-            sess['admin_id'] = test_admin.id
+        login_admin(client, test_admin.id, user_id=test_admin.user_id)
 
         response = client.post('/admin/onboarding/skip',
                                content_type='application/json')

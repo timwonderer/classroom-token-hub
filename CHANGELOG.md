@@ -25,8 +25,11 @@ and this project follows semantic versioning principles.
   callers in already-completed Wave 4 surfaces now resolve feature enablement
   from `class_id` first instead of rebuilding scope from
   `teacher_id + block/join_code`. Focused regressions cover class-scoped helper
-  behavior and admin join-code option discovery without `TeacherBlock`
-  authority.
+  behavior, admin join-code option discovery without `TeacherBlock` authority,
+  insurance management feature gating from the active class, fail-closed
+  handling for unknown class IDs, and canonical user/seat contexts in feature
+  enforcement tests. The hall-pass legacy-scope migration now safely handles a
+  missing table and restores its teacher foreign key on downgrade.
 - **Wave 4 class-configuration canonicalization completed** — The active class
   configuration tables now align on `class_id` as the runtime and schema
   boundary: `class_features`, `feature_settings`, `hall_pass_settings`,

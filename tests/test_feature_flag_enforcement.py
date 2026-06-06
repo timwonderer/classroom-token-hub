@@ -27,6 +27,32 @@ def _bind_canonical_teacher(teacher):
     return user
 
 
+def _bind_canonical_student(student):
+    user = User(
+        user_role=UserRole.STUDENT,
+        username_hash=student.username_hash,
+        passphrase_hash=student.passphrase_hash,
+    )
+    db.session.add(user)
+    db.session.flush()
+    return user
+
+
+def _login_student(client, data, *, transfer_token=None):
+    with client.session_transaction() as sess:
+        sess['student_id'] = data['student'].id
+        sess['user_id'] = data['user_id']
+        sess['current_join_code'] = data['join_code']
+        sess['current_class_id'] = data['class_id']
+        sess['class_id'] = data['class_id']
+        sess['current_seat_id'] = data['seat_id']
+        sess['seat_id'] = data['seat_id']
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+        sess['current_period'] = data['period']
+        if transfer_token:
+            sess['transfer_token'] = transfer_token
+
+
 @pytest.fixture
 def setup_student_with_disabled_banking(client):
     """Create a student with banking feature disabled."""
@@ -47,6 +73,7 @@ def setup_student_with_disabled_banking(client):
     )
     db.session.add(student)
     db.session.flush()
+    user = _bind_canonical_student(student)
     
     # Link student to teacher
     from app.models import StudentTeacher
@@ -87,6 +114,7 @@ def setup_student_with_disabled_banking(client):
         role='student',
         join_code=join_code,
         student_id=student.id,
+        user_id=user.id,
         block="Period1",
         block_identifier="Period1",
         claimed_at=datetime.now(timezone.utc),
@@ -121,21 +149,15 @@ def setup_student_with_disabled_banking(client):
         'join_code': join_code,
         'class_id': economy.class_id,
         'seat_id': student_seat.id,
+        'user_id': user.id,
+        'period': 'Period1',
     }
 
 
 def test_transfer_blocked_when_banking_disabled(client, setup_student_with_disabled_banking):
     """Test that transfer route is blocked when banking is disabled."""
     data = setup_student_with_disabled_banking
-    student = data['student']
-    join_code = data['join_code']
-    
-    # Login as student
-    with client.session_transaction() as sess:
-        sess['student_id'] = student.id
-        sess['current_join_code'] = join_code
-        sess['login_time'] = datetime.now(timezone.utc).isoformat()
-        sess['current_period'] = 'Period1'
+    _login_student(client, data)
     
     # Try to access transfer page (GET)
     response = client.get('/student/transfer', follow_redirects=False)
@@ -146,16 +168,7 @@ def test_transfer_blocked_when_banking_disabled(client, setup_student_with_disab
 def test_transfer_post_blocked_when_banking_disabled(client, setup_student_with_disabled_banking):
     """Test that transfer POST is blocked when banking is disabled."""
     data = setup_student_with_disabled_banking
-    student = data['student']
-    join_code = data['join_code']
-    
-    # Login as student
-    with client.session_transaction() as sess:
-        sess['student_id'] = student.id
-        sess['current_join_code'] = join_code
-        sess['login_time'] = datetime.now(timezone.utc).isoformat()
-        sess['current_period'] = 'Period1'
-        sess['transfer_token'] = 'test-token-blocked'
+    _login_student(client, data, transfer_token='test-token-blocked')
     
     # Try to submit a transfer (POST)
     response = client.post('/student/transfer', data={
@@ -179,15 +192,7 @@ def test_transfer_post_blocked_when_banking_disabled(client, setup_student_with_
 def test_payroll_blocked_when_payroll_disabled(client, setup_student_with_disabled_banking):
     """Test that payroll route is blocked when payroll is disabled."""
     data = setup_student_with_disabled_banking
-    student = data['student']
-    join_code = data['join_code']
-    
-    # Login as student
-    with client.session_transaction() as sess:
-        sess['student_id'] = student.id
-        sess['current_join_code'] = join_code
-        sess['login_time'] = datetime.now(timezone.utc).isoformat()
-        sess['current_period'] = 'Period1'
+    _login_student(client, data)
     
     # Try to access payroll page
     response = client.get('/student/payroll', follow_redirects=False)
@@ -215,6 +220,7 @@ def setup_student_with_enabled_banking(client):
     )
     db.session.add(student)
     db.session.flush()
+    user = _bind_canonical_student(student)
 
     # Link student to teacher
     from app.models import StudentTeacher
@@ -255,6 +261,7 @@ def setup_student_with_enabled_banking(client):
         role='student',
         join_code=join_code,
         student_id=student.id,
+        user_id=user.id,
         block="Period2",
         block_identifier="Period2",
         claimed_at=datetime.now(timezone.utc),
@@ -284,22 +291,15 @@ def setup_student_with_enabled_banking(client):
         'join_code': join_code,
         'class_id': economy.class_id,
         'seat_id': student_seat.id,
+        'user_id': user.id,
+        'period': 'Period2',
     }
 
 
 def test_transfer_allowed_when_banking_enabled(client, setup_student_with_enabled_banking):
     """Test that transfer routes are not blocked by the feature flag when enabled."""
     data = setup_student_with_enabled_banking
-    student = data['student']
-    join_code = data['join_code']
-    
-    # Login as student
-    with client.session_transaction() as sess:
-        sess['student_id'] = student.id
-        sess['current_join_code'] = join_code
-        sess['login_time'] = datetime.now(timezone.utc).isoformat()
-        sess['current_period'] = 'Period2'
-        sess['transfer_token'] = 'test-token-allowed'
+    _login_student(client, data, transfer_token='test-token-allowed')
     
     # Access transfer page (GET) should work
     response = client.get('/student/transfer', follow_redirects=False)
@@ -322,15 +322,7 @@ def test_transfer_allowed_when_banking_enabled(client, setup_student_with_enable
 def test_payroll_allowed_when_payroll_enabled(client, setup_student_with_enabled_banking):
     """Test that payroll works normally when payroll is enabled."""
     data = setup_student_with_enabled_banking
-    student = data['student']
-    join_code = data['join_code']
-    
-    # Login as student
-    with client.session_transaction() as sess:
-        sess['student_id'] = student.id
-        sess['current_join_code'] = join_code
-        sess['login_time'] = datetime.now(timezone.utc).isoformat()
-        sess['current_period'] = 'Period2'
+    _login_student(client, data)
     
     # Access payroll page should work
     response = client.get('/student/payroll', follow_redirects=False)
@@ -341,7 +333,8 @@ def test_payroll_allowed_when_payroll_enabled(client, setup_student_with_enabled
 def test_admin_banking_rejects_disabled_class_scope(client):
     teacher = make_admin("teacher_admin_feature_scope", "secret789")
     db.session.add(teacher)
-    db.session.commit()
+    db.session.flush()
+    user = _bind_canonical_teacher(teacher)
 
     join_code = "BANKA1"
     economy = ClassEconomy(
@@ -353,6 +346,13 @@ def test_admin_banking_rejects_disabled_class_scope(client):
     db.session.add(economy)
     db.session.flush()
     db.session.add(ClassMembership(join_code=join_code, admin_id=teacher.id, role="admin"))
+    teacher_seat = Seat(
+        class_id=economy.class_id,
+        join_code=join_code,
+        role="teacher",
+        user_id=user.id,
+    )
+    db.session.add(teacher_seat)
 
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
@@ -371,12 +371,18 @@ def test_admin_banking_rejects_disabled_class_scope(client):
         db.session.delete(row)
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess['is_admin'] = True
-        sess['admin_id'] = teacher.id
+    login_admin(
+        client,
+        teacher.id,
+        join_code,
+        user_id=user.id,
+        class_id=economy.class_id,
+        seat_id=teacher_seat.id,
+    )
 
     response = client.get('/admin/banking?settings_block=A')
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert b"is disabled for this class" in response.data
 
 
 def _create_admin_feature_scope(teacher, *, join_code, block, feature_name, enabled):
@@ -411,6 +417,7 @@ def _create_admin_feature_scope(teacher, *, join_code, block, feature_name, enab
         class_id=economy.class_id,
         join_code=join_code,
         role="teacher",
+        user_id=teacher.user_id,
     )
     db.session.add(teacher_seat)
 
@@ -423,17 +430,22 @@ def _create_admin_feature_scope(teacher, *, join_code, block, feature_name, enab
 def test_admin_store_rejects_disabled_class_scope(client):
     teacher = make_admin("teacher_admin_store_scope", "secret_store_scope")
     db.session.add(teacher)
-    db.session.commit()
+    db.session.flush()
+    user = _bind_canonical_teacher(teacher)
 
     _create_admin_feature_scope(teacher, join_code="STORE1", block="1", feature_name="store", enabled=True)
     disabled_economy = _create_admin_feature_scope(teacher, join_code="STORE2", block="2", feature_name="store", enabled=False)
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess['is_admin'] = True
-        sess['admin_id'] = teacher.id
-        sess['current_join_code'] = 'STORE2'
-        sess['current_class_id'] = disabled_economy.class_id
+    teacher_seat = Seat.query.filter_by(class_id=disabled_economy.class_id, role="teacher").first()
+    login_admin(
+        client,
+        teacher.id,
+        'STORE2',
+        user_id=user.id,
+        class_id=disabled_economy.class_id,
+        seat_id=teacher_seat.id,
+    )
 
     response = client.get('/admin/store')
     assert response.status_code == 200
@@ -443,17 +455,22 @@ def test_admin_store_rejects_disabled_class_scope(client):
 def test_admin_hall_pass_rejects_disabled_class_scope(client):
     teacher = make_admin("teacher_admin_hall_scope", "secret_hall_scope")
     db.session.add(teacher)
-    db.session.commit()
+    db.session.flush()
+    user = _bind_canonical_teacher(teacher)
 
     _create_admin_feature_scope(teacher, join_code="HALL1", block="1", feature_name="hall_pass", enabled=True)
     disabled_economy = _create_admin_feature_scope(teacher, join_code="HALL2", block="2", feature_name="hall_pass", enabled=False)
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess['is_admin'] = True
-        sess['admin_id'] = teacher.id
-        sess['current_join_code'] = 'HALL2'
-        sess['current_class_id'] = disabled_economy.class_id
+    teacher_seat = Seat.query.filter_by(class_id=disabled_economy.class_id, role="teacher").first()
+    login_admin(
+        client,
+        teacher.id,
+        'HALL2',
+        user_id=user.id,
+        class_id=disabled_economy.class_id,
+        seat_id=teacher_seat.id,
+    )
 
     response = client.get('/admin/hall-pass')
     assert response.status_code == 200
@@ -491,7 +508,8 @@ def test_admin_payroll_rejects_disabled_class_scope(client):
 def test_admin_store_delete_rejects_disabled_class_scope(client):
     teacher = make_admin("teacher_admin_store_delete_scope", "secret_store_delete_scope")
     db.session.add(teacher)
-    db.session.commit()
+    db.session.flush()
+    user = _bind_canonical_teacher(teacher)
 
     _create_admin_feature_scope(teacher, join_code="STD1", block="1", feature_name="store", enabled=True)
     disabled_economy = _create_admin_feature_scope(teacher, join_code="STD2", block="2", feature_name="store", enabled=False)
@@ -507,11 +525,15 @@ def test_admin_store_delete_rejects_disabled_class_scope(client):
     db.session.add(store_item)
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess['is_admin'] = True
-        sess['admin_id'] = teacher.id
-        sess['current_join_code'] = 'STD2'
-        sess['current_class_id'] = disabled_economy.class_id
+    teacher_seat = Seat.query.filter_by(class_id=disabled_economy.class_id, role="teacher").first()
+    login_admin(
+        client,
+        teacher.id,
+        'STD2',
+        user_id=user.id,
+        class_id=disabled_economy.class_id,
+        seat_id=teacher_seat.id,
+    )
 
     response = client.post(
         f'/admin/store/delete/{store_item.id}',
@@ -540,6 +562,7 @@ def test_student_rent_rejects_disabled_feature_scope(client):
     )
     db.session.add(student)
     db.session.flush()
+    user = _bind_canonical_student(student)
 
     from app.models import StudentTeacher
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
@@ -568,16 +591,30 @@ def test_student_rent_rejects_disabled_feature_scope(client):
         is_claimed=True,
         claimed_at=datetime.now(timezone.utc)
     ))
+    student_seat = Seat(
+        class_id=economy.class_id,
+        join_code=join_code,
+        role='student',
+        student_id=student.id,
+        user_id=user.id,
+        block='Period3',
+        block_identifier='Period3',
+        claimed_at=datetime.now(timezone.utc),
+    )
+    db.session.add(student_seat)
 
     for row in ClassFeature.query.filter_by(class_id=economy.class_id, feature_name='rent').all():
         db.session.delete(row)
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess['student_id'] = student.id
-        sess['current_join_code'] = join_code
-        sess['login_time'] = datetime.now(timezone.utc).isoformat()
-        sess['current_period'] = 'Period3'
+    _login_student(client, {
+        'student': student,
+        'user_id': user.id,
+        'join_code': join_code,
+        'class_id': economy.class_id,
+        'seat_id': student_seat.id,
+        'period': 'Period3',
+    })
 
     response = client.get('/student/rent', follow_redirects=False)
     assert response.status_code == 404

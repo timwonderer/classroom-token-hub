@@ -1721,6 +1721,8 @@ Focused validation:
       `TeacherBlock`
     - join-code-to-feature-settings helper now resolves `class_id` from
       `ClassEconomy` and reads class features directly
+    - insurance management now gates and loads policies from the active
+      `class_id`; `TeacherBlock` is retained only for the optional display block
   - `app/routes/student.py`
     - student feature settings and feature-enabled checks now read from
       canonical `class_id`
@@ -1732,12 +1734,29 @@ Focused validation:
       canonical `class_id`
 - Validation:
   - `./venv/bin/python -m py_compile app/utils/economy_policy.py app/routes/admin.py app/routes/api.py app/routes/student.py app/feats/attendance.py tests/test_feature_settings.py tests/test_api_tenancy.py` → pass
-  - `pytest -q tests/test_feature_settings.py -k "resolve_feature_class_for_class or get_class_feature_settings_for_class or admin_feature_join_code_options"` → `3 passed`
+  - `pytest -q tests/test_feature_settings.py -k "resolve_feature_class_for_class or get_class_feature_settings_for_class or explicit_class_feature_helpers or admin_feature"` → `6 passed`
+  - `pytest -q tests/test_feature_settings.py tests/test_feature_flag_enforcement.py` → `34 passed`
+  - `pytest -q tests/test_api_tenancy.py -k "hall_pass_available_types"` → `4 passed`, `15 deselected`
+  - `./venv/bin/python scripts/lint_migrations.py migrations/versions/e0babef88934_remove_legacy_scope_columns_from_.py` → pass
+  - `flask db downgrade c8f1e2d3a4b5` → pass
+  - `flask db upgrade` → pass
+  - `flask db heads` and `flask db current --verbose` → `4b1e8f2c6d90 (head)`
   - `git diff --check` → clean
+- Follow-through fixes:
+  - explicit `class_id` feature helpers now return no scope for a nonexistent
+    `ClassEconomy` instead of synthesizing an all-disabled feature map
+  - hall-pass tenancy fixtures now construct `HallPassSettings` with canonical
+    `class_id` only and use claimed canonical user/seat session context
+  - feature-enforcement route tests now authenticate through canonical teacher
+    and student principals before asserting feature-gate behavior
+  - the hall-pass legacy-scope migration now no-ops when the table is absent and
+    idempotently restores the teacher foreign key during downgrade
+  - one-off root helper scripts and captured test-output files were removed from
+    the branch patch
 - Remaining follow-up:
   - `app/routes/admin.py` still has non-completed-surface legacy wrappers and a
-    few untouched feature reads outside this slice (`insurance` and older
-    settings admin routes). Those remain for the next authority-reduction pass.
+    few untouched feature reads outside this slice (older settings admin
+    routes). Those remain for the next authority-reduction pass.
 
 ### Status Update (2026-06-05): Post-Wave 4 Cleanup — TLCP, Sysadmin Probe, and Payroll Authority Cutover
 
