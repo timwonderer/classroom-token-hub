@@ -1306,6 +1306,8 @@ def _hard_delete_class_scope(class_id, teacher_id):
 
     # Financial ledger (only here)
     Transaction.query.filter(Transaction.class_id == class_id).delete(synchronize_session=False)
+    PayrollSettings.query.filter(PayrollSettings.class_id == class_id).delete(synchronize_session=False)
+    RentSettings.query.filter(RentSettings.class_id == class_id).delete(synchronize_session=False)
 
     # Remove store items tied only to this class block scope.
     if class_blocks:
@@ -1382,27 +1384,6 @@ def _hard_delete_class_scope(class_id, teacher_id):
     Student.query.filter(
         Student.id.in_(sa.select(orphan_student_ids))
     ).delete(synchronize_session=False)
-
-    # Clean up PayrollSettings and RentSettings for any block name that now has no
-    # remaining TeacherBlock entries for this teacher.  These models are scoped by
-    # teacher_id + block name (not join_code), so they are not caught above.
-    # Only delete when the block truly has no seats left — preserving settings for
-    # teachers who still teach other join codes under the same block name.
-    if class_blocks:
-        for block_name in class_blocks:
-            remaining = db.session.query(TeacherBlock).filter(
-                TeacherBlock.teacher_id == teacher_id,
-                TeacherBlock.block == block_name,
-                TeacherBlock.class_id != class_id,
-            ).count()
-            if remaining == 0:
-                PayrollSettings.query.filter_by(
-                    teacher_id=teacher_id, block=block_name
-                ).delete(synchronize_session=False)
-                RentSettings.query.filter_by(
-                    teacher_id=teacher_id, block=block_name
-                ).delete(synchronize_session=False)
-
 
 def _delete_teacher_residual_ownership_rows(teacher_id):
     """Delete teacher-owned link rows not already removed by join-code scoped deletion."""

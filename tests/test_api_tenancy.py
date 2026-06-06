@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from app import app, db
 from app.models import (
+    UserRole,
     Admin,
     ClassFeature,
     ClassEconomy,

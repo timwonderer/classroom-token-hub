@@ -10,10 +10,44 @@ import pytest
 from datetime import datetime, timezone, timedelta
 from app.models import (
     Student, Admin, HallPassLog, StudentTeacher, HallPassSettings, TeacherBlock, ClassEconomy, Seat,
-    AttendanceSession, SeatAttendanceState
+    AttendanceSession, SeatAttendanceState, User, UserRole
 )
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
+from app.utils.auth_username import build_hashed_username_fields
+
+
+def _make_canonical_user(*, username: str, role: UserRole) -> User:
+    salt, username_hash, username_lookup_hash = build_hashed_username_fields(username)
+    user = User(
+        user_role=role,
+        username_hash=username_hash,
+        username_lookup_hash=username_lookup_hash,
+    )
+    db.session.add(user)
+    db.session.flush()
+    return user
+
+
+def _login_student_context(client, *, student: Student, user: User, seat: Seat, login_time: str | None = None) -> None:
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['user_id'] = user.id
+        sess['current_seat_id'] = seat.id
+        sess['current_class_id'] = seat.class_id
+        sess['current_join_code'] = seat.join_code
+        sess['is_student'] = True
+        sess['login_time'] = login_time or datetime.now(timezone.utc).isoformat()
+
+
+def _login_admin_context(client, *, teacher: Admin, user: User, class_id: str, join_code: str) -> None:
+    with client.session_transaction() as sess:
+        sess['is_admin'] = True
+        sess['admin_id'] = teacher.id
+        sess['user_id'] = user.id
+        sess['current_class_id'] = class_id
+        sess['current_join_code'] = join_code
+        sess['last_activity'] = datetime.now(timezone.utc).isoformat()
 
 
 @pytest.fixture
@@ -22,9 +56,14 @@ def setup_hall_pass_checkout_test(client):
     # Create teacher
     teacher = make_admin("teacher1", "secret1")
     db.session.add(teacher)
+    db.session.flush()
+    teacher_user = _make_canonical_user(username="teacher1", role=UserRole.TEACHER)
+    teacher.user_id = teacher_user.id
     db.session.commit()
 
     # Create student
+    user = _make_canonical_user(username="alice_a", role=UserRole.STUDENT)
+
     salt = get_random_salt()
     student = Student(
         first_name="Alice",
@@ -53,10 +92,7 @@ def setup_hall_pass_checkout_test(client):
 
     # Create hall pass settings
     settings = HallPassSettings(
-        teacher_id=teacher.id,
-        join_code="TEST123",
         class_id=economy.class_id,
-        block="Period1",
         queue_enabled=True,
         queue_limit=10,
         pass_types=[
@@ -69,6 +105,7 @@ def setup_hall_pass_checkout_test(client):
 
     now = datetime.now(timezone.utc)
     seat = Seat(
+        user_id=user.id,
         student_id=student.id,
         class_id=economy.class_id,
         join_code=economy.join_code,
@@ -114,7 +151,11 @@ def setup_hall_pass_checkout_test(client):
 
     return {
         'teacher': teacher,
+        'teacher_user': teacher_user,
         'student': student,
+        'student_user': user,
+        'seat': seat,
+        'economy': economy,
         'hall_pass': hall_pass,
         'settings': settings
     }
@@ -124,14 +165,11 @@ def test_checkout_with_approved_pass(client, setup_hall_pass_checkout_test):
     """Test that student can check out with an approved hall pass."""
     data = setup_hall_pass_checkout_test
     student = data['student']
+    user = data['student_user']
+    seat = data['seat']
     hall_pass = data['hall_pass']
 
-    # Login as student
-    with client.session_transaction() as sess:
-        sess['student_id'] = student.id
-        sess['is_student'] = True
-        sess['current_class_id'] = hall_pass.class_id
-        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+    _login_student_context(client, student=student, user=user, seat=seat)
 
     # Checkout
     response = client.post('/api/hall-pass/checkout',
@@ -173,6 +211,7 @@ def test_approve_does_not_generate_pass_number(client, setup_hall_pass_checkout_
     data = setup_hall_pass_checkout_test
     student = data['student']
     teacher = data['teacher']
+    teacher_user = data['teacher_user']
     hall_pass = data['hall_pass']
 
     hall_pass.status = 'pending'
@@ -180,10 +219,13 @@ def test_approve_does_not_generate_pass_number(client, setup_hall_pass_checkout_
     hall_pass.decision_time = None
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess['is_admin'] = True
-        sess['admin_id'] = teacher.id
-        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+    _login_admin_context(
+        client,
+        teacher=teacher,
+        user=teacher_user,
+        class_id=hall_pass.class_id,
+        join_code=hall_pass.join_code,
+    )
 
     response = client.post(
         f'/api/hall-pass/{hall_pass.id}/approve',
@@ -204,6 +246,8 @@ def test_checkout_blocked_by_simultaneous_limit(client, setup_hall_pass_checkout
     """Test that checkout is blocked when simultaneous limit is reached."""
     data = setup_hall_pass_checkout_test
     student = data['student']
+    user = data['student_user']
+    seat = data['seat']
     hall_pass = data['hall_pass']
 
     # Create 2 other students already out for bathroom (limit is 2)
@@ -236,11 +280,7 @@ def test_checkout_blocked_by_simultaneous_limit(client, setup_hall_pass_checkout
     db.session.commit()
 
     # Login as student
-    with client.session_transaction() as sess:
-        sess['student_id'] = student.id
-        sess['is_student'] = True
-        sess['current_class_id'] = hall_pass.class_id
-        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+    _login_student_context(client, student=student, user=user, seat=seat)
 
     # Try to checkout (should fail due to limit)
     response = client.post('/api/hall-pass/checkout',
@@ -261,6 +301,8 @@ def test_checkin_with_left_pass(client, setup_hall_pass_checkout_test):
     """Test that student can check in when they're currently out."""
     data = setup_hall_pass_checkout_test
     student = data['student']
+    user = data['student_user']
+    seat = data['seat']
     hall_pass = data['hall_pass']
 
     # Set pass to 'left' status
@@ -270,11 +312,7 @@ def test_checkin_with_left_pass(client, setup_hall_pass_checkout_test):
     db.session.commit()
 
     # Login as student
-    with client.session_transaction() as sess:
-        sess['student_id'] = student.id
-        sess['is_student'] = True
-        sess['current_class_id'] = hall_pass.class_id
-        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+    _login_student_context(client, student=student, user=user, seat=seat)
 
     # Checkin
     response = client.post('/api/hall-pass/checkin',
@@ -326,8 +364,10 @@ def test_checkout_rejects_wrong_student(client, setup_hall_pass_checkout_test):
     """Test that student cannot check out another student's pass."""
     data = setup_hall_pass_checkout_test
     hall_pass = data['hall_pass']
+    economy = data['economy']
 
     # Create another student
+    other_user = _make_canonical_user(username="bob_b", role=UserRole.STUDENT)
     salt = get_random_salt()
     other_student = Student(
         first_name="Bob",
@@ -337,14 +377,36 @@ def test_checkout_rejects_wrong_student(client, setup_hall_pass_checkout_test):
         username_hash=hash_username("bob_b", salt)
     )
     db.session.add(other_student)
+    db.session.flush()
+    other_seat = Seat(
+        user_id=other_user.id,
+        student_id=other_student.id,
+        class_id=economy.class_id,
+        join_code=economy.join_code,
+        block="Period1",
+        block_identifier="Period1",
+        role="student",
+        claimed_at=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+    db.session.add(other_seat)
+    db.session.add(TeacherBlock(
+        teacher_id=data['teacher'].id,
+        class_id=economy.class_id,
+        block="Period1",
+        class_label="Period1",
+        first_name=other_student.first_name,
+        last_initial=other_student.last_initial,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
+        salt=b"seat-salt-bob",
+        first_half_hash="seat-hash-bob",
+        join_code=economy.join_code,
+        student_id=other_student.id,
+        is_claimed=True,
+    ))
     db.session.commit()
 
-    # Login as other student
-    with client.session_transaction() as sess:
-        sess['student_id'] = other_student.id
-        sess['is_student'] = True
-        sess['current_class_id'] = hall_pass.class_id
-        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+    _login_student_context(client, student=other_student, user=other_user, seat=other_seat)
 
     # Try to checkout Alice's pass
     response = client.post('/api/hall-pass/checkout',
@@ -361,6 +423,8 @@ def test_checkout_rejects_non_approved_pass(client, setup_hall_pass_checkout_tes
     """Test that checkout fails if pass is not in approved status."""
     data = setup_hall_pass_checkout_test
     student = data['student']
+    user = data['student_user']
+    seat = data['seat']
     hall_pass = data['hall_pass']
 
     # Set pass to 'pending' status
@@ -368,11 +432,7 @@ def test_checkout_rejects_non_approved_pass(client, setup_hall_pass_checkout_tes
     db.session.commit()
 
     # Login as student
-    with client.session_transaction() as sess:
-        sess['student_id'] = student.id
-        sess['is_student'] = True
-        sess['current_class_id'] = hall_pass.class_id
-        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+    _login_student_context(client, student=student, user=user, seat=seat)
 
     # Try to checkout
     response = client.post('/api/hall-pass/checkout',
@@ -389,17 +449,15 @@ def test_checkin_rejects_non_left_pass(client, setup_hall_pass_checkout_test):
     """Test that checkin fails if pass is not in left status."""
     data = setup_hall_pass_checkout_test
     student = data['student']
+    user = data['student_user']
+    seat = data['seat']
     hall_pass = data['hall_pass']
 
     # Pass is still in 'approved' status
     assert hall_pass.status == 'approved'
 
     # Login as student
-    with client.session_transaction() as sess:
-        sess['student_id'] = student.id
-        sess['is_student'] = True
-        sess['current_class_id'] = hall_pass.class_id
-        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+    _login_student_context(client, student=student, user=user, seat=seat)
 
     # Try to checkin
     response = client.post('/api/hall-pass/checkin',
@@ -416,6 +474,8 @@ def test_checkout_rejects_mismatched_class_context(client, setup_hall_pass_check
     """Checkout should fail when active class context does not match pass class_id."""
     data = setup_hall_pass_checkout_test
     student = data['student']
+    user = data['student_user']
+    seat = data['seat']
     hall_pass = data['hall_pass']
     teacher = data['teacher']
 
@@ -428,7 +488,8 @@ def test_checkout_rejects_mismatched_class_context(client, setup_hall_pass_check
     )
     db.session.add(other_economy)
     db.session.flush()
-    db.session.add(Seat(
+    other_seat = Seat(
+        user_id=user.id,
         student_id=student.id,
         class_id=other_economy.class_id,
         join_code=other_economy.join_code,
@@ -436,7 +497,8 @@ def test_checkout_rejects_mismatched_class_context(client, setup_hall_pass_check
         block_identifier="Period2",
         role="student",
         claimed_at=datetime.now(timezone.utc) - timedelta(days=1),
-    ))
+    )
+    db.session.add(other_seat)
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
         class_id=other_economy.class_id,
@@ -454,12 +516,7 @@ def test_checkout_rejects_mismatched_class_context(client, setup_hall_pass_check
     ))
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess['student_id'] = student.id
-        sess['is_student'] = True
-        sess['current_class_id'] = other_economy.class_id
-        sess['current_join_code'] = "OTHER123"
-        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+    _login_student_context(client, student=student, user=user, seat=other_seat)
 
     response = client.post(
         '/api/hall-pass/checkout',
@@ -477,6 +534,7 @@ def test_cancel_rejects_mismatched_class_context(client, setup_hall_pass_checkou
     """Cancel should fail when active class context does not match pass class_id."""
     data = setup_hall_pass_checkout_test
     student = data['student']
+    user = data['student_user']
     hall_pass = data['hall_pass']
     teacher = data['teacher']
 
@@ -491,7 +549,8 @@ def test_cancel_rejects_mismatched_class_context(client, setup_hall_pass_checkou
     )
     db.session.add(other_economy)
     db.session.flush()
-    db.session.add(Seat(
+    other_seat = Seat(
+        user_id=user.id,
         student_id=student.id,
         class_id=other_economy.class_id,
         join_code=other_economy.join_code,
@@ -499,7 +558,8 @@ def test_cancel_rejects_mismatched_class_context(client, setup_hall_pass_checkou
         block_identifier="Period2",
         role="student",
         claimed_at=datetime.now(timezone.utc) - timedelta(days=1),
-    ))
+    )
+    db.session.add(other_seat)
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
         class_id=other_economy.class_id,
@@ -517,12 +577,7 @@ def test_cancel_rejects_mismatched_class_context(client, setup_hall_pass_checkou
     ))
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess['student_id'] = student.id
-        sess['is_student'] = True
-        sess['current_class_id'] = other_economy.class_id
-        sess['current_join_code'] = "OTHER123"
-        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+    _login_student_context(client, student=student, user=user, seat=other_seat)
 
     response = client.post(
         f'/api/hall-pass/cancel/{hall_pass.id}',

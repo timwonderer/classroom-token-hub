@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from app import db
 from app.models import (
     Admin,
+    ClassEconomy,
     Student,
     StudentTeacher,
     TeacherBlock,
@@ -25,6 +26,8 @@ from app.models import (
     RentSettings,
     SystemAdmin,
     StudentBlock,
+    User,
+    UserRole,
 )
 from app.hash_utils import get_random_salt, hash_hmac
 from tests.helpers.class_scope import create_class_scope
@@ -42,6 +45,15 @@ def _create_teacher(username: str) -> tuple[Admin, str, str]:
         secret,
     )
     db.session.add(teacher)
+    salt, username_hash, username_lookup_hash = build_hashed_username_fields(username)
+    user = User(
+        user_role=UserRole.TEACHER,
+        username_hash=username_hash,
+        username_lookup_hash=username_lookup_hash,
+    )
+    db.session.add(user)
+    db.session.flush()
+    teacher.user_id = user.id
     db.session.commit()
     return teacher, secret, username
 
@@ -72,7 +84,7 @@ def _create_student(teacher: Admin, first_name: str, block: str, join_code: str)
     db.session.add(student)
     db.session.flush()
 
-    create_class_scope(
+    class_row = create_class_scope(
         teacher=teacher,
         join_code=join_code,
         student=student,
@@ -82,6 +94,7 @@ def _create_student(teacher: Admin, first_name: str, block: str, join_code: str)
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
+        class_id=class_row.class_id,
         block=block,
         first_name=first_name,
         last_initial=first_name[0].upper(),
@@ -103,9 +116,20 @@ def _login_teacher(client, teacher: Admin, secret: str, username: str):
         data={"username": username, "totp_code": pyotp.TOTP(secret).now()},
         follow_redirects=True,
     )
+    class_row = (
+        db.session.query(ClassEconomy)
+        .filter_by(teacher_id=teacher.id)
+        .order_by(ClassEconomy.created_at.asc(), ClassEconomy.join_code.asc())
+        .first()
+    )
     with client.session_transaction() as sess:
         sess["is_admin"] = True
         sess["admin_id"] = teacher.id
+        if teacher.user_id:
+            sess["user_id"] = teacher.user_id
+        if class_row:
+            sess["current_class_id"] = class_row.class_id
+            sess["current_join_code"] = class_row.join_code
         sess["last_activity"] = datetime.now(timezone.utc).isoformat()
 
 
@@ -288,8 +312,10 @@ def test_rent_settings_deleted_when_last_join_code_for_block_removed(client):
     """RentSettings for block 'A' must be removed when no TeacherBlock remains for it."""
     teacher, secret, teacher_username = _create_teacher("teacher-rs-del")
     _create_student(teacher, "Raj", "A", "RSDEL1")
+    class_row = db.session.query(ClassEconomy).filter_by(join_code="RSDEL1").first()
+    assert class_row is not None
 
-    rs = RentSettings(teacher_id=teacher.id, block="A", rent_amount=50)
+    rs = RentSettings(class_id=class_row.class_id, block="A", rent_amount=50)
     db.session.add(rs)
     db.session.commit()
     rs_id = rs.id
@@ -306,6 +332,7 @@ def test_rent_settings_deleted_when_last_join_code_for_block_removed(client):
     )
     assert resp.get_json()["status"] == "success"
 
+    db.session.expire_all()
     assert db.session.get(RentSettings, rs_id) is None
 
 

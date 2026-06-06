@@ -50,34 +50,14 @@ class HallPassRequestGuardResult(TapGuardResult):
     should_require_pass: bool = False
 
 
-def _get_or_create_hall_pass_settings(*, teacher_id: int, class_id: str, join_code: str | None = None):
+def _get_or_create_hall_pass_settings(*, class_id: str):
     """Fetch class-scoped hall pass settings, creating defaults when absent."""
     settings = HallPassSettings.query.filter_by(class_id=class_id).first()
     if settings:
         return settings
 
-    class_row = ClassEconomy.query.filter_by(class_id=class_id).first()
-    resolved_join_code = join_code or (class_row.join_code if class_row else None)
-    if not resolved_join_code:
-        return None
-
-    block_value = (
-        db.session.query(TeacherBlock.block)
-        .filter(
-            TeacherBlock.teacher_id == teacher_id,
-            TeacherBlock.class_id == class_id,
-        )
-        .order_by(TeacherBlock.block.asc())
-        .limit(1)
-        .scalar()
-        or ""
-    )
-
     settings = HallPassSettings(
-        teacher_id=teacher_id,
         class_id=class_id,
-        join_code=resolved_join_code,
-        block=block_value,
         queue_enabled=True,
         queue_limit=10,
         pass_types=HallPassSettings.get_default_pass_types(),
@@ -520,11 +500,7 @@ def _check_simultaneous_pass_limit(*, log_entry: HallPassLog):
     if not teacher_id:
         return None
 
-    settings = _get_or_create_hall_pass_settings(
-        teacher_id=teacher_id,
-        class_id=log_entry.class_id,
-        join_code=log_entry.join_code,
-    )
+    settings = _get_or_create_hall_pass_settings(class_id=log_entry.class_id)
     if not settings:
         return None
 
@@ -627,11 +603,7 @@ def check_hall_pass_request_policy(
             teacher_id=teacher_id,
         )
 
-    settings = _get_or_create_hall_pass_settings(
-        teacher_id=teacher_id,
-        class_id=class_id,
-        join_code=join_code,
-    )
+    settings = _get_or_create_hall_pass_settings(class_id=class_id)
     if not settings:
         return HallPassRequestGuardResult(
             allowed=False,
@@ -918,11 +890,7 @@ def update_hall_pass_queue_settings(
     updated_at=None,
 ) -> HallPassSettings:
     """Update class-scoped queue settings for hall-pass management."""
-    settings = _get_or_create_hall_pass_settings(
-        teacher_id=teacher_id,
-        class_id=class_id,
-        join_code=join_code,
-    )
+    settings = _get_or_create_hall_pass_settings(class_id=class_id)
     if not settings:
         raise ValueError("Class context is required")
 
@@ -953,11 +921,7 @@ def save_hall_pass_setup_config(
     updated_at=None,
 ) -> HallPassSettings:
     """Persist class-scoped hall-pass configuration payload."""
-    settings = _get_or_create_hall_pass_settings(
-        teacher_id=teacher_id,
-        class_id=class_id,
-        join_code=join_code,
-    )
+    settings = _get_or_create_hall_pass_settings(class_id=class_id)
     if not settings:
         raise ValueError("Class scope not found")
 

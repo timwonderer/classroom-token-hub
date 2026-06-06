@@ -234,7 +234,7 @@ def _get_hall_pass_settings_scope(teacher_id, join_code):
     return resolve_class_scope(teacher_id, join_code=join_code)
 
 
-def _get_or_create_hall_pass_settings(teacher_id, class_id, join_code=None):
+def _get_or_create_hall_pass_settings(class_id):
     """Return the hall pass settings row for a specific class, creating it if needed."""
     if not class_id:
         return None
@@ -243,13 +243,8 @@ def _get_or_create_hall_pass_settings(teacher_id, class_id, join_code=None):
     if settings:
         return settings
 
-    class_row = ClassEconomy.query.filter_by(class_id=class_id).first()
-    resolved_join_code = join_code or (class_row.join_code if class_row else None)
-
     settings = HallPassSettings(
-        teacher_id=teacher_id,
         class_id=class_id,
-        join_code=resolved_join_code,
         queue_enabled=True,
         queue_limit=10,
     )
@@ -1143,7 +1138,7 @@ def _check_simultaneous_pass_limit(log_entry):
     if not teacher_id:
         return None
 
-    settings = _get_or_create_hall_pass_settings(teacher_id, log_entry.class_id)
+    settings = _get_or_create_hall_pass_settings(log_entry.class_id)
     if not settings:
         return None
 
@@ -1654,7 +1649,7 @@ def save_hall_pass_setup():
             return jsonify({"status": "error", "message": "Class scope not found"}), 404
         settings = HallPassSettings.query.filter_by(class_id=scope["class_id"]).first()
         if not settings:
-            settings = _get_or_create_hall_pass_settings(scoped_admin_id, scope["class_id"], join_code=scope["join_code"])
+            settings = _get_or_create_hall_pass_settings(scope["class_id"])
         if not settings:
             return jsonify({"status": "error", "message": "Class scope not found"}), 404
 
