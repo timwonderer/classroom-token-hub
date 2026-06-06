@@ -93,6 +93,7 @@ def execute_rent_payment(
         coverage_year=coverage_year,
         was_late=is_late,
         late_fee_charged=late_fee_for_this_payment,
+        transaction_id=transaction.id,
     )
     db.session.flush()
 

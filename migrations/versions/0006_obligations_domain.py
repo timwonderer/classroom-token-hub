@@ -1,0 +1,230 @@
+"""Wave 7 — Canonical Obligations Domain (DOM-OBL-001)
+
+Creates obligation_assessment, obligation_satisfaction, obligation_reversal,
+insurance_enrollments, and entitlement_events tables. Old rent/insurance tables
+are retained for backward-compatible reads during the transition period; they
+will be dropped in the follow-up Wave 7-B migration once all reads are migrated.
+
+Revision ID: 0006
+Revises: 4b1e8f2c6d90
+Create Date: 2026-06-06
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision = "0006"
+down_revision = "4b1e8f2c6d90"
+branch_labels = None
+depends_on = None
+
+
+# ============================================================================
+# IDEMPOTENCY HELPERS (REQUIRED)
+# ============================================================================
+
+def table_exists(table_name):
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return table_name in inspector.get_table_names()
+
+
+def column_exists(table_name, column_name):
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        columns = [col['name'] for col in inspector.get_columns(table_name)]
+        return column_name in columns
+    except Exception:
+        return False
+
+
+def index_exists(table_name, index_name):
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
+        return index_name in indexes
+    except Exception:
+        return False
+
+
+def constraint_exists(table_name, constraint_name):
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        constraints = [c['name'] for c in inspector.get_unique_constraints(table_name)]
+        return constraint_name in constraints
+    except Exception:
+        return False
+
+
+# ============================================================================
+# MIGRATION FUNCTIONS
+# ============================================================================
+
+def upgrade():
+    # 1. obligation_assessment — authoritative debt fact record
+    if not table_exists('obligation_assessment'):
+        op.create_table(
+            'obligation_assessment',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('seat_id', sa.Integer(), nullable=False),
+            sa.Column('class_id', sa.String(36), nullable=False),
+            sa.Column('join_code', sa.String(20), nullable=True),
+            sa.Column('period', sa.String(10), nullable=True),
+            sa.Column('obligation_type', sa.String(30), nullable=False),
+            sa.Column('amount_snap', sa.Numeric(precision=12, scale=2), nullable=False),
+            sa.Column('due_at', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('assessed_at', sa.DateTime(timezone=True), nullable=False),
+            # Rent-cycle coverage-window fields
+            sa.Column('period_key', sa.String(20), nullable=True),
+            sa.Column('coverage_start_time', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('coverage_end_time', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('cycle_idempotency_key', sa.String(160), nullable=True),
+            sa.Column('period_month', sa.Integer(), nullable=True),
+            sa.Column('period_year', sa.Integer(), nullable=True),
+            sa.Column('coverage_month', sa.Integer(), nullable=True),
+            sa.Column('coverage_year', sa.Integer(), nullable=True),
+            sa.ForeignKeyConstraint(['seat_id'], ['seats.id'], ondelete='CASCADE'),
+            sa.ForeignKeyConstraint(['class_id'], ['classes.class_id'], ondelete='CASCADE'),
+            sa.PrimaryKeyConstraint('id'),
+            sa.UniqueConstraint('seat_id', 'class_id', 'cycle_idempotency_key', name='uq_obligation_assessment_idempotency'),
+        )
+        op.create_index('ix_obligation_assessment_seat_id', 'obligation_assessment', ['seat_id'])
+        op.create_index('ix_obligation_assessment_class_id', 'obligation_assessment', ['class_id'])
+        op.create_index('ix_obligation_assessment_join_code', 'obligation_assessment', ['join_code'])
+        op.create_index('ix_obligation_assessment_period', 'obligation_assessment', ['period'])
+        op.create_index('ix_obligation_assessment_obligation_type', 'obligation_assessment', ['obligation_type'])
+        op.create_index('ix_obligation_assessment_coverage_start_time', 'obligation_assessment', ['coverage_start_time'])
+        op.create_index('ix_obligation_assessment_coverage_end_time', 'obligation_assessment', ['coverage_end_time'])
+        op.create_index('ix_obligation_assessment_cycle_idempotency_key', 'obligation_assessment', ['cycle_idempotency_key'])
+        op.create_index('ix_obligation_assessment_seat_class', 'obligation_assessment', ['seat_id', 'class_id'])
+        print("✅ Created obligation_assessment")
+    else:
+        print("⚠️  Table 'obligation_assessment' already exists, skipping...")
+
+    # 2. obligation_satisfaction — immutable payment/waiver record
+    if not table_exists('obligation_satisfaction'):
+        op.create_table(
+            'obligation_satisfaction',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('assessment_id', sa.Integer(), nullable=False),
+            sa.Column('method', sa.String(20), nullable=False),
+            sa.Column('amount_paid', sa.Numeric(precision=12, scale=2), nullable=True),
+            sa.Column('was_late', sa.Boolean(), nullable=False, server_default='false'),
+            sa.Column('late_fee_charged', sa.Numeric(precision=12, scale=2), nullable=True),
+            sa.Column('transaction_id', sa.Integer(), nullable=True),
+            sa.Column('satisfied_at', sa.DateTime(timezone=True), nullable=False),
+            sa.ForeignKeyConstraint(['assessment_id'], ['obligation_assessment.id'], ondelete='CASCADE'),
+            sa.ForeignKeyConstraint(['transaction_id'], ['ledger_transaction.id'], ondelete='SET NULL'),
+            sa.PrimaryKeyConstraint('id'),
+            sa.UniqueConstraint('assessment_id', name='uq_obligation_satisfaction_assessment'),
+        )
+        op.create_index('ix_obligation_satisfaction_assessment_id', 'obligation_satisfaction', ['assessment_id'])
+        op.create_index('ix_obligation_satisfaction_transaction_id', 'obligation_satisfaction', ['transaction_id'])
+        print("✅ Created obligation_satisfaction")
+    else:
+        print("⚠️  Table 'obligation_satisfaction' already exists, skipping...")
+
+    # 3. obligation_reversal — immutable nullification record
+    if not table_exists('obligation_reversal'):
+        op.create_table(
+            'obligation_reversal',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('assessment_id', sa.Integer(), nullable=False),
+            sa.Column('reason', sa.Text(), nullable=True),
+            sa.Column('reversed_at', sa.DateTime(timezone=True), nullable=False),
+            sa.Column('reversed_by_teacher_id', sa.Integer(), nullable=True),
+            sa.ForeignKeyConstraint(['assessment_id'], ['obligation_assessment.id'], ondelete='CASCADE'),
+            sa.ForeignKeyConstraint(['reversed_by_teacher_id'], ['teachers.id'], ondelete='SET NULL'),
+            sa.PrimaryKeyConstraint('id'),
+            sa.UniqueConstraint('assessment_id', name='uq_obligation_reversal_assessment'),
+        )
+        op.create_index('ix_obligation_reversal_assessment_id', 'obligation_reversal', ['assessment_id'])
+        print("✅ Created obligation_reversal")
+    else:
+        print("⚠️  Table 'obligation_reversal' already exists, skipping...")
+
+    # 4. insurance_enrollments — canonical seat-level insurance contracts
+    if not table_exists('insurance_enrollments'):
+        op.create_table(
+            'insurance_enrollments',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('seat_id', sa.Integer(), nullable=False),
+            sa.Column('class_id', sa.String(36), nullable=False),
+            sa.Column('policy_id', sa.Integer(), nullable=False),
+            sa.Column('join_code', sa.String(20), nullable=True),
+            sa.Column('status', sa.String(20), nullable=False, server_default='active'),
+            sa.Column('purchase_date', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('cancel_date', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('last_payment_date', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('next_payment_due', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('coverage_start_date', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('payment_current', sa.Boolean(), nullable=False, server_default='true'),
+            sa.Column('days_unpaid', sa.Integer(), nullable=False, server_default='0'),
+            # Immutable policy snapshot
+            sa.Column('frozen_policy_title', sa.String(100), nullable=True),
+            sa.Column('frozen_policy_description', sa.Text(), nullable=True),
+            sa.Column('frozen_max_claim_amount', sa.Numeric(precision=12, scale=2), nullable=True),
+            sa.Column('frozen_max_payout_per_period', sa.Numeric(precision=12, scale=2), nullable=True),
+            sa.Column('frozen_max_claims_count', sa.Integer(), nullable=True),
+            sa.Column('frozen_max_claims_period', sa.String(20), nullable=True),
+            sa.Column('frozen_claim_time_limit_days', sa.Integer(), nullable=True),
+            sa.Column('policy_version', sa.Integer(), nullable=True),
+            sa.ForeignKeyConstraint(['seat_id'], ['seats.id'], ondelete='CASCADE'),
+            sa.ForeignKeyConstraint(['class_id'], ['classes.class_id'], ondelete='CASCADE'),
+            sa.ForeignKeyConstraint(['policy_id'], ['insurance_policies.id']),
+            sa.PrimaryKeyConstraint('id'),
+        )
+        op.create_index('ix_insurance_enrollment_seat_id', 'insurance_enrollments', ['seat_id'])
+        op.create_index('ix_insurance_enrollment_class_id', 'insurance_enrollments', ['class_id'])
+        op.create_index('ix_insurance_enrollment_policy_id', 'insurance_enrollments', ['policy_id'])
+        op.create_index('ix_insurance_enrollment_join_code', 'insurance_enrollments', ['join_code'])
+        op.create_index('ix_insurance_enrollment_seat_class', 'insurance_enrollments', ['seat_id', 'class_id'])
+        print("✅ Created insurance_enrollments")
+    else:
+        print("⚠️  Table 'insurance_enrollments' already exists, skipping...")
+
+    # 5. entitlement_events — append-only perk grant/consumption stream
+    if not table_exists('entitlement_events'):
+        op.create_table(
+            'entitlement_events',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('seat_id', sa.Integer(), nullable=False),
+            sa.Column('class_id', sa.String(36), nullable=False),
+            sa.Column('assessment_id', sa.Integer(), nullable=True),
+            sa.Column('trigger_id', sa.String(200), nullable=True),
+            sa.Column('quantity_delta', sa.Integer(), nullable=False),
+            sa.Column('event_type', sa.String(20), nullable=False),
+            sa.Column('occurred_at', sa.DateTime(timezone=True), nullable=False),
+            sa.ForeignKeyConstraint(['seat_id'], ['seats.id'], ondelete='CASCADE'),
+            sa.ForeignKeyConstraint(['class_id'], ['classes.class_id'], ondelete='CASCADE'),
+            sa.ForeignKeyConstraint(['assessment_id'], ['obligation_assessment.id'], ondelete='SET NULL'),
+            sa.PrimaryKeyConstraint('id'),
+        )
+        op.create_index('ix_entitlement_events_seat_id', 'entitlement_events', ['seat_id'])
+        op.create_index('ix_entitlement_events_class_id', 'entitlement_events', ['class_id'])
+        op.create_index('ix_entitlement_events_assessment_id', 'entitlement_events', ['assessment_id'])
+        op.create_index('ix_entitlement_events_trigger_id', 'entitlement_events', ['trigger_id'])
+        op.create_index('ix_entitlement_events_seat_class', 'entitlement_events', ['seat_id', 'class_id'])
+        print("✅ Created entitlement_events")
+    else:
+        print("⚠️  Table 'entitlement_events' already exists, skipping...")
+
+
+def downgrade():
+    for table in [
+        'entitlement_events',
+        'insurance_enrollments',
+        'obligation_reversal',
+        'obligation_satisfaction',
+        'obligation_assessment',
+    ]:
+        if table_exists(table):
+            op.drop_table(table)
+            print(f"❌ Dropped {table}")
+        else:
+            print(f"⚠️  Table '{table}' does not exist, skipping...")

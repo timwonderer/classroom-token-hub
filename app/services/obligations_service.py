@@ -1,7 +1,16 @@
 from __future__ import annotations
 
 from app.extensions import db
-from app.models import InsuranceClaim, RentPayment, StudentInsurance
+from app.models import (
+    EntitlementEvent,
+    InsuranceClaim,
+    InsuranceEnrollment,
+    ObligationAssessment,
+    ObligationSatisfaction,
+    RentPayment,
+    StudentInsurance,
+)
+from app.utils.time import utc_now
 
 
 def record_rent_payment(
@@ -20,13 +29,56 @@ def record_rent_payment(
     coverage_end_time=None,
     cycle_idempotency_key: str | None = None,
     join_code: str | None = None,
+    transaction_id: int | None = None,
 ):
-    """Obligations-owned mutation for rent payment truth."""
+    """Obligations-owned mutation for rent payment truth.
+
+    Dual-writes to both the legacy rent_payments table (backward-compatible reads)
+    and the canonical obligation_assessment + obligation_satisfaction tables.
+    The canonical tables are the authoritative write target; legacy tables will be
+    dropped in Wave 7-B once all reads are migrated.
+    """
+    now = utc_now()
+
+    # --- Canonical write ---
+    period_key = f"{period_year}-{coverage_month:02d}" if period_year and coverage_month else None
+    assessment = ObligationAssessment(
+        seat_id=seat_id,
+        class_id=class_id,
+        join_code=join_code,
+        period=period,
+        obligation_type="RENT",
+        amount_snap=amount_paid,
+        assessed_at=now,
+        period_key=period_key,
+        coverage_start_time=coverage_start_time,
+        coverage_end_time=coverage_end_time,
+        cycle_idempotency_key=cycle_idempotency_key,
+        period_month=period_month,
+        period_year=period_year,
+        coverage_month=coverage_month,
+        coverage_year=coverage_year,
+    )
+    db.session.add(assessment)
+    db.session.flush()
+
+    satisfaction = ObligationSatisfaction(
+        assessment_id=assessment.id,
+        method="PAYMENT",
+        amount_paid=amount_paid,
+        was_late=was_late,
+        late_fee_charged=late_fee_charged,
+        transaction_id=transaction_id,
+        satisfied_at=now,
+    )
+    db.session.add(satisfaction)
+
+    # --- Legacy write (kept for backward-compatible reads) ---
     payment = RentPayment(
         seat_id=seat_id,
         class_id=class_id,
-        period=period,
         join_code=join_code,
+        period=period,
         amount_paid=amount_paid,
         period_month=period_month,
         period_year=period_year,
@@ -52,8 +104,13 @@ def record_insurance_enrollment(
     coverage_start_date,
     join_code: str | None = None,
 ):
-    """Obligations-owned mutation for insurance enrollment truth."""
-    enrollment = StudentInsurance(
+    """Obligations-owned mutation for insurance enrollment truth.
+
+    Dual-writes to both the legacy student_insurance table and the canonical
+    insurance_enrollments table. Legacy table will be dropped in Wave 7-B.
+    """
+    # --- Canonical write ---
+    enrollment = InsuranceEnrollment(
         seat_id=seat_id,
         class_id=class_id,
         policy_id=policy.id,
@@ -67,7 +124,23 @@ def record_insurance_enrollment(
     )
     enrollment.freeze_policy_snapshot(policy)
     db.session.add(enrollment)
-    return enrollment
+
+    # --- Legacy write (kept for backward-compatible reads) ---
+    legacy_enrollment = StudentInsurance(
+        seat_id=seat_id,
+        class_id=class_id,
+        policy_id=policy.id,
+        join_code=join_code,
+        status='active',
+        purchase_date=purchase_date,
+        last_payment_date=purchase_date,
+        next_payment_due=next_payment_due,
+        coverage_start_date=coverage_start_date,
+        payment_current=True,
+    )
+    legacy_enrollment.freeze_policy_snapshot(policy)
+    db.session.add(legacy_enrollment)
+    return legacy_enrollment
 
 
 def apply_claim_resolution(
@@ -121,3 +194,25 @@ def record_insurance_claim(
     )
     db.session.add(claim)
     return claim
+
+
+def record_entitlement_grant(
+    *,
+    seat_id: int,
+    class_id: str,
+    quantity: int,
+    trigger_id: str | None = None,
+    assessment_id: int | None = None,
+) -> EntitlementEvent:
+    """Record a GRANT entitlement event for obligation-linked perks (e.g., hall passes from rent)."""
+    event = EntitlementEvent(
+        seat_id=seat_id,
+        class_id=class_id,
+        assessment_id=assessment_id,
+        trigger_id=trigger_id,
+        quantity_delta=quantity,
+        event_type="GRANT",
+        occurred_at=utc_now(),
+    )
+    db.session.add(event)
+    return event

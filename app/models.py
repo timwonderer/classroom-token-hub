@@ -2367,6 +2367,179 @@ def _sync_insurance_claim_scope(_mapper, connection, target):
             if not getattr(target, "join_code", None) and row[3]:
                 target.join_code = row[3]
 
+# ---- Canonical Obligations Domain (DOM-OBL-001) ----
+
+class ObligationAssessment(db.Model):
+    """Authoritative record of a seat becoming liable for a policy-defined charge."""
+    __tablename__ = 'obligation_assessment'
+
+    id = db.Column(db.Integer, primary_key=True)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+    period = db.Column(db.String(10), nullable=True, index=True)
+
+    obligation_type = db.Column(db.String(30), nullable=False, index=True)  # RENT, INSURANCE_PREMIUM
+
+    # Policy snapshot at assessment time — INV-OBL-009
+    amount_snap = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+    due_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    assessed_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+
+    # Rent-cycle fields — preserved from prepay coverage-window model (INV-ARC-015)
+    period_key = db.Column(db.String(20), nullable=True)
+    coverage_start_time = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
+    coverage_end_time = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
+    cycle_idempotency_key = db.Column(db.String(160), nullable=True, index=True)
+    period_month = db.Column(db.Integer, nullable=True)
+    period_year = db.Column(db.Integer, nullable=True)
+    coverage_month = db.Column(db.Integer, nullable=True)
+    coverage_year = db.Column(db.Integer, nullable=True)
+
+    seat = db.relationship('Seat', backref=db.backref('obligation_assessments', passive_deletes=True))
+    satisfaction = db.relationship('ObligationSatisfaction', uselist=False, backref='assessment')
+    reversal = db.relationship('ObligationReversal', uselist=False, backref='assessment')
+    entitlement_events = db.relationship('EntitlementEvent', backref='assessment')
+
+    __table_args__ = (
+        db.UniqueConstraint('seat_id', 'class_id', 'cycle_idempotency_key', name='uq_obligation_assessment_idempotency'),
+        db.Index('ix_obligation_assessment_seat_class', 'seat_id', 'class_id'),
+    )
+
+
+class ObligationSatisfaction(db.Model):
+    """Immutable record of how a valid debt was resolved — INV-OBL-004."""
+    __tablename__ = 'obligation_satisfaction'
+
+    id = db.Column(db.Integer, primary_key=True)
+    assessment_id = db.Column(db.Integer, db.ForeignKey('obligation_assessment.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    method = db.Column(db.String(20), nullable=False)  # PAYMENT, WAIVER
+    amount_paid = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
+    was_late = db.Column(db.Boolean, default=False, nullable=False)
+    late_fee_charged = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
+    transaction_id = db.Column(db.Integer, db.ForeignKey('ledger_transaction.id', ondelete='SET NULL'), nullable=True, index=True)
+    satisfied_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class ObligationReversal(db.Model):
+    """Immutable record of an assessment correction or nullification — INV-OBL-005."""
+    __tablename__ = 'obligation_reversal'
+
+    id = db.Column(db.Integer, primary_key=True)
+    assessment_id = db.Column(db.Integer, db.ForeignKey('obligation_assessment.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    reason = db.Column(db.Text, nullable=True)
+    reversed_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    reversed_by_teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='SET NULL'), nullable=True)
+
+
+class InsuranceEnrollment(db.Model):
+    """Canonical seat-level insurance contract (replaces student_insurance)."""
+    __tablename__ = 'insurance_enrollments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
+    policy_id = db.Column(db.Integer, db.ForeignKey('insurance_policies.id'), nullable=False, index=True)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+
+    status = db.Column(db.String(20), default='active', nullable=False)
+    purchase_date = db.Column(db.DateTime(timezone=True), default=utc_now)
+    cancel_date = db.Column(db.DateTime(timezone=True), nullable=True)
+    last_payment_date = db.Column(db.DateTime(timezone=True), nullable=True)
+    next_payment_due = db.Column(db.DateTime(timezone=True), nullable=True)
+    coverage_start_date = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    payment_current = db.Column(db.Boolean, default=True, nullable=False)
+    days_unpaid = db.Column(db.Integer, default=0, nullable=False)
+
+    # Immutable policy snapshot at purchase time — INV-OBL-009
+    frozen_policy_title = db.Column(db.String(100), nullable=True)
+    frozen_policy_description = db.Column(db.Text, nullable=True)
+    frozen_max_claim_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
+    frozen_max_payout_per_period = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
+    frozen_max_claims_count = db.Column(db.Integer, nullable=True)
+    frozen_max_claims_period = db.Column(db.String(20), nullable=True)
+    frozen_claim_time_limit_days = db.Column(db.Integer, nullable=True)
+    policy_version = db.Column(db.Integer, nullable=True)
+
+    seat = db.relationship('Seat', backref=db.backref('insurance_enrollments', passive_deletes=True))
+    policy = db.relationship('InsurancePolicy', backref='enrollments')
+
+    __table_args__ = (
+        db.Index('ix_insurance_enrollment_seat_class', 'seat_id', 'class_id'),
+    )
+
+    def freeze_policy_snapshot(self, policy):
+        self.frozen_policy_title = policy.title
+        self.frozen_policy_description = policy.description
+        self.frozen_max_claim_amount = policy.max_claim_amount
+        self.frozen_max_payout_per_period = policy.max_payout_per_period
+        self.frozen_max_claims_count = policy.max_claims_count
+        self.frozen_max_claims_period = policy.max_claims_period
+        self.frozen_claim_time_limit_days = policy.claim_time_limit_days
+        self.policy_version = policy.version_number or 1
+
+    @property
+    def contract_title(self):
+        return self.frozen_policy_title or (self.policy.title if self.policy else "")
+
+    @property
+    def contract_description(self):
+        return self.frozen_policy_description if self.frozen_policy_description is not None else (
+            self.policy.description if self.policy else None
+        )
+
+    @property
+    def contract_max_claim_amount(self):
+        return self.frozen_max_claim_amount if self.frozen_max_claim_amount is not None else (
+            self.policy.max_claim_amount if self.policy else None
+        )
+
+    @property
+    def contract_max_payout_per_period(self):
+        return self.frozen_max_payout_per_period if self.frozen_max_payout_per_period is not None else (
+            self.policy.max_payout_per_period if self.policy else None
+        )
+
+    @property
+    def contract_max_claims_count(self):
+        return self.frozen_max_claims_count if self.frozen_max_claims_count is not None else (
+            self.policy.max_claims_count if self.policy else None
+        )
+
+    @property
+    def contract_max_claims_period(self):
+        return self.frozen_max_claims_period if self.frozen_max_claims_period else (
+            self.policy.max_claims_period if self.policy else "month"
+        )
+
+    @property
+    def contract_claim_time_limit_days(self):
+        return self.frozen_claim_time_limit_days if self.frozen_claim_time_limit_days is not None else (
+            self.policy.claim_time_limit_days if self.policy else None
+        )
+
+
+class EntitlementEvent(db.Model):
+    """Append-only stream of obligation-linked perk grants, consumptions, and revocations — INV-OBL-002/003."""
+    __tablename__ = 'entitlement_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
+    assessment_id = db.Column(db.Integer, db.ForeignKey('obligation_assessment.id', ondelete='SET NULL'), nullable=True, index=True)
+    trigger_id = db.Column(db.String(200), nullable=True, index=True)  # Idempotency key (INV-OBL-003)
+    quantity_delta = db.Column(db.Integer, nullable=False)  # +N grant, -N consumption/revocation
+    event_type = db.Column(db.String(20), nullable=False)  # GRANT, CONSUMPTION, REVOCATION
+    occurred_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+
+    seat = db.relationship('Seat', backref=db.backref('entitlement_events', passive_deletes=True))
+
+    __table_args__ = (
+        db.Index('ix_entitlement_events_seat_class', 'seat_id', 'class_id'),
+    )
+
+
 # ---- Error Log Model ----
 class ErrorLog(db.Model):
     __tablename__ = 'error_logs'
