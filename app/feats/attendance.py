@@ -20,7 +20,7 @@ from app.models import (
     TeacherBlock,
 )
 from app.payroll import get_daily_limit_seconds
-from app.utils.economy_policy import resolve_feature_class
+from app.utils.economy_policy import resolve_feature_class_for_class
 from app.utils.seat_scope import get_seat_id_for_class
 from app.utils.time import ensure_utc, get_class_now, get_class_today_range, normalize_for_db, utc_now
 from app.attendance import calculate_period_attendance_utc_range
@@ -594,7 +594,7 @@ def check_hall_pass_request_policy(
         )
     teacher_id = economy.teacher_id
 
-    feature_scope = resolve_feature_class(teacher_id, "hall_pass", block=period, join_code=join_code)
+    feature_scope = resolve_feature_class_for_class(class_id, "hall_pass")
     if feature_scope and not feature_scope["enabled"]:
         return HallPassRequestGuardResult(
             allowed=False,

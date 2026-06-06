@@ -9,10 +9,22 @@ from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
-from app.models import Student, Admin, Transaction, TeacherBlock, ClassEconomy, ClassFeature, ClassMembership, StoreItem, Seat
+from app.models import Student, Admin, Transaction, TeacherBlock, ClassEconomy, ClassFeature, ClassMembership, StoreItem, Seat, User, UserRole
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 from tests.helpers.admin_context import login_admin
+
+def _bind_canonical_teacher(teacher):
+    user = User(
+        user_role=UserRole.TEACHER,
+        username_hash=teacher.username_hash,
+        username_lookup_hash=teacher.username_lookup_hash,
+        totp_secret_encrypted=teacher.totp_secret,
+    )
+    db.session.add(user)
+    db.session.flush()
+    teacher.user_id = user.id
+    return user
 
 
 @pytest.fixture
@@ -389,6 +401,18 @@ def _create_admin_feature_scope(teacher, *, join_code, block, feature_name, enab
         join_code=join_code,
         is_claimed=False,
     ))
+    db.session.add(ClassMembership(
+        class_id=economy.class_id,
+        join_code=join_code,
+        admin_id=teacher.id,
+        role="admin",
+    ))
+    teacher_seat = Seat(
+        class_id=economy.class_id,
+        join_code=join_code,
+        role="teacher",
+    )
+    db.session.add(teacher_seat)
 
     if not enabled:
         for row in ClassFeature.query.filter_by(class_id=economy.class_id, feature_name=feature_name).all():
@@ -439,17 +463,23 @@ def test_admin_hall_pass_rejects_disabled_class_scope(client):
 def test_admin_payroll_rejects_disabled_class_scope(client):
     teacher = make_admin("teacher_admin_payroll_scope", "secret_payroll_scope")
     db.session.add(teacher)
-    db.session.commit()
+    db.session.flush()
+    user = _bind_canonical_teacher(teacher)
 
     _create_admin_feature_scope(teacher, join_code="PAY1", block="1", feature_name="payroll", enabled=True)
     disabled_economy = _create_admin_feature_scope(teacher, join_code="PAY2", block="2", feature_name="payroll", enabled=False)
     db.session.commit()
+    teacher_seat = Seat.query.filter_by(class_id=disabled_economy.class_id, role="teacher").first()
+    assert teacher_seat is not None
 
-    with client.session_transaction() as sess:
-        sess['is_admin'] = True
-        sess['admin_id'] = teacher.id
-        sess['current_join_code'] = 'PAY2'
-        sess['current_class_id'] = disabled_economy.class_id
+    login_admin(
+        client,
+        teacher.id,
+        'PAY2',
+        user_id=user.id,
+        class_id=disabled_economy.class_id,
+        seat_id=teacher_seat.id,
+    )
 
     response = client.get('/admin/payroll')
     assert response.status_code == 200

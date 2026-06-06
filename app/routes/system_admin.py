@@ -38,6 +38,7 @@ from app.auth import (
     _expire_system_admin_session,
     _system_admin_timeout_expired,
     find_canonical_user_by_auth_username,
+    get_current_system_admin,
     get_current_user,
     resolve_system_admin_shadow_for_user,
     set_canonical_user_session,
@@ -139,7 +140,8 @@ def auth_check():
     Note: Do NOT decorate with `@system_admin_required` because that may redirect
     to the login page; `auth_request` needs a clean 2xx/401 signal.
     """
-    if not session.get("is_system_admin") or session.get("sysadmin_id") is None:
+    sysadmin = get_current_system_admin()
+    if not sysadmin:
         raise Unauthorized("System admin authentication required")
 
     # Enforce session timeout for security, consistent with other decorators.
@@ -251,17 +253,15 @@ def passkey_register_start():
     Official SDK Pattern: Create RegisterToken and get token from passwordless.dev
     """
     try:
+        sysadmin = get_current_system_admin()
         user = get_current_user()
-        if not user or getattr(user.user_role, "value", user.user_role) != "sysadmin":
-            abort(404)
-        admin = resolve_system_admin_shadow_for_user(user)
-        if not admin or admin.id != session.get("sysadmin_id"):
+        if not sysadmin or not user or getattr(user.user_role, "value", user.user_role) != "sysadmin":
             abort(404)
 
         # Generate registration token using official SDK
         user_id = f"user_{user.id}"
-        username = session.get("sysadmin_auth_username") or admin.get_display_username()
-        displayname = f"System Admin: {admin.get_display_username()}"
+        username = session.get("sysadmin_auth_username") or sysadmin.get_display_username()
+        displayname = f"System Admin: {sysadmin.get_display_username()}"
 
         token = create_register_token(user_id, username, displayname)
 
@@ -288,9 +288,9 @@ def passkey_register_finish():
     After frontend completes WebAuthn ceremony, store credential metadata.
     """
     try:
-        sysadmin_id = session.get("sysadmin_id")
+        sysadmin = get_current_system_admin()
         user = get_current_user()
-        if not user or getattr(user.user_role, "value", user.user_role) != "sysadmin":
+        if not sysadmin or not user or getattr(user.user_role, "value", user.user_role) != "sysadmin":
             return jsonify({"error": "Canonical system admin identity is missing"}), 409
         data = request.get_json()
 
@@ -302,7 +302,7 @@ def passkey_register_finish():
 
         # Save credential metadata (credential_id is optional, stored on passwordless.dev)
         credential = SystemAdminCredential(
-            sysadmin_id=sysadmin_id,  # Correct column name is sysadmin_id, not system_admin_id
+            sysadmin_id=sysadmin.id,
             user_id=user.id,
             credential_id=None,  # Not needed - stored on passwordless.dev servers
             authenticator_name=authenticator_name
@@ -488,10 +488,9 @@ def passkey_delete(credential_id):
 @system_admin_required
 def passkey_settings():
     """Passkey management page."""
-    sysadmin_id = session.get("sysadmin_id")
-    admin = db.get_or_404(SystemAdmin, sysadmin_id)
+    admin = get_current_system_admin()
     user = get_current_user()
-    if not user:
+    if not admin or not user:
         abort(404)
     credentials = (
         SystemAdminCredential.query
@@ -1416,10 +1415,8 @@ def grafana_auth_check():
     Exempt from rate limiting to prevent blocking Grafana's multiple auth checks per page.
     """
     from flask import Response
-    from app.models import SystemAdmin
-
-    # Check if user is logged in as system admin
-    if not session.get("is_system_admin") or not session.get("sysadmin_id"):
+    sysadmin = get_current_system_admin()
+    if not sysadmin:
         return Response('Unauthorized', 401)
 
     # Check session timeout
@@ -1433,13 +1430,6 @@ def grafana_auth_check():
 
     # Update activity to keep session alive
     session["last_activity"] = utc_now().isoformat()
-
-    # Verify the sysadmin still exists
-    sysadmin = db.session.get(SystemAdmin, session.get('sysadmin_id'))
-    if not sysadmin:
-        # Admin was deleted but session still exists
-        _expire_system_admin_session()
-        return Response('Unauthorized', 401)
 
     # Sanitize username for header (prevent response splitting)
     raw_username = session.get("sysadmin_auth_username") or sysadmin.get_display_username()
@@ -1502,7 +1492,7 @@ def grafana_proxy(path):
 
         # Add the authenticated user header for Grafana
         # Fetch admin to get username (Grafana auth proxy expects username, not ID)
-        admin = db.session.get(SystemAdmin, session.get('sysadmin_id'))
+        admin = get_current_system_admin()
         if not admin:
             # Stale session - admin was deleted
             flash("Authentication failed: user not found.", "error")

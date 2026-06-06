@@ -8,18 +8,39 @@ from app.models import (
     Issue,
     IssueCategory,
     PayrollSettings,
+    Seat,
     StoreItem,
     Student,
     StudentTeacher,
     TeacherBlock,
+    User,
+    UserRole,
 )
 from tests.helpers.class_scope import create_class_scope
 
 
-def _login_admin(client, admin_id):
+def _bind_canonical_teacher(admin: Admin) -> User:
+    user = User(
+        user_role=UserRole.TEACHER,
+        username_hash=admin.username_hash,
+        username_lookup_hash=admin.username_lookup_hash,
+    )
+    db.session.add(user)
+    db.session.flush()
+    admin.user_id = user.id
+    return user
+
+
+def _login_admin(client, admin_id, *, user_id: int | None = None, class_id: str | None = None, seat_id: int | None = None):
     with client.session_transaction() as sess:
         sess["admin_id"] = admin_id
         sess["is_admin"] = True
+        if user_id is not None:
+            sess["user_id"] = user_id
+        if class_id is not None:
+            sess["current_class_id"] = class_id
+        if seat_id is not None:
+            sess["current_seat_id"] = seat_id
         sess["last_activity"] = datetime.now(timezone.utc).isoformat()
 
 
@@ -432,11 +453,12 @@ def test_payroll_settings_requires_current_class_context(client):
     admin = make_admin("payroll_guard_admin", "secret")
     db.session.add(admin)
     db.session.flush()
+    user = _bind_canonical_teacher(admin)
 
     create_class_scope(teacher=admin, join_code="PAYG001")
     db.session.commit()
 
-    _login_admin(client, admin.id)
+    _login_admin(client, admin.id, user_id=user.id)
 
     initial_settings_count = db.session.query(PayrollSettings).count()
     response = client.post(
@@ -454,6 +476,7 @@ def test_payroll_settings_uses_feature_scope_blocks_not_student_block_text(clien
     admin = make_admin("payroll_scope_admin", "secret")
     db.session.add(admin)
     db.session.flush()
+    user = _bind_canonical_teacher(admin)
 
     student = Student(first_name="Scope", last_initial="S", block="A", salt=b"salt")
     db.session.add(student)
@@ -469,9 +492,10 @@ def test_payroll_settings_uses_feature_scope_blocks_not_student_block_text(clien
     )
     db.session.commit()
 
-    _login_admin(client, admin.id)
+    teacher_seat = Seat.query.filter_by(class_id=class_row.class_id, role="teacher").first()
+    assert teacher_seat is not None
+    _login_admin(client, admin.id, user_id=user.id, class_id=class_row.class_id, seat_id=teacher_seat.id)
     with client.session_transaction() as sess:
-        sess["current_class_id"] = class_row.class_id
         sess["current_join_code"] = class_row.join_code
 
     response = client.post(
@@ -545,12 +569,15 @@ def test_class_scoped_post_rejects_request_join_code_mismatch(client):
     admin = make_admin("mismatch_guard_admin", "secret")
     db.session.add(admin)
     db.session.flush()
+    user = _bind_canonical_teacher(admin)
 
-    create_class_scope(teacher=admin, join_code="PAYA01", block="A", create_claimed_teacher_block=True)
+    class_a = create_class_scope(teacher=admin, join_code="PAYA01", block="A", create_claimed_teacher_block=True)
     create_class_scope(teacher=admin, join_code="PAYB02", block="B", create_claimed_teacher_block=True)
     db.session.commit()
 
-    _login_admin(client, admin.id)
+    teacher_seat = Seat.query.filter_by(class_id=class_a.class_id, role="teacher").first()
+    assert teacher_seat is not None
+    _login_admin(client, admin.id, user_id=user.id, class_id=class_a.class_id, seat_id=teacher_seat.id)
     with client.session_transaction() as sess:
         sess["current_join_code"] = "PAYA01"
 

@@ -70,7 +70,7 @@ from app.routes.student import (
 )
 from app.feats.store_purchase_feat import execute_rent_perk_purchase, execute_store_purchase
 from app.services import store_service
-from app.utils.economy_policy import resolve_class_scope, resolve_feature_class
+from app.utils.economy_policy import resolve_class_scope, resolve_feature_class, resolve_feature_class_for_class
 from app.utils.overdraft import charge_overdraft_fee_if_needed
 from app.utils.seat_scope import get_seat_id_for_class
 from app.utils.transaction_idempotency import (
@@ -1567,7 +1567,7 @@ def get_hall_pass_setup():
     if not scope:
         return jsonify({"status": "error", "message": "Class scope not found"}), 404
 
-    feature_scope = resolve_feature_class(teacher_id, 'hall_pass', block=scope["block"], join_code=join_code)
+    feature_scope = resolve_feature_class_for_class(scope["class_id"], 'hall_pass')
     if feature_scope and not feature_scope["enabled"]:
         return jsonify({"status": "error", "message": "Hall pass is disabled for this class"}), 403
 
@@ -1653,7 +1653,7 @@ def save_hall_pass_setup():
         if not settings:
             return jsonify({"status": "error", "message": "Class scope not found"}), 404
 
-        feature_scope = resolve_feature_class(scoped_admin_id, 'hall_pass', block=settings.block, join_code=join_code)
+        feature_scope = resolve_feature_class_for_class(scope["class_id"], 'hall_pass')
         if feature_scope and not feature_scope["enabled"]:
             return jsonify({"status": "error", "message": "Hall pass is disabled for this class"}), 403
 
@@ -1724,40 +1724,29 @@ def get_available_hall_pass_types():
             "message": "teacher_public_id is not supported"
         }), 400
 
-    resolved_teacher_id = None
     resolved_class_id = None
     context = get_current_class_context()
 
     if context:
         # Session class context is authoritative for logged-in student/admin flows.
-        resolved_teacher_id = context.get('teacher_id')
         resolved_class_id = context.get('class_id')
         if requested_class_id and requested_class_id != resolved_class_id:
             return jsonify({"status": "error", "message": "class_id is out of scope for this session"}), 403
     elif requested_class_id:
         class_row = ClassEconomy.query.filter_by(class_id=requested_class_id).first()
         if class_row:
-            resolved_teacher_id = class_row.teacher_id
             resolved_class_id = class_row.class_id
 
-    if not resolved_teacher_id:
+    if not resolved_class_id:
         return jsonify({
             "status": "error",
             "message": "class_id is required"
         }), 400
 
     settings = None
-    resolved_join_code = None
     if resolved_class_id:
-        class_row = ClassEconomy.query.filter_by(class_id=resolved_class_id).first()
-        resolved_join_code = class_row.join_code if class_row else None
         settings = HallPassSettings.query.filter_by(class_id=resolved_class_id).first()
-    feature_scope = resolve_feature_class(
-        resolved_teacher_id,
-        'hall_pass',
-        block=(settings.block if settings else None),
-        join_code=resolved_join_code,
-    )
+    feature_scope = resolve_feature_class_for_class(resolved_class_id, 'hall_pass')
     if not feature_scope or not feature_scope.get("enabled"):
         return jsonify({
             "status": "error",

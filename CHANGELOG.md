@@ -9,6 +9,24 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Changed
+- **Closed the next post-Wave 4 authority-reduction slices** — TLCP actor
+  correlation now derives student/teacher `actor_public_id` from the active
+  seat context instead of reconstructing it from legacy `student_id` or
+  `admin_id`. Sysadmin auth probes and passkey-management endpoints now trust
+  canonical resolver identity rather than raw `sysadmin_id` session checks.
+  Payroll route entry, settings writes, and disabled-scope gating now resolve
+  canonical admin identity first and use class-scoped seat data instead of
+  `TeacherBlock.teacher_id` as the primary runtime authority.
+- **Completed-surface feature gating now prefers canonical `class_id` helpers** —
+  `app/utils/economy_policy.py` now exposes explicit
+  `resolve_feature_class_for_class()` and
+  `get_class_feature_settings_for_class()` helpers for class-authoritative
+  feature reads. Active admin, student, API hall-pass, and attendance policy
+  callers in already-completed Wave 4 surfaces now resolve feature enablement
+  from `class_id` first instead of rebuilding scope from
+  `teacher_id + block/join_code`. Focused regressions cover class-scoped helper
+  behavior and admin join-code option discovery without `TeacherBlock`
+  authority.
 - **Wave 4 class-configuration canonicalization completed** — The active class
   configuration tables now align on `class_id` as the runtime and schema
   boundary: `class_features`, `feature_settings`, `hall_pass_settings`,

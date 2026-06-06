@@ -10,12 +10,7 @@ from datetime import timedelta
 import sqlalchemy as sa
 from flask import has_request_context, request, session
 
-from app.auth import (
-    get_current_admin,
-    get_current_seat,
-    get_current_system_admin,
-    get_logged_in_student,
-)
+from app.auth import get_current_admin, get_current_system_admin, get_logged_in_student
 from app.extensions import db
 from app.models import ActorRequestTrace, ErrorEvent, ClassEconomy, Seat, TicketCorrelationPack
 from app.utils.time import utc_now
@@ -60,20 +55,27 @@ def _sanitize_error_message(raw_message: str | None) -> str:
     return compact[:500]
 
 
-def _teacher_seat_public_id(*, admin_id: int | None, class_id: str | None) -> str | None:
-    if not admin_id or not class_id:
+def _session_seat(*, class_id: str | None = None, role: str | None = None) -> Seat | None:
+    seat_id = session.get("current_seat_id") or session.get("seat_id")
+    if not seat_id:
         return None
-    class_row = ClassEconomy.query.filter_by(class_id=class_id, teacher_id=admin_id).first()
-    if not class_row:
+    seat = db.session.get(Seat, seat_id)
+    if not seat:
         return None
+    if class_id and seat.class_id != class_id:
+        return None
+    if role and seat.role != role:
+        return None
+    return seat
+
+
+def _teacher_seat_public_id(*, class_id: str | None) -> str | None:
+    if not class_id:
+        return None
+    session_seat = _session_seat(class_id=class_id, role="teacher")
+    if session_seat:
+        return session_seat.public_id
     seat = Seat.query.filter_by(class_id=class_id, role="teacher").first()
-    return seat.public_id if seat else None
-
-
-def _student_seat_public_id(*, student_id: int | None, class_id: str | None) -> str | None:
-    if not student_id or not class_id:
-        return None
-    seat = Seat.query.filter_by(student_id=student_id, class_id=class_id).first()
     return seat.public_id if seat else None
 
 
@@ -100,8 +102,8 @@ def resolve_actor_context() -> dict | None:
     class_id = None
     actor_public_id = None
 
-    current_seat = get_current_seat()
-    if current_seat and current_seat.student_id:
+    current_seat = _session_seat()
+    if current_seat and current_seat.role == "student" and current_seat.student_id:
         actor_type = "student"
         actor_id = current_seat.student_id
         join_code = current_seat.join_code or session.get("current_join_code")
@@ -112,13 +114,16 @@ def resolve_actor_context() -> dict | None:
         actor_id = student.id
         join_code = session.get("current_join_code")
         class_id = session.get("current_class_id") or _resolve_class_id(join_code) or student.class_id
-        actor_public_id = _student_seat_public_id(student_id=actor_id, class_id=class_id)
+        actor_public_id = (
+            _session_seat(class_id=class_id, role="student").public_id
+            if class_id else None
+        )
     elif (admin := get_current_admin()) is not None:
         actor_type = "teacher"
         actor_id = admin.id
         join_code = session.get("current_join_code")
         class_id = session.get("current_class_id") or _resolve_class_id(join_code)
-        actor_public_id = _teacher_seat_public_id(admin_id=actor_id, class_id=class_id)
+        actor_public_id = _teacher_seat_public_id(class_id=class_id)
     elif (sysadmin := get_current_system_admin()) is not None:
         actor_type = "sysadmin"
         actor_id = sysadmin.id

@@ -7,6 +7,11 @@ import pytest
 import pyotp
 from app import app, db
 from app.models import Admin, ClassEconomy, ClassFeature, FeatureSettings, TeacherOnboarding, TeacherBlock
+from app.routes.admin import get_admin_feature_join_code_options
+from app.utils.economy_policy import (
+    get_class_feature_settings_for_class,
+    resolve_feature_class_for_class,
+)
 
 
 def _create_class_scope(admin, block='A', join_code='JOIN_A'):
@@ -96,6 +101,64 @@ class TestClassFeatures:
             db.session.commit()
 
         db.session.rollback()
+
+    def test_resolve_feature_class_for_class_is_class_scoped(self, client, test_admin):
+        """Class-scoped feature resolution must not bleed across a teacher's classes."""
+        economy_a = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
+        economy_b = _create_class_scope(test_admin, block='B', join_code='JOIN_B')
+        db.session.add(ClassFeature(class_id=economy_a.class_id, feature_name='hall_pass'))
+        db.session.commit()
+
+        scope_a = resolve_feature_class_for_class(economy_a.class_id, 'hall_pass')
+        scope_b = resolve_feature_class_for_class(economy_b.class_id, 'hall_pass')
+
+        assert scope_a == {
+            'class_id': economy_a.class_id,
+            'enabled': True,
+            'feature_name': 'hall_pass',
+            'join_code': 'JOIN_A',
+        }
+        assert scope_b == {
+            'class_id': economy_b.class_id,
+            'enabled': False,
+            'feature_name': 'hall_pass',
+            'join_code': 'JOIN_B',
+        }
+
+    def test_get_class_feature_settings_for_class_reads_from_class_features(self, client, test_admin):
+        """Class-scoped feature settings should read directly from class feature rows."""
+        economy = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
+        db.session.add(ClassFeature(class_id=economy.class_id, feature_name='banking'))
+        db.session.add(ClassFeature(class_id=economy.class_id, feature_name='hall_pass'))
+        db.session.commit()
+
+        scoped = get_class_feature_settings_for_class(economy.class_id)
+
+        assert scoped['class_id'] == economy.class_id
+        assert scoped['features']['payroll_enabled'] is True
+        assert scoped['features']['banking_enabled'] is True
+        assert scoped['features']['hall_pass_enabled'] is True
+        assert scoped['features']['insurance_enabled'] is False
+
+    def test_admin_feature_join_code_options_do_not_depend_on_teacher_block(self, client, test_admin):
+        """Enabled class options should come from class scope, not TeacherBlock discovery."""
+        economy_a = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
+        economy_b = _create_class_scope(test_admin, block='B', join_code='JOIN_B')
+        db.session.add(ClassFeature(class_id=economy_a.class_id, feature_name='hall_pass'))
+        TeacherBlock.query.filter(
+            TeacherBlock.teacher_id == test_admin.id,
+            TeacherBlock.join_code == economy_a.join_code,
+        ).delete(synchronize_session=False)
+        db.session.commit()
+
+        options = get_admin_feature_join_code_options('hall_pass', admin_id=test_admin.id)
+
+        assert options == [{
+            'join_code': economy_a.join_code,
+            'class_id': economy_a.class_id,
+            'block': '',
+            'label': economy_a.display_name,
+        }]
 
 
 class TestTeacherOnboarding:

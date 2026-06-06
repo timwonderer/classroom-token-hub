@@ -1,0 +1,1191 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.5, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/timothychang/Documents/GitHub/classroom-economy
+configfile: pytest.ini
+plugins: flask-1.3.0
+collected 19 items
+
+tests/test_api_tenancy.py FFF.FFFFFFF...FFFF.                            [100%]
+
+=================================== FAILURES ===================================
+________________ test_attendance_history_api_scoped_to_teacher _________________
+
+client = <FlaskClient <Flask 'app'>>
+
+    def test_attendance_history_api_scoped_to_teacher(client):
+        """Admin should only see attendance history for their own students."""
+        teacher_a, secret_a = _create_admin("teacher-a")
+        teacher_b, secret_b = _create_admin("teacher-b")
+    
+        # Create students for each teacher
+        student_a = _create_student("StudentA", primary_teacher=teacher_a)
+        student_b = _create_student("StudentB", primary_teacher=teacher_b)
+    
+        # Create tap events for both students
+        tap_a = _create_tap_event(student_a, teacher_a, "ATTEND_A", status="active")
+        tap_b = _create_tap_event(student_b, teacher_b, "ATTEND_B", status="active")
+    
+        # Login as teacher A
+        _login_admin(client, teacher_a, secret_a)
+    
+        # Request attendance history
+        response = client.get("/api/attendance/history")
+    
+>       assert response.status_code == 200
+E       assert 302 == 200
+E        +  where 302 = <WrapperTestResponse streamed [302 FOUND]>.status_code
+
+tests/test_api_tenancy.py:231: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[2026-06-04 21:18:04,505] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+[2026-06-04 21:18:04,505] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+[2026-06-04 21:18:04,506] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_acded69d20a245d3986fd81cf666b1d4 | idempotency_key=NONE
+------------------------------ Captured log setup ------------------------------
+WARNING  app.feats.base:base.py:333 FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_acded69d20a245d3986fd81cf666b1d4 | idempotency_key=NONE
+----------------------------- Captured stderr call -----------------------------
+[2026-06-04 21:18:04,604] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+[2026-06-04 21:18:04,612] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+[2026-06-04 21:18:04,619] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+[2026-06-04 21:18:04,624] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+[2026-06-04 21:18:04,624] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:04,628] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:04,631] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:04,637] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:04,639] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+[2026-06-04 21:18:04,644] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+[2026-06-04 21:18:04,644] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:04,649] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:04,650] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:04,651] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:04,652] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+[2026-06-04 21:18:04,655] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+[2026-06-04 21:18:04,655] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:04,664] INFO in auth [5d16f0bd183d45eeb7df1ef15ce5c5a0] [actor=-:- class_id=-] [endpoint=/api/attendance/history method=GET] [error_class=- correlation_version=1]: Admin access attempt: session = {'_flashes': [('error', 'Invalid credentials or TOTP code.')], 'admin_id': 1, 'current_class_id': '83b7edd0-2ba5-4056-a569-9943314f7257', 'current_join_code': 'ATTEND_A', 'is_admin': True, 'last_activity': '2026-06-05T04:18:04.663273+00:00'}
+------------------------------ Captured log call -------------------------------
+INFO     app.feats.base:base.py:264 FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+INFO     app:auth.py:217 Admin access attempt: session = {'_flashes': [('error', 'Invalid credentials or TOTP code.')], 'admin_id': 1, 'current_class_id': '83b7edd0-2ba5-4056-a569-9943314f7257', 'current_join_code': 'ATTEND_A', 'is_admin': True, 'last_activity': '2026-06-05T04:18:04.663273+00:00'}
+--------------------------- Captured stderr teardown ---------------------------
+[2026-06-04 21:18:04,709] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+---------------------------- Captured log teardown -----------------------------
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_acded69d20a245d3986fd81cf666b1d4
+_____________ test_attendance_history_api_includes_shared_students _____________
+
+client = <FlaskClient <Flask 'app'>>
+
+    def test_attendance_history_api_includes_shared_students(client):
+        """Admin should see attendance history for shared students."""
+        teacher_a, secret_a = _create_admin("teacher-a")
+        teacher_b, secret_b = _create_admin("teacher-b")
+    
+        # Create shared student
+        shared_student = _create_student("Shared", primary_teacher=teacher_a, linked_teachers=[teacher_a, teacher_b])
+    
+        # Create exclusive students
+        exclusive_a = _create_student("ExclusiveA", primary_teacher=teacher_a)
+        exclusive_b = _create_student("ExclusiveB", primary_teacher=teacher_b)
+    
+        # Create tap events
+        tap_shared = _create_tap_event(shared_student, teacher_a, "SHARED_A")
+        _create_class_scope(teacher_b, shared_student, "SHARED_B")
+        tap_a = _create_tap_event(exclusive_a, teacher_a, "EXCL_A")
+        tap_b = _create_tap_event(exclusive_b, teacher_b, "EXCL_B")
+    
+        # Login as teacher A
+        _login_admin(client, teacher_a, secret_a)
+    
+        # Request attendance history
+        response = client.get("/api/attendance/history")
+    
+>       assert response.status_code == 200
+E       assert 302 == 200
+E        +  where 302 = <WrapperTestResponse streamed [302 FOUND]>.status_code
+
+tests/test_api_tenancy.py:265: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[2026-06-04 21:18:05,241] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+[2026-06-04 21:18:05,241] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+[2026-06-04 21:18:05,242] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_8b76ae5b709f40288022d017c466f527 | idempotency_key=NONE
+------------------------------ Captured log setup ------------------------------
+WARNING  app.feats.base:base.py:333 FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_8b76ae5b709f40288022d017c466f527 | idempotency_key=NONE
+----------------------------- Captured stderr call -----------------------------
+[2026-06-04 21:18:05,244] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+[2026-06-04 21:18:05,255] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+[2026-06-04 21:18:05,264] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+[2026-06-04 21:18:05,266] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,269] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+[2026-06-04 21:18:05,269] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,270] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,273] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+[2026-06-04 21:18:05,273] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,276] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,279] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,284] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,287] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+[2026-06-04 21:18:05,290] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+[2026-06-04 21:18:05,291] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,295] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,296] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,297] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,299] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+[2026-06-04 21:18:05,300] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 17 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,301] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 18 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,302] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 19 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,303] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+[2026-06-04 21:18:05,306] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=10. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+[2026-06-04 21:18:05,306] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 20 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,307] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 21 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,308] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 22 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,310] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 23 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,311] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=11. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+[2026-06-04 21:18:05,313] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=12. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+[2026-06-04 21:18:05,314] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 24 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,319] INFO in auth [ce7ce38967824b4e81cdfc1c14f41725] [actor=-:- class_id=-] [endpoint=/api/attendance/history method=GET] [error_class=- correlation_version=1]: Admin access attempt: session = {'_flashes': [('error', 'Invalid credentials or TOTP code.')], 'admin_id': 1, 'current_class_id': '33546a27-1afa-4e48-8a9f-25cdccc74125', 'current_join_code': 'SHARED_A', 'is_admin': True, 'last_activity': '2026-06-05T04:18:05.318604+00:00'}
+------------------------------ Captured log call -------------------------------
+INFO     app.feats.base:base.py:264 FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 17 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 18 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 19 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=10. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 20 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 21 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 22 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 23 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=11. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=12. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 24 flushes. Consider simplifying or batching mutations.
+INFO     app:auth.py:217 Admin access attempt: session = {'_flashes': [('error', 'Invalid credentials or TOTP code.')], 'admin_id': 1, 'current_class_id': '33546a27-1afa-4e48-8a9f-25cdccc74125', 'current_join_code': 'SHARED_A', 'is_admin': True, 'last_activity': '2026-06-05T04:18:05.318604+00:00'}
+--------------------------- Captured stderr teardown ---------------------------
+[2026-06-04 21:18:05,328] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=13. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+---------------------------- Captured log teardown -----------------------------
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=13. Correlation=bypass_test_8b76ae5b709f40288022d017c466f527
+____________ test_attendance_history_api_filters_work_with_scoping _____________
+
+client = <FlaskClient <Flask 'app'>>
+
+    def test_attendance_history_api_filters_work_with_scoping(client):
+        """Filters should work correctly with tenant scoping."""
+        teacher_a, secret_a = _create_admin("teacher-a")
+        teacher_b, secret_b = _create_admin("teacher-b")
+    
+        # Create students with different periods
+        student_a1 = _create_student("StudentA1", primary_teacher=teacher_a)
+        student_a1.block = "Period1"
+        student_a2 = _create_student("StudentA2", primary_teacher=teacher_a)
+        student_a2.block = "Period2"
+        student_b = _create_student("StudentB", primary_teacher=teacher_b)
+        student_b.block = "Period1"
+        db.session.commit()
+    
+        # Create tap events
+        _create_class_scope(teacher_a, student_a1, "FILTER_A1")
+        _create_class_scope(teacher_a, student_a2, "FILTER_A2")
+        _create_class_scope(teacher_b, student_b, "FILTER_B1")
+        class_a1 = ClassEconomy.query.filter_by(join_code="FILTER_A1", teacher_id=teacher_a.id).first()
+        class_a2 = ClassEconomy.query.filter_by(join_code="FILTER_A2", teacher_id=teacher_a.id).first()
+        class_b = ClassEconomy.query.filter_by(join_code="FILTER_B1", teacher_id=teacher_b.id).first()
+        seat_a1 = _get_or_create_student_seat(student_a1, class_a1.class_id, "FILTER_A1")
+        seat_a2 = _get_or_create_student_seat(student_a2, class_a2.class_id, "FILTER_A2")
+        seat_b = _get_or_create_student_seat(student_b, class_b.class_id, "FILTER_B1")
+        tap_a1 = TapEvent(student_id=student_a1.id, seat_id=seat_a1.id, class_id=class_a1.class_id, join_code="FILTER_A1", period="1", status="active", timestamp=datetime.now(timezone.utc))
+        tap_a2 = TapEvent(student_id=student_a2.id, seat_id=seat_a2.id, class_id=class_a2.class_id, join_code="FILTER_A2", period="2", status="active", timestamp=datetime.now(timezone.utc))
+        tap_b = TapEvent(student_id=student_b.id, seat_id=seat_b.id, class_id=class_b.class_id, join_code="FILTER_B1", period="1", status="active", timestamp=datetime.now(timezone.utc))
+        db.session.add_all([tap_a1, tap_a2, tap_b])
+        db.session.commit()
+    
+        # Login as teacher A
+        _login_admin(client, teacher_a, secret_a)
+    
+        # Request attendance history filtered by period 1
+        response = client.get("/api/attendance/history?period=1")
+    
+>       assert response.status_code == 200
+E       assert 302 == 200
+E        +  where 302 = <WrapperTestResponse streamed [302 FOUND]>.status_code
+
+tests/test_api_tenancy.py:312: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[2026-06-04 21:18:05,840] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+[2026-06-04 21:18:05,841] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+[2026-06-04 21:18:05,841] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_429983a9ead64b20b964905e8b078753 | idempotency_key=NONE
+------------------------------ Captured log setup ------------------------------
+WARNING  app.feats.base:base.py:333 FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_429983a9ead64b20b964905e8b078753 | idempotency_key=NONE
+----------------------------- Captured stderr call -----------------------------
+[2026-06-04 21:18:05,843] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+[2026-06-04 21:18:05,855] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+[2026-06-04 21:18:05,861] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+[2026-06-04 21:18:05,918] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+[2026-06-04 21:18:05,918] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,920] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,933] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+[2026-06-04 21:18:05,948] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:05,953] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+[2026-06-04 21:18:05,954] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:06,018] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:06,064] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:06,085] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:06,091] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+[2026-06-04 21:18:06,106] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:06,110] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:06,119] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:06,135] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+[2026-06-04 21:18:06,139] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:06,142] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 17 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:06,150] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 18 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:06,154] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+[2026-06-04 21:18:06,185] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=10. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+[2026-06-04 21:18:06,186] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 19 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:06,232] INFO in auth [24448e954bfd4e019d7098a205b1707b] [actor=-:- class_id=-] [endpoint=/api/attendance/history method=GET] [error_class=- correlation_version=1]: Admin access attempt: session = {'_flashes': [('error', 'Invalid credentials or TOTP code.')], 'admin_id': 1, 'current_class_id': '25db9a6f-0177-4dcd-9afc-fd5d0ab5e980', 'current_join_code': 'FILTER_A1', 'is_admin': True, 'last_activity': '2026-06-05T04:18:06.228061+00:00'}
+------------------------------ Captured log call -------------------------------
+INFO     app.feats.base:base.py:264 FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 17 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 18 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=10. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 19 flushes. Consider simplifying or batching mutations.
+INFO     app:auth.py:217 Admin access attempt: session = {'_flashes': [('error', 'Invalid credentials or TOTP code.')], 'admin_id': 1, 'current_class_id': '25db9a6f-0177-4dcd-9afc-fd5d0ab5e980', 'current_join_code': 'FILTER_A1', 'is_admin': True, 'last_activity': '2026-06-05T04:18:06.228061+00:00'}
+--------------------------- Captured stderr teardown ---------------------------
+[2026-06-04 21:18:06,253] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=11. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+---------------------------- Captured log teardown -----------------------------
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=11. Correlation=bypass_test_429983a9ead64b20b964905e8b078753
+__________________ test_admin_tap_entries_scoped_by_join_code __________________
+
+client = <FlaskClient <Flask 'app'>>
+
+    def test_admin_tap_entries_scoped_by_join_code(client):
+        """Admin should only receive tap entries from their own join-code scope."""
+        teacher_a, secret_a = _create_admin("teacher-a")
+        teacher_b, _ = _create_admin("teacher-b")
+    
+        shared_student = _create_student(
+            "SharedTap",
+            primary_teacher=teacher_a,
+            linked_teachers=[teacher_a, teacher_b],
+        )
+        _create_class_scope(teacher_a, shared_student, "JOIN_A")
+        _create_class_scope(teacher_b, shared_student, "JOIN_B")
+        seat_a = _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
+        seat_b = _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="B")
+        user_seat_a = _get_or_create_student_seat(shared_student, seat_a.class_id, "JOIN_A")
+        user_seat_b = _get_or_create_student_seat(shared_student, seat_b.class_id, "JOIN_B")
+    
+        tap_a = TapEvent(
+            student_id=shared_student.id,
+            seat_id=user_seat_a.id,
+            class_id=seat_a.class_id,
+            period="A",
+            status="active",
+            timestamp=datetime.now(timezone.utc),
+            join_code="JOIN_A",
+        )
+        tap_b = TapEvent(
+            student_id=shared_student.id,
+            seat_id=user_seat_b.id,
+            class_id=seat_b.class_id,
+            period="B",
+            status="active",
+            timestamp=datetime.now(timezone.utc),
+            join_code="JOIN_B",
+        )
+        db.session.add_all([tap_a, tap_b])
+        db.session.commit()
+    
+        _login_admin(client, teacher_a, secret_a)
+        response = client.get(f"/api/admin/tap-entries/{shared_student.id}")
+    
+>       assert response.status_code == 200
+E       assert 401 == 200
+E        +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code
+
+tests/test_api_tenancy.py:396: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[2026-06-04 21:18:07,934] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+[2026-06-04 21:18:07,935] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+[2026-06-04 21:18:07,935] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_cc2adcecb8fc4646a63903e431464a81 | idempotency_key=NONE
+------------------------------ Captured log setup ------------------------------
+WARNING  app.feats.base:base.py:333 FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_cc2adcecb8fc4646a63903e431464a81 | idempotency_key=NONE
+----------------------------- Captured stderr call -----------------------------
+[2026-06-04 21:18:07,936] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+[2026-06-04 21:18:07,971] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+[2026-06-04 21:18:07,979] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+[2026-06-04 21:18:07,983] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:07,987] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:07,991] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:07,992] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+[2026-06-04 21:18:07,994] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:07,994] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:07,996] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:07,997] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+[2026-06-04 21:18:07,999] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:08,002] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+[2026-06-04 21:18:08,003] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:08,005] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:08,007] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+[2026-06-04 21:18:08,007] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:08,016] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+[2026-06-04 21:18:08,017] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+------------------------------ Captured log call -------------------------------
+INFO     app.feats.base:base.py:264 FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+--------------------------- Captured stderr teardown ---------------------------
+[2026-06-04 21:18:08,045] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+---------------------------- Captured log teardown -----------------------------
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_cc2adcecb8fc4646a63903e431464a81
+_____________ test_admin_delete_tap_entry_enforces_join_code_scope _____________
+
+client = <FlaskClient <Flask 'app'>>
+
+    def test_admin_delete_tap_entry_enforces_join_code_scope(client):
+        """Admin should not delete tap entries from another teacher's join code."""
+        teacher_a, secret_a = _create_admin("teacher-a")
+        teacher_b, _ = _create_admin("teacher-b")
+    
+        shared_student = _create_student(
+            "SharedDelete",
+            primary_teacher=teacher_a,
+            linked_teachers=[teacher_a, teacher_b],
+        )
+        _create_class_scope(teacher_a, shared_student, "JOIN_A")
+        _create_class_scope(teacher_b, shared_student, "JOIN_B")
+        seat_a = _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
+        seat_b = _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="B")
+        user_seat_a = _get_or_create_student_seat(shared_student, seat_a.class_id, "JOIN_A")
+        user_seat_b = _get_or_create_student_seat(shared_student, seat_b.class_id, "JOIN_B")
+    
+        tap_a = TapEvent(
+            student_id=shared_student.id,
+            seat_id=user_seat_a.id,
+            class_id=seat_a.class_id,
+            period="A",
+            status="active",
+            timestamp=datetime.now(timezone.utc),
+            join_code="JOIN_A",
+        )
+        tap_b = TapEvent(
+            student_id=shared_student.id,
+            seat_id=user_seat_b.id,
+            class_id=seat_b.class_id,
+            period="B",
+            status="active",
+            timestamp=datetime.now(timezone.utc),
+            join_code="JOIN_B",
+        )
+        db.session.add_all([tap_a, tap_b])
+        db.session.commit()
+    
+        _login_admin(client, teacher_a, secret_a)
+    
+        deny_response = client.delete(
+            f"/api/admin/tap-entries/{tap_b.id}",
+            headers={"X-CSRFToken": "test"},
+        )
+>       assert deny_response.status_code == 403
+E       assert 401 == 403
+E        +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code
+
+tests/test_api_tenancy.py:451: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[2026-06-04 21:18:08,510] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+[2026-06-04 21:18:08,510] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+[2026-06-04 21:18:08,511] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_c8db7bba7f5242bfb63250bcc582f862 | idempotency_key=NONE
+------------------------------ Captured log setup ------------------------------
+WARNING  app.feats.base:base.py:333 FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_c8db7bba7f5242bfb63250bcc582f862 | idempotency_key=NONE
+----------------------------- Captured stderr call -----------------------------
+[2026-06-04 21:18:08,513] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+[2026-06-04 21:18:08,523] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+[2026-06-04 21:18:08,530] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+[2026-06-04 21:18:08,534] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:08,536] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:08,540] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:08,542] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+[2026-06-04 21:18:08,543] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:08,544] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:08,546] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:08,547] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+[2026-06-04 21:18:08,550] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:08,553] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+[2026-06-04 21:18:08,553] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:08,556] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:08,557] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+[2026-06-04 21:18:08,558] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:08,561] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+[2026-06-04 21:18:08,561] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:08,570] WARNING in base [2302ebd3bcb74a098e3ab6e176164a26] [actor=-:- class_id=-] [endpoint=/api/admin/tap-entries/<int:event_id> method=DELETE] [error_class=- correlation_version=1]: FEAT-SHELL-DIRTY: Executing legacy logic in shell FEAT-ATTN-001. Function=delete_tap_entry. Correlation=GENERATE
+[2026-06-04 21:18:08,571] WARNING in base [2302ebd3bcb74a098e3ab6e176164a26] [actor=-:- class_id=-] [endpoint=/api/admin/tap-entries/<int:event_id> method=DELETE] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-ATTN-001 (Blast=MED) missing idempotency_key.
+[2026-06-04 21:18:08,571] INFO in base [2302ebd3bcb74a098e3ab6e176164a26] [actor=-:- class_id=-] [endpoint=/api/admin/tap-entries/<int:event_id> method=DELETE] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-ATTN-001 | correlation_id=bypass_test_c8db7bba7f5242bfb63250bcc582f862 | idempotency_key=NONE
+------------------------------ Captured log call -------------------------------
+INFO     app.feats.base:base.py:264 FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:412 FEAT-SHELL-DIRTY: Executing legacy logic in shell FEAT-ATTN-001. Function=delete_tap_entry. Correlation=GENERATE
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-ATTN-001 (Blast=MED) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-ATTN-001 | correlation_id=bypass_test_c8db7bba7f5242bfb63250bcc582f862 | idempotency_key=NONE
+--------------------------- Captured stderr teardown ---------------------------
+[2026-06-04 21:18:08,579] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+---------------------------- Captured log teardown -----------------------------
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_c8db7bba7f5242bfb63250bcc582f862
+_______ test_admin_student_block_settings_rejects_out_of_scope_join_code _______
+
+client = <FlaskClient <Flask 'app'>>
+
+    def test_admin_student_block_settings_rejects_out_of_scope_join_code(client):
+        """Admin must not update a StudentBlock row bound to another join code."""
+        teacher_a, secret_a = _create_admin("teacher-a")
+        teacher_b, _ = _create_admin("teacher-b")
+    
+        shared_student = _create_student(
+            "SharedBlock",
+            primary_teacher=teacher_a,
+            linked_teachers=[teacher_a, teacher_b],
+        )
+        _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
+        _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="A")
+    
+        block = StudentBlock(
+            student_id=shared_student.id,
+            period="A",
+            join_code="JOIN_B",
+            tap_enabled=True,
+        )
+        db.session.add(block)
+        db.session.commit()
+    
+        _login_admin(client, teacher_a, secret_a)
+        response = client.post(
+            "/api/admin/student-block-settings",
+            json={"student_id": shared_student.id, "period": "A", "tap_enabled": False},
+            headers={"X-CSRFToken": "test"},
+        )
+    
+>       assert response.status_code == 403
+E       assert 401 == 403
+E        +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code
+
+tests/test_api_tenancy.py:493: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[2026-06-04 21:18:09,095] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+[2026-06-04 21:18:09,095] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+[2026-06-04 21:18:09,096] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36 | idempotency_key=NONE
+------------------------------ Captured log setup ------------------------------
+WARNING  app.feats.base:base.py:333 FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36 | idempotency_key=NONE
+----------------------------- Captured stderr call -----------------------------
+[2026-06-04 21:18:09,098] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+[2026-06-04 21:18:09,108] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+[2026-06-04 21:18:09,119] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+[2026-06-04 21:18:09,125] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:09,129] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:09,134] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:09,137] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+[2026-06-04 21:18:09,141] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:09,145] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+[2026-06-04 21:18:09,145] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:09,149] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:09,150] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:09,151] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:09,153] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+[2026-06-04 21:18:09,154] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:09,156] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+[2026-06-04 21:18:09,156] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:09,157] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+[2026-06-04 21:18:09,157] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:09,168] WARNING in base [6105cdcf11d747ab952308f94f49180e] [actor=-:- class_id=-] [endpoint=/api/admin/student-block-settings method=POST] [error_class=- correlation_version=1]: FEAT-SHELL-DIRTY: Executing legacy logic in shell FEAT-ATTN-001. Function=update_student_block_settings. Correlation=GENERATE
+[2026-06-04 21:18:09,169] WARNING in base [6105cdcf11d747ab952308f94f49180e] [actor=-:- class_id=-] [endpoint=/api/admin/student-block-settings method=POST] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-ATTN-001 (Blast=MED) missing idempotency_key.
+[2026-06-04 21:18:09,169] INFO in base [6105cdcf11d747ab952308f94f49180e] [actor=-:- class_id=-] [endpoint=/api/admin/student-block-settings method=POST] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-ATTN-001 | correlation_id=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36 | idempotency_key=NONE
+------------------------------ Captured log call -------------------------------
+INFO     app.feats.base:base.py:264 FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:412 FEAT-SHELL-DIRTY: Executing legacy logic in shell FEAT-ATTN-001. Function=update_student_block_settings. Correlation=GENERATE
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-ATTN-001 (Blast=MED) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-ATTN-001 | correlation_id=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36 | idempotency_key=NONE
+--------------------------- Captured stderr teardown ---------------------------
+[2026-06-04 21:18:09,177] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+---------------------------- Captured log teardown -----------------------------
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_7070bf52817a45c8b6c3b601b4d0dc36
+_________ test_admin_student_block_settings_rejects_null_join_code_row _________
+
+client = <FlaskClient <Flask 'app'>>
+
+    def test_admin_student_block_settings_rejects_null_join_code_row(client):
+        """Admin update should reject StudentBlock rows without join-code scope in v2 mode."""
+        teacher_a, secret_a = _create_admin("teacher-a")
+        student = _create_student("LegacyBlock", primary_teacher=teacher_a)
+        _create_claimed_seat(teacher_a, student, "JOIN_A", block="A")
+    
+        block = StudentBlock(
+            student_id=student.id,
+            period="A",
+            join_code=None,
+            tap_enabled=True,
+        )
+        db.session.add(block)
+        db.session.commit()
+    
+        _login_admin(client, teacher_a, secret_a)
+        response = client.post(
+            "/api/admin/student-block-settings",
+            json={"student_id": student.id, "period": "A", "tap_enabled": False},
+            headers={"X-CSRFToken": "test"},
+        )
+    
+>       assert response.status_code == 403
+E       assert 401 == 403
+E        +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code
+
+tests/test_api_tenancy.py:520: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[2026-06-04 21:18:09,686] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+[2026-06-04 21:18:09,686] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+[2026-06-04 21:18:09,687] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_02f0e460148c4a7184aad77144cd8f5c | idempotency_key=NONE
+------------------------------ Captured log setup ------------------------------
+WARNING  app.feats.base:base.py:333 FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_02f0e460148c4a7184aad77144cd8f5c | idempotency_key=NONE
+----------------------------- Captured stderr call -----------------------------
+[2026-06-04 21:18:09,690] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_02f0e460148c4a7184aad77144cd8f5c
+[2026-06-04 21:18:09,707] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_02f0e460148c4a7184aad77144cd8f5c
+[2026-06-04 21:18:09,721] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:09,724] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_02f0e460148c4a7184aad77144cd8f5c
+[2026-06-04 21:18:09,728] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:09,733] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_02f0e460148c4a7184aad77144cd8f5c
+[2026-06-04 21:18:09,733] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:09,735] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_02f0e460148c4a7184aad77144cd8f5c
+[2026-06-04 21:18:09,735] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:09,744] WARNING in base [cff2c3fb62d24f678964ce3a8aa22801] [actor=-:- class_id=-] [endpoint=/api/admin/student-block-settings method=POST] [error_class=- correlation_version=1]: FEAT-SHELL-DIRTY: Executing legacy logic in shell FEAT-ATTN-001. Function=update_student_block_settings. Correlation=GENERATE
+[2026-06-04 21:18:09,744] WARNING in base [cff2c3fb62d24f678964ce3a8aa22801] [actor=-:- class_id=-] [endpoint=/api/admin/student-block-settings method=POST] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-ATTN-001 (Blast=MED) missing idempotency_key.
+[2026-06-04 21:18:09,744] INFO in base [cff2c3fb62d24f678964ce3a8aa22801] [actor=-:- class_id=-] [endpoint=/api/admin/student-block-settings method=POST] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-ATTN-001 | correlation_id=bypass_test_02f0e460148c4a7184aad77144cd8f5c | idempotency_key=NONE
+------------------------------ Captured log call -------------------------------
+INFO     app.feats.base:base.py:264 FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_02f0e460148c4a7184aad77144cd8f5c
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_02f0e460148c4a7184aad77144cd8f5c
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_02f0e460148c4a7184aad77144cd8f5c
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_02f0e460148c4a7184aad77144cd8f5c
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_02f0e460148c4a7184aad77144cd8f5c
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:412 FEAT-SHELL-DIRTY: Executing legacy logic in shell FEAT-ATTN-001. Function=update_student_block_settings. Correlation=GENERATE
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-ATTN-001 (Blast=MED) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-ATTN-001 | correlation_id=bypass_test_02f0e460148c4a7184aad77144cd8f5c | idempotency_key=NONE
+--------------------------- Captured stderr teardown ---------------------------
+[2026-06-04 21:18:09,752] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_02f0e460148c4a7184aad77144cd8f5c
+---------------------------- Captured log teardown -----------------------------
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_02f0e460148c4a7184aad77144cd8f5c
+_____ test_admin_block_tap_settings_get_ignores_out_of_scope_join_code_row _____
+
+client = <FlaskClient <Flask 'app'>>
+
+    def test_admin_block_tap_settings_get_ignores_out_of_scope_join_code_row(client):
+        """Block-level tap state should ignore StudentBlock rows from other join-code scopes."""
+        teacher_a, secret_a = _create_admin("teacher-a")
+        teacher_b, _ = _create_admin("teacher-b")
+    
+        shared_student = _create_student(
+            "SharedTapState",
+            primary_teacher=teacher_a,
+            linked_teachers=[teacher_a, teacher_b],
+        )
+        _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
+        _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="A")
+    
+        # Out-of-scope row for teacher A should not drive block-level state.
+        db.session.add(
+            StudentBlock(
+                student_id=shared_student.id,
+                period="A",
+                join_code="JOIN_B",
+                tap_enabled=False,
+            )
+        )
+        db.session.commit()
+    
+        _login_admin(client, teacher_a, secret_a)
+        response = client.get("/api/admin/block-tap-settings?block=A")
+    
+>       assert response.status_code == 200
+E       assert 302 == 200
+E        +  where 302 = <WrapperTestResponse streamed [302 FOUND]>.status_code
+
+tests/test_api_tenancy.py:553: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[2026-06-04 21:18:10,269] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+[2026-06-04 21:18:10,269] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+[2026-06-04 21:18:10,269] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_b431a86d3241446a9316a2de20bad69b | idempotency_key=NONE
+------------------------------ Captured log setup ------------------------------
+WARNING  app.feats.base:base.py:333 FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_b431a86d3241446a9316a2de20bad69b | idempotency_key=NONE
+----------------------------- Captured stderr call -----------------------------
+[2026-06-04 21:18:10,270] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+[2026-06-04 21:18:10,282] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+[2026-06-04 21:18:10,289] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+[2026-06-04 21:18:10,294] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,296] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,301] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,303] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+[2026-06-04 21:18:10,306] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,309] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+[2026-06-04 21:18:10,309] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,311] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,312] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,314] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,315] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+[2026-06-04 21:18:10,317] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,319] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+[2026-06-04 21:18:10,319] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,320] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+[2026-06-04 21:18:10,320] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,327] INFO in auth [49b7302bdc904486a3bd3ff708a5bddb] [actor=-:- class_id=-] [endpoint=/api/admin/block-tap-settings method=GET] [error_class=- correlation_version=1]: Admin access attempt: session = {'_flashes': [('error', 'Invalid credentials or TOTP code.')], 'admin_id': 1, 'current_class_id': '29d81100-c87c-4b7e-b474-5bc0195f61c2', 'current_join_code': 'JOIN_A', 'is_admin': True, 'last_activity': '2026-06-05T04:18:10.326753+00:00'}
+------------------------------ Captured log call -------------------------------
+INFO     app.feats.base:base.py:264 FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+INFO     app:auth.py:217 Admin access attempt: session = {'_flashes': [('error', 'Invalid credentials or TOTP code.')], 'admin_id': 1, 'current_class_id': '29d81100-c87c-4b7e-b474-5bc0195f61c2', 'current_join_code': 'JOIN_A', 'is_admin': True, 'last_activity': '2026-06-05T04:18:10.326753+00:00'}
+--------------------------- Captured stderr teardown ---------------------------
+[2026-06-04 21:18:10,336] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+---------------------------- Captured log teardown -----------------------------
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_b431a86d3241446a9316a2de20bad69b
+___ test_admin_block_tap_settings_post_preserves_out_of_scope_join_code_row ____
+
+client = <FlaskClient <Flask 'app'>>
+
+    def test_admin_block_tap_settings_post_preserves_out_of_scope_join_code_row(client):
+        """Bulk block tap updates must not mutate another join-code's StudentBlock row."""
+        teacher_a, secret_a = _create_admin("teacher-a")
+        teacher_b, _ = _create_admin("teacher-b")
+    
+        shared_student = _create_student(
+            "SharedTapBulk",
+            primary_teacher=teacher_a,
+            linked_teachers=[teacher_a, teacher_b],
+        )
+        _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
+        _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="A")
+    
+        foreign_row = StudentBlock(
+            student_id=shared_student.id,
+            period="A",
+            join_code="JOIN_B",
+            tap_enabled=True,
+        )
+        db.session.add(foreign_row)
+        db.session.commit()
+    
+        _login_admin(client, teacher_a, secret_a)
+        response = client.post(
+            "/api/admin/block-tap-settings",
+            json={"block": "A", "tap_enabled": False},
+            headers={"X-CSRFToken": "test"},
+        )
+    
+>       assert response.status_code == 404
+E       assert 302 == 404
+E        +  where 302 = <WrapperTestResponse streamed [302 FOUND]>.status_code
+
+tests/test_api_tenancy.py:588: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[2026-06-04 21:18:10,855] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+[2026-06-04 21:18:10,855] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+[2026-06-04 21:18:10,856] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_81977339fad245cc88f85d1e6d4358bc | idempotency_key=NONE
+------------------------------ Captured log setup ------------------------------
+WARNING  app.feats.base:base.py:333 FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_81977339fad245cc88f85d1e6d4358bc | idempotency_key=NONE
+----------------------------- Captured stderr call -----------------------------
+[2026-06-04 21:18:10,856] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+[2026-06-04 21:18:10,869] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+[2026-06-04 21:18:10,876] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+[2026-06-04 21:18:10,880] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,882] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,886] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,888] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+[2026-06-04 21:18:10,890] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,893] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+[2026-06-04 21:18:10,893] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,896] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,897] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,898] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,900] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+[2026-06-04 21:18:10,901] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,903] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+[2026-06-04 21:18:10,903] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,904] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+[2026-06-04 21:18:10,904] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:10,911] INFO in auth [fc0c27749ae5497ea853fabaf4e93def] [actor=-:- class_id=-] [endpoint=/api/admin/block-tap-settings method=POST] [error_class=- correlation_version=1]: Admin access attempt: session = {'_flashes': [('error', 'Invalid credentials or TOTP code.')], 'admin_id': 1, 'current_class_id': 'bfd990b6-f2c4-48b8-838f-7f3c7caf6a0c', 'current_join_code': 'JOIN_A', 'is_admin': True, 'last_activity': '2026-06-05T04:18:10.910776+00:00'}
+------------------------------ Captured log call -------------------------------
+INFO     app.feats.base:base.py:264 FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+INFO     app:auth.py:217 Admin access attempt: session = {'_flashes': [('error', 'Invalid credentials or TOTP code.')], 'admin_id': 1, 'current_class_id': 'bfd990b6-f2c4-48b8-838f-7f3c7caf6a0c', 'current_join_code': 'JOIN_A', 'is_admin': True, 'last_activity': '2026-06-05T04:18:10.910776+00:00'}
+--------------------------- Captured stderr teardown ---------------------------
+[2026-06-04 21:18:10,920] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+---------------------------- Captured log teardown -----------------------------
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_81977339fad245cc88f85d1e6d4358bc
+______ test_hall_pass_available_types_accepts_class_id_without_teacher_id ______
+
+client = <FlaskClient <Flask 'app'>>
+
+    def test_hall_pass_available_types_accepts_class_id_without_teacher_id(client):
+        teacher, _ = _create_admin("teacher-hall-types")
+        student = _create_student("JoinCodePassTypes", primary_teacher=teacher)
+        _create_claimed_seat(teacher, student, "HALLA1", block="A")
+    
+        economy = ClassEconomy.query.filter_by(join_code="HALLA1").first()
+        db.session.add(HallPassSettings(
+            class_id=economy.class_id,
+            pass_types=[
+                {"name": "Bathroom", "enabled": True},
+                {"name": "Office", "enabled": False},
+                {"name": "Nurse", "enabled": True},
+            ],
+        ))
+        db.session.add(ClassFeature(class_id=economy.class_id, feature_name="hall_pass"))
+        db.session.commit()
+    
+        _login_student(client, student, join_code="HALLA1")
+        response = client.get(f"/api/hall-pass/available-types?class_id={economy.class_id}")
+    
+>       assert response.status_code == 200
+E       assert 403 == 200
+E        +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code
+
+tests/test_api_tenancy.py:620: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[2026-06-04 21:18:11,471] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+[2026-06-04 21:18:11,471] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+[2026-06-04 21:18:11,471] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_3f38466021b64ffea974e1050434ca22 | idempotency_key=NONE
+------------------------------ Captured log setup ------------------------------
+WARNING  app.feats.base:base.py:333 FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_3f38466021b64ffea974e1050434ca22 | idempotency_key=NONE
+----------------------------- Captured stderr call -----------------------------
+[2026-06-04 21:18:11,475] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_3f38466021b64ffea974e1050434ca22
+[2026-06-04 21:18:11,494] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_3f38466021b64ffea974e1050434ca22
+[2026-06-04 21:18:11,509] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:11,512] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_3f38466021b64ffea974e1050434ca22
+[2026-06-04 21:18:11,516] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:11,519] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_3f38466021b64ffea974e1050434ca22
+[2026-06-04 21:18:11,519] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:11,521] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_3f38466021b64ffea974e1050434ca22
+[2026-06-04 21:18:11,521] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+------------------------------ Captured log call -------------------------------
+INFO     app.feats.base:base.py:264 FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_3f38466021b64ffea974e1050434ca22
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_3f38466021b64ffea974e1050434ca22
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_3f38466021b64ffea974e1050434ca22
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_3f38466021b64ffea974e1050434ca22
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_3f38466021b64ffea974e1050434ca22
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+--------------------------- Captured stderr teardown ---------------------------
+[2026-06-04 21:18:11,536] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_3f38466021b64ffea974e1050434ca22
+---------------------------- Captured log teardown -----------------------------
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_3f38466021b64ffea974e1050434ca22
+_____________ test_student_seat_context_rejects_cross_user_seat_id _____________
+
+client = <FlaskClient <Flask 'app'>>
+
+    def test_student_seat_context_rejects_cross_user_seat_id(client):
+        teacher_a, _ = _create_admin("teacher-seat-injection-a")
+        teacher_b, _ = _create_admin("teacher-seat-injection-b")
+        alice = _create_student("SeatAlice", primary_teacher=teacher_a)
+        bob = _create_student("SeatBob", primary_teacher=teacher_b)
+        _create_claimed_seat(teacher_a, alice, "SEATA1", block="A")
+        _create_claimed_seat(teacher_b, bob, "SEATB1", block="A")
+    
+        bob_class = ClassEconomy.query.filter_by(join_code="SEATB1", teacher_id=teacher_b.id).first()
+        bob_seat = Seat.query.filter_by(student_id=bob.id, class_id=bob_class.class_id).first()
+        assert bob_seat is not None and bob_seat.claimed_at is not None
+        assert bob_seat.student_id != alice.id
+    
+        from flask import session
+        from app.auth import get_current_seat, get_current_student_seat
+    
+        with app.test_request_context("/student/payroll"):
+            session["student_id"] = alice.id
+            session["current_seat_id"] = bob_seat.id
+            session["seat_id"] = bob_seat.id
+            session["current_class_id"] = bob_class.class_id
+            session["class_id"] = bob_class.class_id
+            session["current_join_code"] = "SEATB1"
+    
+>           assert get_current_student_seat() is None
+E           assert <Seat 4> is None
+E            +  where <Seat 4> = <function get_current_student_seat at 0x10a4dca40>()
+
+tests/test_api_tenancy.py:716: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[2026-06-04 21:18:13,966] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+[2026-06-04 21:18:13,966] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+[2026-06-04 21:18:13,967] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_5da61287211d49bf880f1309befbc5dc | idempotency_key=NONE
+------------------------------ Captured log setup ------------------------------
+WARNING  app.feats.base:base.py:333 FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_5da61287211d49bf880f1309befbc5dc | idempotency_key=NONE
+----------------------------- Captured stderr call -----------------------------
+[2026-06-04 21:18:13,969] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+[2026-06-04 21:18:13,982] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+[2026-06-04 21:18:13,989] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+[2026-06-04 21:18:13,996] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+[2026-06-04 21:18:13,996] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:14,000] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:14,003] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:14,008] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:14,011] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+[2026-06-04 21:18:14,015] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:14,018] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+[2026-06-04 21:18:14,018] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:14,020] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:14,021] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:14,023] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:14,024] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+[2026-06-04 21:18:14,026] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:14,028] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+[2026-06-04 21:18:14,028] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+------------------------------ Captured log call -------------------------------
+INFO     app.feats.base:base.py:264 FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 16 flushes. Consider simplifying or batching mutations.
+--------------------------- Captured stderr teardown ---------------------------
+[2026-06-04 21:18:14,041] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+---------------------------- Captured log teardown -----------------------------
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=9. Correlation=bypass_test_5da61287211d49bf880f1309befbc5dc
+___________ test_hall_pass_available_types_rejects_teacher_public_id ___________
+
+client = <FlaskClient <Flask 'app'>>
+
+    def test_hall_pass_available_types_rejects_teacher_public_id(client):
+        teacher, _ = _create_admin("teacher-hall-public")
+        student = _create_student("PublicIdPassTypes", primary_teacher=teacher)
+        _create_claimed_seat(teacher, student, "HALLP1", block="A")
+    
+        _login_student(client, student, join_code="HALLP1")
+        response = client.get("/api/hall-pass/available-types?teacher_public_id=crisp-otter-leaf")
+    
+>       assert response.status_code == 400
+E       assert 403 == 400
+E        +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code
+
+tests/test_api_tenancy.py:728: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[2026-06-04 21:18:14,572] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+[2026-06-04 21:18:14,572] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+[2026-06-04 21:18:14,573] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_34578d7477d34188a76f8a0b76c6bc52 | idempotency_key=NONE
+------------------------------ Captured log setup ------------------------------
+WARNING  app.feats.base:base.py:333 FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_34578d7477d34188a76f8a0b76c6bc52 | idempotency_key=NONE
+----------------------------- Captured stderr call -----------------------------
+[2026-06-04 21:18:14,575] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_34578d7477d34188a76f8a0b76c6bc52
+[2026-06-04 21:18:14,591] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_34578d7477d34188a76f8a0b76c6bc52
+[2026-06-04 21:18:14,605] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:14,608] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_34578d7477d34188a76f8a0b76c6bc52
+[2026-06-04 21:18:14,611] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:14,615] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_34578d7477d34188a76f8a0b76c6bc52
+[2026-06-04 21:18:14,615] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+------------------------------ Captured log call -------------------------------
+INFO     app.feats.base:base.py:264 FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_34578d7477d34188a76f8a0b76c6bc52
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_34578d7477d34188a76f8a0b76c6bc52
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_34578d7477d34188a76f8a0b76c6bc52
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_34578d7477d34188a76f8a0b76c6bc52
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+--------------------------- Captured stderr teardown ---------------------------
+[2026-06-04 21:18:14,629] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_34578d7477d34188a76f8a0b76c6bc52
+---------------------------- Captured log teardown -----------------------------
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_34578d7477d34188a76f8a0b76c6bc52
+_______________ test_switch_teacher_public_id_route_is_disabled ________________
+
+client = <FlaskClient <Flask 'app'>>
+
+    def test_switch_teacher_public_id_route_is_disabled(client):
+        teacher_a, _ = _create_admin("teacher-switch-a")
+        teacher_b, _ = _create_admin("teacher-switch-b")
+        student = _create_student(
+            "SwitchByPublicId",
+            primary_teacher=teacher_a,
+            linked_teachers=[teacher_a, teacher_b],
+        )
+        _create_claimed_seat(teacher_a, student, "SWITCHA1", block="A")
+        _create_claimed_seat(teacher_b, student, "SWITCHB1", block="B")
+    
+        _login_student(client, student, join_code="SWITCHA1")
+        response = client.post("/student/switch-teacher/teacher-switch-b-public")
+    
+>       assert response.status_code == 404
+E       assert 302 == 404
+E        +  where 302 = <WrapperTestResponse streamed [302 FOUND]>.status_code
+
+tests/test_api_tenancy.py:748: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[2026-06-04 21:18:15,145] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+[2026-06-04 21:18:15,145] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+[2026-06-04 21:18:15,145] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_ca03c68c96ed42c581f5663b4e9a91af | idempotency_key=NONE
+------------------------------ Captured log setup ------------------------------
+WARNING  app.feats.base:base.py:333 FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_ca03c68c96ed42c581f5663b4e9a91af | idempotency_key=NONE
+----------------------------- Captured stderr call -----------------------------
+[2026-06-04 21:18:15,146] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+[2026-06-04 21:18:15,163] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+[2026-06-04 21:18:15,169] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+[2026-06-04 21:18:15,173] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:15,176] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:15,179] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:15,180] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+[2026-06-04 21:18:15,183] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:15,186] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+[2026-06-04 21:18:15,186] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:15,188] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:15,189] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:15,191] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:15,193] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+[2026-06-04 21:18:15,195] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:15,197] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+[2026-06-04 21:18:15,197] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+------------------------------ Captured log call -------------------------------
+INFO     app.feats.base:base.py:264 FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 9 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 10 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 11 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 12 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 13 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=6. Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 14 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=7. Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 15 flushes. Consider simplifying or batching mutations.
+--------------------------- Captured stderr teardown ---------------------------
+[2026-06-04 21:18:15,209] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+---------------------------- Captured log teardown -----------------------------
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=8. Correlation=bypass_test_ca03c68c96ed42c581f5663b4e9a91af
+_________ test_switch_teacher_public_id_invalid_keeps_current_context __________
+
+client = <FlaskClient <Flask 'app'>>
+
+    def test_switch_teacher_public_id_invalid_keeps_current_context(client):
+        teacher_a, _ = _create_admin("teacher-switch-invalid-a")
+        student = _create_student("SwitchInvalidPublicId", primary_teacher=teacher_a)
+        _create_claimed_seat(teacher_a, student, "SWITCHINV", block="A")
+    
+        _login_student(client, student, join_code="SWITCHINV")
+        response = client.post("/student/switch-teacher/not-valid-public-id")
+    
+>       assert response.status_code == 404
+E       assert 302 == 404
+E        +  where 302 = <WrapperTestResponse streamed [302 FOUND]>.status_code
+
+tests/test_api_tenancy.py:762: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+[2026-06-04 21:18:15,751] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+[2026-06-04 21:18:15,751] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+[2026-06-04 21:18:15,751] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_e2335d1e1f4f49ef9c67f7301d7c8028 | idempotency_key=NONE
+------------------------------ Captured log setup ------------------------------
+WARNING  app.feats.base:base.py:333 FEAT-INTEGRITY-WARNING: FEATBypass active. Execution integrity is currently unmanaged.
+WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-BYPASS-LEGACY (Blast=LOW) missing idempotency_key.
+INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correlation_id=bypass_test_e2335d1e1f4f49ef9c67f7301d7c8028 | idempotency_key=NONE
+----------------------------- Captured stderr call -----------------------------
+[2026-06-04 21:18:15,753] INFO in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_e2335d1e1f4f49ef9c67f7301d7c8028
+[2026-06-04 21:18:15,771] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_e2335d1e1f4f49ef9c67f7301d7c8028
+[2026-06-04 21:18:15,787] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:15,790] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_e2335d1e1f4f49ef9c67f7301d7c8028
+[2026-06-04 21:18:15,794] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+[2026-06-04 21:18:15,798] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_e2335d1e1f4f49ef9c67f7301d7c8028
+[2026-06-04 21:18:15,799] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+------------------------------ Captured log call -------------------------------
+INFO     app.feats.base:base.py:264 FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | First commit owned by FEAT-BYPASS-LEGACY | Correlation=bypass_test_e2335d1e1f4f49ef9c67f7301d7c8028
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=2. Correlation=bypass_test_e2335d1e1f4f49ef9c67f7301d7c8028
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 6 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_e2335d1e1f4f49ef9c67f7301d7c8028
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 7 flushes. Consider simplifying or batching mutations.
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=4. Correlation=bypass_test_e2335d1e1f4f49ef9c67f7301d7c8028
+WARNING  app.feats.base:base.py:288 FEAT-FLUSH-COMPLEXITY: FEAT-BYPASS-LEGACY has triggered 8 flushes. Consider simplifying or batching mutations.
+--------------------------- Captured stderr teardown ---------------------------
+[2026-06-04 21:18:15,817] WARNING in base [-] [actor=-:- class_id=-] [endpoint=/ method=GET] [error_class=- correlation_version=1]: FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_e2335d1e1f4f49ef9c67f7301d7c8028
+---------------------------- Captured log teardown -----------------------------
+WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=5. Correlation=bypass_test_e2335d1e1f4f49ef9c67f7301d7c8028
+=========================== short test summary info ============================
+FAILED tests/test_api_tenancy.py::test_attendance_history_api_scoped_to_teacher
+FAILED tests/test_api_tenancy.py::test_attendance_history_api_includes_shared_students
+FAILED tests/test_api_tenancy.py::test_attendance_history_api_filters_work_with_scoping
+FAILED tests/test_api_tenancy.py::test_admin_tap_entries_scoped_by_join_code
+FAILED tests/test_api_tenancy.py::test_admin_delete_tap_entry_enforces_join_code_scope
+FAILED tests/test_api_tenancy.py::test_admin_student_block_settings_rejects_out_of_scope_join_code
+FAILED tests/test_api_tenancy.py::test_admin_student_block_settings_rejects_null_join_code_row
+FAILED tests/test_api_tenancy.py::test_admin_block_tap_settings_get_ignores_out_of_scope_join_code_row
+FAILED tests/test_api_tenancy.py::test_admin_block_tap_settings_post_preserves_out_of_scope_join_code_row
+FAILED tests/test_api_tenancy.py::test_hall_pass_available_types_accepts_class_id_without_teacher_id
+FAILED tests/test_api_tenancy.py::test_student_seat_context_rejects_cross_user_seat_id
+FAILED tests/test_api_tenancy.py::test_hall_pass_available_types_rejects_teacher_public_id
+FAILED tests/test_api_tenancy.py::test_switch_teacher_public_id_route_is_disabled
+FAILED tests/test_api_tenancy.py::test_switch_teacher_public_id_invalid_keeps_current_context
+======================== 14 failed, 5 passed in 12.50s =========================

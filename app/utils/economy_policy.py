@@ -611,6 +611,43 @@ def get_active_policy_mode_for_class(class_id: Optional[str]) -> str:
     return normalize_policy_mode(getattr(row, "economy_policy_mode", POLICY_MODE_DEFAULT))
 
 
+def resolve_feature_class_for_class(
+    class_id: Optional[str],
+    feature_name: str,
+) -> Optional[dict[str, Any]]:
+    """Resolve feature enablement by explicit canonical class_id."""
+    if feature_name not in FEATURE_FLAGS:
+        raise ValueError(f"Unknown feature flag: {feature_name}")
+    if not has_app_context() or not class_id:
+        return None
+
+    from app.models import ClassEconomy, ClassFeature
+
+    class_row = ClassEconomy.query.with_entities(ClassEconomy.join_code).filter_by(class_id=class_id).first()
+    enabled = feature_name in ClassFeature.enabled_names_for_class(class_id)
+    return {
+        "class_id": class_id,
+        "enabled": bool(enabled),
+        "feature_name": feature_name,
+        "join_code": class_row.join_code if class_row else None,
+    }
+
+
+def get_class_feature_settings_for_class(
+    class_id: Optional[str],
+) -> Optional[dict[str, Any]]:
+    """Return class feature map by explicit canonical class_id."""
+    if not has_app_context() or not class_id:
+        return None
+
+    from app.models import ClassFeature
+
+    return {
+        "class_id": class_id,
+        "features": ClassFeature.feature_map_for_class(class_id),
+    }
+
+
 def get_analytics_policy(mode: Optional[str]) -> Dict[str, float]:
     profile = get_policy_profile(mode)
     configured = profile.get("analytics", {})

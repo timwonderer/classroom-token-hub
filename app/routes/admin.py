@@ -87,6 +87,7 @@ from app.utils.economy_balance import EconomyBalanceChecker
 from app.utils.economy_policy import (
     POLICY_MODES,
     convert_weekly_amount_to_frequency,
+    get_class_feature_settings_for_class,
     get_insurance_premium_recommendation,
     get_class_feature_settings,
     get_feature_settings_row_for_class,
@@ -95,6 +96,7 @@ from app.utils.economy_policy import (
     replace_enabled_class_features,
     resolve_class_scope,
     resolve_feature_class,
+    resolve_feature_class_for_class,
 )
 from app.utils.economy_rebalance import (
     REBALANCE_ACTIVATION_IMMEDIATE,
@@ -533,13 +535,7 @@ def before_request():
         and request.method == "GET"
         and g.admin_class_context is not None
     ):
-        scoped_admin_id = session.get("admin_id")
-        scope = resolve_feature_class(
-            scoped_admin_id,
-            feature_name,
-            block=g.admin_class_context.get("block"),
-            join_code=g.admin_class_context.get("join_code"),
-        ) if scoped_admin_id else None
+        scope = resolve_feature_class_for_class(g.admin_class_id, feature_name)
         if scope and not scope["enabled"]:
             return render_template(
                 "admin_feature_disabled.html",
@@ -629,24 +625,30 @@ def get_admin_feature_settings_for_join_code(admin_id: int | None, join_code: st
     if not resolved_join_code:
         return FeatureSettings.get_defaults()
 
-    scope = resolve_class_scope(admin_id, join_code=resolved_join_code)
-    if not scope:
+    class_row = (
+        ClassEconomy.query.with_entities(ClassEconomy.class_id)
+        .filter(
+            ClassEconomy.teacher_id == admin_id,
+            ClassEconomy.join_code == resolved_join_code,
+        )
+        .first()
+    )
+    if not class_row or not class_row.class_id:
         return FeatureSettings.get_defaults()
 
-    scoped_features = get_class_feature_settings(
-        admin_id,
-        block=scope["block"],
-        join_code=scope["join_code"],
-    )
+    scoped_features = get_class_feature_settings_for_class(class_row.class_id)
     return scoped_features["features"] if scoped_features else FeatureSettings.get_defaults()
 
 
 def is_admin_feature_enabled(feature_name: str, admin_id: int | None = None, join_code: str | None = None) -> bool:
-    scope = resolve_feature_class(
-        admin_id or session.get('admin_id'),
-        feature_name,
-        join_code=join_code,
-    )
+    class_id = (getattr(g, "admin_class_id", None) or session.get("current_class_id") or "").strip()
+    scope = resolve_feature_class_for_class(class_id, feature_name) if class_id else None
+    if scope is None and (admin_id or session.get('admin_id')):
+        scope = resolve_feature_class(
+            admin_id or session.get('admin_id'),
+            feature_name,
+            join_code=join_code,
+        )
     return bool(scope["enabled"]) if scope else False
 
 
@@ -655,32 +657,42 @@ def get_admin_feature_join_code_options(feature_name: str, admin_id: int | None 
     if not resolved_admin_id:
         return []
 
-    teacher_blocks = (
-        TeacherBlock.query.with_entities(TeacherBlock.join_code, TeacherBlock.block, TeacherBlock.class_label)
-        .filter(
-            TeacherBlock.teacher_id == resolved_admin_id,
-            TeacherBlock.join_code.isnot(None),
+    classes = (
+        ClassEconomy.query.with_entities(
+            ClassEconomy.class_id,
+            ClassEconomy.join_code,
+            ClassEconomy.section,
+            ClassEconomy.display_name,
         )
-        .order_by(TeacherBlock.block.asc(), TeacherBlock.id.asc())
+        .filter(
+            ClassEconomy.teacher_id == resolved_admin_id,
+            ClassEconomy.join_code.isnot(None),
+        )
+        .order_by(ClassEconomy.section.asc(), ClassEconomy.created_at.asc())
         .all()
     )
+    roster_blocks = {
+        class_id: block
+        for class_id, block in (
+            TeacherBlock.query.with_entities(TeacherBlock.class_id, TeacherBlock.block)
+            .filter(TeacherBlock.class_id.in_([class_id for class_id, *_ in classes]))
+            .order_by(TeacherBlock.id.asc())
+            .all()
+        )
+        if class_id and block
+    }
 
     options: list[dict[str, str]] = []
     seen_join_codes: set[str] = set()
-    for join_code, block, class_label in teacher_blocks:
+    for class_id, join_code, section, display_name in classes:
         if not join_code or join_code in seen_join_codes:
             continue
         seen_join_codes.add(join_code)
-        scope = resolve_feature_class(
-            resolved_admin_id,
-            feature_name,
-            join_code=join_code,
-            block=block,
-        )
+        scope = resolve_feature_class_for_class(class_id, feature_name)
         if not scope or not scope["enabled"]:
             continue
-        normalized_block = scope["block"]
-        label = class_label or (f"Period {normalized_block}" if normalized_block else scope["join_code"])
+        normalized_block = ((section or roster_blocks.get(class_id) or "")).strip().upper()
+        label = display_name or (f"Period {normalized_block}" if normalized_block else scope["join_code"])
         options.append({
             'join_code': scope["join_code"],
             'class_id': scope["class_id"],
@@ -8685,7 +8697,10 @@ def payroll():
     now_utc = utc_now()
     current_time = now_utc.astimezone(get_timezone())
 
-    admin_id = session.get("admin_id")
+    current_admin = get_current_admin()
+    if not current_admin:
+        abort(404)
+    admin_id = current_admin.id
     feature_options = get_admin_feature_join_code_options('payroll', admin_id=admin_id)
     selected_scope = require_admin_feature_scope(
         'payroll',
@@ -8694,25 +8709,38 @@ def payroll():
     )
     selected_join_code = selected_scope['join_code']
     selected_block = selected_scope['block']
+    selected_class_id = selected_scope['class_id']
+    class_row = ClassEconomy.query.filter_by(class_id=selected_class_id).first()
+    class_label = (
+        (class_row.display_name if class_row and class_row.display_name else None)
+        or (f"Period {selected_block}" if selected_block else selected_join_code)
+    )
 
-    # Get student scope subquery for filtering
-    student_ids_subq = _student_scope_subquery_for_join_code(selected_join_code)
-
-    # Get class-scoped students and blocks
-    students = (
-        _scoped_students(include_unassigned=False)
-        .join(TeacherBlock, TeacherBlock.student_id == Student.id)
+    # Get class-scoped students and seats directly from canonical seat bindings.
+    seats = (
+        Seat.query
         .filter(
-            TeacherBlock.teacher_id == admin_id,
-            TeacherBlock.join_code == selected_join_code,
-            TeacherBlock.is_claimed == True,
+            Seat.class_id == selected_class_id,
+            Seat.role == 'student',
+            Seat.claimed_at.isnot(None),
         )
-        .distinct()
         .all()
     )
+    if selected_block:
+        selected_block_upper = selected_block.upper()
+        seats = [
+            seat for seat in seats
+            if ((seat.block_identifier or seat.block or '').strip().upper() == selected_block_upper)
+        ]
+    student_ids = [seat.student_id for seat in seats if seat.student_id]
+    students = (
+        Student.query
+        .filter(Student.id.in_(student_ids))
+        .distinct()
+        .all()
+        if student_ids else []
+    )
     blocks = [selected_block] if selected_block else []
-
-    selected_class_id = selected_scope['class_id']
     # Check if payroll settings exist for the selected class scope
     has_settings = (
         PayrollSettings.query.filter_by(class_id=selected_class_id, block=selected_block)
@@ -8788,8 +8816,7 @@ def payroll():
 
     total_payroll_estimate = sum(payroll_summary.values())
 
-    # Build class_labels_by_block dictionary
-    class_labels_by_block = _get_class_labels_for_blocks(admin_id, blocks)
+    class_labels_by_block = {selected_block: class_label} if selected_block else {}
 
     # Next payroll by block
     next_payroll_by_block = []
@@ -8814,9 +8841,6 @@ def payroll():
     student_stats = []
 
     # Pre-fetch payroll earnings and last payroll dates in batch
-    seats = []
-    if selected_class_id:
-        seats = Seat.query.filter(Seat.class_id == selected_class_id, Seat.role == 'student').all()
     class_seat_pairs = [(seat.class_id, seat.id) for seat in seats]
     raw_balances = get_batch_balances_by_class_seat(class_seat_pairs)
     seat_map = {(seat.student_id, seat.class_id): seat for seat in seats}
@@ -8835,7 +8859,6 @@ def payroll():
             'savings': savings_total,
         }
 
-    student_ids = [s.id for s in students]
     seat_ids = [s.id for s in seats]
     student_id_by_seat = {seat.id: seat.student_id for seat in seats}
 
@@ -8871,28 +8894,13 @@ def payroll():
         .all()
     )
     class_id_by_join_code = {row.join_code: row.class_id for row in class_rows if row.class_id}
-    claimed_seat_rows = (
-        TeacherBlock.query
-        .with_entities(
-            TeacherBlock.id,
-            TeacherBlock.student_id,
-            TeacherBlock.join_code,
-            TeacherBlock.class_id,
-            TeacherBlock.block,
-        )
-        .filter(
-            TeacherBlock.teacher_id == admin_id,
-            TeacherBlock.is_claimed == True,
-            TeacherBlock.join_code.in_(my_join_codes),
-            TeacherBlock.student_id.in_(student_ids),
-            TeacherBlock.class_id.isnot(None),
-        )
-        .all()
-    )
-    for seat_row in claimed_seat_rows:
+    for seat_row in seats:
+        if not seat_row.join_code or seat_row.join_code not in my_join_codes:
+            continue
+        seat_block = (seat_row.block_identifier or seat_row.block or "").strip().upper()
         seat_ids_by_join_code[seat_row.join_code].add(seat_row.id)
         seat_id_by_student_block_class.setdefault(
-            (seat_row.student_id, (seat_row.block or "").strip().upper(), seat_row.class_id),
+            (seat_row.student_id, seat_block, seat_row.class_id),
             seat_row.id,
         )
 
@@ -8986,7 +8994,7 @@ def payroll():
             'type': tx.type or 'manual_payment',
             'block': student_block,
             'class_label': class_labels_by_block.get(student_block, student_block) if student_block != 'Unknown' else 'Unknown',
-            'student_id': tx.student_id,
+            'student_id': seat.student_id if seat else tx.student_id,
             'student': student,
             'student_name': student.full_name if student else 'Unknown',
             'join_code': join_codes_by_block.get(student_block, ''),
@@ -9007,11 +9015,7 @@ def payroll():
 
     # Build join_code to label map for payroll display
     # This is needed because transactions are now scoped by join_code
-    join_code_to_label = {}
-    teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
-    for tb in teacher_blocks:
-        if tb.join_code:
-            join_code_to_label[tb.join_code] = tb.get_class_label()
+    join_code_to_label = {selected_join_code: class_label}
 
     return render_template(
         'admin_payroll.html',
@@ -9061,8 +9065,10 @@ def payroll():
 def payroll_settings():
     """Save payroll settings for a block or globally (Simple or Advanced mode)."""
     try:
-        # Get current admin ID for teacher scoping
-        admin_id = session.get("admin_id")
+        current_admin = get_current_admin()
+        if not current_admin:
+            abort(404)
+        admin_id = current_admin.id
         feature_options = get_admin_feature_join_code_options('payroll', admin_id=admin_id)
         enabled_blocks = [option['block'] for option in feature_options if option.get('block')]
         enabled_block_set = set(enabled_blocks)
@@ -9275,7 +9281,10 @@ def update_expected_weekly_hours():
         expected_weekly_hours = _quantize_currency(request.form.get('expected_weekly_hours', '5.0'))
         cwi_block = selected_scope['block']
         apply_to_all = request.form.get('apply_to_all', 'false').lower() == 'true'
-        admin_id = session.get("admin_id")
+        current_admin = get_current_admin()
+        if not current_admin:
+            abort(404)
+        admin_id = current_admin.id
         feature_options = get_admin_feature_join_code_options('payroll', admin_id=admin_id)
         enabled_blocks = {option['block'] for option in feature_options if option.get('block')}
         class_id_by_block = {

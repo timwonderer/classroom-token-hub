@@ -57,7 +57,12 @@ from app.utils.claim_credentials import compute_primary_claim_hash, match_claim_
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed, evaluate_overdraft_allowance
 from app.utils.help_content import HELP_ARTICLES
-from app.utils.economy_policy import get_class_feature_settings, resolve_feature_class
+from app.utils.economy_policy import (
+    get_class_feature_settings,
+    get_class_feature_settings_for_class,
+    resolve_feature_class,
+    resolve_feature_class_for_class,
+)
 from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
 from app.access import (
     AccessScopeDenied,
@@ -505,20 +510,11 @@ def get_feature_settings_for_student():
     if not context:
         return FeatureSettings.get_defaults()
 
-    teacher_id = context.get('teacher_id')
-    if not teacher_id:
+    class_id = context.get('class_id')
+    if not class_id:
         return FeatureSettings.get_defaults()
 
-    join_code = context.get('join_code')
-    if not join_code:
-        return FeatureSettings.get_defaults()
-
-    current_block = (context.get('block') or '').strip().upper()
-    scoped_features = get_class_feature_settings(
-        teacher_id,
-        block=current_block,
-        join_code=join_code,
-    )
+    scoped_features = get_class_feature_settings_for_class(class_id)
     if scoped_features:
         return scoped_features["features"]
 
@@ -545,12 +541,11 @@ def is_feature_enabled(feature_name):
     if not context:
         return False
 
-    scoped_feature = resolve_feature_class(
-        context.get('teacher_id'),
-        feature_name,
-        block=context.get('block'),
-        join_code=context.get('join_code'),
-    )
+    class_id = context.get('class_id')
+    if not class_id:
+        return False
+
+    scoped_feature = resolve_feature_class_for_class(class_id, feature_name)
     return bool(scoped_feature["enabled"]) if scoped_feature else False
 
 

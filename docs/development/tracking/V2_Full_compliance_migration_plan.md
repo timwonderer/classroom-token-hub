@@ -1707,6 +1707,74 @@ Focused validation:
   - The main Wave 4 execution objective is complete: active class-configuration runtime + schema are now class-authoritative and legacy settings scope columns have been retired.
   - The separate DOM-ECON integrated checklist remains tracked as an architecture/governance follow-up, not as a blocker for the legacy column-retirement closeout.
 
+### Status Update (2026-06-05): Post-Wave 4 Cleanup — Completed-Surface Feature Gates Prefer `class_id`
+
+- Removed the remaining feature-gate contradiction inside already-completed Wave 4
+  surfaces by adding explicit class-authoritative helper reads in
+  `app/utils/economy_policy.py`:
+  - `resolve_feature_class_for_class(class_id, feature_name)`
+  - `get_class_feature_settings_for_class(class_id)`
+- Rewired completed-surface callers to consume the new helpers directly:
+  - `app/routes/admin.py`
+    - admin GET feature-disabled gate now resolves by `g.admin_class_id`
+    - join-code option discovery now enumerates `ClassEconomy` rows rather than
+      `TeacherBlock`
+    - join-code-to-feature-settings helper now resolves `class_id` from
+      `ClassEconomy` and reads class features directly
+  - `app/routes/student.py`
+    - student feature settings and feature-enabled checks now read from
+      canonical `class_id`
+  - `app/routes/api.py`
+    - hall-pass setup and available-types feature checks now resolve directly by
+      canonical `class_id`
+  - `app/feats/attendance.py`
+    - hall-pass request policy guard now resolves feature enablement directly by
+      canonical `class_id`
+- Validation:
+  - `./venv/bin/python -m py_compile app/utils/economy_policy.py app/routes/admin.py app/routes/api.py app/routes/student.py app/feats/attendance.py tests/test_feature_settings.py tests/test_api_tenancy.py` → pass
+  - `pytest -q tests/test_feature_settings.py -k "resolve_feature_class_for_class or get_class_feature_settings_for_class or admin_feature_join_code_options"` → `3 passed`
+  - `git diff --check` → clean
+- Remaining follow-up:
+  - `app/routes/admin.py` still has non-completed-surface legacy wrappers and a
+    few untouched feature reads outside this slice (`insurance` and older
+    settings admin routes). Those remain for the next authority-reduction pass.
+
+### Status Update (2026-06-05): Post-Wave 4 Cleanup — TLCP, Sysadmin Probe, and Payroll Authority Cutover
+
+- Closed the next three audit items inside reportedly completed surfaces:
+  - `app/services/tlcp.py`
+    - teacher `actor_public_id` now resolves from the active teacher seat / class
+      context rather than `admin.id -> class.teacher_id -> teacher seat`
+    - student fallback no longer reconstructs `actor_public_id` from
+      `student_id`; it now requires active seat context
+  - `app/routes/system_admin.py`
+    - `/sysadmin/auth-check` now trusts `get_current_system_admin()`
+    - `/sysadmin/grafana/auth-check` now trusts `get_current_system_admin()`
+    - sysadmin passkey register/start, register/finish, settings, and Grafana
+      proxy header resolution now use canonical resolver identity rather than
+      raw `session["sysadmin_id"]` trust
+  - `app/routes/admin.py`
+    - `/admin/payroll`, `/admin/payroll/settings`, and
+      `/admin/payroll/update-expected-hours` now require canonical admin
+      identity via `get_current_admin()`
+    - payroll page student/seat scope now reads directly from canonical
+      `Seat(class_id, role='student')` rows instead of using
+      `TeacherBlock.teacher_id` as the primary authority anchor
+    - payroll feature block selection keeps `TeacherBlock.block` only as
+      class-local metadata fallback when `ClassEconomy.section` is absent
+- Focused validation:
+  - `pytest -q tests/test_tlcp_actor_context_resolution.py tests/test_sysadmin_grafana_auth.py` → `10 passed`
+  - `pytest -q tests/test_payroll_settings_class_scope.py tests/test_admin_payroll_scoped_balances.py tests/test_admin_membership_gates.py -k payroll` → `5 passed, 14 deselected`
+  - `pytest -q tests/test_feature_flag_enforcement.py -k admin_payroll_rejects_disabled_class_scope` → `1 passed, 10 deselected`
+  - `./venv/bin/python -m py_compile app/services/tlcp.py app/routes/system_admin.py app/routes/admin.py tests/test_tlcp_actor_context_resolution.py tests/test_sysadmin_grafana_auth.py tests/test_payroll_settings_class_scope.py tests/test_admin_payroll_scoped_balances.py tests/test_admin_membership_gates.py tests/test_feature_flag_enforcement.py tests/helpers/admin_context.py` → pass
+  - `git diff --check` → clean
+- Remaining follow-up:
+  - broader legacy-session test files still exist outside this slice and were
+    not normalized here unless they directly exercised the cutover paths above
+  - untouched sysadmin/admin route surfaces that still read raw compatibility
+    ids remain part of the next audit pass, but the specific completed-surface
+    blockers from the latest audit are now closed
+
 ### Status Update (2026-05-20): Spec Coverage Audit — Banking/Balance/Overdraft/Rent Touchpoints
 
 - Confirmed existing v2 spec coverage for touched features:
