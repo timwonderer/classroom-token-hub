@@ -10,7 +10,11 @@ load_dotenv(dotenv_path=DOTENV_PATH)
 
 # Read TEST_DATABASE_URL directly from .env so tests can use the dedicated test DB
 dotenv_config = dotenv_values(DOTENV_PATH)
-test_database_url = dotenv_config.get("TEST_DATABASE_URL") or os.environ.get("TEST_DATABASE_URL")
+test_database_url = (
+    dotenv_config.get("TEST_DATABASE_URL")
+    or os.environ.get("TEST_DATABASE_URL")
+    or os.environ.get("DATABASE_URL")  # CI sets DATABASE_URL; accept it when TEST_DATABASE_URL is absent
+)
 if not test_database_url:
     raise RuntimeError("TEST_DATABASE_URL must be set in .env for tests.")
 
