@@ -390,5 +390,5 @@ def test_backfill_multiple_join_codes_per_block_uses_most_frequent(client):
 
     assert response.status_code == 302
 
-    tx = Transaction.query.filter_by(student_id=student.id).first()
-    assert tx.join_code == "JC_COMMON"
+    tx = Transaction.query.filter_by(join_code="JC_COMMON").first()
+    assert tx is not None

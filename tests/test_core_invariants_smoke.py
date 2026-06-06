@@ -565,15 +565,14 @@ def test_rent_payment_creates_rent_obligation_record(client):
     response = client.post("/student/rent/pay/A", follow_redirects=False)
     assert response.status_code in (302, 303)
 
-    rent_payment = RentPayment.query.filter_by(student_id=student.id, join_code="JOIN-RENT").first()
+    rent_payment = RentPayment.query.filter_by(seat_id=seat.id, join_code="JOIN-RENT").first()
     assert rent_payment is not None
 
     rent_tx = (
-        Transaction.query.filter_by(
-            student_id=student.id,
-            teacher_id=admin.id,
-            join_code="JOIN-RENT",
-            type="Rent Payment",
+        Transaction.query.filter(
+            Transaction.seat_id == seat.id,
+            Transaction.join_code == "JOIN-RENT",
+            Transaction.type == "Rent Payment",
         )
         .order_by(Transaction.id.desc())
         .first()

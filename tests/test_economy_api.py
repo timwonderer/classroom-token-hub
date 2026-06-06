@@ -39,8 +39,6 @@ def admin_with_payroll(client):
 
     # Create payroll settings with specific expected_weekly_hours
     payroll_settings = PayrollSettings(
-        teacher_id=admin.id,
-        join_code="ECONA001",
         class_id=class_scope.class_id,
         block="A",
         pay_rate=0.25,  # $0.25/min = $15/hour
