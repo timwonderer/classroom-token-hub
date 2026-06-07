@@ -1886,16 +1886,27 @@ Constraint:
 
 ### Deliverables
 
-1. **Migration `0006_obligations_domain.py`:**
-   - Creates: `assessment_events`, `obligation_lifecycle`, `obligation_satisfaction`, `obligation_reversal`, `entitlement_events`
-   - Drops: `rent_payments`, `rent_waivers`, `rent_items`, `insurance_policies`, `student_insurance`, `insurance_claims`, `insurance_policy_blocks`
+1. **Obligations migration sequence:**
+   - `0006_obligations_domain.py` adds transitional dual-write tables without
+     dropping legacy rent/insurance state
+   - `0007_obligations_schema_contract.py` creates/backfills
+     `assessment_events` and `obligation_lifecycle`, then repoints
+     `obligation_satisfaction`, `obligation_reversal`, and
+     `entitlement_events` to the canonical assessment table
+   - a later Wave 7 migration drops transitional and legacy tables only after
+     read cutover and parity validation
 
-2. **`app/services/obligations_service.py`** rewritten on canonical obligation tables
+2. **`app/services/obligations_service.py`** migrated incrementally:
+   - rent and insurance enrollment writes emit canonical assessment/lifecycle
+     state
+   - insurance claim resolution and remaining reads still require canonical
+     cutover
 
 3. **FEATs updated:**
-   - `rent_payment_feat.py` → writes `AssessmentEvent` + `ObligationLifecycle` + `LedgerTransaction`
-   - `insurance_claim_feat.py` → writes satisfaction/reversal on `ObligationLifecycle`
-   - `insurance_purchase_feat.py` → writes `EntitlementEvent` + `LedgerTransaction`
+   - `rent_payment_feat.py` → canonical assessment/lifecycle write is landed
+   - `insurance_claim_feat.py` → satisfaction/reversal lifecycle cutover remains
+   - `insurance_purchase_feat.py` → enrollment assessment/lifecycle write is
+     landed; entitlement completion remains
 
 4. **`tests/domain/test_obligations.py`:**
    - Rent assessment creates `assessment_events` + `obligation_lifecycle`
@@ -1913,6 +1924,7 @@ Constraint:
 - `app/feats/insurance_claim_feat.py`
 - `app/feats/insurance_purchase_feat.py`
 - `migrations/versions/0006_obligations_domain.py`
+- `migrations/versions/0007_obligations_schema_contract.py`
 - `tests/domain/test_obligations.py`
 
 ### Verification

@@ -1,9 +1,31 @@
-# V2 Rebuild Validation Report — Revision 19
+# V2 Rebuild Validation Report — Revision 20
 
 **Generated:** 2026-06-01
 **Branch:** `codex/v2.0`  
 **Against:** `V2_Full_compliance_migration_plan.md`  
 **Methodology:** Direct code inspection (multi-pass), migration chain analysis, model column audit, service/FEAT write-path tracing, test coverage enumeration, CI infrastructure review, adversarial scorecard analysis, INV compliance sweep, auth-path and session-bridge verification (Revision 3 additions)
+
+### Post-Report Update (2026-06-06, `codex/v2.0`) — Wave 7 Obligations Schema Contract
+
+- Landed transitional migration `0006_obligations_domain.py` and canonical
+  correction migration `0007_obligations_schema_contract.py`.
+- Runtime `ObligationAssessment` now maps to `assessment_events`; canonical
+  `obligation_lifecycle` state is emitted for rent payments and insurance
+  enrollments.
+- `obligation_satisfaction`, `obligation_reversal`, and `entitlement_events`
+  foreign keys now reference `assessment_events`.
+- Both the dedicated v2 test database and the repaired development database
+  completed `0007 -> 0006 -> 0007` downgrade/re-upgrade validation.
+- Development drift was traced to five empty, unreferenced canonical bootstrap
+  placeholders. Removing those placeholders allowed `0006` and `0007` to
+  recreate the governed schemas; the development database now reports `0007`.
+- Wave 7 remains open for insurance-claim lifecycle migration, remaining
+  legacy-read cutover, parity validation, and transitional/legacy table drops.
+- Validation:
+  - migration lint -> pass
+  - single Alembic head -> `0007`
+  - app factory import -> pass
+  - focused obligations and insurance scoping suite -> `35 passed`
 
 ### Post-Report Update (2026-06-02, `codex/v2.0`) — TLCP Runtime Actor-Public-ID Cutover
 
@@ -615,7 +637,7 @@ The first validation report characterized this as "NOT STARTED." The deeper anal
 
 ## Wave 7 — Obligations Domain
 
-### Status: ⚠️ BEHAVIORAL CONTRACTS COMPLETE — SCHEMA CONSOLIDATION PENDING
+### Status: ⚠️ CANONICAL SCHEMA/PRIMARY WRITES LANDED — READ CUTOVER AND DROPS PENDING
 
 **Behavioral contracts (locked per tracker "System Behavior Contracts" section):**
 
@@ -634,10 +656,10 @@ The first validation report characterized this as "NOT STARTED." The deeper anal
 
 | Check | Status |
 |---|---|
-| `obligations_service.py` | ❌ Still imports `InsuranceClaim, RentPayment, StudentInsurance` (legacy tables) |
-| `AssessmentEvent`, `ObligationLifecycle`, etc. used at runtime | ❌ Stub-only in `models_canonical.py` |
-| `rent_payment_feat.py`, `insurance_claim_feat.py`, `insurance_purchase_feat.py` write to obligation canonical tables | ❌ All still write to legacy tables via services |
-| Wave 7 migration (`0006_obligations_domain.py`) | ❌ DOES NOT EXIST |
+| `obligations_service.py` | ⚠️ Rent and insurance enrollment emit canonical assessment/lifecycle rows while compatibility writes remain |
+| `AssessmentEvent`, `ObligationLifecycle`, etc. used at runtime | ✅ Runtime models map to `assessment_events` and `obligation_lifecycle` |
+| `rent_payment_feat.py`, `insurance_claim_feat.py`, `insurance_purchase_feat.py` write to obligation canonical tables | ⚠️ Rent/enrollment canonical writes landed; insurance claim lifecycle cutover remains |
+| Wave 7 migrations | ✅ `0006_obligations_domain.py` transitional layer plus `0007_obligations_schema_contract.py` canonical correction |
 | Legacy obligation tables dropped | ❌ `rent_payments`, `rent_waivers`, `rent_items`, `insurance_policies`, `insurance_policy_blocks`, `student_insurance`, `insurance_claims` all still in schema |
 
 ---
@@ -807,10 +829,13 @@ The FEAT execution layer is the most thoroughly completed component. Revised ass
 **Canonical tables LIVE at runtime (survive to v2 target state):**  
 `users`, `seats`, `classes` (was `class_economies`), `ledger_transaction`, `ledger_balance_snapshot`, `identity_profiles`, `class_features`, `feature_settings` (fully cleaned), `hall_pass_settings`, `payroll_settings`, `payroll_rewards`, `payroll_fines`, `rent_settings`, `banking_settings`, `hall_pass_logs`, `store_items`, `class_memberships`, `issues`, `issue_status_history`, `issue_resolution_actions`, `ticket_correlation_pack`, `issue_categories`, `announcements`, `policy_versions`, `policy_transitions`
 
-**Dual-scoped legacy tables (behaviorally compliant; Wave 5 ledger rename now landed):**  
-`tap_events` → target: `attendance_sessions` + `seat_attendance_state`  
-`rent_payments` (w/ coverage_start/end + idempotency_key) → target: `obligation_lifecycle`  
-`student_insurance`, `insurance_claims` → target: `obligation_lifecycle` derivatives  
+**Dual-write or compatibility tables still active:**
+`tap_events` → target: `attendance_sessions` + `seat_attendance_state`
+`rent_payments` (w/ coverage_start/end + idempotency_key) → canonical
+`assessment_events` + `obligation_lifecycle` writes landed; legacy reads remain
+`student_insurance` → canonical enrollment assessment/lifecycle write landed;
+legacy reads remain
+`insurance_claims` → canonical lifecycle migration remains
 
 **Pure legacy tables (used in active write paths, targeted for drop in Waves 5–10):**  
 `student_items`, `store_item_blocks` (Wave 8)  
@@ -884,13 +909,17 @@ The first report contained several characterizations that this deeper analysis r
 
 6. **Close INV-ARC-014 (`block` as routing key)** — `RentSettings.block` column needs to be resolved to `class_id` alone. Tracked in `V2_CLASS_ID_INVARIANT_BACKLOG.md`.
 
-7. **Execute Wave 7 (Obligations)** — behavioral contracts already complete; schema consolidation is the remaining work.
+7. **Complete Wave 7 (Obligations)** — canonical schema and primary rent/enrollment
+   writes are landed; migrate insurance claims, cut remaining reads, validate
+   parity, then drop transitional and legacy tables.
 
 8. **Execute Waves 8–10** in sequence (Store → Operations/Interpretation → Support).
 
 9. **Wave 3 structural completion** — activate `User`/`Seat` as the primary auth path and drop legacy auth tables. This is the largest architectural debt item.
 
-10. **Create per-domain test files** in `tests/domain/` (`test_identity.py`, `test_attendance.py`, `test_obligations.py`, `test_store.py`, `test_operations.py`, `test_support.py`).
+10. **Complete per-domain test files** in `tests/domain/`; obligations now has
+    `test_obligations.py`, while remaining domain coverage must be audited
+    against the current files.
 
 11. **Decompose `admin.py`** (Wave 11) — 12,862 lines is the single largest maintenance liability.
 
