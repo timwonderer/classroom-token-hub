@@ -234,7 +234,7 @@ def verify_hall_pass(teacher_public_token):
     - Non-enumerable (token-based)
     - Rotatable
     """
-    from app.models import TeacherBlock, HallPassLog
+    from app.models import ClassEconomy, HallPassLog
 
     _GENERIC_UNAVAILABLE = "Verification page not available."
 
@@ -249,25 +249,19 @@ def verify_hall_pass(teacher_public_token):
         ), 404
 
     # Get teacher's active classes (distinct join_codes with labels)
-    # Use plain .distinct() (all columns) + Python deduplication for cross-DB compat
     classes_rows = (
-        db.session.query(TeacherBlock.join_code, TeacherBlock.class_id, TeacherBlock.block, TeacherBlock.class_label)
-        .filter(
-            TeacherBlock.teacher_id == teacher.id,
-            TeacherBlock.join_code.isnot(None),
-        )
-        .group_by(TeacherBlock.join_code, TeacherBlock.class_id, TeacherBlock.block, TeacherBlock.class_label)
-        .order_by(TeacherBlock.block)
+        ClassEconomy.query.filter_by(teacher_id=teacher.id)
+        .order_by(ClassEconomy.display_name)
         .all()
     )
     # Build list: [{"join_code": ..., "label": ...}, ...]
     classes = []
-    seen_codes = set()
-    for row in classes_rows:
-        if row.join_code and row.join_code not in seen_codes:
-            seen_codes.add(row.join_code)
-            label = row.class_label if row.class_label else row.block
-            classes.append({"join_code": row.join_code, "class_id": row.class_id, "label": label})
+    for c in classes_rows:
+        classes.append({
+            "join_code": c.join_code,
+            "class_id": c.class_id,
+            "label": c.display_name or c.join_code
+        })
 
     if request.method == 'GET':
         return render_template(

@@ -234,7 +234,7 @@ def test_auto_tapout_noops_without_canonical_seat_scope(client):
     """
     Auto-tap-out should no-op when no canonical class/seat scope exists.
     """
-    from app.models import Admin, PayrollSettings
+    from app.models import Admin, PayrollSettings, ClassEconomy
     from app.routes.api import check_and_auto_tapout_if_limit_reached
     import pyotp
 
@@ -243,8 +243,18 @@ def test_auto_tapout_noops_without_canonical_seat_scope(client):
     db.session.add(teacher)
     db.session.flush()
 
-    ps = PayrollSettings(
+    class_economy = ClassEconomy(
+        join_code="LEGACY_JOIN",
         teacher_id=teacher.id,
+        display_name="Legacy Class",
+        status="active",
+        created_by_admin_id=teacher.id,
+    )
+    db.session.add(class_economy)
+    db.session.flush()
+
+    ps = PayrollSettings(
+        class_id=class_economy.class_id,
         block="A",
         daily_limit_hours=0.001, # very small limit to trigger immediate tapout
         settings_mode='simple'

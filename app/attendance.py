@@ -134,13 +134,17 @@ def get_session_status(seat_id, class_id, period):
     is_active = latest_state.is_active if latest_state else False
 
     today_local = get_class_now(class_id).date()
-    block_query = StudentBlock.query.filter(
-        StudentBlock.seat_id == seat_id,
-        StudentBlock.class_id == class_id,
-        StudentBlock.period == period,
-        StudentBlock.done_for_day_date.isnot(None),
-    )
-    done = block_query.filter(StudentBlock.done_for_day_date == today_local).first() is not None
+    done = False
+    if latest_state and latest_state.done_for_day_date == today_local:
+        done = True
+    else:
+        block_query = StudentBlock.query.filter(
+            StudentBlock.seat_id == seat_id,
+            StudentBlock.class_id == class_id,
+            StudentBlock.period == period,
+            StudentBlock.done_for_day_date.isnot(None),
+        )
+        done = block_query.filter(StudentBlock.done_for_day_date == today_local).first() is not None
 
     # Calculate unpaid duration
     last_payroll_time = get_last_payroll_time(seat_id=seat_id, class_id=class_id)
@@ -279,7 +283,7 @@ def batch_auto_tapout_students(admin_id):
     Optimized version of auto-tapout that processes all students for an admin in batch.
     Returns the count of students tapped out.
     """
-    from app.models import Student, TapEventReasonCode, StudentBlock, PayrollSettings, StudentTeacher, TeacherBlock
+    from app.models import Student, TapEventReasonCode, StudentBlock, PayrollSettings, StudentTeacher, TeacherBlock, Seat, ClassEconomy
     from app.extensions import db
 
     # 1. Get all students for this admin via StudentTeacher
@@ -294,9 +298,9 @@ def batch_auto_tapout_students(admin_id):
         return 0
 
     # 1b. SECURITY: Fetch only class scopes owned by this admin.
-    admin_class_rows = db.session.query(TeacherBlock.class_id, TeacherBlock.join_code).filter(
-        TeacherBlock.teacher_id == admin_id,
-        TeacherBlock.class_id.isnot(None),
+    admin_class_rows = db.session.query(ClassEconomy.class_id, ClassEconomy.join_code).filter(
+        ClassEconomy.teacher_id == admin_id,
+        ClassEconomy.class_id.isnot(None),
     ).distinct().all()
     admin_class_ids = [row.class_id for row in admin_class_rows if row.class_id]
     join_code_by_class_id = {row.class_id: row.join_code for row in admin_class_rows if row.class_id}
@@ -322,12 +326,11 @@ def batch_auto_tapout_students(admin_id):
     default_today_local = class_date(timestamp_utc=now_utc)
 
     claimed_seats = (
-        TeacherBlock.query
+        Seat.query
         .filter(
-            TeacherBlock.teacher_id == admin_id,
-            TeacherBlock.is_claimed == True,
-            TeacherBlock.student_id.in_(student_ids),
-            TeacherBlock.class_id.in_(admin_class_ids),
+            Seat.class_id.in_(admin_class_ids),
+            Seat.student_id.in_(student_ids),
+            Seat.claimed_at.isnot(None),
         )
         .all()
     )
@@ -348,7 +351,10 @@ def batch_auto_tapout_students(admin_id):
         seats_by_student_period.setdefault(seat.student_id, {}).setdefault(blk, []).append(seat)
 
     # 4. Batch fetch PayrollSettings
-    payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True).all()
+    payroll_settings = PayrollSettings.query.filter(
+        PayrollSettings.class_id.in_(admin_class_ids),
+        PayrollSettings.is_active == True
+    ).all()
     limits_map = {}
 
     def get_limit(setting):

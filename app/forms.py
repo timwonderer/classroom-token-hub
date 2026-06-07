@@ -338,13 +338,12 @@ class StudentAddClassForm(FlaskForm):
     """Form for logged-in students to add a new class by entering a join code.
 
     Each join_code is an independent universe. Credentials entered here are
-    verified against the *new* class's own unclaimed roster seat — not against
-    any data stored on the student's existing account (which has none post-claim).
+    verified against the *new* class's own unclaimed roster seat.
     """
     join_code = StringField('Join Code (from your teacher)', validators=[DataRequired()])
-    first_initial = StringField('First Initial (e.g., J)', validators=[DataRequired(), Length(min=1, max=1)])
+    first_name = StringField('First Name', validators=[DataRequired(), Length(min=1, max=128)])
     last_name = StringField('Last Name', validators=[DataRequired()])
-    dob_sum = DateField('Date of Birth', format='%Y-%m-%d', validators=[DataRequired()])
+    dedupe_code = StringField('Deduplication Code (if provided by teacher)', validators=[Optional(), Length(max=32)])
     submit = SubmitField('Add Class')
 
 

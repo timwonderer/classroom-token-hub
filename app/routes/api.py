@@ -22,7 +22,7 @@ from app.extensions import db, limiter
 from app.models import (
     Admin, Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
     TapEventReasonCode, HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
-    StudentTeacher, TeacherBlock, StudentBlock, StoreItemBlock,
+    StudentTeacher, StudentBlock, StoreItemBlock,
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource, _quantize_currency,
     ClassEconomy, ClassMembership, Seat, SeatAttendanceState,
 )
@@ -1938,12 +1938,12 @@ def attendance_history():
         blocks_in_records = set(seats[sid]['block'] for sid in seats if seats[sid]['block'])
         class_labels = {}
         if blocks_in_records:
-            teacher_blocks = TeacherBlock.query.filter(
-                TeacherBlock.teacher_id == scoped_admin_id,
-                TeacherBlock.block.in_(blocks_in_records)
+            classes = ClassEconomy.query.filter(
+                ClassEconomy.teacher_id == scoped_admin_id
             ).all()
-            for teacher_block in teacher_blocks:
-                class_labels[teacher_block.block] = teacher_block.get_class_label()
+            for c in classes:
+                block_name = (c.display_name or '').strip().upper()
+                class_labels[block_name] = c.display_name or c.join_code
 
         # Format records for response
         records_data = []
@@ -2406,11 +2406,11 @@ def update_student_block_settings():
         return jsonify({"error": "Student not found or access denied"}), 404
 
     # Resolve seat_id and class_id for V2 identity
-    seat = TeacherBlock.query.filter(
-        TeacherBlock.teacher_id == admin.id,
-        TeacherBlock.student_id == student_id,
-        TeacherBlock.is_claimed.is_(True),
-        func.upper(TeacherBlock.block) == period,
+    seat = Seat.query.join(ClassEconomy, Seat.class_id == ClassEconomy.class_id).filter(
+        ClassEconomy.teacher_id == admin.id,
+        Seat.student_id == student_id,
+        Seat.claimed_at.isnot(None),
+        func.upper(Seat.block) == period,
     ).first()
 
     if not seat or not seat.class_id:
@@ -2603,23 +2603,21 @@ def get_block_tap_settings():
     from app.auth import get_admin_student_query
     
     # Resolve class_id for this admin and block
-    class_row = TeacherBlock.query.with_entities(TeacherBlock.class_id).filter(
-        TeacherBlock.teacher_id == admin.id,
-        func.upper(TeacherBlock.block) == block,
-        TeacherBlock.class_id.isnot(None)
+    class_row = ClassEconomy.query.filter(
+        ClassEconomy.teacher_id == admin.id,
+        func.upper(ClassEconomy.display_name) == block,
     ).first()
     
     if not class_row:
         return jsonify({"tap_enabled": True})
         
-    class_id = class_row[0]
+    class_id = class_row.class_id
 
     # Get all claimed seats for this admin, block, and class
-    seats = TeacherBlock.query.filter(
-        TeacherBlock.teacher_id == admin.id,
-        func.upper(TeacherBlock.block) == block,
-        TeacherBlock.class_id == class_id,
-        TeacherBlock.is_claimed.is_(True)
+    seats = Seat.query.filter(
+        Seat.class_id == class_id,
+        func.upper(Seat.block) == block,
+        Seat.claimed_at.isnot(None)
     ).all()
 
     if not seats:
@@ -2670,23 +2668,21 @@ def update_block_tap_settings():
     
     try:
         # Resolve class_id for this admin and block
-        class_row = TeacherBlock.query.with_entities(TeacherBlock.class_id).filter(
-            TeacherBlock.teacher_id == admin.id,
-            func.upper(TeacherBlock.block) == block,
-            TeacherBlock.class_id.isnot(None)
+        class_row = ClassEconomy.query.filter(
+            ClassEconomy.teacher_id == admin.id,
+            func.upper(ClassEconomy.display_name) == block,
         ).first()
         
         if not class_row:
             return jsonify({"status": "error", "message": "Class not found"}), 404
             
-        class_id = class_row[0]
+        class_id = class_row.class_id
 
         # Get all claimed seats for this admin, block, and class
-        seats = TeacherBlock.query.filter(
-            TeacherBlock.teacher_id == admin.id,
-            func.upper(TeacherBlock.block) == block,
-            TeacherBlock.class_id == class_id,
-            TeacherBlock.is_claimed.is_(True)
+        seats = Seat.query.filter(
+            Seat.class_id == class_id,
+            func.upper(Seat.block) == block,
+            Seat.claimed_at.isnot(None)
         ).all()
 
         updated_count = 0

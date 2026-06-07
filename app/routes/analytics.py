@@ -21,7 +21,7 @@ from app.feats.base import feat_shell
 from app.auth import admin_required
 from app.models import (
     Admin, AnalyticsAlert, AnalyticsEvent,
-    PayrollSettings, RentSettings, Student, StudentBlock, TeacherBlock, ClassEconomy, Seat
+    PayrollSettings, RentSettings, Student, ClassEconomy, Seat
 )
 from app.models import Transaction
 
@@ -45,27 +45,15 @@ def get_teacher_class_options(teacher_id: int):
     if not teacher_id:
         return []
 
-    teacher_blocks = TeacherBlock.query.filter_by(
-        teacher_id=teacher_id
-    ).order_by(TeacherBlock.block).all()
+    classes = ClassEconomy.query.filter_by(teacher_id=teacher_id).order_by(ClassEconomy.display_name).all()
 
-    seen_join_codes = set()
     options = []
-    for tb in teacher_blocks:
-        if not tb.join_code or tb.join_code in seen_join_codes:
-            continue
-        class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
-            teacher_id=teacher_id,
-            join_code=tb.join_code,
-        ).first()
-        if not class_row or not class_row[0]:
-            continue
-        seen_join_codes.add(tb.join_code)
+    for c in classes:
         options.append({
-            'class_id': class_row[0],
-            'join_code': tb.join_code,
-            'block': (tb.block or '').strip().upper(),
-            'label': tb.get_class_label()
+            'class_id': c.class_id,
+            'join_code': c.join_code,
+            'block': (c.display_name or '').strip().upper(),
+            'label': c.display_name or c.join_code
         })
 
     return options
@@ -97,12 +85,9 @@ def resolve_current_class_context(teacher_id: int):
 
 
 def get_block_for_join_code(join_code: str):
-    block_row = StudentBlock.query.with_entities(StudentBlock.period).filter(
-        StudentBlock.join_code == join_code
-    ).first()
-    if block_row:
-        period = block_row[0]
-        return period.strip().upper() if period else None
+    class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+    if class_row and class_row.display_name:
+        return class_row.display_name.strip().upper()
     return None
 
 
@@ -506,12 +491,19 @@ def student_drill_down(student_id):
         return redirect(url_for('admin.students'))
     join_code = selected_class['join_code']
     
+    # Get class economy row
+    class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+    if not class_row:
+        flash('Class period not found.', 'warning')
+        return redirect(url_for('admin.students'))
+    class_id = class_row.class_id
+
     # Get student with scoping
     student = Student.query.join(
-        StudentBlock, Student.id == StudentBlock.student_id
+        Seat, Student.id == Seat.student_id
     ).filter(
         Student.id == student_id,
-        StudentBlock.join_code == join_code
+        Seat.class_id == class_id
     ).first()
     if student is None:
         flash('Student not found for this class period.', 'warning')
@@ -520,14 +512,14 @@ def student_drill_down(student_id):
     weeks_enrolled = 18  # default/fallback for legacy behavior
 
     # Try to determine when the student enrolled in this class period
-    enrollment_block = StudentBlock.query.filter(
-        StudentBlock.student_id == student.id,
-        StudentBlock.join_code == join_code
-    ).order_by(StudentBlock.id.asc()).first()
+    student_seat = Seat.query.filter_by(
+        student_id=student.id,
+        class_id=class_id
+    ).first()
 
     enrollment_start = None
-    if enrollment_block is not None and hasattr(enrollment_block, "created_at"):
-        enrollment_start = enrollment_block.created_at
+    if student_seat is not None and student_seat.claimed_at:
+        enrollment_start = student_seat.claimed_at
     elif hasattr(student, "created_at"):
         # Fallback: use the student's created_at if per-class timestamp is unavailable
         enrollment_start = student.created_at

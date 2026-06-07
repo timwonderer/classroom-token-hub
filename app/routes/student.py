@@ -27,7 +27,7 @@ from app.models import (
     Student, Transaction, TransactionStatus, TapEvent, StoreItem, StoreItemBlock, StudentItem,
     RentSettings, RentPayment, RentWaiver, InsurancePolicy, StudentInsurance, InsuranceClaim,
     BankingSettings, UserReport, FeatureSettings, Issue, Seat, User, UserRole, StudentTeacher,
-    ClassMembership, ClassEconomy, TeacherBlock, _quantize_currency
+    ClassMembership, ClassEconomy, _quantize_currency
 )
 from app.auth import (
     admin_required,
@@ -222,46 +222,6 @@ def _get_or_create_setup_user_for_student(student_id: int | None) -> User | None
     return user
 
 
-def _get_or_create_bridge_seat_for_teacher_block(
-    teacher_block,
-    student_id: int | None = None,
-    user_id: int | None = None,
-) -> Seat | None:
-    if not teacher_block or not teacher_block.join_code:
-        return None
-
-    seat = (
-        Seat.query.filter_by(
-            join_code=teacher_block.join_code,
-            student_id=student_id or teacher_block.student_id,
-        )
-        .order_by(Seat.id.asc())
-        .first()
-    )
-    if seat:
-        if user_id and seat.user_id != user_id:
-            seat.user_id = user_id
-        if seat.block_identifier is None and teacher_block.block:
-            seat.block_identifier = teacher_block.block
-        if seat.block is None and teacher_block.block:
-            seat.block = teacher_block.block
-        if not seat.claimed_at and teacher_block.claimed_at:
-            seat.claimed_at = teacher_block.claimed_at
-        return seat
-
-    seat = Seat(
-        user_id=user_id,
-        class_id=getattr(teacher_block, "class_id", None),
-        role='student',
-        block_identifier=teacher_block.block,
-        join_code=teacher_block.join_code,
-        student_id=student_id or teacher_block.student_id,
-        block=teacher_block.block,
-        claimed_at=teacher_block.claimed_at,
-    )
-    db.session.add(seat)
-    db.session.flush()
-    return seat
 
 
 def _find_existing_teacher_shadow_student(teacher_id: int | None) -> Student | None:
@@ -298,48 +258,6 @@ def _ensure_student_class_membership(student_id: int | None, join_code: str | No
     ))
 
 
-def _ensure_class_anchor_for_teacher_block(teacher_block) -> str | None:
-    """Backfill the canonical class row for legacy seats before v2 membership writes."""
-    if not teacher_block or not teacher_block.join_code or not teacher_block.teacher_id:
-        return getattr(teacher_block, "class_id", None) if teacher_block else None
-
-    class_row = ClassEconomy.query.filter_by(join_code=teacher_block.join_code).first()
-    if class_row is None:
-        class_row = ClassEconomy(
-            join_code=teacher_block.join_code,
-            teacher_id=teacher_block.teacher_id,
-            created_by_admin_id=teacher_block.teacher_id,
-            display_name=teacher_block.block,
-            class_id=getattr(teacher_block, "class_id", None),
-        )
-        db.session.add(class_row)
-        db.session.flush()
-
-    teacher_block.class_id = teacher_block.class_id or class_row.class_id
-
-    admin_membership = ClassMembership.query.filter_by(
-        join_code=teacher_block.join_code,
-        admin_id=teacher_block.teacher_id,
-    ).first()
-    if not admin_membership:
-        db.session.add(ClassMembership(
-            join_code=teacher_block.join_code,
-            admin_id=teacher_block.teacher_id,
-            role='admin',
-        ))
-
-    teacher_seat = Seat.query.filter_by(
-        class_id=class_row.class_id,
-        role='teacher',
-    ).first()
-    if teacher_seat is None:
-        db.session.add(Seat(
-            class_id=class_row.class_id,
-            join_code=teacher_block.join_code,
-            role='teacher',
-        ))
-
-    return class_row.class_id
 
 
 def _get_claimed_setup_state():
@@ -395,10 +313,14 @@ def get_current_class_context():
 
 def _prime_student_teacher_display_name_cache(student_id: int) -> None:
     """Cache decrypted teacher display names in session for this student session."""
-    from app.models import TeacherBlock, Admin
+    from app.models import Seat, ClassEconomy, Admin
 
-    seats = TeacherBlock.query.filter_by(student_id=student_id, is_claimed=True).all()
-    teacher_ids = sorted({seat.teacher_id for seat in seats if seat.teacher_id})
+    seats = Seat.query.filter(Seat.student_id == student_id, Seat.claimed_at.isnot(None)).all()
+    class_ids = sorted({seat.class_id for seat in seats if seat.class_id})
+    teacher_ids = []
+    if class_ids:
+        classes = ClassEconomy.query.filter(ClassEconomy.class_id.in_(class_ids)).all()
+        teacher_ids = sorted({c.teacher_id for c in classes if c.teacher_id})
     if not teacher_ids:
         clear_teacher_display_name_cache()
         return
@@ -576,12 +498,13 @@ def claim_account():
     1. Student enters join code (resolves to class_id)
     2. Student enters full first + last name
     3. If multiple seats match, student enters optional dedupe code
-    3. System finds matching unclaimed seat in TeacherBlock
-    4. Creates Student record (or finds existing if student has other classes)
-    5. Links TeacherBlock seat to Student
-    6. Creates StudentTeacher link
+    4. System finds matching unclaimed seat in Seat
+    5. Creates Student record (or finds existing if teacher shadow student)
+    6. Links Seat to Student
+    7. Creates StudentTeacher link
     """
-    from app.models import TeacherBlock, StudentTeacher
+    from app.models import ClassEconomy, Seat, IdentityProfile, StudentTeacher, Student
+    from app.hash_utils import hash_username_lookup
     from app.utils.join_code import format_join_code
 
     form = StudentClaimAccountForm()
@@ -592,51 +515,48 @@ def claim_account():
         last_name = form.last_name.data.strip()
         dedupe_code = (form.dedupe_code.data or "").strip().upper()
 
-        # Find all unclaimed seats with this join code
-        unclaimed_seats = TeacherBlock.query.filter_by(
-            join_code=join_code,
-            is_claimed=False
-        ).all()
-
-        if not unclaimed_seats:
+        # Resolve class context
+        class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+        if not class_row:
             current_app.logger.warning(
-                f"Claim attempt failed: No unclaimed seats for join_code={join_code}"
+                f"Claim attempt failed: No class found for join_code={join_code}"
             )
             flash("Invalid join code or all seats already claimed. Check with your teacher.", "claim")
             return redirect(url_for('student.claim_account'))
 
-        # Try to find matching seats by v2 claim identity:
-        # join_code + full first_name + full last_name (+ optional dedupe on collisions).
-        from app.utils.name_utils import verify_last_name_parts
+        class_id = class_row.class_id
+        teacher_id = class_row.teacher_id
+
+        # Find all unclaimed seats with this class_id
+        unclaimed_seats = (
+            Seat.query
+            .filter(
+                Seat.class_id == class_id,
+                Seat.claimed_at.is_(None)
+            )
+            .all()
+        )
+
+        if not unclaimed_seats:
+            current_app.logger.warning(
+                f"Claim attempt failed: No unclaimed seats for class_id={class_id}"
+            )
+            flash("Invalid join code or all seats already claimed. Check with your teacher.", "claim")
+            return redirect(url_for('student.claim_account'))
+
+        claim_first_name_hash = hash_username_lookup(first_name.lower())
+        claim_last_name_hash = hash_username_lookup(last_name.lower())
 
         matched_seats = []
-        match_attempts = []  # Track why each seat didn't match
-
         for seat in unclaimed_seats:
-            seat_first_name = (seat.first_name or "").strip()
-            first_name_matches = seat_first_name.casefold() == first_name.casefold()
-
-            # Check last name with fuzzy matching
-            last_name_matches = verify_last_name_parts(
-                last_name,
-                seat.last_name_hash_by_part,
-                seat.salt
-            )
-            match_attempts.append({
-                'seat_id': seat.id,
-                'first_name_matches': first_name_matches,
-                'last_name_matches': last_name_matches,
-            })
-
-            if first_name_matches and last_name_matches:
+            if seat.claim_first_name_hash == claim_first_name_hash and seat.claim_last_name_hash == claim_last_name_hash:
                 matched_seats.append(seat)
 
         if not matched_seats:
-            # Log detailed match failure information
             current_app.logger.warning(
                 f"Claim attempt failed for join_code={join_code}, "
-                f"first_name={first_name}, with last_name from input. "
-                f"Attempted {len(match_attempts)} seat(s). Match details: {match_attempts}"
+                f"first_name={first_name}, last_name={last_name}. "
+                f"No matching seat found."
             )
             flash("No matching account found. Please check your join code and credentials.", "claim")
             return redirect(url_for('student.claim_account'))
@@ -654,55 +574,44 @@ def claim_account():
             dedupe_matches = [
                 seat
                 for seat in matched_seats
-                if ((seat.dedupe_key or "")[:8].upper() == dedupe_code)
+                if (seat.dedupe_code == dedupe_code)
             ]
             if len(dedupe_matches) != 1:
                 flash("Invalid deduplication code. Check with your teacher.", "claim")
                 return redirect(url_for('student.claim_account'))
             matched_seat = dedupe_matches[0]
 
-        # Check if this student already has an account (claiming from another teacher).
-        # Use first_half_hash for matching — it stays set even after dob_sum is cleaned up
-        # post-claim, so this lookup works regardless of cleanup state.
+        is_teacher = (
+            matched_seat.identity_profile is not None
+            and matched_seat.identity_profile.profile_type == 'teacher_shadow_student'
+        )
         existing_student = None
-        if matched_seat.is_teacher:
-            existing_student = _find_existing_teacher_shadow_student(matched_seat.teacher_id)
-        if not existing_student:
-            existing_student = Student.query.filter_by(
-                first_half_hash=matched_seat.first_half_hash
-            ).first()
+        if is_teacher:
+            existing_student = _find_existing_teacher_shadow_student(teacher_id)
 
         if existing_student:
             # Student already exists - link this seat to existing student
-            _ensure_class_anchor_for_teacher_block(matched_seat)
             matched_seat.student_id = existing_student.id
-            matched_seat.is_claimed = True
             matched_seat.claimed_at = utc_now()
-            # Null out PII on the now-claimed seat — no longer needed for matching
-            matched_seat.dob_sum_hash = None
-            matched_seat.last_name_hash_by_part = None
 
             # Create StudentTeacher link
             existing_link = StudentTeacher.query.filter_by(
                 student_id=existing_student.id,
-                teacher_id=matched_seat.teacher_id
+                teacher_id=teacher_id
             ).first()
 
             if not existing_link:
                 link = StudentTeacher(
                     student_id=existing_student.id,
-                    teacher_id=matched_seat.teacher_id,
+                    teacher_id=teacher_id,
                     join_code=matched_seat.join_code,
                 )
                 db.session.add(link)
 
             _ensure_student_class_membership(existing_student.id, matched_seat.join_code)
             linked_user = _get_or_create_setup_user_for_student(existing_student.id)
-            bridge_seat = _get_or_create_bridge_seat_for_teacher_block(
-                matched_seat,
-                existing_student.id,
-                linked_user.id if linked_user else None,
-            )
+            if linked_user:
+                matched_seat.user_id = linked_user.id
 
             db.session.flush()
 
@@ -713,7 +622,7 @@ def claim_account():
             else:
                 # Continue setup process
                 session['claimed_student_id'] = existing_student.id
-                session['claimed_seat_id'] = bridge_seat.id if bridge_seat else None
+                session['claimed_seat_id'] = matched_seat.id
                 session['claimed_user_id'] = linked_user.id if linked_user else None
                 session.pop('generated_username', None)
                 session.pop('theme_prompt', None)
@@ -721,119 +630,47 @@ def claim_account():
                 return redirect(url_for('student.create_username'))
 
         # New student - create Student record
-        # Generate an opaque credential hash value; DOB is no longer part of claim identity.
-        _ensure_class_anchor_for_teacher_block(matched_seat)
-        second_half_hash = hash_hmac(secrets.token_bytes(16), matched_seat.salt)
+        salt = get_random_salt()
+        import secrets
+        first_half_hash = hash_hmac(secrets.token_bytes(16), salt)
+        second_half_hash = hash_hmac(secrets.token_bytes(16), salt)
 
         new_student = Student(
-            first_name=matched_seat.first_name,
-            last_initial=matched_seat.last_initial,
-            block=matched_seat.block,
-            salt=matched_seat.salt,
-            first_half_hash=matched_seat.first_half_hash,
+            first_name=first_name,
+            last_initial=last_name[0].upper() if last_name else "?",
+            identity_profile=matched_seat.identity_profile,
+            block=matched_seat.block or "",
+            salt=salt,
+            first_half_hash=first_half_hash,
             second_half_hash=second_half_hash,
             has_completed_setup=False,
-            is_teacher=matched_seat.is_teacher,
+            is_teacher=is_teacher,
         )
         db.session.add(new_student)
-
-        try:
-            db.session.flush()  # Get student ID
-        except IntegrityError:
-            # Handle duplicate first_half_hash - student already exists but wasn't found
-            # by the deduplication logic above (edge case with different field combinations)
-            db.session.rollback()
-
-            # Look up the existing student directly by first_half_hash
-            existing_by_hash = None
-            if matched_seat.is_teacher:
-                existing_by_hash = _find_existing_teacher_shadow_student(matched_seat.teacher_id)
-            if not existing_by_hash:
-                existing_by_hash = Student.query.filter_by(
-                    first_half_hash=matched_seat.first_half_hash
-                ).first()
-
-            if existing_by_hash:
-                # Link this seat to the existing student
-                _ensure_class_anchor_for_teacher_block(matched_seat)
-                matched_seat.student_id = existing_by_hash.id
-                matched_seat.is_claimed = True
-                matched_seat.claimed_at = utc_now()
-                # Null out PII on the now-claimed seat
-                matched_seat.dob_sum_hash = None
-                matched_seat.last_name_hash_by_part = None
-
-                # Create StudentTeacher link if not exists
-                existing_link = StudentTeacher.query.filter_by(
-                    student_id=existing_by_hash.id,
-                    teacher_id=matched_seat.teacher_id
-                ).first()
-
-                if not existing_link:
-                    link = StudentTeacher(
-                        student_id=existing_by_hash.id,
-                        teacher_id=matched_seat.teacher_id,
-                        join_code=matched_seat.join_code,
-                    )
-                    db.session.add(link)
-
-                _ensure_student_class_membership(existing_by_hash.id, matched_seat.join_code)
-                linked_user = _get_or_create_setup_user_for_student(existing_by_hash.id)
-                bridge_seat = _get_or_create_bridge_seat_for_teacher_block(
-                    matched_seat,
-                    existing_by_hash.id,
-                    linked_user.id if linked_user else None,
-                )
-
-                db.session.flush()
-
-                if existing_by_hash.has_completed_setup:
-                    flash("This seat has been linked to your existing account. Please log in.", "claim")
-                    return redirect(url_for('student.login'))
-                else:
-                    session['claimed_student_id'] = existing_by_hash.id
-                    session['claimed_seat_id'] = bridge_seat.id if bridge_seat else None
-                    session['claimed_user_id'] = linked_user.id if linked_user else None
-                    session.pop('generated_username', None)
-                    session.pop('theme_prompt', None)
-                    session.pop('theme_slug', None)
-                    return redirect(url_for('student.create_username'))
-            else:
-                # Unexpected state - constraint violation but no matching student found
-                current_app.logger.error(
-                    f"IntegrityError on first_half_hash but no matching student found. "
-                    f"Seat ID: {matched_seat.id}, Hash: {matched_seat.first_half_hash[:16]}..."
-                )
-                flash("An error occurred while claiming your account. Please try again.", "danger")
-                return redirect(url_for('student.claim_account'))
+        db.session.flush()  # Get student ID
 
         # Link seat to student
         matched_seat.student_id = new_student.id
-        matched_seat.is_claimed = True
         matched_seat.claimed_at = utc_now()
-        # Null out seat verification hashes once claim succeeds.
-        matched_seat.dob_sum_hash = None
-        matched_seat.last_name_hash_by_part = None
 
         # Create StudentTeacher link
-        link = StudentTeacher(
-            student_id=new_student.id,
-            teacher_id=matched_seat.teacher_id,
-            join_code=matched_seat.join_code,
-        )
-        db.session.add(link)
+        if teacher_id:
+            link = StudentTeacher(
+                student_id=new_student.id,
+                teacher_id=teacher_id,
+                join_code=matched_seat.join_code,
+            )
+            db.session.add(link)
+
         _ensure_student_class_membership(new_student.id, matched_seat.join_code)
         linked_user = _get_or_create_setup_user_for_student(new_student.id)
-        bridge_seat = _get_or_create_bridge_seat_for_teacher_block(
-            matched_seat,
-            new_student.id,
-            linked_user.id if linked_user else None,
-        )
+        if linked_user:
+            matched_seat.user_id = linked_user.id
         db.session.flush()
 
         # Start setup flow
         session['claimed_student_id'] = new_student.id
-        session['claimed_seat_id'] = bridge_seat.id if bridge_seat else None
+        session['claimed_seat_id'] = matched_seat.id
         session['claimed_user_id'] = linked_user.id if linked_user else None
         session.pop('generated_username', None)
         session.pop('theme_prompt', None)
@@ -976,21 +813,13 @@ def add_class():
     """
     Allow logged-in students to add a new class by entering a join code.
 
-    Each join_code is an independent scoped universe. Credentials entered here
-    are matched against the *new* class's own unclaimed roster seat, which still
-    carries its own verification hashes (dob_sum, last_name_hash_by_part).
-    Those hashes are deleted from the seat after it is claimed.
-
-    Note: The student's own account has no stored dob_sum or last_name_hash_by_part.
-    This is intentional —
-    we verify credentials against the target class's seat, not the student account.
-    A name cross-check (encrypted first_name + last_initial) ensures the entered
-    credentials correspond to a seat belonging to this student.
+    Each join_code is an independent universe. Credentials entered here
+    are matched against the *new* class's own unclaimed roster seat.
     """
-    from app.models import TeacherBlock, StudentTeacher
+    from app.models import ClassEconomy, Seat, IdentityProfile, StudentTeacher
     from app.utils.join_code import format_join_code
     from app.forms import StudentAddClassForm
-    from app.utils.name_utils import verify_last_name_parts
+    from app.hash_utils import hash_username_lookup
 
     student = get_logged_in_student()
     form = StudentAddClassForm()
@@ -1053,74 +882,69 @@ def add_class():
 
     if form.validate_on_submit():
         join_code = format_join_code(form.join_code.data)
-        first_initial = form.first_initial.data.strip().upper()
+        first_name = (form.first_name.data or "").strip()
         last_name = form.last_name.data.strip()
-        dob_input = form.dob_sum.data
+        dedupe_code = (form.dedupe_code.data or "").strip().upper()
 
-        # Parse DOB and calculate sum
-        try:
-            if isinstance(dob_input, str):
-                dob_input = dob_input.strip()
-                dob_input = datetime.strptime(dob_input, "%Y-%m-%d").date()
-            dob_sum = dob_input.month + dob_input.day + dob_input.year
-        except (ValueError, AttributeError, TypeError):
-            flash("Invalid date of birth. Please enter a valid date.", "danger")
-            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
+        # Resolve class context
+        class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+        if not class_row:
+            flash("Invalid join code or all seats already claimed. Check with your teacher.", "danger")
+            return redirect(_get_return_target())
 
-        # Find all unclaimed seats with this join code
-        unclaimed_seats = TeacherBlock.query.filter_by(
-            join_code=join_code,
-            is_claimed=False
-        ).all()
+        class_id = class_row.class_id
+        teacher_id = class_row.teacher_id
+
+        # Find all unclaimed seats with this class_id
+        unclaimed_seats = (
+            Seat.query
+            .filter(
+                Seat.class_id == class_id,
+                Seat.claimed_at.is_(None)
+            )
+            .all()
+        )
 
         if not unclaimed_seats:
             flash("Invalid join code or all seats already claimed. Check with your teacher.", "danger")
-            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
+            return redirect(_get_return_target())
 
-        # Verify credentials against the new class's own seat hashes (per-seat scoping).
-        # The student's account does not store dob_sum or last_name_hash_by_part after
-        # their initial claim completes. Verification uses the target seat's hashes only.
-        matched_seat = None
+        claim_first_name_hash = hash_username_lookup(first_name.lower())
+        claim_last_name_hash = hash_username_lookup(last_name.lower())
+
+        matched_seats = []
         for seat in unclaimed_seats:
-            credential_matches, matched_primary, canonical_hash = match_claim_hash(
-                seat.first_half_hash,
-                first_initial,
-                seat.last_initial,
-                dob_sum,
-                seat.salt,
-            )
+            if seat.claim_first_name_hash == claim_first_name_hash and seat.claim_last_name_hash == claim_last_name_hash:
+                matched_seats.append(seat)
 
-            last_name_matches = verify_last_name_parts(
-                last_name,
-                seat.last_name_hash_by_part,
-                seat.salt
-            )
-
-            # Cross-check: ensure the seat belongs to this authenticated student
-            # (encrypted first_name + last_initial comparison).
-            name_matches = (
-                seat.first_name == student.first_name
-                and seat.last_initial == student.last_initial
-            )
-
-            dob_sum_matches = (
-                seat.dob_sum_hash is not None
-                and hash_hmac(str(dob_sum).encode(), seat.salt) == seat.dob_sum_hash
-            )
-            if credential_matches and last_name_matches and name_matches and dob_sum_matches:
-                if canonical_hash and not matched_primary:
-                    seat.first_half_hash = canonical_hash
-                matched_seat = seat
-                break
-
-        if not matched_seat:
+        if not matched_seats:
             flash("No matching seat found. Please verify your join code and credentials with your teacher.", "danger")
-            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
+            return redirect(_get_return_target())
+
+        matched_seat = None
+        if len(matched_seats) == 1:
+            matched_seat = matched_seats[0]
+        else:
+            if not dedupe_code:
+                flash(
+                    "Multiple students in this class share that name. Enter your deduplication code from your teacher.",
+                    "danger",
+                )
+                return redirect(_get_return_target())
+            dedupe_matches = [
+                seat
+                for seat in matched_seats
+                if (seat.dedupe_code == dedupe_code)
+            ]
+            if len(dedupe_matches) != 1:
+                flash("Invalid deduplication code. Check with your teacher.", "danger")
+                return redirect(_get_return_target())
+            matched_seat = dedupe_matches[0]
 
         # Check if student is already linked to this teacher's block
         existing_link = StudentTeacher.query.filter_by(
             student_id=student.id,
-            teacher_id=matched_seat.teacher_id
+            teacher_id=teacher_id
         ).first()
 
         if existing_link:
@@ -1130,30 +954,23 @@ def add_class():
                 flash(f"You are already enrolled in Block {new_block_check}.", "warning")
                 return redirect(_get_return_target())
 
-        # Link the seat to the student and null out its PII (no longer needed post-claim)
-        _ensure_class_anchor_for_teacher_block(matched_seat)
+        # Link the seat to the student
         matched_seat.student_id = student.id
-        matched_seat.is_claimed = True
         matched_seat.claimed_at = utc_now()
-        matched_seat.dob_sum_hash = None
-        matched_seat.last_name_hash_by_part = None
+        linked_user = _get_or_create_setup_user_for_student(student.id)
+        if linked_user:
+            matched_seat.user_id = linked_user.id
 
         # Create StudentTeacher link if it doesn't exist
         if not existing_link:
             link = StudentTeacher(
                 student_id=student.id,
-                teacher_id=matched_seat.teacher_id,
+                teacher_id=teacher_id,
                 join_code=matched_seat.join_code,
             )
             db.session.add(link)
 
         _ensure_student_class_membership(student.id, matched_seat.join_code)
-        linked_user = _get_or_create_setup_user_for_student(student.id)
-        _get_or_create_bridge_seat_for_teacher_block(
-            matched_seat,
-            student.id,
-            linked_user.id if linked_user else None,
-        )
 
         # Update student's block to include the new block if not already there
         current_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
@@ -2597,14 +2414,14 @@ def shop():
                     rent_free_uses[store_item_id] = granted_uses
 
     # Calculate class size for collective goals (count unique students in this class)
-    from app.models import TeacherBlock
+    from app.models import Seat
     class_size = 0
     if join_code:
         class_size = db.session.query(db.func.count(db.func.distinct(Student.id))).join(
-            TeacherBlock, TeacherBlock.student_id == Student.id
+            Seat, Seat.student_id == Student.id
         ).filter(
-            TeacherBlock.join_code == join_code,
-            TeacherBlock.is_claimed == True,
+            Seat.join_code == join_code,
+            Seat.claimed_at.isnot(None),
             Student.is_teacher == False,  # Exclude teacher account from class size
         ).scalar() or 0
 

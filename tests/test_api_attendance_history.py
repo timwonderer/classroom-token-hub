@@ -18,6 +18,17 @@ def admin_with_students(client):
     db.session.add(admin)
     db.session.flush()
 
+    # Create admin User record for authentication
+    from app.models import User, UserRole
+    user = User(
+        user_role=UserRole.TEACHER,
+        username_hash=admin.username_hash,
+        username_lookup_hash=admin.username_lookup_hash,
+        password_hash="pw",
+    )
+    db.session.add(user)
+    db.session.flush()
+
     # Create student owned by this admin
     salt = get_random_salt()
     student = Student(
@@ -86,6 +97,7 @@ def admin_with_students(client):
     
     return {
         'admin': admin,
+        'user': user,
         'student': student,
         'seat': seat,
         'class_id': class_row.class_id,
@@ -102,6 +114,7 @@ def test_attendance_history_returns_records(client, admin_with_students):
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin.id
+        sess['user_id'] = admin_with_students['user'].id
         sess['current_class_id'] = admin_with_students['class_id']
         sess['current_join_code'] = admin_with_students['join_code']
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
@@ -135,6 +148,7 @@ def test_attendance_history_with_date_filters(client, admin_with_students):
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin.id
+        sess['user_id'] = admin_with_students['user'].id
         sess['current_class_id'] = admin_with_students['class_id']
         sess['current_join_code'] = admin_with_students['join_code']
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
@@ -167,6 +181,23 @@ def test_attendance_history_tenant_scoping(client):
     admin1 = make_admin('admin1', 'TESTSECRET1')
     admin2 = make_admin('admin2', 'TESTSECRET2')
     db.session.add_all([admin1, admin2])
+    db.session.flush()
+
+    # Create admin User records for authentication
+    from app.models import User, UserRole
+    user1 = User(
+        user_role=UserRole.TEACHER,
+        username_hash=admin1.username_hash,
+        username_lookup_hash=admin1.username_lookup_hash,
+        password_hash="pw",
+    )
+    user2 = User(
+        user_role=UserRole.TEACHER,
+        username_hash=admin2.username_hash,
+        username_lookup_hash=admin2.username_lookup_hash,
+        password_hash="pw",
+    )
+    db.session.add_all([user1, user2])
     db.session.flush()
 
     # Create student for admin1
@@ -240,6 +271,7 @@ def test_attendance_history_tenant_scoping(client):
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin1.id
+        sess['user_id'] = user1.id
         sess['current_class_id'] = class1.class_id
         sess['current_join_code'] = class1.join_code
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
@@ -284,6 +316,7 @@ def test_attendance_history_excludes_deleted_records(client, admin_with_students
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin.id
+        sess['user_id'] = admin_with_students['user'].id
         sess['current_class_id'] = admin_with_students['class_id']
         sess['current_join_code'] = admin_with_students['join_code']
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
@@ -340,6 +373,7 @@ def test_attendance_history_dedupes_duplicate_daily_limit_tapouts(client, admin_
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin.id
+        sess['user_id'] = admin_with_students['user'].id
         sess['current_class_id'] = admin_with_students['class_id']
         sess['current_join_code'] = admin_with_students['join_code']
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()

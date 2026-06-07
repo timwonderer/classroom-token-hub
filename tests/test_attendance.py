@@ -14,11 +14,21 @@ from datetime import datetime, timedelta, timezone
 
 
 def _attach_student_to_class(student, join_code="ATTEND1", block="A"):
-    from app.models import Admin, TeacherBlock, StudentTeacher, User, Seat
+    from app.models import Admin, TeacherBlock, StudentTeacher, User, Seat, UserRole
     from tests.helpers.class_scope import create_class_scope
+    from app.hash_utils import hash_username_lookup
 
     teacher = make_admin(f"teacher_{join_code}_{student.id or 'new'}", "s")
     db.session.add(teacher)
+    db.session.flush()
+
+    admin_user = User(
+        user_role=UserRole.TEACHER,
+        username_hash=teacher.username_hash,
+        username_lookup_hash=teacher.username_lookup_hash,
+        password_hash="pw",
+    )
+    db.session.add(admin_user)
     db.session.flush()
 
     class_economy = create_class_scope(
@@ -27,12 +37,17 @@ def _attach_student_to_class(student, join_code="ATTEND1", block="A"):
         student=student,
         block=block,
         display_name=block,
+        create_seat=False,
     )
     db.session.flush()
 
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
+    
+    student_username = f"user_{join_code}_{student.id}"
     user = User(
-        username=f"user_{join_code}_{student.id}",
+        user_role=UserRole.STUDENT,
+        username_hash=hash_username_lookup(student_username),
+        username_lookup_hash=hash_username_lookup(student_username),
         password_hash="hash",
     )
     db.session.add(user)
@@ -57,8 +72,12 @@ def _attach_student_to_class(student, join_code="ATTEND1", block="A"):
         Seat(
             user_id=user.id,
             student_id=student.id,
+            class_id=class_economy.class_id,
             join_code=join_code,
             block=block,
+            block_identifier=block,
+            role="student",
+            claimed_at=datetime.now(timezone.utc),
         )
     )
     db.session.commit()

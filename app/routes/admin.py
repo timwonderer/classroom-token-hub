@@ -58,12 +58,12 @@ from app.models import (
     Student, Admin, ClassEconomy, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
     InsuranceEnrollment, StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, SavedAdjustment,
-    BankingSettings, TeacherBlock,
+    BankingSettings,
     UserReport, FeatureSettings, StudentBlock,
     Announcement, RedemptionAuditLog, RedemptionAuditAction,
     RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent, Seat,
     BalanceCache, ClassMembership, ClassEconomy, EconomySnapshot, User, UserRole, _quantize_currency,
-    SeatAttendanceState, TapEventReasonCode,
+    SeatAttendanceState, TapEventReasonCode, IdentityProfile,
 )
 from app.auth import (
     admin_required,
@@ -676,14 +676,14 @@ def get_admin_feature_join_code_options(feature_name: str, admin_id: int | None 
         .all()
     )
     roster_blocks = {
-        class_id: block
-        for class_id, block in (
-            TeacherBlock.query.with_entities(TeacherBlock.class_id, TeacherBlock.block)
-            .filter(TeacherBlock.class_id.in_([class_id for class_id, *_ in classes]))
-            .order_by(TeacherBlock.id.asc())
+        seat_class_id: seat_block
+        for seat_class_id, seat_block in (
+            db.session.query(Seat.class_id, Seat.block)
+            .filter(Seat.class_id.in_([class_id for class_id, *_ in classes]))
+            .order_by(Seat.id.asc())
             .all()
         )
-        if class_id and block
+        if seat_class_id and seat_block
     }
 
     options: list[dict[str, str]] = []
@@ -843,11 +843,10 @@ def _scoped_students(include_unassigned=True):
         return query
 
     class_scoped_student_ids = (
-        db.session.query(TeacherBlock.student_id)
+        db.session.query(Seat.student_id)
         .filter(
-            TeacherBlock.teacher_id == admin_id,
-            TeacherBlock.class_id == class_id,
-            TeacherBlock.student_id.isnot(None),
+            Seat.class_id == class_id,
+            Seat.student_id.isnot(None),
         )
         .subquery()
     )
@@ -855,20 +854,24 @@ def _scoped_students(include_unassigned=True):
 
 
 def _get_teacher_blocks():
-    """Get sorted list of blocks from teacher's students."""
+    """Get sorted list of blocks from the current teacher's Seat roster."""
     admin_id = session.get("admin_id")
     class_id = getattr(g, "admin_class_id", None) or (session.get("current_class_id") or "").strip() or None
     if not admin_id:
         return []
 
-    query = TeacherBlock.query.with_entities(TeacherBlock.block).filter(
-        TeacherBlock.teacher_id == admin_id,
-        TeacherBlock.block.isnot(None),
+    # Derive blocks from ClassEconomy (canonical class anchor) for the current teacher.
+    query = (
+        db.session.query(ClassEconomy.section)
+        .filter(
+            ClassEconomy.teacher_id == admin_id,
+            ClassEconomy.section.isnot(None),
+        )
     )
     if class_id:
-        query = query.filter(TeacherBlock.class_id == class_id)
+        query = query.filter(ClassEconomy.class_id == class_id)
     rows = query.all()
-    return sorted({(block or "").strip().upper() for (block,) in rows if (block or "").strip()})
+    return sorted({(section or "").strip().upper() for (section,) in rows if (section or "").strip()})
 
 
 
@@ -913,20 +916,23 @@ def _populate_policy_from_form(policy, form, *, next_tier_category_id=None):
     policy.is_active = form.is_active.data
 
 def _get_class_labels_for_blocks(admin_id, blocks):
-    """Return mapping of block -> class label for the given admin without N+1 queries."""
+    """Return mapping of block -> class display_name for the given admin without N+1 queries."""
 
     if not blocks:
         return {}
 
     class_id = getattr(g, "admin_class_id", None) or (session.get("current_class_id") or "").strip() or None
-    teacher_blocks_query = (
-        TeacherBlock.query
-        .filter(TeacherBlock.teacher_id == admin_id, TeacherBlock.block.in_(blocks))
+    query = (
+        db.session.query(ClassEconomy.section, ClassEconomy.display_name)
+        .filter(
+            ClassEconomy.teacher_id == admin_id,
+            ClassEconomy.section.in_(blocks),
+        )
     )
     if class_id:
-        teacher_blocks_query = teacher_blocks_query.filter(TeacherBlock.class_id == class_id)
-    teacher_blocks = teacher_blocks_query.all()
-    labels = {tb.block: tb.get_class_label() for tb in teacher_blocks}
+        query = query.filter(ClassEconomy.class_id == class_id)
+    rows = query.all()
+    labels = {section: (display_name or section) for section, display_name in rows}
 
     for block in blocks:
         labels.setdefault(block, block)
@@ -941,16 +947,18 @@ def _get_join_codes_by_block(admin_id, blocks):
         return {}
 
     class_id = getattr(g, "admin_class_id", None) or (session.get("current_class_id") or "").strip() or None
-    teacher_blocks_query = (
-        TeacherBlock.query
-        .filter(TeacherBlock.teacher_id == admin_id, TeacherBlock.block.in_(blocks))
+    query = (
+        db.session.query(ClassEconomy.section, ClassEconomy.join_code)
+        .filter(
+            ClassEconomy.teacher_id == admin_id,
+            ClassEconomy.section.in_(blocks),
+            ClassEconomy.join_code.isnot(None),
+        )
     )
     if class_id:
-        teacher_blocks_query = teacher_blocks_query.filter(TeacherBlock.class_id == class_id)
-    teacher_blocks = teacher_blocks_query.all()
-    join_codes = {tb.block: tb.join_code for tb in teacher_blocks if tb.join_code}
-
-    return join_codes
+        query = query.filter(ClassEconomy.class_id == class_id)
+    rows = query.all()
+    return {section: join_code for section, join_code in rows if join_code}
 
 
 def _build_payroll_preview_state(students, join_codes_by_block):
@@ -1030,38 +1038,40 @@ def _student_scope_subquery(include_unassigned=True):
 
 
 def _student_scope_subquery_for_join_code(join_code: str, *, include_unassigned: bool = False):
-    """Return a subquery of student IDs scoped to one teacher-owned class."""
+    """Return a subquery of student IDs scoped to one class by join_code."""
     admin_id = session.get("admin_id")
     if not admin_id or not join_code:
         return sa.select(Student.id).where(sa.false()).subquery()
 
     query = (
         db.session.query(Student.id)
-        .join(TeacherBlock, TeacherBlock.student_id == Student.id)
+        .join(Seat, Seat.student_id == Student.id)
+        .join(ClassEconomy, ClassEconomy.class_id == Seat.class_id)
         .filter(
-            TeacherBlock.teacher_id == admin_id,
-            TeacherBlock.join_code == join_code,
-            TeacherBlock.student_id.isnot(None),
+            ClassEconomy.teacher_id == admin_id,
+            Seat.join_code == join_code,
+            Seat.student_id.isnot(None),
         )
         .distinct()
     )
     if not include_unassigned:
-        query = query.filter(TeacherBlock.is_claimed == True)
+        query = query.filter(Seat.claimed_at.isnot(None))
 
     return query.subquery()
 
 
 def _get_claimed_teacher_block_for_join_code(student_id: int, teacher_id: int, join_code: str):
-    """Return the claimed teacher-block row for one student in one class scope."""
+    """Return the claimed Seat for one student in one class scope."""
     if not student_id or not teacher_id or not join_code:
         return None
     return (
-        TeacherBlock.query
-        .filter_by(
-            student_id=student_id,
-            teacher_id=teacher_id,
-            join_code=join_code,
-            is_claimed=True,
+        Seat.query
+        .join(ClassEconomy, ClassEconomy.class_id == Seat.class_id)
+        .filter(
+            Seat.student_id == student_id,
+            ClassEconomy.teacher_id == teacher_id,
+            Seat.join_code == join_code,
+            Seat.claimed_at.isnot(None),
         )
         .first()
     )
@@ -1082,7 +1092,7 @@ def _require_payroll_feature_scope_from_request(
     4. Construct the scoped features and options based on the class boundary.
     """
     from flask import request, session
-    from app.models import Seat, ClassFeature, TeacherBlock
+    from app.models import Seat, ClassFeature
     from app.feats.base import InvariantViolation
 
     # 1. Resolve canonical context variables
@@ -1115,14 +1125,17 @@ def _require_payroll_feature_scope_from_request(
             f"Insufficient authority: Seat {teacher_seat.id} is role='{teacher_seat.role}', not 'teacher'."
         )
 
-    # 4. Resolve block from TeacherBlock
+    # 4. Resolve available blocks from Seat (class-scoped)
     requested_block = (request.values.get('cwi_block') or request.values.get('block') or '').strip().upper()
 
-    # Query TeacherBlocks for this class to get blocks
     blocks = (
-        TeacherBlock.query.with_entities(TeacherBlock.block)
-        .filter(TeacherBlock.class_id == resolved_class_id)
-        .order_by(TeacherBlock.block.asc(), TeacherBlock.id.asc())
+        db.session.query(Seat.block)
+        .filter(
+            Seat.class_id == resolved_class_id,
+            Seat.block.isnot(None),
+        )
+        .distinct()
+        .order_by(Seat.block.asc())
         .all()
     )
     available_blocks = [r[0] for r in blocks if r[0]]
@@ -1151,10 +1164,10 @@ def _require_payroll_feature_scope_from_request(
 
 
 def _join_code_exists(join_code):
-    """Return True when a class economy identified by join_code still exists."""
+    """Return True when a class identified by join_code still exists in ClassEconomy."""
     if not join_code:
         return False
-    return TeacherBlock.query.filter_by(join_code=join_code).first() is not None
+    return ClassEconomy.query.filter_by(join_code=join_code).first() is not None
 
 
 def _assert_transaction_deletion_allowed(join_code, *, join_code_deletion=False):
@@ -1210,7 +1223,6 @@ def _hard_delete_class_scope(class_id, teacher_id):
     join_code = class_row.join_code
     invalid_scope_rows = []
     scoped_models = (
-        ("teacher_blocks", TeacherBlock),
         ("ledger_transaction", Transaction),
         ("student_blocks", StudentBlock),
         ("tap_events", TapEvent),
@@ -1239,10 +1251,10 @@ def _hard_delete_class_scope(class_id, teacher_id):
         raise InvariantViolation(message)
 
     scoped_student_ids = [
-        sid for (sid,) in db.session.query(TeacherBlock.student_id)
+        sid for (sid,) in db.session.query(Seat.student_id)
         .filter(
-            TeacherBlock.class_id == class_id,
-            TeacherBlock.student_id.isnot(None),
+            Seat.class_id == class_id,
+            Seat.student_id.isnot(None),
         )
         .distinct()
         .all()
@@ -1268,10 +1280,9 @@ def _hard_delete_class_scope(class_id, teacher_id):
         .subquery()
     )
     class_blocks = [
-        block for (block,) in db.session.query(TeacherBlock.block).filter(
-            TeacherBlock.teacher_id == teacher_id,
-            TeacherBlock.class_id == class_id,
-            TeacherBlock.block.isnot(None),
+        block for (block,) in db.session.query(Seat.block).filter(
+            Seat.class_id == class_id,
+            Seat.block.isnot(None),
         ).distinct().all()
     ]
     if class_blocks and scoped_student_ids:
@@ -1377,16 +1388,13 @@ def _hard_delete_class_scope(class_id, teacher_id):
 
     # Seats/ownership for this class
     ClassMembership.query.filter(ClassMembership.class_id == class_id).delete(synchronize_session=False)
-    TeacherBlock.query.filter(
-        TeacherBlock.teacher_id == teacher_id,
-        TeacherBlock.class_id == class_id,
-    ).delete(synchronize_session=False)
+    Seat.query.filter(Seat.class_id == class_id).delete(synchronize_session=False)
     ClassEconomy.query.filter_by(class_id=class_id).delete(synchronize_session=False)
 
-    # Remove students that no longer belong to any class after this join-code deletion.
-    remaining_student_ids_subq = db.session.query(TeacherBlock.student_id).filter(
-        TeacherBlock.student_id.isnot(None),
-        TeacherBlock.class_id != class_id,
+    # Remove students that no longer belong to any class after this class deletion.
+    remaining_student_ids_subq = db.session.query(Seat.student_id).filter(
+        Seat.student_id.isnot(None),
+        Seat.class_id != class_id,
     ).subquery()
     orphan_student_ids = (
         db.session.query(Student.id)
@@ -1402,8 +1410,10 @@ def _hard_delete_class_scope(class_id, teacher_id):
     ).delete(synchronize_session=False)
 
 def _delete_teacher_residual_ownership_rows(teacher_id):
-    """Delete teacher-owned link rows not already removed by join-code scoped deletion."""
-    TeacherBlock.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    """Delete teacher-owned link rows not already removed by class-scoped deletion."""
+    Seat.query.join(ClassEconomy, ClassEconomy.class_id == Seat.class_id).filter(
+        ClassEconomy.teacher_id == teacher_id
+    ).delete(synchronize_session=False)
     StudentTeacher.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
 
 
@@ -1533,9 +1543,9 @@ def _hard_delete_teacher_account_scope(teacher_id):
     ]
 
     affected_student_ids = {
-        sid for (sid,) in db.session.query(TeacherBlock.student_id).filter(
-            TeacherBlock.teacher_id == teacher_id,
-            TeacherBlock.student_id.isnot(None),
+        sid for (sid,) in db.session.query(Seat.student_id).filter(
+            Seat.class_id.in_(class_ids),
+            Seat.student_id.isnot(None),
         ).distinct().all()
     }
     affected_student_ids.update(
@@ -1728,61 +1738,69 @@ def student_detail_url(student_id: int) -> str:
 
 def _ensure_teacher_student_seat(teacher_id, join_code, block):
     """
-    Ensure a 'Teacher Student' seat exists for the given class period.
+    Ensure a teacher shadow student seat exists for the given class period.
 
-    This creates a special TeacherBlock entry that allows the teacher to log in
-    as a student for this specific class. It uses a standard identity so the
-    teacher knows how to claim it (Teacher S., DOB 01/01/2001).
+    Uses profile_type='teacher_shadow_student' as the authoritative machine-readable
+    discriminator. Name-based detection is explicitly avoided — the profile_type is the
+    only correct authority for identifying this seat.
     """
     if not join_code:
         return
 
     class_id = _resolve_class_id(teacher_id, join_code)
+    if not class_id:
+        class_id = _ensure_join_code_anchors(teacher_id, join_code, class_label=block)
 
-    existing_seat = TeacherBlock.query.filter_by(
-        teacher_id=teacher_id,
-        join_code=join_code,
-        is_teacher=True
-    ).first()
+    from app.models import Seat, IdentityProfile
+    from app.hash_utils import hash_username_lookup
+
+    # Use profile_type as the canonical discriminator — not name strings.
+    existing_seat = (
+        Seat.query
+        .join(IdentityProfile, IdentityProfile.seat_id == Seat.id)
+        .filter(
+            Seat.class_id == class_id,
+            IdentityProfile.profile_type == 'teacher_shadow_student',
+        )
+        .first()
+    )
 
     if existing_seat:
+        existing_seat.block_identifier = block
         existing_seat.block = block
-        existing_seat.class_id = existing_seat.class_id or class_id
-        if block and existing_seat.class_label != block:
-            existing_seat.class_label = block
+        existing_seat.join_code = join_code
         return
 
-    class_id = _ensure_join_code_anchors(teacher_id, join_code, class_label=block)
-
-    # Create the teacher student seat
-    # Default Identity: Teacher Student, DOB 01/01/2001
     first_name = "Teacher"
     last_initial = "S"
-    dob_sum = 1 + 1 + 2001  # 2003
 
-    salt = get_random_salt()
-    # Canonical hash for claim matching
-    first_half_hash = compute_primary_claim_hash(first_name[:1], dob_sum, salt)
-    last_name_hash_by_part = hash_last_name_parts("Student", salt)
-    dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
+    # Roster fingerprint is class-scoped to prevent cross-class correlation (INV-CORE).
+    claim_first_name_hash = hash_username_lookup(first_name.lower())
+    claim_last_name_hash = hash_username_lookup("student")
+    roster_fingerprint = hash_username_lookup(f"{class_id}|{first_name.lower()}|student")
 
-    teacher_seat = TeacherBlock(
-        teacher_id=teacher_id,
-        block=block,
-        join_code=join_code,
+    teacher_seat = Seat(
         class_id=class_id,
-        class_label=block,
-        first_name=first_name,
-        last_initial=last_initial,
-        last_name_hash_by_part=last_name_hash_by_part,
-        dob_sum_hash=dob_sum_hash,
-        salt=salt,
-        first_half_hash=first_half_hash,
-        is_claimed=False,
-        is_teacher=True
+        role='student',
+        block_identifier=block,
+        block=block,
+        claim_first_name_hash=claim_first_name_hash,
+        claim_last_name_hash=claim_last_name_hash,
+        roster_fingerprint=roster_fingerprint,
+        join_code=join_code,
+        claimed_at=None
     )
     db.session.add(teacher_seat)
-    current_app.logger.info(f"Created Teacher Student seat for teacher {teacher_id}, join_code {join_code}")
+    db.session.flush()
+
+    profile = IdentityProfile(
+        seat_id=teacher_seat.id,
+        profile_type='teacher_shadow_student',
+        first_name=first_name,
+        last_initial=last_initial
+    )
+    db.session.add(profile)
+    current_app.logger.info(f"Created teacher shadow student seat for teacher {teacher_id}, join_code {join_code}")
 
 
 def _get_table_names() -> set[str]:
@@ -1999,7 +2017,7 @@ def _link_student_to_admin(
 ):
     """
     Ensure the given admin is associated with the student.
-    Creates both StudentTeacher link AND TeacherBlock record with join_code.
+    Creates a StudentTeacher link and a claimed Seat record.
     """
     if not admin_id:
         return
@@ -2008,7 +2026,7 @@ def _link_student_to_admin(
 
     if not target_block:
         current_app.logger.warning(
-            f"Selected student has no block assigned, skipping TeacherBlock creation"
+            "Selected student has no block assigned, skipping Seat creation"
         )
         return
 
@@ -2021,88 +2039,69 @@ def _link_student_to_admin(
 
     target_join_code = join_code
     target_class_id = class_id
-    target_class_label = class_label
 
     if target_join_code:
         if not target_class_id:
             target_class_id = _resolve_class_id(admin_id, target_join_code)
-        if target_class_label is None:
-            current_scope_block = TeacherBlock.query.filter_by(
-                teacher_id=admin_id,
-                join_code=target_join_code,
-            ).first()
-            if current_scope_block and current_scope_block.class_label:
-                target_class_label = current_scope_block.class_label
     else:
-        # Find or create a join_code for this teacher+block combo
-        # Look for any existing TeacherBlock for this teacher+block (even unclaimed ones)
-        any_block_record = TeacherBlock.query.filter_by(
-            teacher_id=admin_id,
-            block=target_block
+        # Find or create a join_code for this teacher+block combo via ClassEconomy.
+        existing_class = ClassEconomy.query.filter(
+            ClassEconomy.teacher_id == admin_id,
+            ClassEconomy.section == target_block,
         ).first()
-
-        if any_block_record and any_block_record.join_code:
-            # Reuse existing join_code for this block
-            target_join_code = any_block_record.join_code
-            target_class_label = any_block_record.class_label
+        if existing_class and existing_class.join_code:
+            target_join_code = existing_class.join_code
+            target_class_id = existing_class.class_id
         else:
-            # Generate new join_code for this teacher+block
-            target_join_code = generate_join_code()
-        target_class_id = _resolve_class_id(admin_id, target_join_code)
+            from app.utils.join_code import generate_join_code as _gen_jc
+            target_join_code = _gen_jc()
+        if not target_class_id:
+            target_class_id = _resolve_class_id(admin_id, target_join_code)
 
-    # 2. Create or update TeacherBlock record with join_code
-    existing_teacher_block_query = TeacherBlock.query.filter_by(
-        teacher_id=admin_id,
+    # 2. Ensure ClassEconomy record exists.
+    _ensure_join_code_anchors(admin_id, target_join_code, class_label=class_label)
+
+    # 3. Create or update Seat record.
+    existing_seat = Seat.query.filter_by(
         student_id=student.id,
-    )
-    if target_join_code:
-        existing_teacher_block_query = existing_teacher_block_query.filter_by(join_code=target_join_code)
-    else:
-        existing_teacher_block_query = existing_teacher_block_query.filter_by(block=target_block)
-    existing_teacher_block = existing_teacher_block_query.first()
+        class_id=target_class_id,
+    ).first()
 
-    if not existing_teacher_block and target_join_code:
-        existing_teacher_block = TeacherBlock.query.filter_by(
-            teacher_id=admin_id,
-            join_code=target_join_code,
-            block=target_block,
-            is_claimed=False,
-            first_half_hash=student.first_half_hash,
-        ).first()
-
-    if not existing_teacher_block:
-        # Ensure ClassEconomy record exists before creating TeacherBlock
-        _ensure_join_code_anchors(admin_id, target_join_code, class_label=target_class_label)
-
-        # Create new TeacherBlock record
-        new_teacher_block = TeacherBlock(
-            teacher_id=admin_id,
-            student_id=student.id,
-            block=target_block,
-            join_code=target_join_code,
+    if not existing_seat:
+        from app.hash_utils import hash_username_lookup as _h
+        new_seat = Seat(
             class_id=target_class_id,
-            class_label=target_class_label,  # Preserve class_label if it exists
-            is_claimed=True,  # Mark as claimed since teacher manually added them
+            student_id=student.id,
+            role='student',
+            block_identifier=target_block,
+            block=target_block,
+            join_code=target_join_code,
+            claim_first_name_hash=_h(student.first_name.lower()) if student.first_name else None,
+            claim_last_name_hash=_h(student.last_initial.lower()) if student.last_initial else None,
+            roster_fingerprint=_h(
+                f"{target_class_id}|{(student.first_name or '').lower()}|{(student.last_initial or '').lower()}"
+            ),
+            claimed_at=utc_now(),
+        )
+        db.session.add(new_seat)
+        db.session.flush()
+        profile = IdentityProfile(
+            seat_id=new_seat.id,
+            profile_type='student',
             first_name=student.first_name,
             last_initial=student.last_initial,
-            last_name_hash_by_part=None,
-            dob_sum_hash=None,
-            salt=student.salt,
-            first_half_hash=student.first_half_hash
         )
-        db.session.add(new_teacher_block)
+        db.session.add(profile)
         current_app.logger.info(
-            f"Created TeacherBlock for a student for teacher {admin_id} in block {target_block}"
+            "Created claimed Seat for student %s, teacher %s, block %s",
+            student.id, admin_id, target_block,
         )
-    elif not existing_teacher_block.is_claimed:
-        # TeacherBlock exists but not claimed - mark as claimed now
-        existing_teacher_block.is_claimed = True
-        existing_teacher_block.student_id = student.id
-        existing_teacher_block.class_id = existing_teacher_block.class_id or target_class_id
-        if target_class_label and not existing_teacher_block.class_label:
-            existing_teacher_block.class_label = target_class_label
+    else:
+        if not existing_seat.claimed_at:
+            existing_seat.claimed_at = utc_now()
+        existing_seat.class_id = existing_seat.class_id or target_class_id
         current_app.logger.info(
-            f"Claimed existing TeacherBlock for student with join_code {existing_teacher_block.join_code}"
+            "Claimed existing Seat %s for student %s", existing_seat.id, student.id
         )
 
 
@@ -2129,15 +2128,15 @@ def _resolve_join_code_for_block(admin_id, block_name):
     if not block_name:
         return None
     row = (
-        TeacherBlock.query.with_entities(TeacherBlock.join_code)
+        ClassEconomy.query
         .filter(
-            TeacherBlock.teacher_id == admin_id,
-            TeacherBlock.block == block_name,
-            TeacherBlock.join_code.isnot(None),
+            ClassEconomy.teacher_id == admin_id,
+            ClassEconomy.section == block_name,
+            ClassEconomy.join_code.isnot(None),
         )
         .first()
     )
-    return row[0] if row and row[0] else None
+    return row.join_code if row and row.join_code else None
 
 
 def _build_economy_snapshot_from_analysis(class_id, join_code, checker, analysis):
@@ -2398,16 +2397,12 @@ def _get_frozen_economy_analysis_payload(
 def _resolve_payroll_settings_for_block(admin_id, block_name):
     if not block_name:
         return None
-    class_id_row = (
-        TeacherBlock.query.with_entities(TeacherBlock.class_id)
-        .filter(
-            TeacherBlock.teacher_id == admin_id,
-            TeacherBlock.block == block_name,
-            TeacherBlock.class_id.isnot(None),
-        )
-        .first()
-    )
-    class_id = class_id_row[0] if class_id_row and class_id_row[0] else None
+    class_row = ClassEconomy.query.filter(
+        ClassEconomy.teacher_id == admin_id,
+        ClassEconomy.section == block_name,
+        ClassEconomy.class_id.isnot(None),
+    ).first()
+    class_id = class_row.class_id if class_row else None
     if not class_id:
         return None
     return (
@@ -2799,46 +2794,13 @@ def _check_onboarding_redirect():
 def _normalize_claim_credentials_for_admin(admin_id: int) -> int:
     """Normalize claim hashes for all students and seats the admin can access.
 
-    This keeps legacy last-initial hashes claimable while ensuring future
-    matches use the canonical first-initial credential. Returns the number of
-    records updated.
+def _normalize_claim_credentials_for_admin(admin_id: int) -> int:
+    """No-op: TeacherBlock-based hash normalization has been removed with TeacherBlock.
+
+    Kept as a stub to avoid breaking any callers that have not yet been removed.
+    Returns 0 always.
     """
-
-    if not admin_id:
-        return 0
-
-    updated = 0
-
-    # Normalize TeacherBlock seats (claimed and unclaimed)
-    teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).yield_per(100)
-    for seat in teacher_blocks:
-        if seat.first_name == LEGACY_PLACEHOLDER_FIRST_NAME:
-            # Placeholder rows only store join codes and should not be mutated
-            continue
-
-        first_initial = seat.first_name.strip()[0].upper() if seat.first_name else None
-        updated_hash, changed = normalize_claim_hash(
-            seat.first_half_hash,
-            first_initial,
-            seat.last_initial,
-            None,
-            seat.salt,
-        )
-        if changed and updated_hash:
-            seat.first_half_hash = updated_hash
-            updated += 1
-
-    if updated:
-        try:
-            db.session.flush()
-        except Exception as exc:
-            current_app.logger.error(
-                "Failed to normalize claim credentials for admin %s: %s", admin_id, exc
-            )
-            db.session.rollback()
-            return 0
-
-    return updated
+    return 0
 
 @admin_bp.route('/')
 @admin_required
@@ -2872,12 +2834,8 @@ def dashboard():
 
     # Optimized balance calculation (scoped to teacher's classes)
     student_ids = [s.id for s in students]
-    # Fetch all join codes for this teacher
+    # Fetch all join codes for this teacher via ClassEconomy (canonical source).
     teacher_join_codes = _get_admin_owned_join_codes(current_admin_id)
-    join_code_scope = TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
-        TeacherBlock.teacher_id == current_admin_id,
-        TeacherBlock.join_code.isnot(None),
-    ).distinct()
 
     teacher_class_ids = [
         class_id
@@ -3490,15 +3448,15 @@ def recover():
         # Step 1: Establish teacher identity from the first join_code
         # ----------------------------------------------------------------
         first_join_code = pairs[0][0]
-        first_block = TeacherBlock.query.filter_by(join_code=first_join_code).first()
-        if not first_block:
+        first_class = ClassEconomy.query.filter_by(join_code=first_join_code).first()
+        if not first_class:
             current_app.logger.warning(
                 f"Admin recovery: initial join_code '{first_join_code}' not found"
             )
             flash(_GENERIC_ERROR, "error")
             return render_template("admin_recover.html", form=form)
 
-        teacher_id = first_block.teacher_id
+        teacher_id = first_class.teacher_id
 
         # ----------------------------------------------------------------
         # Step 2: Verify submitted join codes exactly match the teacher's active classes
@@ -3508,8 +3466,8 @@ def recover():
             flash(_GENERIC_ERROR, "error")
             return render_template("admin_recover.html", form=form)
 
-        teacher_blocks = TeacherBlock.query.filter_by(teacher_id=teacher_id).all()
-        all_active_join_codes = set(b.join_code for b in teacher_blocks if b.join_code)
+        teacher_classes = ClassEconomy.query.filter_by(teacher_id=teacher_id).all()
+        all_active_join_codes = {c.join_code for c in teacher_classes if c.join_code}
         submitted_join_codes = set(jc for jc, _ in pairs)
 
         # Must exactly match backend list
@@ -3533,19 +3491,24 @@ def recover():
         # ----------------------------------------------------------------
         resolved_students = {}   # join_code -> Student
 
-        # Group blocks by join_code for quick student_id lookup
-        blocks_by_jc = {}
-        for b in teacher_blocks:
-            if b.join_code:
-                blocks_by_jc.setdefault(b.join_code, []).append(b)
+        # Group Seat student_ids by join_code for quick lookup
+        seats_by_jc = {}
+        for c in teacher_classes:
+            if c.join_code:
+                jc_seats = Seat.query.filter(
+                    Seat.class_id == c.class_id,
+                    Seat.student_id.isnot(None),
+                    Seat.claimed_at.isnot(None),
+                ).all()
+                seats_by_jc[c.join_code] = jc_seats
 
         for join_code, username in pairs:
             # We already know this join_code belongs to the teacher from the set comparison
             lookup_hash = hash_username_lookup(username)
 
             # Get all student IDs associated with this specific join_code
-            blocks_for_jc = blocks_by_jc[join_code]
-            student_ids_in_class = [b.student_id for b in blocks_for_jc if b.student_id]
+            seats_for_jc = seats_by_jc.get(join_code, [])
+            student_ids_in_class = [s.student_id for s in seats_for_jc if s.student_id]
 
             student = (
                 Student.query
@@ -3935,28 +3898,24 @@ def settings():
             else:
                 admin.display_name = None  # Use teacher_public_id as fallback
 
-            # Update class labels for each block
-            blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).distinct(TeacherBlock.block).all()
-            for block in blocks:
-                class_label_key = f'class_label_{block.block}'
+            # Update class labels for each ClassEconomy (canonical class label store)
+            teacher_classes = ClassEconomy.query.filter_by(teacher_id=admin_id).all()
+            for cls in teacher_classes:
+                section_key = cls.section or cls.join_code or ''
+                class_label_key = f'class_label_{section_key}'
                 class_label = request.form.get(class_label_key, '').strip()
-
-                # Update all TeacherBlock entries with this block value
-                TeacherBlock.query.filter_by(
-                    teacher_id=admin_id,
-                    block=block.block
-                ).update({'class_label': class_label if class_label else None})
+                cls.display_name = class_label if class_label else None
 
         set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
         flash("Settings updated successfully!", "success")
         return redirect(url_for('admin.settings'))
 
     # GET: Show settings form
-    # Get unique blocks for this teacher
-    blocks = db.session.query(TeacherBlock.block, TeacherBlock.class_label)\
-        .filter_by(teacher_id=admin_id)\
-        .distinct(TeacherBlock.block)\
-        .all()
+    # Derive blocks from ClassEconomy (canonical class anchor)
+    blocks = [
+        (cls.section or cls.join_code or '', cls.display_name)
+        for cls in ClassEconomy.query.filter_by(teacher_id=admin_id).order_by(ClassEconomy.section.asc()).all()
+    ]
 
     return render_template(
         'admin_settings.html',
@@ -4297,81 +4256,79 @@ def students():
         if class_row:
             pending_class_timezone_confirmations.append(_build_pending_class_timezone_payload(class_row))
 
-    # Backfill any legacy credential hashes to the canonical format for this admin's data
-    updated_records = _normalize_claim_credentials_for_admin(current_admin)
-    if updated_records:
-        current_app.logger.info(
-            "Normalized %s student/seat claim credential(s) for admin %s", updated_records, current_admin
+
+    # Strict single-context: only Seat data anchored to the active class_id.
+    class_seats = (
+        Seat.query
+        .join(IdentityProfile, IdentityProfile.seat_id == Seat.id)
+        .filter(
+            Seat.class_id == current_class_id,
+            IdentityProfile.profile_type != 'teacher_shadow_student',
         )
+        .all()
+    ) if current_class_id else []
 
-    # Strict single-context: only roster data anchored to the active class_id.
-    teacher_blocks = TeacherBlock.query.filter_by(
-        teacher_id=current_admin,
-        class_id=current_class_id,
-    ).all()
-
+    # Derive unique blocks from the Seat roster.
     blocks = sorted({
-        tb.block.strip().upper()
-        for tb in teacher_blocks
-        if tb.block and tb.block.strip()
+        (s.block or '').strip().upper()
+        for s in class_seats
+        if (s.block or '').strip()
     })
 
     # Group students by block (students can appear in multiple blocks)
     students_by_block = {}
 
-    # Claimed students are resolved through TeacherBlock rows in the active class.
+    # Claimed students are resolved through Seat rows in the active class.
     claimed_student_ids = sorted({
-        tb.student_id for tb in teacher_blocks
-        if tb.student_id is not None
+        s.student_id for s in class_seats
+        if s.student_id is not None and s.claimed_at is not None
     })
     all_students = _scoped_students().filter(Student.id.in_(claimed_student_ids)).order_by(Student.block, Student.first_name).all() if claimed_student_ids else []
 
     # Group students by block within this class only.
     for block in blocks:
         block_claimed_ids = {
-            tb.student_id for tb in teacher_blocks
-            if tb.block and tb.block.strip().upper() == block and tb.student_id is not None
+            s.student_id for s in class_seats
+            if (s.block or '').strip().upper() == block
+            and s.student_id is not None
+            and s.claimed_at is not None
         }
         students_by_block[block] = [s for s in all_students if s.id in block_claimed_ids]
 
     # Add username_display attribute to each student
     for student in all_students:
         if student.username_hash and student.has_completed_setup:
-            # Username is hashed, we need to display a placeholder
             student.username_display = f"user_{student.id}"
         else:
             student.username_display = "Not Set"
 
-    # Fetch join codes, class labels, and unclaimed seats for each block
+    # Fetch join codes, class labels, and unclaimed seats for each block.
+    # Source of truth: ClassEconomy for join codes/labels, Seat for unclaimed counts.
     join_codes_by_block = {}
     class_labels_by_block = {}
     class_ids_by_block = {}
     unclaimed_seats_by_block = {}
     unclaimed_seats_list_by_block = {}
 
-    # Process current-class teacher_blocks in one pass to build all required structures.
-    for tb in teacher_blocks:
-        block_name = tb.block.strip().upper() if tb.block else None
-        if block_name:
-            # Initialize structures if needed
-            if block_name not in unclaimed_seats_list_by_block:
-                unclaimed_seats_list_by_block[block_name] = []
-                # Store the first join code we encounter for this block.
-                # All TeacherBlock records for the same block should have the same join_code
-                # (enforced by roster import logic), so taking the first one is correct.
-                join_codes_by_block[block_name] = tb.join_code
-                # Store class label (use the first one; they should all be the same for a given block)
-                class_labels_by_block[block_name] = tb.get_class_label()
-                class_ids_by_block[block_name] = tb.class_id
-                unclaimed_seats_by_block[block_name] = 0
+    if current_class_id:
+        class_row = ClassEconomy.query.filter_by(
+            teacher_id=current_admin,
+            class_id=current_class_id,
+        ).first()
+        if class_row:
+            for block in blocks:
+                unclaimed_seats_list_by_block[block] = []
+                join_codes_by_block[block] = class_row.join_code
+                class_labels_by_block[block] = class_row.display_name or block
+                class_ids_by_block[block] = class_row.class_id
+                unclaimed_seats_by_block[block] = 0
 
-            # Track unclaimed seats (excluding legacy placeholders and seats already linked to a student)
-            if (
-                not tb.is_claimed
-                and tb.first_name != LEGACY_PLACEHOLDER_FIRST_NAME
-                and tb.student_id is None
-            ):
-                unclaimed_seats_list_by_block[block_name].append(tb)
+    # Count unclaimed seats per block (exclude teacher shadow student seats).
+    for s in class_seats:
+        block_name = (s.block or '').strip().upper()
+        if block_name and block_name in unclaimed_seats_list_by_block:
+            if s.claimed_at is None and s.student_id is None:
+                unclaimed_seats_list_by_block[block_name].append(s)
                 unclaimed_seats_by_block[block_name] += 1
 
     # CRITICAL: Add scoped balances for each student in each block
@@ -5548,12 +5505,11 @@ def add_manual_student():
                 if canonical_hash and not is_primary:
                     existing_student.first_half_hash = canonical_hash
                 current_admin_id = session.get("admin_id")
-                existing_class_seat = TeacherBlock.query.filter_by(
-                    teacher_id=current_admin_id,
+                existing_class_seat = Seat.query.filter_by(
                     student_id=existing_student.id,
-                    join_code=join_code,
+                    class_id=class_id,
                 ).first()
-                if existing_class_seat:
+                if existing_class_seat and existing_class_seat.claimed_at:
                     flash(f"Student {first_name} {last_name} is already in your class.", "info")
                 else:
                     flash(f"Student {first_name} {last_name} already exists. Linking to your class.", "warning")
@@ -9662,13 +9618,20 @@ def upload_students():
         duplicated = 0
 
         # Track join codes for each block
-        from app.models import TeacherBlock
+        from app.models import Seat, IdentityProfile, ClassEconomy
         from app.utils.join_code import generate_join_code
+        from app.hash_utils import hash_username_lookup
+        import random
+        import string
 
         # Get or generate join codes for each block in this upload
         join_codes_by_block = {}
         class_ids_by_block = {}
         created_class_rows_by_block = {}
+
+        # Keep track of matched DB seats during this upload to avoid recreating them
+        matched_seats = set()
+        name_counts_in_run = {}  # (class_id, name_key) -> count
 
         for row in csv_input:
             try:
@@ -9689,22 +9652,23 @@ def upload_students():
 
                 # Get or generate join code for this teacher-block combination
                 if block not in join_codes_by_block:
-                    # Check if this teacher already has a join code for this block
-                    existing_seat = TeacherBlock.query.filter_by(
+                    # Check if this teacher already has a class for this block
+                    existing_class = ClassEconomy.query.filter_by(
                         teacher_id=teacher_id,
-                        block=block
+                        section=block
                     ).first()
 
-                    if existing_seat:
-                        # Reuse existing join code
-                        join_codes_by_block[block] = existing_seat.join_code
+                    if existing_class:
+                        # Reuse existing join code and class_id
+                        join_codes_by_block[block] = existing_class.join_code
+                        class_ids_by_block[block] = existing_class.class_id
                     else:
                         # Generate new unique join code with retry limit
                         new_code = None
                         for _ in range(MAX_JOIN_CODE_RETRIES):
                             new_code = generate_join_code()
-                            # Ensure uniqueness across all teachers
-                            if not TeacherBlock.query.filter_by(join_code=new_code).first():
+                            # Ensure uniqueness across all classes
+                            if not ClassEconomy.query.filter_by(join_code=new_code).first():
                                 join_codes_by_block[block] = new_code
                                 break
                         else:
@@ -9735,46 +9699,99 @@ def upload_students():
                 join_code = join_codes_by_block[block]
                 class_id = class_ids_by_block[block]
 
-                dedupe_key = _build_teacher_block_dedupe_key(class_id, first_name, last_name)
+                claim_first_name_hash = hash_username_lookup(first_name.lower())
+                claim_last_name_hash = hash_username_lookup(last_name.lower())
+                name_key = (first_name.lower(), last_name.lower())
 
-                # Check if this seat already exists in this join code.
-                existing_seat = TeacherBlock.query.filter_by(
-                    teacher_id=teacher_id,
-                    class_id=class_id,
-                    dedupe_key=dedupe_key,
-                ).first()
+                # Find all seats in the DB for this class with the same name hashes.
+                # Exclude teacher shadow student seats from collision counts.
+                db_seats = (
+                    Seat.query
+                    .join(IdentityProfile, IdentityProfile.seat_id == Seat.id)
+                    .filter(
+                        Seat.class_id == class_id,
+                        Seat.claim_first_name_hash == claim_first_name_hash,
+                        Seat.claim_last_name_hash == claim_last_name_hash,
+                        IdentityProfile.profile_type != 'teacher_shadow_student',
+                    )
+                    .all()
+                )
 
-                if existing_seat:
+                # Check if we can match this row to an unmatched existing seat in the DB
+                matched_seat = None
+                for s in db_seats:
+                    if s.id not in matched_seats:
+                        matched_seat = s
+                        matched_seats.add(s.id)
+                        break
+
+                if matched_seat:
+                    # This seat already exists, skip creating it
                     duplicated += 1
                     continue
 
-                # Generate salt
-                salt = get_random_salt()
+                # If we got here, we need to create a new Seat.
+                # Dedupe symmetry rule: once any duplicate exists in this class (either in the
+                # DB or created in this upload run), ALL seats with this name require a
+                # dedupe_code — including seats that already exist without one. This prevents
+                # the asymmetry where seat #1 is claimable without a code but seat #2 requires
+                # one.
+                total_existing = len(db_seats) + name_counts_in_run.get((class_id, name_key), 0)
+                is_collision = total_existing > 0
 
-                # v2: eliminate DOB-based credential material.
-                claim_seed = int.from_bytes(salt[:2], "big") % 10000
-                first_half_hash = compute_primary_claim_hash(first_initial, claim_seed, salt)
-                seed_hash = hash_hmac(str(claim_seed).encode(), salt)
+                dedupe_code = None
+                if is_collision:
+                    alphabet = string.ascii_uppercase + string.digits
+                    dedupe_code = "".join(random.choices(alphabet, k=4))
 
-                # Compute last_name_hash_by_part for fuzzy matching
-                last_name_parts = hash_last_name_parts(last_name, salt)
+                    # Backfill: if the first DB seat for this name still has no dedupe_code,
+                    # assign one now so it cannot be claimed without a code either.
+                    for s in db_seats:
+                        if s.dedupe_code is None:
+                            backfill_code = "".join(random.choices(alphabet, k=4))
+                            s.dedupe_code = backfill_code
+                            # Regenerate its fingerprint to be code-scoped too.
+                            s.roster_fingerprint = hash_username_lookup(
+                                f"{class_id}|{first_name.lower()}|{last_name.lower()}|{backfill_code}"
+                            )
 
-                # Create TeacherBlock seat (unclaimed account)
-                seat = TeacherBlock(
-                    teacher_id=teacher_id,
-                    block=block,
-                    first_name=first_name,
-                    last_initial=last_initial,
-                    last_name_hash_by_part=last_name_parts,
-                    dob_sum_hash=seed_hash,
-                    salt=salt,
-                    first_half_hash=first_half_hash,
-                    join_code=join_code,
+                name_counts_in_run[(class_id, name_key)] = name_counts_in_run.get((class_id, name_key), 0) + 1
+
+                # Roster fingerprint is class-scoped (INV-CORE: no cross-class correlators).
+                if dedupe_code:
+                    roster_fingerprint = hash_username_lookup(
+                        f"{class_id}|{first_name.lower()}|{last_name.lower()}|{dedupe_code}"
+                    )
+                else:
+                    roster_fingerprint = hash_username_lookup(
+                        f"{class_id}|{first_name.lower()}|{last_name.lower()}"
+                    )
+
+                # Create Seat (unclaimed account)
+                seat = Seat(
                     class_id=class_id,
-                    dedupe_key=dedupe_key,
-                    is_claimed=False,
+                    role='student',
+                    block_identifier=block,
+                    block=block,
+                    claim_first_name_hash=claim_first_name_hash,
+                    claim_last_name_hash=claim_last_name_hash,
+                    roster_fingerprint=roster_fingerprint,
+                    dedupe_code=dedupe_code,
+                    join_code=join_code,
+                    claimed_at=None
                 )
                 db.session.add(seat)
+                db.session.flush()
+
+                # Create associated IdentityProfile
+                profile = IdentityProfile(
+                    seat_id=seat.id,
+                    profile_type='student',
+                    first_name=first_name,
+                    last_initial=last_initial
+                )
+                db.session.add(profile)
+
                 if additional_notes:
                     current_app.logger.info(
                         "Bulk upload additional notes provided (not persisted): class_id=%s block=%s length=%s",

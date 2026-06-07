@@ -1,13 +1,11 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app
 from datetime import timedelta
-from datetime import timedelta
 import secrets
 
-from app.extensions import db
-from app.models import Seat, Student, TeacherBlock, User
+from app.extensions import db, limiter
+from app.models import Seat, Student, User
 from app.auth import admin_required, get_student_for_admin
 from app.utils.time import utc_now, ensure_utc
-from app.extensions import limiter
 
 recovery_bp = Blueprint('recovery', __name__, url_prefix='/recovery')
 RESET_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -26,43 +24,6 @@ def _find_linked_user_for_student(student_id: int | None) -> User | None:
         .order_by(Seat.id.asc())
         .first()
     )
-
-
-def _get_or_create_bridge_seat_for_teacher_block(teacher_block) -> Seat | None:
-    if not teacher_block or not teacher_block.join_code:
-        return None
-
-    seat = (
-        Seat.query.filter_by(
-            join_code=teacher_block.join_code,
-            student_id=teacher_block.student_id,
-        )
-        .order_by(Seat.id.asc())
-        .first()
-    )
-    if seat:
-        if seat.block_identifier is None and teacher_block.block:
-            seat.block_identifier = teacher_block.block
-        if seat.block is None and teacher_block.block:
-            seat.block = teacher_block.block
-        if not seat.claimed_at and teacher_block.claimed_at:
-            seat.claimed_at = teacher_block.claimed_at
-        return seat
-
-    seat = Seat(
-        user_id=None,
-        class_id=getattr(teacher_block, "class_id", None),
-        role='student',
-        block_identifier=teacher_block.block,
-        join_code=teacher_block.join_code,
-        student_id=teacher_block.student_id,
-        block=teacher_block.block,
-        claimed_at=teacher_block.claimed_at,
-    )
-    db.session.add(seat)
-    db.session.flush()
-    return seat
-
 
 def _recovery_rate_limit():
     """Use strict limits in runtime, relaxed limits in test environments."""
@@ -167,16 +128,16 @@ def _account_lookup_legacy():
             return redirect(url_for('recovery.account_lookup'))
  
         # Find candidate row by both reset_code and join_code to avoid collisions.
-        linked_block = (
-            TeacherBlock.query
-            .join(Student, Student.id == TeacherBlock.student_id)
+        seat = (
+            Seat.query
+            .join(Student, Student.id == Seat.student_id)
             .filter(
-                TeacherBlock.join_code == join_code,
+                Seat.join_code == join_code,
                 Student.reset_code == reset_code,
             )
             .first()
         )
-        student = db.session.get(Student, linked_block.student_id) if linked_block else None
+        student = db.session.get(Student, seat.student_id) if seat else None
  
         # Validate all conditions — use a single generic error for security
         valid = True
@@ -195,8 +156,8 @@ def _account_lookup_legacy():
  
         # Clear all credentials — forces fresh credential setup (username, PIN, passphrase).
         # first_name and last_initial are preserved; they are managed by the teacher.
-        if linked_block and linked_block.is_claimed and linked_block.claimed_at is None:
-            linked_block.claimed_at = utc_now()
+        if seat and seat.claimed_at is None:
+            seat.claimed_at = utc_now()
 
         linked_user = _find_linked_user_for_student(student.id)
         if not linked_user:
@@ -217,9 +178,8 @@ def _account_lookup_legacy():
         linked_user.passphrase_hash = None
         linked_user.has_completed_setup = False
 
-        bridge_seat = _get_or_create_bridge_seat_for_teacher_block(linked_block)
-        if bridge_seat and linked_user and bridge_seat.user_id != linked_user.id:
-            bridge_seat.user_id = linked_user.id
+        if seat and linked_user and seat.user_id != linked_user.id:
+            seat.user_id = linked_user.id
  
         db.session.flush() # FEAT-LEGACY-WRAP: commit removed
 
@@ -228,9 +188,8 @@ def _account_lookup_legacy():
         )
 
         # Set session for credential setup flow
-        # Set session for credential setup flow
         session['claimed_student_id'] = student.id
-        session['claimed_seat_id'] = bridge_seat.id if bridge_seat else None
+        session['claimed_seat_id'] = seat.id if seat else None
         session['claimed_user_id'] = linked_user.id if linked_user else None
         session.pop('recovery_student_id', None)
 

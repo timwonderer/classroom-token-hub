@@ -342,6 +342,14 @@ class Seat(db.Model):
         db.UniqueConstraint('user_id', 'class_id', name='uq_seats_user_class'),
     )
 
+    @property
+    def display_first_name(self):
+        return self.identity_profile.first_name if self.identity_profile else ""
+
+    @property
+    def display_last_initial(self):
+        return self.identity_profile.last_initial if self.identity_profile else ""
+
 
 @event.listens_for(Seat, "before_insert")
 @event.listens_for(Seat, "before_update")
@@ -360,87 +368,6 @@ def _sync_seat_scope(mapper, connection, target):
             target.class_id = str(class_id)
 
 
-class TeacherBlock(db.Model):
-    """
-    Represents an unclaimed seat in a teacher's class roster.
-
-    When a teacher uploads a roster, each student creates a TeacherBlock entry (a "seat").
-    Students claim their seat by providing the period join code + their credentials.
-    Once claimed, the seat links to a Student record via student_id.
-
-    This model enables:
-    - Join code-based account claiming (eliminates need for students to know teacher name)
-    - Multi-school support (join codes implicitly partition schools)
-    - Duplicate prevention (same student claiming across multiple teachers)
-    """
-    __tablename__ = 'teacher_blocks'
-
-    id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
-    block = db.Column(db.String(10), nullable=False)  # Legacy technical identifier
-    class_label = db.Column(db.String(50), nullable=True)  # Teacher-customizable display name for this class
-
-    # Student identifiers (used for matching during claim)
-    first_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=False)
-    last_initial = db.Column(db.String(1), nullable=False)
-    identity_id = db.Column(db.Integer, db.ForeignKey('identity_profiles.id', ondelete='RESTRICT'), nullable=False, index=True)
-
-    # Fuzzy name matching - stores hash of each last name part separately
-    # Example: "Smith-Jones" → ["hash(smith)", "hash(jones)"]
-    # Nulled out after the seat is claimed (PII cleanup).
-    last_name_hash_by_part = db.Column(db.JSON, nullable=True)
-
-    # Privacy-aligned DOB sum stored as HMAC-SHA256 hash (non-reversible).
-    # Nulled out after the seat is claimed (PII cleanup).
-    dob_sum_hash = db.Column(db.String(64), nullable=True)
-
-    # Hashing
-    salt = db.Column(db.LargeBinary(16), nullable=False)
-    first_half_hash = db.Column(db.String(64), nullable=False)  # Hash of CONCAT(first_initial, DOB_sum) - e.g., "S2025"
-
-    # Join code for this period (shared across all students in same teacher-block)
-    join_code = db.Column(db.String(20), nullable=False)
-    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
-    dedupe_key = db.Column(db.String(64), nullable=True, index=True)
-
-    # Claim status
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
-    is_claimed = db.Column(db.Boolean, default=False, nullable=False)
-
-    # Teacher Identity Flag
-    is_teacher = db.Column(db.Boolean, default=False, nullable=False)
-
-    # Timestamps
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
-    claimed_at = db.Column(db.DateTime(timezone=True), nullable=True)
-
-    # Relationships
-    teacher = db.relationship('Admin', backref=db.backref('roster_seats', lazy='dynamic', passive_deletes=True))
-    student = db.relationship('Student', backref='roster_seats')
-    identity_profile = db.relationship('IdentityProfile', foreign_keys=[identity_id], lazy='joined')
-
-    # Indexes for efficient lookups
-    __table_args__ = (
-        db.Index('ix_teacher_blocks_join_code', 'join_code'),
-        db.Index('ix_teacher_blocks_teacher_block', 'teacher_id', 'block'),
-        db.Index('ix_teacher_blocks_claimed', 'is_claimed'),
-    )
-
-    def get_class_label(self):
-        """Return class_label if set, otherwise fall back to block"""
-        return self.class_label if self.class_label else self.block
-
-    def __repr__(self):
-        status = "claimed" if self.is_claimed else "unclaimed"
-        return f'<TeacherBlock {self.display_first_name} {self.display_last_initial}. - {self.teacher_id}/{self.block} - {status}>'
-
-    @property
-    def display_first_name(self):
-        return self.identity_profile.first_name if self.identity_profile else ""
-
-    @property
-    def display_last_initial(self):
-        return self.identity_profile.last_initial if self.identity_profile else ""
 
 class Student(db.Model):
     __tablename__ = 'students'
@@ -3779,11 +3706,7 @@ def _ensure_identity_profiles(session, flush_context, instances):
     for obj in session.new:
         if isinstance(obj, Student):
             _sync_identity_profile(session, obj, "student")
-        elif isinstance(obj, TeacherBlock):
-            _sync_identity_profile(session, obj, "teacher_block")
 
     for obj in session.dirty:
         if isinstance(obj, Student):
             _sync_identity_profile(session, obj, "student")
-        elif isinstance(obj, TeacherBlock):
-            _sync_identity_profile(session, obj, "teacher_block")

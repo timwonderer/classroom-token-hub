@@ -5,7 +5,7 @@ from app.models import (
     HallPassLog,
     SeatAttendanceState,
     StudentBlock,
-    TeacherBlock,
+    Seat,
 )
 from app.utils.time import ensure_utc, get_class_now
 
@@ -43,10 +43,10 @@ def get_all_block_statuses(student, *, class_id: str, payroll_anchor_by_class_id
     if not class_id:
         raise ValueError("get_all_block_statuses requires class_id.")
 
-    claimed_seats = TeacherBlock.query.filter_by(
-        student_id=student.id,
-        class_id=class_id,
-        is_claimed=True,
+    claimed_seats = Seat.query.filter(
+        Seat.student_id == student.id,
+        Seat.class_id == class_id,
+        Seat.claimed_at.isnot(None),
     ).all()
     student_blocks = [seat.block.strip() for seat in claimed_seats if seat.block]
 
@@ -67,17 +67,18 @@ def get_all_block_statuses(student, *, class_id: str, payroll_anchor_by_class_id
         ).first()
         is_active = state.is_active if state else False
 
-        student_block = StudentBlock.query.filter_by(
-            seat_id=seat_id,
-            class_id=class_id,
-            period=blk,
-        ).first()
         today_local = get_class_now(class_id).date()
-        done = bool(
-            student_block
-            and student_block.done_for_day_date
-            and student_block.done_for_day_date == today_local
-        )
+        done = False
+        if state and state.done_for_day_date == today_local:
+            done = True
+        else:
+            student_block = StudentBlock.query.filter_by(
+                seat_id=seat_id,
+                class_id=class_id,
+                period=blk,
+            ).first()
+            if student_block and student_block.done_for_day_date == today_local:
+                done = True
 
         duration = calculate_unpaid_attendance_seconds(
             seat_id,

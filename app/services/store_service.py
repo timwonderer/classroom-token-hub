@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from app.extensions import db
-from app.models import RentItem, Student, StudentItem, TeacherBlock
+from app.models import RentItem, Student, StudentItem, Seat
 from app.utils.time import utc_now
 
 
@@ -209,10 +209,10 @@ def unlock_collective_goal_if_ready(*, item, class_id: str, join_code: str | Non
     if not class_id:
         raise ValueError("class_id is required for collective goal unlock")
     class_size = db.session.query(db.func.count(db.func.distinct(Student.id))).join(
-        TeacherBlock, TeacherBlock.student_id == Student.id,
+        Seat, Seat.student_id == Student.id,
     ).filter(
-        TeacherBlock.class_id == class_id,
-        TeacherBlock.is_claimed == True,
+        Seat.class_id == class_id,
+        Seat.claimed_at.isnot(None),
     ).scalar() or 0
 
     purchased_query = db.session.query(db.func.count(db.func.distinct(StudentItem.student_id))).filter(
