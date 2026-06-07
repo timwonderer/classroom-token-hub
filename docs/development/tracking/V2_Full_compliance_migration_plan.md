@@ -134,6 +134,8 @@ This file is the single active tracker for v2 migration execution. All prior tra
 - `V2_STUDENT_BLOCKS_REDESIGN_NOTE.md`
 - `V2_STUDENT_IDENTITY_ARCHITECTURE.md`
 - `V2_TEACHER_IDENTITY_ARCHITECTURE.md`
+- `V2_TEST_CREATION_PROTOCOL.md`
+- `V2_TESTING_PROTOCOL_AND_GATES.md`
 - `V2_Temporal_Architecture_Rebuild_Plan.md`
 - `V2_WAVE_3_IDENTITY_DOMAIN_RISK_AND_DEPENDENCY.md`
 
