@@ -31,6 +31,16 @@ Target state:
 | `Seat` | Active class-local actor anchor; remaining `student_id` bridges are compatibility only |
 | `Class` | `classes.class_id` is the canonical class boundary; `join_code` is a public alias |
 
+### Validation Checkpoint
+
+**Last validated:** 2026-06-07T16:20:10Z
+
+- Tracker reconciliation refreshed against the current `codex/v2.0` state.
+- Waves 3-6 remain the last fully evidenced landed cluster in the active tracker.
+- Wave 7 schema contract is installed and still open for the remaining insurance-claim lifecycle and legacy-read cutover.
+- Waves 8-12 remain open and continue to require per-wave verification gates before they can be marked complete.
+- No tracker entry was promoted to complete status without direct evidence in the current pass.
+
 ---
 
 ## Canonical Target Schema (DOM-CORE-002)

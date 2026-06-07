@@ -5,6 +5,17 @@
 **Against:** `V2_Full_compliance_migration_plan.md`  
 **Methodology:** Direct code inspection (multi-pass), migration chain analysis, model column audit, service/FEAT write-path tracing, test coverage enumeration, CI infrastructure review, adversarial scorecard analysis, INV compliance sweep, auth-path and session-bridge verification (Revision 3 additions)
 
+### Post-Report Update (2026-06-07, `codex/v2.0`) — Tracker Reconciliation and Validation Refresh
+
+- Re-ran a documentation-only validation pass against the active tracker and current rebuild report state.
+- Updated the active migration plan with a timestamped checkpoint to reflect the latest confirmed progression without promoting unverified waves.
+- Confirmed the tracker still treats Waves 3-6 as the last fully evidenced landed cluster, with Wave 7 open and Waves 8-12 still pending their verification gates.
+- No code-path or schema changes were made in this refresh; this pass only aligned the live docs with the most recent validated state.
+- Validation:
+  - active tracker reconciliation -> pass
+  - report/state consistency check -> pass
+  - no completion claims advanced beyond current evidence -> pass
+
 ### Post-Report Update (2026-06-06, `codex/v2.0`) — Wave 7 Obligations Schema Contract
 
 - Landed transitional migration `0006_obligations_domain.py` and canonical
