@@ -2371,7 +2371,7 @@ def _sync_insurance_claim_scope(_mapper, connection, target):
 
 class ObligationAssessment(db.Model):
     """Authoritative record of a seat becoming liable for a policy-defined charge."""
-    __tablename__ = 'obligation_assessment'
+    __tablename__ = 'assessment_events'
 
     id = db.Column(db.Integer, primary_key=True)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
@@ -2402,9 +2402,21 @@ class ObligationAssessment(db.Model):
     entitlement_events = db.relationship('EntitlementEvent', backref='assessment')
 
     __table_args__ = (
-        db.UniqueConstraint('seat_id', 'class_id', 'cycle_idempotency_key', name='uq_obligation_assessment_idempotency'),
-        db.Index('ix_obligation_assessment_seat_class', 'seat_id', 'class_id'),
+        db.UniqueConstraint('seat_id', 'class_id', 'cycle_idempotency_key', name='uq_assessment_events_idempotency'),
+        db.Index('ix_assessment_events_seat_class', 'seat_id', 'class_id'),
     )
+
+
+class ObligationLifecycle(db.Model):
+    """Current derived lifecycle state for one canonical assessment event."""
+    __tablename__ = 'obligation_lifecycle'
+
+    id = db.Column(db.Integer, primary_key=True)
+    assessment_id = db.Column(db.Integer, db.ForeignKey('assessment_events.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    status = db.Column(db.String(20), nullable=False, index=True)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+
+    assessment = db.relationship('ObligationAssessment', backref=db.backref('lifecycle', uselist=False))
 
 
 class ObligationSatisfaction(db.Model):
@@ -2412,7 +2424,7 @@ class ObligationSatisfaction(db.Model):
     __tablename__ = 'obligation_satisfaction'
 
     id = db.Column(db.Integer, primary_key=True)
-    assessment_id = db.Column(db.Integer, db.ForeignKey('obligation_assessment.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    assessment_id = db.Column(db.Integer, db.ForeignKey('assessment_events.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
     method = db.Column(db.String(20), nullable=False)  # PAYMENT, WAIVER
     amount_paid = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
     was_late = db.Column(db.Boolean, default=False, nullable=False)
@@ -2426,7 +2438,7 @@ class ObligationReversal(db.Model):
     __tablename__ = 'obligation_reversal'
 
     id = db.Column(db.Integer, primary_key=True)
-    assessment_id = db.Column(db.Integer, db.ForeignKey('obligation_assessment.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    assessment_id = db.Column(db.Integer, db.ForeignKey('assessment_events.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
     reason = db.Column(db.Text, nullable=True)
     reversed_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
     reversed_by_teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='SET NULL'), nullable=True)
@@ -2527,7 +2539,7 @@ class EntitlementEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
-    assessment_id = db.Column(db.Integer, db.ForeignKey('obligation_assessment.id', ondelete='SET NULL'), nullable=True, index=True)
+    assessment_id = db.Column(db.Integer, db.ForeignKey('assessment_events.id', ondelete='SET NULL'), nullable=True, index=True)
     trigger_id = db.Column(db.String(200), nullable=True, index=True)  # Idempotency key (INV-OBL-003)
     quantity_delta = db.Column(db.Integer, nullable=False)  # +N grant, -N consumption/revocation
     event_type = db.Column(db.String(20), nullable=False)  # GRANT, CONSUMPTION, REVOCATION

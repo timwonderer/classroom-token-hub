@@ -39,12 +39,16 @@ Tier 1 — Constitutional. This document defines structural enforcement mechanis
 
 This domain is the sole schema and mutation authority over:
 
-- `obligation_assessment` (historical fact of debt)
+- `assessment_events` (historical fact of debt)
+- `obligation_lifecycle` (current derived lifecycle state per assessment)
 - `obligation_satisfaction` (payments, waivers)
 - `obligation_reversal` (corrections, nullifications)
 - `entitlement_events` (grant/consumption stream)
-- `insurance_enrollments` (seat-level contracts)
-- `insurance_claims` (decision state)
+
+`DOM-CORE-002_Canonical_Schema_Definition.md` is authoritative for the exact
+44-table target. Insurance enrollment and claim state must be represented
+within the canonical assessment/lifecycle/event hierarchy; they do not add
+separate final-schema tables.
 
 **Policy Ownership:** Class Configuration owns the obligation policy (rates, schedules). Obligations shall execute the policy into runtime events.
 
@@ -75,7 +79,7 @@ This domain is the sole schema and mutation authority over:
 
 ## VIII. Schema Contract
 
-### 1. `obligation_assessment`
+### 1. `assessment_events`
 
 Records the historical fact of a seat becoming liable for a policy-defined charge.
 
@@ -87,7 +91,16 @@ Records the historical fact of a seat becoming liable for a policy-defined charg
 - `due_at` (Timestamp: Snapshotted from policy + calendar)
 - `assessed_at` (Timestamp)
 
-### 2. `obligation_satisfaction`
+### 2. `obligation_lifecycle`
+
+Stores the current derived lifecycle state for one assessment.
+
+- `id` (PK)
+- `assessment_id` (FK; Unique)
+- `status` (Enum: `DUE`, `OVERDUE`, `PAID`, `WAIVED`, `REVERSED`)
+- `updated_at` (Timestamp)
+
+### 3. `obligation_satisfaction`
 
 Records how a valid debt was resolved.
 
@@ -96,7 +109,7 @@ Records how a valid debt was resolved.
 - `method` (Enum: `PAYMENT`, `WAIVER`)
 - `satisfied_at` (Timestamp)
 
-### 3. `obligation_reversal`
+### 4. `obligation_reversal`
 
 Records the correction or nullification of an assessment.
 
@@ -105,7 +118,7 @@ Records the correction or nullification of an assessment.
 - `reason` (String)
 - `reversed_at` (Timestamp)
 
-### 4. `entitlement_events`
+### 5. `entitlement_events`
 
 Append-only stream of obligation-linked perks (e.g., hall pass quota).
 

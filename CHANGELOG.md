@@ -9,6 +9,13 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Changed
+- **Wave 7 obligations schema contract corrected** — Added forward migration
+  `0007` to create and backfill canonical `assessment_events` and
+  `obligation_lifecycle`, repoint satisfaction/reversal/entitlement foreign
+  keys, and preserve downgrade data in the transitional `0006` table. Runtime
+  rent and insurance enrollment writes now emit canonical assessment and
+  lifecycle state while legacy tables remain available for the later read
+  cutover and parity validation.
 - **Closed the next post-Wave 4 authority-reduction slices** — TLCP actor
   correlation now derives student/teacher `actor_public_id` from the active
   seat context instead of reconstructing it from legacy `student_id` or

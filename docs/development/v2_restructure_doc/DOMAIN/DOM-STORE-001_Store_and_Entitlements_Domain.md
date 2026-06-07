@@ -92,8 +92,9 @@ Rules:
   exactly one class.
 - Collective goal progress is tracked at the `collective_goal_instance_code` level.
   Multiple items may share an instance code to compose a single collective goal.
-- `is_rent_linked` items are linked to an `RentItem` row in the Obligations domain.
-  Store owns this row; Obligations owns the corresponding `RentItem` row.
+- `is_rent_linked` items are linked to an assessment event in the Obligations
+  domain. Store owns the catalog row; Obligations owns the corresponding
+  `assessment_events` row.
 
 ### 2. `store_item_visibility`
 
@@ -174,7 +175,7 @@ Rules:
 
 - **Purchases are orchestrated through FEAT**: Store owns store-purchased entitlement state, Ledger owns money state.
 - **Entitlement Sovereignty**: Obligations owns **obligation-linked** entitlements (e.g., rent-linked hall passes). Store owns **store-purchased** items. The `entitlement_events` in the Obligations domain is a separate stream from `student_items` in the Store domain.
-- **Rent-linked store items**: Some store items may be aliases of rent items. The Obligations domain owns the underlying `obligation_assessment`; Store owns the `StoreItem` definition used for display/visibility in the catalog.
+- **Rent-linked store items**: Some store items may be aliases of rent items. The Obligations domain owns the underlying `assessment_events` row; Store owns the `StoreItem` definition used for display/visibility in the catalog.
 - `purchase_transaction_id` on `student_items` is a read-only cross-domain reference to Ledger. It does not transfer ledger write authority.
 
 ## X. Amendment

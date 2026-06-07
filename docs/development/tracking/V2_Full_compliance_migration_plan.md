@@ -21,8 +21,8 @@ Target state:
 | Dimension | Status |
 |---|---|
 | Models | 54+ classes; 44 dual-scoped, 5 pure v1, ~5 pure v2 |
-| Migration files | 16 in `migrations/versions/`; single head `f7b8c9d0e1f2` |
-| Test files | 117 test files; ~798 total tests (617 passed, 174 failed, 1 skipped, 6 errors) |
+| Migration files | Single head `0007`; canonical obligations assessment/lifecycle schema is installed |
+| Test files | Schema Change Gate critical/regression failures repaired in `5563a150`; full-suite baseline requires refresh |
 | Feats | 19 registered FEAT codes in canonical registry |
 | Services | 8 (`access_policy`, `attendance`, `balance`, `identity`, `ledger`, `obligations`, `store`, `tlcp`) |
 | Blueprints | 8 (`admin` 514K lines, `student` 178K, `api` 120K, `system_admin` 78K, `docs` 30K, `analytics` 19K, `main` 14K, `recovery` 8.6K) |
@@ -78,7 +78,7 @@ This file is the single active tracker for v2 migration execution. All prior tra
 - [x] Complete Wave 3 identity migration sequence through remaining scoped domains (strict exit criteria below; no legacy fallback permitted)
 - [x] Complete Wave 4 class-configuration canonicalization and drop legacy settings columns
 - [x] Complete Wave 5 ledger table migration and FEAT hook reassignment
-- [ ] Complete Wave 6 attendance table migration (`tap_events` lineage removal)
+- [ ] Complete Wave 6 attendance table migration (`tap_events` lineage removal; canonical admin routes landed, legacy reads/table remain)
 - [ ] Complete Wave 7 obligations schema migration while preserving already-landed prepay/temporal behavior
 - [ ] Complete Wave 8 store schema migration and remove remaining teacher-scoped enforcement remnants
 - [ ] Complete Wave 9 operations + interpretation canonical migration
@@ -1921,6 +1921,55 @@ Constraint:
 - Insurance purchase + claim works
 - Delinquency guard active
 - No old rent/insurance tables in schema
+
+### Status Update (2026-06-06): Wave 7-A Schema Contract Audit
+
+- Landed commits:
+  - `820d8966` added a transitional obligations dual-write layer and migration
+    `0006_obligations_domain.py`
+  - `38a1b4e3` repaired period-key, deletion, and migration-idempotency issues
+  - `5563a150` repaired Schema Change Gate critical/regression fixtures after
+    recent schema removals
+- Audit result:
+  - `DOM-CORE-002` is authoritative for the exact 44-table final schema
+  - the final Obligations table contract remains:
+    - `assessment_events`
+    - `obligation_lifecycle`
+    - `obligation_satisfaction`
+    - `obligation_reversal`
+    - `entitlement_events`
+  - landed `0006` instead creates `obligation_assessment` and
+    `insurance_enrollments`, and omits `obligation_lifecycle`
+  - therefore `0006` is transitional scaffolding only and does not satisfy the
+    Wave 7 schema deliverable or exit gate
+- Normative correction:
+  - `DOM-OBL-001` now explicitly defers exact table naming/count to
+    `DOM-CORE-002`
+  - insurance enrollment and claim state must map into the canonical
+    assessment/lifecycle/event hierarchy rather than add final-schema tables
+- Forward schema correction landed:
+  - `0007_obligations_schema_contract.py` creates and backfills
+    `assessment_events` and `obligation_lifecycle`
+  - satisfaction, reversal, and entitlement foreign keys now target
+    `assessment_events`
+  - runtime rent and insurance enrollment writes now emit canonical assessment
+    and lifecycle rows
+  - downgrade copies canonical-only assessments back into
+    `obligation_assessment` before restoring the `0006` foreign keys
+- Remaining Wave 7 work:
+  1. migrate insurance claim resolution into canonical assessment/lifecycle
+     events
+  2. cut remaining reads over from legacy rent and insurance tables
+  3. validate dual-write parity and rollback assumptions with production-shaped
+     data
+  4. remove transitional `obligation_assessment`, `insurance_enrollments`, and
+     legacy rent/insurance tables only after those checks pass
+- Wave ordering:
+  - Wave 6 remains open because `TapEvent`/`tap_events` and attendance-owned
+    `StudentBlock` reads still exist
+  - the forward schema correction is landed, but no legacy obligation-table
+    drop should proceed until Wave 6 exit status and Wave 7 read-cutover
+    validation are explicitly resolved
 
 ---
 

@@ -10,6 +10,7 @@ from app.models import (
     EntitlementEvent,
     InsuranceEnrollment,
     ObligationAssessment,
+    ObligationLifecycle,
     ObligationReversal,
     ObligationSatisfaction,
 )
@@ -63,7 +64,19 @@ def test_obligation_assessment_class_fk_targets_classes():
 def test_obligation_assessment_idempotency_unique_constraint_exists():
     """INV-OBL-004: duplicate (seat_id, class_id, cycle_idempotency_key) must be rejected."""
     constraint_names = _unique_constraints(ObligationAssessment)
-    assert "uq_obligation_assessment_idempotency" in constraint_names
+    assert "uq_assessment_events_idempotency" in constraint_names
+
+
+def test_obligation_assessment_uses_canonical_table_name():
+    assert ObligationAssessment.__tablename__ == "assessment_events"
+
+
+def test_obligation_lifecycle_has_required_columns():
+    assert {"assessment_id", "status", "updated_at"} <= _column_names(ObligationLifecycle)
+
+
+def test_obligation_lifecycle_assessment_fk_targets_assessment():
+    assert _fk_targets(ObligationLifecycle, "assessment_id") == {"assessment_events.id"}
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +95,7 @@ def test_obligation_satisfaction_has_payment_detail_columns():
 
 
 def test_obligation_satisfaction_assessment_fk_targets_assessment():
-    assert _fk_targets(ObligationSatisfaction, "assessment_id") == {"obligation_assessment.id"}
+    assert _fk_targets(ObligationSatisfaction, "assessment_id") == {"assessment_events.id"}
 
 
 def test_obligation_satisfaction_transaction_fk_targets_ledger():
@@ -106,7 +119,7 @@ def test_obligation_reversal_has_required_columns():
 
 
 def test_obligation_reversal_assessment_fk_targets_assessment():
-    assert _fk_targets(ObligationReversal, "assessment_id") == {"obligation_assessment.id"}
+    assert _fk_targets(ObligationReversal, "assessment_id") == {"assessment_events.id"}
 
 
 def test_obligation_reversal_assessment_id_is_unique():

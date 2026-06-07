@@ -6,6 +6,7 @@ from app.models import (
     InsuranceClaim,
     InsuranceEnrollment,
     ObligationAssessment,
+    ObligationLifecycle,
     ObligationSatisfaction,
     RentPayment,
     StudentInsurance,
@@ -34,7 +35,7 @@ def record_rent_payment(
     """Obligations-owned mutation for rent payment truth.
 
     Dual-writes to both the legacy rent_payments table (backward-compatible reads)
-    and the canonical obligation_assessment + obligation_satisfaction tables.
+    and the canonical assessment_events + obligation_satisfaction tables.
     The canonical tables are the authoritative write target; legacy tables will be
     dropped in Wave 7-B once all reads are migrated.
     """
@@ -61,6 +62,13 @@ def record_rent_payment(
     )
     db.session.add(assessment)
     db.session.flush()
+
+    lifecycle = ObligationLifecycle(
+        assessment_id=assessment.id,
+        status="PAID",
+        updated_at=now,
+    )
+    db.session.add(lifecycle)
 
     satisfaction = ObligationSatisfaction(
         assessment_id=assessment.id,
@@ -107,10 +115,9 @@ def record_insurance_enrollment(
     """Obligations-owned mutation for insurance enrollment truth.
 
     Dual-writes to both the legacy student_insurance table and the canonical
-    insurance_enrollments table. Returns the legacy StudentInsurance row for
-    backward-compatible callers; canonical InsuranceEnrollment becomes the
-    primary return value in Wave 7-B once all reads are migrated.
-    Legacy table will be dropped in Wave 7-B.
+    insurance_enrollments table while also recording the enrollment in the
+    canonical assessment/lifecycle hierarchy. Returns the legacy
+    StudentInsurance row for backward-compatible callers.
     """
     # --- Canonical write ---
     enrollment = InsuranceEnrollment(
@@ -127,6 +134,25 @@ def record_insurance_enrollment(
     )
     enrollment.freeze_policy_snapshot(policy)
     db.session.add(enrollment)
+
+    assessment = ObligationAssessment(
+        seat_id=seat_id,
+        class_id=class_id,
+        join_code=join_code,
+        obligation_type="INSURANCE_ENROLLMENT",
+        amount_snap=0,
+        due_at=next_payment_due,
+        assessed_at=purchase_date,
+    )
+    db.session.add(assessment)
+    db.session.flush()
+    db.session.add(
+        ObligationLifecycle(
+            assessment_id=assessment.id,
+            status="DUE",
+            updated_at=purchase_date,
+        )
+    )
 
     # --- Legacy write (kept for backward-compatible reads) ---
     legacy_enrollment = StudentInsurance(
