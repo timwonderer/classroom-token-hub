@@ -105,7 +105,7 @@ def database_maintenance_job():
     """
     # Import here to avoid circular imports
     from sqlalchemy import and_, or_, tuple_
-    from app.models import StoreItemBlock, TeacherBlock, StoreItem
+    from app.models import Seat, StoreItemBlock, StoreItem
     from app.extensions import db
 
     logger = logging.getLogger('scheduled_tasks')
@@ -114,10 +114,25 @@ def database_maintenance_job():
     total_cleaned = 0
 
     try:
-        # Task 1: Clean up orphaned StoreItemBlock entries
-        # These are blocks that reference classes that no longer exist
+        # Task 1: Clean up orphaned StoreItemBlock entries.
+        # StoreItemBlock entries are class-scoped (store_item_id, class_id, block).
+        # They are orphaned when:
+        #   a) The parent StoreItem no longer exists (FK cascade should handle; explicit check as safety net).
+        #   b) The class_id is set but no Seat with that block identifier exists in that class
+        #      (the block period was retired while the class still exists).
         logger.info("Checking for orphaned StoreItemBlock entries...")
-        
+
+        # Subquery: active (class_id, block) pairs that exist in canonical Seat records
+        active_class_blocks_subq = (
+            db.session.query(
+                Seat.class_id.label("class_id"),
+                Seat.block.label("block"),
+            )
+            .filter(Seat.block.isnot(None), Seat.class_id.isnot(None))
+            .distinct()
+            .subquery()
+        )
+
         orphaned_entries_subq = (
             db.session.query(
                 StoreItemBlock.store_item_id.label("store_item_id"),
@@ -125,16 +140,19 @@ def database_maintenance_job():
             )
             .outerjoin(StoreItem, StoreItem.id == StoreItemBlock.store_item_id)
             .outerjoin(
-                TeacherBlock,
+                active_class_blocks_subq,
                 and_(
-                    TeacherBlock.teacher_id == StoreItem.teacher_id,
-                    TeacherBlock.block == StoreItemBlock.block,
+                    active_class_blocks_subq.c.class_id == StoreItemBlock.class_id,
+                    active_class_blocks_subq.c.block == StoreItemBlock.block,
                 ),
             )
             .filter(
                 or_(
                     StoreItem.id.is_(None),
-                    TeacherBlock.id.is_(None),
+                    and_(
+                        StoreItemBlock.class_id.isnot(None),
+                        active_class_blocks_subq.c.class_id.is_(None),
+                    ),
                 )
             )
             .distinct()

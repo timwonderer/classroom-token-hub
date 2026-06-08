@@ -6,7 +6,7 @@ from sqlalchemy import func, or_, case, select
 
 from app.extensions import db
 from app.models import (
-    ClassEconomy, ClassMembership, TeacherBlock, Transaction, StudentBlock,
+    ClassEconomy, ClassMembership, Seat, Transaction, StudentBlock,
     TapEvent, HallPassLog, RedemptionAuditLog, StudentItem, AnalyticsEvent,
     AnalyticsSnapshot, Issue, IssueResolutionAction, InsuranceClaim,
     StudentInsurance, RentPayment, Announcement, StoreItemBlock, StoreItem,
@@ -25,7 +25,6 @@ def _raise_invariant_violation(message: str) -> None:
 
 def _assert_class_scope_integrity(class_id: str, join_code: str) -> None:
     scoped_models = (
-        ("teacher_blocks", TeacherBlock),
         ("ledger_transaction", Transaction),
         ("student_blocks", StudentBlock),
         ("tap_events", TapEvent),
@@ -47,20 +46,23 @@ def _assert_class_scope_integrity(class_id: str, join_code: str) -> None:
         if count:
             violations.append(f"{label}={count}")
 
-    affected_blocks = db.session.query(TeacherBlock.block).filter(
-        TeacherBlock.class_id == class_id,
-        TeacherBlock.block.isnot(None),
-    ).distinct().all()
-    affected_student_ids = db.session.query(TeacherBlock.student_id).filter(
-        TeacherBlock.class_id == class_id,
-        TeacherBlock.student_id.isnot(None),
-    ).distinct().all()
-    block_names = [block for (block,) in affected_blocks]
-    student_ids = [student_id for (student_id,) in affected_student_ids]
-    if block_names and student_ids:
+    # Check for StudentBlock rows with null class_id inferred from active seats in this class
+    seat_student_ids = [
+        s_id for (s_id,) in db.session.query(Seat.student_id).filter(
+            Seat.class_id == class_id,
+            Seat.student_id.isnot(None),
+        ).distinct().all()
+    ]
+    seat_blocks = [
+        b for (b,) in db.session.query(Seat.block).filter(
+            Seat.class_id == class_id,
+            Seat.block.isnot(None),
+        ).distinct().all()
+    ]
+    if seat_student_ids and seat_blocks:
         inferred_student_block_nulls = db.session.query(StudentBlock).filter(
-            StudentBlock.student_id.in_(student_ids),
-            StudentBlock.period.in_(block_names),
+            StudentBlock.student_id.in_(seat_student_ids),
+            StudentBlock.period.in_(seat_blocks),
             StudentBlock.class_id.is_(None),
         ).count()
         if inferred_student_block_nulls:
@@ -108,15 +110,18 @@ def collapse_universe(class_id: str, reason: str, actor_membership_id: Optional[
             actor_membership_id,
         )
 
-        # 1. Identify affected TeacherBlocks and Students
-        affected_blocks = db.session.query(TeacherBlock.block, TeacherBlock.teacher_id).filter_by(
-            class_id=class_id
-        ).all()
-        
-        affected_student_ids_tb = [
-            s_id for (s_id,) in db.session.query(TeacherBlock.student_id).filter(
-                TeacherBlock.class_id == class_id,
-                TeacherBlock.student_id.isnot(None)
+        # 1. Identify affected Seats and Students for this class
+        teacher_id = economy.teacher_id
+        affected_seat_blocks = [
+            b for (b,) in db.session.query(Seat.block).filter(
+                Seat.class_id == class_id,
+                Seat.block.isnot(None),
+            ).distinct().all()
+        ]
+        affected_student_ids_seat = [
+            s_id for (s_id,) in db.session.query(Seat.student_id).filter(
+                Seat.class_id == class_id,
+                Seat.student_id.isnot(None),
             ).distinct().all()
         ]
         affected_student_ids_sb = [
@@ -125,7 +130,7 @@ def collapse_universe(class_id: str, reason: str, actor_membership_id: Optional[
                 StudentBlock.student_id.isnot(None)
             ).distinct().all()
         ]
-        affected_student_ids = list(set(affected_student_ids_tb + affected_student_ids_sb))
+        affected_student_ids = list(set(affected_student_ids_seat + affected_student_ids_sb))
 
         # Many tables are handled by ON DELETE CASCADE from ClassEconomy
         # (e.g. BalanceCache, Transaction, StudentBlock, TapEvent, RentPayment, ClassMembership, ClassJoinCodeAlias)
@@ -162,77 +167,68 @@ def collapse_universe(class_id: str, reason: str, actor_membership_id: Optional[
         ).delete(synchronize_session=False)
         StudentItem.query.filter_by(class_id=class_id).delete(synchronize_session=False)
 
-        # Clean up StoreItemBlocks for the affected blocks
-        if affected_blocks:
-            involved_teachers = list(set(t_id for _, t_id in affected_blocks))
-            block_names = list(set(b_name for b_name, _ in affected_blocks))
-            
-            # Find all store items belonging to the affected teachers that are visible to these blocks
-            store_items_in_blocks = db.session.query(StoreItem.id).filter(
-                StoreItem.teacher_id.in_(involved_teachers)
-            ).subquery()
-            
-            # Delete the visibility blocks for those store items matching the deleted block names
-            StoreItemBlock.query.filter(
-                StoreItemBlock.store_item_id.in_(select(store_items_in_blocks)),
-                StoreItemBlock.block.in_(block_names)
-            ).delete(synchronize_session=False)
+        # 4b. StoreItemBlocks for this class (class-scoped; also handled by FK cascade on class deletion)
+        StoreItemBlock.query.filter_by(class_id=class_id).delete(synchronize_session=False)
+        # Delete StoreItems that now have NO remaining StoreItemBlock visibility entries for this class
+        deletable_store_items = (
+            db.session.query(StoreItem.id)
+            .outerjoin(StoreItemBlock, StoreItem.id == StoreItemBlock.store_item_id)
+            .filter(
+                StoreItem.class_id == class_id,
+                StoreItemBlock.store_item_id.is_(None),
+            )
+            .subquery()
+        )
+        StoreItem.query.filter(StoreItem.id.in_(select(deletable_store_items))).delete(synchronize_session=False)
 
-            # Delete StoreItems that now have NO remaining StoreItemBlock visibility entries
-            # We must do this for all teachers involved in the blocks
-            for t_id in involved_teachers:
-                deletable_store_items = db.session.query(StoreItem.id).outerjoin(
-                    StoreItemBlock, StoreItem.id == StoreItemBlock.store_item_id
-                ).filter(
-                    StoreItem.teacher_id == t_id,
-                    StoreItemBlock.store_item_id == None
-                ).subquery()
-                
-                # We already deleted StudentItems, so we just delete the StoreItems
-                StoreItem.query.filter(StoreItem.id.in_(select(deletable_store_items))).delete(synchronize_session=False)
+        # 5. Delete Seats for this class (also handled by FK cascade on ClassEconomy deletion)
+        Seat.query.filter_by(class_id=class_id).delete(synchronize_session=False)
 
-        # 5. Delete TeacherBlocks for this class
-        TeacherBlock.query.filter_by(class_id=class_id).delete(synchronize_session=False)
-
-        # 6. Delete the ClassEconomy itself (This triggers ON DELETE CASCADE for Transactions, Memberships, etc.)
+        # 6. Delete the ClassEconomy itself (triggers ON DELETE CASCADE for Transactions, Memberships, etc.)
         db.session.delete(economy)
 
         # 7. Post-collapse: Student Erasure and Link Cleanup
-        # If a student has zero remaining memberships AND zero TeacherBlocks under THIS specific teacher, 
-        # remove the StudentTeacher association for this teacher.
-        # If they have zero across ALL teachers, fully delete the student.
+        # If a student has zero remaining Seats under this teacher's classes, remove the StudentTeacher link.
+        # If they have zero across ALL teachers, fully delete the student record.
         if affected_student_ids:
-            involved_teachers = list(set(t_id for _, t_id in affected_blocks))
             for s_id in affected_student_ids:
-                # Cleanup teacher-student link for specific teachers
-                for t_id in involved_teachers:
-                    # Does student have any remaining classes with this specific teacher?
-                    remaining_with_teacher = db.session.query(TeacherBlock.id).filter_by(
-                        student_id=s_id, teacher_id=t_id
-                    ).count()
-                    
-                    if remaining_with_teacher == 0:
-                        StudentTeacher.query.filter_by(student_id=s_id, teacher_id=t_id).delete(synchronize_session=False)
-                
-                # Full erasure if totally orphaned
+                # Does student have any remaining seats in this teacher's other classes?
+                remaining_with_teacher = (
+                    db.session.query(Seat.id)
+                    .join(ClassEconomy, ClassEconomy.class_id == Seat.class_id)
+                    .filter(
+                        Seat.student_id == s_id,
+                        ClassEconomy.teacher_id == teacher_id,
+                    )
+                    .count()
+                )
+                if remaining_with_teacher == 0:
+                    StudentTeacher.query.filter_by(student_id=s_id, teacher_id=teacher_id).delete(synchronize_session=False)
+
+                # Full erasure if totally orphaned across all teachers
                 remaining_memberships = db.session.query(ClassMembership.id).filter_by(student_id=s_id).count()
-                remaining_tblocks = db.session.query(TeacherBlock.id).filter_by(student_id=s_id).count()
-                
-                if remaining_memberships == 0 and remaining_tblocks == 0:
+                remaining_seats = db.session.query(Seat.id).filter_by(student_id=s_id).count()
+                if remaining_memberships == 0 and remaining_seats == 0:
                     logger.info(f"Student Erasure Rule triggered for student_id={s_id}")
-                    # Remove any leftover bridge rows
                     StudentTeacher.query.filter_by(student_id=s_id).delete(synchronize_session=False)
-                    # Orphaned transactions will be deleted via ON DELETE CASCADE from Seats when Student is deleted.
                     Student.query.filter_by(id=s_id).delete(synchronize_session=False)
 
         # 8. Post-collapse: Settings Cleanup
-        # If no remaining TeacherBlock exists for that block name for the teacher, delete the settings.
-        if affected_blocks:
-            for block_name, teacher_id in affected_blocks:
-                remaining_blocks = db.session.query(TeacherBlock.id).filter_by(block=block_name, teacher_id=teacher_id).count()
-                if remaining_blocks == 0:
+        # If no remaining Seat exists for that block name in this teacher's other classes, delete insurance policy blocks.
+        if affected_seat_blocks:
+            for block_name in affected_seat_blocks:
+                remaining = (
+                    db.session.query(Seat.id)
+                    .join(ClassEconomy, ClassEconomy.class_id == Seat.class_id)
+                    .filter(
+                        Seat.block == block_name,
+                        ClassEconomy.teacher_id == teacher_id,
+                    )
+                    .count()
+                )
+                if remaining == 0:
                     logger.info(f"Settings Cleanup Rule triggered for block={block_name}, teacher={teacher_id}")
-                    InsurancePolicyBlock.query.filter_by(block=block_name).delete(synchronize_session=False) # Simplified, might need teacher_id scoping depending on model
+                    InsurancePolicyBlock.query.filter_by(block=block_name).delete(synchronize_session=False)
 
         db.session.flush()  # FEAT-AUTHORIZED-SHELL
         return True

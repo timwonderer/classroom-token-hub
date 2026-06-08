@@ -1567,45 +1567,19 @@ class RentSettings(db.Model):
     def late_fee(self):
         return self.late_penalty_amount
 
-    def __init__(self, **kwargs):
-        legacy_join_code = kwargs.pop('join_code', None)
-        legacy_teacher_id = kwargs.pop('teacher_id', None)
-        super().__init__(**kwargs)
-        self._legacy_join_code = legacy_join_code
-        self._legacy_teacher_id = legacy_teacher_id
-
-
 @event.listens_for(RentSettings, "before_insert")
 @event.listens_for(RentSettings, "before_update")
 def _sync_rent_settings_scope(mapper, connection, target):
     """Best-effort class scope backfill for transitional join-code seeded fixtures."""
-    legacy_join_code = getattr(target, "_legacy_join_code", None)
-    if getattr(target, "class_id", None) is None and legacy_join_code:
-        class_id = connection.execute(
-            sa.text("SELECT class_id FROM classes WHERE join_code = :join_code"),
-            {"join_code": legacy_join_code},
-        ).scalar()
-        if class_id:
-            target.class_id = str(class_id)
-            return
-
-    legacy_teacher_id = getattr(target, "_legacy_teacher_id", None)
-    legacy_block = getattr(target, "block", None)
-    if getattr(target, "class_id", None) is None and legacy_teacher_id and legacy_block:
-        rows = connection.execute(
-            sa.text(
-                """
-                SELECT DISTINCT class_id
-                FROM teacher_blocks
-                WHERE teacher_id = :teacher_id
-                  AND block = :block
-                  AND class_id IS NOT NULL
-                """
-            ),
-            {"teacher_id": legacy_teacher_id, "block": legacy_block},
-        ).scalars().all()
-        if len(rows) == 1:
-            target.class_id = str(rows[0])
+    if getattr(target, "class_id", None) is None:
+        join_code = getattr(target, "join_code", None)
+        if join_code:
+            class_id = connection.execute(
+                sa.text("SELECT class_id FROM classes WHERE join_code = :join_code"),
+                {"join_code": join_code},
+            ).scalar()
+            if class_id:
+                target.class_id = str(class_id)
 
 
 class RentPayment(db.Model):

@@ -696,7 +696,7 @@ def create_app():
         """Inject current class context and available classes for student navigation."""
         try:
             from app.auth import get_logged_in_student, get_current_seat, get_current_class_id, get_current_user
-            from app.models import TeacherBlock, Admin, ClassEconomy
+            from app.models import Seat, Admin, ClassEconomy
             from flask import session
             from app.utils.display_name_session import (
                 get_teacher_display_name_cache,
@@ -714,10 +714,13 @@ def create_app():
                 return {'current_class_context': None, 'available_classes': []}
 
             # Get all claimed seats for this student
-            claimed_seats = TeacherBlock.query.filter_by(
-                student_id=student_id,
-                is_claimed=True
-            ).order_by(TeacherBlock.teacher_id, TeacherBlock.block).all()
+            claimed_seats = (
+                Seat.query
+                .filter_by(student_id=student_id)
+                .filter(Seat.claimed_at.isnot(None))
+                .order_by(Seat.class_id, Seat.block)
+                .all()
+            )
 
             if not claimed_seats:
                 return {'current_class_context': None, 'available_classes': []}
@@ -752,8 +755,8 @@ def create_app():
             }
 
             # Build list of available classes with teacher names.
-            # Resolve names from session cache first to avoid repeated decryptions.
-            teacher_ids = sorted({seat.teacher_id for seat in claimed_seats if seat.teacher_id})
+            # teacher_id is on ClassEconomy, not on Seat.
+            teacher_ids = sorted({row.teacher_id for row in class_rows_by_class_id.values() if row.teacher_id})
             teacher_name_cache = get_teacher_display_name_cache()
             missing_ids = [tid for tid in teacher_ids if str(tid) not in teacher_name_cache]
             if missing_ids:
@@ -766,34 +769,38 @@ def create_app():
 
             available_classes = []
             for seat in claimed_seats:
-                teacher_name = teacher_name_cache.get(str(seat.teacher_id), 'Unknown')
                 class_row = class_rows_by_class_id.get(seat.class_id)
+                row_teacher_id = getattr(class_row, 'teacher_id', None)
+                teacher_name = teacher_name_cache.get(str(row_teacher_id), 'Unknown') if row_teacher_id else 'Unknown'
+                class_label = (class_row.display_name if class_row and class_row.display_name else None) or seat.join_code
                 available_classes.append({
                     'join_code': seat.join_code,
                     'class_id': getattr(class_row, 'class_id', None),
-                    'class_identifier': (class_row.display_name if class_row and class_row.display_name else seat.get_class_label()),
+                    'class_identifier': class_label,
                     'class_timezone': getattr(class_row, 'class_timezone', None),
                     'teacher_name': teacher_name,
                     'block': seat.block,
-                    'block_display': seat.get_class_label(),
+                    'block_display': class_label,
                     'is_current': seat.class_id == current_seat.class_id
                 })
 
             # Build current class context from cache.
             current_class_row = class_rows_by_class_id.get(current_seat.class_id)
+            current_teacher_id = getattr(current_class_row, 'teacher_id', None)
+            current_class_label = (
+                current_class_row.display_name
+                if current_class_row and current_class_row.display_name
+                else current_seat.join_code
+            )
             current_class_context = {
                 'join_code': current_seat.join_code,
                 'class_id': getattr(current_class_row, 'class_id', None),
-                'class_identifier': (
-                    current_class_row.display_name
-                    if current_class_row and current_class_row.display_name
-                    else current_seat.get_class_label()
-                ),
+                'class_identifier': current_class_label,
                 'class_timezone': getattr(current_class_row, 'class_timezone', None),
-                'teacher_name': teacher_name_cache.get(str(current_seat.teacher_id), 'Unknown'),
-                'teacher_id': current_seat.teacher_id,
+                'teacher_name': teacher_name_cache.get(str(current_teacher_id), 'Unknown') if current_teacher_id else 'Unknown',
+                'teacher_id': current_teacher_id,
                 'block': current_seat.block,
-                'block_display': current_seat.get_class_label(),
+                'block_display': current_class_label,
                 'student_first_name': current_seat.display_first_name,
                 'student_last_initial': current_seat.display_last_initial,
             }
@@ -812,7 +819,7 @@ def create_app():
         """Inject current class context and available classes for admin navigation."""
         try:
             from flask import session
-            from app.models import TeacherBlock, ClassEconomy
+            from app.models import ClassEconomy
             from app.routes.admin import _resolve_admin_class_context
             from app.auth import get_current_user, get_current_class_id
 
@@ -830,36 +837,18 @@ def create_app():
             if not class_rows:
                 return {'admin_current_class_context': None, 'admin_available_classes': []}
 
-            teacher_blocks = (
-                TeacherBlock.query
-                .filter(
-                    TeacherBlock.teacher_id == admin_id,
-                    TeacherBlock.join_code.isnot(None),
-                )
-                .order_by(TeacherBlock.id.asc())
-                .all()
-            )
-            block_rows_by_join_code = {}
-            for teacher_block in teacher_blocks:
-                if teacher_block.join_code and teacher_block.join_code not in block_rows_by_join_code:
-                    block_rows_by_join_code[teacher_block.join_code] = teacher_block
-
             admin_available_classes = []
             for class_row in class_rows:
                 if not class_row.join_code:
                     continue
-                teacher_block = block_rows_by_join_code.get(class_row.join_code)
+                class_label = class_row.display_name or class_row.join_code
                 admin_available_classes.append({
                     'join_code': class_row.join_code,
                     'class_id': class_row.class_id,
-                    'class_identifier': (
-                        class_row.display_name
-                        if class_row.display_name
-                        else (teacher_block.get_class_label() if teacher_block else class_row.join_code)
-                    ),
+                    'class_identifier': class_label,
                     'class_timezone': class_row.class_timezone,
-                    'block': teacher_block.block if teacher_block else None,
-                    'block_display': teacher_block.get_class_label() if teacher_block else (class_row.display_name or class_row.join_code),
+                    'block': class_row.section,
+                    'block_display': class_label,
                 })
 
             if not admin_available_classes:

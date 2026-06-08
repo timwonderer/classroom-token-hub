@@ -28,7 +28,7 @@ from app.extensions import db, limiter
 from app.models import (
     Seat, SystemAdmin, SystemAdminCredential, Admin, Student, ErrorLog,
     Transaction, TransactionStatus, TapEvent, HallPassLog, StudentItem, RentPayment,
-    StudentInsurance, InsuranceClaim, StudentTeacher, TeacherBlock, StudentBlock, UserReport,
+    StudentInsurance, InsuranceClaim, StudentTeacher, StudentBlock, UserReport,
     FeatureSettings, RentSettings, BankingSettings,
     HallPassSettings, SavedAdjustment,
     PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory, IssueResolutionAction, User
@@ -962,7 +962,7 @@ def delete_admin(admin_id):
             InsuranceClaim.query.filter(InsuranceClaim.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
             StudentTeacher.query.filter(StudentTeacher.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
             StudentBlock.query.filter(StudentBlock.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
-            TeacherBlock.query.filter(TeacherBlock.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
+            Seat.query.filter(Seat.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
             Student.query.filter(Student.id.in_(exclusive_student_ids)).delete(synchronize_session=False)
 
         admin_username = admin.get_sysadmin_display_name()

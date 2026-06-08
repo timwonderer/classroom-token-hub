@@ -33,13 +33,14 @@ Target state:
 
 ### Validation Checkpoint
 
-**Last validated:** 2026-06-07T16:20:10Z
+**Last validated:** 2026-06-07T20:20:00Z
 
 - Tracker reconciliation refreshed against the current `codex/v2.0` state.
 - Waves 3-6 remain the last fully evidenced landed cluster in the active tracker.
 - Wave 7 schema contract is installed and still open for the remaining insurance-claim lifecycle and legacy-read cutover.
 - Waves 8-12 remain open and continue to require per-wave verification gates before they can be marked complete.
 - No tracker entry was promoted to complete status without direct evidence in the current pass.
+- **2026-06-07**: `TeacherBlock` identity model decommissioning is in active execution under Wave 11 admin route decomposition scope (see Wave 11 status update below).
 
 ---
 
@@ -99,7 +100,7 @@ This file is the single active tracker for v2 migration execution. All prior tra
 - [ ] Wave 11 backup/restore rehearsal evidence
 - [ ] Wave 11 operator sign-off flow completion (`user_invite_tokens`)
 - [ ] Wave 11 system-admin compliance audit completion
-- [ ] Wave 11 admin route decomposition (`app/routes/admin.py`)
+- [/] Wave 11 admin route decomposition (`app/routes/admin.py`) — **TeacherBlock decommissioning actively in progress** (see Wave 11 status update 2026-06-07)
 - [ ] Wave 11 invariant sweeps complete (INV-ARC-007, INV-ARC-014, INV-ARC-015 full repo pass)
 - [ ] Wave 11 `V2_CLASS_ID_INVARIANT_BACKLOG` closure
 - [ ] Complete single-context UI enforcement sweep: remove remaining page-level class selectors and request `join_code` context controls outside nav context switch
@@ -2237,6 +2238,86 @@ Wave impact:
 - Closes a reliability gap in Wave 11 adversarial evidence reporting (stale data contamination removed).
 - Makes Phase 1 scorecard outcomes actionable by separating expected synthetic probes from real violations.
 - Advances Wave 11 item **6. INV-ARC-007 final sweep** by preserving clean detector signal for subsequent GET-route hardening slices.
+
+### Status Update (2026-06-07): Wave 11 — TeacherBlock Identity Model Decommissioning
+
+This slice is part of Wave 11 admin route decomposition and addresses a major legacy identity debt item: the `TeacherBlock` model was the v1 roster-and-identity anchor for class membership. This work replaces all `TeacherBlock` usage with the canonical `Seat`, `IdentityProfile`, and `ClassEconomy` authority.
+
+**Design decisions enforced during this work:**
+
+- Teacher shadow seats are identified by `IdentityProfile.profile_type = 'teacher_shadow_student'` — not by fragile name string matching.
+- Roster fingerprints are class-scoped: `hash(class_id|first_name|last_name[|dedupe_code])`. Cross-class fingerprint correlation is explicitly prevented.
+- Deduplication symmetry: when any collision is detected in a class, all same-name seats (including pre-existing ones) are assigned `dedupe_code` so claim requirements are symmetric.
+
+**Completed in this slice:**
+
+- `app/models.py`:
+  - Removed `TeacherBlock` model class entirely.
+  - Removed `TeacherBlock` sync logic from `before_flush` session listener.
+  - Added `display_first_name` and `display_last_initial` computed properties to `Seat`.
+
+- `app/routes/student.py`:
+  - `claim_account` now identifies the teacher shadow seat via `IdentityProfile.profile_type` discriminator (not name strings).
+
+- `app/routes/admin.py` (multiple helpers migrated):
+  - `_get_teacher_blocks`, `_get_class_labels_for_blocks`, `_get_join_codes_by_block` — removed; callers now query `Seat` and `ClassEconomy` directly.
+  - `_scoped_students` / `_get_claimed_teacher_block_for_join_code` → `Seat`.
+  - `_join_code_exists` → `ClassEconomy`.
+  - `_hard_delete_class_scope` (scope invariant checker, student IDs, block discovery, seat deletion, orphan detection) → `Seat`.
+  - `_delete_teacher_residual_ownership_rows` → `Seat` joined on `ClassEconomy`.
+  - `_hard_delete_teacher_account_scope` affected student IDs → `Seat`.
+  - `_require_payroll_feature_scope_from_request` block resolution → `Seat`.
+  - `_link_student_to_admin` now creates a `Seat` + `IdentityProfile` pair instead of a `TeacherBlock` record.
+  - `_resolve_join_code_for_block` → `ClassEconomy.section`.
+  - `_resolve_payroll_settings_for_block` → `ClassEconomy.section`.
+  - `_normalize_claim_credentials_for_admin` — stubbed out (dead code now that TeacherBlock hashes are gone).
+  - Students page roster logic (blocks, claimed IDs, unclaimed seat counts) → `Seat` + `ClassEconomy`.
+  - Settings page class label management → `ClassEconomy.display_name`.
+  - Dashboard join_code lookup → `ClassEconomy` (removed unused `TeacherBlock` query).
+  - Admin recovery flow (Steps 1–3: teacher identity, join_code set verification, per-class student lookup) → `ClassEconomy` + `Seat`.
+  - `IdentityProfile` promoted to module-level import.
+  - Stale `TeacherBlock` local import in `_require_payroll_feature_scope_from_request` removed.
+  - Add-student duplicate check → `Seat.claimed_at` (not `TeacherBlock.is_claimed`).
+
+**Remaining in active execution (not yet landed):**
+
+- `app/routes/admin.py`: student detail/edit route (~lines 4680–4960), class-join teacher block lookup, and several smaller residual call-sites (~108 references remain in admin.py as of last count).
+- `app/utils/deletion.py`, `app/utils/student_deletion.py` (~32 references).
+- `app/utils/economy_policy.py` (~11 references).
+- `app/__init__.py` (~8 references).
+- `app/scheduled_tasks.py`, `app/cli_commands.py`, `app/utils/attendance_helpers.py`, `app/routes/system_admin.py`, `app/feats/attendance.py` (smaller counts).
+- Tests referencing `TeacherBlock` fixtures.
+- Migration to physically drop the `teacher_blocks` table — **now unblocked** (all application-layer runtime references cleared).
+- Test files referencing `TeacherBlock` in fixtures need rewriting to use `Seat` — remaining in tests/ (not blocking table drop).
+
+### Status Update (2026-06-07 cont.): Wave 11 — TeacherBlock Application-Layer Clearance Complete
+
+All runtime app references to `TeacherBlock` have been removed. The `teacher_blocks` table can now be physically dropped via migration.
+
+**Files migrated in this slice:**
+- `app/models.py` — removed `_legacy_teacher_id` v1 compatibility init and the `teacher_blocks` SQL fallback in `_sync_rent_settings_scope`
+- `app/feats/attendance.py` — `enforce_daily_limits` uses `Seat` instead of `TeacherBlock`
+- `app/routes/system_admin.py` — student hard-delete uses `Seat` instead of `TeacherBlock`
+- `app/cli_commands.py` — `normalize-claim-credentials` command replaced with no-op stub
+- `app/attendance.py` — import removed
+- `app/scheduled_tasks.py` — `StoreItemBlock` orphan detection uses `Seat`+`class_id` instead of `TeacherBlock`+`teacher_id`
+- `app/utils/economy_policy.py` — `_resolve_join_code_for_block` and `resolve_class_scope` use `ClassEconomy.section` instead of `TeacherBlock`
+- `app/utils/student_deletion.py` — `_unclaim_all_teacher_blocks_for_student` replaced with `_unclaim_all_seats_for_student`; `remove_student_from_teacher_scope` uses `Seat` via `ClassEconomy` join
+- `app/utils/deletion.py` — `_assert_class_scope_integrity` and `collapse_universe` use `Seat` for block/student discovery and erasure logic; `StoreItemBlock` cleanup uses `class_id` scope
+- `app/__init__.py` — both `inject_class_context` (student) and `inject_admin_class_context` (admin) context processors use `Seat` and `ClassEconomy` directly
+- `app/utils/attendance_helpers.py` — `get_join_code_for_student_period` uses `Seat`
+- `app/utils/issue_helpers.py` — `create_issue` uses `ClassEconomy` for class label and class_id resolution
+- `app/routes/admin.py` — all remaining call-sites migrated by the agent pass
+
+**Validation:**
+- `python3 -m py_compile app/models.py app/routes/admin.py app/routes/system_admin.py app/feats/attendance.py app/utils/deletion.py app/utils/student_deletion.py app/__init__.py` → pass
+- `python3 scripts/wave3_identity_drop_surface_guardrail.py` → `Wave 3 identity-drop surface guardrail: clean (no expansion)` — confirmed large TeacherBlock surface reduction
+- `venv/bin/pytest tests/domain/ -q` → 39 passed
+
+**Remaining:**
+- Write migration to DROP TABLE `teacher_blocks`
+- Rewrite/skip test files that use `TeacherBlock` fixtures (71 test collection errors)
+- Re-cut guardrail baseline to reflect zero TeacherBlock surface
 
 ---
 

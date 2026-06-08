@@ -13,11 +13,11 @@ from app.models import (
     ClassEconomy,
     HallPassLog,
     HallPassSettings,
+    Seat,
     SeatAttendanceState,
     StudentBlock,
     TapEvent,
     TapEventReasonCode,
-    TeacherBlock,
 )
 from app.payroll import get_daily_limit_seconds
 from app.utils.economy_policy import resolve_feature_class_for_class
@@ -676,11 +676,10 @@ def enforce_daily_limits(*, student, commit: bool = True, logger=None):
 
     for block_original in student_blocks:
         period_upper = block_original.upper()
-        seat = TeacherBlock.query.filter_by(
+        seat = Seat.query.filter_by(
             student_id=student.id,
             block=block_original,
-            is_claimed=True,
-        ).first()
+        ).filter(Seat.claimed_at.isnot(None)).first()
         if not seat or not seat.class_id:
             continue
 

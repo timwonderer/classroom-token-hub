@@ -19,7 +19,6 @@ from app.models import (
     StudentItem,
     StudentTeacher,
     TapEvent,
-    TeacherBlock,
     Transaction,
     UserReport,
     Seat,
@@ -55,15 +54,15 @@ def _collect_related_ids(student_id):
     return student_item_ids, issue_ids, insurance_ids, tx_ids, seat_ids
 
 
-def _unclaim_all_teacher_blocks_for_student(student_id):
-    """Convert all claimed roster seats for this student back to unclaimed seats."""
-    TeacherBlock.query.filter(
-        TeacherBlock.student_id == student_id
+def _unclaim_all_seats_for_student(student_id):
+    """Detach all canonical seats for this student, resetting them to unclaimed."""
+    Seat.query.filter(
+        Seat.student_id == student_id
     ).update(
         {
-            TeacherBlock.student_id: None,
-            TeacherBlock.is_claimed: False,
-            TeacherBlock.claimed_at: None,
+            Seat.student_id: None,
+            Seat.claimed_at: None,
+            Seat.user_id: None,
         },
         synchronize_session=False,
     )
@@ -149,7 +148,7 @@ def hard_delete_student_if_orphaned(student_id):
         return False
 
     student_item_ids, issue_ids, insurance_ids, tx_ids, seat_ids = _collect_related_ids(student_id)
-    _unclaim_all_teacher_blocks_for_student(student_id)
+    _unclaim_all_seats_for_student(student_id)
     _clear_cross_transaction_refs(tx_ids)
     _delete_student_scoped_rows(student_id, student_item_ids, issue_ids, insurance_ids, tx_ids, seat_ids)
     Student.query.filter(Student.id == student_id).delete(synchronize_session=False)
@@ -164,14 +163,18 @@ def remove_student_from_teacher_scope(student_id, teacher_id):
         StudentTeacher.student_id == student_id,
         StudentTeacher.teacher_id == teacher_id,
     ).delete(synchronize_session=False)
-    TeacherBlock.query.filter(
-        TeacherBlock.student_id == student_id,
-        TeacherBlock.teacher_id == teacher_id,
+    # Detach the student's seats that belong to this teacher's classes.
+    # Seats belonging to other teachers' classes are left intact.
+    from app.models import ClassEconomy
+    teacher_class_ids = db.session.query(ClassEconomy.class_id).filter_by(teacher_id=teacher_id).subquery()
+    Seat.query.filter(
+        Seat.student_id == student_id,
+        Seat.class_id.in_(teacher_class_ids),
     ).update(
         {
-            TeacherBlock.student_id: None,
-            TeacherBlock.is_claimed: False,
-            TeacherBlock.claimed_at: None,
+            Seat.student_id: None,
+            Seat.claimed_at: None,
+            Seat.user_id: None,
         },
         synchronize_session=False,
     )

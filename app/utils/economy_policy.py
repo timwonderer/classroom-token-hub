@@ -419,14 +419,14 @@ def _resolve_join_code_for_block(teacher_id: int, block: Optional[str]) -> Optio
     if not has_app_context() or not block:
         return None
 
-    from app.models import TeacherBlock
+    from app.models import ClassEconomy
 
     row = (
-        TeacherBlock.query.with_entities(TeacherBlock.join_code)
+        ClassEconomy.query.with_entities(ClassEconomy.join_code)
         .filter(
-            TeacherBlock.teacher_id == teacher_id,
-            TeacherBlock.block == block,
-            TeacherBlock.join_code.isnot(None),
+            ClassEconomy.teacher_id == teacher_id,
+            ClassEconomy.section == block,
+            ClassEconomy.join_code.isnot(None),
         )
         .first()
     )
@@ -442,7 +442,7 @@ def resolve_class_scope(
     if not has_app_context() or not teacher_id:
         return None
 
-    from app.models import ClassEconomy, TeacherBlock
+    from app.models import ClassEconomy
 
     normalized_block = block.strip().upper() if block else None
     normalized_join_code = (join_code or "").strip().upper() or None
@@ -451,13 +451,12 @@ def resolve_class_scope(
         normalized_join_code = _resolve_join_code_for_block(teacher_id, normalized_block)
     if normalized_join_code and not normalized_block:
         block_row = (
-            TeacherBlock.query.with_entities(TeacherBlock.block)
+            ClassEconomy.query.with_entities(ClassEconomy.section)
             .filter(
-                TeacherBlock.teacher_id == teacher_id,
-                TeacherBlock.join_code == normalized_join_code,
-                TeacherBlock.block.isnot(None),
+                ClassEconomy.teacher_id == teacher_id,
+                ClassEconomy.join_code == normalized_join_code,
+                ClassEconomy.section.isnot(None),
             )
-            .order_by(TeacherBlock.id.asc())
             .first()
         )
         normalized_block = block_row[0].strip().upper() if block_row and block_row[0] else None

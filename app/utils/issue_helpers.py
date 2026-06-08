@@ -122,21 +122,17 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
     Returns:
         Issue: Created issue instance
     """
-    from app.models import IssueCategory, TeacherBlock
+    from app.models import ClassEconomy, IssueCategory
 
     # Get category to determine issue_type
     category = db.session.get(IssueCategory, category_id)
     if not category:
         raise ValueError("Invalid category")
 
-    # Get class label
-    seat = TeacherBlock.query.filter_by(
-        student_id=student.id,
-        join_code=join_code
-    ).first()
-
-    class_label = seat.get_class_label() if seat else None
-    class_id = seat.class_id if seat else None
+    # Resolve class_id and label from ClassEconomy (canonical source of truth)
+    class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+    class_label = (class_row.display_name if class_row and class_row.display_name else None) or join_code
+    class_id = class_row.class_id if class_row else None
     canonical_seat = None
     if class_id:
         canonical_seat = Seat.query.filter_by(student_id=student.id, class_id=class_id).first()
