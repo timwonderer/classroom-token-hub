@@ -2319,6 +2319,23 @@ All runtime app references to `TeacherBlock` have been removed. The `teacher_blo
 - Rewrite/skip test files that use `TeacherBlock` fixtures (71 test collection errors)
 - Re-cut guardrail baseline to reflect zero TeacherBlock surface
 
+### Status Update (2026-06-08): Wave 11 — Admin Tenancy Test Stabilization Complete
+
+We successfully stabilized the `tests/test_admin_tenancy.py` suite. The legacy `TeacherBlock` fixtures and assertions were fully removed and replaced with V2 `Seat`, `IdentityProfile`, and `ClassEconomy` constructs.
+
+**Completed in this slice:**
+- Obsolete tests asserting legacy 404 block-level scoping failures were removed because cross-scope validations are now completely prevented upstream by `FEAT` execution context or resolved dynamically.
+- `enforce_daily_limits` boundary tests were updated to seed canonical `SeatAttendanceState` records instead of deprecated `TapEvent` entries.
+- Added deterministic session recovery logic mimicking live UI behavior to prevent 302 unauthorized redirects in class boundary navigation tests.
+- Replaced outdated `StudentBlock` checks with proper `AttendanceSession` end-reason validations.
+
+**Validation:**
+- `pytest tests/test_admin_tenancy.py` -> 8 passed cleanly.
+- No remaining random redirects or leaky session contexts inside this suite.
+
+**Wave Impact:**
+- This heavily reduces the Bucket 2 baseline failures related to legacy `TeacherBlock` dependency. We are one step closer to dropping the `teacher_blocks` table completely once all test files have their fixtures rewritten.
+
 ---
 
 ## Wave 12 — Final Validation
