@@ -3,7 +3,8 @@ from decimal import Decimal
 
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
-from app.models import Admin, PayrollSettings, Seat, Student, StudentTeacher, TeacherBlock
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, PayrollSettings, Seat, Student, StudentTeacher
 from tests.helpers.class_scope import create_class_scope
 
 

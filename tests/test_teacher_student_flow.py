@@ -1,6 +1,7 @@
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
-from app.models import Student, TeacherBlock, Transaction, StoreItem, StudentItem, Admin, Seat, User, ClassMembership, StudentTeacher
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Student, Transaction, StoreItem, StudentItem, Admin, Seat, User, ClassMembership, StudentTeacher
 from app.utils.analytics_engine import AnalyticsEngine
 from app import db
 import time

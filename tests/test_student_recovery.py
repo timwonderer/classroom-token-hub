@@ -16,8 +16,9 @@ import re
 import pytest
 from datetime import timedelta
 from app import db
+from tests.helpers.mock_teacher_block import TeacherBlock
 from app.models import (
-    ClassEconomy, IdentityProfile, Seat, Student, TeacherBlock, Admin,
+    ClassEconomy, IdentityProfile, Seat, Student, Admin,
     StudentTeacher, Transaction, StudentBlock, User, UserRole,
 )
 from app.hash_utils import get_random_salt, hash_username, hash_username_lookup

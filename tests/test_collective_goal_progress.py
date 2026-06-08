@@ -7,7 +7,8 @@ from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import uuid
 
 from app.extensions import db
-from app.models import Admin, ClassMembership, StoreItem, StoreItemBlock, Student, StudentItem, StudentTeacher, TeacherBlock, Transaction
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, ClassMembership, StoreItem, StoreItemBlock, Student, StudentItem, StudentTeacher, Transaction
 from tests.helpers.class_scope import create_class_scope
 
 

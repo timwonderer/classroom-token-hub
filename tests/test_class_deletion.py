@@ -4,8 +4,9 @@ from datetime import datetime, timezone
 
 from app.extensions import db
 from app.feats.base import InvariantViolation
+from tests.helpers.mock_teacher_block import TeacherBlock
 from app.models import (
-    Admin, ClassEconomy, ClassMembership, TeacherBlock, Transaction, StudentBlock,
+    Admin, ClassEconomy, ClassMembership, Transaction, StudentBlock,
     TapEvent, HallPassLog, RedemptionAuditLog, StudentItem, AnalyticsEvent,
     AnalyticsSnapshot, Issue, IssueResolutionAction, InsuranceClaim,
     StudentInsurance, RentPayment, Announcement, StoreItemBlock, StoreItem,

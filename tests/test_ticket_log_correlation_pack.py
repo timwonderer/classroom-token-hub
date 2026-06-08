@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import db
+from tests.helpers.mock_teacher_block import TeacherBlock
 from app.models import (
     Admin,
     ActorRequestTrace,
@@ -10,8 +11,7 @@ from app.models import (
     ClassEconomy,
     Seat,
     Student,
-    TeacherBlock,
-)
+    )
 from app.utils.issue_helpers import create_issue
 from app.utils.time import utc_now
 

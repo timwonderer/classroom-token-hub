@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
-from app.models import Admin, Student, StudentTeacher, TeacherBlock, RentSettings, TeacherOnboarding, InsurancePolicy
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, Student, StudentTeacher, RentSettings, TeacherOnboarding, InsurancePolicy
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 from tests.helpers.class_scope import create_class_scope

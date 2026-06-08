@@ -9,7 +9,8 @@ import pytest
 import pyotp
 from datetime import datetime, timedelta, timezone
 from app import db
-from app.models import Admin, Announcement, TeacherBlock, ClassEconomy
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, Announcement, ClassEconomy
 
 
 @pytest.fixture

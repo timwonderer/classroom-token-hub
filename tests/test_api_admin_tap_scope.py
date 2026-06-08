@@ -2,7 +2,8 @@ from datetime import datetime, timezone
 
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
-from app.models import Admin, ClassEconomy, ClassMembership, Seat, Student, StudentTeacher, TapEvent, TeacherBlock
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, ClassEconomy, ClassMembership, Seat, Student, StudentTeacher, TapEvent
 
 
 def _login_admin(client, admin_id, join_code):

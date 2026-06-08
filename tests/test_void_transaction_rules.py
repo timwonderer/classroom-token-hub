@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash
 
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
+from tests.helpers.mock_teacher_block import TeacherBlock
 from app.models import (
     Admin,
     InsurancePolicy,
@@ -15,7 +16,6 @@ from app.models import (
     StudentInsurance,
     StudentItem,
     StudentTeacher,
-    TeacherBlock,
     Transaction,
 )
 

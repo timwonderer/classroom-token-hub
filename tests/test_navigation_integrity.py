@@ -2,7 +2,8 @@ import os
 import pytest
 from datetime import datetime, timezone
 from app.extensions import db
-from app.models import TeacherOnboarding, Student, StudentTeacher, TeacherBlock
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import TeacherOnboarding, Student, StudentTeacher
 from app.hash_utils import get_random_salt, hash_username
 from app.utils.economy_policy import replace_enabled_class_features
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin

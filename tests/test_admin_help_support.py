@@ -1,7 +1,8 @@
 import pyotp
 
 from app import db
-from app.models import Admin, TeacherBlock, UserReport
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, UserReport
 from app.utils.auth_username import build_hashed_username_fields
 
 

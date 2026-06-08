@@ -7,6 +7,7 @@ from app import db
 from app.models import (
     Admin,
     ClassEconomy,
+    ClassMembership,
     FeatureSettings,
     IdentityProfile,
     InsurancePolicy,
@@ -17,8 +18,9 @@ from app.models import (
     RentSettings,
     Seat,
     Student,
-    TeacherBlock,
     Transaction,
+    User,
+    UserRole,
 )
 from app.hash_utils import get_random_salt, hash_username
 from app.routes.student import (
@@ -43,13 +45,10 @@ def _login_admin(client, admin_id, *, join_code=None, class_id=None):
     resolved_join_code = join_code
     resolved_class_id = class_id
     if not resolved_join_code:
-        block_row = (
-            TeacherBlock.query.with_entities(TeacherBlock.join_code)
-            .filter(TeacherBlock.teacher_id == admin_id, TeacherBlock.join_code.isnot(None))
-            .order_by(TeacherBlock.id.asc())
-            .first()
-        )
-        resolved_join_code = block_row[0] if block_row and block_row[0] else None
+        class_row = ClassEconomy.query.filter_by(teacher_id=admin_id).first()
+        if class_row:
+            resolved_join_code = class_row.join_code
+            resolved_class_id = class_row.class_id
     if not resolved_class_id and resolved_join_code:
         class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
             join_code=resolved_join_code,
@@ -57,9 +56,17 @@ def _login_admin(client, admin_id, *, join_code=None, class_id=None):
         ).first()
         resolved_class_id = class_row[0] if class_row and class_row[0] else None
 
+    admin = Admin.query.get(admin_id)
+    user = User.query.filter_by(username_lookup_hash=admin.username_lookup_hash).first() if admin else None
+    seat = Seat.query.filter_by(class_id=resolved_class_id, role="teacher").first() if resolved_class_id else None
+
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = admin_id
+        if user:
+            sess['user_id'] = user.id
+        if seat:
+            sess['current_seat_id'] = seat.id
         sess['is_system_admin'] = False
         if resolved_join_code:
             sess['current_join_code'] = resolved_join_code
@@ -68,32 +75,35 @@ def _login_admin(client, admin_id, *, join_code=None, class_id=None):
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
 
 
-def _create_teacher_block(admin_id, block='A', join_code='JOINPOLA', class_id=None):
+def _create_teacher_seat(admin_id, block='A', join_code='JOINPOLA', class_id=None):
     identity = IdentityProfile(profile_type='student', first_name='Policy', last_initial='S')
     db.session.add(identity)
     db.session.flush()
 
-    teacher_block = TeacherBlock(
-        teacher_id=admin_id,
+    db.session.add(ClassMembership(
         class_id=class_id,
-        block=block,
-        first_name='Policy',
-        last_initial='S',
-        identity_id=identity.id,
-        last_name_hash_by_part=['hash'],
-        dob_sum_hash=None,
-        salt=b'1234567890123456',
-        first_half_hash='hashvalue',
         join_code=join_code,
-    )
-    db.session.add(teacher_block)
+        admin_id=admin_id,
+        role="admin",
+    ))
+    db.session.add(Seat(
+        class_id=class_id,
+        join_code=join_code,
+        role="teacher",
+        block=block,
+    ))
     db.session.flush()
-    return teacher_block
 
 
 def _create_admin_with_block(block='A', join_code='JOINPOLA'):
     admin = make_admin(f"policyadmin_{block.lower()}_{join_code.lower()}", "TESTSECRET123456")
-    db.session.add(admin)
+    user = User(
+        user_role=UserRole.TEACHER,
+        username_hash=admin.username_hash,
+        username_lookup_hash=admin.username_lookup_hash,
+        totp_secret_encrypted=admin.totp_secret,
+    )
+    db.session.add_all([admin, user])
     db.session.flush()
 
     economy = ClassEconomy(
@@ -101,15 +111,14 @@ def _create_admin_with_block(block='A', join_code='JOINPOLA'):
         teacher_id=admin.id,
         created_by_admin_id=admin.id,
         display_name=f'Period {block}',
+        section=block,
     )
     db.session.add(economy)
     db.session.flush()
 
-    _create_teacher_block(admin.id, block=block, join_code=join_code, class_id=economy.class_id)
+    _create_teacher_seat(admin.id, block=block, join_code=join_code, class_id=economy.class_id)
 
     payroll_settings = PayrollSettings(
-        teacher_id=admin.id,
-        join_code=join_code,
         class_id=economy.class_id,
         block=block,
         pay_rate=Decimal('0.25'),
@@ -119,8 +128,6 @@ def _create_admin_with_block(block='A', join_code='JOINPOLA'):
         is_active=True,
     )
     rent_settings = RentSettings(
-        teacher_id=admin.id,
-        join_code=join_code,
         class_id=economy.class_id,
         block=block,
         is_enabled=True,
@@ -232,13 +239,13 @@ def _create_pending_policy_transition(
 def test_checker_uses_feature_policy_mode_for_recommendations(client):
     admin, payroll_settings, _, economy = _create_admin_with_block()
 
-    default_checker = EconomyBalanceChecker(admin.id, 'A', policy_mode='default')
+    default_checker = EconomyBalanceChecker(admin.id, 'A', class_id=economy.class_id, policy_mode='default')
     default_recommendations = default_checker.analyze_economy(payroll_settings).recommendations
 
     db.session.add(FeatureSettings(class_id=economy.class_id, economy_policy_mode='tight'))
     db.session.commit()
 
-    tight_checker = EconomyBalanceChecker(admin.id, 'A')
+    tight_checker = EconomyBalanceChecker(admin.id, 'A', class_id=economy.class_id)
     tight_recommendations = tight_checker.analyze_economy(payroll_settings).recommendations
 
     assert tight_checker.policy_mode == 'tight'
@@ -252,9 +259,9 @@ def test_checker_uses_feature_policy_mode_for_recommendations(client):
 
 
 def test_comfortable_policy_uses_requested_ratio_profile(client):
-    admin, payroll_settings, _, _ = _create_admin_with_block()
+    admin, payroll_settings, _, economy = _create_admin_with_block()
 
-    checker = EconomyBalanceChecker(admin.id, 'A', policy_mode='comfortable')
+    checker = EconomyBalanceChecker(admin.id, 'A', class_id=economy.class_id, policy_mode='comfortable')
     recommendations = checker.analyze_economy(payroll_settings).recommendations
 
     cwi = float(payroll_settings.pay_rate) * payroll_settings.expected_weekly_hours * 60
@@ -281,9 +288,9 @@ def test_comfortable_policy_uses_requested_ratio_profile(client):
 
 
 def test_insurance_premium_recommendation_matches_checker_output(client):
-    admin, payroll_settings, _, _ = _create_admin_with_block()
+    admin, payroll_settings, _, economy = _create_admin_with_block()
 
-    checker = EconomyBalanceChecker(admin.id, 'A', policy_mode='default')
+    checker = EconomyBalanceChecker(admin.id, 'A', class_id=economy.class_id, policy_mode='default')
     analysis = checker.analyze_economy(payroll_settings)
     recommendation = get_insurance_premium_recommendation(
         'default',
@@ -324,7 +331,7 @@ def test_convert_weekly_amount_to_frequency_supports_custom_schedules(client):
 
 
 def test_edit_insurance_policy_renders_shared_recommendation_text(client):
-    admin, _, _, _ = _create_admin_with_block()
+    admin, _, _, economy = _create_admin_with_block()
     policy = _create_insurance_policy(admin.id, 'Coverage', Decimal('40.00'), block='A', join_code='JOINPOLA')
     _login_admin(client, admin.id)
 
@@ -368,12 +375,11 @@ def test_get_feature_settings_row_for_class_requires_explicit_class_scope(client
 
 
 def test_rent_warnings_report_single_monthly_conversion(client):
-    admin, payroll_settings, _, _ = _create_admin_with_block()
-    checker = EconomyBalanceChecker(admin.id, 'A', policy_mode='default')
+    admin, payroll_settings, _, economy = _create_admin_with_block()
+    checker = EconomyBalanceChecker(admin.id, 'A', class_id=economy.class_id, policy_mode='default')
     cwi = checker.calculate_cwi(payroll_settings).cwi
     high_rent = RentSettings(
-        teacher_id=admin.id,
-        join_code='JOINPOLA',
+        class_id=economy.class_id,
         block='A',
         is_enabled=True,
         rent_amount=Decimal('600.00'),
@@ -392,7 +398,7 @@ def test_immediate_rebalance_updates_rent_setting(client):
     db.session.add(FeatureSettings(class_id=economy.class_id, economy_policy_mode='tight'))
     db.session.commit()
 
-    checker = EconomyBalanceChecker(admin.id, 'A', policy_mode='tight')
+    checker = EconomyBalanceChecker(admin.id, 'A', class_id=economy.class_id, policy_mode='tight')
     expected_rent = Decimal(str(checker.analyze_economy(payroll_settings).recommendations['rent']['recommended']))
 
     response = client.post('/admin/economy-policy/rebalance', data={
@@ -404,7 +410,6 @@ def test_immediate_rebalance_updates_rent_setting(client):
 
     assert response.status_code == 302
     scoped_rent = RentSettings.query.filter_by(
-        teacher_id=admin.id,
         class_id=economy.class_id,
         block='A',
     ).first()
@@ -413,7 +418,7 @@ def test_immediate_rebalance_updates_rent_setting(client):
 
 
 def test_rebalanced_rent_amount_does_not_backdate_current_coverage_due(client):
-    _, _, rent_settings, _ = _create_admin_with_block()
+    _, _, rent_settings, economy = _create_admin_with_block()
     rent_settings.rent_amount = Decimal('620.00')
     rent_settings.updated_at = datetime(2026, 3, 19, 12, 0, tzinfo=timezone.utc)
 
@@ -432,7 +437,7 @@ def test_rebalanced_rent_amount_does_not_backdate_current_coverage_due(client):
 
 
 def test_join_code_cycle_locks_rent_rate_after_first_payment(client):
-    admin, _, rent_settings, _ = _create_admin_with_block()
+    admin, _, rent_settings, economy = _create_admin_with_block()
     join_code = "LOCKA1"
     lock_class = ClassEconomy(
         join_code=join_code,
@@ -524,7 +529,7 @@ def test_invalid_activation_mode_is_rejected(client):
 
 def test_rebalance_ignores_cross_teacher_selected_ids(client):
     admin_a, _, _, economy_a = _create_admin_with_block('A', 'JOINPOLA')
-    admin_b, _, _, _ = _create_admin_with_block('B', 'JOINPOLB')
+    admin_b, _, _, economy = _create_admin_with_block('B', 'JOINPOLB')
     policy_a = _create_insurance_policy(admin_a.id, 'Teacher A Policy', '20.00', block='A')
     policy_b = _create_insurance_policy(admin_b.id, 'Teacher B Policy', '99.00', block='B')
     _login_admin(client, admin_a.id)
@@ -568,7 +573,7 @@ def test_run_payroll_applies_scheduled_rebalance(client):
     )
     db.session.commit()
 
-    response = client.post('/admin/run_payroll')
+    response = client.post('/admin/run_payroll', data={'block': 'A'})
 
     assert response.status_code == 302
     db.session.refresh(rent_settings)
@@ -687,11 +692,9 @@ def test_activate_due_rebalances_keeps_rent_mutation_in_settings_row_class(clien
     )
     db.session.add(economy_b)
     db.session.flush()
-    _create_teacher_block(admin.id, block='B', join_code='JOINPOLB', class_id=economy_b.class_id)
+    _create_teacher_seat(admin.id, block='B', join_code='JOINPOLB', class_id=economy_b.class_id)
 
     rent_settings_b = RentSettings(
-        teacher_id=admin.id,
-        join_code='JOINPOLB',
         class_id=economy_b.class_id,
         block='B',
         is_enabled=True,
@@ -769,7 +772,7 @@ def test_activate_due_rebalances_does_not_mutate_cross_class_insurance_policy(cl
 
 
 def test_prepare_scheduled_rebalance_changes_sets_rent_effective_at(client):
-    admin, _, rent_settings, _ = _create_admin_with_block()
+    admin, _, rent_settings, economy = _create_admin_with_block()
 
     changes = prepare_scheduled_rebalance_changes(
         [{

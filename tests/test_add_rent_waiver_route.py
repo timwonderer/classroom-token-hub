@@ -4,6 +4,7 @@ from decimal import Decimal
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import db
 from app.hash_utils import get_random_salt, hash_username
+from tests.helpers.mock_teacher_block import TeacherBlock
 from app.models import (
     Admin,
     AnalyticsEvent,
@@ -14,8 +15,7 @@ from app.models import (
     RentWaiver,
     Student,
     StudentTeacher,
-    TeacherBlock,
-)
+    )
 from tests.helpers.admin_context import login_admin
 
 

@@ -8,7 +8,8 @@ import pyotp
 from flask import session
 
 from app import app, db
-from app.models import Admin, ClassEconomy, ClassFeature, FeatureSettings, TeacherOnboarding, TeacherBlock, User, UserRole
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, ClassEconomy, ClassFeature, FeatureSettings, TeacherOnboarding, User, UserRole
 from app.routes.admin import get_admin_feature_join_code_options, is_admin_feature_enabled
 from tests.helpers.admin_context import login_admin
 from app.utils.economy_policy import (
@@ -164,8 +165,7 @@ class TestClassFeatures:
         economy_b = _create_class_scope(test_admin, block='B', join_code='JOIN_B')
         db.session.add(ClassFeature(class_id=economy_a.class_id, feature_name='hall_pass'))
         TeacherBlock.query.filter(
-            TeacherBlock.teacher_id == test_admin.id,
-            TeacherBlock.join_code == economy_a.join_code,
+            TeacherBlock.teacher_id == test_admin.id.join_code == economy_a.join_code,
         ).delete(synchronize_session=False)
         db.session.commit()
 

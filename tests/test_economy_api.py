@@ -13,7 +13,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from os import urandom
 from app import db
-from app.models import Admin, ClassEconomy, EconomySnapshot, PayrollSettings, TeacherBlock
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, ClassEconomy, EconomySnapshot, PayrollSettings
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 from app.routes import admin as admin_routes
 from tests.helpers.class_scope import create_class_scope

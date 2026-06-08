@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
-from app.models import Admin, Seat, Student, StudentTeacher, TeacherBlock, Transaction, TransactionStatus, User, UserRole
+from app.models import Admin, Seat, Student, StudentTeacher, Transaction, TransactionStatus, User, UserRole
 from tests.helpers.class_scope import create_class_scope
 
 
@@ -57,8 +57,7 @@ def test_admin_payroll_displays_scoped_balances_only(client):
     with FEATContext("FEAT-ADMN-001"):
         db.session.add_all([
             StudentTeacher(student_id=student.id, teacher_id=teacher_a.id),
-            StudentTeacher(student_id=student.id, teacher_id=teacher_b.id),
-            TeacherBlock(
+            StudentTeacher(student_id=student.id, teacher_id=teacher_b.id)(
                 teacher_id=teacher_a.id,
                 block="A",
                 join_code="PAYA01",
@@ -71,8 +70,7 @@ def test_admin_payroll_displays_scoped_balances_only(client):
                 dob_sum_hash=None,
                 salt=b"salt",
                 first_half_hash="hash-a",
-            ),
-            TeacherBlock(
+            )(
                 teacher_id=teacher_b.id,
                 block="A",
                 join_code="PAYB01",

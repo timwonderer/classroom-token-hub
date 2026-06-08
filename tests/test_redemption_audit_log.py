@@ -7,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db
+from tests.helpers.mock_teacher_block import TeacherBlock
 from app.models import (
     Admin,
     ClassEconomy,
@@ -17,7 +18,6 @@ from app.models import (
     Student,
     StudentItem,
     StudentTeacher,
-    TeacherBlock,
     Transaction,
 )
 

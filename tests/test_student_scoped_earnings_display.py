@@ -3,7 +3,8 @@ from decimal import Decimal
 
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
-from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TransactionStatus
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, Student, StudentTeacher, Transaction, TransactionStatus
 from tests.helpers.class_scope import create_class_scope
 
 
@@ -41,8 +42,7 @@ def _build_multi_class_student():
             dob_sum_hash=None,
             salt=b"salt",
             first_half_hash="hash-a",
-        ),
-        TeacherBlock(
+        )(
             teacher_id=teacher.id,
             block="B",
             join_code="STUDSC2",

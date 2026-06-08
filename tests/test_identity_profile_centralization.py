@@ -1,7 +1,8 @@
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import db
 from app.hash_utils import get_random_salt, hash_username
-from app.models import Admin, IdentityProfile, Student, TeacherBlock
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, IdentityProfile, Student
 
 
 def _create_admin(username: str) -> Admin:

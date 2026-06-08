@@ -17,7 +17,8 @@ import unicodedata
 from datetime import datetime, timezone, timedelta
 
 from app.extensions import db
-from app.models import Admin, Student, StudentTeacher, TeacherBlock, HallPassLog
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, Student, StudentTeacher, HallPassLog
 from app.hash_utils import get_random_salt, hash_username
 
 

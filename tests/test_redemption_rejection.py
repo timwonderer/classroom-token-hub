@@ -2,7 +2,8 @@ from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from decimal import Decimal
 from datetime import datetime, timezone
-from app.models import Admin, Student, Transaction, StoreItem, StudentItem, TeacherBlock, StudentTeacher, ClassEconomy, ClassMembership
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, Student, Transaction, StoreItem, StudentItem, StudentTeacher, ClassEconomy, ClassMembership
 from app.extensions import db
 from werkzeug.security import generate_password_hash
 

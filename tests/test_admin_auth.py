@@ -4,7 +4,8 @@ from datetime import datetime, timezone
 
 from app import db
 from app.auth import ensure_admin_join_code, get_current_admin
-from app.models import Admin, IdentityProfile, TeacherBlock, User, UserRole
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, IdentityProfile, User, UserRole
 
 
 def test_admin_login_sets_session_identity(client):

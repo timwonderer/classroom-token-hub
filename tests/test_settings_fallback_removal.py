@@ -5,6 +5,7 @@ from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 
 from app.extensions import db
+from tests.helpers.mock_teacher_block import TeacherBlock
 from app.models import (
     Admin,
     BankingSettings,
@@ -15,8 +16,7 @@ from app.models import (
     RentSettings,
     Student,
     StudentTeacher,
-    TeacherBlock,
-)
+    )
 from app.routes.student import (
     get_banking_settings_for_context,
     get_feature_settings_for_student,

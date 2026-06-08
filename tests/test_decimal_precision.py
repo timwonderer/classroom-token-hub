@@ -9,9 +9,9 @@ from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from decimal import Decimal
 from datetime import datetime, timezone
+from tests.helpers.mock_teacher_block import TeacherBlock
 from app.models import (
-    Admin, ClassEconomy, IdentityProfile, Seat, Student, StudentTeacher, Transaction, StudentBlock, TeacherBlock,
-    RentSettings, RentPayment, BankingSettings, _quantize_currency
+    Admin, ClassEconomy, IdentityProfile, Seat, Student, StudentTeacher, Transaction, StudentBlock, RentSettings, RentPayment, BankingSettings, _quantize_currency
 )
 from app.extensions import db
 from app.utils.overdraft import charge_overdraft_fee_if_needed

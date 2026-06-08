@@ -12,7 +12,8 @@ import os
 from datetime import datetime, timezone
 import pytest
 from flask import session
-from app.models import Student, Admin, TeacherBlock, ClassEconomy, ClassMembership, Seat
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Student, Admin, ClassEconomy, ClassMembership, Seat
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 

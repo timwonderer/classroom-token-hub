@@ -9,7 +9,8 @@ from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
-from app.models import Student, Admin, Transaction, TeacherBlock, ClassEconomy, ClassFeature, ClassMembership, StoreItem, Seat, User, UserRole
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Student, Admin, Transaction, ClassEconomy, ClassFeature, ClassMembership, StoreItem, Seat, User, UserRole
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 from tests.helpers.admin_context import login_admin

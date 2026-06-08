@@ -18,7 +18,8 @@ from werkzeug.security import generate_password_hash
 
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app.extensions import db
-from app.models import Admin, ClassMembership, StoreItem, StudentItem, StudentTeacher, TeacherBlock, Transaction
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, ClassMembership, StoreItem, StudentItem, StudentTeacher, Transaction
 from app.utils.store import process_expired_collective_goals, refund_pending_collective_purchases
 from tests.helpers.admin_context import login_admin
 from tests.helpers.class_scope import create_class_scope

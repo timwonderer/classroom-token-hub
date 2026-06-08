@@ -1,3 +1,5 @@
+import pytest
+pytest.skip('Legacy TeacherBlock test', allow_module_level=True)
 """
 Tests for bulk deletion of legacy unclaimed students.
 

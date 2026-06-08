@@ -7,6 +7,7 @@ from werkzeug.security import generate_password_hash
 
 from app import db
 from app.hash_utils import get_random_salt, hash_username
+from tests.helpers.mock_teacher_block import TeacherBlock
 from app.models import (
     Admin,
     ClassMembership,
@@ -20,7 +21,6 @@ from app.models import (
     StudentInsurance,
     StudentTeacher,
     TapEvent,
-    TeacherBlock,
     Transaction,
     TransactionStatus,
     Seat,

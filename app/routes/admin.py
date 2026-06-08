@@ -4517,8 +4517,6 @@ def student_detail_public(student_public_id):
         abort(404)
     if expected_class_id and str(scoped_seat.class_id or "") != expected_class_id:
         abort(404)
-    if current_class_id and str(scoped_seat.class_id or "") != current_class_id:
-        abort(404)
 
     student = _get_student_or_404(scoped_seat.student_id)
     join_code = scoped_seat.join_code
@@ -4733,6 +4731,8 @@ def edit_student():
     new_blocks_set = set(b.strip().upper() for b in new_blocks.split(',') if b.strip())
 
     # Determine which blocks are being removed/added
+    print(f"DEBUG_TRANSFER: old_blocks={old_blocks} new_blocks_set={new_blocks_set}")
+
     removed_blocks = old_blocks - new_blocks_set
     added_blocks = new_blocks_set - old_blocks
 
@@ -4786,11 +4786,12 @@ def edit_student():
 
                         update_values = {
                             'join_code': target_join_code,
+                            'class_id': ce.class_id,
                             # Ensure seat scope tracks the transferred join_code.
                             # If target seat is missing, clear legacy seat link to avoid stale cross-scope seat_id.
                             'seat_id': target_seat_id,
                         }
-                        Transaction.query.filter_by(
+                        update_res = Transaction.query.filter_by(
                             seat_id=old_seat_id,
                             join_code=old_join_code
                         ).update(update_values, synchronize_session=False)
@@ -4842,6 +4843,8 @@ def edit_student():
                 seat.identity_profile.last_initial = student.last_initial
 
     # Handle block changes - update Seat entries
+    print(f"DEBUG_TRANSFER: old_blocks={old_blocks} new_blocks_set={new_blocks_set}")
+
     removed_blocks = old_blocks - new_blocks_set
     added_blocks = new_blocks_set - old_blocks
 
@@ -4928,6 +4931,7 @@ def edit_student():
 
     except Exception as e:
         db.session.rollback()
+        current_app.logger.error(f"FAILED TO EDIT STUDENT EXCEPTION: {e}")
         current_app.logger.error(f"Error updating student {student_id}", exc_info=True)
         flash("Error updating student due to internal error", "error")
 

@@ -4,7 +4,8 @@ import os
 
 from werkzeug.security import generate_password_hash
 
-from app.models import Admin, Student, TeacherBlock, RentSettings
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, Student, RentSettings
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 

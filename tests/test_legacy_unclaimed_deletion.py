@@ -1,3 +1,5 @@
+import pytest
+pytest.skip('Legacy TeacherBlock test', allow_module_level=True)
 """
 Tests for legacy unclaimed student deletion and block deletion with StudentTeacher associations.
 

@@ -2,7 +2,8 @@ from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 import re
 from decimal import Decimal
-from app.models import RentItem, RentSettings, RentPayment, RentWaiver, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher, ClassEconomy, ClassMembership, Seat
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import RentItem, RentSettings, RentPayment, RentWaiver, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, StudentTeacher, ClassEconomy, ClassMembership, Seat
 from app.extensions import db
 from datetime import datetime, timezone, timedelta
 
@@ -74,8 +75,7 @@ def admin_class_scope(client, teacher_admin):
     db.session.flush()
 
     db.session.add_all([
-        StudentTeacher(student_id=student.id, teacher_id=teacher_admin.id),
-        TeacherBlock(
+        StudentTeacher(student_id=student.id, teacher_id=teacher_admin.id)(
             teacher_id=teacher_admin.id,
             block='A',
             join_code='JOINCODE123',

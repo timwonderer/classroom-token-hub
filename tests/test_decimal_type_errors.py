@@ -15,8 +15,7 @@ import pytest
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from app.models import (
-    Admin, Student, Transaction, StudentBlock, TeacherBlock,
-    RentSettings, RentPayment, BankingSettings, _quantize_currency
+    Admin, Student, Transaction, StudentBlock, RentSettings, RentPayment, BankingSettings, _quantize_currency
 )
 from app.extensions import db
 

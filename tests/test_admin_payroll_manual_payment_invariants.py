@@ -3,7 +3,8 @@ from app.feats.base import InvariantViolation
 from app.extensions import db
 from tests.helpers.v2_fixtures import make_admin
 from tests.helpers.class_scope import create_class_scope
-from app.models import ClassFeature, TeacherBlock, Seat
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import ClassFeature, Seat
 
 
 def test_payroll_scope_missing_class_id_raises_invariant(client):

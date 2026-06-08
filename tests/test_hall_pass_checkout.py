@@ -8,8 +8,9 @@ without using the terminal, with proper limit enforcement.
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from datetime import datetime, timezone, timedelta
+from tests.helpers.mock_teacher_block import TeacherBlock
 from app.models import (
-    Student, Admin, HallPassLog, StudentTeacher, HallPassSettings, TeacherBlock, ClassEconomy, Seat,
+    Student, Admin, HallPassLog, StudentTeacher, HallPassSettings, ClassEconomy, Seat,
     AttendanceSession, SeatAttendanceState, User, UserRole
 )
 from app.extensions import db

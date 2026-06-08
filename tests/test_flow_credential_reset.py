@@ -10,7 +10,8 @@ from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from werkzeug.security import generate_password_hash
 from app import db
-from app.models import Admin, Student, TeacherBlock, StudentBlock, Transaction
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, Student, StudentBlock, Transaction
 from app.hash_utils import hash_username, hash_username_lookup, get_random_salt
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.claim_credentials import compute_primary_claim_hash

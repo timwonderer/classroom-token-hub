@@ -1,6 +1,7 @@
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
-from app.models import Admin, Student, TeacherBlock, Transaction
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, Student, Transaction
 from app import db
 from datetime import datetime, timezone
 

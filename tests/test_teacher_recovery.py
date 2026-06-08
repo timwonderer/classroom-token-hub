@@ -3,7 +3,8 @@ import pytest
 import pyotp
 import bcrypt
 from datetime import datetime, timezone, timedelta
-from app.models import Admin, Student, RecoveryRequest, StudentRecoveryCode, StudentTeacher, TeacherBlock, ClassEconomy, User, UserRole
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, Student, RecoveryRequest, StudentRecoveryCode, StudentTeacher, ClassEconomy, User, UserRole
 from app.extensions import db
 from app.hash_utils import hash_username_lookup, get_random_salt, hash_hmac
 

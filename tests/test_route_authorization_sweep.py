@@ -3,7 +3,8 @@ from datetime import datetime, timezone, timedelta
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 import pytest
 from app.extensions import db
-from app.models import Admin, ClassEconomy, ClassMembership, Student, Transaction, TransactionStatus, StoreItem, StudentItem, IssueCategory, Issue, TeacherBlock, Seat, ClassFeature
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, ClassEconomy, ClassMembership, Student, Transaction, TransactionStatus, StoreItem, StudentItem, IssueCategory, Issue, Seat, ClassFeature
 
 def _login_admin(client, admin_id):
     with client.session_transaction() as sess:
@@ -195,8 +196,7 @@ def test_file_claim_scoped_to_class(client):
             join_code="CLAIM_A",
             student_id=student.id,
             is_claimed=True,
-        ),
-        TeacherBlock(
+        )(
             teacher_id=admin.id,
             block="B",
             first_name="Claimer",

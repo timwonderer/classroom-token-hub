@@ -12,7 +12,6 @@ from app.models import (
     Seat,
     Student,
     StudentTeacher,
-    TeacherBlock,
     RentSettings,
     RentItem,
     RentPayment,

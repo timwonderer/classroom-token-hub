@@ -4,7 +4,8 @@ from io import StringIO
 
 from app import db
 from app.hash_utils import get_random_salt, hash_username
-from app.models import Admin, ClassMembership, Student, StudentTeacher, TeacherBlock, Transaction
+from tests.helpers.mock_teacher_block import TeacherBlock
+from app.models import Admin, ClassMembership, Student, StudentTeacher, Transaction
 from tests.helpers.class_scope import create_class_scope
 
 
