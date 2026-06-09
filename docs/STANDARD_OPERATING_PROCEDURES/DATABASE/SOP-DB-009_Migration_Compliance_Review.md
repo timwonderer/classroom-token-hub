@@ -17,7 +17,7 @@ Current v2 live-test preparations concerning the database state and testing runs
 Normative (SOP Tier). Subordinate to INV-CORE-000.
 
 ## IV. Dependencies
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `SOP-DB-011_Migration_Specifications.md`
 
 ## V. Executive Summary

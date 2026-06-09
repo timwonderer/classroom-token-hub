@@ -10,8 +10,8 @@
 > prohibited in the v2 identity model. No DOB is stored or used in any form for
 > either students or teachers in v2.
 > For the v2 target model, see:
-> - `docs/development/v2_restructure_doc/DOM-DOMAIN/DOM-IDEN-002_Student_Account_Recovery.md`
-> - `docs/development/v2_restructure_doc/DOM-DOMAIN/DOM-IDEN-004_Teacher_Account_Recovery.md`
+> - `docs/development/v2_restructure_doc/DOM-DOMAIN/DOM-IDEN-002_STUDENT_ACCOUNT_RECOVERY.md`
+> - `docs/development/v2_restructure_doc/DOM-DOMAIN/DOM-IDEN-004_TEACHER_ACCOUNT_RECOVERY.md`
 > This document is retained for historical reference only. Do not implement from it.
 
 ## I. Purpose
@@ -34,7 +34,7 @@ Applies to student credential recovery and identity management within a specific
 Normative (ARC Tier). Subordinate to INV-CORE-000.
 
 ## IV. Dependencies
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 
 ## V. Core Invariant (Non-Negotiable)
 

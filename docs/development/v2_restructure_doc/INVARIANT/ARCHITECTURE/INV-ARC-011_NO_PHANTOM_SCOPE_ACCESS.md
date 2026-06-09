@@ -1,4 +1,4 @@
-# INV-ARC-011 — No Phantom Scope Access
+# INV-ARC-011: No Phantom Scope Access
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -18,7 +18,7 @@ Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-000`.
 
 ## IV. Dependencies
 
-- `INV-ARC-004_Cross_Tenant_Isolation.md`
+- `INV-ARC-004_CROSS_TENANT_ISOLATION.md`
 
 ## V. Core Rule
 

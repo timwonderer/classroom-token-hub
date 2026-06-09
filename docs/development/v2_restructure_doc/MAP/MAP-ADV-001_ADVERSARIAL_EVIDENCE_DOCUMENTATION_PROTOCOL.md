@@ -1,8 +1,8 @@
-# V2 Adversarial Evidence Documentation Protocol
+# MAP-ADV-001: Adversarial Evidence Documentation Protocol
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| V2-ADV-EVID-001  | 1.0     | 2026-05-13     | N/A        | Informative     |
+| MAP-ADV-001      | 1.1     | 2026-06-08     | V2-ADV-EVID-001 v1.0 | Informative |
 
 ## I. Purpose
 
@@ -18,7 +18,7 @@ Informative. This document is subordinate to `SOP-DOC-000` and must not override
 
 ## IV. Dependencies
 
-- `docs/STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-000_Writing_Specification.md`
+- `docs/development/v2_restructure_doc/SOP-DOC-000_DOCUMENTATION_STANDARD.md`
 - `docs/development/tracking/V2_Full_compliance_migration_plan.md`
 - `scripts/adversarial/build_evidence_bundle.py`
 

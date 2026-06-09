@@ -1,4 +1,4 @@
-# INV-ARC-003 — Scoped Capability Evaluation
+# INV-ARC-003: Scoped Capability Evaluation
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -18,7 +18,7 @@ Foundational within `INV-ARC`. Derived from `INV-CORE-000`, `INV-CORE-001`, and 
 
 ## IV. Dependencies
 
-- `INV-ARC-001_Scoped_Request_Context.md`
+- `INV-ARC-001_SCOPED_REQUEST_CONTEXT.md`
 
 ## V. Core Rule
 

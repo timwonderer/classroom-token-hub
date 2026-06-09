@@ -1,4 +1,4 @@
-# Support Domain
+# DOM-SUP-001: Support Domain
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -35,9 +35,9 @@ This domain does not own:
 
 ## III. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
-- `DOM-CORE-000_Domain_Foundation.md`
-- `DOM-LED-001_Ledger_Domain.md` (resolution actions may reference transactions; Ledger owns those rows)
+- `INV-CORE-000_CORE_INVARIANTS.md`
+- `DOM-CORE-000_DOMAIN_FOUNDATION.md`
+- `DOM-LED-001_LEDGER_DOMAIN.md` (resolution actions may reference transactions; Ledger owns those rows)
 - `DOM-ANA-001_Analytics_Domain.md` (correlation packs read from observability tables at submission time)
 
 ## IV. Schema Authority Declaration

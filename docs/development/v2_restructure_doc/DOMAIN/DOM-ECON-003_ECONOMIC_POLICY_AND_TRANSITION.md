@@ -1,4 +1,4 @@
-# DOM-ECON-003 Economic Policy Governance & Transition
+# DOM-ECON-003: Economic Policy and Transition
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
@@ -82,7 +82,7 @@ Implementations MUST NOT treat `DOM-ECON-000` ratio bands and CWI formulas as su
 
 ## Related Documents
 
-- `DOM-ECON-000_ECONOMY_GOVERNANCE_FOUNDATION.md` — CWI, ratio bands, solvency rules (remains authoritative)
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-ECON-000_ECONOMY_GOVERNANCE_FOUNDATION.md` — CWI, ratio bands, solvency rules (remains authoritative)
 - `DOM-ECON-004_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE_SPECIFICATION.md` — pending policy visibility requirements
 - `FEAT-ECON-001_ECONOMIC_POLICY_TRANSITION_EXECUTION_AND_ACTIVATION_ORCHESTRATION.md` — FEAT-layer execution
 
@@ -437,3 +437,9 @@ This model establishes:
 - constitutional economic transparency.
 
 Economic governance therefore behaves as constitutional system law rather than mutable delayed configuration state.
+
+---
+
+## XVI. Amendment
+
+Revisions to this document must increment the version number, update the effective date, and remain consistent with foundational documentation standards.

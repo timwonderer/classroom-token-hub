@@ -1,4 +1,4 @@
-# MAP-IDEN-001: Account Lifecycle Overview (Informative)
+# DOM-IDEN-005: Account Lifecycle Map
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|

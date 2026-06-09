@@ -18,7 +18,7 @@ Normative (SOP Tier). Subordinate to `INV-CORE-000`.
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `SOP-DB-009_Migration_Compliance_Review.md`
 - `SOP-DEP-022_V2_Live_Test_Runbook.md`
 - `SOP-DEP-016_Rollback_Procedures.md`
@@ -138,7 +138,7 @@ Record:
 ## XII. Deferral Boundary
 
 - This runbook is limited to launch-critical transition steps and operator records.
-- Broader operational taxonomy changes, route-family cleanup, and post-port architecture alignment are deferred until after `docs/development/specs/V2_ADMIN_ROUTE_REFACTOR.md` and `docs/development/specs/V2_Class_Scope_Normalization_Target.md`.
+- Broader operational taxonomy changes, route-family cleanup, and post-port architecture alignment are deferred until after `../../development/specs/V2_ADMIN_ROUTE_REFACTOR.md` and `../../development/v2_restructure_doc/MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md`.
 
 ## XIII. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

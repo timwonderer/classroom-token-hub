@@ -14,7 +14,7 @@ This specification applies to support ticket behavior for Student, Teacher, and 
 Normative (Tier 2). This document derives from constitutional and domain constraints and must not conflict with Tier 0 or Tier 1 authority.
 
 ## IV. Dependencies
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `INV-CORE-001_Authority_Model.md`
 - `DOM-ECON-002_Economy_Specification.md`
 - `ARC-OPS-007_Database_Schema.md`

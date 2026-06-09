@@ -1,4 +1,4 @@
-# INV-ARC-008 — Identity Resolution and Seat Scope
+# INV-ARC-008: Identity Resolution and Seat Scope
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -21,9 +21,9 @@ Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-000`.
 
 ## IV. Dependencies
 
-- `INV-ARC-001_Scoped_Request_Context.md`
-- `INV-ARC-010_Explicit_Context_Switching.md`
-- `INV-ARC-011_No_Phantom_Scope_Access.md`
+- `INV-ARC-001_SCOPED_REQUEST_CONTEXT.md`
+- `INV-ARC-010_EXPLICIT_CONTEXT_SWITCHING.md`
+- `INV-ARC-011_NO_PHANTOM_SCOPE_ACCESS.md`
 
 ## V. Core Rule
 

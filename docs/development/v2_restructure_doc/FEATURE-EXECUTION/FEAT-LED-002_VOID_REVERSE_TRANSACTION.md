@@ -1,4 +1,4 @@
-# FEAT-LED-002: Void/Reverse Transaction (Normative)
+# FEAT-LED-002: Void Reverse Transaction
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |

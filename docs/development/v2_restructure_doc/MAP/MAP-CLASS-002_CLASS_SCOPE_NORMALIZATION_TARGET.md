@@ -1,15 +1,37 @@
-# ARC-OPS-014 Class Scope Normalization Target
+# MAP-CLASS-002: Class Scope Normalization Target
 
-**Status:** Deferred post-port architecture target  
-**Last Updated:** 2026-03-30
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| MAP-CLASS-002    | 1.0     | 2026-06-08     | ARC-OPS-014 | Informative |
 
-## Purpose
+---
 
-This document records the intended long-term class scoping model for the application so
-current port work does not deepen patterns that will later need to be removed.
+## I. Purpose
 
-This is **not** an active implementation plan for the current port. It is a target-state
-architecture note and a set of guardrails for ongoing work.
+This document records the intended long-term class scoping model for the application so current port work does not deepen patterns that will later need to be removed.
+
+This is **not** an active implementation plan for the current port. It is a target-state architecture note and a set of guardrails for ongoing work.
+
+---
+
+## II. Scope
+
+This target model applies to all class-scoped and user-associated database tables, session contexts, API parameters, and query builder logic.
+
+---
+
+## III. Authority Level
+
+Informative. Subordinate to `SOP-DOC-000` and all foundational/constitutional rules.
+
+---
+
+## IV. Dependencies
+
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
+
+---
 
 ## Current Reality
 
@@ -157,5 +179,10 @@ This is an interim runtime invariant, not the final target-state architecture. T
 
 ## Decision
 
-This architecture target is accepted, but implementation is deferred until the port is
-complete and can be handled as its own project.
+This architecture target is accepted, but implementation is deferred until the port is complete and can be handled as its own project.
+
+---
+
+## VI. Amendment
+
+Revisions to this document must increment the version number, update the effective date, and remain consistent with foundational documentation standards.

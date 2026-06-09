@@ -266,7 +266,7 @@ Keep active docs aligned with v2 while other threads are shipping code.
 
 - `README.md`
 - `docs/LOGS/AUDITS/LOG-ARC-049_V2_Multitenancy_Go_No_Go_Checklist.md`
-- `docs/STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_Documentation_Index.md`
+- `docs/STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_DOCUMENTATION_INDEX.md`
 - `docs/development/tracking/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`
 - `docs/development/tracking/V2_PARALLEL_WORKSTREAMS.md`
 

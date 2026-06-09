@@ -1,4 +1,4 @@
-# Class Configuration Domain
+# DOM-CLASS-001: Class Configuration Domain
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -10,9 +10,9 @@ Tier 1 — Constitutional. This document defines structural enforcement mechanis
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
-- `DOM-CORE-000_Domain_Foundation.md`
-- `DOM-IDEN-001_Identity_Class_Binding_Domain.md` (class identity anchor `classes`)
+- `INV-CORE-000_CORE_INVARIANTS.md`
+- `DOM-CORE-000_DOMAIN_FOUNDATION.md`
+- `DOM-IDEN-001_IDENTITY_CLASS_BINDING_DOMAIN.md` (class identity anchor `classes`)
 
 ## IV.A Terminology Formalization
 

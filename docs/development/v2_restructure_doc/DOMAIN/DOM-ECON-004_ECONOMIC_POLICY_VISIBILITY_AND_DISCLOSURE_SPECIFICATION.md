@@ -1,4 +1,4 @@
-# DOM-ECON-004 — Economic Policy Visibility & Disclosure Specification
+# DOM-ECON-004: Economic Policy Visibility and Disclosure Specification
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|

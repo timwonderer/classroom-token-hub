@@ -23,7 +23,7 @@ Out of scope:
 Normative (FEAT Tier). Subordinate to INV-CORE-000 and FEAT-CORE-000.
 
 ## IV. Dependencies
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `FEAT-CORE-000_Feature_Foundation.md`
 
 ## V. Canonical Data Model

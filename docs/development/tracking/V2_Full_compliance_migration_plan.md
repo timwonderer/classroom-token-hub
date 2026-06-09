@@ -120,25 +120,25 @@ This file is the single active tracker for v2 migration execution. All prior tra
 
 ### Build Specs Index (Authoritative Specs in `docs/development/specs/`)
 
-- `V2_ADMIN_ROUTE_REFACTOR.md`
-- `V2_AUTHORITY_EXTRACTION_PLAN.md`
-- `V2_BANKING_LEDGER_SETTLEMENT_PLAN.md`
-- `V2_BALANCE_SCOPE_AND_SETTLEMENT_CONTRACT.md`
-- `V2_CANONICAL_AUTH_RUNTIME_CUTOVER.md`
-- `V2_CAPABILITY-BASED_ARCHITECTURE_REBUILD.md`
-- `V2_CLASS_ID_INVARIANT_BACKLOG.md`
-- `V2_Class_Scope_Normalization_Target.md`
-- `DOM-ECON-000_ECONOMY_GOVERNANCE_FOUNDATION.md`
-- `V2_DOCS_PLATFORM_SPLIT.md`
-- `V2_IDENTITY_AND_OWNERSHIP_MODEL.md`
-- `V2_SESSION_MUTATION_SAFETY.md`
-- `V2_STUDENT_BLOCKS_REDESIGN_NOTE.md`
-- `V2_STUDENT_IDENTITY_ARCHITECTURE.md`
-- `V2_TEACHER_IDENTITY_ARCHITECTURE.md`
-- `V2_TEST_CREATION_PROTOCOL.md`
-- `V2_TESTING_PROTOCOL_AND_GATES.md`
-- `V2_Temporal_Architecture_Rebuild_Plan.md`
-- `V2_WAVE_3_IDENTITY_DOMAIN_RISK_AND_DEPENDENCY.md`
+- [V2_ADMIN_ROUTE_REFACTOR.md](../specs/V2_ADMIN_ROUTE_REFACTOR.md)
+- [V2_AUTHORITY_EXTRACTION_PLAN.md](../specs/V2_AUTHORITY_EXTRACTION_PLAN.md)
+- [V2_BANKING_LEDGER_SETTLEMENT_PLAN.md](../specs/V2_BANKING_LEDGER_SETTLEMENT_PLAN.md)
+- [V2_BALANCE_SCOPE_AND_SETTLEMENT_CONTRACT.md](../specs/V2_BALANCE_SCOPE_AND_SETTLEMENT_CONTRACT.md)
+- [V2_CANONICAL_AUTH_RUNTIME_CUTOVER.md](../specs/V2_CANONICAL_AUTH_RUNTIME_CUTOVER.md)
+- [V2_CAPABILITY-BASED_ARCHITECTURE_REBUILD.md](../specs/V2_CAPABILITY-BASED_ARCHITECTURE_REBUILD.md)
+- [V2_CLASS_ID_INVARIANT_BACKLOG.md](../specs/V2_CLASS_ID_INVARIANT_BACKLOG.md)
+- [MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md](../v2_restructure_doc/MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md)
+- [DOM-ECON-000_ECONOMY_GOVERNANCE_FOUNDATION.md](../v2_restructure_doc/DOMAIN/DOM-ECON-000_ECONOMY_GOVERNANCE_FOUNDATION.md)
+- [V2_DOCS_PLATFORM_SPLIT.md](../specs/V2_DOCS_PLATFORM_SPLIT.md)
+- [INV-ARC-019_IDENTITY_AND_OWNERSHIP_MODEL.md](../v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-019_IDENTITY_AND_OWNERSHIP_MODEL.md)
+- [V2_SESSION_MUTATION_SAFETY.md](../specs/V2_SESSION_MUTATION_SAFETY.md)
+- [V2_STUDENT_BLOCKS_REDESIGN_NOTE.md](../specs/V2_STUDENT_BLOCKS_REDESIGN_NOTE.md)
+- [V2_STUDENT_IDENTITY_ARCHITECTURE.md](../specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md)
+- [V2_TEACHER_IDENTITY_ARCHITECTURE.md](../specs/V2_TEACHER_IDENTITY_ARCHITECTURE.md)
+- [INV-ARC-018_TEST_CREATION_PROTOCOL.md](../v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-018_TEST_CREATION_PROTOCOL.md)
+- [INV-ARC-017_TESTING_PROTOCOL_AND_GATES.md](../v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-017_TESTING_PROTOCOL_AND_GATES.md)
+- [V2_Temporal_Architecture_Rebuild_Plan.md](../specs/V2_Temporal_Architecture_Rebuild_Plan.md)
+- [V2_WAVE_3_IDENTITY_DOMAIN_RISK_AND_DEPENDENCY.md](../specs/V2_WAVE_3_IDENTITY_DOMAIN_RISK_AND_DEPENDENCY.md)
 
 ---
 
@@ -1811,10 +1811,10 @@ Focused validation:
 
 - Confirmed existing v2 spec coverage for touched features:
   - `V2_BANKING_LEDGER_SETTLEMENT_PLAN.md`
-  - `DOM-CLASS-001_Class_Configuration_Domain.md`
-  - `FEAT-LED-001_Post_Ledger_Transaction.md`
-  - `FEAT-OBLI-001_Assess_Obligation.md`
-  - `FEAT-STOR-001_Store_Purchase.md`
+  - `DOM-CLASS-001_CLASS_CONFIGURATION_DOMAIN.md`
+  - `FEAT-LED-001_POST_LEDGER_TRANSACTION.md`
+  - `FEAT-OBLI-001_ASSESS_OBLIGATION.md`
+  - `FEAT-STOR-001_STORE_PURCHASE.md`
 - Added missing focused implementation contract doc for the exact touched helper+settlement boundary:
   - `V2_BALANCE_SCOPE_AND_SETTLEMENT_CONTRACT.md`
   - documents current runtime logic and explicit risk against v2 rules where transitional behavior remains
@@ -2188,7 +2188,7 @@ Constraint:
   - Scorecard now reports runtime battery status/violation counts
 - Established sanitized evidence documentation protocol:
   - `scripts/adversarial/build_evidence_bundle.py` now emits commit-safe summaries under `artifacts/adversarial/sanitized/<run_id>/`
-  - protocol spec: `docs/development/specs/V2_ADVERSARIAL_EVIDENCE_DOCUMENTATION_PROTOCOL.md`
+  - protocol spec: `docs/development/v2_restructure_doc/MAP/MAP-ADV-001_ADVERSARIAL_EVIDENCE_DOCUMENTATION_PROTOCOL.md`
   - intent: always document results without committing raw engagement payload files
 - Fixed adversarial replay reliability issues discovered during rerun:
   - `scripts/adversarial/inject_impossible_state.py` now bootstraps a compliant `balance_cache` row when the seed topology has none, then performs class mismatch injection
@@ -2404,10 +2404,10 @@ grep -r "\.student_id" app/routes/            # 0 results (outside identity_serv
 
 | Category | Key Files |
 |---|---|
-| Canonical schema spec | `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-002_Canonical_Schema_Definition.md` |
-| Domain authority | `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-001_Domain_Authority_Summary.md` |
-| FEAT constitution | `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_Feature_Execution_Constitutional_Directive.md` |
-| Core invariants | `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_Core_Invariants.md` |
+| Canonical schema spec | `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION.md` |
+| Domain authority | `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-001_DOMAIN_AUTHORITY_SUMMARY.md` |
+| FEAT constitution | `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md` |
+| Core invariants | `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md` |
 | Archived tracker history | `docs/development/archive/tracking/` |
 | Active build specs | `docs/development/specs/` |
 | Migration template | `migrations/migration_template.py.mako` |

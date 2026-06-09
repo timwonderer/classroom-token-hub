@@ -1,8 +1,8 @@
-# V2 Test Creation Protocol
+# INV-ARC-018: Test Creation Protocol
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| V2-TEST-001      | 1.0     | 2026-06-07     | N/A        | Constitutional  |
+| INV-ARC-018      | 1.1     | 2026-06-08     | V2-TEST-001 v1.0 | Constitutional |
 
 ## I. Purpose
 
@@ -29,15 +29,15 @@ Constitutional. This protocol derives from `INV-CORE-000` and `INV-CORE-001` and
 
 ## IV. Dependencies
 
-- `docs/development/specs/V2_TESTING_PROTOCOL_AND_GATES.md`
-- `docs/STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-000_Writing_Specification.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-017_TESTING_PROTOCOL_AND_GATES.md`
+- `docs/development/v2_restructure_doc/SOP-DOC-000_DOCUMENTATION_STANDARD.md`
 - `docs/development/tracking/V2_Full_compliance_migration_plan.md`
 - `docs/development/tracking/V2_REBUILD_VALIDATION_REPORT.md`
-- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_Core_Invariants.md`
-- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_Capability_Based_Architecture_and_Authority_Model.md`
-- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-007_GET_Must_Be_Pure.md`
-- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-015_Temporal_Model_and_Boundary_Enforcement.md`
-- `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_Feature_Execution_Constitutional_Directive.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-007_GET_MUST_BE_PURE.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-015_TEMPORAL_MODEL_AND_BOUNDARY_ENFORCEMENT.md`
+- `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
 
 ## V. Test Creation Principles
 

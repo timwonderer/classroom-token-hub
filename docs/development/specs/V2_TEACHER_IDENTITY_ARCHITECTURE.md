@@ -8,10 +8,10 @@ This is a pure v2 architecture document. It is not a migration tracker, it does 
 
 ## Constitutional References
 
-- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_Core_Invariants.md`
-- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-001_Scoped_Request_Context.md`
-- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-013_Membership_by_Existence.md`
-- `docs/development/v2_restructure_doc/DOMAIN/DOM-IDEN-001_Identity_Class_Binding_Domain.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-001_SCOPED_REQUEST_CONTEXT.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-013_MEMBERSHIP_BY_EXISTENCE.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-IDEN-001_IDENTITY_CLASS_BINDING_DOMAIN.md`
 - `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
 
 ## Core Design Principle

@@ -8,7 +8,7 @@
 > **SUPERSEDED.** This document describes the v1 teacher identity model.
 > For the v2 target model, see:
 > `docs/development/specs/V2_TEACHER_IDENTITY_ARCHITECTURE.md`
-> and `docs/development/v2_restructure_doc/DOM-DOMAIN/DOM-IDEN-001_Identity_Class_Binding_Domain.md`.
+> and `docs/development/v2_restructure_doc/DOM-DOMAIN/DOM-IDEN-001_IDENTITY_CLASS_BINDING_DOMAIN.md`.
 > This document is retained for historical reference only.
 
 ## I. Purpose
@@ -21,7 +21,7 @@ Applies to identity models, login properties, and public display identifiers for
 Constitutional (ARC Tier). Subordinate to INV-CORE-000.
 
 ## IV. Dependencies
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 
 ## V. Canonical Identity Fields
 

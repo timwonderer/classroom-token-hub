@@ -1,4 +1,4 @@
-# FEAT-CORE-000: Feature Execution Constitutional Directive (Normative)
+# FEAT-CORE-000: Feature Execution Constitutional Directive
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |

@@ -18,9 +18,9 @@ Constitutional.
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `INV-CORE-001_Authority_Model.md`
-- `DOM-CORE-000_Domain_Foundation.md`
+- `DOM-CORE-000_DOMAIN_FOUNDATION.md`
 - `ARC-OPS-016_Schema_Ownership_Index.md`
 
 ## V. Core Cross-Domain References

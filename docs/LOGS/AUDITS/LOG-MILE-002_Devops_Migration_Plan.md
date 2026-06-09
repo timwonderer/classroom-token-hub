@@ -382,7 +382,7 @@ Missing documentation:
 
 ```
 docs/
-├── INV-CORE-000_Core_Invariants.md          (foundational)
+├── INV-CORE-000_CORE_INVARIANTS.md          (foundational)
 ├── ARC-OPS-000_Operational_Constraints.md  (new)
 ├── ARC-OPS-001_*.md
 ├── ARC-OPS-002_*.md

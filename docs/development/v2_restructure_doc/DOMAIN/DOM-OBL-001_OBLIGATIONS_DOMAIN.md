@@ -1,4 +1,4 @@
-# Obligations Domain
+# DOM-OBL-001: Obligations Domain
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -30,9 +30,9 @@ Tier 1 — Constitutional. This document defines structural enforcement mechanis
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
-- `DOM-CORE-000_Domain_Foundation.md`
-- `DOM-CLASS-001_Class_Configuration_Domain.md` (Policy Source)
+- `INV-CORE-000_CORE_INVARIANTS.md`
+- `DOM-CORE-000_DOMAIN_FOUNDATION.md`
+- `DOM-CLASS-001_CLASS_CONFIGURATION_DOMAIN.md` (Policy Source)
 - `DOM-ECON-003_ECONOMIC_POLICY_AND_TRANSITION.md` (Operational boundary activation protocol)
 
 ## V. Schema Authority Declaration
@@ -45,7 +45,7 @@ This domain is the sole schema and mutation authority over:
 - `obligation_reversal` (corrections, nullifications)
 - `entitlement_events` (grant/consumption stream)
 
-`DOM-CORE-002_Canonical_Schema_Definition.md` is authoritative for the exact
+`DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION.md` is authoritative for the exact
 44-table target. Insurance enrollment and claim state must be represented
 within the canonical assessment/lifecycle/event hierarchy; they do not add
 separate final-schema tables.

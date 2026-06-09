@@ -1,4 +1,4 @@
-# MAP-CORE-001: Domain-to-FEAT Capability Map (Informative)
+# MAP-CORE-001: Domain to FEAT Capability Map
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|

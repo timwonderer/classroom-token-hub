@@ -14,7 +14,7 @@ Applies to the `RentItem` and `StudentItem` mapping models, the `v1/purchase` an
 Constitutional (DOM Tier). Subordinate to INV-CORE-000 and FEAT-RENT-002.
 
 ## IV. Dependencies
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `FEAT-RENT-002_Rent_Item_Types.md`
 - `DOM-ECON-003_Ledger_Integrity_and_Determinism.md`
 

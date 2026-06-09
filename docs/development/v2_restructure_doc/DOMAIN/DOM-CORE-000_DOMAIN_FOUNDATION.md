@@ -1,4 +1,4 @@
-# Domain Architecture Foundation
+# DOM-CORE-000: Domain Foundation
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|

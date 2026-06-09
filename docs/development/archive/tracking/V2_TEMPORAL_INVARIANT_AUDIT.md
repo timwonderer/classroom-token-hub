@@ -5,7 +5,7 @@
 | Audit Date | 2026-04-21 |
 | Last Reviewed | 2026-04-25 |
 | Specification | INV-ARC-015 v1.0 |
-| Authority | `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-015_Temporal_Model_and_Boundary_Enforcement.md` |
+| Authority | `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-015_TEMPORAL_MODEL_AND_BOUNDARY_ENFORCEMENT.md` |
 | Status | **Individual violations remediated** — bad patterns removed; target `TemporalContext` architecture (per `V2_Temporal_Architecture_Rebuild_Plan.md`) is NOT yet implemented |
 
 ## 2026-04-25 Progress Note

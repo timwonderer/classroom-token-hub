@@ -1,4 +1,4 @@
-# Core Invariants of Classroom Token Hub
+# INV-CORE-000: Core Invariants
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
 |INV-CORE-000| 1.0 | 2026-4-12 | 1.0 |Foundational|
@@ -133,4 +133,4 @@ Class and membership are existence-based, not lifecycle-based. A `class_id` eith
 V2 transition rules for identity resolution, `student_id` quarantine, and seat-scoped
 participant URL enforcement are execution-layer invariants, not `INV-CORE` rules. They
 are defined in
-`docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-008_Identity_Resolution_and_Seat_Scope.md`.
+`docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-008_IDENTITY_RESOLUTION_AND_SEAT_SCOPE.md`.

@@ -19,8 +19,8 @@ Constitutional (DOM Tier). Subordinate to INV-CORE-000.
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
-- `DOM-CORE-000_Domain_Foundation.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
+- `DOM-CORE-000_DOMAIN_FOUNDATION.md`
 
 ## V. Core Reference Variable
 

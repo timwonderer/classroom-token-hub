@@ -5,11 +5,11 @@ This report reconstructs project history from two evidence sets:
 
 1. `migrations/versions/*.py` (revision graph, `Create Date`, `down_revision`, and `upgrade()` behavior).
 2. V2 restructuring authority documents from `origin/codex/v2.0`, especially:
-   - `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-000_Domain_Foundation.md`
-   - `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-001_Domain_Authority_Summary.md`
-   - `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-002_Canonical_Schema_Definition.md`
-   - `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_Feature_Execution_Constitutional_Directive.md`
-   - `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_Core_Invariants.md`
+   - `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-000_DOMAIN_FOUNDATION.md`
+   - `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-001_DOMAIN_AUTHORITY_SUMMARY.md`
+   - `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION.md`
+   - `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
+   - `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
    - `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-000_EXECUTION_MODEL.md`
 
 No application code, tests, or external narrative sources were used to build this history.

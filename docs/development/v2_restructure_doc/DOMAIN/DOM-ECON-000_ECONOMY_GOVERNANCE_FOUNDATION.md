@@ -1,8 +1,8 @@
-# DOM-ECON-000 — ECONOMY GOVERNANCE FOUNDATION
+# DOM-ECON-000: Economy Governance Foundation
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| DOM-ECON-000 | 1.0 | TBD | None | Constitutional |
+| DOM-ECON-000 | 1.1 | 2026-06-08 | 1.0 | Constitutional |
 
 ---
 

@@ -1,4 +1,4 @@
-# FEAT-OPS-001: Audit Protected Emission (Normative)
+# FEAT-OPS-001: Audit Protected Emission
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |:---|:---|:---|:---|:---|
@@ -26,9 +26,9 @@ Normative. Subordinate to `INV-ARC-016`, `DOM-OPS-002`, and `FEAT-CORE-000`.
 
 ## IV. Dependencies
 
-- `INV-ARC-016_Lawful_Existence_and_Audit_Lineage.md`
-- `DOM-OPS-002_Audit_Lineage_Integrity.md`
-- `FEAT-CORE-000_Feature_Execution_Constitutional_Directive.md`
+- `INV-ARC-016_LAWFUL_EXISTENCE_AND_AUDIT_LINEAGE.md`
+- `DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md`
+- `FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
 
 ---
 

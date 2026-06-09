@@ -1,4 +1,4 @@
-# INV-ARC-012 — Hard Deletion Enforcement
+# INV-ARC-012: Hard Deletion Enforcement
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -18,7 +18,7 @@ Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-000`.
 
 ## IV. Dependencies
 
-- `INV-ARC-011_No_Phantom_Scope_Access.md`
+- `INV-ARC-011_NO_PHANTOM_SCOPE_ACCESS.md`
 
 ## V. Core Rule
 

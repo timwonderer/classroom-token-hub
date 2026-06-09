@@ -21,7 +21,7 @@ Normative (FEAT Tier). Subordinate to INV-CORE-000 and DOM-ECON-002.
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `DOM-ECON-002_Economy_Specification.md`
 
 ## V. Core Purpose (Non-Negotiable)

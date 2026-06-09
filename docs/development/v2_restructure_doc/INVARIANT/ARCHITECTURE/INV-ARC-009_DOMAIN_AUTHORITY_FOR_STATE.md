@@ -1,4 +1,4 @@
-# INV-ARC-009 — Domain Authority for State
+# INV-ARC-009: Domain Authority for State
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -18,7 +18,7 @@ Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-000`.
 
 ## IV. Dependencies
 
-- `INV-ARC-002_No_Implicit_Global_Access.md`
+- `INV-ARC-002_NO_IMPLICIT_GLOBAL_ACCESS.md`
 
 ## V. Core Rule
 

@@ -14,7 +14,7 @@ Applies to the `Transaction` model, the `balance_service.py`, and all routes/job
 Constitutional (DOM Tier). Subordinate to INV-CORE-000 (Section 3: Deterministic and Traceable Financial Logic).
 
 ## IV. Dependencies
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `ARC-OPS-013_Money_Handling.md`
 
 ## V. Mathematical Foundation: Integer Cents

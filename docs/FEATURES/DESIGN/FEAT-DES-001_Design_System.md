@@ -18,7 +18,7 @@ Normative (FEAT Tier). Subordinate to INV-CORE-000.
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 
 ## V. Philosophy
 

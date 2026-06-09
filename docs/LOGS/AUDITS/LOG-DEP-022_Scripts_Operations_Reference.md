@@ -302,7 +302,7 @@ When adding new scripts to this directory:
 
 - **[Deployment SOPs](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)** - Operational procedures using these scripts
 - **[Contributing Guide](../../../CONTRIBUTING.md)** - Development workflow and git hooks
-- **[Documentation Index](../../STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_Documentation_Index.md)** - Canonical documentation map
+- **[Documentation Index](../../development/v2_restructure_doc/SOP-DOC-002_DOCUMENTATION_INDEX.md)** - Canonical documentation map
 
 ---
 

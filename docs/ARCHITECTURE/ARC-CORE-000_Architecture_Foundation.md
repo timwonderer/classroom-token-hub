@@ -23,11 +23,11 @@ Examples of cross-domain architecture:
 
 ## III. Authority Level
 
-Constitutional (Tier 1). No other ARCHITECTURE document may override the rules defined herein, and other namespaces must conform to ARC. Subordinate only to `INV-CORE-000_Core_Invariants.md`.
+Constitutional (Tier 1). No other ARCHITECTURE document may override the rules defined herein, and other namespaces must conform to ARC. Subordinate only to `INV-CORE-000_CORE_INVARIANTS.md`.
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 
 ## V. Subdivisions
 

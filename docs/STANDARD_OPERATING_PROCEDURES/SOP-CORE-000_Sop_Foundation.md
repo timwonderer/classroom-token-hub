@@ -22,7 +22,7 @@ Constitutional (Tier 1) within the context of human procedure, but explicitly su
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 
 ## V. Subdivisions
 

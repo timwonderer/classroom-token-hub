@@ -14,7 +14,7 @@ This architecture applies only to `claim_type = 'transaction_monetary'`. It does
 Normative (ARC Tier). Subordinate to INV-CORE-000.
 
 ## IV. Dependencies
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `ARC-OPS-013_Money_Handling.md`
 
 ## V. Definitions

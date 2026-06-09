@@ -1,4 +1,4 @@
-# INV-ARC-016 — Lawful Existence and Audit Lineage
+# INV-ARC-016: Lawful Existence and Audit Lineage
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -26,10 +26,10 @@ Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-006`.
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
-- `INV-ARC-006_Command_Boundary_for_Mutation.md`
-- `INV-ARC-007_GET_Must_Be_Pure.md`
-- `DOM-OPS-002_Audit_Lineage_Integrity.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
+- `INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md`
+- `INV-ARC-007_GET_MUST_BE_PURE.md`
+- `DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md`
 - `DOM-ECON-003_ECONOMIC_POLICY_AND_TRANSITION.md`
 
 ## V. Core Rule

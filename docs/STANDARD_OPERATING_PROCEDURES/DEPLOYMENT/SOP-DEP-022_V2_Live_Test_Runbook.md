@@ -14,7 +14,7 @@ All testing deployments from the current branch running against v2 operational d
 Normative (SOP Tier). Subordinate to INV-CORE-000.
 
 ## IV. Dependencies
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `SOP-DB-009_Migration_Compliance_Review.md`
 - `SOP-DB-011_Migration_Specifications.md`
 
@@ -197,7 +197,7 @@ Capture and store:
 ## XIV. Deferral Boundary
 
 - This runbook intentionally avoids a broader route-taxonomy rewrite or operations-document restructure.
-- Any deeper cleanup driven by route renames, class-scope normalization, or cross-SOP reorganization is deferred until after `docs/development/specs/V2_ADMIN_ROUTE_REFACTOR.md` and `docs/development/specs/V2_Class_Scope_Normalization_Target.md`.
+- Any deeper cleanup driven by route renames, class-scope normalization, or cross-SOP reorganization is deferred until after `../../development/specs/V2_ADMIN_ROUTE_REFACTOR.md` and `../../development/v2_restructure_doc/MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md`.
 
 ## XV. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.

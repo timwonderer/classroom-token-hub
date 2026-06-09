@@ -14,7 +14,7 @@ All GitHub Actions deployment workflows accessing production resources via SSH.
 Normative (SEC-CONT Tier). Subordinate to INV-CORE-000.
 
 ## IV. Dependencies
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `SEC-CORE-000_Security_Foundation.md`
 
 ## V. Quick Start (5 Minutes)

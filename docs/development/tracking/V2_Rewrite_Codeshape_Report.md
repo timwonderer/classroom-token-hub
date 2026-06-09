@@ -72,7 +72,7 @@ Domain authority docs in:
 
 Execution contract in:
 
-- `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_Feature_Execution_Constitutional_Directive.md`
+- `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
 
 FEATs are the only legal mutation path, and must:
 
@@ -150,7 +150,7 @@ Canonical target (from docs):
 Authoritative references:
 
 - `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
-- `docs/development/v2_restructure_doc/DOMAIN/DOM-IDEN-001_Identity_Class_Binding_Domain.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-IDEN-001_IDENTITY_CLASS_BINDING_DOMAIN.md`
 
 Observed transitional runtime:
 
@@ -213,7 +213,7 @@ Key domain-design justifications:
 
 Docs:
 
-- `docs/development/v2_restructure_doc/DOMAIN/DOM-LED-001_Ledger_Domain.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-LED-001_LEDGER_DOMAIN.md`
 - `docs/development/specs/V2_BANKING_LEDGER_SETTLEMENT_PLAN.md`
 
 Grounded current design direction:
@@ -290,22 +290,22 @@ The plan explicitly states this is a **clean break** path, with staged retiremen
 
 ### Constitutional documents
 
-- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_Core_Invariants.md`
-- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_Capability_Based_Architecture_and_Authority_Model.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 - `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-000_EXECUTION_MODEL.md`
-- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-007_GET_Must_Be_Pure.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-007_GET_MUST_BE_PURE.md`
 
 ### Domain architecture
 
-- `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-001_Domain_Authority_Summary.md`
-- `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-002_Canonical_Schema_Definition.md`
-- `docs/development/v2_restructure_doc/DOMAIN/DOM-IDEN-001_Identity_Class_Binding_Domain.md`
-- `docs/development/v2_restructure_doc/DOMAIN/DOM-LED-001_Ledger_Domain.md`
-- `docs/development/v2_restructure_doc/DOMAIN/DOM-OBL-001_Obligations_Domain.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-001_DOMAIN_AUTHORITY_SUMMARY.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-IDEN-001_IDENTITY_CLASS_BINDING_DOMAIN.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-LED-001_LEDGER_DOMAIN.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-OBL-001_OBLIGATIONS_DOMAIN.md`
 
 ### FEAT contract
 
-- `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_Feature_Execution_Constitutional_Directive.md`
+- `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
 
 ### Build specs and transition plans
 

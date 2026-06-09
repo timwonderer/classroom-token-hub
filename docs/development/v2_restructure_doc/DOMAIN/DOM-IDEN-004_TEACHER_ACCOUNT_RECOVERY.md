@@ -1,4 +1,4 @@
-# DOM-IDEN-004 Teacher Account Recovery
+# DOM-IDEN-004: Teacher Account Recovery
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -12,16 +12,16 @@ Teacher recovery is **self-serve and student-assisted**. The teacher proves iden
 through their roster. No sysadmin involvement is required. No DOB or personal contact
 information is used in the target model.
 
-For student account recovery, see `DOM-IDEN-002_Student_Account_Recovery.md`.
+For student account recovery, see `DOM-IDEN-002_STUDENT_ACCOUNT_RECOVERY.md`.
 
 Supersedes `docs/LOGS/AUDITS/LOG-ARC-011_Recovery_Evaluation.md` (informative).
 
 ## II. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
-- `DOM-CORE-000_Domain_Foundation.md`
-- `DOM-IDEN-001_Identity_Class_Binding_Domain.md`
-- `DOM-IDEN-003_Teacher_Identity_Architecture.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
+- `DOM-CORE-000_DOMAIN_FOUNDATION.md`
+- `DOM-IDEN-001_IDENTITY_CLASS_BINDING_DOMAIN.md`
+- `DOM-IDEN-003_TEACHER_IDENTITY_ARCHITECTURE.md`
 
 ---
 
@@ -93,7 +93,7 @@ Applies to:
 - Teacher credential recovery (self-serve, student-assisted)
 
 Does not apply to:
-- Student recovery — see `DOM-IDEN-002_Student_Account_Recovery.md`
+- Student recovery — see `DOM-IDEN-002_STUDENT_ACCOUNT_RECOVERY.md`
 - System admin recovery (separate tier)
 
 ---
@@ -299,5 +299,5 @@ The teacher recovery system must NOT:
 Revisions require version increment, effective-date update, and continued consistency
 with `INV-CORE-000` and:
 
-- `DOM-IDEN-001_Identity_Class_Binding_Domain.md`
-- `DOM-IDEN-003_Teacher_Identity_Architecture.md`
+- `DOM-IDEN-001_IDENTITY_CLASS_BINDING_DOMAIN.md`
+- `DOM-IDEN-003_TEACHER_IDENTITY_ARCHITECTURE.md`

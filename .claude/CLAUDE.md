@@ -574,9 +574,9 @@ class_id = session.get("current_class_id")
 ## Questions or Clarifications?
 
 When uncertain about:
-- **v2 architecture decisions** → `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-001_Domain_Authority_Summary.md`
-- **FEAT execution rules** → `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_Feature_Execution_Constitutional_Directive.md`
-- **Core invariants** → `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_Core_Invariants.md`
+- **v2 architecture decisions** → `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-001_DOMAIN_AUTHORITY_SUMMARY.md`
+- **FEAT execution rules** → `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
+- **Core invariants** → `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
 - **Multi-tenancy** → `.claude/rules/multi-tenancy.md` and `docs/security/MULTI_TENANCY_AUDIT.md`
 - **Database design** → `docs/technical-reference/database_schema.md`
 - **Deployment** → `docs/operations/Deployment_Guide.md`

@@ -1,4 +1,4 @@
-# INV-ARC-013 — Membership by Existence
+# INV-ARC-013: Membership by Existence
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -18,7 +18,7 @@ Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-000`.
 
 ## IV. Dependencies
 
-- `INV-ARC-001_Scoped_Request_Context.md`
+- `INV-ARC-001_SCOPED_REQUEST_CONTEXT.md`
 
 ## V. Core Rule
 

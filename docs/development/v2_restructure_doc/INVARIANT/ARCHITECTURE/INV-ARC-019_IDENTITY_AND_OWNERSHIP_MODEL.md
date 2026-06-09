@@ -1,9 +1,37 @@
-# CTH Identity and Ownership Model
+# INV-ARC-019: Identity and Ownership Model
 
-**Status:** Normative v2 target  
-**Effective Date:** 2026-06-05
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| INV-ARC-019      | 1.0     | 2026-06-08     | None | Constitutional |
 
-## Core Principle
+---
+
+## I. Purpose
+
+This document defines the canonical identity and ownership boundaries for Classroom Token Hub (CTH) V2. It ensures a clear separation between global authentication principals, class-local operational actors, isolation boundaries, public reference keys, and presentation profiles.
+
+---
+
+## II. Scope
+
+This model applies system-wide to database schema design, session management, routing logic, and capability validation across all domains and feature executors.
+
+---
+
+## III. Authority Level
+
+Constitutional (Tier 1). This protocol derives from `INV-CORE-000` and `INV-CORE-001` and is subordinate to them.
+
+---
+
+## IV. Dependencies
+
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
+
+---
+
+## V. Core Principle
 
 Every runtime object has one authoritative owner.
 
@@ -17,7 +45,7 @@ Identity resolution must answer these questions separately:
 
 No identifier answers more than its assigned question.
 
-## 1. Authentication Principal
+## VI. Authentication Principal
 
 ### `users.id`
 
@@ -45,7 +73,7 @@ No identifier answers more than its assigned question.
 Passkey metadata may be implemented by dedicated credential tables, but the owning
 principal is always `users.id`.
 
-## 2. Operational Actor
+## VII. Operational Actor
 
 ### `seats.id`
 
@@ -77,7 +105,7 @@ identity and they are not display identity.
 
 Teacher seats and student seats follow the same actor model.
 
-## 3. Isolation Boundary
+## VIII. Isolation Boundary
 
 ### `classes.class_id`
 
@@ -96,7 +124,7 @@ Teacher seats and student seats follow the same actor model.
 claim, or routing convenience, but it MUST resolve to `class_id` before any
 authority-sensitive operation.
 
-## 4. Public Actor Identity
+## IX. Public Actor Identity
 
 ### `seats.public_id`
 
@@ -135,7 +163,7 @@ Named cleanup debt:
 - `TLCP-SCHEMA-001` — complete as of 2026-06-02. Physical TLCP actor
   columns/API labels now use `actor_public_id` and store `Seat.public_id`.
 
-## 5. Display Identity
+## X. Display Identity
 
 ### `identity_profiles`
 
@@ -148,7 +176,7 @@ resolution, or actor lookup.
 Do not store claim artifacts, credential artifacts, or class authority in
 `identity_profiles`.
 
-## 6. Capability Tokens
+## XI. Capability Tokens
 
 Capability tokens grant permission to perform one defined action. They are not users,
 seats, classes, or public actor identities.
@@ -175,7 +203,7 @@ Settled ownership:
 Ownership of `hall_pass_verify_token` remains under investigation. Its current
 teacher-table ownership is not accepted as the final v2 design.
 
-## 7. Roster Provisioning and Seat Claim
+## XII. Roster Provisioning and Seat Claim
 
 Roster upload provisions a future participant position. It does not create a
 student-authenticated principal.
@@ -192,7 +220,7 @@ When a teacher uploads a roster:
 Claim/setup later proves entitlement to the seat and activates credentials on
 `users`.
 
-## 8. Runtime Context
+## XIII. Runtime Context
 
 The authenticated principal and active classroom context remain separate:
 
@@ -205,7 +233,7 @@ The session MUST NOT infer an actor or boundary from display fields, role-specif
 public identifiers, legacy numeric participant IDs, or aliases once canonical context
 is available.
 
-## Settled Decisions
+## XIV. Settled Decisions
 
 - `users.id` = authentication principal
 - `seats.id` = operational actor
@@ -217,8 +245,14 @@ is available.
 - recovery tokens = user-owned recovery capability
 - passkey metadata = user-owned authentication capability
 
-## Open Decisions
+## XV. Open Decisions
 
 - `hall_pass_verify_token` ownership and boundary scope
 - invalid public identifier residue removal order
 - bridge-table retirement order
+
+---
+
+## XVI. Amendment
+
+Revisions to this document must increment the version number, update the effective date, and remain consistent with foundational documentation standards and core invariants.

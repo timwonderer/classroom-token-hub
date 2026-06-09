@@ -1,4 +1,4 @@
-# DOM-BANK-001 — Savings Interest Accrual and Disbursement Specification
+# DOM-BANK-001: Savings Interest Accrual and Disbursement Specification
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|

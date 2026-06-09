@@ -1,35 +1,121 @@
 # SOP-DOC-002: Documentation Index
+
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|SOP-DOC-002| 2.4 | 2026-04-12 | 2.3 |Normative|
+| SOP-DOC-002      | 3.0     | 2026-06-08     | 2.4        | Normative       |
+
+---
 
 ## I. Purpose
 
-This document is the canonical index of all formal documentation.
+This document is the canonical master index of all formal documentation within the Classroom Token Hub (CTH) repository. It tracks and organizes all constitutional, normative, and informative documents across both V2 restructured systems and legacy pathways.
+
+---
 
 ## II. Scope
 
-This index tracks formally registered, numbered documents in the constitutional, normative, and informative namespace system, plus the root invariant documents.
+This index tracks all formally registered, numbered documents. The following folders/files are intentionally out of scope:
+- `docs/user-guides/` (User-facing help/tutorials)
+- `docs/README.md` (General repository navigation)
 
-The following documentation trees are intentionally out of scope for this formal numbered index:
+---
 
-- `docs/user-guides/` user-facing documentation
-- `docs/README.md` repository navigation
 ## III. Authority Level
-Normative. Subordinate to CORE invariant definitions.
+
+Normative (Tier 2). Subordinate to Core and Constitutional Invariants (`INV-CORE-000`, `INV-CORE-001`).
+
+---
+
 ## IV. Dependencies
-None specified.
-## V. Document Index
 
-### ARCHITECTURE
+- `docs/development/v2_restructure_doc/SOP-DOC-000_DOCUMENTATION_STANDARD.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
 
+---
+
+## V. V2 Restructured Specifications
+
+These documents conform to the V2 capability-based architecture and domain authority rules.
+
+### Standards & Procedures (SOP)
+- [SOP-DOC-000_DOCUMENTATION_STANDARD.md](SOP-DOC-000_DOCUMENTATION_STANDARD.md) — Unified writing standard
+- [SOP-DOC-002_DOCUMENTATION_INDEX.md](SOP-DOC-002_DOCUMENTATION_INDEX.md) — Master documentation index
+
+### Invariants — Core (INV-CORE)
+- [INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md](INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md) — Foundational system invariants
+- [INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md](INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md) — Architectural design invariants
+
+### Invariants — Architecture (INV-ARC)
+- [INVARIANT/ARCHITECTURE/INV-ARC-000_EXECUTION_MODEL.md](INVARIANT/ARCHITECTURE/INV-ARC-000_EXECUTION_MODEL.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-001_SCOPED_REQUEST_CONTEXT.md](INVARIANT/ARCHITECTURE/INV-ARC-001_SCOPED_REQUEST_CONTEXT.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-002_NO_IMPLICIT_GLOBAL_ACCESS.md](INVARIANT/ARCHITECTURE/INV-ARC-002_NO_IMPLICIT_GLOBAL_ACCESS.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-003_SCOPED_CAPABILITY_EVALUATION.md](INVARIANT/ARCHITECTURE/INV-ARC-003_SCOPED_CAPABILITY_EVALUATION.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-004_CROSS_TENANT_ISOLATION.md](INVARIANT/ARCHITECTURE/INV-ARC-004_CROSS_TENANT_ISOLATION.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-005_NO_PII_LEAKAGE_IN_EXECUTION_LAYER.md](INVARIANT/ARCHITECTURE/INV-ARC-005_NO_PII_LEAKAGE_IN_EXECUTION_LAYER.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md](INVARIANT/ARCHITECTURE/INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-007_GET_MUST_BE_PURE.md](INVARIANT/ARCHITECTURE/INV-ARC-007_GET_MUST_BE_PURE.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-008_IDENTITY_RESOLUTION_AND_SEAT_SCOPE.md](INVARIANT/ARCHITECTURE/INV-ARC-008_IDENTITY_RESOLUTION_AND_SEAT_SCOPE.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-009_DOMAIN_AUTHORITY_FOR_STATE.md](INVARIANT/ARCHITECTURE/INV-ARC-009_DOMAIN_AUTHORITY_FOR_STATE.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-010_EXPLICIT_CONTEXT_SWITCHING.md](INVARIANT/ARCHITECTURE/INV-ARC-010_EXPLICIT_CONTEXT_SWITCHING.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-011_NO_PHANTOM_SCOPE_ACCESS.md](INVARIANT/ARCHITECTURE/INV-ARC-011_NO_PHANTOM_SCOPE_ACCESS.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-012_HARD_DELETION_ENFORCEMENT.md](INVARIANT/ARCHITECTURE/INV-ARC-012_HARD_DELETION_ENFORCEMENT.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-013_MEMBERSHIP_BY_EXISTENCE.md](INVARIANT/ARCHITECTURE/INV-ARC-013_MEMBERSHIP_BY_EXISTENCE.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-014_NO_LABEL_BASED_LOGIC.md](INVARIANT/ARCHITECTURE/INV-ARC-014_NO_LABEL_BASED_LOGIC.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-015_TEMPORAL_MODEL_AND_BOUNDARY_ENFORCEMENT.md](INVARIANT/ARCHITECTURE/INV-ARC-015_TEMPORAL_MODEL_AND_BOUNDARY_ENFORCEMENT.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-016_LAWFUL_EXISTENCE_AND_AUDIT_LINEAGE.md](INVARIANT/ARCHITECTURE/INV-ARC-016_LAWFUL_EXISTENCE_AND_AUDIT_LINEAGE.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-017_TESTING_PROTOCOL_AND_GATES.md](INVARIANT/ARCHITECTURE/INV-ARC-017_TESTING_PROTOCOL_AND_GATES.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-018_TEST_CREATION_PROTOCOL.md](INVARIANT/ARCHITECTURE/INV-ARC-018_TEST_CREATION_PROTOCOL.md)
+- [INVARIANT/ARCHITECTURE/INV-ARC-019_IDENTITY_AND_OWNERSHIP_MODEL.md](INVARIANT/ARCHITECTURE/INV-ARC-019_IDENTITY_AND_OWNERSHIP_MODEL.md)
+
+### Domains (DOM)
+- [DOMAIN/DOM-CORE-000_DOMAIN_FOUNDATION.md](DOMAIN/DOM-CORE-000_DOMAIN_FOUNDATION.md)
+- [DOMAIN/DOM-CORE-001_DOMAIN_AUTHORITY_SUMMARY.md](DOMAIN/DOM-CORE-001_DOMAIN_AUTHORITY_SUMMARY.md)
+- [DOMAIN/DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION.md](DOMAIN/DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION.md)
+- [DOMAIN/DOM-IDEN-001_IDENTITY_CLASS_BINDING_DOMAIN.md](DOMAIN/DOM-IDEN-001_IDENTITY_CLASS_BINDING_DOMAIN.md)
+- [DOMAIN/DOM-IDEN-002_STUDENT_ACCOUNT_RECOVERY.md](DOMAIN/DOM-IDEN-002_STUDENT_ACCOUNT_RECOVERY.md)
+- [DOMAIN/DOM-IDEN-003_TEACHER_IDENTITY_ARCHITECTURE.md](DOMAIN/DOM-IDEN-003_TEACHER_IDENTITY_ARCHITECTURE.md)
+- [DOMAIN/DOM-IDEN-004_TEACHER_ACCOUNT_RECOVERY.md](DOMAIN/DOM-IDEN-004_TEACHER_ACCOUNT_RECOVERY.md)
+- [DOMAIN/DOM-IDEN-005_ACCOUNT_LIFECYCLE_MAP.md](DOMAIN/DOM-IDEN-005_ACCOUNT_LIFECYCLE_MAP.md)
+- [DOMAIN/DOM-CLASS-001_CLASS_CONFIGURATION_DOMAIN.md](DOMAIN/DOM-CLASS-001_CLASS_CONFIGURATION_DOMAIN.md)
+- [DOMAIN/DOM-ATT-001_ATTENDANCE_DOMAIN.md](DOMAIN/DOM-ATT-001_ATTENDANCE_DOMAIN.md)
+- [DOMAIN/DOM-OBL-001_OBLIGATIONS_DOMAIN.md](DOMAIN/DOM-OBL-001_OBLIGATIONS_DOMAIN.md)
+- [DOMAIN/DOM-LED-001_LEDGER_DOMAIN.md](DOMAIN/DOM-LED-001_LEDGER_DOMAIN.md)
+- [DOMAIN/DOM-STORE-001_STORE_AND_ENTITLEMENTS_DOMAIN.md](DOMAIN/DOM-STORE-001_STORE_AND_ENTITLEMENTS_DOMAIN.md)
+- [DOMAIN/DOM-OPS-001_OPERATIONS_DOMAIN.md](DOMAIN/DOM-OPS-001_OPERATIONS_DOMAIN.md)
+- [DOMAIN/DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md](DOMAIN/DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md)
+- [DOMAIN/DOM-ITR-001_INTERPRETATION_DOMAIN.md](DOMAIN/DOM-ITR-001_INTERPRETATION_DOMAIN.md)
+- [DOMAIN/DOM-SUP-001_SUPPORT_DOMAIN.md](DOMAIN/DOM-SUP-001_SUPPORT_DOMAIN.md)
+- [DOMAIN/DOM-ECON-000_ECONOMY_GOVERNANCE_FOUNDATION.md](DOMAIN/DOM-ECON-000_ECONOMY_GOVERNANCE_FOUNDATION.md)
+- [DOMAIN/DOM-ECON-003_ECONOMIC_POLICY_AND_TRANSITION.md](DOMAIN/DOM-ECON-003_ECONOMIC_POLICY_AND_TRANSITION.md)
+- [DOMAIN/DOM-ECON-004_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE_SPECIFICATION.md](DOMAIN/DOM-ECON-004_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE_SPECIFICATION.md)
+- [DOMAIN/DOM-BANK-001_SAVINGS_INTEREST_ACCRUAL_AND_DISBURSEMENT_SPECIFICATION.md](DOMAIN/DOM-BANK-001_SAVINGS_INTEREST_ACCRUAL_AND_DISBURSEMENT_SPECIFICATION.md)
+
+### Feature Execution (FEAT)
+- [FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md](FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md)
+- [FEATURE-EXECUTION/FEAT-ECON-001_ECONOMIC_POLICY_TRANSITION_EXECUTION_AND_ACTIVATION_ORCHESTRATION.md](FEATURE-EXECUTION/FEAT-ECON-001_ECONOMIC_POLICY_TRANSITION_EXECUTION_AND_ACTIVATION_ORCHESTRATION.md)
+- [FEATURE-EXECUTION/FEAT-IDEN-001_STUDENT_SEAT_CLAIM.md](FEATURE-EXECUTION/FEAT-IDEN-001_STUDENT_SEAT_CLAIM.md)
+- [FEATURE-EXECUTION/FEAT-LED-001_POST_LEDGER_TRANSACTION.md](FEATURE-EXECUTION/FEAT-LED-001_POST_LEDGER_TRANSACTION.md)
+- [FEATURE-EXECUTION/FEAT-LED-002_VOID_REVERSE_TRANSACTION.md](FEATURE-EXECUTION/FEAT-LED-002_VOID_REVERSE_TRANSACTION.md)
+- [FEATURE-EXECUTION/FEAT-OBLI-001_ASSESS_OBLIGATION.md](FEATURE-EXECUTION/FEAT-OBLI-001_ASSESS_OBLIGATION.md)
+- [FEATURE-EXECUTION/FEAT-OPS-001_AUDIT_PROTECTED_EMISSION.md](FEATURE-EXECUTION/FEAT-OPS-001_AUDIT_PROTECTED_EMISSION.md)
+- [FEATURE-EXECUTION/FEAT-PAY-001_RUN_PAYROLL.md](FEATURE-EXECUTION/FEAT-PAY-001_RUN_PAYROLL.md)
+- [FEATURE-EXECUTION/FEAT-STOR-001_STORE_PURCHASE.md](FEATURE-EXECUTION/FEAT-STOR-001_STORE_PURCHASE.md)
+
+### Maps (MAP)
+- [MAP/MAP-ADV-001_ADVERSARIAL_EVIDENCE_DOCUMENTATION_PROTOCOL.md](MAP/MAP-ADV-001_ADVERSARIAL_EVIDENCE_DOCUMENTATION_PROTOCOL.md)
+- [MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md](MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md)
+- [MAP/MAP-CORE-001_DOMAIN_TO_FEAT_CAPABILITY_MAP.md](MAP/MAP-CORE-001_DOMAIN_TO_FEAT_CAPABILITY_MAP.md)
+
+---
+
+## VI. Legacy Specifications (Deprecated/Transitional)
+
+These legacy specifications remain active for reference during the transitional phase of the V2 port.
+
+### Architecture
 - [ARC-CORE-000_Architecture_Foundation.md](../../ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)
-### ARCHITECTURE/IDENTITY
-
 - [ARC-IDEN-001_Admin_Identity_Handling.md](../../ARCHITECTURE/IDENTITY/ARC-IDEN-001_Admin_Identity_Handling.md)
 - [ARC-IDEN-002_Account_Recovery.md](../../ARCHITECTURE/IDENTITY/ARC-IDEN-002_Account_Recovery.md)
-### ARCHITECTURE/OPERATIONS
-
 - [ARC-OPS-000_Operational_Constraints.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-000_Operational_Constraints.md)
 - [ARC-OPS-001_Transaction_Based_Reimbursement_Architecture.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-001_Transaction_Based_Reimbursement_Architecture.md)
 - [ARC-OPS-005_Api_Reference.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)
@@ -37,148 +123,25 @@ None specified.
 - [ARC-OPS-012_Datetime_Handling_Specification.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-012_Datetime_Handling_Specification.md)
 - [ARC-OPS-013_Money_Handling.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-013_Money_Handling.md)
 - [ARC-OPS-015_Multi_tenancy_and_Join_Code_Interface.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-015_Multi_tenancy_and_Join_Code_Interface.md)
-### ARCHITECTURE/SYSADMIN
-
 - [ARC-SYS-001_Sysadmin_Interface.md](../../ARCHITECTURE/SYSADMIN/ARC-SYS-001_Sysadmin_Interface.md)
 - [ARC-SYS-002_Deterministic_Analytics_Alerting_Pipeline.md](../../ARCHITECTURE/SYSADMIN/ARC-SYS-002_Deterministic_Analytics_Alerting_Pipeline.md)
-### DOMAINS
 
-- [DOM-CORE-000_Domain_Foundation.md](../../DOMAINS/DOM-CORE-000_Domain_Foundation.md)
-### DOMAINS/ECONOMY_DESIGN
-
+### Domains
 - [DOM-ECON-001_Economy_Balance_Checker.md](../../DOMAINS/ECONOMY_DESIGN/DOM-ECON-001_Economy_Balance_Checker.md)
 - [DOM-ECON-002_Economy_Specification.md](../../DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification.md)
 - [DOM-ECON-003_Ledger_Integrity_and_Determinism.md](../../DOMAINS/ECONOMY_DESIGN/DOM-ECON-003_Ledger_Integrity_and_Determinism.md)
 - [DOM-ECON-004_Automated_Rent_Linked_Benefit_Resolution.md](../../DOMAINS/ECONOMY_DESIGN/DOM-ECON-004_Automated_Rent_Linked_Benefit_Resolution.md)
-### DEVELOPMENT
 
-- [development/README.md](../../development/README.md)
-- [specs/V2_AUTHORITY_EXTRACTION_PLAN.md](../../development/specs/V2_AUTHORITY_EXTRACTION_PLAN.md)
-- [specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md](../../development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md)
-- [specs/V2_Class_Scope_Normalization_Target.md](../../development/specs/V2_Class_Scope_Normalization_Target.md)
-- [specs/V2_BANKING_LEDGER_SETTLEMENT_PLAN.md](../../development/specs/V2_BANKING_LEDGER_SETTLEMENT_PLAN.md)
-- [tracking/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md](../../development/tracking/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md)
-- [tracking/V2_LAUNCH_PROJECT_CHECKLIST.md](../../development/tracking/V2_LAUNCH_PROJECT_CHECKLIST.md)
-- [tracking/V2_LAUNCH_READINESS_MATRIX.md](../../development/tracking/V2_LAUNCH_READINESS_MATRIX.md)
-- [tracking/V2_MAIN_RECONCILIATION_TRACKER.md](../../development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md)
-- [tracking/V2_PARALLEL_WORKSTREAMS.md](../../development/tracking/V2_PARALLEL_WORKSTREAMS.md)
-- [tracking/V1_USER_FACING_FEATURE_PARITY_MATRIX.md](../../development/tracking/V1_USER_FACING_FEATURE_PARITY_MATRIX.md)
-### FEATURES/ANALYTICS
-
+### Features
 - [FEAT-MET-001_Analytics_Specification.md](../../FEATURES/ANALYTICS/FEAT-MET-001_Analytics_Specification.md)
-### FEATURES/ECONOMY
-
 - [FEAT-ECON-001_Policy_Mode_and_Rebalancer.md](../../FEATURES/ECONOMY/FEAT-ECON-001_Policy_Mode_and_Rebalancer.md)
-### FEATURES/DESIGN
-
 - [FEAT-DES-001_Design_System.md](../../FEATURES/DESIGN/FEAT-DES-001_Design_System.md)
-### FEATURES
-
 - [FEAT-CORE-000_Feature_Foundation.md](../../FEATURES/FEAT-CORE-000_Feature_Foundation.md)
-### FEATURES/HALL_PASS
-
 - [FEAT-HALL-001_Hall_Pass.md](../../FEATURES/HALL_PASS/FEAT-HALL-001_Hall_Pass.md)
-### FEATURES/RENT
-
 - [FEAT-RENT-002_Rent_Item_Types.md](../../FEATURES/RENT/FEAT-RENT-002_Rent_Item_Types.md)
-### FEATURES/SUPPORT
-
 - [FEAT-TICK-001_Ticket_Lifecycle.md](../../FEATURES/SUPPORT/FEAT-TICK-001_Ticket_Lifecycle.md)
-### Root
 
-- [INV-CORE-000_Core_Invariants.md](../../INV-CORE-000_Core_Invariants.md)
-- [INV-CORE-001_Authority_Model.md](../../INV-CORE-001_Authority_Model.md)
-### LOGS/AUDITS
-
-- [LOG-ARC-002_Testing_Summary_Legacy.md](../../LOGS/AUDITS/LOG-ARC-002_Testing_Summary_Legacy.md)
-- [LOG-ARC-003_Decimal_Refactoring.md](../../LOGS/AUDITS/LOG-ARC-003_Decimal_Refactoring.md)
-- [LOG-ARC-004_Doc_Review_2026_01.md](../../LOGS/AUDITS/LOG-ARC-004_Doc_Review_2026_01.md)
-- [LOG-ARC-005_Economy_Balancing_Report.md](../../LOGS/AUDITS/LOG-ARC-005_Economy_Balancing_Report.md)
-- [LOG-ARC-006_Fixes_Summary_Legacy.md](../../LOGS/AUDITS/LOG-ARC-006_Fixes_Summary_Legacy.md)
-- [LOG-ARC-007_Implementation_Progress_Legacy.md](../../LOGS/AUDITS/LOG-ARC-007_Implementation_Progress_Legacy.md)
-- [LOG-ARC-008_Issue_Fix_Summary_Legacy.md](../../LOGS/AUDITS/LOG-ARC-008_Issue_Fix_Summary_Legacy.md)
-- [LOG-ARC-009_Join_Code_Fix.md](../../LOGS/AUDITS/LOG-ARC-009_Join_Code_Fix.md)
-- [LOG-ARC-010_Jules_Setup_Legacy.md](../../LOGS/AUDITS/LOG-ARC-010_Jules_Setup_Legacy.md)
-- [LOG-ARC-011_Recovery_Evaluation.md](../../LOGS/AUDITS/LOG-ARC-011_Recovery_Evaluation.md)
-- [LOG-ARC-012_Template_Redesign_Recs.md](../../LOGS/AUDITS/LOG-ARC-012_Template_Redesign_Recs.md)
-- [LOG-ARC-013_Verification_Report_Legacy.md](../../LOGS/AUDITS/LOG-ARC-013_Verification_Report_Legacy.md)
-- [LOG-ARC-014_Timestamps_Legacy.md](../../LOGS/AUDITS/LOG-ARC-014_Timestamps_Legacy.md)
-- [LOG-ARC-016_Security_Fix_Verification.md](../../LOGS/AUDITS/LOG-ARC-016_Security_Fix_Verification.md)
-- [LOG-ARC-017_Security_Fixes_Consolidated.md](../../LOGS/AUDITS/LOG-ARC-017_Security_Fixes_Consolidated.md)
-- [LOG-ARC-018_Pr_Description_Security.md](../../LOGS/AUDITS/LOG-ARC-018_Pr_Description_Security.md)
-- [LOG-ARC-019_Regression_Test_Report.md](../../LOGS/AUDITS/LOG-ARC-019_Regression_Test_Report.md)
-- [LOG-ARC-020_Fix_Teacher_Blocks.md](../../LOGS/AUDITS/LOG-ARC-020_Fix_Teacher_Blocks.md)
-- [LOG-ARC-021_Pr_Reports_Readme.md](../../LOGS/AUDITS/LOG-ARC-021_Pr_Reports_Readme.md)
-- [LOG-ARC-022_Pr_Description.md](../../LOGS/AUDITS/LOG-ARC-022_Pr_Description.md)
-- [LOG-ARC-023_Security_Fix_Update.md](../../LOGS/AUDITS/LOG-ARC-023_Security_Fix_Update.md)
-- [LOG-ARC-024_Code_Review_Technical.md](../../LOGS/AUDITS/LOG-ARC-024_Code_Review_Technical.md)
-- [LOG-ARC-025_Multitenancy_Readiness.md](../../LOGS/AUDITS/LOG-ARC-025_Multitenancy_Readiness.md)
-- [LOG-ARC-026_Code_Review_Security.md](../../LOGS/AUDITS/LOG-ARC-026_Code_Review_Security.md)
-- [LOG-ARC-027_Final_Code_Review.md](../../LOGS/AUDITS/LOG-ARC-027_Final_Code_Review.md)
-- [LOG-ARC-028_Archive_Readme.md](../../LOGS/AUDITS/LOG-ARC-028_Archive_Readme.md)
-- [LOG-ARC-029_Roadmap_1_6_0.md](../../LOGS/AUDITS/LOG-ARC-029_Roadmap_1_6_0.md)
-- [LOG-ARC-030_Implementation_Progress.md](../../LOGS/AUDITS/LOG-ARC-030_Implementation_Progress.md)
-- [LOG-ARC-031_Project_History.md](../../LOGS/AUDITS/LOG-ARC-031_Project_History.md)
-- [LOG-ARC-032_Teacher_Id_Regression.md](../../LOGS/AUDITS/LOG-ARC-032_Teacher_Id_Regression.md)
-- [LOG-ARC-033_Part2_Completion.md](../../LOGS/AUDITS/LOG-ARC-033_Part2_Completion.md)
-- [LOG-ARC-034_Part1_Completion.md](../../LOGS/AUDITS/LOG-ARC-034_Part1_Completion.md)
-- [LOG-ARC-035_Part2_Final.md](../../LOGS/AUDITS/LOG-ARC-035_Part2_Final.md)
-- [LOG-ARC-036_Deprecated_Code_Patterns.md](../../LOGS/AUDITS/LOG-ARC-036_Deprecated_Code_Patterns.md)
-- [LOG-ARC-037_Architecture_Overview.md](../../LOGS/AUDITS/LOG-ARC-037_Architecture_Overview.md)
-- [LOG-ARC-038_Duplicate_Tapout_Bug_Report.md](../../LOGS/AUDITS/LOG-ARC-038_Duplicate_Tapout_Bug_Report.md)
-- [LOG-ARC-039_Project_Timeline.md](../../LOGS/AUDITS/LOG-ARC-039_Project_Timeline.md)
-- [LOG-ARC-040_Seat_Scope_Migration_Progress.md](../../LOGS/AUDITS/LOG-ARC-040_Seat_Scope_Migration_Progress.md)
-- [LOG-ARC-041_Join_Code_Centric_Alignment_Whitepaper.md](../../LOGS/AUDITS/LOG-ARC-041_Join_Code_Centric_Alignment_Whitepaper.md)
-- [LOG-ARC-042_Legacy_Lookup_Burndown_and_Reporting_Validation.md](../../LOGS/AUDITS/LOG-ARC-042_Legacy_Lookup_Burndown_and_Reporting_Validation.md)
-- [LOG-ARC-043_Doc_Code_Cross_Reference_Audit_2026_03.md](../../LOGS/AUDITS/LOG-ARC-043_Doc_Code_Cross_Reference_Audit_2026_03.md)
-- [LOG-ARC-044_Testing_Best_Practices_2026_02.md](../../LOGS/AUDITS/LOG-ARC-044_Testing_Best_Practices_2026_02.md)
-- [LOG-ARC-045_Teacher_Student_Shadow_Spec_V2.md](../../LOGS/AUDITS/LOG-ARC-045_Teacher_Student_Shadow_Spec_V2.md)
-- [LOG-ARC-046_Join_Code_Migration_Refinement_Plan.md](../../LOGS/AUDITS/LOG-ARC-046_Join_Code_Migration_Refinement_Plan.md)
-- [LOG-ARC-047_Multi_Tenancy_Hardening_Progress_Log.md](../../LOGS/AUDITS/LOG-ARC-047_Multi_Tenancy_Hardening_Progress_Log.md)
-- [LOG-ARC-048_Multitenancy_Hardening_Matrix.md](../../LOGS/AUDITS/LOG-ARC-048_Multitenancy_Hardening_Matrix.md)
-- [LOG-ARC-049_V2_Multitenancy_Go_No_Go_Checklist.md](../../LOGS/AUDITS/LOG-ARC-049_V2_Multitenancy_Go_No_Go_Checklist.md)
-- [LOG-DB-001_Migration_Fix_Summary.md](../../LOGS/AUDITS/LOG-DB-001_Migration_Fix_Summary.md)
-- [LOG-DB-002_Migration_Note_Expected_Weekly_Hours.md](../../LOGS/AUDITS/LOG-DB-002_Migration_Note_Expected_Weekly_Hours.md)
-- [LOG-DB-003_Migration_Status_Report.md](../../LOGS/AUDITS/LOG-DB-003_Migration_Status_Report.md)
-- [LOG-DB-004_Staging_Migration_Fix.md](../../LOGS/AUDITS/LOG-DB-004_Staging_Migration_Fix.md)
-- [LOG-DB-005_Migration_Conditional_Index_Drop.md](../../LOGS/AUDITS/LOG-DB-005_Migration_Conditional_Index_Drop.md)
-- [LOG-DB-006_Migration_Check_Report.md](../../LOGS/AUDITS/LOG-DB-006_Migration_Check_Report.md)
-- [LOG-DB-007_Migration_Report_Staging.md](../../LOGS/AUDITS/LOG-DB-007_Migration_Report_Staging.md)
-- [LOG-DB-008_Legacy_Student_Migration.md](../../LOGS/AUDITS/LOG-DB-008_Legacy_Student_Migration.md)
-- [LOG-DB-012_Migration_Totp_Encryption.md](../../LOGS/AUDITS/LOG-DB-012_Migration_Totp_Encryption.md)
-- [LOG-DB-013_Deprecated_Symbols_Machine_Registry_Legacy.md](../../LOGS/AUDITS/LOG-DB-013_Deprecated_Symbols_Machine_Registry_Legacy.md)
-- [LOG-DEP-002_Cleanup_Duplicates.md](../../LOGS/AUDITS/LOG-DEP-002_Cleanup_Duplicates.md)
-- [LOG-DEP-010_Legacy_Account_Migration.md](../../LOGS/AUDITS/LOG-DEP-010_Legacy_Account_Migration.md)
-- [LOG-DEP-011_Multi_Tenancy_Fix_Deployment.md](../../LOGS/AUDITS/LOG-DEP-011_Multi_Tenancy_Fix_Deployment.md)
-- [LOG-DEP-013_Readme.md](../../LOGS/AUDITS/LOG-DEP-013_Readme.md)
-- [LOG-DEP-014_Readme_Github_Pages.md](../../LOGS/AUDITS/LOG-DEP-014_Readme_Github_Pages.md)
-- [LOG-DEP-022_Scripts_Operations_Reference.md](../../LOGS/AUDITS/LOG-DEP-022_Scripts_Operations_Reference.md)
-- [LOG-DEP-023_Dev_Utilities_Safety_Guide.md](../../LOGS/AUDITS/LOG-DEP-023_Dev_Utilities_Safety_Guide.md)
-- [LOG-DOC-001_Documentation_Inventory_Report.md](../../LOGS/AUDITS/LOG-DOC-001_Documentation_Inventory_Report.md)
-- [LOG-MILE-001_Implementation_Status_2026_02_24.md](../../LOGS/AUDITS/LOG-MILE-001_Implementation_Status_2026_02_24.md)
-- [LOG-MILE-002_Devops_Migration_Plan.md](../../LOGS/AUDITS/LOG-MILE-002_Devops_Migration_Plan.md)
-### LOGS
-
-- [LOG-CORE-000_Logs_Foundation.md](../../LOGS/LOG-CORE-000_Logs_Foundation.md)
-### LOGS/RELEASES
-
-- [LOG-REL-002_Changelog_Mirror.md](../../LOGS/RELEASES/LOG-REL-002_Changelog_Mirror.md)
-- [LOG-REL-003_Releases_Index.md](../../LOGS/RELEASES/LOG-REL-003_Releases_Index.md)
-- [LOG-REL-004_Release_Notes_V1.0.0.md](../../LOGS/RELEASES/LOG-REL-004_Release_Notes_V1.0.0.md)
-- [LOG-REL-005_Release_Notes_V1.1.0.md](../../LOGS/RELEASES/LOG-REL-005_Release_Notes_V1.1.0.md)
-- [LOG-REL-006_Release_Notes_V1.1.1.md](../../LOGS/RELEASES/LOG-REL-006_Release_Notes_V1.1.1.md)
-- [LOG-REL-007_Release_Notes_V1.2.0.md](../../LOGS/RELEASES/LOG-REL-007_Release_Notes_V1.2.0.md)
-- [LOG-REL-008_Release_Notes_V1.2.1.md](../../LOGS/RELEASES/LOG-REL-008_Release_Notes_V1.2.1.md)
-- [LOG-REL-009_Release_Notes_V1.3.0.md](../../LOGS/RELEASES/LOG-REL-009_Release_Notes_V1.3.0.md)
-- [LOG-REL-010_Release_Notes_V1.4.0.md](../../LOGS/RELEASES/LOG-REL-010_Release_Notes_V1.4.0.md)
-- [LOG-REL-011_Release_Notes_V1.5.0.md](../../LOGS/RELEASES/LOG-REL-011_Release_Notes_V1.5.0.md)
-- [LOG-REL-012_Release_Notes_V1.6.0.md](../../LOGS/RELEASES/LOG-REL-012_Release_Notes_V1.6.0.md)
-- [LOG-REL-013_Release_Notes_V1.7.0.md](../../LOGS/RELEASES/LOG-REL-013_Release_Notes_V1.7.0.md)
-- [LOG-REL-014_Release_Notes_V1.7.1.md](../../LOGS/RELEASES/LOG-REL-014_Release_Notes_V1.7.1.md)
-- [LOG-REL-015_Release_Notes_V1.8.0.md](../../LOGS/RELEASES/LOG-REL-015_Release_Notes_V1.8.0.md)
-- [LOG-REL-016_Release_Notes_V1.9.0.md](../../LOGS/RELEASES/LOG-REL-016_Release_Notes_V1.9.0.md)
-### SECURITY/AUDITS
-
+### Security & Audits
 - [SEC-AUD-001_Multi_Tenancy_Violations_Audit.md](../../SECURITY/AUDITS/SEC-AUD-001_Multi_Tenancy_Violations_Audit.md)
 - [SEC-AUD-002_Security_Audit_Insurance_Overhaul.md](../../SECURITY/AUDITS/SEC-AUD-002_Security_Audit_Insurance_Overhaul.md)
 - [SEC-AUD-003_Audit_Summary_V1_6_0.md](../../SECURITY/AUDITS/SEC-AUD-003_Audit_Summary_V1_6_0.md)
@@ -196,59 +159,51 @@ None specified.
 - [SEC-AUD-018_Pii_Audit.md](../../SECURITY/AUDITS/SEC-AUD-018_Pii_Audit.md)
 - [SEC-AUD-020_Security_Audit_2025.md](../../SECURITY/AUDITS/SEC-AUD-020_Security_Audit_2025.md)
 - [SEC-AUD-025_Validation_Report.md](../../SECURITY/AUDITS/SEC-AUD-025_Validation_Report.md)
-### SECURITY/CONTROLS
-
 - [SEC-CONT-014_Github_Secrets_Management.md](../../SECURITY/CONTROLS/SEC-CONT-014_Github_Secrets_Management.md)
 - [SEC-CONT-019_Promptpwnd_Remediation.md](../../SECURITY/CONTROLS/SEC-CONT-019_Promptpwnd_Remediation.md)
 - [SEC-CONT-021_Security_Fixes_Summary.md](../../SECURITY/CONTROLS/SEC-CONT-021_Security_Fixes_Summary.md)
 - [SEC-CONT-022_Security_Improvements_Implementation.md](../../SECURITY/CONTROLS/SEC-CONT-022_Security_Improvements_Implementation.md)
 - [SEC-CONT-023_Security_Remediation_Guide.md](../../SECURITY/CONTROLS/SEC-CONT-023_Security_Remediation_Guide.md)
 - [SEC-CONT-026_Authorization_Architecture.md](../../SECURITY/CONTROLS/SEC-CONT-026_Authorization_Architecture.md)
-### SECURITY/INCIDENTS
-
 - [SEC-INC-013_Critical_Same_Teacher_Leak.md](../../SECURITY/INCIDENTS/SEC-INC-013_Critical_Same_Teacher_Leak.md)
-### SECURITY
-
 - [SEC-CORE-000_Security_Foundation.md](../../SECURITY/SEC-CORE-000_Security_Foundation.md)
-### SECURITY/THREATS
-
 - [SEC-THR-027_Multi_Tenancy_Threat_Model.md](../../SECURITY/THREATS/SEC-THR-027_Multi_Tenancy_Threat_Model.md)
-### SECURITY/VULNERABILITIES
-
 - [SEC-VUL-017_Network_Vulnerability_Report.md](../../SECURITY/VULNERABILITIES/SEC-VUL-017_Network_Vulnerability_Report.md)
 - [SEC-VUL-024_Source_Code_Vulnerability_Report.md](../../SECURITY/VULNERABILITIES/SEC-VUL-024_Source_Code_Vulnerability_Report.md)
-### STANDARD_OPERATING_PROCEDURES/DATABASE
 
-- [SOP-DB-009_Migration_Compliance_Review.md](../DATABASE/SOP-DB-009_Migration_Compliance_Review.md)
-- [SOP-DB-010_Database_Switching.md](../DATABASE/SOP-DB-010_Database_Switching.md)
-- [SOP-DB-011_Migration_Specifications.md](../DATABASE/SOP-DB-011_Migration_Specifications.md)
-- [SOP-DB-013_Database_Migration_Rollback.md](../DATABASE/SOP-DB-013_Database_Migration_Rollback.md)
-- [SOP-DB-014_Deprecated_Symbols_Registry.md](../DATABASE/SOP-DB-014_Deprecated_Symbols_Registry.md)
-- [SOP-DB-015_Schema_Change_Proposals.md](../DATABASE/SOP-DB-015_Schema_Change_Proposals.md)
-### STANDARD_OPERATING_PROCEDURES/DEPLOYMENT
+### Standard Operating Procedures (Legacy)
+- [SOP-CORE-000_Sop_Foundation.md](../../STANDARD_OPERATING_PROCEDURES/SOP-CORE-000_Sop_Foundation.md)
+- [SOP-DB-009_Migration_Compliance_Review.md](../../STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-009_Migration_Compliance_Review.md)
+- [SOP-DB-010_Database_Switching.md](../../STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-010_Database_Switching.md)
+- [SOP-DB-011_Migration_Specifications.md](../../STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-011_Migration_Specifications.md)
+- [SOP-DB-013_Database_Migration_Rollback.md](../../STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-013_Database_Migration_Rollback.md)
+- [SOP-DB-014_Deprecated_Symbols_Registry.md](../../STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-014_Deprecated_Symbols_Registry.md)
+- [SOP-DB-015_Schema_Change_Proposals.md](../../STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-015_Schema_Change_Proposals.md)
+- [SOP-DEP-001_Production_Deployment_Instructions.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-001_Production_Deployment_Instructions.md)
+- [SOP-DEP-005_Digitalocean_Cloudflare_Setup.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-005_Digitalocean_Cloudflare_Setup.md)
+- [SOP-DEP-006_Deployment_Guide.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)
+- [SOP-DEP-007_Github_Pages_Setup.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-007_Github_Pages_Setup.md)
+- [SOP-DEP-008_Grafana_Fix_Guide.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-008_Grafana_Fix_Guide.md)
+- [SOP-DEP-009_Landing_Page_Deployment.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-009_Landing_Page_Deployment.md)
+- [SOP-DEP-012_Pulsetic_Setup.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-012_Pulsetic_Setup.md)
+- [SOP-DEP-015_Ci_Cd_Pipeline_Documentation.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-015_Ci_Cd_Pipeline_Documentation.md)
+- [SOP-DEP-016_Rollback_Procedures.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-016_Rollback_Procedures.md)
+- [SOP-DEP-020_Seeding_Instructions.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-020_Seeding_Instructions.md)
+- [SOP-DEP-021_Pwa_Icon_Requirements.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-021_Pwa_Icon_Requirements.md)
+- [SOP-DEP-022_V2_Live_Test_Runbook.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md)
+- [SOP-DEP-023_V2_Production_Transition_Runbook.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md)
 
-- [SOP-DEP-001_Production_Deployment_Instructions.md](../DEPLOYMENT/SOP-DEP-001_Production_Deployment_Instructions.md)
-- [SOP-DEP-005_Digitalocean_Cloudflare_Setup.md](../DEPLOYMENT/SOP-DEP-005_Digitalocean_Cloudflare_Setup.md)
-- [SOP-DEP-006_Deployment_Guide.md](../DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)
-- [SOP-DEP-007_Github_Pages_Setup.md](../DEPLOYMENT/SOP-DEP-007_Github_Pages_Setup.md)
-- [SOP-DEP-008_Grafana_Fix_Guide.md](../DEPLOYMENT/SOP-DEP-008_Grafana_Fix_Guide.md)
-- [SOP-DEP-009_Landing_Page_Deployment.md](../DEPLOYMENT/SOP-DEP-009_Landing_Page_Deployment.md)
-- [SOP-DEP-012_Pulsetic_Setup.md](../DEPLOYMENT/SOP-DEP-012_Pulsetic_Setup.md)
-- [SOP-DEP-015_Ci_Cd_Pipeline_Documentation.md](../DEPLOYMENT/SOP-DEP-015_Ci_Cd_Pipeline_Documentation.md)
-- [SOP-DEP-016_Rollback_Procedures.md](../DEPLOYMENT/SOP-DEP-016_Rollback_Procedures.md)
-- [SOP-DEP-020_Seeding_Instructions.md](../DEPLOYMENT/SOP-DEP-020_Seeding_Instructions.md)
-- [SOP-DEP-021_Pwa_Icon_Requirements.md](../DEPLOYMENT/SOP-DEP-021_Pwa_Icon_Requirements.md)
-- [SOP-DEP-022_V2_Live_Test_Runbook.md](../DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md)
-- [SOP-DEP-023_V2_Production_Transition_Runbook.md](../DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md)
-### STANDARD_OPERATING_PROCEDURES/DOCUMENTATION
+---
 
-- [SOP-DOC-000_Writing_Specification.md](SOP-DOC-000_Writing_Specification.md)
-- [SOP-DOC-002_Documentation_Index.md](SOP-DOC-002_Documentation_Index.md)
-- [SOP-DOC-003_Division_Definition.md](SOP-DOC-003_Division_Definition.md)
-- [SOP-DOC-005_Codebase_Organization_Playbook.md](SOP-DOC-005_Codebase_Organization_Playbook.md)
-- [SOP-DOC-006_User_Guide_Authoring_Standard.md](SOP-DOC-006_User_Guide_Authoring_Standard.md)
-### STANDARD_OPERATING_PROCEDURES
+## VII. Informative Logs (LOG)
+- [LOG-CORE-000_Logs_Foundation.md](../../LOGS/LOG-CORE-000_Logs_Foundation.md)
+- [LOG-REL-002_Changelog_Mirror.md](../../LOGS/RELEASES/LOG-REL-002_Changelog_Mirror.md)
+- [LOG-REL-003_Releases_Index.md](../../LOGS/RELEASES/LOG-REL-003_Releases_Index.md)
+- [LOGS/RELEASES/LOG-REL-016_Release_Notes_V1.9.0.md](../../LOGS/RELEASES/LOG-REL-016_Release_Notes_V1.9.0.md)
+- [LOGS/AUDITS/LOG-DEP-022_Scripts_Operations_Reference.md](../../LOGS/AUDITS/LOG-DEP-022_Scripts_Operations_Reference.md)
 
-- [SOP-CORE-000_Sop_Foundation.md](../SOP-CORE-000_Sop_Foundation.md)
-## VI. Amendment
-Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+---
+
+## VIII. Amendment
+
+Revisions to this document must increment the version number, update the effective date, and remain consistent with the CTH documentation standard.

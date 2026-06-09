@@ -26,7 +26,7 @@ The remainder of this report provides (1) an INV/ARC/DOM/FEAT mapping, (2) a vio
 **Observed data model direction:** the repo is converging on a “join_code-scoped universe” with **Seat** as a bridge to support multi-tenancy, and a “ledger + settlement cache” pattern (**Transaction**, **BalanceCache**) to avoid recomputing balances. fileciteturn46file0turn48file0turn41file0turn53file0
 
 **Authority documents present in repo:**  
-- `docs/INV-CORE-000_Core_Invariants.md` and `docs/INV-CORE-001_Authority_Model.md` exist. fileciteturn53file0turn42file0  
+- `docs/INV-CORE-000_CORE_INVARIANTS.md` and `docs/INV-CORE-001_Authority_Model.md` exist. fileciteturn53file0turn42file0  
 - The user’s `INV-CORE-002` spec appears **not committed** to this branch (it was shown in the user’s editor), so this report treats its text as an **external governing invariant** and audits the code against it, while also referencing the repo’s own invariants where aligned. fileciteturn53file0turn42file0
 
 **Unspecified (do not infer):**
@@ -40,7 +40,7 @@ The repo currently implements pieces of INV/ARC/DOM/FEAT, but the boundaries are
 
 | File | Role | Rationale |
 |---|---|---|
-| `docs/INV-CORE-000_Core_Invariants.md` | INV | Declares join_code isolation, scoping, and ledger-related invariants. fileciteturn53file0 |
+| `docs/INV-CORE-000_CORE_INVARIANTS.md` | INV | Declares join_code isolation, scoping, and ledger-related invariants. fileciteturn53file0 |
 | `docs/INV-CORE-001_Authority_Model.md` | INV | Defines rule hierarchy / governance levels. fileciteturn42file0 |
 | `app/models.py` | DOM (data truth) + partial ARC guardrails | Defines entities and some “truth functions” (scoped balances), but also contains legacy/unscoped properties that undermine invariants if used. fileciteturn46file0 |
 

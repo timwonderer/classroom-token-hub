@@ -1,4 +1,4 @@
-# V2 Domain Authority Master Summary
+# DOM-CORE-001: Domain Authority Summary
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -17,13 +17,13 @@ All domains listed below are bound by the following structural rules:
 2. **Event-Log Authority**: State is derived from immutable event logs. Caches are non-authoritative.
 3. **Policy vs. Execution**: Class Configuration owns "Directives"; Operational domains own "Facts."
 4. **Global Idempotency**: All write operations require a unique `idempotency_key`.
-5. **FEAT Execution Compliance**: All state mutation MUST occur through a compliant FEAT unit governed by [FEAT-CORE-000](file:///Users/timothychang/Documents/GitHub/classroom-economy/docs/development/v2_restructure_doc/FEAT-EXECUTION/FEAT-CORE-000_Feature_Execution_Constitutional_Directive.md).
+5. **FEAT Execution Compliance**: All state mutation MUST occur through a compliant FEAT unit governed by [FEAT-CORE-000](file:///Users/timothychang/Documents/GitHub/classroom-economy/docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md).
 
 ---
 
 ## III. Master Directives
 
-### 1. Feature Execution Constitutional Directive ([FEAT-CORE-000](file:///Users/timothychang/Documents/GitHub/classroom-economy/docs/development/v2_restructure_doc/FEAT-EXECUTION/FEAT-CORE-000_Feature_Execution_Constitutional_Directive.md))
+### 1. Feature Execution Constitutional Directive ([FEAT-CORE-000](file:///Users/timothychang/Documents/GitHub/classroom-economy/docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md))
 - **Authority**: Mandatory execution contract for all cross-domain coordination and state mutation.
 - **Enforcement**: Atomic transactions, context-first resolution, mandatory audit logging.
 
@@ -40,7 +40,7 @@ All domains listed below are bound by the following structural rules:
   - `classes`: Authoritative Universe Anchor.
 - **Key Transitions**: `Claim Seat`, `Resolve Context`, `Recover Account`.
 - **Primary Schema**: `users`, `seats`, `identity_profiles`, `classes`.
-- **Informative Map**: [DOM-IDEN-005 (MAP-IDEN-001)](file:///Users/timothychang/Documents/GitHub/classroom-economy/docs/development/v2_restructure_doc/DOM-DOMAIN/DOM-IDEN-005_Account_Lifecycle_Map.md).
+- **Informative Map**: [DOM-IDEN-005 (MAP-IDEN-001)](file:///Users/timothychang/Documents/GitHub/classroom-economy/docs/development/v2_restructure_doc/DOMAIN/DOM-IDEN-005_ACCOUNT_LIFECYCLE_MAP.md).
 
 ### 2. Class Configuration (`DOM-CLASS-001`)
 - **Authority**: Sovereign over "Directives" (Class Law/Policy).

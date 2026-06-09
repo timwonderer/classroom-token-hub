@@ -1,4 +1,4 @@
-# Identity and Class Binding Domain
+# DOM-IDEN-001: Identity Class Binding Domain
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -29,12 +29,12 @@ Tier 1 — Constitutional. This document defines structural enforcement mechanis
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
-- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-008_Identity_Resolution_and_Seat_Scope.md`
-- `DOM-CORE-000_Domain_Foundation.md`
-- `DOM-IDEN-003_Teacher_Identity_Architecture.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-008_IDENTITY_RESOLUTION_AND_SEAT_SCOPE.md`
+- `DOM-CORE-000_DOMAIN_FOUNDATION.md`
+- `DOM-IDEN-003_TEACHER_IDENTITY_ARCHITECTURE.md`
 - `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
-- `docs/development/specs/V2_IDENTITY_AND_OWNERSHIP_MODEL.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-019_IDENTITY_AND_OWNERSHIP_MODEL.md`
 
 ## V. Schema Authority Declaration
 

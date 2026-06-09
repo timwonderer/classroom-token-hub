@@ -21,8 +21,8 @@ As of 2026-04-13:
 
 The governing documents for this namespace realignment are:
 
-- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_Core_Invariants.md`
-- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_Capability_Based_Architecture_and_Authority_Model.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 - `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-000_EXECUTION_MODEL.md`
 
 ## Current Status Note (2026-04-25)
@@ -64,25 +64,25 @@ Only the following doc families belong at this level:
 
 ### INV-CORE
 
-- [x] `INV-CORE-000_Core_Invariants.md`
-- [x] `INV-CORE-001_Capability_Based_Architecture_and_Authority_Model.md`
+- [x] `INV-CORE-000_CORE_INVARIANTS.md`
+- [x] `INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 
 ### INV-ARC
 
 - [x] `INV-ARC-000_EXECUTION_MODEL.md`
-- [x] `INV-ARC-001_Scoped_Request_Context.md`
-- [x] `INV-ARC-002_No_Implicit_Global_Access.md`
-- [x] `INV-ARC-003_Scoped_Capability_Evaluation.md`
-- [x] `INV-ARC-004_Cross_Tenant_Isolation.md`
-- [x] `INV-ARC-005_No_PII_Leakage_in_Execution_Layer.md`
-- [x] `INV-ARC-006_Command_Boundary_for_Mutation.md`
-- [x] `INV-ARC-007_GET_Must_Be_Pure.md`
-- [x] `INV-ARC-009_Domain_Authority_for_State.md`
-- [x] `INV-ARC-010_Explicit_Context_Switching.md`
-- [x] `INV-ARC-011_No_Phantom_Scope_Access.md`
-- [x] `INV-ARC-012_Hard_Deletion_Enforcement.md`
-- [x] `INV-ARC-013_Membership_by_Existence.md`
-- [x] `INV-ARC-014_No_Label_Based_Logic.md`
+- [x] `INV-ARC-001_SCOPED_REQUEST_CONTEXT.md`
+- [x] `INV-ARC-002_NO_IMPLICIT_GLOBAL_ACCESS.md`
+- [x] `INV-ARC-003_SCOPED_CAPABILITY_EVALUATION.md`
+- [x] `INV-ARC-004_CROSS_TENANT_ISOLATION.md`
+- [x] `INV-ARC-005_NO_PII_LEAKAGE_IN_EXECUTION_LAYER.md`
+- [x] `INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md`
+- [x] `INV-ARC-007_GET_MUST_BE_PURE.md`
+- [x] `INV-ARC-009_DOMAIN_AUTHORITY_FOR_STATE.md`
+- [x] `INV-ARC-010_EXPLICIT_CONTEXT_SWITCHING.md`
+- [x] `INV-ARC-011_NO_PHANTOM_SCOPE_ACCESS.md`
+- [x] `INV-ARC-012_HARD_DELETION_ENFORCEMENT.md`
+- [x] `INV-ARC-013_MEMBERSHIP_BY_EXISTENCE.md`
+- [x] `INV-ARC-014_NO_LABEL_BASED_LOGIC.md`
 
 ## Removed From This Level
 

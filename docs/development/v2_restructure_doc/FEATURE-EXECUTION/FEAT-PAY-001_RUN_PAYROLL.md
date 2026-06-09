@@ -1,4 +1,4 @@
-# FEAT-PAY-001: Run Payroll (Normative)
+# FEAT-PAY-001: Run Payroll
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |

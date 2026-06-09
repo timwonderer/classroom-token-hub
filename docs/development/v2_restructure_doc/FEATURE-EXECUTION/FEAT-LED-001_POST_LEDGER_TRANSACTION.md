@@ -1,4 +1,4 @@
-# FEAT-LED-001: Post Ledger Transaction (Normative)
+# FEAT-LED-001: Post Ledger Transaction
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |

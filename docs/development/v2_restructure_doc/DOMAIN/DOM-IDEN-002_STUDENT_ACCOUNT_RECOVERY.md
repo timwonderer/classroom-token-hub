@@ -1,4 +1,4 @@
-# DOM-IDEN-002 Student Account Recovery
+# DOM-IDEN-002: Student Account Recovery
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
 | DOM-IDEN-002     | 2.1     | 2026-06-05     | 2.0 | Normative |
@@ -11,15 +11,15 @@ Recovery restores credential access to an existing student `users` identity and 
 claimed class-local seat. It is an **identity rebinding operation only** — it never
 alters economic history or creates a new participant record.
 
-For teacher account recovery, see `DOM-IDEN-004_Teacher_Account_Recovery.md`.
+For teacher account recovery, see `DOM-IDEN-004_TEACHER_ACCOUNT_RECOVERY.md`.
 
 Supersedes `docs/ARCHITECTURE/IDENTITY/ARC-IDEN-002_Account_Recovery.md`.
 
 ## II. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
-- `DOM-CORE-000_Domain_Foundation.md`
-- `DOM-IDEN-001_Identity_Class_Binding_Domain.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
+- `DOM-CORE-000_DOMAIN_FOUNDATION.md`
+- `DOM-IDEN-001_IDENTITY_CLASS_BINDING_DOMAIN.md`
 - `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
 
 ---
@@ -50,7 +50,7 @@ Applies to:
 - Student credential recovery within a class economy boundary
 
 Does not apply to:
-- Teacher recovery — see `DOM-IDEN-004_Teacher_Account_Recovery.md`
+- Teacher recovery — see `DOM-IDEN-004_TEACHER_ACCOUNT_RECOVERY.md`
 - System admin recovery (separate tier)
 - Class deletion or archival flows
 
@@ -238,5 +238,5 @@ handoff code described in this document. Durable recovery capability belongs in
 Revisions require version increment, effective-date update, and continued consistency
 with `INV-CORE-000` and:
 
-- `DOM-IDEN-001_Identity_Class_Binding_Domain.md`
+- `DOM-IDEN-001_IDENTITY_CLASS_BINDING_DOMAIN.md`
 - `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`

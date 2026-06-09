@@ -1,4 +1,4 @@
-# INV-ARC-001 — Scoped Request Context
+# INV-ARC-001: Scoped Request Context
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -18,7 +18,7 @@ Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-000`.
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `INV-ARC-000_EXECUTION_MODEL.md`
 
 ## V. Core Rule

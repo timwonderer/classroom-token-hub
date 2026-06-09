@@ -14,7 +14,7 @@ Applies to all multi-tenant boundaries, student join/claim flows, and cross-clas
 Constitutional (ARC Tier). Subordinate to INV-CORE-000 (Section 1 and 6).
 
 ## IV. Dependencies
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `ARC-IDEN-001_Admin_Identity_Handling.md`
 
 ## V. Tenant Identification Model

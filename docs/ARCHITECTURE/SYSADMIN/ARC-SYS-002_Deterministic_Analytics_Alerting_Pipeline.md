@@ -14,7 +14,7 @@ Applies to the `AnalyticsSnapshot` and `AnalyticsAlert` models, the periodic sna
 Constitutional (ARC Tier). Subordinate to INV-CORE-000 (Section 1: Isolation).
 
 ## IV. Dependencies
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `ARC-SYS-001_Sysadmin_Interface.md`
 
 ## V. Data Capture: The Snapshot Mechanical

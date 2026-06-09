@@ -1,4 +1,4 @@
-# FEAT-OBLI-001: Assess Obligation (Normative)
+# FEAT-OBLI-001: Assess Obligation
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |

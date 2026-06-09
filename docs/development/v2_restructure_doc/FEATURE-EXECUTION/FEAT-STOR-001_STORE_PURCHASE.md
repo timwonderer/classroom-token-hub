@@ -1,4 +1,4 @@
-# FEAT-STOR-001: Store Purchase (Normative)
+# FEAT-STOR-001: Store Purchase
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |

@@ -1,4 +1,4 @@
-# DOM-IDEN-003 Teacher Identity Architecture
+# DOM-IDEN-003: Teacher Identity Architecture
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -19,13 +19,13 @@ Supersedes `docs/ARCHITECTURE/IDENTITY/ARC-IDEN-001_Admin_Identity_Handling.md`.
 
 ## II. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
-- `DOM-CORE-000_Domain_Foundation.md`
-- `DOM-IDEN-001_Identity_Class_Binding_Domain.md`
-- `DOM-IDEN-002_Student_Account_Recovery.md`
-- `DOM-IDEN-004_Teacher_Account_Recovery.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
+- `DOM-CORE-000_DOMAIN_FOUNDATION.md`
+- `DOM-IDEN-001_IDENTITY_CLASS_BINDING_DOMAIN.md`
+- `DOM-IDEN-002_STUDENT_ACCOUNT_RECOVERY.md`
+- `DOM-IDEN-004_TEACHER_ACCOUNT_RECOVERY.md`
 - `docs/development/specs/V2_STUDENT_IDENTITY_ARCHITECTURE.md`
-- `docs/development/specs/V2_IDENTITY_AND_OWNERSHIP_MODEL.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-019_IDENTITY_AND_OWNERSHIP_MODEL.md`
 
 ## III. Core Design Principle
 
@@ -254,3 +254,9 @@ The following patterns are explicitly excluded from the v2 teacher identity mode
 - Teacher authentication always requires TOTP or passkey. PIN is for students only.
 - Student financial actions always require passphrase re-verification. This gate does
   not apply to teachers.
+
+---
+
+## XII. Amendment
+
+Revisions to this document must increment the version number, update the effective date, and remain consistent with foundational documentation standards.

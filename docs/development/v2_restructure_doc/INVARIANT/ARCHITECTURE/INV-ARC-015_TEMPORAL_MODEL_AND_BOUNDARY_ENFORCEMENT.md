@@ -1,4 +1,4 @@
-# Temporal Model and Boundary Enforcement
+# INV-ARC-015: Temporal Model and Boundary Enforcement
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -32,14 +32,14 @@ It is binding on all DOM and FEAT specifications.
 
 Foundational within the INV-ARC namespace. It derives from:
 
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `INV-ARC-000_EXECUTION_MODEL.md`
 
 ---
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
 - `INV-ARC-000_EXECUTION_MODEL.md`
 
 ---

@@ -1,4 +1,4 @@
-# FEAT-IDEN-001: Student Seat Claim (Normative)
+# FEAT-IDEN-001: Student Seat Claim
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |

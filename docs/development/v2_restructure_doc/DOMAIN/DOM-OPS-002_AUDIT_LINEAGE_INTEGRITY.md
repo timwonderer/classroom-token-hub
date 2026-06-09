@@ -28,10 +28,10 @@ Constitutional. Subordinate to `INV-ARC-016` and `DOM-OPS-001`. Supersedes any p
 
 ## IV. Dependencies
 
-- `INV-ARC-016_Lawful_Existence_and_Audit_Lineage.md`
-- `DOM-OPS-001_Operations_Domain.md`
-- `INV-ARC-006_Command_Boundary_for_Mutation.md`
-- `FEAT-CORE-000_Feature_Execution_Constitutional_Directive.md`
+- `INV-ARC-016_LAWFUL_EXISTENCE_AND_AUDIT_LINEAGE.md`
+- `DOM-OPS-001_OPERATIONS_DOMAIN.md`
+- `INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md`
+- `FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
 
 ---
 

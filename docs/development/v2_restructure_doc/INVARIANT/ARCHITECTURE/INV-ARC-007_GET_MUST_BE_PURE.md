@@ -1,4 +1,4 @@
-# INV-ARC-007 — GET Must Be Pure
+# INV-ARC-007: GET Must Be Pure
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -18,7 +18,7 @@ Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-000`.
 
 ## IV. Dependencies
 
-- `INV-ARC-006_Command_Boundary_for_Mutation.md`
+- `INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md`
 
 ## V. Core Rule
 

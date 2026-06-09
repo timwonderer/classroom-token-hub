@@ -1,4 +1,4 @@
-# INV-ARC-000 — Execution Model
+# INV-ARC-000: Execution Model
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -27,13 +27,13 @@ It is binding on all `DOM` and `FEAT` specifications.
 
 Foundational within the `INV-ARC` namespace. It derives from:
 
-- `INV-CORE-000_Core_Invariants.md`
-- `INV-CORE-001_Capability_Based_Architecture_and_Authority_Model.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
+- `INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
-- `INV-CORE-001_Capability_Based_Architecture_and_Authority_Model.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
+- `INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 
 ## V. Core Execution Model
 
@@ -51,22 +51,22 @@ No deviation from this sequence is permitted.
 
 This execution model is elaborated by the following `INV-ARC` documents:
 
-- `INV-ARC-001_Scoped_Request_Context.md`
-- `INV-ARC-002_No_Implicit_Global_Access.md`
-- `INV-ARC-003_Scoped_Capability_Evaluation.md`
-- `INV-ARC-004_Cross_Tenant_Isolation.md`
-- `INV-ARC-005_No_PII_Leakage_in_Execution_Layer.md`
-- `INV-ARC-006_Command_Boundary_for_Mutation.md`
-- `INV-ARC-007_GET_Must_Be_Pure.md`
-- `INV-ARC-008_Identity_Resolution_and_Seat_Scope.md`
-- `INV-ARC-009_Domain_Authority_for_State.md`
-- `INV-ARC-010_Explicit_Context_Switching.md`
-- `INV-ARC-011_No_Phantom_Scope_Access.md`
-- `INV-ARC-012_Hard_Deletion_Enforcement.md`
-- `INV-ARC-013_Membership_by_Existence.md`
-- `INV-ARC-014_No_Label_Based_Logic.md`
-- `INV-ARC-015_Temporal_Model_and_Boundary_Enforcement.md`
-- `INV-ARC-016_Lawful_Existence_and_Audit_Lineage.md`
+- `INV-ARC-001_SCOPED_REQUEST_CONTEXT.md`
+- `INV-ARC-002_NO_IMPLICIT_GLOBAL_ACCESS.md`
+- `INV-ARC-003_SCOPED_CAPABILITY_EVALUATION.md`
+- `INV-ARC-004_CROSS_TENANT_ISOLATION.md`
+- `INV-ARC-005_NO_PII_LEAKAGE_IN_EXECUTION_LAYER.md`
+- `INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md`
+- `INV-ARC-007_GET_MUST_BE_PURE.md`
+- `INV-ARC-008_IDENTITY_RESOLUTION_AND_SEAT_SCOPE.md`
+- `INV-ARC-009_DOMAIN_AUTHORITY_FOR_STATE.md`
+- `INV-ARC-010_EXPLICIT_CONTEXT_SWITCHING.md`
+- `INV-ARC-011_NO_PHANTOM_SCOPE_ACCESS.md`
+- `INV-ARC-012_HARD_DELETION_ENFORCEMENT.md`
+- `INV-ARC-013_MEMBERSHIP_BY_EXISTENCE.md`
+- `INV-ARC-014_NO_LABEL_BASED_LOGIC.md`
+- `INV-ARC-015_TEMPORAL_MODEL_AND_BOUNDARY_ENFORCEMENT.md`
+- `INV-ARC-016_LAWFUL_EXISTENCE_AND_AUDIT_LINEAGE.md`
 
 ## VII. Rebuild Intent
 

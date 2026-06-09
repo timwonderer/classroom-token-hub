@@ -17,7 +17,7 @@ It answers four questions:
 This is an identity-model document, not a full class-scope normalization plan. For
 class scoping and `class_id` normalization, see:
 
-- `docs/development/specs/V2_Class_Scope_Normalization_Target.md`
+- `docs/development/v2_restructure_doc/MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md`
 - `docs/development/specs/V2_CLASS_ID_INVARIANT_BACKLOG.md`
 
 For request-boundary session expiry and mutation replay rules, see:
@@ -26,7 +26,7 @@ For request-boundary session expiry and mutation replay rules, see:
 
 For the shared identity ownership contract used by teacher and student seats, see:
 
-- `docs/development/specs/V2_IDENTITY_AND_OWNERSHIP_MODEL.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-019_IDENTITY_AND_OWNERSHIP_MODEL.md`
 
 ## Core Design Principle
 
@@ -436,6 +436,7 @@ Claim data stored on `seats`:
 6. If duplicate-name seats exist, dedupe code is required to disambiguate.
 7. On successful claim, the seat is bound to `user_id` and marked with `claimed_at`.
 8. Credential setup activates login on `users`.
+9. Set `current_class_id` to resolved class context from join code.
 
 ## Roster Fingerprint
 

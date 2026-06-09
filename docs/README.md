@@ -1,12 +1,12 @@
 # Classroom Token Hub Documentation Index
 
-This directory contains the canonical documentation for the Classroom Token Hub, organized by namespace per [SOP-DOC-000](STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-000_Writing_Specification.md).
+This directory contains the canonical documentation for the Classroom Token Hub, organized by namespace per [SOP-DOC-000](development/v2_restructure_doc/SOP-DOC-000_DOCUMENTATION_STANDARD.md).
 
 ---
 
 ## Document Tier Classification
 
-All documents are classified into one of three tiers. See [SOP-DOC-000 Section V](STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-000_Writing_Specification.md) for full definitions.
+All documents are classified into one of three tiers. See [SOP-DOC-000 Section V](development/v2_restructure_doc/SOP-DOC-000_DOCUMENTATION_STANDARD.md) for full definitions.
 
 | Tier               | Authority                              | Namespaces / Locations                        |
 |--------------------|----------------------------------------|-----------------------------------------------|
@@ -21,7 +21,7 @@ All documents are classified into one of three tiers. See [SOP-DOC-000 Section V
 | Namespace | Tier | Purpose |
 |-----------|------|---------|
 | **[ARC](ARCHITECTURE/)** | Constitutional / Normative | Foundational invariants and operational constraints |
-| **[SOP](STANDARD_OPERATING_PROCEDURES/)** | Normative | Standard operating procedures (documentation, releases, deployments, databases) |
+| **[SOP](STANDARD_OPERATING_PROCEDURES/)** | Normative | Standard operating procedures (documentation, releases, deployments, deployments, databases) |
 | **[SEC](SECURITY/)** | Normative (CONT) / Informative | Security architecture, audits, controls, and incident records |
 | **[DOM](DOMAINS/)** | Normative | Domain specifications *(pending user-guide migration)* |
 | **[FEAT](FEATURES/)** | Normative | Feature specifications *(pending user-guide migration)* |
@@ -39,10 +39,10 @@ Non-namespace locations:
 
 ## Quick Links
 
-- **[Core Invariants](INV-CORE-000_Core_Invariants.md)** — Constitutional constraints (Tier 1)
+- **[Core Invariants](INV-CORE-000_CORE_INVARIANTS.md)** — Constitutional constraints (Tier 1)
 - **[Schema Ownership Index](ARCHITECTURE/OPERATIONS/ARC-OPS-016_Schema_Ownership_Index.md)** — Thin table-to-domain ownership map
 - **[Cross-Domain Data Relationships](ARCHITECTURE/OPERATIONS/ARC-OPS-017_Cross_Domain_Data_Relationships.md)** — Meaning of shared reference fields across domains
-- **[Documentation Standard](STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-000_Writing_Specification.md)** — Tier classification, taxonomy, naming, authoring rules
-- **[Documentation Index](STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_Documentation_Index.md)** — Complete list of tracked documents
+- **[Documentation Standard](development/v2_restructure_doc/SOP-DOC-000_DOCUMENTATION_STANDARD.md)** — Tier classification, taxonomy, naming, authoring rules
+- **[Documentation Index](development/v2_restructure_doc/SOP-DOC-002_DOCUMENTATION_INDEX.md)** — Complete list of tracked documents
 - **[Teacher Manual](user-guides/teacher_manual.md)** — User-facing teacher guide
 - **[Student Guide](user-guides/student_guide.md)** — User-facing student guide

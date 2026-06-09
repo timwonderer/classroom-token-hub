@@ -1,218 +1,146 @@
 # SOP-DOC-000: Documentation Standard
 
-| Reference Number | Version | Effective Date | Supersedes | Authority Level  |
-|------------------|---------|----------------|------------|------------------|
-| SOP-DOC-000      | 2.0     | 2026-03-01     | N/A        | Constitutional   |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DOC-000      | 3.0     | 2026-06-08     | SOP-DOC-000 v2.0, SOP-DOC-003 v1.2, SOP-DOC-005 v2.1, SOP-DOC-006 v1.0 | Foundational |
 
 ---
 
 ## I. Purpose
 
-This document defines the complete documentation standard for the Classroom Token Hub repository, encompassing document tier classification, namespace taxonomy, sub-division structure, naming conventions, authoring standards, authority hierarchy, versioning, and amendment procedures.
+This document defines the unified documentation standard, namespace taxonomy, repository organization, and authoring guidelines for the Classroom Token Hub repository under the V2 restructure architecture.
 
 ---
 
 ## II. Scope
 
-This standard applies to all documents maintained within the repository, including:
-
-- Constitutional, architectural, domain, and feature specification documents
-- Standard operating procedure documents
-- Security audit, control, and incident documents
-- Historical and milestone log documents
-- User-facing guides
-- AI agent operational rules (`.claude/rules/`)
-- Root-level contributor files
+This standard governs all documentation in the repository, including core invariants, architectural specifications, domain definitions, feature execution files, standard operating procedures, logs, user guides, and root repository files.
 
 ---
 
 ## III. Authority Level
 
-Foundational (Tier 0). This document establishes the rules by which all governance must abide, deriving its authority explicitly from INV-CORE-001 (Authority Model).
+Foundational (Tier 0). Subordinate only to `INV-CORE-000` and `INV-CORE-001`.
 
 ---
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
-- `INV-CORE-001_Authority_Model.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
+- `INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 
 ---
 
 ## V. Document Tier Classification
 
-All repository documents are classified into one of four tiers based on their normative authority, as defined by `INV-CORE-001`.
+All documents are classified into four tiers representing their normative authority:
 
 ### Tier 0 — Foundational
-
-**Definition:** Defines the identity, philosophy, and non-negotiable existence principles of the system. No lower authority document may override or redefine a Foundational invariant.
-**Language:** Establishes core invariants. Cannot derive authority from lower levels.
-**Applies to:**
-- `INV-CORE-000`, `INV-CORE-001`, `SOP-DOC-000`
+- **Definition**: Defines non-negotiable laws and identity of the system.
+- **Location**: `docs/development/v2_restructure_doc/INVARIANT/CORE/`
+- **Prefix**: `INV-CORE-*`
 
 ### Tier 1 — Constitutional
-
-**Definition:** Defines structural enforcement mechanisms and cross-cutting constraints that operationalize Foundational invariants.
-**Language:** Must use "shall" and "prohibited" exclusively for constraints. MUST cite relevant Foundational invariants.
-**Applies to:**
-- `ARCHITECTURE/` (ARC-*)
-- `DOMAINS/` (DOM-*)
-- `SECURITY/` (SEC-CONT, Security Architecture)
-
----
+- **Definition**: Structural enforcement mechanisms and bounded domain rules that operationalize Tier 0 laws.
+- **Location**: 
+  - `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/` (Prefix: `INV-ARC-*`)
+  - `docs/development/v2_restructure_doc/DOMAIN/` (Prefix: `DOM-*`)
 
 ### Tier 2 — Normative
-
-**Definition:** Defines required operational procedures and behavioral governance necessary to maintain compliance. Must not conflict with Constitutional documents.
-**Language:** Must use "must", "shall", "required", "prohibited".
-**Applies to:**
-- `FEATURES/` (FEAT-*)
-- `STANDARD_OPERATING_PROCEDURES/` (SOP-*)
-- `.claude/rules/*` — AI agent operational rules
-
----
+- **Definition**: Governs concrete implementation flows, transactions, and operational standard procedures.
+- **Location**: 
+  - `docs/development/v2_restructure_doc/FEATURE-EXECUTION/` (Prefix: `FEAT-*`)
+  - `docs/development/v2_restructure_doc/` (Prefix: `SOP-*`)
 
 ### Tier 3 — Informative
-
-**Definition:** Records historical events, reports, audits, releases, and descriptive system information. Must not define new rules.
-**Language:** May use advisory language ("should", "recommended"). Must not use binding language.
-**Applies to:**
-- `LOGS/` (LOG-*) — historical records and milestone reports
-- `SECURITY/` (SEC-AUD/INC/VUL/THR) — audit findings, incidents, vulnerability reports
-- `docs/user-guides/*` — user-facing instructional content
-- Root-level files: `README.md`, `CHANGELOG.md`, `DEVELOPMENT.md`, `PROJECT_HISTORY.md`, `CONTRIBUTING.md`
+- **Definition**: Preserves institutional memory, timelines, target plans, releases, and user guides. Must not define runtime rules.
+- **Location**:
+  - `docs/development/v2_restructure_doc/MAP/` (Prefix: `MAP-*`)
+  - `docs/user-guides/` (User guides)
+  - `docs/LOGS/` or `docs/development/v2_restructure_doc/LOGS/` (Prefix: `LOG-*`)
+  - Root directory files (`README.md`, `CHANGELOG.md`, `DEVELOPMENT.md`, etc.)
 
 ---
 
-### Conflict Resolution
+## VI. Restructure Directory Taxonomy
 
-In the event of conflict between documents, `INV-CORE-001` Section V is the sole authority:
-1. Foundational authority SHALL prevail.
-2. Constitutional authority SHALL prevail over Normative and Informative.
-3. Normative authority SHALL prevail over Informative.
+The target structure under `docs/development/v2_restructure_doc/` consists of:
 
----
-
-## VI. Documentation Namespaces
-
-The repository documentation is organized into six functional Divisions. For a complete definition of each Division, its purpose, its boundary rules, and what it may/may not contain, refer to `SOP-DOC-003_Division_Definition.md`.
-
-| Division      | Tier Classification                 |
-|---------------|-------------------------------------|
-| ARCHITECTURE  | Constitutional (ARC)               |
-| DOMAINS       | Constitutional (DOM)               |
-| FEATURES      | Normative (FEAT)                   |
-| SOP           | Normative (SOP)                    |
-| SECURITY      | Mixed (Constitutional/Informative) |
-| LOGS          | Informative                        |
-
-Non-namespace locations:
-
-| Location          | Tier        | Purpose                                      |
-|-------------------|-------------|----------------------------------------------|
-| `.claude/rules/`  | Normative   | AI agent operational rules                   |
-| `docs/user-guides/` | Informative | User-facing instructional content            |
-| Root files        | Informative | Project orientation and contributor reference |
+1. **`INVARIANT/CORE/`**: Foundational invariants and system properties.
+2. **`INVARIANT/ARCHITECTURE/`**: Architectural invariants, cross-domain safety boundaries, and gating rules.
+3. **`DOMAIN/`**: Authoritative domain specifications defining vocabulary, schema authority, owned database tables, and capability checks.
+4. **`FEATURE-EXECUTION/`**: Specs defining user interactions, FEAT orchestration, and transaction safety.
+5. **`MAP/`**: Technical maps, launch tracking checklists, and target-state documentation.
 
 ---
 
-## VII. Namespace Sub-Divisions
+## VII. Naming Convention
 
-Subdivisions (e.g., `docs/ARCHITECTURE/OPERATIONS/`, `docs/DOMAINS/BANKING/`) are governed individually by the `CORE-000` document located at the root of their respective namespaces (e.g., `ARC-CORE-000`, `DOM-CORE-000`). Refer to the respective `CORE-000` documents for up-to-date subdivision structures.
-
----
-
-## VIII. Naming Convention
-
-All document identifiers must follow the format:
+All formal document identifiers must follow the format:
 
 ```
 [NAMESPACE]-[FUNCTIONAL-AREA]-[NUMERIC-IDENTIFIER]_[Descriptive_Title].md
 ```
 
-Rules:
-
-- `000` is reserved for foundational or normative definition documents within a namespace-area.
-- Subsequent numbers (`001`, `002`, ...) represent derived or scoped documents.
-- LOG documents may include dates in addition to numeric identifiers.
-- Naming must reflect functional clarity and must not include informal descriptors, narrative, or dates (except LOG documents).
+- `000` is reserved for namespace-area definitions or foundations (e.g. `DOM-CORE-000`).
+- Subsequent numbers represent derived documents.
+- Title must use snake_case or descriptive words separated by underscores.
 
 ---
 
-## IX. Authoring Standards
+## VIII. Authoring Guidelines
 
-### Frontmatter Table
+### Required Sections for Normative and Constitutional Documents
 
-All formally tracked documents must include a frontmatter table immediately after the document title:
+Formal specifications (INV, DOM, FEAT, SOP) must include the following sections in this exact order:
 
-```markdown
-| Reference Number | Version | Effective Date | Supersedes       | Authority Level                      |
-|------------------|---------|----------------|------------------|--------------------------------------|
-| [REF]            | [X.Y]   | [YYYY-MM-DD]   | [N/A or prev ref] | Foundational/Constitutional/Normative/Informative |
+1. **I. Purpose** — Single paragraph explaining the document's goal.
+2. **II. Scope** — Details on what is governed and where constraints apply.
+3. **III. Authority Level** — Tier classification and subordination mappings.
+4. **IV. Dependencies** — References to preceding documents or models.
+5. **[V+] Content Sections** — Document-specific rules (e.g., capability definitions).
+6. **[Last] Amendment** — Standard revision procedure.
+
+### Crucial Architectural Rules to Document
+
+- **Class Isolation Scoping**: Documents must scope student/seat queries by `class_id` (canonical boundary) rather than teacher ownership or label.
+- **Identity Context**: Roster and activity anchors must be bound to `seat_id`.
+- **Pure Reads**: Read pathways (GET) must not trigger state modification or session commits.
+- **PII Encryption**: Specifications must ensure PII is encrypted at rest using standard hash/encryption helpers.
+
+---
+
+## IX. Codebase Organization Playbook
+
+### Clean Separation Rules
+- **No Documentation in `/app/`**: Runtime directories must contain only execution code, tests, and configuration.
+- **No Runtime Code in `/docs/`**: The documentation tree must not contain executable modules or active scripts.
+- **User-Facing Separation**: Public guides belong in `docs/user-guides/` and must focus on high-level guarantees and walkthroughs. No internal implementation details, ORM schemas, or system keys may be published in user-facing guides.
+
+### File Operations Workflow
+1. **Use Git Move**: Always run `git mv` to relocate files to preserve commit history.
+2. **Verify References**: After moving, use `rg` to locate and update all inbound markdown links and reference pointers.
+3. **Audit heads**: Ensure Alembic migration heads and Git HEAD remain clean and unified.
+
+---
+
+## X. Link Integrity Verification Procedure
+
+Every file relocation or renaming must be immediately verified with:
+
+```bash
+# Search for occurrences of the old filename or path across the repository
+rg "old_filename_or_path" docs/
 ```
 
-The `Authority Level` field must strictly match the assigned Tier of the document (Foundational, Constitutional, Normative, or Informative).
-
-### Required Sections for Normative Documents
-
-All normative documents (ARC, DOM, FEAT, SOP, SEC-CONT) must include the following sections in this order:
-
-1. **I. Purpose** — Single paragraph statement of the document's purpose
-2. **II. Scope** — What this document governs and where it applies
-3. **III. Authority Level** — Tier classification and what this document is subordinate to
-4. **IV. Dependencies** — Documents this document directly derives from or requires
-5. **[V+] Content Sections** — Document-specific normative content
-6. **[Last] Amendment** — Procedure for revising this document
-
-Informative documents (LOG, SEC-AUD/INC/VUL/THR, user-guides, root files) do not require this structure.
-
-### Section Numbering
-
-All formal sections must use Roman numerals at the top level (I, II, III...). Subsections use Arabic numerals (1, 2, 3...) or letters.
-
-### Language Standards
-
-Normative documents must:
-
-- Use precise and enforceable language: "must", "shall", "required", "prohibited"
-- Avoid narrative, historical storytelling, or design rationale
-- Avoid duplicating invariant language from INV-CORE-000
-- Avoid redundancy with other normative documents
-
-Informative documents:
-
-- May use advisory language: "should", "recommended", "typically"
-- May include narrative and contextual explanation
-- Must not define binding rules or restate Constitutional constraints
+All references must be updated in the same commit to guarantee a zero-broken-link state.
 
 ---
 
-## X. Authority Hierarchy
+## XI. Amendment
 
-The following precedence order applies in the event of conflict, per `INV-CORE-001`:
-
-1. `INV-CORE` and `SOP-DOC-000` define Foundational truth.
-2. `ARC`, `DOM`, and Security Architecture define authoritative Constitutional rules.
-3. `FEAT` and `SOP` define Normative implementation details and operational procedures.
-4. `LOG` and `SEC` records are Informative descriptions.
-
----
-
-## XI. Versioning
-
-- Major version increments indicate structural changes to purpose, scope, tier classification, or authority.
-- Minor version increments indicate clarification or non-breaking additions.
-- Effective Date must be updated upon approval of all revisions.
-- Supersedes field must reference the prior version or any superseded documents by reference number and version.
-
----
-
-## XII. Amendment
-
-Revisions to this document must:
-
-1. Increment the version number per Section XI.
-2. Update the Effective Date.
-3. Populate the Supersedes field with the replaced version or document references.
-4. Maintain consistency with INV-CORE-000.
-5. Update SOP-DOC-002 to reflect any structural changes to the namespace or sub-division definitions.
+Revisions to this standard require:
+1. Incrementing the version number.
+2. Updating the Effective Date.
+3. Updating the Supersedes list.
+4. Ensuring compatibility with core invariants in `INV-CORE-000`.

@@ -14,7 +14,7 @@ This specification governs the `/sysadmin` namespace, defining authentication re
 Constitutional (ARC Tier). This document is subordinate only to `INV-CORE-000` and `ARC-CORE-000`.
 
 ## IV. Dependencies
-- `INV-CORE-000_Core_Invariants.md` (Authority and Multi-tenancy isolation policies)
+- `INV-CORE-000_CORE_INVARIANTS.md` (Authority and Multi-tenancy isolation policies)
 - `ARC-IDEN-001_Admin_Identity_Handling.md`
 
 ## V. Design Philosophy

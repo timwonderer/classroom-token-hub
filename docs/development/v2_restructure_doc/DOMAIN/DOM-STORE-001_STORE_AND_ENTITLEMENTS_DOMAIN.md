@@ -1,4 +1,4 @@
-# Store and Entitlements Domain
+# DOM-STORE-001: Store and Entitlements Domain
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -22,8 +22,8 @@ Tier 1 — Constitutional. This document defines structural enforcement mechanis
 
 ## IV. Dependencies
 
-- `INV-CORE-000_Core_Invariants.md`
-- `DOM-CORE-000_Domain_Foundation.md`
+- `INV-CORE-000_CORE_INVARIANTS.md`
+- `DOM-CORE-000_DOMAIN_FOUNDATION.md`
 
 ## V. Schema Authority Declaration
 

@@ -1,4 +1,4 @@
-# INV-ARC-006 — Command Boundary for Mutation
+# INV-ARC-006: Command Boundary for Mutation
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -18,7 +18,7 @@ Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-000`.
 
 ## IV. Dependencies
 
-- `INV-ARC-003_Scoped_Capability_Evaluation.md`
+- `INV-ARC-003_SCOPED_CAPABILITY_EVALUATION.md`
 
 ## V. Core Rule
 

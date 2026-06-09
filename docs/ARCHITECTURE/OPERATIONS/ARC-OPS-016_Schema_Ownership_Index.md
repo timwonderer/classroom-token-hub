@@ -19,7 +19,7 @@ Constitutional as an index only. It may point to authority; it does not replace 
 ## IV. Dependencies
 
 - `INV-CORE-001_Authority_Model.md`
-- `DOM-CORE-000_Domain_Foundation.md`
+- `DOM-CORE-000_DOMAIN_FOUNDATION.md`
 
 ## V. Table Ownership Index
 

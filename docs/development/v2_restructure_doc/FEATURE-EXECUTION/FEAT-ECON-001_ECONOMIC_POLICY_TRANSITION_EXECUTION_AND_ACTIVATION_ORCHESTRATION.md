@@ -1,4 +1,4 @@
-# FEAT-ECON-001  Economic Policy Transition Execution & Activation Orchestration
+# FEAT-ECON-001: Economic Policy Transition Execution and Activation Orchestration
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|

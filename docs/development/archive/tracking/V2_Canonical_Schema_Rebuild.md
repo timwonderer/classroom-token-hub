@@ -2,7 +2,7 @@
 
 ## Context
 
-`docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-002_Canonical_Schema_Definition.md` (Constitutional, 2026-04-25) declares the **only valid runtime tables** for v2. The current schema (`app/models.py`, ~60 models, 80+ migrations) diverges materially: `students`/`teachers` violate INV-IDEN-001; `transaction`/`balance_cache` violate INV-LED-001/010; the entire Obligations, Operations, and Interpretation domains are unimplemented; 33 tables have nullable `class_id`; 9 tables use `block`/`period` labels as scoping authorities. Full divergence inventory in `docs/development/tracking/V2_SCHEMA_COMPLIANCE_AUDIT.md` (compliance ~55/100).
+`docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION.md` (Constitutional, 2026-04-25) declares the **only valid runtime tables** for v2. The current schema (`app/models.py`, ~60 models, 80+ migrations) diverges materially: `students`/`teachers` violate INV-IDEN-001; `transaction`/`balance_cache` violate INV-LED-001/010; the entire Obligations, Operations, and Interpretation domains are unimplemented; 33 tables have nullable `class_id`; 9 tables use `block`/`period` labels as scoping authorities. Full divergence inventory in `docs/development/tracking/V2_SCHEMA_COMPLIANCE_AUDIT.md` (compliance ~55/100).
 
 V2 will launch on an empty database. There is no production data, no live users, and no upgrade path to preserve. This plan is a **clean-slate rebuild** to DOM-CORE-002 compliance with no transition scaffolding, no backfill logic, and no compatibility shims. Auxiliary capabilities not listed in DOM-CORE-002 §V (sysadmin role, invite codes, recovery flow, analytics caches) are folded into canonical tables and DOM-CORE-002 is amended to v1.1 to declare those composition rules. The Alembic chain is squashed to a single bootstrap migration.
 
@@ -20,12 +20,12 @@ Before any code: lock the contract.
   - DOM-OPS-001: replace `payroll_cache` and any read-side caches with snapshot derivations under `operational_events` or computed-on-read services. No persisted compute caches.
   - DOM-SUP-001: add `user_reports` as canonical (already domain-aligned).
   - DOM-ITR-001: explicitly subsume `economy_snapshots` semantics under `interpretation_snapshots.axis = STRUCTURAL`.
-- Update `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-001_Domain_Authority_Summary.md` to reflect v1.1 composition rules.
+- Update `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-001_DOMAIN_AUTHORITY_SUMMARY.md` to reflect v1.1 composition rules.
 - Snapshot the final canonical table list as the single source of truth — every subsequent wave verifies against it.
 
 **Critical files:**
-- `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-002_Canonical_Schema_Definition.md`
-- `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-001_Domain_Authority_Summary.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-001_DOMAIN_AUTHORITY_SUMMARY.md`
 - New: `docs/development/tracking/V2_CANONICAL_REBUILD_PLAN.md` (this plan, summarized)
 
 ---
