@@ -33,6 +33,13 @@ def _create_admin(username: str) -> tuple[Admin, str]:
     secret = pyotp.random_base32()
     admin = make_admin(username, secret)
     db.session.add(admin)
+    db.session.flush()
+    user = User(
+        user_role=UserRole.TEACHER,
+        username_hash=admin.username_hash,
+        username_lookup_hash=admin.username_lookup_hash,
+    )
+    db.session.add(user)
     db.session.commit()
     return admin, secret
 
@@ -82,9 +89,12 @@ def _login_admin(client, admin: Admin, secret: str):
         data={"username": "teacher1", "totp_code": pyotp.TOTP(secret).now()},
         follow_redirects=False,
     )
+    user = User.query.filter_by(username_lookup_hash=admin.username_lookup_hash).first()
     with client.session_transaction() as sess:
         sess["is_admin"] = True
         sess["admin_id"] = admin.id
+        if user:
+            sess["user_id"] = user.id
         if not sess.get("current_join_code"):
             first_membership = (
                 ClassMembership.query.filter_by(admin_id=admin.id, role="admin")
@@ -134,33 +144,17 @@ def _create_claimed_seat(teacher: Admin, student: Student, join_code: str, block
         _create_class_scope(teacher, student, join_code)
 
     class_row = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=teacher.id).first()
-    seat = TeacherBlock(
-        teacher_id=teacher.id,
-        block=block,
-        class_label=block,
-        first_name=student.first_name,
-        last_initial=student.last_initial,
-        last_name_hash_by_part=None,
-        dob_sum_hash=None,
-        salt=b"seat-salt",
-        first_half_hash=f"hash-{teacher.id}-{student.id}-{join_code}",
-        class_id=class_row.class_id if class_row else None,
-        join_code=join_code,
-        student_id=student.id,
-        is_claimed=True,
-    )
-    db.session.add(seat)
     runtime_seat = _get_or_create_student_seat(student, class_row.class_id, join_code) if class_row else None
     if runtime_seat and not runtime_seat.claimed_at:
         runtime_seat.claimed_at = datetime.now(timezone.utc)
     db.session.commit()
-    return seat
+    return runtime_seat
 
 
 def _get_or_create_student_seat(student: Student, class_id: str, join_code: str):
     user = User.query.filter_by(username_hash=student.username_hash).first()
     assert user is not None
-    seat = Seat.query.filter_by(student_id=student.id, class_id=class_id).first()
+    seat = Seat.query.filter_by(student_id=student.id, class_id=class_id).order_by(Seat.id.asc()).first()
     if seat:
         seat.user_id = user.id
         return seat
@@ -172,6 +166,7 @@ def _get_or_create_student_seat(student: Student, class_id: str, join_code: str)
         role="student",
         block_identifier="A",
         block="A",
+        claimed_at=datetime.now(timezone.utc),
     )
     db.session.add(seat)
     db.session.flush()
@@ -209,8 +204,11 @@ def _create_class_scope(teacher: Admin, student: Student, join_code: str):
 
 def _login_student(client, student: Student, join_code: str | None = None):
     now = datetime.now(timezone.utc).isoformat()
+    user = User.query.filter_by(username_hash=student.username_hash).first()
     with client.session_transaction() as sess:
         sess["student_id"] = student.id
+        if user:
+            sess["user_id"] = user.id
         sess["login_time"] = now
         sess["last_activity"] = now
         if join_code:
@@ -223,7 +221,6 @@ def _login_student(client, student: Student, join_code: str | None = None):
                     sess["current_seat_id"] = seat.id
                     sess["seat_id"] = seat.id
                     sess["class_id"] = class_row.class_id
-                    sess["user_id"] = seat.user_id
 
 
 def test_attendance_history_api_scoped_to_teacher(client):
@@ -633,7 +630,8 @@ def test_hall_pass_available_types_accepts_class_id_without_teacher_id(client):
 
     _login_student(client, student, join_code="HALLA1")
     response = client.get(f"/api/hall-pass/available-types?class_id={economy.class_id}")
-
+    
+    print("RESPONSE JSON:", response.get_json())
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["status"] == "success"
