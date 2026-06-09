@@ -29,7 +29,6 @@ def record_rent_payment(
     coverage_start_time=None,
     coverage_end_time=None,
     cycle_idempotency_key: str | None = None,
-    join_code: str | None = None,
     transaction_id: int | None = None,
 ):
     """Obligations-owned mutation for rent payment truth.
@@ -46,7 +45,6 @@ def record_rent_payment(
     assessment = ObligationAssessment(
         seat_id=seat_id,
         class_id=class_id,
-        join_code=join_code,
         period=period,
         obligation_type="RENT",
         amount_snap=amount_paid,
@@ -85,7 +83,6 @@ def record_rent_payment(
     payment = RentPayment(
         seat_id=seat_id,
         class_id=class_id,
-        join_code=join_code,
         period=period,
         amount_paid=amount_paid,
         period_month=period_month,
@@ -110,7 +107,6 @@ def record_insurance_enrollment(
     purchase_date,
     next_payment_due,
     coverage_start_date,
-    join_code: str | None = None,
 ):
     """Obligations-owned mutation for insurance enrollment truth.
 
@@ -124,7 +120,6 @@ def record_insurance_enrollment(
         seat_id=seat_id,
         class_id=class_id,
         policy_id=policy.id,
-        join_code=join_code,
         status='active',
         purchase_date=purchase_date,
         last_payment_date=purchase_date,
@@ -138,7 +133,6 @@ def record_insurance_enrollment(
     assessment = ObligationAssessment(
         seat_id=seat_id,
         class_id=class_id,
-        join_code=join_code,
         obligation_type="INSURANCE_ENROLLMENT",
         amount_snap=0,
         due_at=next_payment_due,
@@ -159,7 +153,6 @@ def record_insurance_enrollment(
         seat_id=seat_id,
         class_id=class_id,
         policy_id=policy.id,
-        join_code=join_code,
         status='active',
         purchase_date=purchase_date,
         last_payment_date=purchase_date,
@@ -204,7 +197,6 @@ def record_insurance_claim(
     claim_item: str | None,
     comments: str | None,
     transaction_id: int | None,
-    join_code: str | None = None,
 ):
     """Obligations-owned mutation for filed insurance claims."""
     claim = InsuranceClaim(
@@ -212,7 +204,6 @@ def record_insurance_claim(
         policy_id=policy_id,
         seat_id=seat_id,
         class_id=class_id,
-        join_code=join_code,
         incident_date=incident_date,
         description=description,
         claim_amount=claim_amount,

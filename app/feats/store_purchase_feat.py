@@ -190,7 +190,6 @@ def execute_store_purchase(
         store_service.unlock_collective_goal_if_ready(
             item=item,
             class_id=class_id,
-            join_code=scope.join_code,
         )
 
     # FEAT-LEGACY-WRAP: commit moved to shell

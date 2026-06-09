@@ -106,13 +106,13 @@ def resolve_actor_context() -> dict | None:
     if current_seat and current_seat.role == "student" and current_seat.student_id:
         actor_type = "student"
         actor_id = current_seat.student_id
-        join_code = current_seat.join_code or session.get("current_join_code")
+        join_code = None or None
         class_id = current_seat.class_id or session.get("current_class_id") or _resolve_class_id(join_code)
         actor_public_id = current_seat.public_id
     elif (student := get_logged_in_student()) is not None:
         actor_type = "student"
         actor_id = student.id
-        join_code = session.get("current_join_code")
+        join_code = None
         class_id = session.get("current_class_id") or _resolve_class_id(join_code) or student.class_id
         actor_public_id = (
             _session_seat(class_id=class_id, role="student").public_id
@@ -121,7 +121,7 @@ def resolve_actor_context() -> dict | None:
     elif (admin := get_current_admin()) is not None:
         actor_type = "teacher"
         actor_id = admin.id
-        join_code = session.get("current_join_code")
+        join_code = None
         class_id = session.get("current_class_id") or _resolve_class_id(join_code)
         actor_public_id = _teacher_seat_public_id(class_id=class_id)
     elif (sysadmin := get_current_system_admin()) is not None:

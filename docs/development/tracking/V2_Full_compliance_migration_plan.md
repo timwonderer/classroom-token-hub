@@ -280,6 +280,17 @@ This section defines **behavioral truth**, independent of schema implementation.
 
 All future migration work must preserve these contracts.
 
+### Status Update (2026-06-08): Wave 3C.12-H Canonical Class Context Cutover & Tenancy Test Stabilization
+
+- Implemented `app/services/context_resolver.py` introducing the `CanonicalContext` dataclass, enforcing a strict invariant that strips legacy access properties (`join_code`, `teacher_id`, `block`, `student_id`).
+- Fully replaced implicit `get_current_class_context()` across `app/routes/student.py` and `app/routes/api.py` with explicit fail-closed `resolve_canonical_context()` evaluations.
+- Isolated presentation-layer `join_code` dependency by establishing a standalone `get_display_join_code` template helper, preventing `join_code` from contaminating internal authority.
+- Stabilized the `tests/test_api_tenancy.py` suite (0 failures) by:
+  - Removing duplicate legacy `TeacherBlock` instantiations in fixtures to prevent unique-constraint violations (`uq_seats_user_class`).
+  - Adding deterministic `.order_by(Seat.id.asc())` lookups during testing seat generation.
+  - Ensuring testing sessions correctly hydrate `sess["user_id"]` across simulated authentication exchanges.
+- Added comprehensive regression testing in `tests/test_context_resolver.py` asserting strict rejections for system administrators, uninitialized keys, unclaimed seats, and mismatched bounds.
+
 ## Wave 1 — Canonical Model Foundation
 
 **Goal:** Write all 44 DOM-CORE-002 ORM model classes as the authoritative reference. Produce a gap audit document. App still runs on legacy tables — no schema changes yet.

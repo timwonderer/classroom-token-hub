@@ -77,3 +77,18 @@ def is_valid_join_code_format(code):
         return False
 
     return True
+
+
+def get_display_join_code(class_id: str | None) -> str | None:
+    """
+    Resolve the public join code for a given class ID.
+
+    This is strictly a presentation-layer helper for templates and views
+    that need to display the join code to users. It must never be used
+    to resolve authority or reconstruct context.
+    """
+    if not class_id:
+        return None
+    from app.models import ClassEconomy
+    class_row = ClassEconomy.query.filter_by(class_id=class_id).first()
+    return class_row.join_code if class_row else None

@@ -60,7 +60,6 @@ from app.feats.attendance import (
     return_hall_pass as feat_return_hall_pass,
 )
 from app.routes.student import (
-    get_current_class_context,
     get_current_teacher_id,
     get_feature_settings_for_student,
     get_rent_settings_for_context,
@@ -68,6 +67,7 @@ from app.routes.student import (
     _is_student_coverage_period_paid,
     _ensure_rent_hall_pass_top_off,
 )
+from app.services.context_resolver import resolve_canonical_context, ContextResolutionError
 from app.feats.store_purchase_feat import execute_rent_perk_purchase, execute_store_purchase
 from app.services import store_service
 from app.utils.economy_policy import resolve_class_scope, resolve_feature_class, resolve_feature_class_for_class
@@ -105,6 +105,14 @@ from app.payroll import get_pay_rate_for_block
 
 # Create blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api')
+
+@api_bp.errorhandler(ContextResolutionError)
+def handle_api_context_resolution_error(e):
+    from app.services.context_resolver import ContextForbidden, ContextMismatch
+    if isinstance(e, (ContextForbidden, ContextMismatch)):
+        return jsonify({"status": "error", "message": "Not Found", "error": "Not Found"}), 404
+    return jsonify({"status": "error", "message": "Class context required", "error": "Class context required"}), 401
+
 
 
 # -------------------- Rent Helpers --------------------
@@ -377,7 +385,7 @@ def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_
 @login_required
 @feat_shell("FEAT-STOR-002")
 def purchase_item():
-    from app.routes.student import get_current_class_context
+    from app.services.context_resolver import resolve_canonical_context, ContextResolutionError
 
     student = get_logged_in_student()
     try:
@@ -410,12 +418,12 @@ def purchase_item():
         return jsonify({"status": "error", "message": "Incorrect passphrase."}), 403
 
     # CRITICAL FIX v2: Get full class context (class_id is source of truth)
-    context = get_current_class_context()
+    context = resolve_canonical_context()
     if not context:
         return jsonify({"status": "error", "message": "No class context available."}), 400
 
-    class_id = context['class_id']
-    join_code = context['join_code']
+    class_id = context.class_id
+    join_code = get_display_join_code(context.class_id)
     teacher_id = context['teacher_id']
     current_block = context.get('block', '').strip().upper()
     seat_id = get_seat_id_for_class(student.id, class_id)
@@ -809,7 +817,7 @@ def use_item():
         return jsonify({"status": "error", "message": "This item has expired."}), 400
 
     # Get context up front for audit snapshots and transaction scoping.
-    context = get_current_class_context()
+    context = resolve_canonical_context()
     teacher_id_for_audit = (
         context['teacher_id'] if context else
         (student_item.store_item.teacher_id if student_item.store_item else None)
@@ -1194,7 +1202,7 @@ def _enforce_hall_pass_student_context(student, log_entry):
     """
     current_class_id = get_current_class_id()
     if not current_class_id:
-        context = get_current_class_context()
+        context = resolve_canonical_context()
         current_class_id = context.get("class_id") if context else None
 
     if not current_class_id:
@@ -1725,11 +1733,11 @@ def get_available_hall_pass_types():
         }), 400
 
     resolved_class_id = None
-    context = get_current_class_context()
+    context = resolve_canonical_context()
 
     if context:
         # Session class context is authoritative for logged-in student/admin flows.
-        resolved_class_id = context.get('class_id')
+        resolved_class_id = context.class_id
         if requested_class_id and requested_class_id != resolved_class_id:
             return jsonify({"status": "error", "message": "class_id is out of scope for this session"}), 403
     elif requested_class_id:
@@ -2033,7 +2041,7 @@ def handle_tap():
     # Normalize action to new terminology
     normalized_action = action_map[action]
 
-    context = get_current_class_context()
+    context = resolve_canonical_context()
     class_id = context.get("class_id") if context else get_current_class_id()
     if not class_id:
         current_app.logger.warning("TAP ERROR: Missing class_id context for student_id=%s", student.id)
@@ -2466,11 +2474,11 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
 @api_bp.route('/student-status', methods=['GET'])
 @login_required
 def student_status():
-    from app.routes.student import get_current_class_context
+    from app.services.context_resolver import resolve_canonical_context, ContextResolutionError
 
     student = get_logged_in_student()
 
-    context = get_current_class_context()
+    context = resolve_canonical_context()
     if not context:
         return jsonify({"status": "error", "message": "No class selected."}), 400
 
@@ -2496,13 +2504,13 @@ def student_status():
 @feat_shell("FEAT-ATTN-002")
 def reconcile_student_status():
     """Apply attendance-side mutations (daily-limit auto tap-out) explicitly via POST."""
-    from app.routes.student import get_current_class_context
+    from app.services.context_resolver import resolve_canonical_context, ContextResolutionError
 
     student = get_logged_in_student()
     if not student:
         return jsonify({"status": "error", "message": "Student not found."}), 404
 
-    context = get_current_class_context()
+    context = resolve_canonical_context()
     if not context:
         return jsonify({"status": "error", "message": "No class selected."}), 400
 

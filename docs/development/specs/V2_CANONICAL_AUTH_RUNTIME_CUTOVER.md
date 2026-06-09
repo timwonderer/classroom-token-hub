@@ -1,7 +1,7 @@
 # V2 Canonical Auth Runtime Cutover
 
-**Status:** Current implementation contract
-**Effective Date:** 2026-06-05
+**Status:** Implemented (Wave 3C.12-H)
+**Effective Date:** 2026-06-08
 
 ## Purpose
 

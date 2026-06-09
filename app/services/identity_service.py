@@ -102,7 +102,6 @@ def reconcile_rent_hall_pass_top_off(
             seat_id=seat.id,
             period=seat.block,
             class_id=seat.class_id,
-            join_code=seat.join_code,
             rent_hall_passes=0,
         )
         db.session.add(student_block)

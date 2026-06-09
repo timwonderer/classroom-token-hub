@@ -378,6 +378,10 @@ def get_current_student_seat():
     if user and seat.user_id != user.id:
         return None
 
+    student_id = _safe_int_id(session.get('student_id'))
+    if student_id and seat.student_id != student_id:
+        return None
+
     if not getattr(seat, "claimed_at", None):
         return None
 

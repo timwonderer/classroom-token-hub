@@ -52,7 +52,6 @@ def execute_scheduled_rent_charge(
     payment = obligations_service.record_rent_payment(
         seat_id=seat.id,
         class_id=class_id,
-        join_code=seat.join_code,
         period=period,
         amount_paid=amount,
         period_month=cycle_start_class.month,

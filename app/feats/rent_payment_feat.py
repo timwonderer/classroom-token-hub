@@ -84,7 +84,6 @@ def execute_rent_payment(
     payment = obligations_service.record_rent_payment(
         seat_id=seat.id,
         class_id=class_id,
-        join_code=join_code,
         period=period,
         amount_paid=payment_amount,
         period_month=current_month,

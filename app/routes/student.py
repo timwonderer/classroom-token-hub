@@ -88,6 +88,7 @@ from app.feats.transfer_feat import execute_account_transfer
 from app.feats.insurance_purchase_feat import execute_insurance_purchase
 from app.feats.insurance_claim_feat import execute_file_claim
 from app.payroll import get_pay_rate_for_block
+from app.utils.join_code import get_display_join_code
 from app.utils.time import (
     utc_now,
     ensure_utc,
@@ -138,9 +139,29 @@ from app.utils.display_name_session import (
     clear_teacher_display_name_cache,
 )
 from app.services.tlcp import has_recent_error_for_actor
+from app.services.context_resolver import (
+    resolve_canonical_context,
+    ContextResolutionError,
+    ContextNotEstablished,
+    ContextForbidden,
+    ContextMismatch,
+)
 
 # Create blueprint
 student_bp = Blueprint('student', __name__, url_prefix='/student')
+
+@student_bp.errorhandler(ContextForbidden)
+@student_bp.errorhandler(ContextMismatch)
+def handle_context_forbidden(e):
+    current_app.logger.warning(f"Class context resolution failed (403/404 mapping): {e}")
+    # Following security disclosure requirements, we hide forbidden/mismatched contexts
+    abort(404)
+
+@student_bp.errorhandler(ContextNotEstablished)
+def handle_context_not_established(e):
+    current_app.logger.info(f"Class context not established: {e}")
+    flash("Please select a class to continue.", "info")
+    return redirect(url_for('student.select_class'))
 
 STUDENT_FEATURE_ENDPOINTS = {
     'student.payroll': 'payroll',
@@ -170,7 +191,7 @@ def enforce_student_feature_gates():
 
     # Some legacy tests/flows hydrate seat context lazily during route execution.
     # Only enforce here when class context is already resolvable.
-    if not get_current_class_context():
+    if not resolve_canonical_context():
         return None
 
     if not is_feature_enabled(feature_name):
@@ -276,39 +297,7 @@ def _get_claimed_setup_state():
 
     return seat, student, user
 
-def get_current_class_context():
-    """Get the currently selected class context.
 
-    CRITICAL: This function enforces proper multi-tenancy isolation by using
-    class_id as the source of truth.
-
-    Returns:
-        dict with keys: class_id, join_code, teacher_id, block, seat_id
-        None if no context available
-    """
-    student = get_logged_in_student()
-    if not student:
-        return None
-
-    current_seat = get_current_student_seat()
-    if not current_seat:
-        # Fallback to the first seat if no seat selected
-        current_seat = Seat.query.filter_by(student_id=student.id).order_by(Seat.id.asc()).first()
-        if current_seat:
-            sync_student_session_context(student, seat_id=current_seat.id)
-    
-    if current_seat:
-        class_row = ClassEconomy.query.filter_by(class_id=current_seat.class_id).first()
-        if class_row:
-            return {
-                'class_id': class_row.class_id,
-                'join_code': class_row.join_code,
-                'teacher_id': class_row.teacher_id,
-                'block': current_seat.block_identifier or current_seat.block,
-                'seat_id': current_seat.id,
-            }
-
-    return None
 
 
 def _prime_student_teacher_display_name_cache(student_id: int) -> None:
@@ -336,8 +325,8 @@ def get_rent_settings_for_context(context):
     if not context:
         return None
 
-    class_id = context.get('class_id')
-    current_block = (context.get('block') or '').strip().upper()
+    class_id = context.class_id
+    current_block = ('' or '').strip().upper()
     if not class_id:
         return None
 
@@ -358,7 +347,7 @@ def get_rent_settings_for_context(context):
 
 
 def _support_actor_public_id(class_context):
-    seat_id = class_context.get('seat_id') if class_context else None
+    seat_id = class_context.seat_id if class_context else None
     seat = db.session.get(Seat, seat_id) if seat_id else None
     return seat.public_id if seat else None
 
@@ -378,8 +367,8 @@ def get_banking_settings_for_context(context):
     if not context:
         return None
 
-    class_id = context.get('class_id')
-    current_block = (context.get('block') or '').strip().upper()
+    class_id = context.class_id
+    current_block = ('' or '').strip().upper()
     if not class_id:
         return None
 
@@ -398,10 +387,10 @@ def get_current_teacher_id():
     """DEPRECATED: Get teacher_id from current class context.
 
     This function is maintained for backward compatibility but should be
-    replaced with get_current_class_context() for proper multi-tenancy.
+    replaced with resolve_canonical_context() for proper multi-tenancy.
     """
-    context = get_current_class_context()
-    return context['teacher_id'] if context else None
+    context = resolve_canonical_context()
+    return None if context else None
 
 
 def get_current_join_code():
@@ -410,8 +399,8 @@ def get_current_join_code():
     Join code is the absolute source of truth for class association.
     Returns None if no class context is available.
     """
-    context = get_current_class_context()
-    return context['join_code'] if context else None
+    context = resolve_canonical_context()
+    return get_display_join_code(context.class_id) if context else None
 
 
 def get_feature_settings_for_student():
@@ -428,11 +417,11 @@ def get_feature_settings_for_student():
         # Return defaults if no student logged in
         return FeatureSettings.get_defaults()
 
-    context = get_current_class_context()
+    context = resolve_canonical_context()
     if not context:
         return FeatureSettings.get_defaults()
 
-    class_id = context.get('class_id')
+    class_id = context.class_id
     if not class_id:
         return FeatureSettings.get_defaults()
 
@@ -455,15 +444,15 @@ def is_feature_enabled(feature_name):
         bool: True if feature is enabled, False otherwise
     """
     if feature_name == 'rent':
-        rent_settings = get_rent_settings_for_context(get_current_class_context())
+        rent_settings = get_rent_settings_for_context(resolve_canonical_context())
         if rent_settings:
             return bool(rent_settings.is_enabled)
 
-    context = get_current_class_context()
+    context = resolve_canonical_context()
     if not context:
         return False
 
-    class_id = context.get('class_id')
+    class_id = context.class_id
     if not class_id:
         return False
 
@@ -1206,13 +1195,13 @@ def dashboard():
         month_start = get_class_month_start_utc(class_id, reference_time=class_now_utc)
     else:
         week_start, week_end = get_class_week_range_utc(
-            context.get('class_id'),
+            context.class_id,
             reference_time_utc=now_utc,
-        ) if context.get('class_id') else (now_utc, now_utc + timedelta(days=7))
+        ) if context.class_id else (now_utc, now_utc + timedelta(days=7))
         month_start = get_class_month_start_utc(
-            context.get('class_id'),
+            context.class_id,
             reference_time=now_utc,
-        ) if context.get('class_id') else now_utc
+        ) if context.class_id else now_utc
 
 
 
@@ -1359,7 +1348,7 @@ def payroll():
     if not student:
         student = get_logged_in_student()
 
-    context = get_current_class_context()
+    context = resolve_canonical_context()
     if not context:
         flash("No class selected. Please select a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
@@ -1367,9 +1356,9 @@ def payroll():
         flash("Class context unavailable. Please select a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
 
-    current_block = (context.get('block') or '').upper()
-    join_code = context.get('join_code')
-    teacher_id = context.get('teacher_id')
+    current_block = ('' or '').upper()
+    join_code = get_display_join_code(context.class_id)
+    teacher_id = None
     period_states = get_all_block_statuses(student, class_id=class_id)
 
     # Scope dashboard data to the selected class context only
@@ -1447,13 +1436,13 @@ def transfer():
     student = get_logged_in_student()
 
     # CRITICAL FIX v2: Get full class context (join_code, teacher_id, block)
-    context = get_current_class_context()
+    context = resolve_canonical_context()
     if not context:
         flash("No class selected. Please select a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
 
-    join_code = context['join_code']
-    teacher_id = context['teacher_id']
+    join_code = get_display_join_code(context.class_id)
+    teacher_id = None
 
     if request.method == 'POST':
         is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
@@ -1563,8 +1552,8 @@ def transfer():
 
     # CRITICAL FIX v2: Get transactions for display - strict class_id/seat_id scoping.
     transactions = Transaction.query.filter(
-        Transaction.seat_id == context.get('seat_id'),
-        Transaction.class_id == context.get('class_id'),
+        Transaction.seat_id == context.seat_id,
+        Transaction.class_id == context.class_id,
         Transaction.is_void == False,
     ).order_by(Transaction.timestamp.desc()).all()
     checking_transactions = [t for t in transactions if t.account_type == 'checking']
@@ -1649,13 +1638,13 @@ def transfer():
 
 def apply_savings_interest(student, annual_rate=Decimal('0.045')):
     """Compatibility command wrapper that forwards savings-interest writes into the ledger service."""
-    context = get_current_class_context()
+    context = resolve_canonical_context()
     if not context:
         return None
     interest_tx = post_monthly_savings_interest(
         student,
-        teacher_id=context.get('teacher_id'),
-        join_code=context.get('join_code'),
+        teacher_id=None,
+        join_code=get_display_join_code(context.class_id),
         annual_rate=annual_rate,
     )
     return interest_tx
@@ -1681,15 +1670,15 @@ def insurance_marketplace():
         student = get_logged_in_student()
 
     # CRITICAL FIX v2: Get full class context (join_code is source of truth)
-    context = get_current_class_context()
+    context = resolve_canonical_context()
     if not context:
         flash("No class selected. Please select a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
 
-    teacher_id = context['teacher_id']
-    join_code = context['join_code']
+    teacher_id = None
+    join_code = get_display_join_code(context.class_id)
     if not class_id:
-        class_id = context.get('class_id')
+        class_id = context.class_id
     now_utc = utc_now()
 
     # FIX: Get student's active policies scoped to current class only
@@ -1792,13 +1781,13 @@ def purchase_insurance(policy_id):
     student = get_logged_in_student()
 
     # CRITICAL FIX v2: Get full class context
-    context = get_current_class_context()
+    context = resolve_canonical_context()
     if not context:
         flash("No class selected.", "danger")
         return redirect(url_for('student.dashboard'))
 
-    join_code = context['join_code']
-    teacher_id = context['teacher_id']
+    join_code = get_display_join_code(context.class_id)
+    teacher_id = None
 
     policy = db.get_or_404(InsurancePolicy, policy_id)
 
@@ -1894,7 +1883,7 @@ def purchase_insurance(policy_id):
         student=student,
         teacher_id=teacher_id,
         join_code=join_code,
-        class_id=context.get('class_id'),
+        class_id=context.class_id,
         policy=policy,
         banking_settings=banking_settings,
         overdraft_shortfall=overdraft_shortfall,
@@ -2271,17 +2260,17 @@ def shop():
         student = get_logged_in_student()
 
     # CRITICAL FIX v2: Get full class context
-    context = get_current_class_context()
+    context = resolve_canonical_context()
     if not context:
         flash("No class selected. Please select a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
 
-    teacher_id = context['teacher_id']
-    join_code = context['join_code']
+    teacher_id = None
+    join_code = get_display_join_code(context.class_id)
     if not class_id:
-        class_id = context.get('class_id')
+        class_id = context.class_id
 
-    current_block = (context.get('block') or '').strip().upper()
+    current_block = ('' or '').strip().upper()
 
     now = utc_now()
     now_db = normalize_for_db(now)
@@ -2309,7 +2298,7 @@ def shop():
 
     # Check if student has paid rent this month and get per-period rent item IDs
     from app.models import RentSettings, RentPayment, RentItem
-    current_block = context.get('block')
+    current_block = ''
     has_paid_rent = False
     per_period_rent_item_ids = set()
     rent_item_types_by_store_id = {}
@@ -3269,9 +3258,9 @@ def _ensure_rent_hall_pass_top_off(student, context, settings=None, now=None):
     if not student or not context:
         return 0, 0, False
 
-    join_code = context.get('join_code')
-    current_block = (context.get('block') or '').strip().upper()
-    class_id = context.get('class_id')
+    join_code = get_display_join_code(context.class_id)
+    current_block = ('' or '').strip().upper()
+    class_id = context.class_id
     if not class_id:
         from app.models import ClassEconomy
         ce = ClassEconomy.query.filter_by(join_code=join_code).first()
@@ -3326,14 +3315,14 @@ def rent():
     student = db.session.get(Student, seat.student_id) if seat and seat.student_id else None
     if not student:
         student = get_logged_in_student()
-    context = get_current_class_context()
+    context = resolve_canonical_context()
     if not context:
         flash("No class selected. Please choose a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
 
-    teacher_id = context.get('teacher_id')
-    join_code = context.get('join_code')
-    current_block = (context.get('block') or '').strip().upper()
+    teacher_id = None
+    join_code = get_display_join_code(context.class_id)
+    current_block = ('' or '').strip().upper()
     settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
@@ -3344,7 +3333,7 @@ def rent():
         flash("No class period found for this class.", "error")
         return redirect(url_for('student.dashboard'))
 
-    class_id = class_id or context.get('class_id')
+    class_id = class_id or context.class_id
     if not class_id:
         from app.models import ClassEconomy
         ce = ClassEconomy.query.filter_by(join_code=join_code).first()
@@ -3546,12 +3535,12 @@ def rent_pay(period):
     except AccessScopeDenied as exc:
         flash(exc.message, "error")
         return redirect(url_for('student.dashboard'))
-    context = get_current_class_context()
+    context = resolve_canonical_context()
     if not context:
         flash("No class selected. Please choose a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
 
-    class_id = context.get('class_id')
+    class_id = context.class_id
     if not class_id:
         from app.models import ClassEconomy
         ce = ClassEconomy.query.filter_by(join_code=join_code).first()
@@ -4090,7 +4079,7 @@ def help_support():
     from app.utils.issue_categories import init_default_categories
 
     student = get_logged_in_student()
-    class_context = get_current_class_context()
+    class_context = resolve_canonical_context()
 
     if not class_context:
         flash("Please select a class first.", "warning")
@@ -4102,7 +4091,7 @@ def help_support():
     # Get student's issues for current class (last 20)
     my_issues = Issue.query.filter_by(
         student_id=student.id,
-        join_code=class_context['join_code']
+        join_code=class_get_display_join_code(context.class_id)
     ).order_by(Issue.submitted_at.desc()).limit(20).all()
 
     return render_template('student_help_support_new.html',
@@ -4122,7 +4111,7 @@ def submit_general_issue():
     from app.forms import StudentIssueSubmissionForm
 
     student = get_logged_in_student()
-    class_context = get_current_class_context()
+    class_context = resolve_canonical_context()
 
     if not class_context:
         flash("Please select a class first.", "warning")
@@ -4142,8 +4131,8 @@ def submit_general_issue():
         try:
             issue = create_issue(
                 student=student,
-                teacher_id=class_context['teacher_id'],
-                join_code=class_context['join_code'],
+                teacher_id=class_None,
+                join_code=class_get_display_join_code(context.class_id),
                 category_id=form.category_id.data,
                 explanation=form.explanation.data,
                 expected_outcome=form.expected_outcome.data,
@@ -4175,7 +4164,7 @@ def report_transaction_issue(transaction_id):
     from app.forms import StudentIssueSubmissionForm, TransactionIssueSubmissionForm
 
     student = get_logged_in_student()
-    class_context = get_current_class_context()
+    class_context = resolve_canonical_context()
 
     if not class_context:
         flash("Please select a class first.", "warning")
@@ -4185,7 +4174,7 @@ def report_transaction_issue(transaction_id):
     transaction = Transaction.query.filter_by(
         id=transaction_id,
         student_id=student.id,
-        join_code=class_context['join_code']
+        join_code=class_get_display_join_code(context.class_id)
     ).first_or_404()
 
     form = TransactionIssueSubmissionForm()
@@ -4202,8 +4191,8 @@ def report_transaction_issue(transaction_id):
         try:
             create_issue(
                 student=student,
-                teacher_id=class_context['teacher_id'],
-                join_code=class_context['join_code'],
+                teacher_id=class_None,
+                join_code=class_get_display_join_code(context.class_id),
                 category_id=form.category_id.data,
                 explanation=form.explanation.data,
                 expected_outcome=form.expected_outcome.data,
@@ -4238,7 +4227,7 @@ def report_tap_event_issue(tap_event_id):
     from app.forms import StudentIssueSubmissionForm
 
     student = get_logged_in_student()
-    class_context = get_current_class_context()
+    class_context = resolve_canonical_context()
 
     if not class_context:
         flash("Please select a class first.", "warning")
@@ -4248,7 +4237,7 @@ def report_tap_event_issue(tap_event_id):
     tap_event = TapEvent.query.filter_by(
         id=tap_event_id,
         student_id=student.id,
-        join_code=class_context['join_code']
+        join_code=class_get_display_join_code(context.class_id)
     ).first_or_404()
 
     form = StudentIssueSubmissionForm()
@@ -4265,8 +4254,8 @@ def report_tap_event_issue(tap_event_id):
         try:
             create_issue(
                 student=student,
-                teacher_id=class_context['teacher_id'],
-                join_code=class_context['join_code'],
+                teacher_id=class_None,
+                join_code=class_get_display_join_code(context.class_id),
                 category_id=form.category_id.data,
                 explanation=form.explanation.data,
                 expected_outcome=form.expected_outcome.data,

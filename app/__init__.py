@@ -387,6 +387,9 @@ def create_app():
     app.jinja_env.globals['min'] = min
     app.jinja_env.globals['max'] = max
     app.jinja_env.globals['format_utc_iso'] = format_utc_iso
+    
+    from app.utils.join_code import get_display_join_code
+    app.jinja_env.globals['get_display_join_code'] = get_display_join_code
 
     def is_maintenance_mode_enabled():
         """Return True when maintenance mode is enabled via environment variable."""
