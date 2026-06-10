@@ -104,7 +104,8 @@ This file is the single active tracker for v2 migration execution. All prior tra
 - [ ] Wave 11 invariant sweeps complete (INV-ARC-007, INV-ARC-014, INV-ARC-015 full repo pass)
 - [ ] Wave 11 `V2_CLASS_ID_INVARIANT_BACKLOG` closure
 - [ ] Complete single-context UI enforcement sweep: remove remaining page-level class selectors and request `join_code` context controls outside nav context switch
-- [ ] Wave 12 final schema/code/test validation gate (exact 44 tables, zero v1 runtime artifacts, clean suite)
+- [/] Wave 11 FEATBypass default-flip — invert `tests/conftest.py` so FEAT enforcement is the test default and `FEATBypass` is opt-in per test. **Phase 1 instrumentation next.** Full plan and audit findings in [V2_FEAT_BYPASS_DEFAULT_FLIP_PLAN.md](./V2_FEAT_BYPASS_DEFAULT_FLIP_PLAN.md). Triggered by the 2026-06-08 audit that surfaced `/api/approve-redemption` and `/api/reject-redemption` as dead in production (now fixed via `FEAT-STOR-006`) and the cross-FEAT correlation bug in `Transaction.before_update` (also fixed).
+- [ ] Wave 12 final schema/code/test validation gate (exact 44 tables, zero v1 runtime artifacts, clean suite, **zero `legacy_bypass` markers, zero dead-route xfails**)
 
 #### Deferred-but-tracked architecture items
 - [ ] TemporalContext full architecture rebuild (`V2_Temporal_Architecture_Rebuild_Plan.md`)
