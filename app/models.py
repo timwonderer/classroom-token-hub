@@ -920,14 +920,25 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
     if is_feat_active():
         feat_name = get_active_feat_name()
         target.feat_code = feat_name
-        
+
         # Auto-propagate correlation_id if not explicitly set
         if not target.correlation_id:
             target.correlation_id = get_correlation_id()
-        
-        # Session Isolation: Prevent mixed correlations in one flush
+
+        # Session Isolation: Prevent mixed correlations in one flush.
+        # This only fires for INSERTs — for UPDATEs, target.correlation_id is
+        # historical lineage data from the FEAT that ORIGINATED the row and is
+        # legitimately different from the active FEAT's correlation_id. The
+        # active FEAT's identity on UPDATE is captured by feat_code above; the
+        # row's correlation_id is its provenance, not the current operation's
+        # identity. (Prior to this split, the check fired on UPDATE as well,
+        # which made cross-FEAT Transaction mutations — refunds, voids,
+        # reversal_transaction_id linkage — impossible under FEAT enforcement.
+        # The contradiction was hidden by FEATBypass wrapping every test.)
+        _target_state = sa.inspect(target)
+        _is_new_insert = _target_state.transient or _target_state.pending
         session = db.session.object_session(target)
-        if session:
+        if session and _is_new_insert:
             active_corr = session.info.get("active_correlation_id")
             if active_corr and target.correlation_id != active_corr:
                  raise ValueError(f"FATAL: Mixed correlation in flush. Context={active_corr}, Object={target.correlation_id}")

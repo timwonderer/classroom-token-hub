@@ -8,7 +8,44 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Added
+- **`FEAT-STOR-006` (Redemption Disposition) FEAT** — registered in the canonical
+  registry and implemented in `app/feats/redemption_disposition_feat.py`.
+  Exposes `execute_redemption_approval(...)` and `execute_redemption_rejection(...)`,
+  both `@requires_feat_context("FEAT-STOR-006")`-guarded. The FEAT is named for
+  the business action so the Wave 8 `StudentItem` → `StorePurchase` +
+  `RedemptionEvent` split will change the FEAT's internals without changing
+  its contract.
+- **Enforcement-active redemption tests** —
+  `tests/test_redemption_disposition_feat.py` adds 5 tests under
+  `@pytest.mark.enforce_feat`, exercising the redemption routes with the
+  global `FEATBypass` opted out. `FEATBypass` is used only inside
+  fixture-setup blocks, not around route calls. These tests would have
+  caught the dead-route bug surfaced in the audit; they now lock the fix in.
+
 ### Changed
+- **`/api/approve-redemption` and `/api/reject-redemption` now route through
+  `FEAT-STOR-006`** — both routes were dead in production runtime prior to
+  this change: they performed `db.session.add(RedemptionAuditLog(...))` and
+  mutated `StudentItem.status` without a `@feat_shell` decorator, so the
+  `before_flush` constitutional enforcement raised `FEATContextError` and
+  returned HTTP 500 with zero rows persisting. The breakage was invisible to
+  CI because `tests/conftest.py` wraps every test in `FEATBypass`. Both
+  routes now wear `@feat_shell("FEAT-STOR-006")`, delegate all mutation to
+  the new FEAT module, and narrow their exception handling to
+  `RedemptionDispositionError` (mapped to HTTP 409). Infrastructure errors
+  propagate to the FEAT shell for rollback rather than being swallowed.
+- **Cross-FEAT `Transaction` UPDATE enforcement corrected
+  (`app/models.py:_enforce_transaction_integrity`)** — the "Mixed correlation
+  in flush" check was firing on UPDATE as well as INSERT, making it
+  impossible for any FEAT to mutate a `Transaction` created by a prior FEAT
+  (refunds, voids, `reversal_transaction_id` linkage). Real production paths
+  were affected. The bug was hidden because every test ran under a single
+  `FEATBypass` correlation. The check is now gated on
+  `_target_state.transient or pending` so it fires only on INSERT; on UPDATE
+  the row's `correlation_id` is preserved as historical lineage and the
+  active FEAT's identity is captured via `feat_code` (which is unconditionally
+  set on both insert and update).
 - **Wave 7 obligations schema contract corrected** — Added forward migration
   `0007` to create and backfill canonical `assessment_events` and
   `obligation_lifecycle`, repoint satisfaction/reversal/entitlement foreign

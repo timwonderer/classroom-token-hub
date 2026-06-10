@@ -69,6 +69,11 @@ from app.routes.student import (
 )
 from app.services.context_resolver import resolve_canonical_context, ContextResolutionError
 from app.feats.store_purchase_feat import execute_rent_perk_purchase, execute_store_purchase
+from app.feats.redemption_disposition_feat import (
+    RedemptionDispositionError,
+    execute_redemption_approval,
+    execute_redemption_rejection,
+)
 from app.services import store_service
 from app.utils.economy_policy import resolve_class_scope, resolve_feature_class, resolve_feature_class_for_class
 from app.utils.overdraft import charge_overdraft_fee_if_needed
@@ -921,7 +926,18 @@ def use_item():
 
 @api_bp.route('/approve-redemption', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-STOR-006")
 def approve_redemption():
+    """
+    Approve a pending redemption request.
+
+    Validation and scope checks run as pure reads in the route body; the actual
+    state mutation is delegated to FEAT-STOR-006. The FEAT shell owns the
+    transaction boundary — any exception raised below this point (other than
+    the explicitly caught RedemptionDispositionError business error) will
+    trigger a rollback at the shell. Infrastructure errors are NOT swallowed
+    here; they propagate to Flask's error handler.
+    """
     data = request.get_json(silent=True) or {}
     student_item_id = data.get('student_item_id')
 
@@ -946,42 +962,36 @@ def approve_redemption():
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
 
     try:
-        audit_guard = {'inserted': False}
-        _append_redemption_audit_log(
+        result = execute_redemption_approval(
             student_item=student_item,
-            student=student_item.student,
-            teacher_id=current_admin.id,
-            action='approved',
+            actor_teacher_id=current_admin.id,
             notes=student_item.redemption_details,
-            guard_state=audit_guard,
-            fallback_block=student_item.student.block if student_item.student else None,
         )
+    except RedemptionDispositionError as e:
+        # Business-rule failure (e.g., concurrent state change). Map to 409.
+        current_app.logger.info(
+            "Redemption approval rejected by FEAT for student_item %s: %s",
+            student_item_id,
+            e,
+        )
+        return jsonify({"status": "error", "message": str(e)}), 409
 
-        student_item.status = 'completed'
-
-        # Find the corresponding 'redemption' transaction and update its description
-        redemption_tx = Transaction.query.filter_by(
-            seat_id=student_item.seat_id,
-            class_id=student_item.class_id,
-            type='redemption',
-        ).filter(
-            Transaction.description.like(f"Used: {student_item.store_item.name}%")
-        ).order_by(Transaction.timestamp.desc()).first()
-
-        if redemption_tx:
-            redemption_tx.description = f"Redeemed: {student_item.store_item.name}"
-
-        db.session.flush()
-        return jsonify({"status": "success", "message": "Redemption approved."})
-    except (SQLAlchemyError, RuntimeError, ValueError) as e:
-        db.session.rollback()
-        current_app.logger.error(f"Redemption approval failed for student_item {student_item_id}: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": "An error occurred."}), 500
+    return jsonify({"status": "success", "message": result.message})
 
 
 @api_bp.route('/reject-redemption', methods=['POST'])
 @admin_required
+@feat_shell("FEAT-STOR-006")
 def reject_redemption():
+    """
+    Reject a pending redemption request and refund the student.
+
+    Validation and scope checks run as pure reads in the route body; the actual
+    state mutation (audit log, refund transaction, item status change) is
+    delegated to FEAT-STOR-006. The FEAT shell owns the transaction boundary
+    and rollback semantics. RedemptionDispositionError is the only exception
+    converted into a structured response; infrastructure errors propagate.
+    """
     data = request.get_json(silent=True) or {}
     student_item_id = data.get('student_item_id')
 
@@ -1002,99 +1012,20 @@ def reject_redemption():
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
 
     try:
-        audit_guard = {'inserted': False}
-        _append_redemption_audit_log(
+        result = execute_redemption_rejection(
             student_item=student_item,
-            student=student_item.student,
-            teacher_id=current_admin.id,
-            action='rejected',
+            actor_teacher_id=current_admin.id,
             notes=student_item.redemption_details,
-            guard_state=audit_guard,
-            fallback_block=student_item.student.block if student_item.student else None,
         )
-
-        # 1. Determine Refund Amount from original purchase transaction
-        # Look up the actual amount paid (handles price changes and bulk discounts)
-        purchase_tx_query = Transaction.query.filter_by(
-            seat_id=student_item.seat_id,
-            class_id=student_item.class_id,
-            type='purchase',
-        ).filter(
-            Transaction.description.like(f"Purchase: {student_item.store_item.name}%")
+    except RedemptionDispositionError as e:
+        current_app.logger.info(
+            "Redemption rejection refused by FEAT for student_item %s: %s",
+            student_item_id,
+            e,
         )
-        purchase_txs = purchase_tx_query.all()
+        return jsonify({"status": "error", "message": str(e)}), 409
 
-        purchase_tx = None
-        if purchase_txs:
-            if student_item.purchase_date:
-                target_ts = ensure_utc(student_item.purchase_date)
-
-                def _distance(tx):
-                    if not tx.timestamp:
-                        return float('inf')
-                    return abs((ensure_utc(tx.timestamp) - target_ts).total_seconds())
-
-                purchase_tx = min(purchase_txs, key=_distance)
-            else:
-                purchase_tx = max(
-                    purchase_txs,
-                    key=lambda tx: ensure_utc(tx.timestamp) if tx.timestamp else UTC_MIN
-                )
-
-        if purchase_tx and purchase_tx.amount is not None:
-            total_amount = abs(purchase_tx.amount)
-            quantity = 1
-            if purchase_tx.description:
-                match = re.search(r'\(x(\d+)\)', purchase_tx.description)
-                if match:
-                    try:
-                        parsed_qty = int(match.group(1))
-                        if parsed_qty > 0:
-                            quantity = parsed_qty
-                    except ValueError:
-                        pass
-            refund_amount = total_amount / quantity
-        else:
-            # Fallback to current store price if purchase transaction not found
-            refund_amount = student_item.store_item.price
-
-        # 2. Refund the student — class_id must always be present in V2.
-        refund_class_id = student_item.class_id
-        if not refund_class_id:
-            current_app.logger.error(
-                f"StudentItem {student_item.id} missing class_id during refund. Aborting to avoid unscoped transaction."
-            )
-            return jsonify({"status": "error", "message": "Unable to resolve class for refund."}), 400
-
-        refund_tx, _created = create_pending_transaction_idempotent(
-            idempotency_key=student_item_refund_key(student_item.id, 'redemption-rejected'),
-            seat_id=student_item.seat_id,
-            class_id=refund_class_id,
-            teacher_id=student_item.store_item.teacher_id,
-            amount=refund_amount,
-            account_type='checking',
-            type='refund',
-            original_transaction_id=purchase_tx.id if purchase_tx else None,
-            description=f"Refund: {student_item.store_item.name} (Redemption Rejected)",
-        )
-        if purchase_tx:
-            purchase_tx.reversal_transaction_id = refund_tx.id
-
-        # 3. Mark item as rejected (terminal state) instead of deleting history.
-        student_item.status = 'rejected'
-        student_item.redemption_date = utc_now()
-        if student_item.redemption_details:
-            student_item.redemption_details = f"{student_item.redemption_details}\n---\nStatus: rejected"
-        else:
-            student_item.redemption_details = "Status: rejected"
-
-        db.session.flush()
-        return jsonify({"status": "success", "message": "Redemption rejected and refunded."})
-
-    except (SQLAlchemyError, RuntimeError, ValueError) as e:
-        db.session.rollback()
-        current_app.logger.error(f"Redemption rejection failed for student_item {student_item_id}: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": "An error occurred."}), 500
+    return jsonify({"status": "success", "message": result.message})
 
 
 # -------------------- HALL PASS API --------------------

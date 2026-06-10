@@ -103,6 +103,7 @@ FEAT_REGISTRY = {
     "FEAT-STOR-003": {"domain": "Store", "blast_radius": "MED", "desc": "Purchase Void/Refund"},
     "FEAT-STOR-004": {"domain": "Store", "blast_radius": "MED", "desc": "Rent Perk Purchase ($0)"},
     "FEAT-STOR-005": {"domain": "Store", "blast_radius": "LOW", "desc": "Redeem Item"},
+    "FEAT-STOR-006": {"domain": "Store", "blast_radius": "MED", "desc": "Redemption Disposition"},
     "FEAT-ATTN-001": {"domain": "Attendance", "blast_radius": "MED", "desc": "Session Management"},
     "FEAT-ATTN-002": {"domain": "Attendance", "blast_radius": "LOW", "desc": "Individual Tap"},
     "FEAT-ANLY-001": {"domain": "Analytics", "blast_radius": "LOW", "desc": "Analytics Alert Acknowledgement"},
