@@ -1,8 +1,8 @@
 # V2 FEATBypass Default-Flip Plan
 
-**Status:** Approved 2026-06-09. Phase 1 next.
+**Status:** Phase 1 complete (2026-06-09). Phase 2 next.
 **Owner:** V2 architecture
-**Related:** [V2_Full_compliance_migration_plan.md](./V2_Full_compliance_migration_plan.md), [FEAT-CORE-000](../v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md), [INV-ARC-006](../v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md)
+**Related:** [V2_Full_compliance_migration_plan.md](./V2_Full_compliance_migration_plan.md), [V2_FEAT_BYPASS_DEPENDENCY_REPORT.md](./V2_FEAT_BYPASS_DEPENDENCY_REPORT.md) (Phase 1 output), [FEAT-CORE-000](../v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md), [INV-ARC-006](../v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md)
 
 ---
 
@@ -96,33 +96,71 @@ catalog. Phase 2 builds one.
 
 ## Staged plan
 
-### Phase 1 — Instrumentation (1–2 days, zero risk)
+### Phase 1 — Instrumentation (✅ complete 2026-06-09)
 
 **Goal:** Empirical evidence of the actual dead-route surface before any
 default change.
 
-**Deliverables:**
-- `tests/_feat_bypass_audit.py` — pytest plugin that hooks
-  `app.feats.base.FEATContext`'s `before_flush` listener. For each test running
-  under bypass, the plugin records:
-  - Whether a flush would have raised `FEATContextError` under enforcement
-  - The originating Flask `request.endpoint` (if any)
-  - The call stack reaching the flush
-- `docs/development/tracking/V2_FEAT_BYPASS_DEPENDENCY_REPORT.md` — three
-  columns:
-  1. Tests that would pass under enforcement today (no bypass dependency)
-  2. Tests dependent on bypass for fixture seeding only (route call would
-     pass, fixture flush would fail)
-  3. Tests dependent on bypass for the route call itself (these prove dead
-     routes)
-- Summary table: "Routes that are dead in production" — column-3 endpoints,
-  deduplicated.
+**Deliverables (shipped):**
+- `tests/_feat_bypass_audit.py` — pytest plugin (opt-in via
+  `FEAT_BYPASS_AUDIT=1`) that hooks SQLAlchemy `before_flush`. For each
+  test running under `FEATBypass`, the plugin records:
+  - Whether the flush would have raised `FEATContextError` under enforcement
+  - Whether the flush is inside a real Flask route dispatch (using the call
+    stack — `has_request_context()` is unreliable because pytest-flask leaves
+    a dangling context around fixture code)
+  - The originating endpoint + HTTP method if in dispatch
+  - A trimmed call stack for fixture-code attribution
+- `scripts/regenerate_feat_bypass_report.py` — re-emits the markdown from
+  the raw JSON without a fresh suite run. Decouples report-format iteration
+  from the 11-minute audit run.
+- `docs/development/tracking/V2_FEAT_BYPASS_DEPENDENCY_REPORT.md` — four
+  buckets:
+  1. `passes_under_enforcement` (no bypass-hidden flushes observed)
+  2. `fixture_only_bypass` (seeding-only bypass dependency)
+  3. `get_side_effect` (INV-ARC-007 candidate — bonus discriminator added
+     during Phase 1 because the data warranted separating it from the dead-
+     route bucket)
+  4. `dead_route_dependent` (route mutates in a non-FEAT context — dead in
+     production)
 
-**Exit criterion:** Report exists with concrete counts. No changes to `app/`
-or `tests/conftest.py`.
+**Findings (2026-06-09 run, 816 tests collected, 590 produced flushes):**
 
-This phase produces the actual finding the original FEATBypass audit was
-meant to surface.
+| Bucket | Count |
+|---|---:|
+| `passes_under_enforcement` | 0 |
+| `fixture_only_bypass` | 585 |
+| `get_side_effect` | **0** |
+| `dead_route_dependent` | **5 tests across 4 endpoints** |
+
+**Dead-route endpoints:**
+- `POST admin.process_claim` — insurance claim approval (10 flushes)
+- `POST sysadmin.resolve_escalated_issue` — sysadmin issue resolution (5)
+- `POST admin.rent_settings` — rent settings update (2)
+- `POST admin.passkey_auth_finish` — passkey auth finish (1)
+
+**Key surprises vs the pre-instrumentation estimate:**
+- Dead-route surface is **4 endpoints, not ~78.** The earlier ceiling
+  (`143 − 65`) overcounted by ~20×. Most undecorated routes delegate to
+  FEAT-wrapped service functions; the gap is concentrated, not pervasive.
+- **Zero GET-side-effect bypass-hidden flushes.** INV-ARC-007 is largely
+  respected in runtime.
+- **Fixture seeding is the dominant work.** 585 tests have fixture-only
+  bypass dependency; the top hotspot is
+  `tests/helpers/class_scope.py:create_class_scope` (587 flushes across
+  five line numbers in the same function). Phase 2 fixture consolidation
+  should target it first.
+
+The full table including method, flush counts, and first-observed test is
+in [V2_FEAT_BYPASS_DEPENDENCY_REPORT.md](./V2_FEAT_BYPASS_DEPENDENCY_REPORT.md).
+
+**Implication for downstream phases:**
+- Phase 2 (fixture consolidation) is the bulk of the migration work, not
+  Phase 4 (the flip).
+- Phase 4's triage workload is bounded: 4 routes to fix, each a small
+  targeted change.
+- Phase 5's dead-route inventory starts at 4 entries; achievable to drain
+  before Wave 12.
 
 ---
 
