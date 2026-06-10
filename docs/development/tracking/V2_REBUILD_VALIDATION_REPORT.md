@@ -16,6 +16,27 @@
   - report/state consistency check -> pass
   - no completion claims advanced beyond current evidence -> pass
 
+### Post-Report Update (2026-06-09, `codex/v2.0`) — Wave 7 Insurance Claim Canonical Lifecycle Write
+
+- Completed the previously open Wave 7 write-path gap for insurance-claim resolution.
+- `app/services/obligations_service.py` now:
+  - emits canonical `assessment_events` + `obligation_lifecycle` rows when a
+    claim is filed
+  - requires the canonical claim assessment created at filing time during
+    resolution; no legacy backfill or compatibility bridge remains in this path
+  - records canonical `obligation_satisfaction` rows for approved/paid claims
+    and canonical `obligation_reversal` rows for rejected claims
+- Regression evidence:
+  - `tests/test_insurance_snapshots.py::test_admin_claim_approval_uses_frozen_claim_cap`
+    now asserts the live admin approval path produces canonical claim
+    assessment/lifecycle/satisfaction rows alongside the reimbursement ledger
+    entry
+- Wave 7 remains open for remaining legacy-read cutover, parity validation, and
+  transitional/legacy obligation-table drops.
+- Validation:
+  - `python3 -m py_compile app/services/obligations_service.py tests/test_insurance_snapshots.py` -> pass
+  - `./venv/bin/pytest -q tests/test_insurance_snapshots.py` -> `3 passed`
+
 ### Post-Report Update (2026-06-06, `codex/v2.0`) — Wave 7 Obligations Schema Contract
 
 - Landed transitional migration `0006_obligations_domain.py` and canonical

@@ -3,7 +3,17 @@ from decimal import Decimal
 
 from tests.helpers.v2_fixtures import make_admin, make_sysadmin
 from app import db
-from app.models import Admin, InsurancePolicy, InsuranceClaim, StudentInsurance, StudentTeacher, Transaction, TransactionStatus
+from app.services import obligations_service
+from app.models import (
+    Admin,
+    InsurancePolicy,
+    InsuranceClaim,
+    ObligationAssessment,
+    StudentInsurance,
+    StudentTeacher,
+    Transaction,
+    TransactionStatus,
+)
 from tests.helpers.admin_context import login_admin
 from tests.helpers.class_scope import create_class_scope
 
@@ -116,17 +126,18 @@ def test_admin_claim_approval_uses_frozen_claim_cap(client, test_student):
     db.session.add(tx)
     db.session.flush()
 
-    claim = InsuranceClaim(
+    claim = obligations_service.record_insurance_claim(
         student_insurance_id=enrollment.id,
         policy_id=policy.id,
-        student_id=test_student.id,
+        seat_id=enrollment.seat_id,
+        class_id=enrollment.class_id,
         incident_date=tx.timestamp,
         description="Need reimbursement",
         claim_amount=Decimal("50.00"),
-        status="pending",
+        claim_item=None,
+        comments=None,
         transaction_id=tx.id,
     )
-    db.session.add(claim)
     db.session.commit()
 
     login_admin(client, admin.id, "JOIN-SNAP-1")
@@ -153,3 +164,15 @@ def test_admin_claim_approval_uses_frozen_claim_cap(client, test_student):
     ).first()
     assert reimbursement is not None
     assert reimbursement.amount == Decimal("20.00")
+
+    assessment = ObligationAssessment.query.filter_by(
+        seat_id=claim.seat_id,
+        class_id=claim.class_id,
+        cycle_idempotency_key=f"insurance-claim:{claim.id}",
+    ).one()
+    assert assessment.obligation_type == "INSURANCE_CLAIM"
+    assert assessment.amount_snap == Decimal("50.00")
+    assert assessment.lifecycle is not None
+    assert assessment.lifecycle.status == "PAID"
+    assert assessment.satisfaction is not None
+    assert assessment.satisfaction.amount_paid == Decimal("20.00")

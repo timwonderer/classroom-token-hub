@@ -7,11 +7,76 @@ from app.models import (
     InsuranceEnrollment,
     ObligationAssessment,
     ObligationLifecycle,
+    ObligationReversal,
     ObligationSatisfaction,
     RentPayment,
     StudentInsurance,
 )
 from app.utils.time import utc_now
+
+
+def _claim_assessment_key(claim_id: int) -> str:
+    return f"insurance-claim:{claim_id}"
+
+
+def _get_claim_assessment(claim: InsuranceClaim) -> ObligationAssessment | None:
+    return (
+        ObligationAssessment.query.filter_by(
+            seat_id=claim.seat_id,
+            class_id=claim.class_id,
+            cycle_idempotency_key=_claim_assessment_key(claim.id),
+        )
+        .order_by(ObligationAssessment.id.desc())
+        .first()
+    )
+
+
+def _create_claim_assessment(
+    claim: InsuranceClaim,
+    *,
+    assessed_at,
+) -> ObligationAssessment:
+    assessment = ObligationAssessment(
+        seat_id=claim.seat_id,
+        class_id=claim.class_id,
+        obligation_type="INSURANCE_CLAIM",
+        amount_snap=claim.claim_amount,
+        due_at=claim.incident_date,
+        assessed_at=assessed_at,
+        cycle_idempotency_key=_claim_assessment_key(claim.id),
+    )
+    db.session.add(assessment)
+    db.session.flush()
+    db.session.add(
+        ObligationLifecycle(
+            assessment_id=assessment.id,
+            status="DUE",
+            updated_at=assessed_at,
+        )
+    )
+    return assessment
+
+
+def _require_claim_assessment(claim: InsuranceClaim) -> ObligationAssessment:
+    assessment = _get_claim_assessment(claim)
+    if assessment is None:
+        raise ValueError(f"Missing canonical claim assessment for insurance claim {claim.id}")
+    return assessment
+
+
+def _set_assessment_lifecycle(assessment: ObligationAssessment, *, status: str, updated_at):
+    lifecycle = assessment.lifecycle
+    if lifecycle is None:
+        lifecycle = ObligationLifecycle(
+            assessment_id=assessment.id,
+            status=status,
+            updated_at=updated_at,
+        )
+        db.session.add(lifecycle)
+        return lifecycle
+    lifecycle.status = status
+    lifecycle.updated_at = updated_at
+    return lifecycle
 
 
 def record_rent_payment(
@@ -182,6 +247,38 @@ def apply_claim_resolution(
     claim.processed_date = processed_at
     claim.processed_by_teacher_id = processed_by_teacher_id
     claim.approved_amount = approved_amount
+
+    assessment = _require_claim_assessment(claim)
+
+    if status in {"approved", "paid"}:
+        _set_assessment_lifecycle(assessment, status="PAID", updated_at=processed_at)
+        if assessment.satisfaction is None:
+            db.session.add(
+                ObligationSatisfaction(
+                    assessment_id=assessment.id,
+                    method="PAYMENT",
+                    amount_paid=approved_amount,
+                    satisfied_at=processed_at,
+                )
+            )
+        else:
+            assessment.satisfaction.amount_paid = approved_amount
+            assessment.satisfaction.satisfied_at = processed_at
+    elif status == "rejected":
+        _set_assessment_lifecycle(assessment, status="REVERSED", updated_at=processed_at)
+        if assessment.reversal is None:
+            db.session.add(
+                ObligationReversal(
+                    assessment_id=assessment.id,
+                    reason=rejection_reason or teacher_notes,
+                    reversed_at=processed_at,
+                    reversed_by_teacher_id=processed_by_teacher_id,
+                )
+            )
+        else:
+            assessment.reversal.reason = rejection_reason or teacher_notes
+            assessment.reversal.reversed_at = processed_at
+            assessment.reversal.reversed_by_teacher_id = processed_by_teacher_id
     return claim
 
 
@@ -213,6 +310,9 @@ def record_insurance_claim(
         transaction_id=transaction_id,
     )
     db.session.add(claim)
+    db.session.flush()
+
+    _create_claim_assessment(claim, assessed_at=utc_now())
     return claim
 
 

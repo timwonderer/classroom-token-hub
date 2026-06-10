@@ -9,6 +9,11 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Added
+- **Wave 7 canonical insurance-claim lifecycle coverage** —
+  `tests/test_insurance_snapshots.py::test_admin_claim_approval_uses_frozen_claim_cap`
+  now asserts that the live admin approval path emits canonical
+  `assessment_events`, `obligation_lifecycle`, and `obligation_satisfaction`
+  rows in addition to the reimbursement ledger entry.
 - **`FEAT-STOR-006` (Redemption Disposition) FEAT** — registered in the canonical
   registry and implemented in `app/feats/redemption_disposition_feat.py`.
   Exposes `execute_redemption_approval(...)` and `execute_redemption_rejection(...)`,
@@ -50,6 +55,12 @@ and this project follows semantic versioning principles.
   audited suite); the markdown report is the durable artifact.
 
 ### Changed
+- **Wave 7 insurance-claim resolution now dual-writes canonical obligation
+  state** — `app/services/obligations_service.py` now emits
+  canonical claim assessments using deterministic idempotency keys
+  (`insurance-claim:{claim_id}`), advances `obligation_lifecycle` to `PAID`
+  or `REVERSED` on claim resolution, and records `obligation_satisfaction`
+  or `obligation_reversal` rows under the clean-cutover model.
 - **`/api/approve-redemption` and `/api/reject-redemption` now route through
   `FEAT-STOR-006`** — both routes were dead in production runtime prior to
   this change: they performed `db.session.add(RedemptionAuditLog(...))` and

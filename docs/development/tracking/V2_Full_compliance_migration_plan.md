@@ -33,11 +33,11 @@ Target state:
 
 ### Validation Checkpoint
 
-**Last validated:** 2026-06-07T20:20:00Z
+**Last validated:** 2026-06-10T04:58:00Z
 
 - Tracker reconciliation refreshed against the current `codex/v2.0` state.
 - Waves 3-6 remain the last fully evidenced landed cluster in the active tracker.
-- Wave 7 schema contract is installed and still open for the remaining insurance-claim lifecycle and legacy-read cutover.
+- Wave 7 schema contract is installed; insurance-claim filing and resolution now emit canonical `assessment_events` + `obligation_lifecycle` state under a clean-cutover model, while legacy-read cutover and table drops remain open.
 - Waves 8-12 remain open and continue to require per-wave verification gates before they can be marked complete.
 - No tracker entry was promoted to complete status without direct evidence in the current pass.
 - **2026-06-07**: `TeacherBlock` identity model decommissioning is in active execution under Wave 11 admin route decomposition scope (see Wave 11 status update below).
@@ -2007,6 +2007,30 @@ Constraint:
   - the forward schema correction is landed, but no legacy obligation-table
     drop should proceed until Wave 6 exit status and Wave 7 read-cutover
     validation are explicitly resolved
+
+### Status Update (2026-06-09): Wave 7-B Insurance Claim Resolution Canonical Write Cutover
+
+- Landed a focused Wave 7 follow-on slice in `app/services/obligations_service.py`:
+  - claim filing now emits canonical `assessment_events` + `obligation_lifecycle`
+    rows with deterministic idempotency keys (`insurance-claim:{claim_id}`)
+  - claim resolution now advances canonical lifecycle state and records
+    `obligation_satisfaction` for approved/paid claims and `obligation_reversal`
+    for rejected claims
+- resolution requires the canonical claim assessment created at filing time;
+    no legacy backfill or compatibility bridge is retained in this path
+- Evidence added:
+  - `tests/test_insurance_snapshots.py::test_admin_claim_approval_uses_frozen_claim_cap`
+    now asserts the live admin approval path produces canonical claim
+    assessment/lifecycle/satisfaction rows in addition to the reimbursement
+    ledger entry
+- Validation:
+  - `python3 -m py_compile app/services/obligations_service.py tests/test_insurance_snapshots.py`
+  - `./venv/bin/pytest -q tests/test_insurance_snapshots.py`
+- Wave impact:
+  - closes the previously open insurance-claim resolution canonical write-path
+    gap
+  - Wave 7 remains open for legacy-read cutover, parity validation, and
+    transitional/legacy obligation-table removal
 
 ---
 
