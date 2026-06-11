@@ -55,6 +55,16 @@ and this project follows semantic versioning principles.
   audited suite); the markdown report is the durable artifact.
 
 ### Changed
+- **Wave 8 obligation identity canonicalization** — all obligation domain
+  identity references now use canonical v2 identifiers (`user_id`, `seat_id`,
+  `enrollment_id`) exclusively. Migration `0008` renames
+  `obligation_reversal.reversed_by_teacher_id` → `reversed_by_user_id` (FK →
+  `users.id`), `insurance_claims.processed_by_teacher_id` →
+  `processed_by_user_id` (FK → `users.id`), `insurance_claims.student_insurance_id`
+  → `enrollment_id` (FK repointed from `student_insurance` to
+  `insurance_enrollments`), and drops `insurance_claims.student_id`. FEAT layer
+  and admin routes updated to pass `user_id` instead of `teacher_id`/`admin_id`.
+  All 23 insurance/obligation tests pass with canonical fixtures.
 - **Wave 7 insurance-claim resolution now dual-writes canonical obligation
   state** — `app/services/obligations_service.py` now emits
   canonical claim assessments using deterministic idempotency keys

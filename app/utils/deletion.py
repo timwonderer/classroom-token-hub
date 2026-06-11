@@ -154,7 +154,7 @@ def collapse_universe(class_id: str, reason: str, actor_membership_id: Optional[
         tx_ids_subq = select(Transaction.id).filter_by(class_id=class_id).subquery()
         InsuranceClaim.query.filter(
             or_(
-                InsuranceClaim.student_insurance_id.in_(select(insurance_ids_subq)),
+                InsuranceClaim.enrollment_id.in_(select(insurance_ids_subq)),
                 InsuranceClaim.transaction_id.in_(select(tx_ids_subq))
             )
         ).delete(synchronize_session=False)

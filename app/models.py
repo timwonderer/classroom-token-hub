@@ -1984,7 +1984,6 @@ class StudentInsurance(db.Model):
 
     # Relationships
     student = db.relationship('Student', backref='insurance_policies')
-    claims = db.relationship('InsuranceClaim', backref='student_policy', lazy='dynamic')
 
     def freeze_policy_snapshot(self, policy):
         """Copy mutable template values into this enrollment's immutable contract snapshot."""
@@ -2226,58 +2225,39 @@ class InsuranceClaim(db.Model):
         db.UniqueConstraint('transaction_id', name='uq_insurance_claims_transaction_id'),
     )
     id = db.Column(db.Integer, primary_key=True)
-    student_insurance_id = db.Column(db.Integer, db.ForeignKey('student_insurance.id'), nullable=False)
+    enrollment_id = db.Column(db.Integer, db.ForeignKey('insurance_enrollments.id'), nullable=False)
     policy_id = db.Column(db.Integer, db.ForeignKey('insurance_policies.id'), nullable=False)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
-    incident_date = db.Column(db.DateTime(timezone=True), nullable=False)  # When incident occurred
+    incident_date = db.Column(db.DateTime(timezone=True), nullable=False)
     filed_date = db.Column(db.DateTime(timezone=True), default=utc_now)
     description = db.Column(db.Text, nullable=False)
-    claim_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)  # For monetary claims: requested amount
-    claim_item = db.Column(db.Text, nullable=True)  # For non-monetary claims: what they're claiming
-    comments = db.Column(db.Text, nullable=True)  # Optional comments from student
+    claim_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
+    claim_item = db.Column(db.Text, nullable=True)
+    comments = db.Column(db.Text, nullable=True)
 
-    status = db.Column(db.String(20), default='pending')  # pending, approved, rejected, paid
+    status = db.Column(db.String(20), default='pending')
     rejection_reason = db.Column(db.Text, nullable=True)
     teacher_notes = db.Column(db.Text, nullable=True)
     approved_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
     processed_date = db.Column(db.DateTime(timezone=True), nullable=True)
-    processed_by_teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True)
+    processed_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     transaction_id = db.Column(db.Integer, db.ForeignKey('ledger_transaction.id'), nullable=True)
 
     # Relationships
-    student = db.relationship('Student', backref='insurance_claims')
-    processed_by = db.relationship('Admin', backref='processed_claims')
+    enrollment = db.relationship('InsuranceEnrollment', backref='claims')
+    processed_by = db.relationship('User', backref='processed_claims')
     transaction = db.relationship('Transaction', backref='insurance_claims')
+    seat = db.relationship('Seat', backref='insurance_claims', foreign_keys=[seat_id])
+
+    @property
+    def student(self):
+        """Resolve student through seat for template compatibility."""
+        return self.seat.student if self.seat and self.seat.student_id else None
 
 
-@sa.event.listens_for(InsuranceClaim, "before_insert")
-@sa.event.listens_for(InsuranceClaim, "before_update")
-def _sync_insurance_claim_scope(_mapper, connection, target):
-    """Dual-write bridge for insurance_claims seat/class/student scope."""
-    needs_scope_backfill = any(
-        not getattr(target, attr, None)
-        for attr in ("student_id", "seat_id", "class_id", "join_code")
-    )
-    if needs_scope_backfill and getattr(target, "student_insurance_id", None):
-        row = connection.execute(
-            sa.text(
-                "SELECT student_id, seat_id, class_id, join_code FROM student_insurance WHERE id = :sid LIMIT 1"
-            ),
-            {"sid": target.student_insurance_id},
-        ).fetchone()
-        if row:
-            if row[0]:
-                target.student_id = row[0]
-            if not getattr(target, "seat_id", None) and row[1]:
-                target.seat_id = row[1]
-            if not getattr(target, "class_id", None) and row[2]:
-                target.class_id = row[2]
-            if not getattr(target, "join_code", None) and row[3]:
-                target.join_code = row[3]
 
 # ---- Canonical Obligations Domain (DOM-OBL-001) ----
 
@@ -2353,7 +2333,7 @@ class ObligationReversal(db.Model):
     assessment_id = db.Column(db.Integer, db.ForeignKey('assessment_events.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
     reason = db.Column(db.Text, nullable=True)
     reversed_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    reversed_by_teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='SET NULL'), nullable=True)
+    reversed_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
 
 
 class InsuranceEnrollment(db.Model):
@@ -2442,6 +2422,11 @@ class InsuranceEnrollment(db.Model):
         return self.frozen_claim_time_limit_days if self.frozen_claim_time_limit_days is not None else (
             self.policy.claim_time_limit_days if self.policy else None
         )
+
+    @property
+    def student(self):
+        """Resolve student through seat for template compatibility."""
+        return self.seat.student if self.seat and self.seat.student_id else None
 
 
 class EntitlementEvent(db.Model):

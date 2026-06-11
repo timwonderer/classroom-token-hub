@@ -17,7 +17,7 @@ import sys
 from app import create_app
 from app.extensions import db
 from app.models import (
-    Student, Transaction, TapEvent, HallPassLog, StudentItem,
+    Seat, Student, Transaction, TapEvent, HallPassLog, StudentItem,
     RentPayment, RentWaiver, StudentInsurance, InsuranceClaim
 )
 from collections import defaultdict
@@ -66,7 +66,8 @@ def list_duplicates():
                 item_count = StudentItem.query.filter_by(student_id=dup.id).count()
                 rent_count = RentPayment.query.filter_by(student_id=dup.id).count()
                 insurance_count = StudentInsurance.query.filter_by(student_id=dup.id).count()
-                claim_count = InsuranceClaim.query.filter_by(student_id=dup.id).count()
+                dup_seat_ids = [s.id for s in Seat.query.filter_by(student_id=dup.id).all()]
+                claim_count = InsuranceClaim.query.filter(InsuranceClaim.seat_id.in_(dup_seat_ids)).count() if dup_seat_ids else 0
 
                 total_records = txn_count + tap_count + hall_count + item_count + rent_count + insurance_count + claim_count
                 total_records_to_migrate += total_records
@@ -162,10 +163,7 @@ def delete_duplicates():
                     ins.student_id = keep.id
                     migrate_count += 1
 
-                # 8. Insurance Claims
-                for claim in InsuranceClaim.query.filter_by(student_id=dup.id).all():
-                    claim.student_id = keep.id
-                    migrate_count += 1
+                # 8. Insurance Claims — seat_id migration handled via Seat reassignment
 
                 if migrate_count > 0:
                     print(f"    → Migrated {migrate_count} records")

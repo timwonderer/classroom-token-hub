@@ -161,7 +161,7 @@ from app.attendance import (
 )
 from app.utils.attendance_helpers import get_join_code_for_student_period
 from app.services.balance_service import get_batch_balances_by_class_seat
-from app.services import access_policy_service, ledger_service
+from app.services import access_policy_service, ledger_service, obligations_service
 from app.services import operational_event_service
 from app.services.ledger_service import get_available_balances
 from app.services.admin_identity_bridge_service import (
@@ -1325,7 +1325,7 @@ def _hard_delete_class_scope(class_id, teacher_id):
     # Insurance data tied to this class or class-scoped transactions
     InsuranceClaim.query.filter(
         sa.or_(
-            InsuranceClaim.student_insurance_id.in_(sa.select(insurance_ids_subq)),
+            InsuranceClaim.enrollment_id.in_(sa.select(insurance_ids_subq)),
             InsuranceClaim.transaction_id.in_(sa.select(tx_ids_subq)),
         )
     ).delete(synchronize_session=False)
@@ -2873,8 +2873,8 @@ def dashboard():
     )
     pending_insurance_claims_count = (
         InsuranceClaim.query
-        .join(Student, InsuranceClaim.student_id == Student.id)
-        .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .join(Seat, InsuranceClaim.seat_id == Seat.id)
+        .filter(Seat.student_id.in_(sa.select(student_ids_subq)))
         .filter(InsuranceClaim.status == 'pending')
         .count()
     )
@@ -2902,8 +2902,8 @@ def dashboard():
     )
     recent_insurance_claims = (
         InsuranceClaim.query
-        .join(Student, InsuranceClaim.student_id == Student.id)
-        .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .join(Seat, InsuranceClaim.seat_id == Seat.id)
+        .filter(Seat.student_id.in_(sa.select(student_ids_subq)))
         .filter(InsuranceClaim.status == 'pending')
         .order_by(InsuranceClaim.filed_date.desc())
         .limit(5)
@@ -7075,17 +7075,17 @@ def add_rent_waiver():
     count = 0
     for student_id in student_ids:
         student = _get_student_or_404(int(student_id))
+        seat_id = get_seat_id_for_class(student.id, class_id) if class_id else None
         for waiver_start, waiver_end, periods_count in waiver_windows:
-            waiver = RentWaiver(
-                student_id=student.id,
-                join_code=join_code,
+            obligations_service.record_rent_waiver(
+                seat_id=seat_id or 0,
+                class_id=class_id or "",
                 waiver_start_date=waiver_start,
                 waiver_end_date=waiver_end,
                 periods_count=periods_count,
                 reason=reason,
-                created_by_teacher_id=admin_id,
+                created_by_user_id=admin_id,
             )
-            db.session.add(waiver)
         description = f"Rent waiver added for {student.full_name} covering: {scope_str}."
         if reason:
             description = f"{description} Reason: {reason}"
@@ -7399,7 +7399,7 @@ def insurance_management():
         # Get claims for selected block, filtered by join_code for proper multi-tenancy isolation
         claims = (
             InsuranceClaim.query
-            .join(StudentInsurance, InsuranceClaim.student_insurance_id == StudentInsurance.id)
+            .join(StudentInsurance, InsuranceClaim.enrollment_id == StudentInsurance.id)
             .filter(StudentInsurance.student_id.in_(student_ids_in_scope))
             .filter(StudentInsurance.join_code == selected_join_code)
             .order_by(InsuranceClaim.filed_date.desc())
@@ -7407,7 +7407,7 @@ def insurance_management():
         )
         pending_claims_count = (
             InsuranceClaim.query
-            .join(StudentInsurance, InsuranceClaim.student_insurance_id == StudentInsurance.id)
+            .join(StudentInsurance, InsuranceClaim.enrollment_id == StudentInsurance.id)
             .filter(StudentInsurance.student_id.in_(student_ids_in_scope))
             .filter(StudentInsurance.join_code == selected_join_code)
             .filter(InsuranceClaim.status == 'pending')
@@ -7575,11 +7575,15 @@ def delete_insurance_policy(policy_id):
     ).count()
 
     # Check for pending claims within scope
-    pending_claims = InsuranceClaim.query.filter(
-        InsuranceClaim.policy_id == policy_id,
-        InsuranceClaim.status == 'pending',
-        InsuranceClaim.student_id.in_(sa.select(student_ids_subq)),
-    ).count()
+    pending_claims = (
+        InsuranceClaim.query
+        .join(Seat, InsuranceClaim.seat_id == Seat.id)
+        .filter(
+            InsuranceClaim.policy_id == policy_id,
+            InsuranceClaim.status == 'pending',
+            Seat.student_id.in_(sa.select(student_ids_subq)),
+        ).count()
+    )
 
     if not force_delete and (active_enrollments > 0 or pending_claims > 0):
         flash(f"Cannot delete policy '{policy.title}': {active_enrollments} active enrollments and {pending_claims} pending claims. Cancel all enrollments first or use force delete.", "danger")
@@ -7596,10 +7600,15 @@ def delete_insurance_policy(policy_id):
             flash(f"Cancelled {cancelled_count} active enrollments.", "info")
 
         # Delete all claims for this policy
-        claims_deleted = InsuranceClaim.query.filter(
-            InsuranceClaim.policy_id == policy_id,
-            InsuranceClaim.student_id.in_(sa.select(student_ids_subq)),
-        ).delete(synchronize_session=False)
+        claim_ids_to_delete = [
+            c.id for c in InsuranceClaim.query
+            .join(Seat, InsuranceClaim.seat_id == Seat.id)
+            .filter(
+                InsuranceClaim.policy_id == policy_id,
+                Seat.student_id.in_(sa.select(student_ids_subq)),
+            ).all()
+        ]
+        claims_deleted = InsuranceClaim.query.filter(InsuranceClaim.id.in_(claim_ids_to_delete)).delete(synchronize_session=False) if claim_ids_to_delete else 0
 
         # Delete all enrollments for this policy (legacy + canonical)
         enrollments_deleted = StudentInsurance.query.filter(
@@ -7682,7 +7691,7 @@ def view_student_policy(enrollment_id):
     )
 
     # Get claims for this enrollment
-    claims = InsuranceClaim.query.filter_by(student_insurance_id=enrollment.id).order_by(
+    claims = InsuranceClaim.query.filter_by(enrollment_id=enrollment.id).order_by(
         InsuranceClaim.filed_date.desc()
     ).all()
 
@@ -7708,7 +7717,9 @@ def process_claim(claim_id):
     if claim is None:
         abort(404)
 
-    enrollment = db.session.get(StudentInsurance, claim.student_insurance_id)
+    enrollment = db.session.get(InsuranceEnrollment, claim.enrollment_id)
+    if enrollment is None:
+        enrollment = db.session.get(StudentInsurance, claim.enrollment_id)
     if enrollment is None:
         abort(404)
 
@@ -7836,7 +7847,7 @@ def process_claim(claim_id):
 
     # Check max claims count
     approved_claims = InsuranceClaim.query.filter(
-        InsuranceClaim.student_insurance_id == enrollment.id,
+        InsuranceClaim.enrollment_id == enrollment.id,
         InsuranceClaim.status.in_(['approved', 'paid']),
         InsuranceClaim.processed_date >= period_start_db,
         InsuranceClaim.processed_date < period_end_db,
@@ -7849,7 +7860,7 @@ def process_claim(claim_id):
     remaining_period_cap = None
     if max_payout_per_period:
         period_payouts = db.session.query(func.sum(InsuranceClaim.approved_amount)).filter(
-            InsuranceClaim.student_insurance_id == enrollment.id,
+            InsuranceClaim.enrollment_id == enrollment.id,
             InsuranceClaim.status.in_(['approved', 'paid']),
             InsuranceClaim.processed_date >= period_start_db,
             InsuranceClaim.processed_date < period_end_db,
@@ -7866,10 +7877,10 @@ def process_claim(claim_id):
 
     # Get claims statistics
     claims_stats = {
-        'pending': InsuranceClaim.query.filter_by(student_insurance_id=enrollment.id, status='pending').count(),
-        'approved': InsuranceClaim.query.filter_by(student_insurance_id=enrollment.id, status='approved').count(),
-        'rejected': InsuranceClaim.query.filter_by(student_insurance_id=enrollment.id, status='rejected').count(),
-        'paid': InsuranceClaim.query.filter_by(student_insurance_id=enrollment.id, status='paid').count(),
+        'pending': InsuranceClaim.query.filter_by(enrollment_id=enrollment.id, status='pending').count(),
+        'approved': InsuranceClaim.query.filter_by(enrollment_id=enrollment.id, status='approved').count(),
+        'rejected': InsuranceClaim.query.filter_by(enrollment_id=enrollment.id, status='rejected').count(),
+        'paid': InsuranceClaim.query.filter_by(enrollment_id=enrollment.id, status='paid').count(),
     }
 
     if request.method == 'POST' and form.validate_on_submit():
@@ -7921,11 +7932,11 @@ def process_claim(claim_id):
                 new_status=new_status,
                 teacher_notes=form.teacher_notes.data,
                 rejection_reason=form.rejection_reason.data,
-                processed_by_teacher_id=session.get('admin_id'),
+                processed_by_user_id=session.get('admin_id'),
                 approved_amount=approved_amount,
             )
             if requires_payout:
-                flash(f"Monetary claim approved! ${approved_amount:.2f} deposited to {claim.student.full_name}'s checking account.", "success")
+                flash(f"Monetary claim approved! ${approved_amount:.2f} deposited to {enrollment.student.full_name}'s checking account.", "success")
         except IntegrityError as exc:
             db.session.rollback()
             if 'uq_insurance_reimbursement_source_policy' in str(exc.orig):

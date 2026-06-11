@@ -959,7 +959,9 @@ def delete_admin(admin_id):
             StudentItem.query.filter(StudentItem.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
             RentPayment.query.filter(RentPayment.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
             db.session.execute(delete(StudentInsurance).where(StudentInsurance.student_id.in_(exclusive_student_ids)))
-            InsuranceClaim.query.filter(InsuranceClaim.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
+            seat_ids_for_students = [s.id for s in Seat.query.filter(Seat.student_id.in_(exclusive_student_ids)).all()]
+            if seat_ids_for_students:
+                InsuranceClaim.query.filter(InsuranceClaim.seat_id.in_(seat_ids_for_students)).delete(synchronize_session=False)
             StudentTeacher.query.filter(StudentTeacher.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
             StudentBlock.query.filter(StudentBlock.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
             Seat.query.filter(Seat.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)

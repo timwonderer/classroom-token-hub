@@ -446,9 +446,8 @@ def purchase_insurance_for_student(student, policy, join_code, teacher, past_wai
         claim_amount = min(random.randint(30, 100), policy.max_claim_amount or 1000)
 
         claim = InsuranceClaim(
-            student_insurance_id=student_insurance.id,
+            enrollment_id=student_insurance.id,
             policy_id=policy.id,
-            student_id=student.id,
             incident_date=incident_date,
             filed_date=incident_date + timedelta(days=1),
             description=f"Claim for {policy.title}",
@@ -456,7 +455,7 @@ def purchase_insurance_for_student(student, policy, join_code, teacher, past_wai
             status='approved' if random.random() < 0.7 else 'pending',
             approved_amount=claim_amount,
             processed_date=incident_date + timedelta(days=2),
-            processed_by_admin_id=teacher.id
+            processed_by_user_id=teacher.id
         )
         db.session.add(claim)
 

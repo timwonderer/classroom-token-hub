@@ -34,7 +34,7 @@ def execute_scheduled_rent_charge(
     cycle_end = cycle_start + timedelta(days=cycle_length_days)
     cycle_start_class = to_class_time(cycle_start, class_id)
 
-    teacher_id = seat.class_economy.teacher_id if getattr(seat, "class_economy", None) else None
+    user_id = seat.class_economy.teacher_id if getattr(seat, "class_economy", None) else None  # resolves to user_id via class_economy; teacher_id column rename pending on ClassEconomy
     amount = Decimal(str(settings.rent_amount or Decimal("0.00")))
     period = (seat.block_identifier or seat.block or "A").strip().upper()
 
@@ -42,7 +42,7 @@ def execute_scheduled_rent_charge(
         idempotency_key=idempotency_key,
         seat_id=seat.id,
         class_id=class_id,
-        teacher_id=teacher_id,
+        teacher_id=user_id,  # ledger API still uses teacher_id; DOM-LED canonicalization pending
         amount=-amount,
         account_type="checking",
         type="Rent Payment",

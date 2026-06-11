@@ -13,6 +13,7 @@ from app.models import (
     ClassMembership,
     ClassFeature,
     InsuranceClaim,
+    InsuranceEnrollment,
     InsurancePolicy,
     RentPayment,
     RentSettings,
@@ -26,7 +27,7 @@ from app.models import (
     Seat,
     ClassEconomy,
 )
-from app.services import ledger_service
+from app.services import ledger_service, obligations_service
 from tests.helpers.admin_context import login_admin
 from tests.helpers.class_scope import create_class_scope
 
@@ -271,11 +272,12 @@ def test_insurance_approval_creates_reimbursement_transaction(client):
     db.session.add(policy)
     db.session.flush()
 
-    enrollment = StudentInsurance(
-        student_id=student.id,
+    enrollment = InsuranceEnrollment(
+        seat_id=seat.id,
+        class_id=economy.class_id,
         policy_id=policy.id,
-        status="active",
         join_code="JOIN-INS",
+        status="active",
         purchase_date=datetime.now(timezone.utc) - timedelta(days=2),
         coverage_start_date=datetime.now(timezone.utc) - timedelta(days=30),
         payment_current=True,
@@ -299,17 +301,18 @@ def test_insurance_approval_creates_reimbursement_transaction(client):
     db.session.add(purchase_tx)
     db.session.flush()
 
-    claim = InsuranceClaim(
-        student_insurance_id=enrollment.id,
+    claim = obligations_service.record_insurance_claim(
+        enrollment_id=enrollment.id,
         policy_id=policy.id,
-        student_id=student.id,
+        seat_id=seat.id,
+        class_id=economy.class_id,
         incident_date=purchase_tx.timestamp,
         description="Reimburse",
         claim_amount=Decimal("30.00"),
-        status="pending",
+        claim_item=None,
+        comments=None,
         transaction_id=purchase_tx.id,
     )
-    db.session.add(claim)
     db.session.commit()
 
     login_admin(client, admin.id, "JOIN-INS")
@@ -537,10 +540,7 @@ def test_rent_payment_creates_rent_obligation_record(client):
     economy = ClassEconomy.query.filter_by(join_code="JOIN-RENT").first()
     assert economy is not None
     settings = RentSettings(
-        teacher_id=admin.id,
-        join_code="JOIN-RENT",
         class_id=economy.class_id,
-        block="A",
         is_enabled=True,
         rent_amount=Decimal("10.00"),
         frequency_type="monthly",

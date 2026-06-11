@@ -6,9 +6,11 @@ from app import db
 from app.services import obligations_service
 from app.models import (
     Admin,
+    InsuranceEnrollment,
     InsurancePolicy,
     InsuranceClaim,
     ObligationAssessment,
+    Seat,
     StudentInsurance,
     StudentTeacher,
     Transaction,
@@ -99,8 +101,12 @@ def test_admin_claim_approval_uses_frozen_claim_cap(client, test_student):
 
     policy = _create_policy(admin.id, title="Claim Cap Policy", max_claim_amount=Decimal("100.00"))
 
-    enrollment = StudentInsurance(
-        student_id=test_student.id,
+    seat = Seat.query.filter_by(student_id=test_student.id).first()
+    assert seat is not None, "test_student must have a seat (created by create_class_scope)"
+
+    enrollment = InsuranceEnrollment(
+        seat_id=seat.id,
+        class_id=seat.class_id,
         policy_id=policy.id,
         status="active",
         join_code="JOIN-SNAP-1",
@@ -127,7 +133,7 @@ def test_admin_claim_approval_uses_frozen_claim_cap(client, test_student):
     db.session.flush()
 
     claim = obligations_service.record_insurance_claim(
-        student_insurance_id=enrollment.id,
+        enrollment_id=enrollment.id,
         policy_id=policy.id,
         seat_id=enrollment.seat_id,
         class_id=enrollment.class_id,

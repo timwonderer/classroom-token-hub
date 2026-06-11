@@ -113,9 +113,10 @@ def _delete_student_scoped_rows(student_id, student_item_ids, issue_ids, insuran
             IssueStatusHistory.issue_id.in_(issue_ids)
         ).delete(synchronize_session=False)
 
-    insurance_claim_filters = [InsuranceClaim.student_id == student_id]
+    seat_ids_for_student = [s.id for s in Seat.query.filter_by(student_id=student_id).all()]
+    insurance_claim_filters = [InsuranceClaim.seat_id.in_(seat_ids_for_student)] if seat_ids_for_student else []
     if insurance_ids:
-        insurance_claim_filters.append(InsuranceClaim.student_insurance_id.in_(insurance_ids))
+        insurance_claim_filters.append(InsuranceClaim.enrollment_id.in_(insurance_ids))
     if tx_ids:
         insurance_claim_filters.append(InsuranceClaim.transaction_id.in_(tx_ids))
     InsuranceClaim.query.filter(sa.or_(*insurance_claim_filters)).delete(synchronize_session=False)

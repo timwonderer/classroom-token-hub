@@ -39,7 +39,7 @@ def execute_file_claim(
         enrollment=enrollment,
     )
     claim = obligations_service.record_insurance_claim(
-        student_insurance_id=enrollment.id,
+        enrollment_id=enrollment.id,
         policy_id=enrollment.policy_id,
         seat_id=seat_id,
         class_id=class_id,
@@ -61,7 +61,7 @@ def execute_insurance_claim_resolution(
     new_status: str,
     teacher_notes: str | None,
     rejection_reason: str | None,
-    processed_by_teacher_id: int | None,
+    processed_by_user_id: int | None,
     approved_amount: Decimal | None,
 ):
     """Obligations-led FEAT for insurance claim resolution and reimbursement."""
@@ -76,7 +76,7 @@ def execute_insurance_claim_resolution(
         status=new_status,
         teacher_notes=teacher_notes,
         rejection_reason=rejection_reason,
-        processed_by_teacher_id=processed_by_teacher_id,
+        processed_by_user_id=processed_by_user_id,
         processed_at=processed_at,
         approved_amount=approved_amount,
     )
@@ -90,7 +90,7 @@ def execute_insurance_claim_resolution(
             idempotency_key=insurance_reimbursement_key(claim.id),
             seat_id=claim.seat_id,
             class_id=scope.class_id,
-            teacher_id=processed_by_teacher_id,
+            teacher_id=processed_by_user_id,  # ledger API still uses teacher_id; DOM-LED canonicalization pending
             amount=approved_amount,
             account_type="checking",
             type="insurance_reimbursement",

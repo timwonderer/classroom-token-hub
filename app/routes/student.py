@@ -1734,7 +1734,7 @@ def insurance_marketplace():
     my_claims = InsuranceClaim.query.join(
         InsurancePolicy, InsuranceClaim.policy_id == InsurancePolicy.id
     ).filter(
-        InsuranceClaim.student_id == student.id,
+        InsuranceClaim.seat_id == seat.id,
         InsuranceClaim.join_code == join_code,
     ).all()
 
@@ -1880,9 +1880,8 @@ def purchase_insurance(policy_id):
         overdraft_shortfall = shortfall
 
     execute_insurance_purchase(
-        student=student,
-        teacher_id=teacher_id,
-        join_code=join_code,
+        seat=seat,
+        user_id=teacher_id,  # route still resolves teacher_id from context; full route canonicalization pending
         class_id=context.class_id,
         policy=policy,
         banking_settings=banking_settings,
@@ -1988,7 +1987,7 @@ def file_claim(policy_id):
     # Check max claims per period
     if max_claims_count:
         claims_count = InsuranceClaim.query.filter(
-            InsuranceClaim.student_insurance_id == enrollment.id,
+            InsuranceClaim.enrollment_id == enrollment.id,
             InsuranceClaim.status.in_(['pending', 'approved', 'paid']),
             InsuranceClaim.filed_date >= period_start_db,
             InsuranceClaim.filed_date < period_end_db,
@@ -2001,7 +2000,7 @@ def file_claim(policy_id):
     remaining_period_cap = None
     if max_payout_per_period:
         period_payouts = db.session.query(func.sum(InsuranceClaim.approved_amount)).filter(
-            InsuranceClaim.student_insurance_id == enrollment.id,
+            InsuranceClaim.enrollment_id == enrollment.id,
             InsuranceClaim.status.in_(['approved', 'paid']),
             InsuranceClaim.processed_date >= period_start_db,
             InsuranceClaim.processed_date < period_end_db,
@@ -2184,7 +2183,7 @@ def file_claim(policy_id):
 
     # Get claims for this period
     claims_this_period = InsuranceClaim.query.filter_by(
-        student_insurance_id=enrollment.id
+        enrollment_id=enrollment.id
     ).all()
 
     return render_template('student_file_claim.html',
@@ -2225,7 +2224,7 @@ def view_policy(enrollment_id):
         return redirect(url_for('student.student_insurance'))
 
     # Get claims for this policy
-    claims = InsuranceClaim.query.filter_by(student_insurance_id=enrollment.id).order_by(
+    claims = InsuranceClaim.query.filter_by(enrollment_id=enrollment.id).order_by(
         InsuranceClaim.filed_date.desc()
     ).all()
 

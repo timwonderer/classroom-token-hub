@@ -7,7 +7,9 @@ from sqlalchemy.exc import IntegrityError
 from app import db
 from app.models import (
     Admin,
+    InsuranceEnrollment,
     InsurancePolicy,
+    Seat,
     StudentInsurance,
     InsuranceClaim,
     Transaction,
@@ -44,13 +46,18 @@ def _create_policy(admin_id):
 
 
 def _enroll_student(student_id, policy_id):
-    enrollment = StudentInsurance(
-        student_id=student_id,
+    seat = Seat.query.filter_by(student_id=student_id).first()
+    assert seat is not None, f"No seat for student_id={student_id}"
+    enrollment = InsuranceEnrollment(
+        seat_id=seat.id,
+        class_id=seat.class_id,
         policy_id=policy_id,
+        join_code=seat.join_code,
         status="active",
         coverage_start_date=datetime.now(timezone.utc) - timedelta(days=2),
         payment_current=True,
     )
+    enrollment.freeze_policy_snapshot(db.session.get(InsurancePolicy, policy_id))
     db.session.add(enrollment)
     db.session.commit()
     return enrollment
@@ -73,9 +80,11 @@ def _create_transaction(student_id, teacher_id, is_void=False):
 
 def _build_claim(enrollment, policy, student_id, transaction):
     return InsuranceClaim(
-        student_insurance_id=enrollment.id,
+        enrollment_id=enrollment.id,
         policy_id=policy.id,
-        student_id=student_id,
+        seat_id=enrollment.seat_id,
+        class_id=enrollment.class_id,
+        join_code=enrollment.join_code,
         incident_date=transaction.timestamp,
         description="Test claim",
         claim_amount=abs(transaction.amount),
@@ -203,6 +212,13 @@ def test_hard_deny_transaction_type_cannot_be_approved(client, test_student, adm
 
 
 def test_duplicate_reimbursement_for_same_source_and_policy_blocked(client, test_student, admin_user):
+    from app.models import StudentTeacher
+
+    st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
+    db.session.add(st)
+    db.session.commit()
+    class_row = _ensure_admin_class_scope(admin_user, test_student)
+
     policy = _create_policy(admin_user.id)
     source_tx = Transaction(
         student_id=test_student.id,
@@ -310,7 +326,6 @@ def test_rent_privilege_purchase_cannot_be_approved(client, test_student, admin_
     db.session.flush()
 
     rent_settings = RentSettings(
-        teacher_id=admin_user.id,
         class_id=class_row.class_id,
         is_enabled=True,
         rent_amount=10.0,

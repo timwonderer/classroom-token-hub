@@ -18,8 +18,10 @@ from tests.helpers.mock_teacher_block import TeacherBlock
 from app.models import (
     Admin, Student, StudentBlock, StudentTeacher,
     InsurancePolicy, InsurancePolicyBlock, StudentInsurance, InsuranceClaim,
+    InsuranceEnrollment, Seat,
 )
 from app.hash_utils import hash_username, get_random_salt
+from tests.helpers.class_scope import create_class_scope
 
 
 @pytest.fixture
@@ -338,80 +340,93 @@ def test_student_insurance_enrollments_filtered_by_join_code(
 def test_claims_filtered_by_join_code(
     client, teacher_with_two_classes, students_in_two_classes, policies_for_two_classes
 ):
-    """Test that insurance claims are filtered by join_code."""
+    """Test that insurance claims are filtered by join_code via canonical InsuranceEnrollment."""
+    teacher = teacher_with_two_classes
     students = students_in_two_classes
     policies = policies_for_two_classes
 
-    # Create enrollment for student A
-    enrollment_a = StudentInsurance(
-        student_id=students['student_a'].id,
+    from app.models import ClassEconomy
+    class_a = ClassEconomy.query.filter_by(join_code="JOINA123").first()
+    class_b = ClassEconomy.query.filter_by(join_code="JOINB456").first()
+    if class_a is None:
+        class_a = create_class_scope(teacher=teacher, join_code="JOINA123", student=students['student_a'], block="A")
+    if class_b is None:
+        class_b = create_class_scope(teacher=teacher, join_code="JOINB456", student=students['student_b'], block="B")
+    db.session.flush()
+
+    seat_a = Seat.query.filter_by(student_id=students['student_a'].id, class_id=class_a.class_id).first()
+    seat_b = Seat.query.filter_by(student_id=students['student_b'].id, class_id=class_b.class_id).first()
+
+    enrollment_a = InsuranceEnrollment(
+        seat_id=seat_a.id,
+        class_id=class_a.class_id,
         policy_id=policies['policy_a'].id,
         join_code="JOINA123",
         status="active",
         coverage_start_date=datetime.now(timezone.utc) - timedelta(days=10),
-        payment_current=True
+        payment_current=True,
     )
+    enrollment_a.freeze_policy_snapshot(policies['policy_a'])
     db.session.add(enrollment_a)
     db.session.flush()
 
-    # Create claim for student A
     claim_a = InsuranceClaim(
-        student_insurance_id=enrollment_a.id,
+        enrollment_id=enrollment_a.id,
         policy_id=policies['policy_a'].id,
-        student_id=students['student_a'].id,
+        seat_id=seat_a.id,
+        class_id=class_a.class_id,
+        join_code="JOINA123",
         incident_date=datetime.now(timezone.utc) - timedelta(days=1),
         description="Claim from Period A",
         claim_amount=25.0,
-        status="pending"
+        status="pending",
     )
     db.session.add(claim_a)
 
-    # Create enrollment for student B
-    enrollment_b = StudentInsurance(
-        student_id=students['student_b'].id,
+    enrollment_b = InsuranceEnrollment(
+        seat_id=seat_b.id,
+        class_id=class_b.class_id,
         policy_id=policies['policy_b'].id,
         join_code="JOINB456",
         status="active",
         coverage_start_date=datetime.now(timezone.utc) - timedelta(days=10),
-        payment_current=True
+        payment_current=True,
     )
+    enrollment_b.freeze_policy_snapshot(policies['policy_b'])
     db.session.add(enrollment_b)
     db.session.flush()
 
-    # Create claim for student B
     claim_b = InsuranceClaim(
-        student_insurance_id=enrollment_b.id,
+        enrollment_id=enrollment_b.id,
         policy_id=policies['policy_b'].id,
-        student_id=students['student_b'].id,
+        seat_id=seat_b.id,
+        class_id=class_b.class_id,
+        join_code="JOINB456",
         incident_date=datetime.now(timezone.utc) - timedelta(days=1),
         description="Claim from Period B",
         claim_amount=30.0,
-        status="pending"
+        status="pending",
     )
     db.session.add(claim_b)
     db.session.commit()
 
-    # Query claims for Period A only (via StudentInsurance.join_code)
     period_a_claims = (
         InsuranceClaim.query
-        .join(StudentInsurance, InsuranceClaim.student_insurance_id == StudentInsurance.id)
-        .filter(StudentInsurance.join_code == "JOINA123")
+        .join(InsuranceEnrollment, InsuranceClaim.enrollment_id == InsuranceEnrollment.id)
+        .filter(InsuranceEnrollment.join_code == "JOINA123")
         .all()
     )
 
-    # Should only include claim_a
     assert len(period_a_claims) == 1
     assert period_a_claims[0].description == "Claim from Period A"
 
-    # Query claims for Period B only
     period_b_claims = (
         InsuranceClaim.query
-        .join(StudentInsurance, InsuranceClaim.student_insurance_id == StudentInsurance.id)
-        .filter(StudentInsurance.join_code == "JOINB456")
+        .join(InsuranceEnrollment, InsuranceClaim.enrollment_id == InsuranceEnrollment.id)
+        .filter(InsuranceEnrollment.join_code == "JOINB456")
         .all()
     )
 
-    # Should only include claim_b
     assert len(period_b_claims) == 1
     assert period_b_claims[0].description == "Claim from Period B"
 

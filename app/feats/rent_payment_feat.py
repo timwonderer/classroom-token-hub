@@ -44,14 +44,14 @@ def execute_rent_payment(
 ) -> RentPaymentResult:
     """Obligations-led FEAT for rent payment orchestration."""
     now = now or utc_now()
-    teacher_id = context.get("teacher_id")
+    user_id = context.get("user_id")
     join_code = seat.join_code
     class_id = seat.class_id
-    
+
     access_policy_service.assert_can_pay_rent(
         seat_id=seat.id,
         class_id=class_id,
-        teacher_id=teacher_id,
+        teacher_id=user_id,  # access_policy API still uses teacher_id; canonicalization pending
     )
     current_block = (context.get("block") or period or "").strip().upper()
     is_partial = payment_amount < remaining_amount
@@ -66,7 +66,7 @@ def execute_rent_payment(
     transaction = ledger_service.create_pending_transaction(
         seat_id=seat.id,
         class_id=class_id,
-        teacher_id=teacher_id,
+        teacher_id=user_id,  # ledger API still uses teacher_id; DOM-LED canonicalization pending
         amount=-payment_amount,
         account_type='checking',
         type='Rent Payment',
@@ -100,7 +100,7 @@ def execute_rent_payment(
         ledger_service.create_transfer_pair(
             seat_id=seat.id,
             class_id=class_id,
-            teacher_id=teacher_id,
+            teacher_id=user_id,  # ledger API still uses teacher_id; DOM-LED canonicalization pending
             amount=overdraft_shortfall,
             from_account='savings',
             to_account='checking',
