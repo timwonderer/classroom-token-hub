@@ -904,6 +904,13 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
                 PayrollSettings.query.filter_by(
                     teacher_id=teacher_id, block=block_name
                 ).delete(synchronize_session=False)
+                block_rent_setting_ids_subq = db.session.query(RentSettings.id).filter(
+                    RentSettings.teacher_id == teacher_id,
+                    RentSettings.block == block_name,
+                ).subquery()
+                RentItem.query.filter(
+                    RentItem.rent_setting_id.in_(sa.select(block_rent_setting_ids_subq))
+                ).delete(synchronize_session=False)
                 RentSettings.query.filter_by(
                     teacher_id=teacher_id, block=block_name
                 ).delete(synchronize_session=False)

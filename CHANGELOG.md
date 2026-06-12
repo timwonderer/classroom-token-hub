@@ -14,6 +14,7 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 - Resolved dependency resolution conflict from Dependabot PR #1174 where `opentelemetry-sdk 1.41.1` required `opentelemetry-semantic-conventions==0.62b1` but `opentelemetry-instrumentation-flask 0.62b0` hard-required `==0.62b0`. Root cause: the patch-updates group did not recognize the instrumentation pre-release bump as a patch update, leaving the packages out of lockstep.
+- **Block deletion rent FK cleanup** — Fixed `/admin/students/delete-block` failing with a `ForeignKeyViolation` when deleting a class block that still had `rent_items` rows pointing at block-scoped `rent_settings`. `_hard_delete_join_code_scope` now deletes dependent `RentItem` rows before deleting `RentSettings` for blocks with no remaining seats.
 
 ### Added
 - **Insurance recurring billing — Phases 2–4** — Builds on the Phase 1 nightly billing job shipped in PR #1168:
