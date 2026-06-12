@@ -876,18 +876,17 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
         TeacherBlock.student_id.isnot(None),
         TeacherBlock.join_code != join_code,
     ).subquery()
-    orphan_student_ids = (
-        db.session.query(Student.id)
-        .filter(Student.id.in_(scoped_student_ids))
-        .filter(~Student.id.in_(sa.select(remaining_student_ids_subq)))
-        .subquery()
-    )
-    StudentTeacher.query.filter(
-        StudentTeacher.student_id.in_(sa.select(orphan_student_ids))
-    ).delete(synchronize_session=False)
-    Student.query.filter(
-        Student.id.in_(sa.select(orphan_student_ids))
-    ).delete(synchronize_session=False)
+    orphan_student_ids = []
+    if scoped_student_ids:
+        orphan_student_ids = [
+            student_id
+            for (student_id,) in db.session.query(Student.id)
+            .filter(Student.id.in_(scoped_student_ids))
+            .filter(~Student.id.in_(sa.select(remaining_student_ids_subq)))
+            .all()
+        ]
+    for student_id in orphan_student_ids:
+        remove_student_from_teacher_scope(student_id, teacher_id)
 
     # Clean up PayrollSettings and RentSettings for any block name that now has no
     # remaining TeacherBlock entries for this teacher.  These models are scoped by
