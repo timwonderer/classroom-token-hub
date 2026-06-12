@@ -11,7 +11,7 @@ import pyotp
 from datetime import datetime, timezone
 
 from app import db
-from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction
+from app.models import Admin, RentWaiver, Student, StudentTeacher, TeacherBlock, Transaction
 from app.hash_utils import get_random_salt, hash_hmac
 
 
@@ -347,6 +347,47 @@ def test_block_deletion_with_improved_transactions(client):
     
     # Verify transactions in deleted class join code are deleted
     assert Transaction.query.filter_by(student_id=student1_id).first() is None
+
+
+def test_block_deletion_removes_rent_waivers_for_orphaned_students(client):
+    """Deleting a block should remove rent waivers before hard-deleting orphaned students."""
+    teacher, secret = _create_admin("teacher-block-waiver")
+    student = _create_claimed_student("Piper", "piper_username", teacher, "G")
+
+    join_code = TeacherBlock.query.filter_by(teacher_id=teacher.id, block="G").first().join_code
+    waiver = RentWaiver(
+        student_id=student.id,
+        join_code=join_code,
+        waiver_start_date=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        waiver_end_date=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        periods_count=1,
+        reason="cleanup regression",
+        created_by_admin_id=teacher.id,
+    )
+    db.session.add(waiver)
+    db.session.commit()
+
+    student_id = student.id
+    waiver_id = waiver.id
+
+    _login_admin(client, teacher, secret)
+
+    response = client.post(
+        "/admin/students/delete-block",
+        json={
+            "block": "G",
+            "gate_phrase": "DELETE BLOCK G",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
+        content_type="application/json"
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["status"] == "success"
+    assert db.session.get(Student, student_id) is None
+    assert db.session.get(RentWaiver, waiver_id) is None
 
 
 def test_bulk_delete_legacy_unclaimed_no_block_provided(client):
