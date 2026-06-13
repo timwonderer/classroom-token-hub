@@ -424,6 +424,22 @@ def create_app():
         annotate_request_context_span()
 
     @app.before_request
+    def enforce_v1_sunset():
+        """
+        Redirect every request to the transition page during the v1 sunset.
+
+        Only the transition landing page, learn-more page, and required styling
+        assets remain reachable.
+        """
+        if not is_v1_sunset_active():
+            return None
+
+        if is_v1_sunset_allowed_path(request.path):
+            return None
+
+        return redirect(get_v1_sunset_redirect_target(), code=302)
+
+    @app.before_request
     def capture_correlation_context():
         from app.services.tlcp import resolve_actor_context
 
@@ -497,8 +513,13 @@ def create_app():
         return datetime.now(timezone.utc) >= V1_SUNSET_START_UTC
 
     def is_v1_sunset_allowed_path(path: str) -> bool:
-        """Return True only for the two public transition pages."""
-        return path in {"/v2transition.html", "/learnmore.html"}
+        """Return True only for the public sunset pages and their required CSS."""
+        return path in {
+            "/v2transition.html",
+            "/learnmore.html",
+            "/style.css",
+            "/static/css/tokens.css",
+        }
 
     def get_v1_sunset_redirect_target() -> str:
         """Return the canonical transition page URL used during sunset."""
@@ -604,22 +625,6 @@ def create_app():
         # Otherwise show maintenance page.
         return render_template("maintenance.html", **maintenance_context()), 503
 
-    @app.before_request
-    def enforce_v1_sunset():
-        """
-        Redirect every request to the transition page during the v1 sunset.
-
-        Only the transition landing page and learn-more page remain reachable.
-        """
-        if not is_v1_sunset_active():
-            return None
-
-        if is_v1_sunset_allowed_path(request.path):
-            return None
-
-        return redirect(get_v1_sunset_redirect_target(), code=302)
-
-    @app.before_request
     def set_rls_tenant_context():
         """
         Set PostgreSQL Row-Level Security tenant context for multi-tenancy isolation.

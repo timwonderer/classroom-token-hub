@@ -25,7 +25,20 @@ def test_v1_sunset_allows_learn_more_page(client, monkeypatch):
     response = client.get("/learnmore.html")
 
     assert response.status_code == 200
-    assert "Back to transition page" in response.get_data(as_text=True)
+    assert "Back to Transition Page" in response.get_data(as_text=True)
+
+
+def test_v1_sunset_allows_required_transition_assets(client, monkeypatch):
+    monkeypatch.setenv("V1_SUNSET_MODE", "true")
+    monkeypatch.setenv("V1_SUNSET_TEST_NOW_UTC", "2026-07-01T07:00:00Z")
+
+    style_response = client.get("/style.css")
+    tokens_response = client.get("/static/css/tokens.css")
+
+    assert style_response.status_code == 200
+    assert "landing-hero" in style_response.get_data(as_text=True)
+    assert tokens_response.status_code == 200
+    assert "--primary" in tokens_response.get_data(as_text=True)
 
 
 def test_v1_sunset_blocks_health_endpoint(client, monkeypatch):

@@ -192,6 +192,12 @@ def learn_more():
     return send_from_directory(Path(current_app.root_path).parent / 'docs', 'learnmore.html')
 
 
+@main_bp.route('/style.css')
+def docs_style():
+    """Serve the shared docs stylesheet for the sunset transition pages."""
+    return send_from_directory(Path(current_app.root_path).parent / 'docs', 'style.css')
+
+
 @main_bp.route('/sw.js')
 @limiter.exempt
 def service_worker():
