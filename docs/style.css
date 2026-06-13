@@ -1,5 +1,4 @@
-
-
+/* ─── Design Tokens (inlined from tokens.css for GitHub Pages) ─── */
 :root {
     --primary-color: #236960;
     --primary-dark: #1a4742;
@@ -12,7 +11,37 @@
     --border-color: #e5e5e3;
     --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    --steward-blue: #253f66;
+
+    /* Tokens from unified design system */
+    --radius-sm: 4px;
+    --radius-pill: 999px;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --neutral-50: #fafaf9;
+    --neutral-100: #f5f5f3;
+    --neutral-200: #e8e8e5;
+    --neutral-300: #d4d4d0;
+    --neutral-400: #a3a3a0;
+    --neutral-500: #737370;
+    --neutral-700: #404040;
+    --neutral-800: #262626;
+    --neutral-900: #171717;
+    --background: var(--neutral-100);
+    --surface: #ffffff;
+    --text-primary: var(--neutral-800);
+    --text-secondary: var(--neutral-500);
+    --text-muted: var(--neutral-500);
+    --text-inverse: #ffffff;
+    --border-subtle: var(--neutral-200);
+    --primary: #1a4d47;
+    --primary-hover: #15403b;
+    --primary-subtle: #e8f0ef;
+    --secondary: #d3af37;
+    --secondary-hover: #c49f2e;
+    --secondary-text: var(--neutral-900);
+    --secondary-subtle: #f9f5e6;
+    --advisor-green: #1a4d47;
+    --steward-blue: #2F4F7F;
+    --guardian-gray: #303030;
 }
 
 .loading-badge {
@@ -21,7 +50,6 @@
     width: fit-content;
     margin: 0 auto;
     border-radius: 100px;
-    
 }
 
 body {
@@ -30,8 +58,6 @@ body {
     color: var(--text-dark);
     background-color: var(--bg-light);
 }
-
-
 
 /* Navigation */
 nav {
@@ -197,10 +223,7 @@ hr {
 
 .hero p {
     font-size: 1.25rem;
-    
-    
 }
-
 
 .hero-actions {
     display: flex;
@@ -238,9 +261,7 @@ hr {
 .transition-page-v2-subheading {
     color:var(--accent-color);
     font-size:1.2rem;
-
     font-weight:400;
-   
     padding-left: 3rem;
     margin-top:0;
 }
@@ -614,10 +635,6 @@ footer p {
     border:2px solid white;
 }
 
-
-
-
-
 .transition-page {
     background: var(--guardian-gray);
 }
@@ -732,7 +749,6 @@ body.landing-page {
 
 .landing-welcome .version {
     color: #DEDEDE;
-   
     font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.3em;
@@ -796,7 +812,6 @@ body.landing-page {
     line-height: 1.2;
     transition: filter 120ms ease-in-out;
     box-shadow: var( --shadow);
-
 }
 
 .landing-signin-btn:hover,
@@ -805,8 +820,6 @@ body.landing-page {
 .landing-learn-more-btn:focus-visible {
     color: var(--text-inverse);
     box-shadow: 0 0 5px 1px var(--secondary-color);
-
-
 }
 
 .landing-signin-btn-main {
@@ -851,7 +864,6 @@ body.landing-page {
     background-color: var(--secondary-subtle);
 }
 
-
 .landing-about-panel p {
     margin: 0 0 1rem 0;
     font-size: 1rem;
@@ -867,17 +879,12 @@ body.landing-page {
 }
 
 .landing-status-label {
- 
     color: var(--text-light);
     font-size: 0.8rem;
     font-weight: 400;
     letter-spacing: 0.05em;
     text-transform: uppercase;
 }
-
-
-
-
 
 .landing-about-panel h2 {
     margin-bottom: 1rem;
@@ -988,8 +995,6 @@ body.landing-page {
     .landing-footer-meta {
         grid-column: 1 / -1;
     }
-
-
 }
 
 @media (max-width: 700px) {
@@ -1035,5 +1040,4 @@ body.landing-page {
     .landing-footer-grid {
         grid-template-columns: 1fr;
     }
-
 }
