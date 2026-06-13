@@ -8,8 +8,7 @@ import pyotp
 from flask import session
 
 from app import app, db
-from tests.helpers.mock_teacher_block import TeacherBlock
-from app.models import Admin, ClassEconomy, ClassFeature, FeatureSettings, TeacherOnboarding, User, UserRole
+from app.models import Admin, ClassEconomy, ClassFeature, FeatureSettings, Seat, TeacherOnboarding, User, UserRole
 from app.routes.admin import get_admin_feature_join_code_options, is_admin_feature_enabled
 from tests.helpers.admin_context import login_admin
 from app.utils.economy_policy import (
@@ -27,16 +26,12 @@ def _create_class_scope(admin, block='A', join_code='JOIN_A'):
     )
     db.session.add(economy)
     db.session.flush()
-    db.session.add(TeacherBlock(
-        teacher_id=admin.id,
-        block=block,
+    db.session.add(Seat(
+        class_id=economy.class_id,
         join_code=join_code,
-        first_name='Test',
-        last_initial='T',
-        last_name_hash_by_part=[],
-        dob_sum_hash=None,
-        salt=b'salt',
-        first_half_hash='hash',
+        block=block,
+        block_identifier=block,
+        role='student',
     ))
     db.session.flush()
     return economy
@@ -164,9 +159,7 @@ class TestClassFeatures:
         economy_a = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
         economy_b = _create_class_scope(test_admin, block='B', join_code='JOIN_B')
         db.session.add(ClassFeature(class_id=economy_a.class_id, feature_name='hall_pass'))
-        TeacherBlock.query.filter(
-            TeacherBlock.teacher_id == test_admin.id.join_code == economy_a.join_code,
-        ).delete(synchronize_session=False)
+        Seat.query.filter_by(class_id=economy_a.class_id).delete(synchronize_session=False)
         db.session.commit()
 
         options = get_admin_feature_join_code_options('hall_pass', admin_id=test_admin.id)
@@ -182,10 +175,7 @@ class TestClassFeatures:
         """Boundary join codes resolve through ClassEconomy without TeacherBlock authority."""
         economy = _create_class_scope(test_admin, block='A', join_code='JOIN_A')
         db.session.add(ClassFeature(class_id=economy.class_id, feature_name='insurance'))
-        TeacherBlock.query.filter_by(
-            teacher_id=test_admin.id,
-            join_code=economy.join_code,
-        ).delete(synchronize_session=False)
+        Seat.query.filter_by(class_id=economy.class_id).delete(synchronize_session=False)
         db.session.commit()
 
         with app.test_request_context('/admin/insurance'):
@@ -395,8 +385,8 @@ class TestTeacherDeletionCascade:
         # Verify onboarding was CASCADE deleted
         assert TeacherOnboarding.query.filter_by(teacher_id=teacher_id).first() is None
 
-    def test_teacher_blocks_cascade_on_teacher_delete(self, client_with_fk):
-        """Test that TeacherBlocks are CASCADE deleted when teacher is deleted."""
+    def test_class_scoped_seats_cascade_on_teacher_delete(self, client_with_fk):
+        """Test that class-scoped seats are removed when the teacher's classes are deleted."""
         from app.models import ClassEconomy
 
         # Create a teacher
@@ -407,48 +397,24 @@ class TestTeacherDeletionCascade:
         teacher_id = admin.id
 
         # Ensure ClassEconomy exists for FK constraints
-        if not db.session.get(ClassEconomy, 'TEST123'):
-            db.session.add(ClassEconomy(join_code='TEST123', teacher_id=teacher_id, created_by_admin_id=teacher_id, display_name='Class TEST123'))
-        if not db.session.get(ClassEconomy, 'TEST456'):
-            db.session.add(ClassEconomy(join_code='TEST456', teacher_id=teacher_id, created_by_admin_id=teacher_id, display_name='Class TEST456'))
+        if not ClassEconomy.query.filter_by(class_id='TEST123').first():
+            db.session.add(ClassEconomy(class_id='TEST123', join_code='TEST123', teacher_id=teacher_id, created_by_admin_id=teacher_id, display_name='Class TEST123'))
+        if not ClassEconomy.query.filter_by(class_id='TEST456').first():
+            db.session.add(ClassEconomy(class_id='TEST456', join_code='TEST456', teacher_id=teacher_id, created_by_admin_id=teacher_id, display_name='Class TEST456'))
         db.session.commit()
 
-        # Create teacher blocks
-        # PIIEncryptedType will handle encryption automatically
-        block1 = TeacherBlock(
-            teacher_id=teacher_id,
-            block='A',
-            first_name='John',
-            last_initial='D',
-            last_name_hash_by_part=['hash1'],
-            dob_sum_hash=None,
-            salt=os.urandom(16),
-            first_half_hash='test_hash_1',
-            join_code='TEST123',
-            is_claimed=False
-        )
-        block2 = TeacherBlock(
-            teacher_id=teacher_id,
-            block='B',
-            first_name='Jane',
-            last_initial='S',
-            last_name_hash_by_part=['hash2'],
-            dob_sum_hash=None,
-            salt=os.urandom(16),
-            first_half_hash='test_hash_2',
-            join_code='TEST456',
-            is_claimed=False
-        )
+        block1 = Seat(class_id='TEST123', join_code='TEST123', block='A', block_identifier='A', role='student')
+        block2 = Seat(class_id='TEST456', join_code='TEST456', block='B', block_identifier='B', role='student')
         db.session.add(block1)
         db.session.add(block2)
         db.session.commit()
 
-        # Verify blocks exist
-        assert TeacherBlock.query.filter_by(teacher_id=teacher_id).count() == 2
+        # Verify seats exist
+        assert Seat.query.filter(Seat.class_id.in_(['TEST123', 'TEST456'])).count() == 2
 
         # Delete the teacher
         db.session.delete(admin)
         db.session.commit()
 
-        # Verify teacher blocks were CASCADE deleted
-        assert TeacherBlock.query.filter_by(teacher_id=teacher_id).count() == 0
+        # Verify class-scoped seats were CASCADE deleted via class deletion.
+        assert Seat.query.filter(Seat.class_id.in_(['TEST123', 'TEST456'])).count() == 0

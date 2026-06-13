@@ -1,45 +1,46 @@
 import pyotp
 
 from app import db
-from tests.helpers.mock_teacher_block import TeacherBlock
-from app.models import Admin, UserReport
+from app.models import Admin, ClassEconomy, User, UserReport, UserRole
 from app.utils.auth_username import build_hashed_username_fields
 
 
 def _login_admin(client):
-    secret = pyotp.random_base32()
     auth_username = "teacher_help"
     salt, username_hash, username_lookup_hash = build_hashed_username_fields(auth_username)
     admin = Admin(
         username_hash=username_hash,
         username_lookup_hash=username_lookup_hash,
         salt=salt,
-        totp_secret=secret,
+        totp_secret=pyotp.random_base32(),
     )
     db.session.add(admin)
     db.session.flush()
+    user = User(
+        user_role=UserRole.TEACHER,
+        username_hash=username_hash,
+        username_lookup_hash=username_lookup_hash,
+    )
+    db.session.add(user)
+    db.session.flush()
+    admin.user_id = user.id
 
-    seat = TeacherBlock(
+    db.session.add(ClassEconomy(
+        class_id="help-support-class",
         teacher_id=admin.id,
-        block="A",
-        class_label="ELA",
-        first_name="Student",
-        last_initial="T",
-        last_name_hash_by_part=["hash"],
-        dob_sum_hash=None,
-        salt=b"1234567890123456",
-        first_half_hash="hashvalue",
-        join_code="ELA123"
-    )
-    db.session.add(seat)
+        join_code="ELA123",
+        display_name="ELA",
+        section="A",
+        status="active",
+        created_by_admin_id=admin.id,
+    ))
     db.session.commit()
-
-    response = client.post(
-        "/admin/login",
-        data={"username": auth_username, "totp_code": pyotp.TOTP(secret).now()},
-        follow_redirects=True,
-    )
-    assert response.status_code == 200
+    with client.session_transaction() as sess:
+        sess["admin_id"] = admin.id
+        sess["is_admin"] = True
+        sess["user_id"] = user.id
+        sess["current_class_id"] = "help-support-class"
+        sess["current_join_code"] = "ELA123"
 
 
 def test_help_support_page_renders(client):

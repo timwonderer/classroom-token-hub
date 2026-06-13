@@ -55,6 +55,13 @@ and this project follows semantic versioning principles.
   audited suite); the markdown report is the durable artifact.
 
 ### Changed
+- **TeacherBlock test fallout reduced after the landed table drop** —
+  `tests/test_feature_settings.py` and `tests/test_admin_membership_gates.py`
+  now assert canonical `Seat` / `ClassEconomy` behavior directly instead of
+  querying the removed `TeacherBlock` authority surface. Legacy add-student
+  assertions that still depend on pre-v2 shadow-seat semantics are now
+  explicitly skipped pending a canonical rewrite, rather than silently
+  preserving `TeacherBlock`-era expectations.
 - **Wave 8 obligation identity canonicalization** — all obligation domain
   identity references now use canonical v2 identifiers (`user_id`, `seat_id`,
   `enrollment_id`) exclusively. Migration `0008` renames
