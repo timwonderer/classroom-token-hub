@@ -3,18 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Classroom Token Hub - Architecture & Philosophy">
-    <meta name="keywords" content="classroom economy, financial literacy, educational software, banking simulation, token economy">
-    <meta name="author" content="Classroom Token Hub">
-
+    <meta name="description" content="Classroom Token Hub - V2 Architecture & Philosophy">
     <title>Learn More - Classroom Token Hub</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" >
-    <link rel="icon" type="image/png" href="icon-192.png">
-    <link rel="stylesheet" href="style.css">
+    <link href="../static/css/tokens.css" rel="stylesheet">
+    <link href="./style.css" rel="stylesheet">
     <style>
         .v2-feature-list {
             list-style: none;
@@ -67,6 +64,7 @@
             margin-bottom: 1rem;
             font-weight: 600;
             border-bottom: 2px solid var(--border-subtle);
+
         }
         .philosophy-text p {
             font-size: 1.15rem;
@@ -78,7 +76,7 @@
             background-color: var(--secondary-color);
             color: var(--secondary-text);
             padding: 0.25rem 0.75rem;
-            border-radius: 999px;
+            border-radius: var(--radius-full);
             font-size: 0.9rem;
             font-weight: 600;
             margin-left: 0.75rem;
@@ -227,9 +225,9 @@
                     <h1>Learn More</h1>
                     <p>Explore what we have built and why we built it that way.</p>
 
-                    <a href="index.html" target="_self" class="floating-back-widget">
+                    <a href="v2transition.html" target="_self" class="floating-back-widget">
                         <span class="material-symbols-outlined" aria-hidden="true">arrow_circle_left</span>
-                        <span>Back to Home</span>
+                        <span>Back to Transition Page</span>
                     </a>
                 </div>
             </div>
@@ -242,8 +240,8 @@
                     <div class="philosophy-text">
                         <p>Classroom Token Hub was originally developed in 2024 as a personal project to manage our classroom economy. While there are a few others existing platforms, we couldn't find one that has all the features we need along with the transparency we want our student to see. We also find most platforms design their user interface to be either too childish or too sterile.</p>
                         <p>We started with a simple question: <em>How can we design a classroom economy system that respects teacher agency, follows clear and explicit rules, provides meaningful guidance, and protects user privacy?</em></p>
-                        <p>That question turns out to be more challenging to solve than we have anticipated. That question is also what guides the development of Classroom Token Hub. Building on the same features as our first version, we have focused our attention on making the platform more stable, more reliable, more trustworthy, and more easy to use.</p>
-                        <p class="fw-bold">This is Version 2.0 of Classroom Token Hub.</p>
+                        <p>That question turns out to be more challenging to solve than we have anticipated. That question is also what guides the development of Classroom Token Hub. </p>
+
                     </div>
                 </div>
 
@@ -259,7 +257,7 @@
                         </li>
                         <li class="v2-feature-card" style="background-color: var(--steward-blue);">
                             <h3 class="text-light">Teacher Agency</h3>
-                            <p class="text-light">Teachers are the sole authority within a classroom. Classroom Token Hub is designed to support teachers' decision-making by providing recommended values and suggestions. However, it does not apply those decision for the teachers nor does it override their decisions. </p>
+                            <p class="text-light">Teachers are the sole authority within a classroom. Classroom Token Hub is designed to support teachers' decision-making by providing recommended values and suggestions. However, it does not apply those decisions for the teachers nor does it override their decisions.</p>
                         </li>
                         <li class="v2-feature-card" style="background-color: var(--guardian-gray);">
                             <h3 class="text-light">Deterministic Architecture</h3>
@@ -331,7 +329,7 @@
                                 <li class="v2-feature-card">
                                     <span class="material-symbols-outlined" aria-hidden="true">storefront</span>
                                     <h3 style="color: var(--steward-blue);">Classroom Store</h3>
-                                    <p>Use your earned classroom currency to purchase items, pay for obligations, or even pitch in to unlock a collective goal item.</p>
+                                    <p>Use your earned classrom currency to purchase items, pay for obligations, or even pitch in to unlock a collective goal item.</p>
                                 </li>
                                 <li class="v2-feature-card">
                                     <span class="material-symbols-outlined" aria-hidden="true">shield</span>
@@ -377,7 +375,7 @@
                             <p>Classroom Token Hub is designed to only allow one active session at a time by assigning each new session a nonce. When a student attempts to open a session on another device or window, the previous session nonce is automatically invalidated.</p>
                         </li>
                         <li class="v2-feature-card">
-                            <span class="material-symbols-outlined" aria-hidden="true">delete_history</span>
+                            <span class="material-symbols-outlined" aria-hidden="true">Delete_History</span>
                             <h3>No Archival Records</h3>
                             <p>When a teacher deletes their class, all data associated with that class is permanently deleted. We do not keep any records of past classes or transactions. Student will continue to have access in app through other classes. If the student loses their last associated class, their account will be automatically deleted.</p>
                         </li>
@@ -393,7 +391,7 @@
                 <div class="philosophy-section">
                     <h2 class="philosophy-heading">Yes, you too can troubleshoot</h2>
                     <div class="philosophy-text">
-                        <p>Classroom Token Hub operates closer to a self-serve system than a typical educational technology. While we do not have a dedicated customer support team like other platforms, we have built the tools you need to troubleshoot efficiently and effectively. </p>
+                        <p>Classroom Token Hub operates closer to a self-serve system than a typical educational technoogy. While we do not have a dedicated customer support team like other platforms, we have built the tools you need to troubleshoot efficiently and effectively. </p>
                     </div>
                     <ul class="v2-feature-list mt-4">
                         <li class="v2-feature-card">
@@ -446,19 +444,21 @@
                             <span class="material-symbols-outlined" aria-hidden="true">verified_user</span>
                             <h3 class="mb-0">Economic Invariant Checker</h3>
                             <p class="mt-1 fw-bold" style="font-size:1rem; color:var(--advisor-green)">Can we trace all the money in the economy?</p>
-                            <p>Some might call this an overkill, but Classroom Token Hub treats transaction record and transactional lineage very seriously  We have developed a tool that runs an automated suite of deterministic checks to guarantee the mathematical and logical integrity of your classroom economy. </p>
-                            <p> When inconsistencies are detected, the system will automatically report them visibly and publicly on our status page.</p>
+                            <p>Some might call this an overkill, but Classroom Token Hub treats transaction record and transactional lineage very seriously. We have developed a tool that runs an automated suite of deterministic checks to guarantee the mathematical and logical integrity of your classroom economy.</p>
+                            <p>When inconsistencies are detected, the system will automatically report them visibly and publicly on our status page.</p>
                         </li>
                     </ul>
                 </div>
                 <div class="philosophy-section">
                     <h2 class="philosophy-heading mb-0">We are not an edtech company</h2>
 
+
                     <div class="philosophy-text">
                         <p class="mt-1 fw-bold"><em>"We" is just a single full-time classroom teacher who believes in making something better for other teachers.<br> The royal "We" is just convention.</em></p>
                         <p>Classroom Token Hub came into existence because a full-time high school teacher got annoyed with the existing classroom economy ecosystem and thought, <em> "fine, I will build one myself."</em> </p>
                         <p>During the first year of development, this platform was tested in a real classrooms with real students. We encountered countless edge cases, failed assumptions, migration challenges, and more than a few bugs. Each one helped shape the system into what it is today. At the same time, our architectural sense got stronger, cleaner, and more refined. All the features you see today is the product of real-world student adversarial testing in a high school setting.</p>
-                        <p>We hope you find this tool useful for your own classroom use. We built Classroom Token Hub to be <strong><em>your classroom economy system, reimagined.</em></strong></p>
+                        <p>We hope you find this tool useful for your own classroom use. We built Classroom Token Hub to be <strong><em>your classroom economy system, reimagined.</em></strong></p></div>
+
                     </div>
                 </div>
 

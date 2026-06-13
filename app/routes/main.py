@@ -7,8 +7,9 @@ debug endpoints, and public hall pass verification.
 
 import unicodedata
 from datetime import timezone
+from pathlib import Path
 
-from flask import Blueprint, redirect, url_for, jsonify, current_app, session, request
+from flask import Blueprint, redirect, url_for, jsonify, current_app, session, request, send_from_directory
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
@@ -177,6 +178,24 @@ def terms():
 def offline():
     """Render the offline fallback page."""
     return render_template('offline.html')
+
+
+@main_bp.route('/v2transition.html')
+def v2_transition():
+    """Serve the static v1 sunset transition page."""
+    return send_from_directory(Path(current_app.root_path).parent / 'docs', 'v2transition.html')
+
+
+@main_bp.route('/learnmore.html')
+def learn_more():
+    """Serve the static v1 sunset learn-more page."""
+    return send_from_directory(Path(current_app.root_path).parent / 'docs', 'learnmore.html')
+
+
+@main_bp.route('/style.css')
+def docs_style():
+    """Serve the shared docs stylesheet for the sunset transition pages."""
+    return send_from_directory(Path(current_app.root_path).parent / 'docs', 'style.css')
 
 
 @main_bp.route('/sw.js')
