@@ -1,11 +1,11 @@
-# 🎓 Classroom Token Hub
+# 🎓Classroom Token Hub v1.9.0
 
 An interactive banking and classroom management platform for teaching students about money while tracking classroom participation.
 
-**Release Track:** Active development — see [CHANGELOG.md](CHANGELOG.md) for current version
+**Release Track:** Sunsetting — see [CHANGELOG.md](CHANGELOG.md) for current version
 
 > [!IMPORTANT]
-> Classroom Token Hub v1.x will be deprecated by June 30, 2026 with v2.0 entering active testing phase soon after. v2.0 represents a breaking change with schema and routes overhaul. Data migration from v1.x to v2.0 is not recommended due to complexity and risk of data corruption. 
+> Classroom Token Hub v1 will be officially deprecated after June 30, 2026. All v1 releases will no longer be supported after that date. Because v2 is a major rebuild, no data migration will occur. Classroom Token Hub v2 is scheduled for public release by August 2026.
 
 ---
 

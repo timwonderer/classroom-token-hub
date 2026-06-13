@@ -32,6 +32,18 @@ dotenv_path = project_root / '.env'
 if os.environ.get("FLASK_ENV") != "testing" and not os.environ.get("CI"):
     load_dotenv(dotenv_path=dotenv_path, override=False)
 
+
+def _parse_int_env(name, default):
+    """Return int value of env var *name*, falling back to *default* on missing or invalid values."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except (ValueError, TypeError):
+        return default
+
+
 derived_database_url = resolve_dev_database_url(os.environ, project_root=project_root)
 if derived_database_url and not os.environ.get("DATABASE_URL"):
     os.environ["DATABASE_URL"] = derived_database_url
@@ -332,6 +344,10 @@ def create_app():
         ENV=flask_env,
         SECRET_KEY=os.environ["SECRET_KEY"],
         SQLALCHEMY_DATABASE_URI=os.environ["DATABASE_URL"],
+        SQLALCHEMY_ENGINE_OPTIONS={
+            "pool_pre_ping": True,
+            "pool_recycle": _parse_int_env("SQLALCHEMY_POOL_RECYCLE_SECONDS", 1800),
+        },
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SESSION_COOKIE_SECURE=flask_env == "production",  # Only require HTTPS in production
         SESSION_COOKIE_HTTPONLY=True,
