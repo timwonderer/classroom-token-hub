@@ -828,6 +828,20 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
             .filter(StudentItem.store_item_id.in_(sa.select(deletable_store_item_ids)))
             .subquery()
         )
+        rent_setting_ids_for_blocks = (
+            db.session.query(RentSettings.id)
+            .filter(
+                RentSettings.teacher_id == teacher_id,
+                RentSettings.block.in_(class_blocks),
+            )
+            .subquery()
+        )
+        RentItem.query.filter(
+            sa.or_(
+                RentItem.store_item_id.in_(sa.select(deletable_store_item_ids)),
+                RentItem.rent_setting_id.in_(sa.select(rent_setting_ids_for_blocks)),
+            )
+        ).delete(synchronize_session=False)
         RedemptionAuditLog.query.filter(
             RedemptionAuditLog.student_item_id.in_(sa.select(class_item_student_ids))
         ).delete(synchronize_session=False)
