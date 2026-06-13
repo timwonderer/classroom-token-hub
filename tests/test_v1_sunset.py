@@ -25,7 +25,9 @@ def test_v1_sunset_allows_learn_more_page(client, monkeypatch):
     response = client.get("/learnmore.html")
 
     assert response.status_code == 200
-    assert "Back to Transition Page" in response.get_data(as_text=True)
+    body = response.get_data(as_text=True)
+    assert 'data-sunset-label="Back to Transition Page"' in body
+    assert "Back to Home" in body
 
 
 def test_v1_sunset_allows_required_transition_assets(client, monkeypatch):

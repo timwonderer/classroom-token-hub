@@ -225,9 +225,17 @@
                     <h1>Learn More</h1>
                     <p>Explore what we have built and why we built it that way.</p>
 
-                    <a href="v2transition.html" target="_self" class="floating-back-widget">
+                    <a
+                        href="index.html"
+                        target="_self"
+                        class="floating-back-widget"
+                        id="learnmore-back-link"
+                        data-sunset-href="v2transition.html"
+                        data-default-label="Back to Home"
+                        data-sunset-label="Back to Transition Page"
+                    >
                         <span class="material-symbols-outlined" aria-hidden="true">arrow_circle_left</span>
-                        <span>Back to Transition Page</span>
+                        <span id="learnmore-back-link-label">Back to Home</span>
                     </a>
                 </div>
             </div>
@@ -489,6 +497,28 @@
             var yearElement = document.getElementById('current-year');
             if (yearElement) {
                 yearElement.textContent = new Date().getFullYear();
+            }
+        })();
+
+        (function () {
+            var backLink = document.getElementById('learnmore-back-link');
+            var backLinkLabel = document.getElementById('learnmore-back-link-label');
+
+            if (!backLink || !backLinkLabel) {
+                return;
+            }
+
+            var sunsetStartUtc = Date.parse('2026-07-01T07:00:00Z');
+            if (Number.isNaN(sunsetStartUtc)) {
+                return;
+            }
+
+            if (Date.now() >= sunsetStartUtc) {
+                backLink.href = backLink.dataset.sunsetHref || 'v2transition.html';
+                backLinkLabel.textContent = backLink.dataset.sunsetLabel || 'Back to Transition Page';
+            } else {
+                backLink.href = 'index.html';
+                backLinkLabel.textContent = backLink.dataset.defaultLabel || 'Back to Home';
             }
         })();
 
