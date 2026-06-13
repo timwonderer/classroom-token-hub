@@ -22,16 +22,11 @@
     /* Modals, Large Containers */
     --radius-pill: 999px;
     /* Status Badges, Chips */
-    --badge-padding-y: 0.3em;
-    --badge-padding-x: 0.7em;
-    --badge-font-size: 0.78rem;
-    --badge-line-height: 1.15;
-    --badge-letter-spacing: 0.01em;
 
     /* Elevation — Subtle */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.18);
-    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.20);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.22);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
 
     /* Layout */
     --sidebar-width: 260px;
@@ -65,6 +60,10 @@
     --text-secondary: var(--neutral-500);
     --text-muted: var(--neutral-500);
     --text-inverse: #ffffff;
+
+    --advisor-green: #1a4d47;
+    --steward-blue: #2F4F7F;
+    --guardian-gray: #303030;
 }
 
 /* ─── Teacher Theme (Advisor Green) ─── */
@@ -92,7 +91,6 @@
     --warning: #c08c15;
     --warning-hover: #a87912;
     --warning-subtle: #fef8e6;
-    --warning-text: #856404;
     --danger: #c0392b;
     --danger-hover: #a83024;
     --danger-subtle: #fce8e6;
@@ -113,7 +111,6 @@
 body.student-shell {
     /* Primary: Dark Slate Blue */
     --primary: #2F4F7F;
-    --student-primary: #2F4F7F;
     --primary-hover: #253f66;
     --primary-subtle: #e8edf4;
 
@@ -135,7 +132,6 @@ body.student-shell {
     --warning: #b58a1a;
     --warning-hover: #9e7816;
     --warning-subtle: #fef8e6;
-    --warning-text: #7a5d11;
     --danger: #c44040;
     --danger-hover: #aa3636;
     --danger-subtle: #fce8e6;
@@ -184,7 +180,6 @@ body.sysadmin-shell {
     --warning: #c08c15;
     --warning-hover: #a87912;
     --warning-subtle: #fef8e6;
-    --warning-text: #856404;
     --danger: #c0392b;
     --danger-hover: #a83024;
     --danger-subtle: #fce8e6;
