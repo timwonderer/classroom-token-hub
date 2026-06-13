@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from datetime import datetime, date, timezone
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, request, render_template, session, g, url_for, has_request_context
+from flask import Flask, request, render_template, session, g, url_for, has_request_context, redirect
 from werkzeug.exceptions import HTTPException
 from dotenv import load_dotenv
 from pathlib import Path
@@ -62,6 +62,8 @@ from app.utils.encryption import PIIEncryptedType
 from app.utils.helpers import format_utc_iso, is_safe_url, render_markdown
 from app.utils.constants import THEME_PROMPTS
 from app.telemetry import annotate_request_context_span, init_tracing
+
+V1_SUNSET_START_UTC = datetime(2026, 7, 1, 7, 0, 0, tzinfo=timezone.utc)
 
 
 def url_encode_filter(s):
@@ -437,7 +439,7 @@ def create_app():
         if request_id:
             response.headers.setdefault("X-Request-Id", request_id)
         context = getattr(g, "correlation_context", None)
-        if context:
+        if context and not is_v1_sunset_active():
             try:
                 with Session(db.engine) as tlcp_session:
                     with tlcp_session.begin():
@@ -469,6 +471,41 @@ def create_app():
     def is_maintenance_mode_enabled():
         """Return True when maintenance mode is enabled via environment variable."""
         return os.getenv("MAINTENANCE_MODE", "").lower() in {"1", "true", "yes", "on"}
+
+    def is_v1_sunset_active():
+        """
+        Return True when v1 sunset mode should block the application.
+
+        The production cutoff is fixed at July 1, 2026 12:00 AM Pacific
+        (2026-07-01T07:00:00Z) and is intentionally not configurable.
+        """
+        if os.getenv("V1_SUNSET_MODE", "").lower() not in {"1", "true", "yes", "on"}:
+            return False
+
+        if app.config.get("TESTING"):
+            test_override = os.getenv("V1_SUNSET_TEST_NOW_UTC", "").strip()
+            if test_override:
+                try:
+                    simulated_now = datetime.fromisoformat(test_override.replace("Z", "+00:00"))
+                    if simulated_now.tzinfo is None:
+                        simulated_now = simulated_now.replace(tzinfo=timezone.utc)
+                    return simulated_now.astimezone(timezone.utc) >= V1_SUNSET_START_UTC
+                except ValueError:
+                    app.logger.error("Invalid V1_SUNSET_TEST_NOW_UTC value: %r", test_override)
+                    return False
+
+        return datetime.now(timezone.utc) >= V1_SUNSET_START_UTC
+
+    def is_v1_sunset_allowed_path(path: str) -> bool:
+        """Return True only for the two public transition pages."""
+        return path in {"/v2transition.html", "/learnmore.html"}
+
+    def get_v1_sunset_redirect_target() -> str:
+        """Return the canonical transition page URL used during sunset."""
+        return os.getenv(
+            "V1_SUNSET_REDIRECT_URL",
+            "https://classroomtokenhub.com/v2transition.html",
+        )
 
     def maintenance_context():
         """Context for the maintenance page, sourced from environment variables."""
@@ -568,6 +605,21 @@ def create_app():
         return render_template("maintenance.html", **maintenance_context()), 503
 
     @app.before_request
+    def enforce_v1_sunset():
+        """
+        Redirect every request to the transition page during the v1 sunset.
+
+        Only the transition landing page and learn-more page remain reachable.
+        """
+        if not is_v1_sunset_active():
+            return None
+
+        if is_v1_sunset_allowed_path(request.path):
+            return None
+
+        return redirect(get_v1_sunset_redirect_target(), code=302)
+
+    @app.before_request
     def set_rls_tenant_context():
         """
         Set PostgreSQL Row-Level Security tenant context for multi-tenancy isolation.
@@ -578,6 +630,9 @@ def create_app():
 
         This follows industry best practices from AWS, Azure, and major SaaS providers.
         """
+        if is_v1_sunset_active():
+            return None
+
         # Skip for static files, health checks, and public routes
         if request.path.startswith("/static/"):
             return None

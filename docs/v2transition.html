@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classroom Token Hub V1 Sunset</title>
+    <meta name="robots" content="noindex, nofollow">
+    <style>
+        :root {
+            --bg: #f4efe6;
+            --surface: #fffaf2;
+            --ink: #17324d;
+            --muted: #52657a;
+            --line: rgba(23, 50, 77, 0.14);
+            --accent: #c75b39;
+            --accent-strong: #9f4126;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Georgia, "Times New Roman", serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at top, rgba(199, 91, 57, 0.18), transparent 34%),
+                linear-gradient(180deg, #f8f3ea 0%, var(--bg) 100%);
+            display: grid;
+            place-items: center;
+            padding: 24px;
+        }
+
+        main {
+            width: min(760px, 100%);
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 24px;
+            padding: 40px 28px;
+            box-shadow: 0 24px 80px rgba(23, 50, 77, 0.12);
+        }
+
+        .eyebrow {
+            display: inline-block;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(199, 91, 57, 0.12);
+            color: var(--accent-strong);
+            font-size: 0.82rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 18px 0 14px;
+            font-size: clamp(2.2rem, 6vw, 4rem);
+            line-height: 0.96;
+        }
+
+        p {
+            margin: 0 0 16px;
+            color: var(--muted);
+            font-size: 1.05rem;
+            line-height: 1.7;
+        }
+
+        .panel {
+            margin-top: 26px;
+            padding: 18px;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.7);
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 28px;
+        }
+
+        a.button,
+        a.text-link {
+            text-decoration: none;
+        }
+
+        a.button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            padding: 0 18px;
+            border-radius: 999px;
+            background: var(--accent);
+            color: #fffaf2;
+            font-weight: 700;
+        }
+
+        a.button:hover,
+        a.button:focus-visible {
+            background: var(--accent-strong);
+        }
+
+        a.text-link {
+            color: var(--ink);
+            font-weight: 700;
+            align-self: center;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <div class="eyebrow">V1 Sunset Effective July 1, 2026</div>
+        <h1>Classroom Token Hub V1 is offline.</h1>
+        <p>
+            Beginning at 12:00 AM UTC on July 1, 2026, Classroom Token Hub V1 is
+            no longer available for sign-in or classroom activity.
+        </p>
+        <p>
+            During the transition window, this page and the learn-more page are
+            the only public pages still online.
+        </p>
+        <div class="panel">
+            <p>
+                If you need the transition timeline, launch status, or next-step
+                guidance, use the learn-more page below.
+            </p>
+        </div>
+        <div class="actions">
+            <a class="button" href="/learnmore.html">Learn more</a>
+            <a class="text-link" href="/learnmore.html">Open the transition details</a>
+        </div>
+    </main>
+</body>
+</html>
