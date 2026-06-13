@@ -136,13 +136,15 @@
     </script>
     <script src="https://cdn.pulsetic.com/index.js" async></script>
     <script>
-        window.onload = function () {
-            Pulsetic.init({
-                badge_id: 893,
-                monitor_id: 130967,
-                element_id: "pulsetic-badge"
-            });
-        };
+        window.addEventListener('load', function () {
+            if (typeof Pulsetic !== 'undefined') {
+                Pulsetic.init({
+                    badge_id: 893,
+                    monitor_id: 130967,
+                    element_id: "pulsetic-badge"
+                });
+            }
+        });
     </script>
 </body>
 </html>
