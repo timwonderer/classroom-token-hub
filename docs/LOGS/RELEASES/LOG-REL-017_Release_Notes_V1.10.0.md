@@ -132,8 +132,8 @@ With this release, **Version 1 is officially retired**. Existing v1 deployments 
 Users running v1 in production should plan to evaluate v2 when it reaches release. Because v2 is a full architectural rebuild, no automatic data migration from v1 is planned. Classroom data export tooling will be evaluated as a v2 release-time priority.
 
 The complete v1 development history is preserved in:
-- [CHANGELOG.md](../../../../CHANGELOG.md) — All changes across every v1 release
-- [DEVELOPMENT.md](../../../../DEVELOPMENT.md) — Development priorities and completed-feature archive
+- [CHANGELOG.md](../../../CHANGELOG.md) — All changes across every v1 release
+- [DEVELOPMENT.md](../../../DEVELOPMENT.md) — Development priorities and completed-feature archive
 - [docs/LOGS/AUDITS/LOG-ARC-031_Project_History.md](../AUDITS/LOG-ARC-031_Project_History.md) — Project philosophy and evolution
 - [docs/LOGS/AUDITS/LOG-ARC-039_Project_Timeline.md](../AUDITS/LOG-ARC-039_Project_Timeline.md) — Interactive timeline of all v1 eras
 
