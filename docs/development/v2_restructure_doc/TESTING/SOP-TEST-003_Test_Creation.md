@@ -1,16 +1,16 @@
-# INV-ARC-018: Test Creation Protocol
+# SOP-TEST-003: Test Creation
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-018      | 1.1     | 2026-06-08     | V2-TEST-001 v1.0 | Constitutional |
+| SOP-TEST-003     | 1.0     | 2026-06-13     | V2-TEST-001 v1.0 | Standard Operating Procedure |
 
 ## I. Purpose
 
-This document defines the canonical protocol for creating tests in the `codex/v2.0` codebase. It standardizes when tests must be added, what the test should prove, how to scope the test, how to structure the test, and how to validate that the test itself is fit for use.
+This SOP defines the canonical procedure for creating tests in the `codex/v2.0` codebase. It standardizes when tests must be added, what the test should prove, how to scope the test, how to structure the test, and how to validate that the test itself is fit for use.
 
 ## II. Scope
 
-This protocol applies whenever a contributor introduces new behavior, changes existing behavior, fixes a bug, modifies a migration, alters a contract, or updates a documentation claim that depends on runtime behavior.
+This SOP applies whenever a contributor introduces new behavior, changes existing behavior, fixes a bug, modifies a migration, alters a contract, or updates a documentation claim that depends on runtime behavior.
 
 It governs:
 
@@ -21,15 +21,11 @@ It governs:
 - test naming and scope
 - validation of new or changed tests before they are relied upon
 
-It does not replace the separate testing execution and reporting protocol. This document answers how to create the test; the companion testing protocol answers how to run and report it.
+It complements `INV-ARC-017` and the testing execution SOPs. This document answers how to create the test; the companion SOPs answer how to run and report it.
 
-## III. Authority Level
+## III. Dependencies
 
-Constitutional. This protocol derives from `INV-CORE-000` and `INV-CORE-001` and is intended to prevent undisciplined test creation, over-broad fixtures, and misleading coverage claims.
-
-## IV. Dependencies
-
-- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-017_TESTING_PROTOCOL_AND_GATES.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-017_GENERAL_TESTING_INVARIANTS.md`
 - `docs/development/v2_restructure_doc/SOP-DOC-000_DOCUMENTATION_STANDARD.md`
 - `docs/development/tracking/V2_Full_compliance_migration_plan.md`
 - `docs/development/tracking/V2_REBUILD_VALIDATION_REPORT.md`
@@ -37,9 +33,11 @@ Constitutional. This protocol derives from `INV-CORE-000` and `INV-CORE-001` and
 - `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 - `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-007_GET_MUST_BE_PURE.md`
 - `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-015_TEMPORAL_MODEL_AND_BOUNDARY_ENFORCEMENT.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-020_ACCESSIBILITY_REQUIREMENTS_AND_TEMPLATE_CONTRACT.md`
+- `docs/development/v2_restructure_doc/TESTING/SOP-TEST-002_Accessibility_Validation_And_PR_Gate.md`
 - `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
 
-## V. Test Creation Principles
+## IV. Test Creation Principles
 
 1. A test must prove one meaningful contract, not several unrelated behaviors.
 2. Every test must have a clear reason to exist.
@@ -49,7 +47,7 @@ Constitutional. This protocol derives from `INV-CORE-000` and `INV-CORE-001` and
 6. A test must not rely on broad fixtures when a focused fixture can prove the same behavior.
 7. A test must reflect the current canonical architecture, not the legacy path unless the legacy path itself is the subject of the test.
 
-## VI. When To Create Tests
+## V. When To Create Tests
 
 Create or update tests whenever any of the following happen:
 
@@ -62,10 +60,11 @@ Create or update tests whenever any of the following happen:
 7. A service or model changes its public contract.
 8. A tracked bug, wave, or refactor mentions a required regression.
 9. A documentation claim depends on runtime evidence and no test currently proves it.
+10. A template or UI accessibility fix changes rendered semantics, contrast behavior, naming, focus, or disclosure state.
 
 Do not wait until the end of a large change to invent tests retroactively if the contract can be stated earlier.
 
-## VII. What A Created Test Must Cover
+## VI. What A Created Test Must Cover
 
 Every newly created test must establish the following, as applicable:
 
@@ -84,8 +83,9 @@ If the change touches one of these areas, the test must cover the corresponding 
 - time-sensitive logic: class-local boundaries and deterministic timestamps
 - authentication or recovery: fail-closed behavior and session integrity
 - documentation claims: runtime evidence must be available or newly produced
+- template accessibility: rendered structure, semantic linkage, and browser-visible contrast or ARIA behavior
 
-## VIII. Test Design Workflow
+## VII. Test Design Workflow
 
 1. Identify the contract.
 2. Identify the smallest reliable execution path that proves it.
@@ -96,7 +96,7 @@ If the change touches one of these areas, the test must cover the corresponding 
 7. Keep negative-path tests fail-closed and direct.
 8. Ensure the test name describes the contract, not the implementation trick.
 
-## IX. Test Construction Rules
+## VIII. Test Construction Rules
 
 ### A. File Placement
 
@@ -130,7 +130,7 @@ If the change touches one of these areas, the test must cover the corresponding 
 - Every authorization or scope test set must include at least one rejection case.
 - Every mutation path test set must include at least one guard or denial case.
 
-## X. Required Validation For New Tests
+## IX. Required Validation For New Tests
 
 Before a new test is treated as authoritative, the contributor must validate that:
 
@@ -147,7 +147,7 @@ Minimum validation evidence for a newly added test:
 - the passing result
 - if relevant, the prior failure mode that the test would have caught
 
-## XI. Standard Test Shapes
+## X. Standard Test Shapes
 
 ### 1. Regression Test
 
@@ -200,7 +200,7 @@ Must include:
 - the expected status or redirect
 - the expected no-write or write behavior
 
-## XII. Quality Bar
+## XI. Quality Bar
 
 A newly created test is acceptable only if it is:
 
@@ -213,7 +213,7 @@ A newly created test is acceptable only if it is:
 
 If a test requires excessive setup to prove a small contract, the test design is too broad and should be simplified.
 
-## XIII. Anti-Patterns
+## XII. Anti-Patterns
 
 The following are prohibited as test creation patterns:
 
@@ -225,18 +225,3 @@ The following are prohibited as test creation patterns:
 6. Creating tests that merely mirror the code instead of validating behavior.
 7. Adding tests that can never fail because they assert trivial truths.
 8. Treating documentation claims as sufficient without runtime evidence.
-
-## XIV. Relationship To Test Execution
-
-This document governs how tests are created. The companion testing protocol governs:
-
-- when to run them
-- what to run first
-- how to report results
-- what test sets to use for events and waves
-
-Both documents must remain aligned. If a new test shape requires a new execution set, both documents must be updated together.
-
-## XV. Amendment
-
-Revisions to this document must increment the version number, update the effective date, preserve compatibility with `INV-CORE-000` and `INV-CORE-001`, and update any active testing protocol references that depend on this test-creation standard.
