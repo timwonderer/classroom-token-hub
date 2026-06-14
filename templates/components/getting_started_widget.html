@@ -8,13 +8,13 @@
 <!-- Getting Started Widget - Floating onboarding checklist -->
 <div id="gettingStartedWidget" class="getting-started-widget" style="display: none;">
     <!-- Circular Bubble (Collapsed State) -->
-    <div id="gsBubble" class="gs-bubble" data-bs-toggle="collapse" data-bs-target="#gsBody" aria-expanded="false"
-        aria-controls="gsBody" data-bs-toggle="tooltip" data-bs-placement="left"
+    <button type="button" id="gsBubble" class="gs-bubble" data-bs-toggle="collapse" data-bs-target="#gsBody" aria-expanded="false"
+        aria-controls="gsBody" data-bs-placement="left"
         title="I can help you set up your classroom economy!">
 
         <span class="material-symbols-outlined gs-bubble-icon">rocket_launch</span>
         <span class="gs-bubble-badge" id="gsBubbleBadge">0/9</span>
-    </div>
+    </button>
 
     <!-- Widget Panel (Expanded State) -->
     <div class="gs-panel collapse" id="gsBody">
@@ -23,7 +23,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center gap-2">
                     <span class="material-symbols-outlined">rocket_launch</span>
-                    <h6 class="mb-0">Getting Started</h6>
+                    <div class="mb-0 h6">Getting Started</div>
                 </div>
                 <div class="d-flex align-items-center gap-2">
                     <span class="gs-progress-badge" id="gsProgressBadge">0/9</span>
@@ -673,7 +673,7 @@
                 congrats.className = ' gs-congratulations mt-2';
                 congrats.innerHTML = `
                 <div class=" align-items-start gap-2" style="padding:10px; border-radius: 0px 0px 10px 10px;background-color: var(--primary); color: white; ">
-                    <h5 style="color:var(--secondary)"> <span class="material-symbols-outlined">celebration</span> Great job!</h5>
+                    <div class="h5 fw-bold" style="color:var(--secondary)"> <span class="material-symbols-outlined">celebration</span> Great job!</div>
                     
                        
                         <p class="mb-0 small" style="font-weight:300">You've completed all required setup tasks.

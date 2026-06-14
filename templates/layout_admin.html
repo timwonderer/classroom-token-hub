@@ -205,7 +205,7 @@
         <div class="nav-shell-bottom mt-auto">
             {% if admin_available_classes %}
             <div class="sidebar-switcher">
-                <div class="sidebar-switcher-label">Switch Class</div>
+                <label for="admin-class-switcher-select" class="sidebar-switcher-label">Switch Class</label>
                 <select id="admin-class-switcher-select" class="form-select form-select-sm">
                     {% for class_option in admin_available_classes %}
                     <option value="{{ class_option.class_id }}" {% if class_option.is_current %}selected{% endif %}>

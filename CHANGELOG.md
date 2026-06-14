@@ -1223,5 +1223,6 @@ When adding entries:
 - Use present tense for entries
 - Keep entries concise but informative
 - Update the date when moving Unreleased to a version
+- For any PR touching templates, shared UI shells/components, template CSS, or template-driven JS, record accessibility issues found and accessibility fixes made
 
 **Last Updated:** 2026-01-09

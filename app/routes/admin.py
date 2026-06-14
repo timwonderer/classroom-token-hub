@@ -2867,7 +2867,7 @@ def dashboard():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
-        .filter(HallPassLog.join_code.in_(join_code_scope))
+        .filter(HallPassLog.join_code.in_(teacher_join_codes))
         .filter(HallPassLog.status == 'pending')
         .count()
     )
@@ -2894,7 +2894,7 @@ def dashboard():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
-        .filter(HallPassLog.join_code.in_(join_code_scope))
+        .filter(HallPassLog.join_code.in_(teacher_join_codes))
         .filter(HallPassLog.status == 'pending')
         .order_by(HallPassLog.request_time.desc())
         .limit(5)

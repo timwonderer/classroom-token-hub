@@ -3,6 +3,22 @@
 {% set current_page = "rent" %}
 {% block title %}Rent{% endblock %}
 {% block page_icon %}home{% endblock %}
+{% block extra_styles %}
+<style>
+    .bills-tabs .nav-link {
+        color: #1f5f8b;
+        font-weight: 600;
+    }
+
+    .bills-tabs .nav-link.active {
+        color: #ffffff;
+    }
+
+    .student-rent-class-hint.alert-info {
+        color: #1f4f73;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 
@@ -30,27 +46,29 @@
 
 {% set status = period_status[current_block] %}
 
-<div class="alert alert-info mb-4">
+<div class="alert alert-info mb-4 student-rent-class-hint">
     <span class="material-symbols-outlined" style="vertical-align: middle;">arrow_circle_left</span> To see your bills
     from another class, use the <strong>Switch Classes</strong> menu on the left.
 </div>
 
 <div class="card mb-4">
     <div class="card-header">
-        <span class="material-symbols-outlined" style="vertical-align: middle;">account_balance</span> Your Balance
+        <h2 class="h6 mb-0 d-flex align-items-center gap-2">
+            <span class="material-symbols-outlined">account_balance</span> Your Balance
+        </h2>
     </div>
     <div class="card-body">
         <div class="row text-center">
             <div class="col-md-6">
                 <div class="p-3 bg-primary-subtle text-primary rounded">
-                    <h6 class="text-primary mb-2">Checking</h6>
-                    <h3 class="text-primary mb-0">${{ "%.2f"|format(checking_balance) }}</h3>
+                    <h3 class="h6 text-primary mb-2">Checking</h3>
+                    <div class="h3 text-primary mb-0">${{ "%.2f"|format(checking_balance) }}</div>
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="p-3 bg-info-subtle rounded">
-                    <h6 class="text-primary mb-2">Savings</h6>
-                    <h3 class="text-primary mb-0">${{ "%.2f"|format(savings_balance) }}</h3>
+                    <h3 class="h6 text-primary mb-2">Savings</h3>
+                    <div class="h3 text-primary mb-0">${{ "%.2f"|format(savings_balance) }}</div>
                 </div>
             </div>
         </div>
@@ -79,18 +97,18 @@
     card_header_bg="bg-warning text-dark" %} {% set status_icon="calendar_today" %} {% set
     status_text="Upcoming - Not Yet Paid" %} {% endif %} <div class="card mb-4 {{ card_border }}">
     <div class="card-header {{ card_header_bg }}">
-        <h5 class="mb-0 d-flex align-items-center justify-content-between">
+        <h2 class="h6 mb-0 d-flex align-items-center justify-content-between">
             <span>Class: {{ current_block|upper }}</span>
             <span>
                 <span class="material-symbols-outlined" style="vertical-align: middle;">{{ status_icon }}</span> {{
                 status_text }}
             </span>
-        </h5>
+        </h2>
     </div>
     <div class="card-body student-theme">
         <div class="mb-3">
             <p class="mb-1 text-muted"><strong>Monthly Rent:</strong></p>
-            <h3 class="text-primary mb-0">${{ "%.2f"|format(settings.rent_amount) }}</h3>
+            <div class="h3 text-primary mb-0">${{ "%.2f"|format(settings.rent_amount) }}</div>
         </div>
 
         {# Show rent items persistently if they exist #}
@@ -188,7 +206,7 @@
         </div>
         <div class="mb-3">
             <p class="text-muted"><strong>Total Amount Due:</strong></p>
-            <h4 class="text-danger mb-1">${{ "%.2f"|format(status.total_due) }}</h4>
+            <div class="h4 text-danger mb-1">${{ "%.2f"|format(status.total_due) }}</div>
             <small class="text-muted">
                 (Rent: ${{ "%.2f"|format(settings.rent_amount) }} + Late Fee: ${{ "%.2f"|format(settings.late_fee) }})
             </small>
@@ -238,7 +256,9 @@
 
     <div class="card bg-light mt-4 border-primary">
         <div class="card-header bg-primary text-white ">
-            <span class="material-symbols-outlined" style="vertical-align: middle;">info</span> Rent Information
+            <h2 class="h6 mb-0 d-flex align-items-center gap-2 text-white">
+                <span class="material-symbols-outlined">info</span> Rent Information
+            </h2>
         </div>
         <div class="card-body">
             <div class="row">
@@ -280,7 +300,7 @@
         </div>
     </div>
 
-    <h4 class="mt-5 mb-3">Payment History</h4>
+    <h2 class="h4 mt-5 mb-3">Payment History</h2>
     {% if payment_history|length == 0 %}
     <div class="alert alert-info">
         No payment history yet for this class.

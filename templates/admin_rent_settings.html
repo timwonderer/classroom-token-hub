@@ -31,7 +31,7 @@
 
 <div class="offcanvas offcanvas-end" tabindex="-1" id="rentGuide" aria-labelledby="rentGuideLabel">
   <div class="offcanvas-header">
-    <h5 class="offcanvas-title" id="rentGuideLabel">How to: Rent Management</h5>
+    <h2 class="offcanvas-title h5" id="rentGuideLabel">How to: Rent Management</h2>
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
   </div>
   <div class="offcanvas-body">
@@ -208,7 +208,7 @@
       <div class="d-flex align-items-center mb-3">
         <span class="material-symbols-outlined fs-1 me-3">power_settings_new</span>
         <div>
-          <h4 class="mb-1">Rent System is Currently Disabled</h4>
+          <h2 class="mb-1 h4">Rent System is Currently Disabled</h2>
           <p class="mb-0">The rent feature is turned off. Students cannot see or interact with rent-related features.
           </p>
         </div>
@@ -233,13 +233,13 @@
     <div class="card shadow">
       <div
         class="card-header {% if settings.is_enabled %}bg-primary text-white{% else %}bg-secondary text-white{% endif %}">
-        <h5 class="mb-0"><span class="material-symbols-outlined me-2">info</span>Current Rent Configuration</h5>
+        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2">info</span>Current Rent Configuration</h2>
       </div>
       <div class="card-body">
         {% if settings.is_enabled %}
         <div class="row">
           <div class="col-md-6">
-            <h6 class="text-muted">Rent Amount</h6>
+            <h3 class="text-muted h6">Rent Amount</h3>
             <p class="h4">${{ "%.2f"|format(settings.rent_amount) }}
               <small class="text-muted">
                 {% if settings.frequency_type == 'daily' %}per day
@@ -252,7 +252,7 @@
             </p>
           </div>
           <div class="col-md-6">
-            <h6 class="text-muted">Late Penalty</h6>
+            <h3 class="text-muted h6">Late Penalty</h3>
             <p class="h4">${{ "%.2f"|format(settings.late_penalty_amount) }}
               <small class="text-muted">
                 {% if settings.late_penalty_type == 'once' %}once per period
@@ -262,11 +262,11 @@
             </p>
           </div>
           <div class="col-md-6">
-            <h6 class="text-muted">Grace Period</h6>
+            <h3 class="text-muted h6">Grace Period</h3>
             <p class="h4">{{ settings.grace_period_days }} days</p>
           </div>
           <div class="col-md-6">
-            <h6 class="text-muted">First Due Date</h6>
+            <h3 class="text-muted h6">First Due Date</h3>
             <p class="h4">
               {% if settings.first_rent_due_date %}
               {{ settings.first_rent_due_date.strftime('%B %d, %Y') }}
@@ -276,7 +276,7 @@
             </p>
           </div>
           <div class="col-md-6">
-            <h6 class="text-muted">Current Rent Period</h6>
+            <h3 class="text-muted h6">Current Rent Period</h3>
             <p class="h5 mb-0">
               {% if current_period_start and current_period_end %}
               {{ current_period_start.strftime('%b %d, %Y') }} - {{ current_period_end.strftime('%b %d, %Y') }}
@@ -286,7 +286,7 @@
             </p>
           </div>
           <div class="col-md-6">
-            <h6 class="text-muted">Next Due Date</h6>
+            <h3 class="text-muted h6">Next Due Date</h3>
             <p class="h5 mb-0">
               {% if next_due_date %}
               {{ next_due_date.strftime('%B %d, %Y') }}
@@ -322,7 +322,7 @@
     {% if settings.is_enabled %}
     <div class="card shadow mt-4">
       <div class="card-header bg-light">
-        <h5 class="mb-0"><span class="material-symbols-outlined me-2">table_view</span>Rent Logs</h5>
+        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2">table_view</span>Rent Logs</h2>
       </div>
       <div class="card-body">
         <ul class="nav nav-tabs mb-3" id="rentLogTabs" role="tablist">
@@ -438,7 +438,7 @@
         <div class="d-flex align-items-center gap-3">
           <span class="material-symbols-outlined" style="font-size: 2rem;">school</span>
           <div>
-            <h6 class="mb-1 fw-bold">Configuring Rent Settings For:</h6>
+            <div class="mb-1 fw-bold h6">Configuring Rent Settings For:</div>
             <div class="small text-muted">{{ selected_feature_scope.label }}</div>
           </div>
         </div>
@@ -453,7 +453,7 @@
       <!-- Main Toggle Card -->
       <div class="card shadow mb-4">
         <div class="card-header bg-primary text-white">
-          <h5 class="mb-0"><span class="material-symbols-outlined me-2">power_settings_new</span>Rent System Control</h5>
+          <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2">power_settings_new</span>Rent System Control</h2>
         </div>
         <div class="card-body">
           <div class="form-check form-switch">
@@ -747,7 +747,7 @@
                   <div class="card mb-3 rent-item-card" data-item-index="{{ loop.index0 }}">
                     <div class="card-body">
                       <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="mb-0"><span class="material-symbols-outlined me-2">drag_indicator</span>Item #{{ loop.index }}</h6>
+                        <h3 class="mb-0 h6"><span class="material-symbols-outlined me-2">drag_indicator</span>Item #{{ loop.index }}</h3>
                         <button type="button" class="btn btn-sm btn-danger" onclick="removeRentItem(this)">
                           <span class="material-symbols-outlined">delete</span> Remove
                         </button>
@@ -878,9 +878,9 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow">
           <div class="card-header bg-warning text-dark">
-            <h5 class="mb-0">
+            <h2 class="mb-0 h5">
               <span class="material-symbols-outlined me-2">undo</span>Reverse Misapplied Late Fees
-            </h5>
+            </h2>
           </div>
           <div class="card-body">
             <p class="mb-3">
@@ -913,7 +913,7 @@
       <div class="col-lg-5 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><span class="material-symbols-outlined me-2">add_circle</span>Add Rent Waiver</h5>
+            <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2">add_circle</span>Add Rent Waiver</h2>
           </div>
           <div class="card-body">
             <form method="POST" action="{{ url_for('admin.add_rent_waiver') }}" id="waiverForm">
@@ -921,7 +921,7 @@
               <input type="hidden" name="settings_block" value="{{ settings.block if settings else '' }}" />
 
               <div class="mb-3">
-                <label class="form-label fw-bold">1. Select Students</label>
+                <label for="waiver_student_ids" class="form-label fw-bold">1. Select Students</label>
                 <select class="form-select" id="waiver_student_ids" name="student_ids" multiple size="7" required>
                   {% for student in all_students if not settings or student.block == settings.block %}
                   <option value="{{ student.id }}">{{ student.full_name }} (Block {{ student.block }})</option>
@@ -1007,7 +1007,7 @@
       <div class="col-lg-7 mb-4">
         <div class="card shadow">
           <div class="card-header bg-info text-white">
-            <h5 class="mb-0"><span class="material-symbols-outlined me-2">format_list_bulleted</span>Active Rent Waivers</h5>
+            <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2">format_list_bulleted</span>Active Rent Waivers</h2>
           </div>
           <div class="card-body">
             {% if active_waivers %}
@@ -1320,7 +1320,7 @@
     itemCard.innerHTML = `
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <h6 class="mb-0"><span class="material-symbols-outlined me-2">drag_indicator</span>Item #${rentItemCounter + 1}</h6>
+          <h3 class="mb-0 h6"><span class="material-symbols-outlined me-2">drag_indicator</span>Item #${rentItemCounter + 1}</h3>
           <button type="button" class="btn btn-sm btn-danger" onclick="removeRentItem(this)">
             <span class="material-symbols-outlined">delete</span> Remove
           </button>

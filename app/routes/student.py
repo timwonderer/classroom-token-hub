@@ -325,8 +325,13 @@ def get_rent_settings_for_context(context):
     if not context:
         return None
 
-    class_id = context.class_id
-    current_block = ('' or '').strip().upper()
+    if isinstance(context, dict):
+        class_id = context.get('class_id')
+    else:
+        class_id = getattr(context, 'class_id', None)
+
+    seat = get_current_seat()
+    current_block = seat.block.strip().upper() if seat and seat.block else ""
     if not class_id:
         return None
 
@@ -347,7 +352,12 @@ def get_rent_settings_for_context(context):
 
 
 def _support_actor_public_id(class_context):
-    seat_id = class_context.seat_id if class_context else None
+    if not class_context:
+        return None
+    if isinstance(class_context, dict):
+        seat_id = class_context.get('seat_id')
+    else:
+        seat_id = getattr(class_context, 'seat_id', None)
     seat = db.session.get(Seat, seat_id) if seat_id else None
     return seat.public_id if seat else None
 
@@ -367,8 +377,13 @@ def get_banking_settings_for_context(context):
     if not context:
         return None
 
-    class_id = context.class_id
-    current_block = ('' or '').strip().upper()
+    if isinstance(context, dict):
+        class_id = context.get('class_id')
+    else:
+        class_id = getattr(context, 'class_id', None)
+
+    seat = get_current_seat()
+    current_block = seat.block.strip().upper() if seat and seat.block else ""
     if not class_id:
         return None
 
@@ -1121,11 +1136,11 @@ def dashboard():
             coverage_year = coverage_due_date.year if coverage_due_date else upcoming_due_date.year
             grace_end_date_for_status = (coverage_due_date + timedelta(days=rent_settings.grace_period_days)) if coverage_due_date else grace_end_date
 
+        seat_ids = [scope.seat_id]
         all_paid = True
         for period in rent_blocks:
-            rent_scope = seat_scoped_filter(RentPayment, student.id, seat_ids)
             all_payments_for_period = RentPayment.query.filter(
-                rent_scope,
+                RentPayment.seat_id == scope.seat_id,
                 RentPayment.class_id == class_id,
                 RentPayment.coverage_month == coverage_month,
                 RentPayment.coverage_year == coverage_year,
@@ -1133,7 +1148,7 @@ def dashboard():
 
             payments = []
             for payment in all_payments_for_period:
-                txn_scope = transaction_scope_filter(Transaction, student.id, seat_ids)
+                txn_scope = transaction_scope_filter(Transaction, scope.seat_id, seat_ids)
                 txn = Transaction.query.filter(
                     txn_scope,
                     Transaction.type == 'Rent Payment',
@@ -1356,7 +1371,7 @@ def payroll():
         flash("Class context unavailable. Please select a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
 
-    current_block = ('' or '').upper()
+    current_block = seat.block.upper() if seat and seat.block else ""
     join_code = get_display_join_code(context.class_id)
     teacher_id = None
     period_states = get_all_block_statuses(student, class_id=class_id)
@@ -2269,7 +2284,7 @@ def shop():
     if not class_id:
         class_id = context.class_id
 
-    current_block = ('' or '').strip().upper()
+    current_block = seat.block.strip().upper() if seat and seat.block else ""
 
     now = utc_now()
     now_db = normalize_for_db(now)
@@ -3998,7 +4013,7 @@ def help_support():
     # Get student's issues for current class (last 20)
     my_issues = Issue.query.filter_by(
         student_id=student.id,
-        join_code=class_get_display_join_code(context.class_id)
+        join_code=get_display_join_code(class_context.class_id)
     ).order_by(Issue.submitted_at.desc()).limit(20).all()
 
     return render_template('student_help_support_new.html',
@@ -4038,8 +4053,8 @@ def submit_general_issue():
         try:
             issue = create_issue(
                 student=student,
-                teacher_id=class_None,
-                join_code=class_get_display_join_code(context.class_id),
+                teacher_id=None,
+                join_code=get_display_join_code(class_context.class_id),
                 category_id=form.category_id.data,
                 explanation=form.explanation.data,
                 expected_outcome=form.expected_outcome.data,
@@ -4081,7 +4096,7 @@ def report_transaction_issue(transaction_id):
     transaction = Transaction.query.filter_by(
         id=transaction_id,
         student_id=student.id,
-        join_code=class_get_display_join_code(context.class_id)
+        join_code=get_display_join_code(class_context.class_id)
     ).first_or_404()
 
     form = TransactionIssueSubmissionForm()
@@ -4098,8 +4113,8 @@ def report_transaction_issue(transaction_id):
         try:
             create_issue(
                 student=student,
-                teacher_id=class_None,
-                join_code=class_get_display_join_code(context.class_id),
+                teacher_id=None,
+                join_code=get_display_join_code(class_context.class_id),
                 category_id=form.category_id.data,
                 explanation=form.explanation.data,
                 expected_outcome=form.expected_outcome.data,
@@ -4144,7 +4159,7 @@ def report_tap_event_issue(tap_event_id):
     tap_event = TapEvent.query.filter_by(
         id=tap_event_id,
         student_id=student.id,
-        join_code=class_get_display_join_code(context.class_id)
+        join_code=get_display_join_code(class_context.class_id)
     ).first_or_404()
 
     form = StudentIssueSubmissionForm()
@@ -4161,8 +4176,8 @@ def report_tap_event_issue(tap_event_id):
         try:
             create_issue(
                 student=student,
-                teacher_id=class_None,
-                join_code=class_get_display_join_code(context.class_id),
+                teacher_id=None,
+                join_code=get_display_join_code(class_context.class_id),
                 category_id=form.category_id.data,
                 explanation=form.explanation.data,
                 expected_outcome=form.expected_outcome.data,

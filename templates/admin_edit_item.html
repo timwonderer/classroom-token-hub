@@ -132,7 +132,7 @@
                         <small><strong>Info:</strong> Collective goals require multiple students to purchase before unlocking for everyone.</small>
                     </div>
                     <div class="mb-3">
-                        {{ form.collective_goal_type.label(class="form-label fw-bold") }}
+                        {{ form.collective_goal_type.label(class="form-label fw-bold", **{'for': 'editCollectiveGoalType'}) }}
                         {{ form.collective_goal_type(class="form-select", id="editCollectiveGoalType") }}
                         <small class="text-muted">Choose how the goal is calculated</small>
                     </div>
@@ -171,7 +171,7 @@
                         <div class="accordion-body">
                             <div class="form-check mb-3">
                                 {{ form.is_bundle(class="form-check-input", id="isBundleCheck") }}
-                                {{ form.is_bundle.label(class="form-check-label fw-bold") }}
+                                {{ form.is_bundle.label(class="form-check-label fw-bold", **{'for': 'isBundleCheck'}) }}
                                 <small class="d-block text-muted">Bundled items give students multiple uses that can be redeemed separately</small>
                             </div>
                             <div id="bundleOptions" style="display: {% if item.is_bundle %}block{% else %}none{% endif %};">
@@ -199,7 +199,7 @@
                         <div class="accordion-body">
                             <div class="form-check mb-3">
                                 {{ form.bulk_discount_enabled(class="form-check-input", id="bulkDiscountCheck") }}
-                                {{ form.bulk_discount_enabled.label(class="form-check-label fw-bold") }}
+                                {{ form.bulk_discount_enabled.label(class="form-check-label fw-bold", **{'for': 'bulkDiscountCheck'}) }}
                                 <small class="d-block text-muted">Offer a discount when students buy multiple quantities</small>
                             </div>
                             <div id="bulkDiscountOptions" style="display: {% if item.bulk_discount_enabled %}block{% else %}none{% endif %};">

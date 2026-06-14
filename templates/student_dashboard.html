@@ -41,7 +41,7 @@
     <div class="d-flex align-items-start">
         <span class="material-symbols-outlined fs-3 text-info me-3">security</span>
         <div class="flex-grow-1">
-            <h5 class="alert-heading fw-bold mb-2">Account Recovery Request</h5>
+            <h3 class="alert-heading h5 fw-bold mb-2">Account Recovery Request</h3>
             <p class="mb-2">Your teacher is trying to recover their account and needs your help to verify their
                 identity.</p>
             <p class="mb-3 small text-muted">
@@ -83,7 +83,7 @@
     role="alert">
     <span class="material-symbols-outlined me-3 fs-4">{{ announcement.get_priority_icon() }}</span>
     <div class="flex-grow-1">
-        <h6 class="alert-heading fw-bold mb-2">{{ announcement.title }}</h6>
+        <h3 class="alert-heading h6 fw-bold mb-2">{{ announcement.title }}</h3>
         <p class="mb-1">{{ announcement.message|nl2br|safe }}</p>
         {% if announcement.expires_at %}
         <small class="text-muted d-block mt-2">
@@ -103,7 +103,7 @@
         <div class="d-flex align-items-center justify-content-between mb-3">
             <div class="d-flex align-items-center">
                 <span class="material-symbols-outlined text-primary me-2">analytics</span>
-                <h5 class="fw-bold mb-0">Weekly Stats</h5>
+                <h3 class="h5 fw-bold mb-0">Weekly Stats</h3>
             </div>
             {{ help.help_icon("user-guides/diagnostics/student-attendance", "Learn about earning tokens") }}
         </div>
@@ -149,7 +149,7 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div class="d-flex align-items-center gap-2">
                 <span class="material-symbols-outlined text-primary me-2">schedule</span>
-                <h5 class="fw-bold mb-0">Attendance</h5>
+                <h3 class="h5 fw-bold mb-0">Attendance</h3>
                 {{ help.help_icon("user-guides/diagnostics/student-attendance", "Learn how attendance tracking works")
                 }}
             </div>
@@ -174,7 +174,7 @@
             <div class="d-flex justify-content-between align-items-center mb-3 bg-light rounded p-3">
                 <div>
                     <div class="small text-muted text-uppercase fw-bold mb-1">Period {{ period }}</div>
-                    <span class="block-status badge bg-secondary">Inactive</span>
+                    <span class="block-status badge" style="background-color: #6c757d; color: #ffffff;">Inactive</span>
                 </div>
                 <div class="text-end">
                     <small class="text-muted d-block mb-1">Time Today</small>
@@ -212,7 +212,7 @@
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <div class="d-flex align-items-center gap-2">
                         <span class="material-symbols-outlined text-primary me-2 fs-3">account_balance_wallet</span>
-                        <h5 class="fw-bold mb-0 text-dark">Checking Account</h5>
+                        <h3 class="h5 fw-bold mb-0 text-dark">Checking Account</h3>
                         {{ help.help_icon("user-guides/diagnostics/student-money", "Learn about checking and savings")
                         }}
                     </div>
@@ -237,7 +237,7 @@
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <div class="d-flex align-items-center gap-2">
                         <span class="material-symbols-outlined text-success me-2 fs-3">savings</span>
-                        <h5 class="fw-bold mb-0 text-dark">Savings Account</h5>
+                        <h3 class="h5 fw-bold mb-0 text-dark">Savings Account</h3>
                         {{ help.help_icon("user-guides/diagnostics/student-money", "Learn about interest and savings")
                         }}
                     </div>
@@ -253,7 +253,7 @@
                 </a>
                 {% else %}
                 <div class="display-6 fw-bold text-muted mb-2">$0.00</div>
-                <div class="alert alert-warning border-warning py-2 px-3 mb-3 small d-flex align-items-start">
+                <div class="alert alert-warning border-warning py-2 px-3 mb-3 small d-flex align-items-start" style="color: #5f3d00;">
                     <span class="material-symbols-outlined fs-6 me-2">info</span>
                     <span>You're missing out on interest! Transfer money from Checking to Savings to start
                         earning.</span>
@@ -269,7 +269,7 @@
 
 <!-- Recent Transactions -->
 <div class="d-flex justify-content-between align-items-center mb-3 px-1">
-    <h5 class="fw-bold mb-0">Recent Activity</h5>
+    <h3 class="h5 fw-bold mb-0">Recent Activity</h3>
 </div>
 
 <div class="card border-0 shadow-sm">
@@ -324,21 +324,21 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title fw-bold">Request Hall Pass / End Work</h5>
+                <h3 class="modal-title h5 fw-bold">Request Hall Pass / End Work</h3>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form id="hallPassForm">
                     <input type="hidden" id="hallPassPeriod">
                     <div class="mb-4">
-                        <label class="form-label small fw-bold text-uppercase text-secondary">Reason</label>
+                        <label for="hallPassReason" class="form-label small fw-bold text-uppercase text-secondary">Reason</label>
                         <select class="form-select form-select-lg" id="hallPassReason">
                             <option value="" selected disabled>Select a reason...</option>
                             <!-- Options will be loaded dynamically from teacher's configuration -->
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-bold text-uppercase text-secondary">Enter PIN to
+                        <label for="hallPassPin" class="form-label small fw-bold text-uppercase text-secondary">Enter PIN to
                             Confirm</label>
                         <input type="password" class="form-control form-control-lg text-center" id="hallPassPin"
                             inputmode="numeric" pattern="[0-9]*" placeholder="••••" style="letter-spacing: 0.5em;">

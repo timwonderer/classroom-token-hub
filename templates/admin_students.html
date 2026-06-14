@@ -98,7 +98,7 @@
 <div class="offcanvas offcanvas-end" tabindex="-1" id="studentManagementGuide"
   aria-labelledby="studentManagementGuideLabel">
   <div class="offcanvas-header">
-    <h5 class="offcanvas-title" id="studentManagementGuideLabel">How to: Student Management</h5>
+    <h2 class="offcanvas-title h5" id="studentManagementGuideLabel">How to: Student Management</h2>
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
   </div>
   <div class="offcanvas-body">
@@ -321,8 +321,8 @@
   <div class="tab-pane fade show active" id="roster" role="tabpanel">
     <div class="card shadow">
       <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0 fs-3"><span class="material-symbols-outlined me-2 align-middle fs-1">groups</span>Class Roster
-        </h5>
+        <h2 class="mb-0 fs-3"><span class="material-symbols-outlined me-2 align-middle fs-1">groups</span>Class Roster
+        </h2>
         <div>
           <a href="{{ url_for('admin.export_students') }}" class="btn btn-light btn-sm me-2">
             <span class="material-symbols-outlined me-1" style="vertical-align: middle;">download</span> Export All
@@ -341,10 +341,10 @@
             <div class="card border-success mb-3">
               <div class="card-header bg-success-subtle">
                 <div class="d-flex justify-content-between align-items-center">
-                  <h6 class="mb-0 text-success fs-4">
+                  <h3 class="mb-0 text-success h6 fs-4">
                     <span class="material-symbols-outlined me-2 align-middle">key</span>
                     Join Code for {{ class_label(block) }}
-                  </h6>
+                  </h3>
                   {% set block_students_list = students_by_block[block] if block in students_by_block else [] %}
                   {% set unclaimed_students_in_block = block_students_list|rejectattr('username_hash')|list|length %}
                   {% set unclaimed_seats_in_block = unclaimed_seats_by_block.get(block|upper, 0) %}
@@ -406,10 +406,10 @@
             {% if block != "Unassigned" and total_unclaimed > 0 %}
             <div class="card border-warning mb-3">
               <div class="card-header bg-warning-subtle d-flex justify-content-between align-items-center">
-                <h6 class="mb-0 text-dark fs-4">
+                <h3 class="mb-0 text-dark h6 fs-4">
                   <span class="material-symbols-outlined me-2 align-middle">pending</span>
                   Unclaimed Seats ({{ total_unclaimed }})
-                </h6>
+                </h3>
                 {% if unclaimed_seats|length > 0 or unclaimed_students|length > 0 %}
                 <button type="button" class="btn btn-sm btn-outline-danger"
                   onclick="deleteAllPendingInBlock('{{ block }}', {{ unclaimed_seats|length }}, {{ unclaimed_students|length }})">
@@ -503,10 +503,10 @@
             {% if claimed_students %}
             <div class="card border-success mb-3">
               <div class="card-header bg-success-subtle">
-                <h6 class="mb-0 text-success fs-4">
+                <h3 class="mb-0 text-success h6 fs-4">
                   <span class="material-symbols-outlined me-2 align-middle">check_circle</span>
                   Active Students ({{ claimed_students|length }})
-                </h6>
+                </h3>
               </div>
               <div class="card-body">
                 <!-- Bulk Actions Toolbar -->
@@ -664,16 +664,16 @@
   <div class="tab-pane fade" id="bulk-upload" role="tabpanel">
     <div class="card shadow">
       <div class="card-header bg-success text-white">
-        <h5 class="mb-0"><span class="material-symbols-outlined me-2"
-            style="vertical-align: middle;">cloud_upload</span>Bulk Student Upload</h5>
+        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2"
+            style="vertical-align: middle;">cloud_upload</span>Bulk Student Upload</h2>
       </div>
       <div class="card-body">
         <div class="row">
           <div class="col-lg-6 mb-4">
             <div class="card h-100" style="border: 2px solid var(--primary);">
               <div class="card-header bg-primary text-white">
-                <h6 class="mb-0 text-white"><span
-                    class="material-symbols-outlined me-2 align-middle">info</span>Instructions</h6>
+                <h3 class="mb-0 text-white h6"><span
+                    class="material-symbols-outlined me-2 align-middle">info</span>Instructions</h3>
               </div>
               <div class="card-body">
                 <ol class="mb-3">
@@ -704,8 +704,8 @@
             <div class="card h-100">
               <div class="card-header text-dark"
                 style="background-color: var(--secondary);border-color: var(--secondary); border-style:solid; border-width:2px;">
-                <h6 class="mb-0 text-muted"><span class="material-symbols-outlined me-2"
-                    style="vertical-align: middle;">cloud_upload</span>Upload File</h6>
+                <h3 class="mb-0 text-muted h6"><span class="material-symbols-outlined me-2"
+                    style="vertical-align: middle;">cloud_upload</span>Upload File</h3>
               </div>
               <div class="card-body" style="border-color: var(--secondary); border-style:solid; border-width: 2px;">
                 <form action="{{ url_for('admin.upload_students') }}" method="post" enctype="multipart/form-data">
@@ -735,8 +735,8 @@
   <div class="tab-pane fade" id="individual-upload" role="tabpanel">
     <div class="card shadow">
       <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><span class="material-symbols-outlined me-2"
-            style="vertical-align: middle;">person_add</span>Add Individual Student</h5>
+        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2"
+            style="vertical-align: middle;">person_add</span>Add Individual Student</h2>
       </div>
       <div class="card-body">
         <div class="row justify-content-center">
@@ -746,8 +746,8 @@
 
               <div class="card  mb-3">
                 <div class="card-header bg-primary text-white">
-                  <h6 class="mb-0 text-white"><span class="material-symbols-outlined me-2"
-                      style="vertical-align: middle;">person</span>Student Information</h6>
+                  <h3 class="mb-0 text-white h6"><span class="material-symbols-outlined me-2"
+                      style="vertical-align: middle;">person</span>Student Information</h3>
                 </div>
                 <div class="card-body">
                   <div class="row">
@@ -764,7 +764,7 @@
                   </div>
                   <div class="row">
                     <div class="col-md-6 mb-3">
-                      <label for="block" class="form-label fw-bold">Class <span class="text-danger">*</span></label>
+                      <label for="block_select" class="form-label fw-bold">Class <span class="text-danger">*</span></label>
                       <select class="form-select" id="block_select" name="block_select">
                         <option value="">Select a block...</option>
                         {% for block in blocks %}
@@ -779,7 +779,8 @@
                       <div id="new_block_input" class="mt-2" style="display: none;">
                         <input type="text" class="form-control" id="new_block_name"
                           maxlength="10"
-                          placeholder="Enter new class section name (e.g., Period 1, Block A)">
+                          placeholder="Enter new class section name (e.g., Period 1, Block A)"
+                          aria-label="New class section name">
                         <div class="form-text">Enter a unique name for the new class section (10 characters max)</div>
                       </div>
                     </div>
@@ -820,9 +821,9 @@
     <form action="{{ url_for('admin.edit_student') }}" method="post">
       <div class="modal-content">
         <div class="modal-header bg-primary text-white">
-          <h5 class="modal-title text-white" id="editStudentModalLabel">
+          <h2 class="modal-title text-white h5" id="editStudentModalLabel">
             <span class="material-symbols-outlined me-2">edit</span>Edit Student
-          </h5>
+          </h2>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
@@ -832,8 +833,8 @@
           <!-- Basic Information -->
           <div class="card border-primary mb-3">
             <div class="card-header bg-primary-subtle text-primary">
-              <h6 class="mb-0 text-white"><span class="material-symbols-outlined me-2"
-                  style="vertical-align: middle;">person</span>Basic Information</h6>
+              <h3 class="mb-0 text-white h6"><span class="material-symbols-outlined me-2"
+                  style="vertical-align: middle;">person</span>Basic Information</h3>
             </div>
             <div class="card-body">
               <div class="row">
@@ -854,8 +855,8 @@
           <!-- Class Assignment -->
           <div class="card border-primary mb-3">
             <div class="card-header bg-primary-subtle text-primary">
-              <h6 class="mb-0 text-white"><span class="material-symbols-outlined me-2"
-                  style="vertical-align: middle;">calendar_today</span>Class Assignment</h6>
+              <h3 class="mb-0 text-white h6"><span class="material-symbols-outlined me-2"
+                  style="vertical-align: middle;">calendar_today</span>Class Assignment</h3>
             </div>
             <div class="card-body">
               <p class="text-muted small mb-2">Select all blocks this student attends (can select multiple):</p>
@@ -878,9 +879,9 @@
 
               <!-- Balance Transfer Options (shown when blocks change) -->
               <div id="balance_transfer_section" class="alert alert-info mt-3 mb-0" style="display: none;">
-                <h6 class="mb-2"><span
+                <h3 class="mb-2 h6"><span
                     class="material-symbols-outlined align-middle me-1 fs-6">account_balance</span>Balance Transfer
-                  Options</h6>
+                  Options</h3>
                 <p class="mb-3 small">For each new class period, choose whether to transfer the student's existing
                   balance or start fresh:</p>
 
@@ -899,8 +900,8 @@
           <!-- Login Management -->
           <div class="card border-primary mb-3">
             <div class="card-header bg-primary-subtle">
-              <h6 class="mb-0 text-white"><span class="material-symbols-outlined me-2"
-                  style="vertical-align: middle;">key</span>Login Management</h6>
+              <h3 class="mb-0 text-white h6"><span class="material-symbols-outlined me-2"
+                  style="vertical-align: middle;">key</span>Login Management</h3>
             </div>
             <div class="card-body">
               <div class="d-flex justify-content-between align-items-center">
@@ -945,9 +946,9 @@
     <form action="{{ url_for('admin.delete_student') }}" method="post">
       <div class="modal-content">
         <div class="modal-header bg-danger text-white">
-          <h5 class="modal-title" id="deleteStudentModalLabel">
+          <h2 class="modal-title h5" id="deleteStudentModalLabel">
             <span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>Delete Student
-          </h5>
+          </h2>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
@@ -955,7 +956,7 @@
           <input type="hidden" id="delete_student_id" name="student_id">
 
           <div class="alert alert-danger">
-            <h6><span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>Warning</h6>
+            <h3 class="h6"><span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>Warning</h3>
             <p>You are about to delete <strong id="delete_student_name"></strong>.</p>
             <p class="mb-0">This action will permanently delete:</p>
             <ul class="mb-0">
@@ -967,7 +968,7 @@
           </div>
 
           <p class="mb-3">Type <strong class="text-danger">DELETE</strong> to confirm:</p>
-          <input type="text" class="form-control" id="delete_confirmation" name="confirmation" required>
+          <input type="text" class="form-control" id="delete_confirmation" name="confirmation" required aria-label="Type DELETE to confirm">
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -984,7 +985,7 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header bg-danger text-white">
-        <h5 class="modal-title" id="timedDeleteGateModalLabel">Confirm Deletion</h5>
+        <h2 class="modal-title h5" id="timedDeleteGateModalLabel">Confirm Deletion</h2>
       </div>
       <div class="modal-body">
         <p class="mb-2" id="timed-delete-gate-warning"></p>
@@ -1020,10 +1021,10 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header bg-primary text-white">
-        <h5 class="modal-title text-white" id="classTimezoneModalLabel">
+        <h2 class="modal-title text-white h5" id="classTimezoneModalLabel">
           <span class="material-symbols-outlined me-2 align-middle">schedule</span>
           Set Official Class Time Zone
-        </h5>
+        </h2>
       </div>
       <div class="modal-body">
         <div class="alert alert-warning" role="status">

@@ -21,7 +21,7 @@
 <div class="alert alert-warning border-0 shadow-sm mb-4 d-flex align-items-center" role="alert">
     <span class="material-symbols-outlined me-3 fs-3">warning</span>
     <div>
-        <h5 class="alert-heading fw-bold mb-1">Action Required: Setup Account Recovery</h5>
+        <h2 class="alert-heading fw-bold h5 mb-1">Action Required: Setup Account Recovery</h2>
         <p class="mb-0">Your account recovery details are missing or outdated. Please update your security setup to
             enable student-assisted recovery.</p>
     </div>
@@ -33,7 +33,7 @@
 <div class="alert alert-info border-0 shadow-sm mb-4 d-flex align-items-center" role="alert">
     <span class="material-symbols-outlined me-3 fs-3">shield</span>
     <div class="me-3">
-        <h5 class="alert-heading fw-bold mb-1">Update insurance to the new tiered design</h5>
+        <h2 class="alert-heading fw-bold h5 mb-1">Update insurance to the new tiered design</h2>
         <p class="mb-0">Your existing policies use the legacy setup. Group them into tiers so students see the modern
             plan layout.</p>
     </div>
@@ -50,7 +50,7 @@
     <div class="alert {{ ann.get_priority_class() }} border-0 shadow-sm mb-4 d-flex align-items-center" role="alert">
         <span class="material-symbols-outlined me-3 fs-3">{{ ann.get_priority_icon() }}</span>
         <div>
-            <h5 class="alert-heading fw-bold mb-1">{{ ann.title }}</h5>
+            <h2 class="alert-heading fw-bold h5 mb-1">{{ ann.title }}</h2>
             <p class="mb-0">{{ ann.message | safe }}</p>
         </div>
     </div>
@@ -68,7 +68,7 @@
                     </div>
                     <span class="text-white text-opacity-75 fw-medium">Active Students</span>
                 </div>
-                <h2 class="display-6 text-white fw-bold mb-0">{{ total_students }}</h2>
+                <div class="display-6 text-white fw-bold mb-0">{{ total_students }}</div>
             </div>
         </div>
     </div>
@@ -80,14 +80,14 @@
                     <div class="icon-circle bg-success-subtle text-success me-3">
                         <span class="material-symbols-outlined">savings</span>
                     </div>
-                    <span class="text-secondary fw-medium">Total Economy Value</span>
+                    <span class="fw-medium" style="color: #5f5f5c;">Total Economy Value</span>
                     <subtitle>
                         <a href="#" class="text-secondary ms-2" data-bs-toggle="tooltip" data-bs-placement="top"
                             data-bs-title="Sum of all student account balances">
                             <span class="material-symbols-outlined align-top fs-6">info</span>
                         </a>
                 </div>
-                <h2 class="display-6 fw-bold mb-0 text-dark">${{ "{:,.0f}".format(total_balance) }}</h2>
+                <div class="display-6 fw-bold mb-0 text-dark">${{ "{:,.0f}".format(total_balance) }}</div>
             </div>
         </div>
     </div>
@@ -99,11 +99,11 @@
                     <div class="icon-circle bg-warning-subtle text-warning me-3">
                         <span class="material-symbols-outlined">pending_actions</span>
                     </div>
-                    <span class="text-secondary fw-medium">Pending Tasks</span>
+                    <span class="fw-medium" style="color: #5f5f5c;">Pending Tasks</span>
                 </div>
-                <h2 class="display-6 fw-bold mb-0 text-dark">{{ total_pending_actions }}</h2>
+                <div class="display-6 fw-bold mb-0 text-dark">{{ total_pending_actions }}</div>
                 {% if total_pending_actions > 0 %}
-                <div class="mt-2 small text-secondary">
+                <div class="mt-2 small" style="color: #5f5f5c;">
                     {% if pending_redemptions_count > 0 %}
                     <span class="badge bg-warning text-dark me-1">{{ pending_redemptions_count }} orders</span>
                     {% endif %}
@@ -126,13 +126,13 @@
                     <div class="icon-circle bg-info-subtle text-info me-3">
                         <span class="material-symbols-outlined">calendar_clock</span>
                     </div>
-                    <span class="text-secondary fw-medium">Next Payroll</span>
+                    <span class="fw-medium" style="color: #5f5f5c;">Next Payroll</span>
                 </div>
-                <h5 class="fw-bold mb-1 text-dark local-timestamp" data-format="MMM D"
+                <div class="fw-bold h5 mb-1 text-dark local-timestamp" data-format="MMM D"
                     data-timestamp="{{ format_utc_iso(next_payroll_date) }}">
                     {{ next_payroll_date.strftime('%b %d') }}
-                </h5>
-                <div class="text-secondary small">
+                </div>
+                <div class="small" style="color: #5f5f5c;">
                     Est: ${{ "{:,.0f}".format(total_payroll_estimate) }}
                     {% if payroll_updated_at %}
                     <br>
@@ -150,7 +150,7 @@
 
 <!-- Quick Actions -->
 <div class="mb-4">
-    <h5 class="text-secondary fw-bold mb-3 small text-uppercase">Quick Actions</h5>
+    <h2 class="h5 fw-bold mb-3 small text-uppercase" style="color: #5f5f5c;">Quick Actions</h2>
     <div class="row g-3">
         <div class="col-6 col-md-3">
             <a href="{{ url_for('admin.attendance_log') }}"
@@ -210,10 +210,10 @@
 <div class="mb-4">
     <div class="card border-0 shadow-sm">
         <div class="card-header bg-transparent border-0 pt-4 px-4 pb-0">
-            <h5 class="fw-bold mb-0">
+            <h2 class="h5 fw-bold mb-0">
                 <span class="material-symbols-outlined align-middle me-2">notifications_active</span>
                 Pending Actions ({{ total_pending_actions }})
-            </h5>
+            </h2>
         </div>
         <div class="card-body p-4">
             <!-- Nav Pills for Pending Actions -->
@@ -381,7 +381,7 @@
         <div class="card border-0 shadow-sm h-100">
             <div
                 class="card-header bg-transparent border-0 pt-4 px-4 pb-0 d-flex justify-content-between align-items-center">
-                <h5 class="fw-bold mb-0 text-dark">Recent Transactions</h5>
+                <h2 class="h5 fw-bold mb-0 text-dark">Recent Transactions</h2>
                 <a href="{{ url_for('admin.transactions') }}" class="btn btn-sm btn-link text-decoration-none">View
                     All</a>
             </div>
@@ -429,7 +429,7 @@
                 {% else %}
                 <div class="text-center py-5">
                     <span class="material-symbols-outlined">unknown_document</span>
-                    <p class="text-secondary">No recent activity found.</p>
+                    <p style="color: #5f5f5c;">No recent activity found.</p>
                 </div>
                 {% endif %}
             </div>
@@ -440,7 +440,7 @@
     <div class="col-12 col-xl-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-transparent border-0 pt-4 px-4 pb-0">
-                <h5 class="fw-bold mb-0 text-dark">Attendance Log</h5>
+                <h2 class="h5 fw-bold mb-0 text-dark">Attendance Log</h2>
             </div>
             <div class="card-body p-0">
                 {% if recent_logs %}

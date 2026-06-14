@@ -14,9 +14,9 @@
         <span class="material-symbols-outlined"
             style="font-size: 2.5rem; vertical-align: middle; font-weight:600; color:var(--secondary)">
             finance_mode</span>
-        <p class="mb-2" style="font-size:2.5rem; font-weight:600;color:var(--primary);">
+        <h1 class="mb-2" style="font-size:2.5rem; font-weight:600;color:var(--primary);">
             CLASSROOM TOKEN HUB
-        </p>
+        </h1>
         <p class="lead text-muted">{% if audience == 'user' %}Help and Support Center{% else %}Technical Documentation{%
             endif %}</p>
 
@@ -54,6 +54,7 @@
     </div>
 
     <!-- Documentation Categories -->
+    <h2 class="visually-hidden">Documentation Categories</h2>
     <div class="row g-4 mb-5">
         {% if audience == 'user' %}
         <!-- Student Diagnostics -->
@@ -284,13 +285,13 @@
     <!-- Quick Links -->
     <div class="card bg-light">
         <div class="card-body">
-            <h4 class="card-title">
+            <h2 class="card-title h4">
                 <span class="material-symbols-outlined" style="vertical-align: middle;">bolt</span>
                 Quick Links
-            </h4>
+            </h2>
             <div class="row">
                 <div class="col-md-6">
-                    <h6>Common Questions</h6>
+                    <h3 class="h5">Common Questions</h3>
                     <ul>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/diagnostics/student/login') }}"
                                 class="text-decoration-none">Why can’t I log in?</a></li>
@@ -303,7 +304,7 @@
                     </ul>
                 </div>
                 <div class="col-md-6">
-                    <h6>External Resources</h6>
+                    <h3 class="h5">External Resources</h3>
                     <ul>
                         <li><a href="{{ url_for('docs.timeline') }}" class="text-decoration-none">Project Timeline</a>
                         </li>

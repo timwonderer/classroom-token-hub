@@ -12,9 +12,30 @@ from app.models import Admin, ClassEconomy, ClassMembership, IdentityProfile, Re
 from app.routes.student import (
     RENT_PAYMENT_MATCH_TOLERANCE_SECONDS,
     _get_locked_rent_amount_for_join_code_cycle,
-    _has_active_rent_waiver,
     _is_student_coverage_period_paid,
 )
+
+def _has_active_rent_waiver(student_id, join_code, coverage_due_date):
+    from app.models import ClassEconomy, Seat
+    from app.routes.student import _has_active_rent_waiver_v2
+    class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+    if not class_row:
+        return False
+    seat = Seat.query.filter_by(student_id=student_id, class_id=class_row.class_id).first()
+    if not seat:
+        return False
+    return _has_active_rent_waiver_v2(seat.id, class_row.class_id, coverage_due_date)
+
+def _is_student_coverage_period_paid_wrapper(settings, student_id, block, join_code, coverage_due_date):
+    from app.models import ClassEconomy, Seat
+    class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+    if not class_row:
+        return False
+    seat = Seat.query.filter_by(student_id=student_id, class_id=class_row.class_id).first()
+    if not seat:
+        return False
+    return _is_student_coverage_period_paid(settings, seat.id, class_row.class_id, coverage_due_date)
+
 
 
 def _login_admin(client, admin_id, join_code):
@@ -155,7 +176,7 @@ def test_waiver_marks_coverage_period_as_paid(client):
     db.session.commit()
 
     assert _has_active_rent_waiver(student.id, "WAIV1", coverage) is True
-    assert _is_student_coverage_period_paid(settings, student.id, "A", "WAIV1", coverage) is True
+    assert _is_student_coverage_period_paid_wrapper(settings, student.id, "A", "WAIV1", coverage) is True
 
 
 def test_reverse_cycle_penalties_refunds_only_misapplied_fees(client, monkeypatch):

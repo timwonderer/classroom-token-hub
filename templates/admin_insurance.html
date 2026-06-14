@@ -112,7 +112,7 @@
 
 <div class="offcanvas offcanvas-end" tabindex="-1" id="insuranceGuide" aria-labelledby="insuranceGuideLabel">
   <div class="offcanvas-header">
-    <h5 class="offcanvas-title" id="insuranceGuideLabel">How to: Insurance Management</h5>
+    <h2 class="offcanvas-title h5" id="insuranceGuideLabel">How to: Insurance Management</h2>
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
   </div>
   <div class="offcanvas-body">
@@ -217,7 +217,7 @@
   <div class="d-flex align-items-center gap-3">
     <span class="material-symbols-outlined" style="font-size: 2rem;">school</span>
     <div>
-      <h6 class="mb-1 fw-bold">Active Class Context</h6>
+      <h3 class="mb-1 fw-bold h6">Active Class Context</h3>
       <div class="small text-muted">
         {{ active_class_label }}{% if active_join_code %} ({{ active_join_code }}){% endif %}
       </div>
@@ -265,7 +265,7 @@
     <!-- Existing Policies -->
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0"><span class="material-symbols-outlined me-2">format_list_bulleted</span>Existing Insurance Policies</h5>
+        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2">format_list_bulleted</span>Existing Insurance Policies</h2>
       </div>
       <div class="card-body">
         <div class="table-responsive">
@@ -347,7 +347,7 @@
       <div class="col-lg-8 mb-4">
         <div class="card shadow mb-0">
           <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0"><span class="material-symbols-outlined me-2">add_circle</span>Add New Insurance Policy</h5>
+            <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2">add_circle</span>Add New Insurance Policy</h2>
             <!-- Mode Toggle -->
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" id="insuranceModeToggle" role="switch">
@@ -358,7 +358,7 @@
             <!-- Display Form Validation Errors -->
             {% if form.errors %}
             <div class="alert alert-danger alert-dismissible fade show" role="alert">
-              <h6 class="alert-heading"><span class="material-symbols-outlined me-2">warning</span>Form Validation Errors</h6>
+              <h3 class="alert-heading h6"><span class="material-symbols-outlined me-2">warning</span>Form Validation Errors</h3>
               <ul class="mb-0">
                 {% for field_name, errors in form.errors.items() %}
                 {% for error in errors %}
@@ -403,7 +403,7 @@
 
                 <div class="row">
                   <div class="col-md-6 mb-3">
-                    {{ form.title.label(class="form-label fw-bold") }}
+                    {{ form.title.label(class="form-label fw-bold", **{'for': 'simple_title'}) }}
                     {{ form.title(class="form-control", placeholder="e.g., Basic Coverage", id="simple_title") }}
                   </div>
                   <div class="col-md-6 mb-3">
@@ -418,7 +418,7 @@
                       }) }}
                       <span class="input-group-text">/{{ form.charge_frequency(class="form-select",
                         id="simple_charge_frequency", style="width: auto;", **{'data-economy-frequency-field': 'true',
-                        'data-economy-frequency-target': '#simple_premium'}) }}</span>
+                        'data-economy-frequency-target': '#simple_premium', 'aria-label': 'Charge Frequency'}) }}</span>
 
                     </div>
                     <small class="text-muted">This also controls how long each subscription period lasts.</small>
@@ -426,20 +426,20 @@
                 </div>
 
                 <div class="mb-3">
-                  {{ form.description.label(class="form-label fw-bold") }}
+                  {{ form.description.label(class="form-label fw-bold", **{'for': 'simple_description'}) }}
                   {{ form.description(class="form-control", rows=3, placeholder="What does this insurance cover?",
                   id="simple_description") }}
                 </div>
 
                 <div class="mb-3">
-                  {{ form.claim_type.label(class="form-label fw-bold") }}
+                  {{ form.claim_type.label(class="form-label fw-bold", **{'for': 'simple_claim_type'}) }}
                   {{ form.claim_type(class="form-select", id="simple_claim_type", **{'data-economy-trigger':
                   '#simple_premium'}) }}
                   <small class="text-muted">Choose how claims are processed.</small>
                 </div>
 
                 <div class="mb-3" id="simpleNonMonetaryClaimsLimit" style="display: none;">
-                  <label class="form-label fw-bold">Claims per Period Limit</label>
+                  <label class="form-label fw-bold" for="simple_max_claims_count">Claims per Period Limit</label>
                   <div class="input-group">
                     {{ form.max_claims_count(class="form-control", placeholder="3", id="simple_max_claims_count") }}
                     <span class="input-group-text">claims per subscription period</span>
@@ -448,7 +448,7 @@
                 </div>
 
                 <div class="mb-3" id="simpleMaxPayoutPerPeriodGroup" style="display: none;">
-                  <label class="form-label fw-bold">Per Period Payout Limit</label>
+                  <label class="form-label fw-bold" for="simple_max_payout_per_period">Per Period Payout Limit</label>
                   <div class="input-group">
                     <span class="input-group-text">$</span>
                     {{ form.max_payout_per_period(class="form-control", placeholder="200.00",
@@ -461,7 +461,7 @@
 
                 <div class="row">
                   <div class="col-md-6 mb-3">
-                    {{ form.waiting_period_days.label(class="form-label fw-bold") }}
+                    {{ form.waiting_period_days.label(class="form-label fw-bold", **{'for': 'simple_waiting_period_days'}) }}
                     <div class="input-group">
                       {{ form.waiting_period_days(class="form-control", placeholder="7",
                       id="simple_waiting_period_days") }}
@@ -473,7 +473,7 @@
                   <div class="col-md-6 mb-3">
                     <div class="form-check form-switch mt-4">
                       {{ form.is_active(class="form-check-input", role="switch", id="simple_is_active") }}
-                      {{ form.is_active.label(class="form-check-label fw-bold") }}
+                      {{ form.is_active.label(class="form-check-label fw-bold", **{'for': 'simple_is_active'}) }}
                     </div>
                   </div>
                 </div>
@@ -505,12 +505,12 @@
                           <small class="text-muted">Clear description of coverage and benefits</small>
                         </div>
                         <div class="mb-3">
-                          {{ form.marketing_badge.label(class="form-label fw-bold") }}
+                          {{ form.marketing_badge.label(class="form-label fw-bold", **{'for': 'advanced_marketing_badge'}) }}
                           {{ form.marketing_badge(class="form-select", id="advanced_marketing_badge") }}
                           <small class="text-muted">Add a fun marketing badge to attract students</small>
                         </div>
                         <div class="mb-0">
-                          {{ form.claim_type.label(class="form-label fw-bold") }}
+                          {{ form.claim_type.label(class="form-label fw-bold", **{'for': 'advanced_claim_type'}) }}
                           {{ form.claim_type(class="form-select", id="advanced_claim_type", **{'data-economy-trigger':
                           '#advanced_premium'}) }}
                           <div class="alert alert-light border mt-2 mb-0">
@@ -541,7 +541,7 @@
                       <div class="accordion-body">
                         <div class="row">
                           <div class="col-md-6 mb-3">
-                            {{ form.premium.label(class="form-label fw-bold") }}
+                            {{ form.premium.label(class="form-label fw-bold", **{'for': 'advanced_premium'}) }}
                             <div class="input-group">
                               <span class="input-group-text">$</span>
                               {{ form.premium(class="form-control", placeholder="0.00", id="advanced_premium", **{
@@ -554,7 +554,7 @@
                             <small class="text-muted">Cost per cycle</small>
                           </div>
                           <div class="col-md-6 mb-3">
-                            {{ form.charge_frequency.label(class="form-label fw-bold") }}
+                            {{ form.charge_frequency.label(class="form-label fw-bold", **{'for': 'advanced_charge_frequency'}) }}
                             {{ form.charge_frequency(class="form-select", id="advanced_charge_frequency",
                             **{'data-economy-frequency-field': 'true', 'data-economy-frequency-target':
                             '#advanced_premium'}) }}
@@ -625,7 +625,7 @@
                           </div>
                         </div>
                         <div class="mb-3" id="advancedMaxClaimAmountGroup">
-                          {{ form.max_claim_amount.label(class="form-label fw-bold") }}
+                          {{ form.max_claim_amount.label(class="form-label fw-bold", **{'for': 'advanced_max_claim_amount'}) }}
                           <div class="input-group">
                             <span class="input-group-text">$</span>
                             {{ form.max_claim_amount(class="form-control", placeholder="0.00",
@@ -635,7 +635,7 @@
                             claim</small>
                         </div>
                         <div class="mb-0" id="advancedMaxPayoutPerPeriodGroup">
-                          {{ form.max_payout_per_period.label(class="form-label fw-bold") }}
+                          {{ form.max_payout_per_period.label(class="form-label fw-bold", **{'for': 'advanced_max_payout_per_period'}) }}
                           <div class="input-group">
                             <span class="input-group-text">$</span>
                             {{ form.max_payout_per_period(class="form-control", placeholder="0.00",
@@ -660,12 +660,12 @@
                       aria-labelledby="advancedHeadingRules" data-bs-parent="#advancedInsuranceAccordion">
                       <div class="accordion-body">
                         <div class="mb-3 pb-3 border-bottom">
-                          <h6 class="fw-bold mb-2"><span class="material-symbols-outlined me-1">block</span>Re-Enrollment Restrictions</h6>
+                          <h3 class="fw-bold mb-2 h6"><span class="material-symbols-outlined me-1">block</span>Re-Enrollment Restrictions</h3>
 
                           <div class="form-check form-switch mb-2">
                             {{ form.no_repurchase_after_cancel(class="form-check-input", role="switch",
                             id="permanentBlockToggleNew") }}
-                            {{ form.no_repurchase_after_cancel.label(class="form-check-label fw-bold") }}
+                            {{ form.no_repurchase_after_cancel.label(class="form-check-label fw-bold", **{'for': 'permanentBlockToggleNew'}) }}
                           </div>
                           <small class="text-muted d-block mb-3">No Re-Enrollment</small>
 
@@ -673,7 +673,7 @@
                             <div class="form-check form-switch mb-2">
                               {{ form.enable_repurchase_cooldown(class="form-check-input", role="switch",
                               id="cooldownToggleNew") }}
-                              {{ form.enable_repurchase_cooldown.label(class="form-check-label fw-bold") }}
+                              {{ form.enable_repurchase_cooldown.label(class="form-check-label fw-bold", **{'for': 'cooldownToggleNew'}) }}
                             </div>
                             <small class="text-muted d-block mb-2">Forced Cooldown Period</small>
 
@@ -689,7 +689,7 @@
                         </div>
 
                         <div>
-                          <h6 class="fw-bold mb-2"><span class="material-symbols-outlined me-1">inventory</span>Bundle Discounts</h6>
+                          <h3 class="fw-bold mb-2 h6"><span class="material-symbols-outlined me-1">inventory</span>Bundle Discounts</h3>
                           <div class="row">
                             <div class="col-6 mb-3">
                               {{ form.bundle_discount_percent.label(class="form-label fw-bold small") }}
@@ -824,7 +824,7 @@
                         </div>
 
                         <div class="d-none">
-                          {{ form.tier_category_id(id="tier_category_id") }}
+                          {{ form.tier_category_id(id="tier_category_id", **{'aria-label': 'Tier Category ID'}) }}
                         </div>
                         {% else %}
                         <div class="alert alert-warning mb-0">
@@ -850,7 +850,7 @@
       <div class="col-lg-4 mb-4">
         <div class="card shadow border-info sticky-top" style="top: 20px;">
           <div class="card-header bg-dark text-white">
-            <h6 class="mb-0"><span class="material-symbols-outlined me-2">trending_up</span>Statistics</h6>
+            <h3 class="mb-0 h6"><span class="material-symbols-outlined me-2">trending_up</span>Statistics</h3>
           </div>
           <div class="card-body">
             <p class="text-muted small">This is how students will see your insurance policy.</p>
@@ -1288,7 +1288,7 @@
   <div class="tab-pane fade" id="student-policies" role="tabpanel">
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0">Active Student Policies</h5>
+        <h2 class="mb-0 h5">Active Student Policies</h2>
       </div>
       <div class="card-body">
         <div class="table-responsive">
@@ -1350,7 +1350,7 @@
   <div class="tab-pane fade" id="cancelled-policies" role="tabpanel">
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0">Cancelled/Inactive Policies</h5>
+        <h2 class="mb-0 h5">Cancelled/Inactive Policies</h2>
       </div>
       <div class="card-body">
         <div class="table-responsive">
@@ -1391,7 +1391,7 @@
   <div class="tab-pane fade" id="claims" role="tabpanel">
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0">Insurance Claims</h5>
+        <h2 class="mb-0 h5">Insurance Claims</h2>
       </div>
       <div class="card-body">
         <!-- Filter by status -->
@@ -1475,8 +1475,8 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Deactivate Policy</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <h2 class="modal-title h5">Deactivate Policy</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
         <p>Are you sure you want to deactivate <strong id="modalPolicyTitle"></strong>?</p>
@@ -1498,8 +1498,8 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header bg-danger text-white">
-        <h5 class="modal-title"><span class="material-symbols-outlined">warning</span> Delete Policy</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <h2 class="modal-title h5"><span class="material-symbols-outlined">warning</span> Delete Policy</h2>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
         <p class="fw-bold">Are you sure you want to permanently delete <strong id="deletePolicyTitle"></strong>?</p>
@@ -1536,8 +1536,8 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header bg-warning">
-        <h5 class="modal-title"><span class="material-symbols-outlined">person_remove</span> Mass Remove Policy</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <h2 class="modal-title h5"><span class="material-symbols-outlined">person_remove</span> Mass Remove Policy</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
         <p>Remove <strong id="massRemovePolicyTitle"></strong> from students?</p>
@@ -1565,7 +1565,7 @@
           </label>
         </div>
         <div class="mt-2" id="studentIdsInput" style="display: none;">
-          <input type="text" class="form-control" id="studentIdsField" placeholder="e.g., 1,5,12,34">
+          <input type="text" class="form-control" id="studentIdsField" placeholder="e.g., 1,5,12,34" aria-label="Student IDs (comma-separated)">
           <small class="text-muted">Enter student IDs separated by commas</small>
         </div>
       </div>

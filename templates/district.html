@@ -73,13 +73,14 @@
     }
 
     a {
-      color: var(--info);
-      text-decoration: none;
+      color: var(--primary);
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: 0.15em;
     }
 
     a:hover {
-      color: var(--primary);
-      text-decoration: underline;
+      color: #123632;
     }
 
     .summary-box {
@@ -132,15 +133,20 @@
     }
 
     .btn-secondary {
-      background-color: var(--neutral-500);
-      border: none;
+      background-color: #4f4f4d;
+      border: 1px solid #4f4f4d;
+      color: #ffffff;
       padding: 0.75rem 1.5rem;
       font-weight: 500;
       transition: background-color 0.2s;
+      text-decoration: none;
     }
 
-    .btn-secondary:hover {
-      background-color: var(--neutral-600);
+    .btn-secondary:hover,
+    .btn-secondary:focus-visible {
+      background-color: #3d3d3b;
+      border-color: #3d3d3b;
+      color: #ffffff;
     }
   </style>
 </head>
@@ -151,7 +157,7 @@
     <p class="last-updated">Last Updated: April 15, 2026</p>
 
     <div class="summary-box">
-      <h3>Overview</h3>
+      <h2>Overview</h2>
       <p>Thank you for your interest in Classroom Token Hub (CTH). </p>
       <p>Classroom Token Hub is a teacher-developed classroom management system with a simulated economic model, designed with a data-minimization and isolation-first architecture.</p>
       <p>As a 100% teacher-designed, developed, hosted, and maintained platform, we look forward to working with district partners to bring CTH to teachers and students.</p>
@@ -177,7 +183,7 @@
     </ul>
 
    <div class="highlight-box mb-0 mt-0">
-    <h3 class="text-secondary fw-bold mt-0">NOTE</h3>
+    <h3 class="fw-bold mt-0" style="color: #8a5d00;">NOTE</h3>
       <p>Student Class Section and Additional Notes are treated as unstructured text within the application and are used for display only.</p>
       <p>These fields are not interpreted, parsed, or used for identification, inference, or external context derivation by the system.</p>
     </div>
@@ -239,6 +245,9 @@
     <h2>9. Compliance and Standards</h2>
     <h3>FERPA</h3>
     <p>Classroom Token Hub is designed to operate in alignment with FERPA principles. The system minimizes the collection of personally identifiable information, restricts access to authorized educators within a class context, and does not share student data with third parties.</p>
+    <h3>COPPA (School Consent Model)</h3>
+    <p>Classroom Token Hub complies with COPPA through the <strong>School Consent Model</strong>. Because CTH is designed strictly for classroom educational use under the supervision of a teacher or school district, the school/educator acts as the consenting authority. Schools authorize CTH to collect and process student first names and last initials for the sole benefit of the educational program, in lieu of direct parental consent.</p>
+    <p>As a key defense of student privacy, <strong>the system does not collect or store any external identifiers</strong> (such as student email addresses, phone numbers, or national student IDs). Accounts are self-contained and purely local to the specific class period. Usernames are pseudonymously generated using a theme word and student initials, and student names are encrypted at rest with only the first name and last initial displayed. Since no external identifiers or parental contact details are collected, the system provides a high level of isolation and cannot be correlated with external databases or tracked across other platforms.</p>
     <h3>Accessibility (WCAG)</h3>
     <p>Classroom Token Hub is designed with accessibility in mind and follows WCAG 2.1 Level AA guidelines where feasible. The platform is continuously improved to support a wide range of users, including those using assistive technologies.</p>
     <p>While formal accessibility audits have not yet been conducted, the system is developed with accessibility best practices as a core consideration. Districts with specific compliance requirements may choose to conduct independent evaluations.</p>

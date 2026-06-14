@@ -222,14 +222,14 @@ a:hover {
 }
 
 .btn-danger {
-    background-color: var(--danger);
-    border-color: var(--danger);
+    background-color: #b3261e;
+    border-color: #b3261e;
     color: white;
 }
 
 .btn-danger:hover {
-    background-color: var(--danger-hover);
-    border-color: var(--danger-hover);
+    background-color: #8f1f1f;
+    border-color: #8f1f1f;
     color: white;
 }
 
@@ -809,7 +809,7 @@ a:hover {
 }
 
 .student-nav a.active {
-    background-color: var(--secondary);
+    background-color: #7f5b34;
     color: white;
     font-weight: 700;
 }
@@ -845,9 +845,32 @@ a:hover {
     margin: 0 auto;
 }
 
+.student-content .text-muted,
+.student-content .text-secondary {
+    color: #5f5f5c !important;
+}
+
+.student-content .badge.text-muted,
+.student-content .badge.bg-secondary,
+.student-content .badge.bg-secondary.text-muted {
+    color: #ffffff !important;
+}
+
+.student-content .alert-warning {
+    color: #5f3d00;
+}
+
+.student-content .alert-danger {
+    color: #8f1f1f;
+}
+
+.student-content .alert-info {
+    color: #1f4f73;
+}
+
 .student-shell .sidebar a.active,
 .student-sidebar .student-nav a.active {
-    background-color: var(--secondary);
+    background-color: #7f5b34;
     color: white;
 }
 
@@ -1366,13 +1389,13 @@ table.js-sortable thead th:hover .sort-indicator {
     text-transform: uppercase;
     font-size: 0.75rem;
     letter-spacing: 0.08em;
-    color: var(--text-secondary);
+    color: #5f5f5c;
     margin-bottom: 0.25rem;
     font-weight: 600;
 }
 
 .page-header .meta {
-    color: var(--text-secondary);
+    color: #5f5f5c;
     font-weight: 500;
 }
 
@@ -1428,4 +1451,11 @@ body.maintenance-active .sidebar {
         top: 34px;
         /* Adjust sticky/fixed pos */
     }
+}
+
+/* ─── Accessibility & Focus Styling (WCAG 2.4.7 / 1.4.11) ─── */
+*:focus-visible {
+    outline: 3px solid var(--primary) !important;
+    outline-offset: 2px !important;
+    box-shadow: none !important;
 }

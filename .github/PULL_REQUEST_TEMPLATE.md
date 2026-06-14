@@ -46,6 +46,35 @@
 - [ ] All existing tests pass
 - [ ] Added new tests for new functionality
 
+## Accessibility Validation
+
+<!-- Required for any PR touching templates/, shared layouts/components, template-supporting CSS, or template-driven JS.
+     See INV-ARC-020 and docs/development/v2_restructure_doc/TESTING/SOP-TEST-002_Accessibility_Validation_And_PR_Gate.md.
+     If not applicable, explicitly mark the N/A option and leave a short reason. -->
+
+- [ ] Not applicable: this PR does not touch template/UI scope covered by `INV-ARC-020`
+- [ ] Applicable: this PR includes template/UI scope and the accessibility report below is complete
+
+**Accessibility Scope**
+<!-- e.g. route template, shared layout, component partial, template CSS, template JS -->
+
+**Accessibility Commands**
+<!-- Required when applicable -->
+- `pytest -q tests/test_accessibility.py`:
+- `venv/bin/pytest -q tests/test_axe_compliance.py`:
+
+**Accessibility Issues Found**
+<!-- List issue categories and short summaries, or write "None". -->
+
+**Accessibility Fixes Applied**
+<!-- Summarize what changed to resolve the issues. -->
+
+**Remaining Accessibility Issues / Follow-up Risk**
+<!-- Write "None" if fully addressed. -->
+
+**Changelog Accessibility Entry**
+- [ ] `CHANGELOG.md` includes the accessibility issues/fixes found in this PR
+
 ## Database Migration Checklist
 
 <!-- Complete this section ONLY if this PR includes a database migration -->
@@ -71,6 +100,7 @@ If **Yes**, confirm:
 - [ ] I have performed a self-review of my own code
 - [ ] I have commented my code where necessary, particularly in hard-to-understand areas
 - [ ] I have updated the documentation accordingly
+- [ ] If this PR touched template/UI scope, I completed the required accessibility validation report
 - [ ] My changes generate no new warnings or errors
 - [ ] I have read and followed the [contributing guidelines](../CONTRIBUTING.md)
 

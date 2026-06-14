@@ -63,7 +63,7 @@
     }
 
     .teacher-section h3 {
-      color: var(--warning);
+      color: #8a5d00;
       margin-top: 0;
     }
 
@@ -76,7 +76,7 @@
     }
 
     .student-section h3 {
-      color: var(--info);
+      color: #1f5f8b;
       margin-top: 0;
     }
 
@@ -106,6 +106,17 @@
       margin-bottom: 1rem;
     }
 
+    a {
+      color: var(--primary);
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: 0.15em;
+    }
+
+    a:hover {
+      color: #123632;
+    }
+
     .info-box {
       background-color: var(--neutral-100);
       padding: 1rem;
@@ -115,15 +126,20 @@
     }
 
     .btn-secondary {
-      background-color: var(--neutral-500);
-      border: none;
+      background-color: #4f4f4d;
+      border: 1px solid #4f4f4d;
+      color: #ffffff;
       padding: 0.75rem 1.5rem;
       font-weight: 500;
       transition: background-color 0.2s;
+      text-decoration: none;
     }
 
-    .btn-secondary:hover {
-      background-color: var(--neutral-600);
+    .btn-secondary:hover,
+    .btn-secondary:focus-visible {
+      background-color: #3d3d3b;
+      border-color: #3d3d3b;
+      color: #ffffff;
     }
   </style>
 </head>
@@ -268,21 +284,25 @@
         with data retention policies.</li>
     </ul>
 
-    <h2>Student Rights & Access</h2>
-    <p>Students have the right to view their own data. If any information is incorrect, please contact your teacher to
-      have it corrected. Account access and credential resets must be handled by an administrator.</p>
-    <p><strong>Account Recovery:</strong> If you lose access to your account, your teacher can issue a reset code. The
-      recovery process requires only your class join code and the reset code — it does not ask you to re-enter your
-      personal information such as your name or date of birth, as those verification hashes are not retained after
-      account setup.</p>
+    <h2>User Rights & Scoped Data Access (GDPR Alignment)</h2>
+    <p>Students and teachers have the right to view, correct, export, or request deletion of their data. However, because Classroom Token Hub is designed to protect your privacy and <strong>does not collect or store global identifiers</strong> (such as email addresses, phone numbers, or national student IDs), system administrators have no technical way to query, identify, or export a user's data from a centralized system lookup.</p>
+    <p>Consequently, all requests for data access, correction, portability (exporting transaction/attendance logs), or erasure (deleting accounts) must be initiated through the classroom teacher or school district using their specific class join codes and local administrative panels. Account deletion requests initiated by a teacher trigger a cascade delete that physically purges all matching records, balances, and history from our systems.</p>
+    <p><strong>Account Recovery:</strong> If you lose access to your account, your teacher can issue a reset code. The recovery process requires only your class join code and the reset code — it does not ask you to re-enter your personal information such as your name or date of birth, as those verification hashes are not retained after account setup.</p>
 
     <h2>Data Breach Notification</h2>
     <p>In the event of a data breach, we will notify affected users and authorities within 72 hours and provide guidance
       on mitigation steps.</p>
 
     <h2>Compliance</h2>
-    <p>This application adheres to FERPA (Family Educational Rights and Privacy Act), COPPA (Children's Online Privacy
-      Protection Act), and relevant data privacy policies.</p>
+    <h3>FERPA (Family Educational Rights and Privacy Act)</h3>
+    <p>Classroom Token Hub is designed to comply with FERPA requirements. Student records are kept secure, access is strictly scoped to authorized teachers within their specific class context, and no education records are shared with third parties or external providers.</p>
+    
+    <h3>COPPA (Children's Online Privacy Protection Act)</h3>
+    <p>Classroom Token Hub complies with COPPA through the <strong>School Consent Model</strong>. Because CTH is designed strictly for classroom use under the direction of an educator or school district, schools are authorized to provide consent for the collection and processing of student information in lieu of direct parental consent. By setting up student accounts, teachers certify that they are acting as the authorizing agent on behalf of parents for the sole benefit of their educational program.</p>
+    <p>To maximize student privacy and prevent identity leaks, <strong>we do not collect or store external identifiers</strong> such as student email addresses, phone numbers, or national student IDs. Student usernames are pseudonymized (generated using a theme word and student initials), and student names are encrypted at rest with only the first name and last initial displayed. Because we do not store external identifiers or parental contact details, the system cannot be linked to external student databases, providing a strong layer of isolation against identity tracking.</p>
+    
+    <h3>GDPR (General Data Protection Regulation)</h3>
+    <p>CTH aligns with GDPR requirements regarding data protection by design and by default (Art. 25) and security of processing (Art. 32). Student first names and teacher display names are encrypted at rest using AES-128-CBC. Since CTH collects no external identifiers, the stored records represent pseudonymized data that cannot be linked to real-world individuals without local classroom records. The legal basis for processing this data is the performance of a task carried out in the public interest (educational instruction under the school's authority) or the legitimate interests of simulating a classroom banking environment.</p>
 
     <h2>Contact Information</h2>
     <p>For questions or concerns, you may use the help and support page to open a support ticket.</a>
