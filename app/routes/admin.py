@@ -4003,20 +4003,33 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
     if not settings_by_block:
         return student_rent_privileges
 
-    # 2. Fetch all RentItems for these RentSettings in a single query
-    setting_ids = [rs.id for rs in all_rent_settings]
-    all_rent_items = RentItem.query.filter(
-        RentItem.rent_setting_id.in_(setting_ids),
-        RentItem.rent_item_type == 'privilege',
-        RentItem.is_available_in_store == True
-    ).all()
+    # 2. Fetch active policy versions and extract privilege items from frozen manifests.
+    #    This ensures mid-cycle teacher edits don't change visible perks until next cycle.
+    from app.models import RentPolicyVersion
+    from app.services.store_service import get_frozen_privilege_items
 
-    items_by_setting_id = defaultdict(list)
+    active_version_ids = [
+        rs.active_version_id for rs in (
+            RentSettings.query
+            .filter(RentSettings.class_id.in_([c.class_id for c in target_classes]))
+            .with_entities(RentSettings.active_version_id)
+            .all()
+        )
+        if rs.active_version_id
+    ]
+    active_versions_by_class = {}
+    if active_version_ids:
+        for v in RentPolicyVersion.query.filter(RentPolicyVersion.id.in_(active_version_ids)).all():
+            active_versions_by_class[v.class_id] = v
+
+    frozen_items_by_class_id = {}
     all_store_item_ids = set()
-    for ri in all_rent_items:
-        items_by_setting_id[ri.rent_setting_id].append(ri)
-        if ri.store_item_id:
-            all_store_item_ids.add(ri.store_item_id)
+    for class_id_val, version in active_versions_by_class.items():
+        frozen_privs = get_frozen_privilege_items(version)
+        frozen_items_by_class_id[class_id_val] = frozen_privs
+        for fp in frozen_privs:
+            if fp.get('store_item_id'):
+                all_store_item_ids.add(fp['store_item_id'])
 
     # 3. Collect all student IDs across all blocks and calculate coverage periods
     all_student_ids = set()
@@ -4094,7 +4107,8 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
         if not rent_settings:
             continue
 
-        per_period_items = items_by_setting_id.get(rent_settings.id, [])
+        block_class_id = class_id_by_block.get(block)
+        per_period_items = frozen_items_by_class_id.get(block_class_id, [])
         if not per_period_items:
             continue
 
@@ -4106,17 +4120,17 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
             has_paid_rent = student.id in paid_student_ids
             student_store_items = items_by_student.get(student.id, set())
 
-            for rent_item in per_period_items:
+            for frozen_item in per_period_items:
                 source = None
 
                 if has_paid_rent:
                     source = 'rent'
-                elif rent_item.store_item_id and rent_item.store_item_id in student_store_items:
+                elif frozen_item.get('store_item_id') and frozen_item['store_item_id'] in student_store_items:
                     source = 'purchased'
 
                 if source:
                     privileges.append({
-                        'name': rent_item.name,
+                        'name': frozen_item['name'],
                         'source': source
                     })
 
@@ -4158,7 +4172,7 @@ def _get_rent_privileges_for_student(student, class_id, join_code):
     coverage_month = coverage_due_date.month
     coverage_year = coverage_due_date.year
     seat_ids = get_seat_ids_for_student_join(student.id, join_code)
-    rent_scope = seat_scoped_filter(RentPayment, student.id, seat_ids)
+    rent_scope = RentPayment.seat_id.in_(seat_ids) if seat_ids else sa.false()
 
     has_paid_rent = RentPayment.query.filter(
         rent_scope,
@@ -4167,13 +4181,16 @@ def _get_rent_privileges_for_student(student, class_id, join_code):
         RentPayment.coverage_year == coverage_year,
     ).first() is not None
 
-    per_period_items = RentItem.query.filter_by(
-        rent_setting_id=rent_settings.id,
-        rent_item_type='privilege',
-        is_available_in_store=True
-    ).all()
+    # Read privilege items from the active policy version's frozen manifest
+    # so mid-cycle teacher edits don't change what students see until next cycle.
+    from app.services.obligations_service import resolve_active_rent_policy_version
+    from app.services.store_service import get_frozen_privilege_items
+    active_version = resolve_active_rent_policy_version(class_id)
+    if not active_version:
+        return rent_privileges
 
-    store_item_ids = [item.store_item_id for item in per_period_items if item.store_item_id]
+    frozen_privileges = get_frozen_privilege_items(active_version)
+    store_item_ids = [item['store_item_id'] for item in frozen_privileges if item.get('store_item_id')]
     items_by_student = set()
     if store_item_ids:
         student_items = StudentItem.query.filter(
@@ -4187,17 +4204,17 @@ def _get_rent_privileges_for_student(student, class_id, join_code):
         ).all()
         items_by_student = {si.store_item_id for si in student_items}
 
-    for rent_item in per_period_items:
+    for frozen_item in frozen_privileges:
         source = None
         if has_paid_rent:
             source = 'rent'
-        elif rent_item.store_item_id and rent_item.store_item_id in items_by_student:
+        elif frozen_item.get('store_item_id') and frozen_item['store_item_id'] in items_by_student:
             source = 'purchased'
 
         if source:
             rent_privileges.append({
-                'name': rent_item.name,
-                'description': rent_item.description,
+                'name': frozen_item['name'],
+                'description': frozen_item.get('description'),
                 'source': source
             })
 
@@ -6641,6 +6658,13 @@ def rent_settings():
                 if mid_period_locked and block == settings_block:
                     flash("Some changes are locked because students have already paid rent this period. "
                           "Item type, use limits, and hall pass counts will apply next period.", "warning")
+
+        # Snapshot current settings + items into a new immutable policy version
+        db.session.flush()  # ensure all items are persisted before snapshotting
+        from app.services.obligations_service import create_and_schedule_rent_policy_version
+        for block in blocks_to_update:
+            scope_for_block = require_admin_feature_scope('rent', admin_id=admin_id, requested_block=block, allow_default=False)
+            create_and_schedule_rent_policy_version(scope_for_block['class_id'])
 
         if apply_to_all:
             flash(f"Rent settings applied to all {len(blocks_to_update)} classes!", "success")

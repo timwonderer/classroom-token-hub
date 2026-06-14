@@ -1573,10 +1573,80 @@ class RentSettings(db.Model):
     cycle_length_days = db.Column(db.Integer, nullable=False, default=30)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
+    # Version tracking — each meaningful save creates a new immutable RentPolicyVersion
+    active_version_id = db.Column(db.Integer, db.ForeignKey('rent_policy_versions.id', ondelete='SET NULL', use_alter=True), nullable=True)
+    next_version_id = db.Column(db.Integer, db.ForeignKey('rent_policy_versions.id', ondelete='SET NULL', use_alter=True), nullable=True)
+
+    active_version = db.relationship(
+        'RentPolicyVersion',
+        foreign_keys=[active_version_id],
+        post_update=True,
+    )
+    next_version = db.relationship(
+        'RentPolicyVersion',
+        foreign_keys=[next_version_id],
+        post_update=True,
+    )
+
     # Keep old field names for backward compatibility (deprecated)
     @property
     def late_fee(self):
         return self.late_penalty_amount
+
+    _FROZEN_POLICY_FIELDS = (
+        'rent_amount', 'frequency_type', 'custom_frequency_value', 'custom_frequency_unit',
+        'due_day_of_month', 'grace_period_days', 'late_penalty_amount', 'late_penalty_type',
+        'late_penalty_frequency_days', 'bill_preview_enabled', 'bill_preview_days',
+        'allow_incremental_payment', 'prevent_purchase_when_late', 'cycle_length_days',
+    )
+
+    def create_policy_version(self):
+        """Snapshot current settings + rent items into a new immutable RentPolicyVersion."""
+        # Derive next version number from existing versions
+        max_version = (
+            db.session.query(db.func.coalesce(db.func.max(RentPolicyVersion.version_number), 0))
+            .filter(RentPolicyVersion.class_id == self.class_id)
+            .scalar()
+        )
+        next_version = max_version + 1
+
+        items_snapshot = [
+            {
+                'name': item.name,
+                'description': item.description,
+                'order_index': item.order_index,
+                'rent_item_type': item.rent_item_type,
+                'use_limit': item.use_limit,
+                'hall_pass_count': item.hall_pass_count,
+                'is_available_in_store': item.is_available_in_store,
+                'store_price': str(item.store_price) if item.store_price is not None else None,
+                'purchase_duration': item.purchase_duration,
+                'store_item_id': item.store_item_id,
+            }
+            for item in self.rent_items.all()
+        ]
+        version = RentPolicyVersion(
+            class_id=self.class_id,
+            version_number=next_version,
+            source_rent_setting_id=self.id,
+            rent_amount=self.rent_amount,
+            frequency_type=self.frequency_type,
+            custom_frequency_value=self.custom_frequency_value,
+            custom_frequency_unit=self.custom_frequency_unit,
+            due_day_of_month=self.due_day_of_month,
+            grace_period_days=self.grace_period_days,
+            late_penalty_amount=self.late_penalty_amount,
+            late_penalty_type=self.late_penalty_type,
+            late_penalty_frequency_days=self.late_penalty_frequency_days,
+            bill_preview_enabled=self.bill_preview_enabled,
+            bill_preview_days=self.bill_preview_days,
+            allow_incremental_payment=self.allow_incremental_payment,
+            prevent_purchase_when_late=self.prevent_purchase_when_late,
+            cycle_length_days=self.cycle_length_days,
+            frozen_items=items_snapshot,
+        )
+        return version
+
 
 @event.listens_for(RentSettings, "before_insert")
 @event.listens_for(RentSettings, "before_update")
@@ -1591,6 +1661,65 @@ def _sync_rent_settings_scope(mapper, connection, target):
             ).scalar()
             if class_id:
                 target.class_id = str(class_id)
+
+
+class RentPolicyVersion(db.Model):
+    """Immutable snapshot of rent policy terms at a point in time.
+
+    Every meaningful edit to RentSettings creates a new version.
+    Policy versions activate only at cycle boundaries — never mid-cycle.
+    Assessments reference the version they were assessed under, providing
+    an auditable answer to: "which contract governed this cycle?"
+
+    Mirrors the InsurancePolicy → InsuranceEnrollment.freeze_policy_snapshot()
+    pattern, but as a standalone snapshot table rather than inline frozen columns,
+    because rent policy carries ~15 fields plus a variable-length perk manifest.
+    """
+    __tablename__ = 'rent_policy_versions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
+    version_number = db.Column(db.Integer, nullable=False)
+    source_rent_setting_id = db.Column(db.Integer, db.ForeignKey('rent_settings.id', ondelete='SET NULL'), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+
+    # --- Frozen policy fields (from RentSettings at snapshot time) ---
+
+    # Pricing
+    rent_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+    frequency_type = db.Column(db.String(20), nullable=False, default='monthly')
+    custom_frequency_value = db.Column(db.Integer, nullable=True)
+    custom_frequency_unit = db.Column(db.String(20), nullable=True)
+    due_day_of_month = db.Column(db.Integer, nullable=True)
+    cycle_length_days = db.Column(db.Integer, nullable=False, default=30)
+
+    # Grace period and late penalties
+    grace_period_days = db.Column(db.Integer, nullable=False, default=3)
+    late_penalty_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=False, default=Decimal('10.00'))
+    late_penalty_type = db.Column(db.String(20), nullable=False, default='once')
+    late_penalty_frequency_days = db.Column(db.Integer, nullable=True)
+
+    # Payment options
+    bill_preview_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    bill_preview_days = db.Column(db.Integer, nullable=False, default=7)
+    allow_incremental_payment = db.Column(db.Boolean, nullable=False, default=False)
+    prevent_purchase_when_late = db.Column(db.Boolean, nullable=False, default=False)
+
+    # --- Frozen perk manifest (from RentItems at snapshot time) ---
+    # JSON array of {name, description, order_index, rent_item_type,
+    #                use_limit, hall_pass_count, is_available_in_store,
+    #                store_price, purchase_duration}
+    frozen_items = db.Column(db.JSON, nullable=False, default=list)
+
+    # Relationships
+    rent_setting = db.relationship('RentSettings', foreign_keys=[source_rent_setting_id])
+
+    __table_args__ = (
+        db.Index('ix_rent_policy_versions_class_version', 'class_id', 'version_number'),
+    )
+
+    def __repr__(self):
+        return f'<RentPolicyVersion class={self.class_id} v{self.version_number}>'
 
 
 class RentPayment(db.Model):
@@ -2278,6 +2407,9 @@ class ObligationAssessment(db.Model):
     due_at = db.Column(db.DateTime(timezone=True), nullable=True)
     assessed_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
 
+    # Rent policy version — links to the immutable contract that governed this assessment
+    rent_policy_version_id = db.Column(db.Integer, db.ForeignKey('rent_policy_versions.id', ondelete='SET NULL'), nullable=True, index=True)
+
     # Rent-cycle fields — preserved from prepay coverage-window model (INV-ARC-015)
     period_key = db.Column(db.String(20), nullable=True)
     coverage_start_time = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
@@ -2292,6 +2424,7 @@ class ObligationAssessment(db.Model):
     satisfaction = db.relationship('ObligationSatisfaction', uselist=False, backref='assessment')
     reversal = db.relationship('ObligationReversal', uselist=False, backref='assessment')
     entitlement_events = db.relationship('EntitlementEvent', backref='assessment')
+    rent_policy_version = db.relationship('RentPolicyVersion', backref='assessments')
 
     __table_args__ = (
         db.UniqueConstraint('seat_id', 'class_id', 'cycle_idempotency_key', name='uq_assessment_events_idempotency'),

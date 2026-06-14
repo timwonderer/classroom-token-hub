@@ -11,6 +11,8 @@ from app.models import (
     ObligationLifecycle,
     ObligationReversal,
     ObligationSatisfaction,
+    RentPolicyVersion,
+    RentSettings,
 )
 from app.utils.time import utc_now
 
@@ -108,17 +110,31 @@ def record_rent_payment(
     coverage_end_time=None,
     cycle_idempotency_key: str | None = None,
     transaction_id: int | None = None,
+    rent_policy_version_id: int,
 ) -> ObligationAssessment:
-    """Record a rent payment as a canonical assessment + satisfaction."""
+    """Record a rent payment as a canonical assessment + satisfaction.
+
+    ``rent_policy_version_id`` is required.  ``amount_snap`` is set to the
+    version's ``rent_amount`` (the policy-defined charge at assessment time).
+    The actual payment amount lives on ``ObligationSatisfaction.amount_paid``
+    and may differ (late fees, partial payments, etc.).
+
+    V2 is a clean break — no legacy data exists, so every rent assessment
+    must reference an immutable policy version.
+    """
     now = utc_now()
     period_key = f"{coverage_year}-{coverage_month:02d}" if coverage_year is not None and coverage_month is not None else None
+
+    version = db.session.get(RentPolicyVersion, rent_policy_version_id)
+    if version is None:
+        raise ValueError(f"RentPolicyVersion {rent_policy_version_id} not found")
 
     assessment = ObligationAssessment(
         seat_id=seat_id,
         class_id=class_id,
         period=period,
         obligation_type="RENT",
-        amount_snap=amount_paid,
+        amount_snap=version.rent_amount,
         assessed_at=now,
         period_key=period_key,
         coverage_start_time=coverage_start_time,
@@ -128,6 +144,7 @@ def record_rent_payment(
         period_year=period_year,
         coverage_month=coverage_month,
         coverage_year=coverage_year,
+        rent_policy_version_id=rent_policy_version_id,
     )
     db.session.add(assessment)
     db.session.flush()
@@ -445,6 +462,234 @@ def get_claim_status(claim_id: int) -> str | None:
     if assessment is None:
         return None
     return assessment.lifecycle.status if assessment.lifecycle else None
+
+
+# ---------------------------------------------------------------------------
+# Rent read helpers (canonical replacements for legacy RentPayment/RentWaiver)
+# ---------------------------------------------------------------------------
+
+def get_paid_rent_assessments_for_cycle(
+    class_id: str,
+    coverage_month: int,
+    coverage_year: int,
+    *,
+    seat_ids: list[int] | None = None,
+) -> list[ObligationAssessment]:
+    """Return PAID rent assessments for a class + cycle, optionally filtered by seats.
+
+    Each returned assessment has a loaded `satisfaction` relationship with
+    `amount_paid`, `was_late`, `late_fee_charged`, `transaction_id`, and
+    `satisfied_at` (the canonical equivalent of ``payment_date``).
+    """
+    from app.models import Transaction
+
+    q = (
+        ObligationAssessment.query
+        .join(ObligationLifecycle, ObligationLifecycle.assessment_id == ObligationAssessment.id)
+        .outerjoin(ObligationSatisfaction, ObligationSatisfaction.assessment_id == ObligationAssessment.id)
+        .outerjoin(Transaction, Transaction.id == ObligationSatisfaction.transaction_id)
+        .filter(
+            ObligationAssessment.class_id == class_id,
+            ObligationAssessment.obligation_type == "RENT",
+            ObligationAssessment.coverage_month == coverage_month,
+            ObligationAssessment.coverage_year == coverage_year,
+            ObligationLifecycle.status == "PAID",
+        )
+    )
+    if seat_ids is not None:
+        q = q.filter(ObligationAssessment.seat_id.in_(seat_ids))
+    # Exclude assessments whose backing ledger transaction was voided
+    q = q.filter(
+        db.or_(
+            ObligationSatisfaction.transaction_id.is_(None),
+            Transaction.is_void.is_(False),
+        )
+    )
+    return q.order_by(ObligationAssessment.assessed_at.asc()).all()
+
+
+def get_waived_seat_ids_for_cycle(
+    class_id: str,
+    coverage_date,
+    seat_ids: list[int],
+) -> set[int]:
+    """Return the set of seat_ids that have a canonical rent waiver covering ``coverage_date``."""
+    rows = (
+        db.session.query(ObligationAssessment.seat_id)
+        .join(ObligationReversal, ObligationReversal.assessment_id == ObligationAssessment.id)
+        .filter(
+            ObligationAssessment.class_id == class_id,
+            ObligationAssessment.obligation_type == "RENT_WAIVER",
+            ObligationAssessment.seat_id.in_(seat_ids),
+            ObligationAssessment.coverage_start_time <= coverage_date,
+            ObligationAssessment.coverage_end_time >= coverage_date,
+        )
+        .all()
+    )
+    return {r[0] for r in rows}
+
+
+def get_rent_waiver_for_seat(
+    seat_id: int,
+    class_id: str,
+    coverage_date,
+) -> ObligationAssessment | None:
+    """Return the canonical rent waiver assessment covering ``coverage_date``, if any."""
+    return (
+        ObligationAssessment.query
+        .join(ObligationReversal, ObligationReversal.assessment_id == ObligationAssessment.id)
+        .filter(
+            ObligationAssessment.seat_id == seat_id,
+            ObligationAssessment.class_id == class_id,
+            ObligationAssessment.obligation_type == "RENT_WAIVER",
+            ObligationAssessment.coverage_start_time <= coverage_date,
+            ObligationAssessment.coverage_end_time >= coverage_date,
+        )
+        .order_by(ObligationAssessment.assessed_at.desc())
+        .first()
+    )
+
+
+def get_rent_waivers_for_seat(
+    seat_id: int,
+    class_id: str,
+) -> list[ObligationAssessment]:
+    """Return all rent waiver assessments for a seat, newest first."""
+    return (
+        ObligationAssessment.query
+        .join(ObligationReversal, ObligationReversal.assessment_id == ObligationAssessment.id)
+        .filter(
+            ObligationAssessment.seat_id == seat_id,
+            ObligationAssessment.class_id == class_id,
+            ObligationAssessment.obligation_type == "RENT_WAIVER",
+        )
+        .order_by(ObligationAssessment.assessed_at.desc())
+        .all()
+    )
+
+
+def get_cycle_rent_amount(
+    class_id: str,
+    coverage_month: int,
+    coverage_year: int,
+) -> "Decimal | None":
+    """Return the policy-defined rent amount for a cycle.
+
+    Reads from the ``RentPolicyVersion`` attached to any assessment in the
+    cycle.  Returns None only if no assessments exist for the cycle yet.
+    """
+    return get_cycle_rent_amount_from_version(class_id, coverage_month, coverage_year)
+
+
+# ---------------------------------------------------------------------------
+# Rent policy version helpers
+# ---------------------------------------------------------------------------
+
+def resolve_active_rent_policy_version(class_id: str) -> RentPolicyVersion | None:
+    """Return the currently active rent policy version for a class.
+
+    Every RentSettings row has an active version from creation.
+    Returns None only if the class has no rent settings.
+    """
+    settings = RentSettings.query.filter_by(class_id=class_id).first()
+    if settings and settings.active_version_id:
+        return db.session.get(RentPolicyVersion, settings.active_version_id)
+    return None
+
+
+def resolve_next_rent_policy_version(class_id: str) -> RentPolicyVersion | None:
+    """Return the version scheduled for the next cycle.
+
+    If ``RentSettings.next_version_id`` is set, returns that version.
+    Otherwise returns None (no pending change).
+    """
+    settings = RentSettings.query.filter_by(class_id=class_id).first()
+    if settings and settings.next_version_id:
+        return db.session.get(RentPolicyVersion, settings.next_version_id)
+    return None
+
+
+def activate_next_rent_policy_version(class_id: str) -> RentPolicyVersion | None:
+    """Promote the next version to active at a cycle boundary.
+
+    Called by the cycle-start FEAT or scheduled task.  Returns the newly
+    activated version, or None if there was nothing to activate.
+    """
+    settings = RentSettings.query.filter_by(class_id=class_id).first()
+    if not settings or not settings.next_version_id:
+        return None
+
+    version = db.session.get(RentPolicyVersion, settings.next_version_id)
+    if version is None:
+        return None
+
+    settings.active_version_id = version.id
+    settings.next_version_id = None
+    return version
+
+
+def create_and_schedule_rent_policy_version(class_id: str) -> RentPolicyVersion | None:
+    """Snapshot current RentSettings into a new version and schedule it for next cycle.
+
+    Called after a teacher saves rent settings.  Creates an immutable
+    ``RentPolicyVersion`` row and sets it as the ``next_version_id``.
+    If there is no active version yet, also sets it as active immediately
+    (first-time setup).
+    """
+    settings = RentSettings.query.filter_by(class_id=class_id).first()
+    if not settings:
+        return None
+
+    version = settings.create_policy_version()
+    db.session.add(version)
+    db.session.flush()
+
+    settings.next_version_id = version.id
+
+    # First-time setup: if no active version exists, activate immediately
+    if settings.active_version_id is None:
+        settings.active_version_id = version.id
+
+    return version
+
+
+def get_cycle_rent_amount_from_version(
+    class_id: str,
+    coverage_month: int,
+    coverage_year: int,
+) -> "Decimal | None":
+    """Return the policy-defined rent amount for a cycle from assessment versions.
+
+    Looks for any assessment in the cycle that has a ``rent_policy_version_id``
+    and returns the version's ``rent_amount``.  Returns None if no versioned
+    assessments exist (legacy data).
+    """
+    assessment = (
+        ObligationAssessment.query
+        .filter(
+            ObligationAssessment.class_id == class_id,
+            ObligationAssessment.obligation_type == "RENT",
+            ObligationAssessment.coverage_month == coverage_month,
+            ObligationAssessment.coverage_year == coverage_year,
+            ObligationAssessment.rent_policy_version_id.isnot(None),
+        )
+        .first()
+    )
+    if assessment and assessment.rent_policy_version_id:
+        version = db.session.get(RentPolicyVersion, assessment.rent_policy_version_id)
+        if version:
+            return version.rent_amount
+    return None
+
+
+def get_rent_policy_version_history(class_id: str) -> list[RentPolicyVersion]:
+    """Return all rent policy versions for a class, newest first."""
+    return (
+        RentPolicyVersion.query
+        .filter_by(class_id=class_id)
+        .order_by(RentPolicyVersion.version_number.desc())
+        .all()
+    )
 
 
 # ---------------------------------------------------------------------------

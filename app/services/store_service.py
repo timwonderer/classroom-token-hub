@@ -3,8 +3,102 @@ from __future__ import annotations
 from datetime import timedelta
 
 from app.extensions import db
-from app.models import RentItem, Student, StudentItem, Seat
+from app.models import RentItem, RentPolicyVersion, Student, StudentItem, Seat
 from app.utils.time import utc_now
+
+
+def get_rent_hall_pass_grant_total_from_version(version: RentPolicyVersion) -> int:
+    """Sum hall_pass_count from the frozen manifest on a policy version."""
+    total = 0
+    for item in (version.frozen_items or []):
+        if item.get('rent_item_type') == 'hall_pass' and item.get('hall_pass_count'):
+            total += item['hall_pass_count']
+    return total
+
+
+def get_frozen_privilege_items(version: RentPolicyVersion) -> list[dict]:
+    """Return privilege-type items from the frozen manifest that are store-linked.
+
+    These are the per-period entitlements a student gets when rent is paid.
+    Privileges end at the cycle boundary (next payment required).
+    """
+    return [
+        item for item in (version.frozen_items or [])
+        if item.get('rent_item_type') == 'privilege'
+        and item.get('is_available_in_store')
+        and item.get('purchase_duration') != 'per_use'  # exclude legacy compat rows
+    ]
+
+
+def get_frozen_store_linked_items(version: RentPolicyVersion) -> list[dict]:
+    """Return all store-linked items from the frozen manifest (excludes hall passes).
+
+    Used by the student store display to mark items as rent-included or rent-per-use.
+    """
+    return [
+        item for item in (version.frozen_items or [])
+        if item.get('is_available_in_store')
+        and item.get('store_item_id')
+        and item.get('rent_item_type') != 'hall_pass'
+    ]
+
+
+def grant_rent_per_use_items_from_version(
+    *, seat, version: RentPolicyVersion, calculate_due_dates_fn, settings=None,
+) -> int:
+    """Store-owned mutation for rent-derived per-use entitlements.
+
+    Reads from the immutable frozen_items on the policy version, not from
+    live RentItem rows.  ``settings`` is only used for ``first_rent_due_date``
+    when computing expiry; if omitted the expiry is left open.
+    """
+    per_use_items = [
+        item for item in (version.frozen_items or [])
+        if item.get('rent_item_type') == 'per_use' and item.get('store_item_id')
+    ]
+
+    granted = 0
+    now = utc_now()
+
+    for pu_item in per_use_items:
+        store_item_id = pu_item['store_item_id']
+        use_limit = pu_item.get('use_limit')
+
+        existing = StudentItem.query.filter(
+            StudentItem.seat_id == seat.id,
+            StudentItem.store_item_id == store_item_id,
+            db.or_(StudentItem.uses_remaining > 0, StudentItem.uses_remaining == -1),
+            db.or_(StudentItem.expiry_date.is_(None), StudentItem.expiry_date > now),
+        ).first()
+
+        if existing:
+            existing.uses_remaining = use_limit if use_limit else -1
+            continue
+
+        expiry_date = None
+        if settings and getattr(settings, 'first_rent_due_date', None):
+            _, next_due = calculate_due_dates_fn(settings, now)
+            if next_due:
+                expiry_date = next_due
+
+        db.session.add(StudentItem(
+            student_id=seat.student_id,
+            seat_id=seat.id,
+            class_id=seat.class_id,
+            store_item_id=store_item_id,
+            purchase_date=now,
+            expiry_date=expiry_date,
+            status='purchased',
+            is_from_bundle=False,
+            quantity_purchased=1,
+            uses_remaining=use_limit if use_limit else -1,
+        ))
+        granted += 1
+
+    return granted
+
+
+# --- Legacy functions (to be removed once all callers migrate to version-based) ---
 
 
 def get_rent_hall_pass_grant_total(rent_setting_id: int) -> int:

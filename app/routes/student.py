@@ -2322,41 +2322,35 @@ def shop():
                     include_waivers=False,
                 )
 
-            rent_store_items = RentItem.query.filter(
-                RentItem.rent_setting_id == rent_settings.id,
-                RentItem.is_available_in_store == True,
-                RentItem.store_item_id.isnot(None),
-                RentItem.rent_item_type != 'hall_pass',
-            ).all()
+            # Read store-linked rent items from the active policy version's frozen
+            # manifest so mid-cycle teacher edits don't change what students see.
+            from app.services.obligations_service import resolve_active_rent_policy_version
+            from app.services.store_service import get_frozen_store_linked_items, get_frozen_privilege_items
+            active_version = resolve_active_rent_policy_version(class_id)
             rent_item_types_by_store_id = {}
-            for rent_item in rent_store_items:
-                if not rent_item.store_item_id:
-                    continue
-                effective_type = rent_item.rent_item_type
-                # Backward compatibility: legacy rows can still carry privilege as the
-                # default type while semantically behaving per-use via duration.
-                if effective_type == 'privilege' and rent_item.purchase_duration == 'per_use':
-                    effective_type = 'per_use'
-                rent_item_types_by_store_id.setdefault(rent_item.store_item_id, set()).add(effective_type)
-            per_use_limit_by_store_id = {
-                rent_item.store_item_id: (rent_item.use_limit if rent_item.use_limit else -1)
-                for rent_item in rent_store_items
-                if rent_item.store_item_id and (
-                    rent_item.rent_item_type == 'per_use' or
-                    (rent_item.rent_item_type == 'privilege' and rent_item.purchase_duration == 'per_use')
-                )
-            }
+            per_use_limit_by_store_id = {}
+            per_period_rent_item_ids = set()
 
-            # Get privilege-type per-period rent items (only these are included/disabled).
-            per_period_items = RentItem.query.filter_by(
-                rent_setting_id=rent_settings.id,
-                rent_item_type='privilege',
-                is_available_in_store=True
-            ).all()
-            per_period_items = [item for item in per_period_items if item.purchase_duration != 'per_use']
+            if active_version:
+                frozen_store_items = get_frozen_store_linked_items(active_version)
+                for frozen_item in frozen_store_items:
+                    sid = frozen_item['store_item_id']
+                    effective_type = frozen_item.get('rent_item_type', 'privilege')
+                    # Backward compatibility: legacy rows can still carry privilege as the
+                    # default type while semantically behaving per-use via duration.
+                    if effective_type == 'privilege' and frozen_item.get('purchase_duration') == 'per_use':
+                        effective_type = 'per_use'
+                    rent_item_types_by_store_id.setdefault(sid, set()).add(effective_type)
 
-            # Collect store item IDs (only privilege items get the "Included in your rent!" badge)
-            per_period_rent_item_ids = {item.store_item_id for item in per_period_items if item.store_item_id}
+                    if effective_type == 'per_use':
+                        use_limit = frozen_item.get('use_limit')
+                        per_use_limit_by_store_id[sid] = use_limit if use_limit else -1
+
+                # Privilege items get the "Included in your rent!" badge
+                frozen_privileges = get_frozen_privilege_items(active_version)
+                per_period_rent_item_ids = {
+                    fp['store_item_id'] for fp in frozen_privileges if fp.get('store_item_id')
+                }
 
     # Build free uses remaining map for rent-linked per-use items
     rent_free_uses = {}  # {store_item_id: uses_remaining or -1 for unlimited}
@@ -2720,57 +2714,36 @@ def _calculate_rent_timeline(settings, now):
     }
 
 
-def _total_paid_by_grace(payments, grace_end_date):
-    """Sum payments made on or before the grace end date."""
-    if not payments or not grace_end_date:
+def _total_paid_by_grace(assessments, grace_end_date):
+    """Sum satisfaction amounts for assessments satisfied on or before the grace end date."""
+    if not assessments or not grace_end_date:
         return Decimal('0.00')
     grace_end_date = ensure_utc(grace_end_date)
     return sum(
-        (p.amount_paid for p in payments
-         if p.payment_date and ensure_utc(p.payment_date) <= grace_end_date),
+        (a.satisfaction.amount_paid for a in assessments
+         if a.satisfaction and a.satisfaction.satisfied_at
+         and ensure_utc(a.satisfaction.satisfied_at) <= grace_end_date),
         Decimal('0.00')
     )
 
 
 def _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date):
-    """Return the first valid payer's base rent for a join_code coverage cycle."""
+    """Return the policy-defined rent amount for a class coverage cycle."""
+    from app.services.obligations_service import get_cycle_rent_amount
+
     if not join_code or not coverage_due_date:
         return None
     class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
     if not class_row:
         return None
-
-    cycle_payments = RentPayment.query.filter(
-        RentPayment.class_id == class_row.class_id,
-        RentPayment.coverage_month == coverage_due_date.month,
-        RentPayment.coverage_year == coverage_due_date.year,
-    ).order_by(RentPayment.payment_date.asc()).all()
-    if not cycle_payments:
-        return None
-
-    for payment in cycle_payments:
-        txn = Transaction.query.filter(
-            Transaction.seat_id == payment.seat_id,
-            Transaction.class_id == payment.class_id,
-            Transaction.type == 'Rent Payment',
-            Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
-            Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
-            Transaction.amount == -payment.amount_paid,
-        ).first()
-        if txn is None or txn.is_void:
-            continue
-
-        late_fee = (payment.late_fee_charged or Decimal('0.00'))
-        base_amount = (payment.amount_paid or Decimal('0.00')) - late_fee
-        if base_amount > Decimal('0.00'):
-            return base_amount
-
-    return None
+    return get_cycle_rent_amount(
+        class_row.class_id, coverage_due_date.month, coverage_due_date.year,
+    )
 
 
 def _get_effective_rent_amount_for_coverage_period(
     settings,
-    payments,
+    assessments,
     coverage_due_date,
     join_code=None,
     locked_amount=None,
@@ -2789,16 +2762,21 @@ def _get_effective_rent_amount_for_coverage_period(
     if locked_amount is not None:
         return locked_amount
 
-    if payments:
+    if assessments:
         updated_at = getattr(settings, 'updated_at', None)
         if updated_at:
-            payment_dates = [ensure_utc(p.payment_date) for p in payments if p.payment_date]
-            if payment_dates:
-                earliest = min(payment_dates)
+            satisfied_dates = [
+                ensure_utc(a.satisfaction.satisfied_at)
+                for a in assessments
+                if a.satisfaction and a.satisfaction.satisfied_at
+            ]
+            if satisfied_dates:
+                earliest = min(satisfied_dates)
                 if ensure_utc(updated_at) > earliest:
                     base_paid = sum(
-                        (p.amount_paid or Decimal('0.00')) - (p.late_fee_charged or Decimal('0.00'))
-                        for p in payments
+                        (a.satisfaction.amount_paid or Decimal('0.00'))
+                        - (a.satisfaction.late_fee_charged or Decimal('0.00'))
+                        for a in assessments if a.satisfaction
                     )
                     if base_paid > Decimal('0.00'):
                         return base_paid
@@ -2877,7 +2855,16 @@ def _build_rent_coverage_context(
 
     Callers can pass this to _is_student_coverage_period_paid(...) to avoid
     repeating equivalent queries for every student in the same request.
+
+    Returns canonical ``ObligationAssessment`` rows grouped by seat.  Each
+    assessment's ``.satisfaction`` holds the payment details (amount_paid,
+    satisfied_at, was_late, late_fee_charged, transaction_id).
     """
+    from app.services.obligations_service import (
+        get_paid_rent_assessments_for_cycle,
+        get_waived_seat_ids_for_cycle,
+    )
+
     if not settings or not class_id or not coverage_due_date or not seat_ids:
         return None
 
@@ -2891,69 +2878,27 @@ def _build_rent_coverage_context(
         .filter(Seat.class_id == class_id, Seat.id.in_(seat_ids))
         .all()
     )
-    student_id_by_seat = {seat_id: student_id for seat_id, student_id in seat_rows}
+    student_id_by_seat = {sid: stid for sid, stid in seat_rows}
     valid_seat_ids = list(student_id_by_seat.keys())
     if not valid_seat_ids:
         return None
 
     waived_seat_ids = set()
     if include_waivers:
-        waiver_rows = (
-            RentWaiver.query
-            .filter(
-                RentWaiver.class_id == class_id,
-                RentWaiver.seat_id.in_(valid_seat_ids),
-                RentWaiver.waiver_start_date <= coverage_due_date,
-                RentWaiver.waiver_end_date >= coverage_due_date,
-            )
-            .all()
+        waived_seat_ids = get_waived_seat_ids_for_cycle(
+            class_id, coverage_due_date, valid_seat_ids,
         )
-        waived_seat_ids = {row.seat_id for row in waiver_rows if row.seat_id}
 
-    coverage_start, coverage_end = _get_rent_coverage_window(settings, coverage_due_date)
-    payments_query = RentPayment.query.filter(
-        RentPayment.class_id == class_id,
-        RentPayment.seat_id.in_(valid_seat_ids),
-        RentPayment.coverage_month == coverage_due_date.month,
-        RentPayment.coverage_year == coverage_due_date.year,
+    assessments = get_paid_rent_assessments_for_cycle(
+        class_id,
+        coverage_due_date.month,
+        coverage_due_date.year,
+        seat_ids=valid_seat_ids,
     )
-    if coverage_start and coverage_end:
-        payments_query = payments_query.filter(
-            RentPayment.payment_date >= coverage_start,
-            RentPayment.payment_date < coverage_end,
-        )
-    coverage_payments = payments_query.all()
 
-    payments_by_seat = defaultdict(list)
-    for payment in coverage_payments:
-        if payment.seat_id:
-            payments_by_seat[payment.seat_id].append(payment)
-
-    # Preload candidate rent transactions once and reuse the same matching rules.
-    payment_dates = [p.payment_date for p in coverage_payments if p.payment_date]
-    payment_amounts = {-(p.amount_paid) for p in coverage_payments if p.amount_paid is not None}
-    txns_by_seat = defaultdict(list)
-    if payment_dates and payment_amounts:
-        window_start = min(payment_dates) - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS)
-        window_end = max(payment_dates) + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS)
-        candidate_txns = Transaction.query.filter(
-            Transaction.seat_id.in_(list(student_id_by_seat.keys())),
-            Transaction.class_id == class_id,
-            Transaction.type == 'Rent Payment',
-            Transaction.timestamp >= window_start,
-            Transaction.timestamp <= window_end,
-            Transaction.amount.in_(payment_amounts),
-        ).all()
-        for txn in candidate_txns:
-            if txn.seat_id:
-                txns_by_seat[txn.seat_id].append(txn)
-
-    valid_payments_by_seat = {}
-    for seat_id, payments in payments_by_seat.items():
-        valid_payments_by_seat[seat_id] = _match_valid_rent_payments(
-            payments,
-            txns_by_seat.get(seat_id, []),
-        )
+    assessments_by_seat: dict[int, list] = defaultdict(list)
+    for a in assessments:
+        assessments_by_seat[a.seat_id].append(a)
 
     return {
         "class_id": class_id,
@@ -2961,14 +2906,14 @@ def _build_rent_coverage_context(
         "join_code": join_code,
         "student_id_by_seat": student_id_by_seat,
         "waived_seat_ids": waived_seat_ids,
-        "valid_payments_by_seat": valid_payments_by_seat,
+        "valid_payments_by_seat": dict(assessments_by_seat),
         "locked_rent_amount": _get_locked_rent_amount_for_join_code_cycle(join_code, coverage_due_date),
     }
 
 
 def _is_coverage_period_paid(
     settings,
-    valid_payments,
+    assessments,
     coverage_due_date,
     include_late_fee=True,
     join_code=None,
@@ -2976,6 +2921,9 @@ def _is_coverage_period_paid(
 ):
     """
     Return True when a coverage period is fully paid.
+
+    ``assessments`` is a list of canonical ``ObligationAssessment`` rows
+    whose ``satisfaction`` relationship holds the payment details.
 
     When include_late_fee is True (default), late fee is required when rent
     was not fully paid by grace. When False, this checks base-rent coverage
@@ -2985,19 +2933,22 @@ def _is_coverage_period_paid(
         return False
     effective_rent_amount = _get_effective_rent_amount_for_coverage_period(
         settings,
-        valid_payments,
+        assessments,
         coverage_due_date,
         join_code=join_code,
         locked_amount=locked_amount,
     )
     if effective_rent_amount <= Decimal('0.00'):
         return True
-    if not valid_payments:
+    if not assessments:
         return False
 
-    total_paid = sum((p.amount_paid for p in valid_payments), Decimal('0.00'))
+    total_paid = sum(
+        (a.satisfaction.amount_paid for a in assessments if a.satisfaction),
+        Decimal('0.00'),
+    )
     grace_for_coverage = coverage_due_date + timedelta(days=settings.grace_period_days)
-    paid_by_grace = _total_paid_by_grace(valid_payments, grace_for_coverage)
+    paid_by_grace = _total_paid_by_grace(assessments, grace_for_coverage)
 
     required_total = effective_rent_amount
     if include_late_fee and paid_by_grace < effective_rent_amount:
@@ -3007,48 +2958,17 @@ def _is_coverage_period_paid(
 
 
 def _get_active_rent_waiver_v2(seat_id, class_id, coverage_due_date):
-    """Return the waiver row covering the given coverage period, if any."""
-    from app.models import RentWaiver
+    """Return the canonical waiver assessment covering the given coverage period, if any."""
+    from app.services.obligations_service import get_rent_waiver_for_seat
 
     if not seat_id or not class_id or not coverage_due_date:
         return None
-    query = RentWaiver.query.filter(
-        RentWaiver.seat_id == seat_id,
-        RentWaiver.class_id == class_id,
-        RentWaiver.waiver_start_date <= coverage_due_date,
-        RentWaiver.waiver_end_date >= coverage_due_date,
-    )
-    return query.order_by(RentWaiver.created_at.desc(), RentWaiver.id.desc()).first()
+    return get_rent_waiver_for_seat(seat_id, class_id, coverage_due_date)
 
 
 def _has_active_rent_waiver_v2(seat_id, class_id, coverage_due_date):
     """Return True when a waiver covers the given coverage period."""
     return _get_active_rent_waiver_v2(seat_id, class_id, coverage_due_date) is not None
-
-
-def _has_active_rent_waiver(student_id, join_code, coverage_due_date):
-    """Legacy compatibility wrapper for waiver checks keyed by student + join_code."""
-    if not student_id or not join_code or not coverage_due_date:
-        return False
-
-    legacy_waiver = RentWaiver.query.filter(
-        RentWaiver.student_id == student_id,
-        RentWaiver.join_code == join_code,
-        RentWaiver.waiver_start_date <= coverage_due_date,
-        RentWaiver.waiver_end_date >= coverage_due_date,
-    ).order_by(RentWaiver.created_at.desc(), RentWaiver.id.desc()).first()
-    if legacy_waiver:
-        return True
-
-    class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
-    if not class_row or not class_row.class_id:
-        return False
-
-    seat_id = get_seat_id_for_class(student_id, class_row.class_id)
-    if not seat_id:
-        return False
-
-    return _has_active_rent_waiver_v2(seat_id, class_row.class_id, coverage_due_date)
 
 
 def _iter_rent_waiver_coverage_dates(settings, waiver):
@@ -3172,34 +3092,18 @@ def _is_student_coverage_period_paid(
                 return True
 
     if context_applies:
-        valid_payments = (coverage_context.get("valid_payments_by_seat") or {}).get(seat_id, [])
+        assessments = (coverage_context.get("valid_payments_by_seat") or {}).get(seat_id, [])
     else:
-        coverage_start, coverage_end = _get_rent_coverage_window(settings, coverage_due_date)
-        coverage_payments_query = RentPayment.query.filter(
-            RentPayment.coverage_month == coverage_due_date.month,
-            RentPayment.coverage_year == coverage_due_date.year,
-        )
-        if coverage_start and coverage_end:
-            coverage_payments_query = coverage_payments_query.filter(
-                RentPayment.payment_date >= coverage_start,
-                RentPayment.payment_date < coverage_end,
-            )
-        coverage_payments_query = coverage_payments_query.filter(
-            RentPayment.seat_id == seat_id,
-            RentPayment.class_id == class_id,
-        )
-        coverage_payments = coverage_payments_query.all()
-
-        seat_ids = [seat_id] if seat_id else []
-        valid_payments = _filter_valid_rent_payments(
-            coverage_payments,
-            student_id,
-            join_code,
-            seat_ids=seat_ids,
+        from app.services.obligations_service import get_paid_rent_assessments_for_cycle
+        assessments = get_paid_rent_assessments_for_cycle(
+            class_id,
+            coverage_due_date.month,
+            coverage_due_date.year,
+            seat_ids=[seat_id],
         )
     return _is_coverage_period_paid(
         settings,
-        valid_payments,
+        assessments,
         coverage_due_date,
         include_late_fee=include_late_fee,
         join_code=join_code,
@@ -3258,7 +3162,10 @@ def _ensure_rent_hall_pass_top_off(student, context, settings=None, now=None):
         return 0, 0, False
 
     join_code = get_display_join_code(context.class_id)
-    current_block = ('' or '').strip().upper()
+    seat = get_current_seat()
+    if not seat and student and context:
+        seat = Seat.query.filter_by(student_id=student.id, class_id=context.class_id).first()
+    current_block = seat.block.strip().upper() if seat and seat.block else ""
     class_id = context.class_id
     if not class_id:
         from app.models import ClassEconomy
@@ -3321,7 +3228,7 @@ def rent():
 
     teacher_id = None
     join_code = get_display_join_code(context.class_id)
-    current_block = ('' or '').strip().upper()
+    current_block = seat.block.strip().upper() if seat and seat.block else ""
     settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
@@ -3501,6 +3408,7 @@ def rent():
     if reference_due_date:
         days_until_due = (reference_due_date - now).days
 
+    student_blocks = [current_block] if current_block else []
     return render_template('student_rent.html',
                           student=student,
                           settings=settings,
