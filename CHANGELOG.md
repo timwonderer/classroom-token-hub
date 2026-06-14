@@ -7,6 +7,10 @@ and this project follows semantic versioning principles.
 
 > **V1 is now retired.** Version 1.10.0 (released June 14, 2026) is the final Version 1 release. No further v1 patches or features will be developed. Active development continues on Version 2, which is a full architectural rebuild. See [README.md](README.md) for details.
 
+## [Unreleased]
+
+*Reserved for v2 pre-release tracking. No unreleased v1 changes.*
+
 ## [1.10.0] - 2026-06-14 — Version 1 Final Release
 
 ### Changed
