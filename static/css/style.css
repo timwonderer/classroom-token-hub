@@ -45,6 +45,15 @@ a:hover {
 }
 
 /* ─── Bootstrap Semantic Overrides (Role-Aware) ─── */
+:root {
+    --bs-primary-text-emphasis: color-mix(in srgb, var(--bs-primary) 60%, #000);
+    --bs-secondary-text-emphasis: color-mix(in srgb, var(--bs-secondary) 60%, #000);
+    --bs-success-text-emphasis: color-mix(in srgb, var(--bs-success) 60%, #000);
+    --bs-info-text-emphasis: color-mix(in srgb, var(--bs-info) 75%, #000);
+    --bs-warning-text-emphasis: color-mix(in srgb, var(--bs-warning) 60%, #000);
+    --bs-danger-text-emphasis: color-mix(in srgb, var(--bs-danger) 60%, #000);
+}
+
 /* Backgrounds */
 .bg-primary {
     background-color: var(--primary) !important;
@@ -92,12 +101,12 @@ a:hover {
 }
 
 .text-secondary {
-    color: var(--secondary) !important;
+    color: color-mix(in srgb, var(--secondary) 60%, #000) !important;
 }
 
 /* Use for branding/accent text */
 .text-success {
-    color: var(--success) !important;
+    color: color-mix(in srgb, var(--success) 70%, #000) !important;
 }
 
 .text-danger {
@@ -105,11 +114,11 @@ a:hover {
 }
 
 .text-warning {
-    color: var(--warning) !important;
+    color: color-mix(in srgb, var(--warning) 60%, #000) !important;
 }
 
 .text-info {
-    color: var(--info) !important;
+    color: color-mix(in srgb, var(--info) 75%, #000) !important;
 }
 
 .text-muted {
@@ -127,6 +136,38 @@ a:hover {
 /* Keep interactive controls aligned to theme colors */
 .nav-tabs .nav-link {
     color: var(--primary);
+}
+
+/* ─── WCAG Contrast Overrides ─── */
+.alert-warning {
+    color: color-mix(in srgb, var(--warning) 60%, #000) !important;
+    background-color: var(--warning-subtle) !important;
+    border-color: color-mix(in srgb, var(--warning) 20%, transparent) !important;
+}
+
+.btn-outline-secondary {
+    color: var(--neutral-700) !important;
+    border-color: var(--neutral-400) !important;
+}
+
+.btn-outline-secondary:hover {
+    background-color: var(--neutral-200) !important;
+    color: var(--neutral-900) !important;
+}
+
+.btn-outline-info {
+    color: var(--info) !important;
+    border-color: var(--info) !important;
+}
+
+.btn-outline-info:hover {
+    background-color: var(--info) !important;
+    color: #fff !important;
+}
+
+/* Fix hardcoded text-white on bg-secondary (Gold in Teacher theme) */
+.bg-secondary.text-white {
+    color: var(--secondary-text) !important;
 }
 
 .nav-tabs .nav-link:hover {

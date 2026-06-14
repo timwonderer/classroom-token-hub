@@ -57,8 +57,8 @@
 
     /* Text - Role Agnostic */
     --text-primary: var(--neutral-800);
-    --text-secondary: var(--neutral-500);
-    --text-muted: var(--neutral-500);
+    --text-secondary: var(--neutral-600);
+    --text-muted: var(--neutral-600);
     --text-inverse: #ffffff;
 
     --advisor-green: #1a4d47;
@@ -85,8 +85,8 @@
     --success: #2e7d5b;
     --success-hover: #276a4d;
     --success-subtle: #e6f4ed;
-    --info: #3b7daa;
-    --info-hover: #336b92;
+    --info: #35719a;
+    --info-hover: #2e6285;
     --info-subtle: #e6f0f8;
     --warning: #c08c15;
     --warning-hover: #a87912;
@@ -126,8 +126,8 @@ body.student-shell {
     --success: #3a7d5c;
     --success-hover: #316b4f;
     --success-subtle: #e6f4ed;
-    --info: #4a7fb3;
-    --info-hover: #3f6d99;
+    --info: #356a9e;
+    --info-hover: #2e5d8b;
     --info-subtle: #e8f0f8;
     --warning: #b58a1a;
     --warning-hover: #9e7816;
@@ -174,8 +174,8 @@ body.sysadmin-shell {
     --success: #2e7d5b;
     --success-hover: #276a4d;
     --success-subtle: #e6f4ed;
-    --info: #3b7daa;
-    --info-hover: #336b92;
+    --info: #35719a;
+    --info-hover: #2e6285;
     --info-subtle: #e6f0f8;
     --warning: #c08c15;
     --warning-hover: #a87912;
