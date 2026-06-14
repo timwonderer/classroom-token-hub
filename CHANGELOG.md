@@ -5,8 +5,9 @@ All notable changes to the Classroom Token Hub project will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows semantic versioning principles.
 
+> **V1 is now retired.** Version 1.10.0 (released June 14, 2026) is the final Version 1 release. No further v1 patches or features will be developed. Active development continues on Version 2, which is a full architectural rebuild. See [README.md](README.md) for details.
 
-## [Unreleased]
+## [1.10.0] - 2026-06-14 — Version 1 Final Release
 
 ### Changed
 - Bumped all OpenTelemetry packages in lockstep: `opentelemetry-api/sdk/exporter-otlp-proto-http` 1.41.0 → 1.41.1; `opentelemetry-instrumentation-flask/requests/sqlalchemy` 0.62b0 → 0.62b1. Explicitly pinned `opentelemetry-semantic-conventions==0.62b1` (was previously unpinned).

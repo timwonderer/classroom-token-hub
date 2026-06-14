@@ -1,8 +1,8 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-04-14
-**Current Version:** 1.9.x (active maintenance)
-**Target:** 1.10.0 Future Enhancements
+**Last Updated:** 2026-06-14
+**Current Version:** 1.10.0 — Version 1 Final Release (End-of-Life)
+**Status:** V1 retired. No further v1 development planned. Active work is on Version 2.
 
 ---
 
@@ -34,9 +34,9 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 
 ---
 
-## In Progress (Unreleased — targeting 1.10.0)
+## Shipped in v1.10.0 (Final Release — June 14, 2026)
 
-The following have shipped to `main` but are not yet tagged in a release:
+The following shipped to `main` since v1.9.0 and are included in the final v1.10.0 tag:
 
 - **Runtime Invariant Health Check System** (V2-INV-001) — `GET /health/invariants` endpoint validates six economic and ledger invariants continuously. `transfer_correlation_id` added to `transaction` to link transfer pairs. See `docs/INV-CORE-000_Core_Invariants.md`.
 - **Student DOB Privacy Remediation (Phase 1)** — DOB removed from usernames and logs; one-time migration flow at `/migrate-username`; `username_migrated` boolean on `Student`; `dob_sum` and `last_name_hash_by_part` nulled post-migration.
@@ -56,11 +56,11 @@ The following have shipped to `main` but are not yet tagged in a release:
 
 ## Recent Releases
 
-### 🔄 Version 1.9.x - Active Maintenance (post 2026-03-04)
+### ✅ Version 1.10.0 — Final Release (June 14, 2026)
 
-Unreleased patches shipping on `main` since v1.9.0. See [CHANGELOG.md — Unreleased](CHANGELOG.md) for full details.
+Final v1 release. All work that shipped since v1.9.0 is tagged here. See [CHANGELOG.md](CHANGELOG.md) for the complete entry.
 
-Key areas: runtime invariant health checks, student DOB privacy remediation, V1 rent stabilization, tiered insurance setup, economy policy mode and rebalancer, teacher PII deletion cascade, Gunicorn JSON logging.
+Key areas: runtime invariant health checks, student DOB privacy remediation, V1 rent stabilization, tiered insurance setup, economy policy mode and rebalancer, teacher PII deletion cascade, Gunicorn JSON logging, insurance recurring billing phases 2–4, v1 sunset transition gate.
 
 ### ✅ Version 1.9.0 - March 4, 2026
 
@@ -176,77 +176,26 @@ See [RELEASE_NOTES_v1.2.0.md](docs/LOGS/RELEASES/LOG-REL-007_Release_Notes_V1.2.
 
 ---
 
-## Development Priorities (v1.10)
+## V1 Retirement Notice
 
-### 🟠 HIGH PRIORITY
+Version 1 is **retired as of June 14, 2026**. The items below were open at time of retirement. They are deferred to v2 or recorded here for historical reference — no v1 work will proceed on them.
 
-#### 1. Multi-Teacher Hardening
-**Status:** In progress (sharing + scoped queries shipped)
+### Deferred to V2 (not v1 issues)
 
-**Remaining Tasks:**
-- [ ] Finalize migration to remove legacy `students.teacher_id` (deprecated in models)
-- [ ] Publish runbook for NOT NULL enforcement / teacher reassignment
-- [ ] Audit for direct `Student.query.get` outside scoped helpers → replace with `get_student_for_admin`
-- [ ] Add DB safeguard for ownership changes (define ON DELETE strategy)
+- **Multi-Teacher Hardening** — Legacy `students.teacher_id` removal, NOT NULL enforcement on `join_code` in ledger tables, and `student_teachers` constraint runbook. The v2 schema redesign addresses these at the foundation level.
+- **Shared-Student Test Coverage** — Payroll/attendance flows for multi-teacher students. v2 will re-test from scratch.
+- **Data Export Capabilities** — CSV exports for rosters, transactions, attendance, payroll, and store purchases.
+- **Enhanced Student Dashboard Insights** — Balance history graphs and projected earnings breakdowns.
 
-**Context:** The `student_teachers` link table is the authoritative ownership model. Join codes partition class economies.
+### Known Issues at Retirement (P2 and below)
 
-#### 2. Shared-Student Test Coverage
-**Status:** Pending
+- SQLAlchemy `Query.get` usage surfaces `LegacyAPIWarning` during tests. Not addressed in v1; v2 uses the new ORM session API throughout.
 
-**Tasks:**
-- [ ] Add pytest coverage for payroll flows with students linked to multiple teachers
-- [ ] Add pytest coverage for attendance flows with shared students
-- [ ] Add DB-level uniqueness regression test for `student_teachers` constraint
+### Items Explicitly Closed at V1 Retirement
 
-#### 3. Operational Safety Documentation
-**Status:** Pending
-
-**Tasks:**
-- [ ] Create runbook for schema changes affecting tenancy or payroll
-- [ ] Document pre/post checks for migrations with maintenance mode
-- [ ] Establish migration validation checklist
-
-#### 4. Migration Compliance Re-Audit
-**Status:** Pending
-
-**Tasks:**
-- [ ] Re-audit migrations for idempotency compliance
-- [ ] Update `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-009_Migration_Compliance_Review.md` with current status and findings
-
-### 🟡 MEDIUM PRIORITY
-
-#### 1. Admin Experience Polish
-- [ ] System-admin filters to view students by primary/shared teachers
-- [ ] Clearer UI messaging when acting on shared students
-- [ ] Payroll scope hints in transaction history
-
-#### 2. Data Export Capabilities
-- [ ] CSV exports for rosters
-- [ ] CSV exports for transactions
-- [ ] CSV exports for attendance history
-- [ ] CSV exports for payroll history
-- [ ] CSV exports for store purchases
-
-#### 3. Mobile & Accessibility
-- [x] Responsive navigation for admin portal (completed v1.2.0)
-- [x] Responsive navigation for student portal (completed v1.2.0)
-- [x] Larger touch targets for tap in/out (completed v1.2.0)
-- [x] Larger touch targets for store interactions (completed v1.2.0)
-- [x] ARIA labels for key buttons and forms (completed v1.2.0)
-- [x] Accessibility improvements following WCAG 2.1 AA guidelines (completed v1.2.0)
-- [x] PWA support with offline capabilities (completed v1.2.0)
-- [x] Mobile-optimized templates (completed v1.2.0)
-
-### 🟢 LOWER PRIORITY
-
-- [ ] Enhanced student dashboard insights (balance history, projected earnings)
-- [ ] Performance profiling for large rosters (pagination partial; continue optimization)
-- [ ] Optional email notifications for teacher/system-admin events
-
-## Known Issues (P2 and below)
-
-- SQLAlchemy `Query.get` usage still surfaces `LegacyAPIWarning` during tests. Refactor to `Session.get`/scoped helper calls once compatibility with existing tenancy helpers is revalidated.
+- **Custom Condition Builder** — Deferred at v1.7; will not be added to v1. Candidate for v2 if demand warrants.
+- **Jobs Feature** — Removed from v1 during cleanup; git history preserved at commit `0800640`. Not returning to v1.
+- **Operational Safety Runbooks** — Partial; v1 migration runbooks remain in `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/`. No further v1 updates planned.
 
 ---
 
@@ -684,25 +633,28 @@ Version 1.0 has been successfully released with the following criteria met:
 
 ---
 
-**Next Immediate Actions (v1.10):**
+**V1 is complete. No further actions are planned for v1.**
 
-1. Complete multi-teacher hardening (remove `students.teacher_id` dependency)
-2. Add shared-student test coverage for payroll and attendance
-3. Publish migration runbooks and maintenance-mode pre/post checks
-4. Complete migration compliance re-audit and publish runbook updates
-5. Continue admin experience polish and export capabilities
+For v2 architectural direction, see the v2 development branch and the v2 design documents in `docs/ARCHITECTURE/`.
 
-**Codex/v2.0 Follow-Up:**
+Key v2 follow-up items carried forward from v1 design learnings:
 - Rebuild attendance tap-in/tap-out enforcement around explicit session ownership and stronger boundary semantics: persist the effective attendance timezone with the session/class, close cross-day sessions deterministically, and unify manual tap, dashboard status refresh, hall-pass transitions, and scheduled auto-tap-out behind one authoritative state machine so cap enforcement and day-boundary enforcement cannot drift apart.
+- Ground-up join-code-centric schema (no legacy `teacher_id` on students from day one).
+- DOB-free identity verification by design.
 
-**Recent Releases:**
-- **v1.9.x** (2026-03-04+) - Active maintenance; see CHANGELOG [Unreleased]
+**V1 Release History:**
+- **v1.10.0** (2026-06-14) - **Final Release — V1 Retired**
 - **v1.9.0** (2026-03-04) - Docs Taxonomy Consolidation and Navigation Integrity
 - **v1.8.0** (2026-02-09) - Rent Item Types, Coverage Tracking, Stability Fixes
 - **v1.7.0** (2026-01-09) - Analytics, Rent Itemization, Mobile Navigation
 - **v1.6.0** (2026-01-01) - Repository Organization
 - **v1.5.0** (2025-12-29) - Issue Resolution System
+- **v1.4.0** (2025-12-27) - Announcement System, UI/UX Redesign
+- **v1.3.0** (2025-12-25) - Passkey Authentication, Encrypted TOTP
+- **v1.2.0** (2025-12-18) - PWA, Mobile-First UI, Accessibility
+- **v1.1.0** (2025-12-13) - Analytics & Insights
+- **v1.0.0** (2024-11-29) - First Stable Release
 
 ---
-**Last Updated:** 2026-04-14
+**Last Updated:** 2026-06-14
 **Maintained by:** Project maintainers and contributors
