@@ -20,7 +20,7 @@ This model applies system-wide to database schema design, session management, ro
 
 ## III. Authority Level
 
-Constitutional (Tier 1). This protocol derives from `INV-CORE-000` and `INV-CORE-001` and is subordinate to them.
+Constitutional (Tier 1) within `INV-ARC`. Derived from `INV-CORE-000` Section III.4, `Principal and Actor Authority`, and governed within the hierarchy described by `INV-CORE-001`. This protocol is subordinate to foundational invariants.
 
 ---
 

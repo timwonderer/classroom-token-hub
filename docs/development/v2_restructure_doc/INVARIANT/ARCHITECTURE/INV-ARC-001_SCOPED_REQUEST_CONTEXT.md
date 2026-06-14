@@ -14,11 +14,12 @@ Applies to all runtime actions that evaluate capability or execute domain comman
 
 ## III. Authority Level
 
-Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-000`.
+Foundational within `INV-ARC`. Derived from `INV-CORE-000` Section III.1, `` `class_id` Centric Isolation``, and Section III.4, `Principal and Actor Authority`, and governed within the hierarchy described by `INV-CORE-001`.
 
 ## IV. Dependencies
 
-- `INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 - `INV-ARC-000_EXECUTION_MODEL.md`
 
 ## V. Core Rule

@@ -38,7 +38,7 @@ This domain does not own:
 - `INV-CORE-000_CORE_INVARIANTS.md`
 - `DOM-CORE-000_DOMAIN_FOUNDATION.md`
 - `DOM-LED-001_LEDGER_DOMAIN.md` (resolution actions may reference transactions; Ledger owns those rows)
-- `DOM-ANA-001_Analytics_Domain.md` (correlation packs read from observability tables at submission time)
+- `DOM-ITR-001_INTERPRETATION_DOMAIN.md` (correlation packs read from observability tables at submission time)
 
 ## IV. Schema Authority Declaration
 

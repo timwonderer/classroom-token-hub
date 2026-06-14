@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-CORE-000 | 1.0 | 2026-04-23 | N/A | Normative |
+| FEAT-CORE-000 | 1.0 | 2026-04-23 | N/A | Constitutional. Subordinate to `INV-CORE-000`, `INV-CORE-001`, and `INV-ARC-006`. |
 
 ---
 
@@ -276,3 +276,11 @@ To ensure compliance, the implementation SHOULD utilize:
 * `DOM-*` defines domain rules and data ownership
 * `FEAT-*` defines concrete execution units governed by this directive
 * `MAP-*` provides non-normative mappings and guidance
+
+---
+
+## XII. Dependencies
+
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md`

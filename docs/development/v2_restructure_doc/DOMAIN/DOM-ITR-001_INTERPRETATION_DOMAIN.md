@@ -4,6 +4,17 @@
 |------------------|---------|----------------|------------|-----------------|
 | DOM-ITR-001      | 1.1     | 2026-04-22     | 1.0        | Normative       |
 
+## I-A. Authority Level and Dependencies
+
+Normative. Subordinate to `INV-CORE-000` and `INV-ARC-009`.
+
+### Dependencies
+
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-009_DOMAIN_AUTHORITY_FOR_STATE.md`
+
+---
+
 ## I. Purpose
 
 The Interpretation Domain is a read-only meaning layer over authoritative system truth.

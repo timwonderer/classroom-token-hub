@@ -25,7 +25,7 @@ It governs:
 
 ## III. Authority Level
 
-Constitutional. This protocol derives from `INV-CORE-000` and `INV-CORE-001` and standardizes repository-wide testing expectations. It is subordinate to foundational invariants and may not weaken them.
+Constitutional within `INV-ARC`. Derived from `INV-CORE-000` Section III.7, `No Unnecessary Barriers to Supported Use`, and governed within the hierarchy described by `INV-CORE-001`. It standardizes repository-wide testing expectations and is subordinate to foundational invariants and may not weaken them.
 
 ## IV. Dependencies
 

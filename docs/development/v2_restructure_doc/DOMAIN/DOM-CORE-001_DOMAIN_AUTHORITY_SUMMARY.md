@@ -6,6 +6,17 @@
 
 ---
 
+## I-A. Authority Level
+
+Foundational. Subordinate to `INV-CORE-000` and `INV-CORE-001`.
+
+## I-B. Dependencies
+
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
+
+---
+
 ## I. Purpose
 
 This document serves as the central "Restructuring Map" for the V2 Domain Authority Model. It provides a high-level technical summary of all codified domains, ensuring that future implementation (Build Phase) adheres to the established Domain Law.

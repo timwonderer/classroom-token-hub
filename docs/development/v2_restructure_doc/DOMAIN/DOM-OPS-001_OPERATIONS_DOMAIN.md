@@ -4,6 +4,17 @@
 |------------------|---------|----------------|------------|-----------------|
 | DOM-OPS-001      | 2.2     | 2026-05-21     | 2.1        | Normative       |
 
+## 0. Authority Level and Dependencies
+
+Normative. Subordinate to `INV-CORE-000` and `INV-ARC-009`.
+
+### Dependencies
+
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-009_DOMAIN_AUTHORITY_FOR_STATE.md`
+
+---
+
 ## 1. Domain Authority
 
 The Operations domain is the single authority over the **Operational Truth** of the system. It governs how the system observes itself, records its behavior, and communicates its status to external actors.

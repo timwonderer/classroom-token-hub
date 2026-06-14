@@ -84,3 +84,10 @@ The `DOM-OPS` audit log MUST contain:
 * `roster_seat_id`
 * `idempotency_key`
 * `outcome`: (NEW_USER_CLAIMED | EXISTING_USER_LINKED | FAILED)
+
+---
+
+## VII. Dependencies
+
+- `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-IDEN-001_IDENTITY_CLASS_BINDING_DOMAIN.md`

@@ -71,3 +71,12 @@ The `DOM-OPS` audit log MUST contain:
     * Total students paid.
     * Total tokens distributed.
 * `outcome`: (SUCCESS | PARTIAL_FAILURE | NO_EARNINGS)
+
+---
+
+## VI. Dependencies
+
+- `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-ATT-001_ATTENDANCE_DOMAIN.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-LED-001_LEDGER_DOMAIN.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-CLASS-001_CLASS_CONFIGURATION_DOMAIN.md`

@@ -22,11 +22,12 @@ Protected tables include:
 
 ## III. Authority Level
 
-Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-006`.
+Foundational within `INV-ARC`. Derived from `INV-CORE-000` Section III.3, `Deterministic and Traceable Financial Logic`, and governed within the hierarchy described by `INV-CORE-001`.
 
 ## IV. Dependencies
 
-- `INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 - `INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md`
 - `INV-ARC-007_GET_MUST_BE_PURE.md`
 - `DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md`

@@ -31,6 +31,14 @@ This document applies to all runtime tables supporting:
 
 ## III. Authority
 
+Foundational. Subordinate to `INV-CORE-000`, `INV-CORE-001`, and `DOM-CORE-000`.
+
+### Dependencies
+
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-000_DOMAIN_FOUNDATION.md`
+
 This document is the authoritative definition of the V2 runtime schema.
 
 - The runtime schema **consists exclusively of the tables defined in this document**.

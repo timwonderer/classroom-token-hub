@@ -72,3 +72,10 @@ The `DOM-OPS` audit log MUST contain:
 * `from_account` / `to_account`
 * `amount`
 * `new_balance_snapshot` (Post-mutation)
+
+---
+
+## VII. Dependencies
+
+- `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-LED-001_LEDGER_DOMAIN.md`

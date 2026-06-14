@@ -14,10 +14,12 @@ Applies to all request or actor context switching.
 
 ## III. Authority Level
 
-Foundational within `INV-ARC`. Derived from `INV-CORE-001` and `INV-ARC-000`.
+Foundational within `INV-ARC`. Derived from `INV-CORE-000` Section III.4, `Principal and Actor Authority`, and governed within the hierarchy described by `INV-CORE-001`.
 
 ## IV. Dependencies
 
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 - `INV-ARC-001_SCOPED_REQUEST_CONTEXT.md`
 
 ## V. Core Rule

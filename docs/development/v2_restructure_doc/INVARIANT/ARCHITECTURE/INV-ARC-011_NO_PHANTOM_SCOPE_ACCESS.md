@@ -14,10 +14,12 @@ Applies to all requests referencing tenant scope.
 
 ## III. Authority Level
 
-Foundational within `INV-ARC`. Derived from `INV-CORE-000` and `INV-ARC-000`.
+Foundational within `INV-ARC`. Derived from `INV-CORE-000` Section III.1, `` `class_id` Centric Isolation``, and Section III.5, `Definite Class Lifecycle`, and governed within the hierarchy described by `INV-CORE-001`.
 
 ## IV. Dependencies
 
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 - `INV-ARC-004_CROSS_TENANT_ISOLATION.md`
 
 ## V. Core Rule

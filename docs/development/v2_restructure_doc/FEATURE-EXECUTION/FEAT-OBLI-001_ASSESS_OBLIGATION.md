@@ -70,3 +70,10 @@ The `DOM-OPS` audit log MUST contain:
 * `obligation_type`
 * `amount`
 * `outcome`: (PAID | OVERDUE | PENDING)
+
+---
+
+## VI. Dependencies
+
+- `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
+- `docs/development/v2_restructure_doc/DOMAIN/DOM-OBL-001_OBLIGATIONS_DOMAIN.md`

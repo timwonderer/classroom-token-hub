@@ -41,17 +41,21 @@ All data access and mutation operations must be scoped to a single `class_id`. `
 ### 2. Minimal Use and Storage of PII
 
 #### Statement
-The system stores only the minimum personally identifiable information required for functional identity binding. Any stored PII must be one-way hashed unless recovery of original content is required (e.g. display name for greeting).
+The system stores only the minimum personally identifiable information required for functional identity binding and in-app display. PII must never exist as plaintext at rest. Every stored PII field must be either HMAC-hashed (for lookup/matching) or symmetrically encrypted (for recoverable display), and the storage form must be the minimum sufficient for the field's defined purpose.
 
 #### Constraints
-- No raw DOB storage of any kind
-- No full name storage beyond initial claim
-- PII must be nullified or deleted immediately after fulfillment of its identity-binding purpose unless explicitly required by invariant-defined functionality.
+- No raw DOB storage of any kind.
 - No contact method of any kind can be stored, processed, or requested.
+- PII stored for display (e.g. first name, last name in `identity_profiles`) must be encrypted at rest using the application's symmetric encryption facility. Plaintext must never be written to disk or database.
+- PII stored for lookup or matching (e.g. name-matching hashes on `seats` for roster claim) must be HMAC-hashed. The original value must not be recoverable from the stored form.
+- A single PII field may require both forms (hashed for lookup, encrypted for display) stored in separate columns. Both columns must be present where both purposes exist.
+- PII fields must not appear in logs, request context, execution traces, error messages, URLs, or query parameters.
+- PII must be deleted when the owning record is deleted. No PII may survive the deletion of its parent seat, user, or class.
 
 #### Prohibited Action
-- Retention of PII beyond its defined functional purpose.
-- PII stored as plaintext.
+- PII stored as plaintext at rest in any column, file, or cache.
+- Retention of PII beyond the lifetime of its owning identity record.
+- Storage of PII fields not required by an invariant-defined function (identity binding, display, or roster claim verification).
 
 ---
 ### 3. Deterministic and Traceable Financial Logic

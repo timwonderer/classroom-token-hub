@@ -29,6 +29,8 @@ Tier 1 — Constitutional. This document defines structural enforcement mechanis
 
 - `INV-CORE-000_CORE_INVARIANTS.md`
 - `DOM-CORE-000_DOMAIN_FOUNDATION.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md`
+- `docs/development/v2_restructure_doc/INVARIANT/ARCHITECTURE/INV-ARC-009_DOMAIN_AUTHORITY_FOR_STATE.md`
 
 ## V. Schema Authority Declaration
 
