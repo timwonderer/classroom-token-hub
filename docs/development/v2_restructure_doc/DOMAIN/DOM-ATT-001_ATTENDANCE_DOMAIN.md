@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-ATT-001 | 1.1 | 2026-04-22 | 1.0 | Normative |
+| DOM-ATT-001 | 2.0 | 2026-06-13 | 1.2 | Normative |
 
 ## I. Purpose
 
@@ -28,23 +28,31 @@ Tier 1 — Constitutional. This document defines structural enforcement mechanis
 
 - `INV-CORE-000_CORE_INVARIANTS.md`
 - `DOM-CORE-000_DOMAIN_FOUNDATION.md`
+- `DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION.md`
 
 ## V. Schema Authority Declaration
 
 This domain is the sole schema and mutation authority over:
 
-- `tap_events`
+- `attendance_sessions`
 - `hall_pass_logs`
 - `seat_attendance_state`
 
 It may read configuration supplied by the Class Configuration domain, but it does not
 own payroll, balances, or eligibility policy.
 
+### Legacy Table Note
+
+The runtime table `tap_events` is the v1 predecessor of `attendance_sessions`.
+`DOM-CORE-002` defines `attendance_sessions` as the canonical v2 table name.
+Until the physical rename migration is complete, implementation code may still
+reference `tap_events`, but this domain document uses the canonical name.
+
 ## VI. Owned Tables
 
-**Event Log Meta-Pattern:** The Attendance domain maintains an "Attendance Event Log" which is conceptually a union of typed event streams (e.g., `tap_events` and `hall_pass_logs`). Both are append-only and lifecycle-driven, establishing a complete immutable timeline of attendance facts.
+**Event Log Meta-Pattern:** The Attendance domain maintains an "Attendance Event Log" which is conceptually a union of typed event streams (e.g., `attendance_sessions` and `hall_pass_logs`). Both are append-only and lifecycle-driven, establishing a complete immutable timeline of attendance facts.
 
-### 1. `tap_events`
+### 1. `attendance_sessions`
 
 Append-style work-state events and attendance timeline truth. Each row records a
 single tap-in or tap-out event for a seat within a class.
@@ -58,36 +66,36 @@ record for one hall-pass event from request through return.
 
 Per-seat mutable attendance gate state. Records whether a seat is tap-enabled and
 whether the seat has been marked done-for-day. One row per seat. This is a
-denormalized gate-evaluation record; `tap_events` remains the authoritative timeline.
+denormalized gate-evaluation record; `attendance_sessions` remains the authoritative timeline.
 
 ## VII. Schema Contract
 
-### 1. `tap_events`
+### 1. `attendance_sessions`
 
 Key fields:
 
 - `id`
-- `seat_id` — FK to seats
-- `join_code` — class isolation anchor
+- `seat_id` — FK to `seats`
+- `class_id` — FK to `classes`; canonical isolation boundary
 - `status` — `active` | `inactive`
 - `timestamp` — UTC
 - `reason_code` — enumerated: `DAILY_LIMIT` | `AUTO_SWITCH` | `MANUAL`
 
 Rules:
 
-- `tap_events` is append-only. Rows are never edited after creation.
-- Completed tap history must not be silently erased. Correction is via a new
+- `attendance_sessions` is append-only. Rows are never edited after creation.
+- Completed session history must not be silently erased. Correction is via a new
   compensating event, not deletion or overwrite.
-- Every tap event is scoped to exactly one `join_code`.
-- **INV-ATT-010 — Single active session per seat**: At most one active tap event may exist without a corresponding inactive event for a given `seat_id`. Enforcement MUST be atomic at write time. The system MUST guarantee that no two active sessions can be created concurrently for the same seat.
+- Every attendance session is scoped to exactly one class (`class_id`).
+- **INV-ATT-010 — Single active session per seat**: At most one active session may exist without a corresponding inactive event for a given `seat_id`. Enforcement MUST be atomic at write time. The system MUST guarantee that no two active sessions can be created concurrently for the same seat.
 
 ### 2. `hall_pass_logs`
 
 Key fields:
 
 - `id`
-- `seat_id` — FK to seats (the student seat holding the pass)
-- `join_code` — class isolation anchor
+- `seat_id` — FK to `seats` (the student seat holding the pass)
+- `class_id` — FK to `classes`; canonical isolation boundary
 - `reason` — `bathroom` | `water` | `office` | `nurse` | `counselor`
 - `status` — `pending` | `approved` | `rejected` | `left` | `returned`
 - `request_time` — UTC
@@ -108,8 +116,8 @@ Rules:
 Key fields:
 
 - `id`
-- `seat_id` — FK to seats (UNIQUE; one record per seat)
-- `join_code` — class isolation anchor
+- `seat_id` — FK to `seats` (UNIQUE; one record per seat)
+- `class_id` — FK to `classes`; canonical isolation boundary
 - `tap_enabled` — boolean; teacher-controlled toggle; false prevents the seat from
   accumulating tap time for payroll
 - `done_for_day_date` — Pacific-local date; when set, the seat is locked from tapping
@@ -120,8 +128,8 @@ Rules:
 
 - One row per seat. Created when the seat is first enrolled in the class.
 - `done_for_day_date` is a mutable denormalization of the most recent done-for-day
-  tap event. It exists for O(1) lock evaluation. If it diverges from `tap_events`,
-  `tap_events` is authoritative.
+  session event. It exists for O(1) lock evaluation. If it diverges from
+  `attendance_sessions`, `attendance_sessions` is authoritative.
 - `done_for_day_date` is evaluated relative to the class timezone, not UTC midnight.
 - `tap_enabled` is set by teacher action only. Students cannot modify this field. Disabling `tap_enabled` does not affect existing active sessions. It only gates future tap-in events.
 - This table does not store balances, earnings, rent-linked pass quotas, or any
@@ -131,7 +139,7 @@ Rules:
 
 - Attendance returns facts only.
 - Attendance does not compute wage policy, payroll amounts, affordability, or solvency.
-- Completed tap and hall-pass history must not be silently erased.
+- Completed session and hall-pass history must not be silently erased.
 - Anchors, limits, and policy inputs are supplied from outside this domain.
 - Rent-derived hall-pass entitlement quota is owned by the Obligations domain, not
   here. Attendance records the consumption event (a `hall_pass_log` row); Obligations
@@ -139,8 +147,8 @@ Rules:
 
 ## IX. Derived / Cross-Domain Rules
 
-- Payroll FEAT consumes attendance facts from `tap_events` and requests money movement
-  from Ledger. Attendance does not initiate that flow.
+- Payroll FEAT consumes attendance facts from `attendance_sessions` and requests money
+  movement from Ledger. Attendance does not initiate that flow.
 - Hall-pass quota from rent obligations is tracked by the Obligations domain.
   Attendance reads the remaining quota when evaluating a pass request but does not
   own or mutate it. The consumption trigger event for rent-linked hall passes is the `approve_pass` transition. Attendance emits this event, but Obligations decides how it is applied.
@@ -152,4 +160,4 @@ Rules:
 Revisions to this document must:
 1. Increment the version number.
 2. Update the Effective Date.
-3. Maintain consistency with `INV-CORE-000`.
+3. Maintain consistency with `INV-CORE-000` and `DOM-CORE-002`.

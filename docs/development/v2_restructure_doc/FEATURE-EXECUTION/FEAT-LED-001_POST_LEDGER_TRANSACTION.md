@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-LED-001 | 1.0 | 2026-04-23 | N/A | Normative |
+| FEAT-LED-001 | 1.1 | 2026-06-13 | 1.0 | Normative |
 
 ---
 
@@ -26,7 +26,6 @@ This is a **Core Orchestrator** (aliased as `FEAT-MONEY-POST`). It is the singul
 
 ### 2. Resolved Context
 * `class_id`: Resolved via `seat_id`.
-* `student_id`: Resolved via `seat_id`.
 
 ---
 
@@ -37,7 +36,7 @@ This is a **Core Orchestrator** (aliased as `FEAT-MONEY-POST`). It is the singul
     * **Success**: If found, return the existing transaction record immediately (SUCCESS).
 2. **Account Validation**: Verify that `from_account` and `to_account` are valid and accessible within the `class_id` scope.
 3. **Limit Validation**:
-    * If `from_account` is a student account: Check if the current balance is sufficient for the `amount`.
+    * If `from_account` is a seat-held account: Check if the current balance is sufficient for the `amount`.
     * **Note**: This FEAT **DOES NOT** implicitly charge overdraft fees. It simply validates if the transaction is mathematically possible under current policy.
 
 ### 2. Mutation Phase (Atomic Transaction)
@@ -53,7 +52,7 @@ This is a **Core Orchestrator** (aliased as `FEAT-MONEY-POST`). It is the singul
 
 ## IV. Invariants & Constraints
 
-1. **Non-Negativity**: Unless the `transaction_type` is explicitly marked as "Negative-Allowed" (e.g., `SYSTEM_ADJUSTMENT`), a transaction MUST NOT result in a negative balance for a student checking account during this FEAT's execution.
+1. **Non-Negativity**: Unless the `transaction_type` is explicitly marked as "Negative-Allowed" (e.g., `SYSTEM_ADJUSTMENT`), a transaction MUST NOT result in a negative balance for a seat-held checking account during this FEAT's execution.
 2. **Atomic Totals**: Transaction creation and snapshot updates MUST happen in the same database transaction.
 
 ---

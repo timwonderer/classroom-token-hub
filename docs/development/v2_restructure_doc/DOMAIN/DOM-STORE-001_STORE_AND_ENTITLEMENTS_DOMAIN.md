@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-STORE-001 | 1.1 | 2026-04-22 | 1.0 | Normative |
+| DOM-STORE-001 | 1.2 | 2026-06-13 | 1.1 | Normative |
 
 ## I. Purpose
 
@@ -64,7 +64,7 @@ Key fields:
 
 - `id`
 - `class_id` — FK to `classes` (CASCADE)
-- `join_code` — explicit class anchor per INV-CORE-000
+- `join_code` — denormalized human-facing alias; resolves to `class_id`
 - `name`
 - `description`
 - `price` — Numeric
@@ -88,8 +88,8 @@ Key fields:
 
 Rules:
 
-- Items are class-scoped by `class_id` and `join_code`. A store item belongs to
-  exactly one class.
+- Items are class-scoped by `class_id`. A store item belongs to exactly one class.
+  `join_code` is carried as a denormalized alias.
 - Collective goal progress is tracked at the `collective_goal_instance_code` level.
   Multiple items may share an instance code to compose a single collective goal.
 - `is_rent_linked` items are linked to an assessment event in the Obligations
@@ -118,7 +118,7 @@ Key fields:
 - `id`
 - `seat_id` — FK to seats (the purchasing/receiving seat)
 - `store_item_id` — FK to `store_items`
-- `join_code` — class isolation anchor
+- `join_code` — denormalized human-facing alias; resolves to `class_id`
 - `status` — `purchased` | `pending` | `processing` | `completed` | `expired` | `redeemed`
 - `purchase_date` — UTC
 - `purchase_transaction_id` — FK to `transaction`; cross-domain reference to the
@@ -146,7 +146,7 @@ Key fields:
 - `id` — UUID
 - `student_item_id` — nullable FK to `student_items`
 - `initiated_by_user_id` — FK to users (the teacher who took the action)
-- `join_code` — class isolation anchor
+- `join_code` — denormalized human-facing alias; resolves to `class_id`
 - `action` — `REQUEST` | `APPROVED` | `REJECTED`
 - `source` — `LIVE`
 - `notes`

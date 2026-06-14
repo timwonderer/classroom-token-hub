@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CLASS-001 | 2.0 | 2026-05-20 | prior class configuration conventions | Constitutional |
+| DOM-CLASS-001 | 2.1 | 2026-06-13 | 2.0 | Constitutional |
 
 ## III. Authority Level
 
@@ -112,7 +112,7 @@ Key fields:
 
 - `id`
 - `class_id` — FK to `classes` (CASCADE, UNIQUE; one record per class)
-- `join_code` — explicit class anchor per INV-CORE-000
+- `join_code` — denormalized human-facing alias; resolves to `class_id`
 - `economy_policy_mode`
 - `economy_policy_updated_at`
 - `economy_last_rebalanced_at`
@@ -134,7 +134,7 @@ Key fields:
 
 - `id`
 - `class_id` — FK to `classes` (CASCADE, UNIQUE; one record per class)
-- `join_code` — explicit class anchor per INV-CORE-000
+- `join_code` — denormalized human-facing alias; resolves to `class_id`
 - `queue_enabled` — boolean
 - `queue_limit` — max concurrent passes across all types
 - `pass_types` — JSON; list of pass-type configurations, each with:
@@ -156,7 +156,7 @@ Key fields:
 
 - `id`
 - `class_id` — FK to `classes` (CASCADE, UNIQUE; one record per class)
-- `join_code` — explicit class anchor per INV-CORE-000
+- `join_code` — denormalized human-facing alias; resolves to `class_id`
 - `is_enabled`
 - `rent_amount` — Numeric
 - `frequency_type` — `daily` | `weekly` | `monthly` | `custom`
@@ -184,7 +184,7 @@ Key fields:
 
 - `id`
 - `class_id` — FK to `classes` (CASCADE, UNIQUE; one record per class)
-- `join_code` — explicit class anchor per INV-CORE-000
+- `join_code` — denormalized human-facing alias; resolves to `class_id`
 - `pay_rate` — Numeric; dollars per minute of tap time
 - `payroll_frequency_days`
 - `daily_limit_hours` — simple-mode auto tap-out threshold
@@ -207,7 +207,7 @@ Key fields:
 
 - `id`
 - `class_id` — FK to `classes` (CASCADE)
-- `join_code` — explicit class anchor per INV-CORE-000
+- `join_code` — denormalized human-facing alias; resolves to `class_id`
 - `name`
 - `description`
 - `amount` — positive Numeric; bonus amount per occurrence
@@ -227,7 +227,7 @@ Key fields:
 
 - `id`
 - `class_id` — FK to `classes` (CASCADE)
-- `join_code` — explicit class anchor per INV-CORE-000
+- `join_code` — denormalized human-facing alias; resolves to `class_id`
 - `name`
 - `description`
 - `amount` — positive Numeric; stored as a magnitude; ledger deduction semantics
@@ -248,7 +248,7 @@ Key fields:
 
 - `id`
 - `class_id` — FK to `classes` (CASCADE, UNIQUE; one record per class)
-- `join_code` — explicit class anchor per INV-CORE-000
+- `join_code` — denormalized human-facing alias; resolves to `class_id`
 - `savings_apy` / `savings_monthly_rate`
 - `interest_calculation_type` — `simple` | `compound`
 - `compound_frequency`
@@ -321,8 +321,9 @@ Rules:
 
 - This domain stores constitutional policy objects and active operational configuration projection state; it does not compute operational outcomes.
 - It does not mutate ledger, attendance, obligations, store, or identity tables.
-- All settings tables are scoped by `class_id` (from `classes`) as the primary
-  class identity anchor. `join_code` is carried explicitly per `INV-CORE-000`.
+- All settings tables are scoped by `class_id` (from `classes`) as the canonical
+  isolation boundary per `INV-CORE-000`. `join_code` is carried as a denormalized
+  human-facing alias for routing convenience.
 - No settings table uses `teacher_id` as a scoping key. The class (`class_id`) is
   the scope boundary, not the teacher.
 - Missing row vs existing row semantics are part of persisted configuration truth
