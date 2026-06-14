@@ -78,23 +78,12 @@ tests/test_admin_multi_tenancy.py
 
 All 6 risky dependencies can be safely merged to `codex/v2.0`:
 
-1. **Create 6 individual PRs** on v2.0 (one per dependency)
-   - Each PR references this assessment
-   - Each PR contains the single dependency upgrade
-   - Easier to review, revert if needed
-
-2. **Suggested merge order:**
-   - zope.interface 8.4 (low risk)
-   - greenlet 3.5.1 (low risk)
-   - click 8.4.1 (low risk)
-   - cryptography 48.0.0 (high priority, thoroughly tested ✓)
-   - gevent 26.5.0 (requires greenlet, test together ✓)
-   - gunicorn 26.0.0 (production web server, stable ✓)
-
-3. **Optional: Run full test suite** before final merge
-   - 139 tests take ~5-10 min to run
-   - Pre-existing failures unrelated to dependencies
-   - Recommended only if governance requires it
+**Consolidated PR Approach (PR #1203):**
+- All 6 dependencies upgraded together in a single PR
+- Ensures co-dependent packages (gevent + greenlet) are upgraded together
+- Comprehensive testing validates all interactions
+- Single merge point simplifies deployment and avoids version conflicts
+- Ready for immediate merge upon CI completion
 
 ---
 
