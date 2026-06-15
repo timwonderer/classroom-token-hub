@@ -18,6 +18,7 @@ jobs:
   accessibility-audit:
     name: WCAG 2.1 AA Compliance Audit
     runs-on: ubuntu-latest
+    environment: testing
     
     # Use a service container for the test database
     services:
@@ -58,9 +59,9 @@ jobs:
           FLASK_APP: app
           FLASK_ENV: testing
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
-          ENCRYPTION_KEY: UENU-3IwrMOdyGCaQR-2suY5Mv5NCsyQkja6CHJBG1I=
-          PEPPER_KEY: 9183723b5d7ba66102f766a6a8600a76fe4b95b9be57fb7d8fd1791b67ecdf7c
-          SECRET_KEY: 7536c8660c96747163e93cefd072489243ba976abd646cb3df9e26d2af3e2afe
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: |
           flask db upgrade
 
@@ -69,11 +70,9 @@ jobs:
           FLASK_APP: app
           FLASK_ENV: testing
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
-          
-          # Testing-only secrets — DO NOT reuse in production
-          ENCRYPTION_KEY: UENU-3IwrMOdyGCaQR-2suY5Mv5NCsyQkja6CHJBG1I=
-          PEPPER_KEY: 9183723b5d7ba66102f766a6a8600a76fe4b95b9be57fb7d8fd1791b67ecdf7c
-          SECRET_KEY: 7536c8660c96747163e93cefd072489243ba976abd646cb3df9e26d2af3e2afe
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: |
           echo "♿ Running Structural & Axe-Core Accessibility Audits..."
           pytest tests/test_accessibility.py tests/test_axe_compliance.py -v
