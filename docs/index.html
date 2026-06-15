@@ -7,103 +7,123 @@
     <meta name="keywords" content="classroom economy, financial literacy, educational software, banking simulation, token economy">
     <meta name="author" content="Classroom Token Hub">
 
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://classroomtokenhub.com/">
-    <meta property="og:title" content="Classroom Token Hub - Educational Banking Simulation">
-    <meta property="og:description" content="Interactive banking and classroom management platform for teaching financial literacy">
-    <meta property="og:image" content="https://classroomtokenhub.com/student_dashboard.png">
-
-    <!-- Twitter -->
-    <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://classroomtokenhub.com/">
-    <meta property="twitter:title" content="Classroom Token Hub - Educational Banking Simulation">
-    <meta property="twitter:description" content="Interactive banking and classroom management platform for teaching financial literacy">
-    <meta property="twitter:image" content="https://classroomtokenhub.com/student_dashboard.png">
 
     <title>Classroom Token Hub - Educational Banking Simulation</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-    <link rel="icon" type="image/png" href="icon-192.png">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" >
+    <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
-    <!-- Hero Section -->
-    <section class="hero">
-        <div class="hero-container">
-            <span class="material-symbols-outlined hero-icon" aria-hidden="true">local_atm</span>
-            <span class="material-symbols-outlined hero-icon" aria-hidden="true">store</span>
-            <span class="material-symbols-outlined hero-icon" aria-hidden="true">finance_mode</span>
-            <div class="version-badge">Version 1.9.0 Released</div>
-            <h1 class="mb-4 display-2" style="font-weight:500">Classroom Token Hub</h1>
-            <p style="font-weight:300">Welcome, what would you like to do today?</p>
-        </div>
-    </section>
-
-    <!-- v1 Sunset Notice -->
-    <div style="background-color: #fff3cd; border-left: 5px solid #ffc107; padding: 1rem 1.5rem; margin: 1.5rem auto; max-width: 900px; border-radius: 4px; display: flex; gap: 1rem; align-items: flex-start;">
-        <span class="material-symbols-outlined" style="color: #856404; font-size: 1.75rem; flex-shrink: 0; margin-top: 0.1rem;">warning</span>
-        <div>
-            <strong style="color: #856404; font-size: 1rem;">Classroom Token Hub End of Service Notice</strong>
-            <p style="color: #856404; margin: 0.35rem 0 0; font-size: 0.9rem; line-height: 1.5;">
-                Classroom Token Hub v1 will reach end-of-life on <strong>June 30, 2026</strong>. After that date, the v1 service will be shut down.
-                <strong>v2 is now in active development</strong> and represents a full rebuild with a new schema, a redesigned API, and stronger privacy guarantees.
-                v2 is a breaking change; therefore, <em>there are no plans to migrate existing data</em>.
-                Check the <a href="https://github.com/timwonderer/classroom-economy/blob/main/README.md" target="_blank" rel="noopener" style="color: #856404;">project README</a> for the latest v2 status and timeline.
-            </p>
-        </div>
-    </div>
-
-    <div class="container" id="learn-more">
-        <!-- Features Section -->
-        <section id="features" class="section">
-
-            <div class="features-grid">
-                <div class="feature-card feature-card--student">
-                    <div class="material-symbols-outlined text-white feature-card-icon" aria-hidden="true">school</div>
-                    <h3 class="text-white">Student Sign In</h3>
-                    <p class="text-white">Access your account, check balances, shop the store, and manage your classroom economy.</p>
-                    <a href="https://app.classroomtokenhub.com/student/login" class="btn btn-outline-primary">Sign In as Student</a>
-
+<body class="landing-page">
+    <main>
+        <section class="landing-hero">
+            <div class="landing-shell landing-hero-grid">
+                <div class="landing-brand">
+                    <div class="landing-brand-row">
+                        <span class="material-symbols-outlined" aria-hidden="true">local_atm</span>
+                        <span>Classroom</span>
+                    </div>
+                    <div class="landing-brand-row">
+                        <span class="material-symbols-outlined" aria-hidden="true">storefront</span>
+                        <span>Token</span>
+                    </div>
+                    <div class="landing-brand-row">
+                        <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+                        <span>Hub</span>
+                    </div>
                 </div>
-
-                <div class="feature-card feature-card--teacher">
-                    <div class="material-symbols-outlined text-white feature-card-icon" aria-hidden="true">supervisor_account</div>
-                    <h3 class="text-white">Teacher Sign In</h3>
-                    <p class="text-white">Manage your classroom, run payroll, configure settings, and view analytics.</p>
-                    <a href="https://app.classroomtokenhub.com/admin/login" class="btn btn-outline-primary">Sign In as Teacher</a>
+                <div class="landing-welcome">
+                    <h1>Welcome</h1>
+                    <p>This is your classroom economy system, <em>reimagined.</em></p>
+                    <p class="text-white" style="font-size:1rem">v 1.10.0</p>
                 </div>
-
-                <div class="feature-card feature-card--about">
-                    <div class="material-symbols-outlined text-white feature-card-icon" aria-hidden="true">info</div>
-                    <h3 class="text-white">About Us</h3>
-                    <p class="text-white">Learn more about this app and how it can help you manage your classroom economy system.</p>
-                    <a href="about.html" class="btn btn-outline-primary">Learn More</a>
-                </div>
-
-
             </div>
         </section>
 
-    </div>
-
-    <!-- Footer -->
-    <footer>
-        <div class="footer-container">
-            <div class="footer-links">
-                <a href="https://github.com/timwonderer/classroom-economy" target="_blank" rel="noopener">GitHub Repository</a>
-                <a href="https://app.classroomtokenhub.com/docs" target="_blank" rel="noopener">Documentation</a>
-                <a href="https://github.com/timwonderer/classroom-economy/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
-                <a href="https://github.com/timwonderer/classroom-economy/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
-                <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" target="_blank" rel="noopener">License</a>
+        <!-- v1 Sunset Notice -->
+        <div style="background-color: #fff3cd; border-left: 5px solid #ffc107; padding: 1rem 1.5rem; margin: 1.5rem auto; max-width: 900px; border-radius: 4px; display: flex; gap: 1rem; align-items: flex-start;">
+            <span class="material-symbols-outlined" style="color: #856404; font-size: 1.75rem; flex-shrink: 0; margin-top: 0.1rem;">warning</span>
+            <div>
+                <strong style="color: #856404; font-size: 1rem;">Classroom Token Hub End of Service Notice</strong>
+                <p style="color: #856404; margin: 0.35rem 0 0; font-size: 0.9rem; line-height: 1.5;">
+                    This version of Classroom Token Hub will officially retire at the end of June 30, 2026. After that date, you will no longer have access to your accounts. In the next few months, Classroom Token Hub will be getting ready to launch v2 by early August 2026.
+                </p>
             </div>
-            <p>&copy; <span id="current-year"></span> Classroom Token Hub. Licensed under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" style="color: #de9b37;" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a>, which makes this app free for educational use</p>
-            <p><i>Built by a classroom teacher who had the mindset of "I'll just make it myself."</i></p>
-            <img class="footer-release" alt="GitHub Release" src="https://img.shields.io/github/v/release/timwonderer/classroom-economy?link=https%3A%2F%2Fgithub.com%2Ftimwonderer%2Fclassroom-economy">
+        </div>
+
+        <section class="landing-content" id="learn-more">
+            <div class="landing-shell landing-content-grid">
+                <aside class="landing-signin-panel">
+                    <h2 class="landing-signin-heading">Got an account? <strong>Sign in.</strong></h2>
+                    <div class="landing-signin-buttons">
+                        <a href="https://app.classroomtokenhub.com/admin/login" class="landing-signin-btn landing-signin-btn--teacher">
+                            <span class="landing-signin-btn-main">
+                                <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+                                <span>Teacher Sign In</span>
+                            </span>
+                            <span class="material-symbols-outlined" aria-hidden="true">arrow_circle_right</span>
+                        </a>
+                        <a href="https://app.classroomtokenhub.com/student/login" class="landing-signin-btn landing-signin-btn--student">
+                            <span class="landing-signin-btn-main">
+                                <span class="material-symbols-outlined" aria-hidden="true">school</span>
+                                <span>Student Sign In</span>
+                            </span>
+                            <span class="material-symbols-outlined" aria-hidden="true">arrow_circle_right</span>
+                        </a>
+                        <a href="https://app.classroomtokenhub.com/sysadmin/login" class="landing-signin-btn landing-signin-btn--operator">
+                            <span class="landing-signin-btn-main">
+                                <span class="material-symbols-outlined" aria-hidden="true">monitor</span>
+                                <span>Operator Sign In</span>
+                            </span>
+                            <span class="material-symbols-outlined" aria-hidden="true">arrow_circle_right</span>
+                        </a>
+                    </div>
+                    <div class="landing-no-account-note">
+                    <p class="landing-signin-note-title">How to: Sign up for new account</p>
+                    <p>Teachers can sign up by visiting the <strong>Teacher Sign In</strong> page and click on <strong>I need a new teacher account.</strong></p>
+                    <p>If you need a student account, please <strong>ask your teacher</strong> directly.</p>
+                    </div>
+                    <div class="landing-status-wrap" aria-live="polite">
+                        <p class="landing-status-label">Login page is currently <span id="pulsetic-badge"></span></p>
+                    </div>
+                </aside>
+                <section class="landing-about-panel" aria-labelledby="landing-about-heading">
+                    <h2 id="landing-about-heading">First time here? <strong>Come on in.</strong></h2>
+                    <p><strong>Classroom Token Hub</strong> is classroom reward management / simulated economy system. Students earn classroom currencies by clocking in and out of class, manage personal finance with simulated checking and interest-earning savings account, build financial literacy through simulated class rent and insurance, and coordinate spending through classroom stores.</p>
+                    <p>Our goal is to provide a free, reliable, secure, and easy to use classroom economy system for <strong>students grade 5 and up.</strong> Many of our features were designed around observed student behaviors and potential teacher fatigue. Instead of features, we focus on guardrails. We traded unlimited customizability for bounded personalization. Teachers can count on features they can explain to their students and support documents that focus on solving problems locally.</p>
+                    <p>The result is a <strong>deterministic</strong>, <strong>straight-forward</strong>, and <strong>privacy-first</strong> classroom economy platform with just enough customization to fit unique classroom needs.</p>
+
+                    <a href="learnmore.html" class="landing-learn-more-btn">
+                        <span class="landing-signin-btn-main">
+                            <span class="material-symbols-outlined" aria-hidden="true">quick_reference</span>
+                            <span>Learn more</span>
+                        </span>
+                        <span class="material-symbols-outlined" aria-hidden="true">arrow_circle_right</span>
+                    </a>
+                </section>
+            </div>
+        </section>
+    </main>
+
+    <footer class="landing-footer">
+        <div class="landing-shell landing-footer-grid">
+            <div class="landing-footer-links">
+                <a href="https://github.com/timwonderer/classroom-economy" target="_blank" rel="noopener">Project Repository</a>
+                <a href="https://app.classroomtokenhub.com/docs" target="_blank" rel="noopener">Support and Docs</a>
+                <a href="https://github.com/timwonderer/classroom-economy/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+            </div>
+            <div class="landing-footer-links">
+                <a href="https://github.com/timwonderer/classroom-economy/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+                <a href="https://polyformproject.org/licenses/noncommercial/1.0.0" target="_blank" rel="noopener">License</a>
+                <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener">Status</a>
+            </div>
+            <div class="landing-footer-meta">
+                <p>&copy; <span id="current-year"></span> Classroom Token Hub. Licensed under PolyForm Noncommercial v1.0.0</p>
+                <p><em>This app is developed, operated, maintained, and self-funded by a full-time high school teacher. As such, we do not display advertisements, use third-party tracking tools, or collect information about you unless it is necessary for the operation of the platform.</em></p>
+            </div>
         </div>
     </footer>
     <script>
@@ -113,6 +133,18 @@
                 yearElement.textContent = new Date().getFullYear();
             }
         })();
+    </script>
+    <script src="https://cdn.pulsetic.com/index.js" async></script>
+    <script>
+        window.addEventListener('load', function () {
+            if (typeof Pulsetic !== 'undefined') {
+                Pulsetic.init({
+                    badge_id: 893,
+                    monitor_id: 130967,
+                    element_id: "pulsetic-badge"
+                });
+            }
+        });
     </script>
 </body>
 </html>

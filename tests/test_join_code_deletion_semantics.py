@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from app import db
 from app.models import (
     Admin,
+    RentItem,
+    RentSettings,
     Student,
     StudentTeacher,
     TeacherBlock,
@@ -98,6 +100,59 @@ def test_delete_student_removes_transactions(client):
     assert response.status_code == 200
 
     assert db.session.get(Student, student_id) is None
+    assert db.session.get(Transaction, tx_id) is None
+
+
+def test_delete_student_removes_purchase_linked_items_before_transactions(client):
+    teacher, secret = _create_admin("teacher-archive-purchase-link")
+    student = _create_student(teacher, "Alicia", "A", "ARCHIVE2")
+
+    item = StoreItem(
+        teacher_id=teacher.id,
+        name="Notebook",
+        price=10,
+        item_type="delayed",
+        is_active=True,
+    )
+    db.session.add(item)
+    db.session.flush()
+    db.session.add(StoreItemBlock(store_item_id=item.id, block="A"))
+
+    tx = Transaction(
+        student_id=student.id,
+        teacher_id=teacher.id,
+        join_code="ARCHIVE2",
+        amount=-10,
+        account_type="checking",
+        type="purchase",
+        description="Purchase: Notebook",
+    )
+    db.session.add(tx)
+    db.session.flush()
+
+    purchase = StudentItem(
+        student_id=student.id,
+        store_item_id=item.id,
+        join_code="ARCHIVE2",
+        status="purchased",
+        purchase_transaction_id=tx.id,
+    )
+    db.session.add(purchase)
+    db.session.commit()
+    tx_id = tx.id
+    purchase_id = purchase.id
+    student_id = student.id
+
+    _login_admin(client, teacher, secret)
+    response = client.post(
+        "/admin/student/archive",
+        data={"student_id": student_id, "confirmation": "DELETE"},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    assert db.session.get(Student, student_id) is None
+    assert db.session.get(StudentItem, purchase_id) is None
     assert db.session.get(Transaction, tx_id) is None
 
 
@@ -225,5 +280,78 @@ def test_delete_join_code_removes_only_scoped_records(client):
     assert db.session.get(Student, student_a_id) is None
     assert db.session.get(Student, student_b_id) is not None
 
+    assert db.session.get(StoreItem, item_a_id) is None
+    assert db.session.get(StoreItem, item_b_id) is not None
+
+
+def test_delete_join_code_removes_rent_items_before_store_items_and_settings(client):
+    teacher, secret = _create_admin("teacher-join-delete-rent")
+    _create_student(teacher, "Evan", "A", "JCRENT1")
+    _create_student(teacher, "Finn", "B", "JCKEEP3")
+
+    item_a = StoreItem(
+        teacher_id=teacher.id,
+        name="Rent-backed A Item",
+        price=5,
+        item_type="delayed",
+        is_active=True,
+    )
+    item_b = StoreItem(
+        teacher_id=teacher.id,
+        name="Class B Item",
+        price=5,
+        item_type="delayed",
+        is_active=True,
+    )
+    db.session.add_all([item_a, item_b])
+    db.session.flush()
+    db.session.add_all([
+        StoreItemBlock(store_item_id=item_a.id, block="A"),
+        StoreItemBlock(store_item_id=item_b.id, block="B"),
+    ])
+    db.session.flush()
+
+    rent_settings = RentSettings(
+        teacher_id=teacher.id,
+        block="A",
+        rent_amount=20,
+        is_enabled=True,
+    )
+    db.session.add(rent_settings)
+    db.session.flush()
+
+    rent_item = RentItem(
+        rent_setting_id=rent_settings.id,
+        join_code="JCRENT1",
+        name="Desk Rental",
+        rent_item_type="privilege",
+        is_available_in_store=True,
+        store_price=5,
+        purchase_duration="per_use",
+        store_item_id=item_a.id,
+    )
+    db.session.add(rent_item)
+    db.session.commit()
+
+    item_a_id = item_a.id
+    item_b_id = item_b.id
+    rent_item_id = rent_item.id
+    rent_settings_id = rent_settings.id
+
+    _login_admin(client, teacher, secret)
+    response = client.post(
+        "/admin/join-code/delete",
+        json={
+            "join_code": "JCRENT1",
+            "gate_phrase": "DELETE JOIN CODE JCRENT1",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+
+    assert db.session.get(RentItem, rent_item_id) is None
+    assert db.session.get(RentSettings, rent_settings_id) is None
     assert db.session.get(StoreItem, item_a_id) is None
     assert db.session.get(StoreItem, item_b_id) is not None

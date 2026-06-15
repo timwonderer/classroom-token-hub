@@ -5,8 +5,13 @@ All notable changes to the Classroom Token Hub project will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows semantic versioning principles.
 
+> **V1 is now retired.** Version 1.10.0 (released June 14, 2026) is the final Version 1 release. No further v1 patches or features will be developed. Active development continues on Version 2, which is a full architectural rebuild. See [README.md](README.md) for details.
 
 ## [Unreleased]
+
+*Reserved for v2 pre-release tracking. No unreleased v1 changes.*
+
+## [1.10.0] - 2026-06-14 — Version 1 Final Release
 
 ### Changed
 - Bumped all OpenTelemetry packages in lockstep: `opentelemetry-api/sdk/exporter-otlp-proto-http` 1.41.0 → 1.41.1; `opentelemetry-instrumentation-flask/requests/sqlalchemy` 0.62b0 → 0.62b1. Explicitly pinned `opentelemetry-semantic-conventions==0.62b1` (was previously unpinned).
@@ -14,6 +19,7 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 - Resolved dependency resolution conflict from Dependabot PR #1174 where `opentelemetry-sdk 1.41.1` required `opentelemetry-semantic-conventions==0.62b1` but `opentelemetry-instrumentation-flask 0.62b0` hard-required `==0.62b0`. Root cause: the patch-updates group did not recognize the instrumentation pre-release bump as a patch update, leaving the packages out of lockstep.
+- **Block deletion rent FK cleanup** — Fixed `/admin/students/delete-block` failing with a `ForeignKeyViolation` when deleting a class block that still had `rent_items` rows pointing at block-scoped `rent_settings`. `_hard_delete_join_code_scope` now deletes dependent `RentItem` rows before deleting `RentSettings` for blocks with no remaining seats.
 
 ### Added
 - **Insurance recurring billing — Phases 2–4** — Builds on the Phase 1 nightly billing job shipped in PR #1168:
