@@ -7,10 +7,12 @@ debug endpoints, and public hall pass verification.
 
 import unicodedata
 from datetime import timezone
+from pathlib import Path
 
-from flask import Blueprint, redirect, url_for, jsonify, current_app, session, request
+from flask import Blueprint, redirect, url_for, jsonify, current_app, session, request, send_from_directory
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import selectinload
 
 from app.extensions import db, limiter
 from app.models import Admin
@@ -178,6 +180,24 @@ def offline():
     return render_template('offline.html')
 
 
+@main_bp.route('/v2transition.html')
+def v2_transition():
+    """Serve the static v1 sunset transition page."""
+    return send_from_directory(Path(current_app.root_path).parent / 'docs', 'v2transition.html')
+
+
+@main_bp.route('/learnmore.html')
+def learn_more():
+    """Serve the static v1 sunset learn-more page."""
+    return send_from_directory(Path(current_app.root_path).parent / 'docs', 'learnmore.html')
+
+
+@main_bp.route('/style.css')
+def docs_style():
+    """Serve the shared docs stylesheet for the sunset transition pages."""
+    return send_from_directory(Path(current_app.root_path).parent / 'docs', 'style.css')
+
+
 @main_bp.route('/sw.js')
 @limiter.exempt
 def service_worker():
@@ -253,28 +273,40 @@ def verify_hall_pass(teacher_public_token):
 
     _GENERIC_UNAVAILABLE = "Verification page not available."
 
-    # Look up teacher by token
-    teacher = Admin.query.filter_by(hall_pass_verify_token=teacher_public_token).first()
-
-    if not teacher:
+    def _unavailable(status_code):
         return render_template(
             'hall_pass_verify.html',
             unavailable=True,
             message=_GENERIC_UNAVAILABLE
-        ), 404
+        ), status_code
 
-    # Get teacher's active classes (distinct join_codes with labels)
-    # Use plain .distinct() (all columns) + Python deduplication for cross-DB compat
-    classes_rows = (
-        db.session.query(TeacherBlock.join_code, TeacherBlock.block, TeacherBlock.class_label)
-        .filter(
-            TeacherBlock.teacher_id == teacher.id,
-            TeacherBlock.join_code.isnot(None),
+    try:
+        # Look up teacher by token.
+        teacher = Admin.query.filter_by(hall_pass_verify_token=teacher_public_token).first()
+
+        if not teacher:
+            return _unavailable(404)
+
+        # Get teacher's active classes (distinct join_codes with labels)
+        # Use plain .distinct() (all columns) + Python deduplication for cross-DB compat.
+        classes_rows = (
+            db.session.query(TeacherBlock.join_code, TeacherBlock.block, TeacherBlock.class_label)
+            .filter(
+                TeacherBlock.teacher_id == teacher.id,
+                TeacherBlock.join_code.isnot(None),
+            )
+            .group_by(TeacherBlock.join_code, TeacherBlock.block, TeacherBlock.class_label)
+            .order_by(TeacherBlock.block)
+            .all()
         )
-        .group_by(TeacherBlock.join_code, TeacherBlock.block, TeacherBlock.class_label)
-        .order_by(TeacherBlock.block)
-        .all()
-    )
+    except SQLAlchemyError:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        current_app.logger.exception("Hall pass verification database unavailable")
+        return _unavailable(503)
+
     # Build list: [{"join_code": ..., "label": ...}, ...]
     classes = []
     seen_codes = set()
@@ -335,29 +367,39 @@ def verify_hall_pass(teacher_public_token):
     today_start_db = normalize_for_db(today_start_utc)
     today_end_db = normalize_for_db(today_end_utc)
 
-    # Query today's hall pass records for this join_code.
-    # Only include actionable statuses (not pending/rejected).
-    passes_query = HallPassLog.query.filter(
-        HallPassLog.join_code == selected_join_code,
-        HallPassLog.request_time >= today_start_db,
-        HallPassLog.request_time <= today_end_db,
-        HallPassLog.status.in_(['approved', 'left', 'returned'])
-    ).order_by(HallPassLog.request_time.desc())
+    try:
+        # Query today's hall pass records for this join_code.
+        # Only include actionable statuses (not pending/rejected).
+        passes_query = HallPassLog.query.options(
+            selectinload(HallPassLog.student)
+        ).filter(
+            HallPassLog.join_code == selected_join_code,
+            HallPassLog.request_time >= today_start_db,
+            HallPassLog.request_time <= today_end_db,
+            HallPassLog.status.in_(['approved', 'left', 'returned'])
+        ).order_by(HallPassLog.request_time.desc())
 
-    # Filter in Python (first_name is PII-encrypted, can't filter in DB).
-    # Stop at 2 matches: enough to distinguish unique vs ambiguous.
-    matched = []
-    for entry in passes_query.yield_per(100):
-        student = entry.student
-        if not student:
-            continue
-        stored_norm = _normalize_first_name(student.first_name)
-        stored_initial = (student.last_initial or '').strip().upper()
-        if stored_norm == first_name_norm and stored_initial == last_initial_norm:
-            matched.append(entry)
-        if len(matched) >= 2:
-            # Ambiguous — stop early
-            break
+        # Filter in Python (first_name is PII-encrypted, can't filter in DB).
+        # Stop at 2 matches: enough to distinguish unique vs ambiguous.
+        matched = []
+        for entry in passes_query.yield_per(100):
+            student = entry.student
+            if not student:
+                continue
+            stored_norm = _normalize_first_name(student.first_name)
+            stored_initial = (student.last_initial or '').strip().upper()
+            if stored_norm == first_name_norm and stored_initial == last_initial_norm:
+                matched.append(entry)
+            if len(matched) >= 2:
+                # Ambiguous: stop early.
+                break
+    except SQLAlchemyError:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        current_app.logger.exception("Hall pass verification database unavailable")
+        return _unavailable(503)
 
     if len(matched) == 0:
         result = {'outcome': 'no_match'}
