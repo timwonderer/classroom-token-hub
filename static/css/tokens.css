@@ -29,9 +29,9 @@
     --badge-letter-spacing: 0.01em;
 
     /* Elevation — Subtle */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.18);
-    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.20);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.22);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
 
     /* Layout */
     --sidebar-width: 260px;
@@ -65,6 +65,10 @@
     --text-secondary: var(--neutral-500);
     --text-muted: var(--neutral-500);
     --text-inverse: #ffffff;
+
+    --advisor-green: #1a4d47;
+    --steward-blue: #2F4F7F;
+    --guardian-gray: #303030;
 }
 
 /* ─── Teacher Theme (Advisor Green) ─── */

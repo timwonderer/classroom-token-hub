@@ -11,7 +11,16 @@ import pyotp
 from datetime import datetime, timezone
 
 from app import db
-from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction
+from app.models import (
+    Admin,
+    RentItem,
+    RentSettings,
+    RentWaiver,
+    Student,
+    StudentTeacher,
+    TeacherBlock,
+    Transaction,
+)
 from app.hash_utils import get_random_salt, hash_hmac
 
 
@@ -347,6 +356,116 @@ def test_block_deletion_with_improved_transactions(client):
     
     # Verify transactions in deleted class join code are deleted
     assert Transaction.query.filter_by(student_id=student1_id).first() is None
+
+
+def test_block_deletion_removes_rent_waivers_for_orphaned_students(client):
+    """Deleting a block should remove rent waivers before hard-deleting orphaned students."""
+    teacher, secret = _create_admin("teacher-block-waiver")
+    student = _create_claimed_student("Piper", "piper_username", teacher, "G")
+
+    join_code = TeacherBlock.query.filter_by(teacher_id=teacher.id, block="G").first().join_code
+    waiver = RentWaiver(
+        student_id=student.id,
+        join_code=join_code,
+        waiver_start_date=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        waiver_end_date=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        periods_count=1,
+        reason="cleanup regression",
+        created_by_admin_id=teacher.id,
+    )
+    db.session.add(waiver)
+    db.session.commit()
+
+    student_id = student.id
+    waiver_id = waiver.id
+
+    _login_admin(client, teacher, secret)
+
+    response = client.post(
+        "/admin/students/delete-block",
+        json={
+            "block": "G",
+            "gate_phrase": "DELETE BLOCK G",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
+        content_type="application/json"
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["status"] == "success"
+    assert db.session.get(Student, student_id) is None
+    assert db.session.get(RentWaiver, waiver_id) is None
+
+
+def test_block_deletion_removes_dependent_rent_items(client):
+    """Deleting a block removes RentItems before RentSettings for that block scope."""
+    teacher, secret = _create_admin("teacher-block-rent-cleanup")
+
+    _create_claimed_student("Quinn", "quinn_username", teacher, "H")
+    _create_claimed_student("Riley", "riley_username", teacher, "I")
+
+    join_code_h = TeacherBlock.query.filter_by(teacher_id=teacher.id, block="H").first().join_code
+    join_code_i = TeacherBlock.query.filter_by(teacher_id=teacher.id, block="I").first().join_code
+
+    rent_settings_h = RentSettings(
+        teacher_id=teacher.id,
+        block="H",
+        join_code=join_code_h,
+        is_enabled=True,
+    )
+    rent_settings_i = RentSettings(
+        teacher_id=teacher.id,
+        block="I",
+        join_code=join_code_i,
+        is_enabled=True,
+    )
+    db.session.add_all([rent_settings_h, rent_settings_i])
+    db.session.flush()
+
+    rent_item_h = RentItem(
+        rent_setting_id=rent_settings_h.id,
+        join_code=join_code_h,
+        name="Desk",
+    )
+    rent_item_i = RentItem(
+        rent_setting_id=rent_settings_i.id,
+        join_code=join_code_i,
+        name="Chair",
+    )
+    db.session.add_all([rent_item_h, rent_item_i])
+    db.session.commit()
+
+    rent_settings_h_id = rent_settings_h.id
+    rent_settings_i_id = rent_settings_i.id
+    rent_item_h_id = rent_item_h.id
+    rent_item_i_id = rent_item_i.id
+
+    _login_admin(client, teacher, secret)
+
+    response = client.post(
+        "/admin/students/delete-block",
+        json={
+            "block": "H",
+            "gate_phrase": "DELETE BLOCK H",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
+        content_type="application/json"
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["status"] == "success"
+
+    # Target block rent rows are deleted in FK-safe order.
+    assert db.session.get(RentItem, rent_item_h_id) is None
+    assert db.session.get(RentSettings, rent_settings_h_id) is None
+
+    # Other block rent rows are preserved.
+    assert db.session.get(RentItem, rent_item_i_id) is not None
+    assert db.session.get(RentSettings, rent_settings_i_id) is not None
 
 
 def test_bulk_delete_legacy_unclaimed_no_block_provided(client):
