@@ -29,52 +29,22 @@
 │   └── rules/                # Detailed rule files
 ├── docs/
 │   ├── README.md             # Documentation index
-│   ├── user-guides/          # For end users
-│   │   ├── README.md
-│   │   ├── teacher_manual.md
-│   │   ├── student_guide.md
-│   │   ├── economy_guide.md
-│   │   ├── diagnostics/
-│   │   ├── features/
-│   │   └── legal/
-│   ├── technical-reference/  # For developers
-│   │   ├── architecture.md
-│   │   ├── database_schema.md
-│   │   ├── api_reference.md
-│   │   ├── analytics-specification.md
-│   │   └── economy-specification.md
-│   ├── operations/           # Deployment and maintenance
-│   │   ├── README.md
-│   │   ├── Deployment_Guide.md
-│   │   ├── README_GITHUB_PAGES.md
-│   │   ├── GITHUB_PAGES_SETUP.md
-│   │   ├── CLEANUP_DUPLICATES.md
-│   │   ├── DEMO_SESSIONS.md
-│   │   ├── DIGITALOCEAN_CLOUDFLARE_SETUP.md
-│   │   ├── MULTI_TENANCY_FIX_DEPLOYMENT.md
-│   │   ├── PII_AUDIT.md
-│   │   ├── SECURITY_AUDIT_2025.md
-│   │   ├── SECURITY_IMPROVEMENTS_IMPLEMENTATION.md
-│   │   └── PULSETIC_SETUP.md
-│   ├── security/             # Security audits and reports
-│   │   ├── CRITICAL_SAME_TEACHER_LEAK.md
-│   │   └── MULTI_TENANCY_AUDIT.md
-│   ├── development/          # Development guides
-│   │   ├── codebase_organization_documentation_hygiene_playbook.md
-│   │   ├── SCHEMA_CHANGE_MD.md
-│   │   ├── migration-specifications.md
-│   │   ├── TESTING_SUMMARY.md
-│   │   └── SEEDING_INSTRUCTIONS.md
+│   ├── ARCHITECTURE/         # Cross-domain architectural rules
+│   ├── DOMAIN/               # Per-domain authority specs
+│   ├── FEATURE-EXECUTION/    # FEAT contracts
+│   ├── INVARIANT/            # Core and architecture invariants
+│   ├── MAP/                  # Domain-to-FEAT capability maps
+│   ├── TESTING/              # Test creation and validation
+│   ├── SPECS/                # Target-state architecture specs
+│   ├── TRACKING/             # Launch readiness and status
+│   ├── LOGS/                 # Historical audit and release logs
+│   ├── SECURITY/             # Security audits and controls
+│   ├── STANDARD_OPERATING_PROCEDURES/  # SOPs
+│   ├── self-hosting/         # Self-hosting guide
 │   └── archive/              # Historical documents
-│       ├── releases/         # Old release notes
-│       │   ├── RELEASE_NOTES_v1.0.md
-│       │   ├── RELEASE_NOTES_v1.1.0.md
-│       │   ├── RELEASE_NOTES_v1.1.1.md
-│       │   └── RELEASE_NOTES_v1.2.0.md
-│       ├── RECOVERY_EVALUATION.md
-│       ├── migration_check_report.md
-│       ├── pr-reports/
-│       └── FIXES_SUMMARY.md
+│       ├── v1-user-guides/   # Archived v1 user docs
+│       ├── v1-development/   # Archived v1 dev docs
+│       └── github-pages/     # Archived GitHub Pages assets
 ```
 
 ---
@@ -130,7 +100,7 @@ Update **ALL** of these:
 - **Hall Pass System** — Time-limited passes with automatic tracking
 ```
 
-**User Guide** (`docs/user-guides/teacher_manual.md` or `student_guide.md`)
+**User Guide** (`docs/archive/v1-user-guides/teacher_manual.md` or `student_guide.md`)
 ```markdown
 ## Hall Passes
 
@@ -148,7 +118,7 @@ Students can request hall passes from their dashboard...
 
 ### Hall Pass System ✅
 **Status:** Completed in v1.0
-**Documentation:** `docs/user-guides/student_guide.md`
+**Documentation:** `docs/archive/v1-user-guides/student_guide.md`
 ```
 
 #### 2. Internal/Technical Features
@@ -417,7 +387,7 @@ Use proper markdown:
 
 ### User Guides
 
-**Location:** `docs/user-guides/`
+**Location:** `docs/archive/v1-user-guides/`
 
 **Files:**
 - `teacher_manual.md` - Complete teacher guide

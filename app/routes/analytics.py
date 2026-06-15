@@ -91,9 +91,9 @@ def get_block_for_join_code(join_code: str):
     return None
 
 
-def _get_payroll_settings_for_class_id(teacher_id: int, class_id: str):
+def _get_payroll_settings_for_class_id(class_id: str):
     """Resolve payroll settings for a selected class via class_id authority."""
-    if not teacher_id or not class_id:
+    if not class_id:
         return None
 
     return (
@@ -105,22 +105,21 @@ def _get_payroll_settings_for_class_id(teacher_id: int, class_id: str):
     )
 
 
-def get_pay_cycle_days(teacher_id: int, class_id: str | None = None, join_code: str | None = None) -> int:
+def get_pay_cycle_days(class_id: str | None = None, join_code: str | None = None) -> int:
     if not class_id and join_code:
         class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
-            teacher_id=teacher_id,
             join_code=join_code,
         ).first()
         class_id = class_row[0] if class_row and class_row[0] else None
-    payroll_settings = _get_payroll_settings_for_class_id(teacher_id, class_id) if class_id else None
+    payroll_settings = _get_payroll_settings_for_class_id(class_id) if class_id else None
     if payroll_settings and payroll_settings.payroll_frequency_days:
         return payroll_settings.payroll_frequency_days
     return 7
 
 
-def _get_rent_settings_for_class_id(teacher_id: int, class_id: str):
+def _get_rent_settings_for_class_id(class_id: str):
     """Resolve rent settings for a selected class via class_id authority."""
-    if not teacher_id or not class_id:
+    if not class_id:
         return None
 
     return (
@@ -132,14 +131,13 @@ def _get_rent_settings_for_class_id(teacher_id: int, class_id: str):
     )
 
 
-def get_rent_cycle_days(teacher_id: int, class_id: str | None = None, join_code: str | None = None) -> int:
+def get_rent_cycle_days(class_id: str | None = None, join_code: str | None = None) -> int:
     if not class_id and join_code:
         class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
-            teacher_id=teacher_id,
             join_code=join_code,
         ).first()
         class_id = class_row[0] if class_row and class_row[0] else None
-    rent_settings = _get_rent_settings_for_class_id(teacher_id, class_id) if class_id else None
+    rent_settings = _get_rent_settings_for_class_id(class_id) if class_id else None
     if not rent_settings:
         return 30
     frequency_type = rent_settings.frequency_type or 'monthly'
@@ -160,7 +158,6 @@ def get_rent_cycle_days(teacher_id: int, class_id: str | None = None, join_code:
 
 def get_time_window(
     window_type: str,
-    teacher_id: int,
     class_id: str,
     custom_start=None,
     custom_end=None
@@ -189,12 +186,12 @@ def get_time_window(
         window_end = anchored_end
     elif window_type == 'pay_cycle':
         # Based on payroll frequency (default 7 days)
-        pay_cycle_days = get_pay_cycle_days(teacher_id, class_id=class_id)
+        pay_cycle_days = get_pay_cycle_days(class_id=class_id)
         window_start = anchored_end - timedelta(days=pay_cycle_days)
         window_end = anchored_end
     elif window_type == 'rent_cycle':
         # Based on rent frequency (default monthly)
-        rent_cycle_days = get_rent_cycle_days(teacher_id, class_id=class_id)
+        rent_cycle_days = get_rent_cycle_days(class_id=class_id)
         window_start = anchored_end - timedelta(days=rent_cycle_days)
         window_end = anchored_end
     elif window_type == 'custom' and custom_start and custom_end:
@@ -220,23 +217,30 @@ def dashboard():
     - Aggregated at class level
     - Auto-updating
     """
-    teacher_id = session.get('admin_id')
-    selected_class, available_classes = resolve_current_class_context(teacher_id)
-    if not selected_class:
+    try:
+        from app.services.context_resolver import resolve_canonical_context, ContextResolutionError
+        context = resolve_canonical_context()
+        class_id = context.class_id
+        
+        # Get join_code from ClassEconomy
+        from app.models import ClassEconomy
+        class_row = ClassEconomy.query.get(class_id)
+        if not class_row:
+            raise ContextResolutionError("Class not found")
+        join_code = class_row.join_code
+    except Exception as e:
         flash('You need to set up class periods before viewing analytics.', 'warning')
         return redirect(url_for('admin.students'))
-    join_code = selected_class['join_code']
-    class_id = selected_class['class_id']
 
     # Get or set time window preference, validated against allowed values
     requested_window_type = request.args.get('window', 'week')
     window_type = requested_window_type if requested_window_type in ALLOWED_WINDOW_TYPES else 'week'
     
     # Calculate time window
-    window_start, window_end = get_time_window(window_type, teacher_id, class_id)
+    window_start, window_end = get_time_window(window_type, class_id)
     
     # Initialize analytics engine
-    engine = AnalyticsEngine(teacher_id, join_code)
+    engine = AnalyticsEngine(class_id)
     
     # INV-ARC-007: analytics GET must be read-only.
     snapshot = (
@@ -293,21 +297,28 @@ def api_snapshot(window_type):
     
     Returns JSON with system health metrics.
     """
-    teacher_id = session.get('admin_id')
-    selected_class, _ = resolve_current_class_context(teacher_id)
-    if not selected_class:
+    try:
+        from app.services.context_resolver import resolve_canonical_context
+        context = resolve_canonical_context()
+        class_id = context.class_id
+        
+        # Get join_code from ClassEconomy
+        from app.models import ClassEconomy
+        class_row = ClassEconomy.query.get(class_id)
+        if not class_row:
+            return jsonify({'error': 'No class period selected'}), 400
+        join_code = class_row.join_code
+    except Exception:
         return jsonify({'error': 'No class period selected'}), 400
-    join_code = selected_class['join_code']
-    class_id = selected_class['class_id']
 
     if window_type not in ALLOWED_WINDOW_TYPES:
         return jsonify({'error': 'Invalid window type'}), 400
     
     # Calculate time window
-    window_start, window_end = get_time_window(window_type, teacher_id, class_id)
+    window_start, window_end = get_time_window(window_type, class_id)
     
     # Initialize analytics engine
-    engine = AnalyticsEngine(teacher_id, join_code)
+    engine = AnalyticsEngine(class_id)
     
     # INV-ARC-007: analytics GET must be read-only.
     snapshot = (
@@ -360,16 +371,21 @@ def api_alerts():
               id, type, severity, what_changed, why_it_matters, suggested_action,
               triggered_at, and acknowledged.
     """
-    teacher_id = session.get('admin_id')
-    selected_class, _ = resolve_current_class_context(teacher_id)
-    if not selected_class:
+    try:
+        from app.services.context_resolver import resolve_canonical_context
+        context = resolve_canonical_context()
+        class_id = context.class_id
+        from app.models import ClassEconomy
+        class_row = ClassEconomy.query.get(class_id)
+        join_code = class_row.join_code if class_row else None
+    except Exception:
         return jsonify({'error': 'No class period selected'}), 400
-    join_code = selected_class['join_code']
-    class_id = selected_class['class_id']
+    if not join_code:
+        return jsonify({'error': 'No class period selected'}), 400
 
     requested_window_type = request.args.get('window', 'week')
     window_type = requested_window_type if requested_window_type in ALLOWED_WINDOW_TYPES else 'week'
-    window_start, window_end = get_time_window(window_type, teacher_id, class_id)
+    window_start, window_end = get_time_window(window_type, class_id)
     
     active_alerts = AnalyticsAlert.query.filter(
         AnalyticsAlert.join_code == join_code,
@@ -406,12 +422,18 @@ def acknowledge_alert(alert_id):
     """
     Mark an alert as acknowledged by the teacher.
     """
-    teacher_id = session.get('admin_id')
-    selected_class, _ = resolve_current_class_context(teacher_id)
-    if not selected_class:
+    try:
+        from app.services.context_resolver import resolve_canonical_context
+        context = resolve_canonical_context()
+        class_id = context.class_id
+        from app.models import ClassEconomy
+        class_row = ClassEconomy.query.get(class_id)
+        join_code = class_row.join_code if class_row else None
+    except Exception:
+        return jsonify({'error': 'No class period selected'}), 400
+    if not join_code:
         flash('Alert not found.', 'danger')
         return redirect(url_for('analytics.dashboard'))
-    join_code = selected_class['join_code']
     
     alert = AnalyticsAlert.query.filter(
         AnalyticsAlert.id == alert_id,
@@ -440,12 +462,19 @@ def events():
     - Shows rent changes, wage changes, inflation events, etc.
     - Provides context for understanding metric changes.
     """
-    teacher_id = session.get('admin_id')
-    selected_class, available_classes = resolve_current_class_context(teacher_id)
-    if not selected_class:
+    try:
+        from app.services.context_resolver import resolve_canonical_context
+        context = resolve_canonical_context()
+        class_id = context.class_id
+        from app.models import ClassEconomy
+        class_row = ClassEconomy.query.get(class_id)
+        if not class_row:
+            raise Exception("No class found")
+        join_code = class_row.join_code
+        available_classes = [{"class_id": class_id, "join_code": join_code}] # Note: minimal stub for UI
+    except Exception:
         flash('You need to set up class periods before viewing analytics.', 'warning')
         return redirect(url_for('admin.students'))
-    join_code = selected_class['join_code']
     
     # Get all events for this class
     events_list = AnalyticsEvent.query.filter(
@@ -537,11 +566,8 @@ def student_drill_down(student_id):
             weeks_enrolled = 0
     
     # Initialize analytics engine
-    engine = AnalyticsEngine(teacher_id, join_code)
+    engine = AnalyticsEngine(class_id)
     cwi = engine._get_cwi()
-    class_id = engine.class_id
-    if not class_id:
-        return jsonify({'error': 'Missing canonical class scope'}), 400
 
     seat = Seat.query.filter_by(student_id=student.id, class_id=class_id).first()
     if not seat:

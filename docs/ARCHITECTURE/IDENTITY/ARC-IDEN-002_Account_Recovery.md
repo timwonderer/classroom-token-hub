@@ -10,8 +10,8 @@
 > prohibited in the v2 identity model. No DOB is stored or used in any form for
 > either students or teachers in v2.
 > For the v2 target model, see:
-> - `docs/development/v2_restructure_doc/DOM-DOMAIN/DOM-IDEN-002_STUDENT_ACCOUNT_RECOVERY.md`
-> - `docs/development/v2_restructure_doc/DOM-DOMAIN/DOM-IDEN-004_TEACHER_ACCOUNT_RECOVERY.md`
+> - `docs/DOMAIN/DOM-IDEN-002_STUDENT_ACCOUNT_RECOVERY.md`
+> - `docs/DOMAIN/DOM-IDEN-004_TEACHER_ACCOUNT_RECOVERY.md`
 > This document is retained for historical reference only. Do not implement from it.
 
 ## I. Purpose

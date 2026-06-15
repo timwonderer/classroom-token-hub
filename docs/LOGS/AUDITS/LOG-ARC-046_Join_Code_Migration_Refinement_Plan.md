@@ -36,7 +36,7 @@ The primary objective is to transition from `teacher_id` (audit) to a `join_code
 
 ## 2. Refined Model Specification
 
-### [ClassEconomy](file:///Users/timothychang/Documents/GitHub/classroom-economy/app/models.py) [NEW]
+### [ClassEconomy](../../app/models.py) [NEW]
 - **PK**: `join_code` (6-char caps/numeric, unique).
 - **Collision Policy**: Regenerate on collision at time of creation.
 - **Rotation Policy**: `ClassJoinCodeAlias(old_code, current_join_code)` for redirects. **Old codes are NOT joinable**. Required to either (a) backfill all FK-scoped tables to the new code at rotation time, or (b) keep the old code as a valid PK in `class_economies` (mark non-joinable) and use the alias purely for routing.
@@ -46,7 +46,7 @@ The primary objective is to transition from `teacher_id` (audit) to a `join_code
     3. Treat `old_code` as invalid for joining or membership lookups.
 - **Fields**: `status` (active/archived), `created_by_admin_id`, `archived_at`. Archived economies block mutation routes but MUST remain read-only accessible to members.
 
-### [ClassMembership](file:///Users/timothychang/Documents/GitHub/classroom-economy/app/models.py) [NEW]
+### [ClassMembership](../../app/models.py) [NEW]
 - **Status**: 'active', 'revoked', 'pending' (reserved).
 - **Role Consistency**:
     - `admin_id` set -> `role IN ('admin', 'observer')`.

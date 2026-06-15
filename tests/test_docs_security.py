@@ -26,7 +26,7 @@ def test_docs_blocks_absolute_path(client):
 def test_docs_blocks_mixed_traversal(client):
     """Test that traversal mixed with valid paths is blocked."""
     # Attempt to traverse from a valid subdirectory
-    response = client.get('/docs/user-guides/../../config.py')
+    response = client.get('/docs/DOMAIN/../../config.py')
     assert response.status_code == 404
 
 
@@ -54,14 +54,14 @@ def test_docs_blocks_null_byte_injection(client):
     # Note: Flask/Werkzeug may reject NUL bytes before routing.
     # If it does, we expect the regex validation to catch it.
     # Using percent-encoded %00 to test the application-level validation.
-    response = client.get('/docs/user-guides%00/../../etc/passwd')
+    response = client.get('/docs/DOMAIN%00/../../etc/passwd')
     assert response.status_code == 404
 
 
 def test_docs_allows_valid_paths(client):
     """Test that valid documentation paths work correctly."""
     # This will return 404 if file doesn't exist, but shouldn't be blocked by security
-    response = client.get('/docs/user-guides/teacher-manual')
+    response = client.get('/docs/DOMAIN/DOM-CORE-001_DOMAIN_AUTHORITY_SUMMARY')
     # Either 200 (file exists) or 404 (file doesn't exist but path is valid)
     assert response.status_code in [200, 404]
 
@@ -197,14 +197,14 @@ def test_docs_path_with_repeated_slashes(client):
     """Test that repeated slashes don't cause issues."""
     # Multiple slashes should be normalized by Flask/Werkzeug (308 redirect)
     # Follow redirects to see the final result
-    response = client.get('/docs//user-guides//teacher-manual', follow_redirects=True)
+    response = client.get('/docs//DOMAIN//DOM-CORE-001_DOMAIN_AUTHORITY_SUMMARY', follow_redirects=True)
     # Should either work (if file exists) or 404 (file doesn't exist)
     assert response.status_code in [200, 404]
 
 
 def test_docs_trailing_slash_handling(client):
     """Test that trailing slashes are handled correctly."""
-    response = client.get('/docs/user-guides/')
+    response = client.get('/docs/DOMAIN/')
     # Should either work or 404, but not cause errors
     assert response.status_code in [200, 302, 404]
 

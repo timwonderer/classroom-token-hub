@@ -194,8 +194,8 @@ Implemented 4 routes:
 **Files Updated**:
 
 - ✅ `CHANGELOG.md` - Issue Resolution System documented in v1.5.0
-- ⏳ `docs/user-guides/teacher_manual.md` - Add issue review section
-- ⏳ `docs/user-guides/student_guide.md` - Update help & support section
+- ⏳ `docs/archive/v1-user-guides/teacher_manual.md` - Add issue review section
+- ⏳ `docs/archive/v1-user-guides/student_guide.md` - Update help & support section
 - ⏳ `docs/technical-reference/architecture.md` - Document issue resolution flow
 - ⏳ `docs/security/` - Document data minimization approach
 
@@ -253,8 +253,8 @@ Implemented 4 routes:
 ### Priority 2: User Documentation ⏳
 **Help users understand the system:**
 
-- Update `docs/user-guides/teacher_manual.md` with Issue Review section
-- Update `docs/user-guides/student_guide.md` with Help & Support usage
+- Update `docs/archive/v1-user-guides/teacher_manual.md` with Issue Review section
+- Update `docs/archive/v1-user-guides/student_guide.md` with Help & Support usage
 - Create diagnostic guides if needed
 
 ### Priority 3: Technical Documentation ⏳

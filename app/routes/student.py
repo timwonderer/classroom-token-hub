@@ -244,23 +244,6 @@ def _get_or_create_setup_user_for_student(student_id: int | None) -> User | None
 
 
 
-
-def _find_existing_teacher_shadow_student(teacher_id: int | None) -> Student | None:
-    if not teacher_id:
-        return None
-
-    return (
-        Student.query
-        .join(StudentTeacher, StudentTeacher.student_id == Student.id)
-        .filter(
-            StudentTeacher.teacher_id == teacher_id,
-            Student.is_teacher.is_(True),
-        )
-        .order_by(Student.id.asc())
-        .first()
-    )
-
-
 def _ensure_student_class_membership(student_id: int | None, join_code: str | None) -> None:
     if not student_id or not join_code:
         return
@@ -398,14 +381,6 @@ def get_banking_settings_for_context(context):
     return base_query.filter(BankingSettings.block.is_(None)).first()
 
 
-def get_current_teacher_id():
-    """DEPRECATED: Get teacher_id from current class context.
-
-    This function is maintained for backward compatibility but should be
-    replaced with resolve_canonical_context() for proper multi-tenancy.
-    """
-    context = resolve_canonical_context()
-    return None if context else None
 
 
 def get_current_join_code():
@@ -475,9 +450,8 @@ def is_feature_enabled(feature_name):
     return bool(scoped_feature["enabled"]) if scoped_feature else False
 
 
-def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: int) -> tuple[Decimal, Decimal]:
+def calculate_scoped_balances(student: 'Student', join_code: str) -> tuple[Decimal, Decimal]:
     """Compatibility wrapper around the ledger-owned balance query."""
-    del teacher_id
     if not student or not join_code:
         return Decimal('0.00'), Decimal('0.00')
     class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
@@ -589,49 +563,7 @@ def claim_account():
             matched_seat.identity_profile is not None
             and matched_seat.identity_profile.profile_type == 'teacher_shadow_student'
         )
-        existing_student = None
-        if is_teacher:
-            existing_student = _find_existing_teacher_shadow_student(teacher_id)
 
-        if existing_student:
-            # Student already exists - link this seat to existing student
-            matched_seat.student_id = existing_student.id
-            matched_seat.claimed_at = utc_now()
-
-            # Create StudentTeacher link
-            existing_link = StudentTeacher.query.filter_by(
-                student_id=existing_student.id,
-                teacher_id=teacher_id
-            ).first()
-
-            if not existing_link:
-                link = StudentTeacher(
-                    student_id=existing_student.id,
-                    teacher_id=teacher_id,
-                    join_code=matched_seat.join_code,
-                )
-                db.session.add(link)
-
-            _ensure_student_class_membership(existing_student.id, matched_seat.join_code)
-            linked_user = _get_or_create_setup_user_for_student(existing_student.id)
-            if linked_user:
-                matched_seat.user_id = linked_user.id
-
-            db.session.flush()
-
-            # Student already completed setup in another class, redirect to login
-            if existing_student.has_completed_setup:
-                flash("This seat has been linked to your existing account. Please log in.", "claim")
-                return redirect(url_for('student.login'))
-            else:
-                # Continue setup process
-                session['claimed_student_id'] = existing_student.id
-                session['claimed_seat_id'] = matched_seat.id
-                session['claimed_user_id'] = linked_user.id if linked_user else None
-                session.pop('generated_username', None)
-                session.pop('theme_prompt', None)
-                session.pop('theme_slug', None)
-                return redirect(url_for('student.create_username'))
 
         # New student - create Student record
         salt = get_random_salt()
@@ -1109,7 +1041,7 @@ def dashboard():
     }
     teacher_id = scope.teacher_id
     class_id = scope.class_id
-    active_insurance = student.get_active_insurance(class_id=join_code, teacher_id=teacher_id)
+    active_insurance = student.get_active_insurance(class_id=join_code)
 
     rent_status = None
     rent_settings = get_rent_settings_for_context(context)
@@ -1333,7 +1265,7 @@ def dashboard():
         # FIX: Pass scoped balances to template instead of using unscoped properties
         checking_balance=float(checking_balance),
         savings_balance=float(savings_balance),
-        teacher_id=teacher_id,
+        # teacher_id removed from route
         pending_recovery_code=pending_recovery_code,
         # Weekly/monthly analytics
         unique_days_tapped=unique_days_tapped,
@@ -1344,7 +1276,7 @@ def dashboard():
         spending_this_month=float(round(spending_this_month, 2)),
         announcements=announcements,
         current_join_code=join_code,
-        scoped_total_earnings=student.get_total_earnings(join_code=join_code, teacher_id=teacher_id),
+        scoped_total_earnings=student.get_total_earnings(join_code=join_code),
     )
 
 
@@ -1434,7 +1366,7 @@ def payroll():
         ],
         now=utc_now(),
         current_join_code=join_code,
-        scoped_total_earnings=student.get_total_earnings(join_code=join_code, teacher_id=teacher_id),
+        scoped_total_earnings=student.get_total_earnings(join_code=join_code),
     )
 
 
@@ -1487,7 +1419,7 @@ def transfer():
         amount = _quantize_currency(request.form.get('amount'))
 
         # CRITICAL FIX: Calculate balances using join_code scoping
-        checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
+        checking_balance, savings_balance = calculate_scoped_balances(student, join_code)
         banking_settings = get_banking_settings_for_context(context)
 
         if from_account == to_account:
@@ -1502,7 +1434,7 @@ def transfer():
             return redirect(url_for("student.transfer"))
         # Resolve seat_id and class_id for V2 identity
         from app.models import ClassEconomy
-        economy = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=teacher_id).first()
+        economy = ClassEconomy.query.filter_by(join_code=join_code).first()
         class_id = economy.class_id if economy else None
         
         if not class_id:
@@ -1543,7 +1475,7 @@ def transfer():
                 execute_account_transfer(
                     seat_id=seat_id,
                     class_id=class_id,
-                    teacher_id=teacher_id,
+                    # teacher_id removed from route
                     amount=amount,
                     from_account=from_account,
                     to_account=to_account,
@@ -1584,7 +1516,7 @@ def transfer():
 
     # Calculate forecast interest based on settings
     # CRITICAL FIX v3: Calculate BOTH checking and savings balances using join_code scoping
-    checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
+    checking_balance, savings_balance = calculate_scoped_balances(student, join_code)
 
     if calculation_type == 'compound':
         if compound_frequency == 'daily':
@@ -1642,7 +1574,7 @@ def transfer():
                          checking_balance=checking_balance,
                          savings_balance=savings_balance,
                          forecast_interest=forecast_interest,
-                         scoped_total_earnings=student.get_total_earnings(join_code=join_code, teacher_id=teacher_id),
+                         scoped_total_earnings=student.get_total_earnings(join_code=join_code),
                          settings=settings,
                          calculation_type=calculation_type,
                          compound_frequency=compound_frequency,
@@ -1858,7 +1790,7 @@ def purchase_insurance(policy_id):
             return redirect(url_for('student.student_insurance'))
 
     # CRITICAL FIX v2: Check sufficient funds using seat/class scoped balance
-    checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
+    checking_balance, savings_balance = calculate_scoped_balances(student, join_code)
     banking_settings = get_banking_settings_for_context(context)
     overdraft_shortfall = Decimal('0.00')
 
@@ -1866,14 +1798,14 @@ def purchase_insurance(policy_id):
         student,
         policy.premium,
         banking_settings,
-        teacher_id=teacher_id,
+        # teacher_id removed from route
         join_code=join_code
     )
     if not allowed:
         fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
             student,
             banking_settings,
-            teacher_id=teacher_id,
+            # teacher_id removed from route
             join_code=join_code,
             force=True
         )
@@ -2471,7 +2403,7 @@ def shop():
 
 # -------------------- RENT --------------------
 
-def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, class_id=None, join_code=None, force=False):
+def _charge_overdraft_fee_if_needed(student, banking_settings, class_id=None, join_code=None, force=False):
     """
     Check if student's checking balance is negative and charge overdraft fee if enabled.
     Returns (fee_charged, fee_amount) tuple.

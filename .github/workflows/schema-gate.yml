@@ -15,6 +15,7 @@ jobs:
   schema-gate-enforcement:
     name: Schema Change Gate
     runs-on: ubuntu-latest
+    environment: testing
     
     # Use a service container for true migration rehearsal (Requirement 3.5)
     services:
@@ -115,8 +116,8 @@ jobs:
           echo "🔍 Scanning for deprecated symbol usage in application code..."
 
           # Fix 3: Require deprecated_symbols.txt to exist
-          if [ ! -f docs/development/DEPRECATED_SYMBOLS.txt ]; then
-            echo "❌ Missing mandatory file: docs/development/DEPRECATED_SYMBOLS.txt"
+          if [ ! -f docs/STANDARD_OPERATING_PROCEDURES/DATABASE/DEPRECATED_SYMBOLS.txt ]; then
+            echo "❌ Missing mandatory file: docs/STANDARD_OPERATING_PROCEDURES/DATABASE/DEPRECATED_SYMBOLS.txt"
             echo "   Please create this file (it can be empty if no symbols are deprecated)."
             exit 1
           fi
@@ -131,7 +132,7 @@ jobs:
               echo "❌ Found usage of deprecated symbol '$symbol' in codebase."
               has_errors=1
             fi
-          done < docs/development/DEPRECATED_SYMBOLS.txt
+          done < docs/STANDARD_OPERATING_PROCEDURES/DATABASE/DEPRECATED_SYMBOLS.txt
 
           if [ $has_errors -eq 1 ]; then
             exit 1
@@ -149,10 +150,9 @@ jobs:
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
 
 
-          # Testing-only secrets — DO NOT reuse in production
-          ENCRYPTION_KEY: UENU-3IwrMOdyGCaQR-2suY5Mv5NCsyQkja6CHJBG1I=
-          PEPPER_KEY: 9183723b5d7ba66102f766a6a8600a76fe4b95b9be57fb7d8fd1791b67ecdf7c
-          SECRET_KEY: 7536c8660c96747163e93cefd072489243ba976abd646cb3df9e26d2af3e2afe
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: |
           echo "🔄 Starting Migration Rehearsal..."
 
@@ -196,10 +196,9 @@ jobs:
           FLASK_ENV: testing
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
 
-          # Testing-only secrets — DO NOT reuse in production
-          ENCRYPTION_KEY: UENU-3IwrMOdyGCaQR-2suY5Mv5NCsyQkja6CHJBG1I=
-          PEPPER_KEY: 9183723b5d7ba66102f766a6a8600a76fe4b95b9be57fb7d8fd1791b67ecdf7c
-          SECRET_KEY: 7536c8660c96747163e93cefd072489243ba976abd646cb3df9e26d2af3e2afe
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: |
           echo "🔥 Running Smoke Tests on Critical Workflows..."
           pytest -v -m "critical or regression"

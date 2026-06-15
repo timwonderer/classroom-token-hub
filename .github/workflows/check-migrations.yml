@@ -2,13 +2,13 @@ name: Check Database Migrations
 
 on:
   push:
-    branches: [ main ]
+    branches: [ codex/v2.0 ]
     paths:
       - 'migrations/versions/**'
       - 'app/models/**'
       - 'scripts/validate-migrations.py'
   pull_request:
-    branches: [ main ]
+    branches: [ codex/v2.0 ]
     paths:
       - 'migrations/versions/**'
       - 'app/models/**'

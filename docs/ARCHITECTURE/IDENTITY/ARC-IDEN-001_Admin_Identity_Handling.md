@@ -7,8 +7,8 @@
 > [!CAUTION]
 > **SUPERSEDED.** This document describes the v1 teacher identity model.
 > For the v2 target model, see:
-> `docs/development/specs/V2_TEACHER_IDENTITY_ARCHITECTURE.md`
-> and `docs/development/v2_restructure_doc/DOM-DOMAIN/DOM-IDEN-001_IDENTITY_CLASS_BINDING_DOMAIN.md`.
+> `docs/SPECS/V2_TEACHER_IDENTITY_ARCHITECTURE.md`
+> and `docs/DOMAIN/DOM-IDEN-001_IDENTITY_CLASS_BINDING_DOMAIN.md`.
 > This document is retained for historical reference only.
 
 ## I. Purpose

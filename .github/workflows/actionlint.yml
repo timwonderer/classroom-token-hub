@@ -10,7 +10,7 @@ on:
       - ".github/workflows/**"
   push:
     branches:
-      - main
+      - codex/v2.0
     paths:
       - ".github/workflows/**"
 

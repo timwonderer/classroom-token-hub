@@ -49,7 +49,7 @@
 ## Accessibility Validation
 
 <!-- Required for any PR touching templates/, shared layouts/components, template-supporting CSS, or template-driven JS.
-     See INV-ARC-020 and docs/development/v2_restructure_doc/TESTING/SOP-TEST-002_Accessibility_Validation_And_PR_Gate.md.
+     See INV-ARC-020 and docs/TESTING/SOP-TEST-002_Accessibility_Validation_And_PR_Gate.md.
      If not applicable, explicitly mark the N/A option and leave a short reason. -->
 
 - [ ] Not applicable: this PR does not touch template/UI scope covered by `INV-ARC-020`
