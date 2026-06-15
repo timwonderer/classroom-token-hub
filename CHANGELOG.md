@@ -8,6 +8,12 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+- **Default branch switched to `codex/v2.0`** — CI workflows (actionlint, check-migrations, policy-guardrails) now trigger on `codex/v2.0` instead of `main`. Deploy to DigitalOcean workflow intentionally remains on `main` only.
+- **Documentation reorganized for v2 canonical structure** — v2 restructure docs promoted from `docs/development/v2_restructure_doc/` to top-level canonical directories: `docs/DOMAIN/`, `docs/FEATURE-EXECUTION/`, `docs/INVARIANT/`, `docs/MAP/`, `docs/TESTING/`. Development specs and tracking promoted to `docs/SPECS/` and `docs/TRACKING/`. All internal cross-references updated across 47 files.
+- **v1 docs archived** — User guides moved to `docs/archive/v1-user-guides/`, GitHub Pages landing assets to `docs/archive/github-pages/`, superseded development artifacts to `docs/archive/v1-development/`.
+- **Root-level cleanup** — Removed 24 scratch/debug/temp files (fix_*.py, debug_*.py, pytest output dumps, ephemeral assessment reports). Moved `student_upload_template.csv` to `app/data/`. Removed duplicate `app/data/random-words.txt`.
+
 ### Added
 - **Wave 7 canonical insurance-claim lifecycle coverage** —
   `tests/test_insurance_snapshots.py::test_admin_claim_approval_uses_frozen_claim_cap`

@@ -9865,9 +9865,9 @@ def upload_students():
 @admin_required
 def download_csv_template():
     """
-    Serves the updated student_upload_template.csv from the project root.
+    Serves the student_upload_template.csv from app/data/.
     """
-    template_path = os.path.join(os.getcwd(), "student_upload_template.csv")
+    template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "student_upload_template.csv")
     return send_file(template_path, as_attachment=True, download_name="student_upload_template.csv", mimetype='text/csv')
 
 
