@@ -31,8 +31,8 @@ docs_bp = Blueprint('docs', __name__, url_prefix='/docs')
 # Documentation root directory
 DOCS_ROOT = Path(__file__).parent.parent.parent / 'docs'
 
-# Directories excluded from user-facing search (internal documentation only)
-EXCLUDED_DIRECTORIES = {'security', 'archive'}
+# Directories excluded from ALL search audiences (internal documentation only)
+EXCLUDED_DIRECTORIES = {'security'}
 
 # Friendly category names for search results
 CATEGORY_MAP = {
@@ -49,6 +49,8 @@ CATEGORY_MAP = {
     'FEATURE-EXECUTION': 'Feature Execution',
     'INVARIANT': 'Invariant',
     'MAP': 'Map',
+    'ARCHITECTURE': 'Architecture',
+    'self-hosting': 'Self Hosting',
     'archive': 'Archive'
 }
 
@@ -681,16 +683,12 @@ def search():
                     continue
                     
                 # Strict audience isolation
-                # NOTE: v1 user-guides are now archived under archive/
-                # (excluded above). User audience filtering is a no-op
-                # until v2 user docs are created in a dedicated directory.
+                is_archived_user_guide = "v1-user-guides" in doc_file.parts
                 if audience == 'user':
-                    # User audience can ONLY see archive/v1-user-guides
-                    if top_dir_raw != 'archive':
+                    if not is_archived_user_guide:
                         continue
                 else:
-                    # DevOps audience can see everything EXCEPT archive
-                    if top_dir_raw == 'archive':
+                    if is_archived_user_guide:
                         continue
 
                 content = doc_file.read_text(encoding='utf-8')

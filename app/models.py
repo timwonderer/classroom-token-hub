@@ -505,7 +505,7 @@ class Student(db.Model):
             raise ValueError("get_savings_balance requires class_id and seat_id.")
         return get_available_balance(seat_id, class_id, 'savings')
 
-    def get_total_earnings(self, join_code=None):
+    def get_total_earnings(self, join_code=None, teacher_id=None):
         """
         Get total earnings scoped to a specific class economy.
 
@@ -513,6 +513,7 @@ class Student(db.Model):
 
         Args:
             join_code: The unique class identifier for period-level isolation
+            teacher_id: Deprecated — accepted but ignored for backward compatibility
 
         Returns:
             float: The total earnings rounded to 2 decimal places
