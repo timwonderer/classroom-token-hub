@@ -94,7 +94,7 @@ None expected for standard deployments.
 
 - [Changelog](../../../CHANGELOG.md)
 - [Releases Index](LOG-REL-003_Releases_Index.md)
-- [Documentation Index](../../development/v2_restructure_doc/SOP-DOC-002_DOCUMENTATION_INDEX.md)
+- [Documentation Index](../../STANDARD_OPERATING_PROCEDURES/SOP-DOC-002_DOCUMENTATION_INDEX.md)
 
 ---
 

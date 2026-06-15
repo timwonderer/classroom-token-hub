@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(/Library/Frameworks/Python.framework/Versions/3.10/bin/pytest tests/test_decimal_precision.py -v --tb=short)"
+      "Bash(/Library/Frameworks/Python.framework/Versions/3.10/bin/pytest tests/test_decimal_precision.py -v --tb=short)",
+      "Edit",
+      "Write",
+      "Bash(git mv *)",
+      "Bash(git rm *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(mkdir *)",
+      "Bash(rm -rf docs/*)"
     ]
   }
 }

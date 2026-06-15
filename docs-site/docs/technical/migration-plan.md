@@ -11,6 +11,6 @@ The docs platform split has four phases:
 
 The canonical engineering plan for this work lives in:
 
-- `docs/development/specs/V2_DOCS_PLATFORM_SPLIT.md`
+- `docs/SPECS/V2_DOCS_PLATFORM_SPLIT.md`
 
 Until the v2 docs rework is complete, this local preview site should only expose a narrow set of preview pages and should not be treated as the canonical documentation system.

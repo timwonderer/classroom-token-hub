@@ -115,8 +115,8 @@ jobs:
           echo "🔍 Scanning for deprecated symbol usage in application code..."
 
           # Fix 3: Require deprecated_symbols.txt to exist
-          if [ ! -f docs/development/DEPRECATED_SYMBOLS.txt ]; then
-            echo "❌ Missing mandatory file: docs/development/DEPRECATED_SYMBOLS.txt"
+          if [ ! -f docs/STANDARD_OPERATING_PROCEDURES/DATABASE/DEPRECATED_SYMBOLS.txt ]; then
+            echo "❌ Missing mandatory file: docs/STANDARD_OPERATING_PROCEDURES/DATABASE/DEPRECATED_SYMBOLS.txt"
             echo "   Please create this file (it can be empty if no symbols are deprecated)."
             exit 1
           fi
@@ -131,7 +131,7 @@ jobs:
               echo "❌ Found usage of deprecated symbol '$symbol' in codebase."
               has_errors=1
             fi
-          done < docs/development/DEPRECATED_SYMBOLS.txt
+          done < docs/STANDARD_OPERATING_PROCEDURES/DATABASE/DEPRECATED_SYMBOLS.txt
 
           if [ $has_errors -eq 1 ]; then
             exit 1

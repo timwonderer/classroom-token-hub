@@ -33,7 +33,7 @@ one-shot reconnaissance run.
 Output
 ------
 At session end, two artefacts are written to
-`docs/development/tracking/`:
+`docs/TRACKING/`:
   - V2_FEAT_BYPASS_DEPENDENCY_REPORT_RAW.json
     Full per-test data, machine-readable.
   - V2_FEAT_BYPASS_DEPENDENCY_REPORT.md
@@ -447,7 +447,7 @@ def emit_markdown(
     lines.append(
         "- **`get_side_effect`** — a bypass-hidden flush happened inside a "
         "GET handler. This is an [INV-ARC-007]"
-        "(../v2_restructure_doc/INVARIANT/ARCHITECTURE/"
+        "(../INVARIANT/ARCHITECTURE/"
         "INV-ARC-007_GET_MUST_BE_PURE.md) "
         "candidate: GETs are required to be side-effect free. Separate "
         "category from dead-route since the fix is "
@@ -584,7 +584,7 @@ def emit_markdown(
 
 
 def pytest_sessionfinish(session, exitstatus):
-    out_dir = Path("docs/development/tracking")
+    out_dir = Path("docs/TRACKING")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     raw_path = out_dir / "V2_FEAT_BYPASS_DEPENDENCY_REPORT_RAW.json"

@@ -299,7 +299,7 @@ After setup:
 - **Main README:** `/README.md` - Project overview
 - **Deployment Guide:** `/docs/operations/Deployment_Guide.md` - Production deployment
 - **Technical Reference:** `/docs/technical-reference/` - Architecture details
-- **User Guides:** `/docs/user-guides/` - Student and teacher guides
+- **User Guides:** `/docs/archive/v1-user-guides/` - Student and teacher guides
 
 ## Support
 

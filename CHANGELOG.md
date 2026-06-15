@@ -28,7 +28,7 @@ and this project follows semantic versioning principles.
   fixture-setup blocks, not around route calls. These tests would have
   caught the dead-route bug surfaced in the audit; they now lock the fix in.
 - **`V2_FEAT_BYPASS_DEFAULT_FLIP_PLAN.md`** —
-  `docs/development/tracking/V2_FEAT_BYPASS_DEFAULT_FLIP_PLAN.md` documents
+  `docs/TRACKING/V2_FEAT_BYPASS_DEFAULT_FLIP_PLAN.md` documents
   the audit findings, methodology note, and 5-phase plan for inverting the
   conftest FEAT-enforcement default so that production-shaped enforcement is
   the default in CI and bypass is explicit per-test. Master tracker updated
@@ -43,7 +43,7 @@ and this project follows semantic versioning principles.
   pytest-flask leaves a dangling context around fixture code.
   `scripts/regenerate_feat_bypass_report.py` re-emits the markdown from the
   raw JSON without a fresh suite run. Findings written to
-  `docs/development/tracking/V2_FEAT_BYPASS_DEPENDENCY_REPORT.md`:
+  `docs/TRACKING/V2_FEAT_BYPASS_DEPENDENCY_REPORT.md`:
   **4 unique mutating endpoints are dead in production**
   (`admin.process_claim`, `sysadmin.resolve_escalated_issue`,
   `admin.rent_settings`, `admin.passkey_auth_finish`), far below the

@@ -16,7 +16,7 @@ Use this checklist when executing the live-test rehearsal for `codex/v2.0` again
 
 - `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md`
 - `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-009_Migration_Compliance_Review.md`
-- `docs/development/tracking/V2_LAUNCH_READINESS_MATRIX.md`
+- `docs/TRACKING/V2_LAUNCH_READINESS_MATRIX.md`
 
 ## IV. Operator Checklist
 > [!NOTE]

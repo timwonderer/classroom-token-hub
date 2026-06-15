@@ -39,4 +39,4 @@
 
 ## Current Status
 
-The template layer is now aligned with `docs/development/design_system.md` and uses unified styling conventions across teacher, student, sysadmin, and standalone recovery/claim surfaces.
+The template layer is now aligned with `docs/FEATURES/DESIGN/FEAT-DES-001_Design_System.md` and uses unified styling conventions across teacher, student, sysadmin, and standalone recovery/claim surfaces.

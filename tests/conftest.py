@@ -6,7 +6,7 @@ from dotenv import dotenv_values, load_dotenv
 # Phase 1 FEATBypass instrumentation (opt-in). When FEAT_BYPASS_AUDIT=1, the
 # audit plugin is registered, which hooks SQLAlchemy `before_flush` to record
 # every bypass-hidden mutation and emit a report at session end. See
-# docs/development/tracking/V2_FEAT_BYPASS_DEFAULT_FLIP_PLAN.md for context.
+# docs/TRACKING/V2_FEAT_BYPASS_DEFAULT_FLIP_PLAN.md for context.
 if os.environ.get("FEAT_BYPASS_AUDIT"):
     pytest_plugins = ["tests._feat_bypass_audit"]
 

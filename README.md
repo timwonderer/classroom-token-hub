@@ -184,23 +184,23 @@ This enables:
 
 ## Documentation
 
-📚 **[Complete Documentation →](docs/user-guides/README.md)**
+📚 **[Complete Documentation →](docs/README.md)**
 
 ### For Users
 
-- **[Student Guide](docs/user-guides/student_guide.md)** — How students use the platform
-- **[Teacher Manual](docs/user-guides/teacher_manual.md)** — Comprehensive admin guide
+- **[Student Guide](docs/archive/v1-user-guides/student_guide.md)** — How students use the platform
+- **[Teacher Manual](docs/archive/v1-user-guides/teacher_manual.md)** — Comprehensive admin guide
 
 ### For Developers
 
 - **[Architecture Guide](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)** — System design and patterns
 - **[Authority Model](docs/INV-CORE-001_Authority_Model.md)** — Foundational documentation and enforcement hierarchy
-- **[V2 Authority Extraction](docs/development/specs/V2_AUTHORITY_EXTRACTION_PLAN.md)** — Current authority-closure state for FEAT, service, and ledger routing
+- **[V2 Authority Extraction](docs/SPECS/V2_AUTHORITY_EXTRACTION_PLAN.md)** — Current authority-closure state for FEAT, service, and ledger routing
 - **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)** — REST API documentation
 - **[Development Priorities](DEVELOPMENT.md)** — Current priorities, roadmap, and tasks
-- **[v2 Main Reconciliation Tracker](docs/development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md)** — Main-only feature clusters and port strategy
-- **[v2 Launch Readiness Matrix](docs/development/tracking/V2_LAUNCH_READINESS_MATRIX.md)** — Live-test and production launch blockers
-- **[V1 User-Facing Feature Parity Matrix](docs/development/tracking/V1_USER_FACING_FEATURE_PARITY_MATRIX.md)** — User-visible V1 capability parity against V2 surfaces
+- **[v2 Main Reconciliation Tracker](docs/TRACKING/V2_MAIN_RECONCILIATION_TRACKER.md)** — Main-only feature clusters and port strategy
+- **[v2 Launch Readiness Matrix](docs/TRACKING/V2_LAUNCH_READINESS_MATRIX.md)** — Live-test and production launch blockers
+- **[V1 User-Facing Feature Parity Matrix](docs/TRACKING/V1_USER_FACING_FEATURE_PARITY_MATRIX.md)** — User-visible V1 capability parity against V2 surfaces
 - **[v2 Live-Test Runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md)** — Operator workflow before live testing
 - **[Changelog](CHANGELOG.md)** — Version history and notable changes
 
@@ -303,7 +303,7 @@ python scripts/seed_dummy_students.py # Seed test data
 
 Active development priorities and v2.0 launch readiness are tracked in [DEVELOPMENT.md](DEVELOPMENT.md).
 
-**Version 2.0 Status:** The v2.0 live-test candidate is feature-complete and undergoing operational readiness validation. See the [v2 Launch Readiness Matrix](docs/development/tracking/V2_LAUNCH_READINESS_MATRIX.md) for current blockers and the [v2 Live-Test Runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md) for the operator workflow.
+**Version 2.0 Status:** The v2.0 live-test candidate is feature-complete and undergoing operational readiness validation. See the [v2 Launch Readiness Matrix](docs/TRACKING/V2_LAUNCH_READINESS_MATRIX.md) for current blockers and the [v2 Live-Test Runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md) for the operator workflow.
 
 ---
 
@@ -349,11 +349,11 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 **Full License:** See [LICENSE](LICENSE) for complete terms
 
-**Commercial Use Policy:** See [docs/user-guides/legal/commercial.md](docs/user-guides/legal/commercial.md) for detailed guidance on permitted and prohibited commercial activities
+**Commercial Use Policy:** See [docs/archive/v1-user-guides/legal/commercial.md](docs/archive/v1-user-guides/legal/commercial.md) for detailed guidance on permitted and prohibited commercial activities
 
-**Third-Party Attributions:** See [docs/user-guides/legal/third-party-notices.md](docs/user-guides/legal/third-party-notices.md) for open-source dependencies and services
+**Third-Party Attributions:** See [docs/archive/v1-user-guides/legal/third-party-notices.md](docs/archive/v1-user-guides/legal/third-party-notices.md) for open-source dependencies and services
 
-**Project Philosophy:** See [docs/user-guides/legal/attribution.md](docs/user-guides/legal/attribution.md) for the project's ethical foundations
+**Project Philosophy:** See [docs/archive/v1-user-guides/legal/attribution.md](docs/archive/v1-user-guides/legal/attribution.md) for the project's ethical foundations
 
 ---
 

@@ -103,7 +103,7 @@ All technical details verified against codebase:
 ### 4. Clean, Consistent, Logical Structure  GOOD (with issues)
 
 #### What's Excellent
-- **Clear categorization**: user-guides/diagnostics/, user-guides/, technical-reference/, operations/, security/
+- **Clear categorization**: archive/v1-user-guides/diagnostics/, archive/v1-user-guides/, technical-reference/, operations/, security/
 - **Consistent frontmatter**: YAML metadata with title, roles, last-updated
 - **Archive system**: Historical docs properly separated in archive/
 - **Diagnostic index pattern**: student.md → student-login.md, student-classes.md, etc.
@@ -112,8 +112,8 @@ All technical details verified against codebase:
 
 ##### Issue 1: Empty Directories  HIGH PRIORITY
 ```
-docs/user-guides/student/     (empty)
-docs/user-guides/teacher/     (empty)
+docs/archive/v1-user-guides/student/     (empty)
+docs/archive/v1-user-guides/teacher/     (empty)
 docs/system-admin/            (empty)
 docs/technical-reference/api/ (empty)
 ```
@@ -199,7 +199,7 @@ Despite being under size limit, this file tries to serve 3 purposes:
 
 **Recommendation:** Break into focused docs:
 
-- `user-guides/diagnostics/student-transfers.md` (1-2KB) - "Can't transfer? Check these..."
+- `archive/v1-user-guides/diagnostics/student-transfers.md` (1-2KB) - "Can't transfer? Check these..."
 - `guides/saving-strategies.md` (3-4KB) - Goal-based saving tips
 - `technical-reference/interest-calculation.md` (2-3KB) - How interest works
 
@@ -224,17 +224,17 @@ Despite being under size limit, this file tries to serve 3 purposes:
 **Issue:** Path is correct but inconsistent with operations/ directory structure
 **Recommendation:** Move `operations/Deployment_Guide.md` to `operations/deployment.md`
 
-#### 2. user-guides/features/banking/transferring-money.md
+#### 2. archive/v1-user-guides/features/banking/transferring-money.md
 **Line 82:**
 ```markdown
-[Understanding Savings](../../user-guides/features/student/banking/savings-interest.md)
+[Understanding Savings](../../archive/v1-user-guides/features/student/banking/savings-interest.md)
 ```
 **Issue:** File does not exist
 **Fix:** Create file OR remove link
 
 **Line 156:**
 ```markdown
-[Student Buying Guide](../../user-guides/features/student/store/browse-buy.md)
+[Student Buying Guide](../../archive/v1-user-guides/features/student/store/browse-buy.md)
 ```
 **Issue:** File does not exist
 **Fix:** Create file OR remove link
@@ -269,8 +269,8 @@ roles: [student, teacher]
 ###  Issue 2: Missing Referenced Files
 Files that are linked but don't exist:
 
-- `docs/user-guides/features/banking/understanding-savings.md`
-- `docs/user-guides/features/store/student-buying.md`
+- `docs/archive/v1-user-guides/features/banking/understanding-savings.md`
+- `docs/archive/v1-user-guides/features/store/student-buying.md`
 
 **Options:**
 
@@ -283,8 +283,8 @@ Files that are linked but don't exist:
 ###  Issue 3: Empty Directory Cleanup
 Remove or populate:
 
-- `docs/user-guides/student/`
-- `docs/user-guides/teacher/`
+- `docs/archive/v1-user-guides/student/`
+- `docs/archive/v1-user-guides/teacher/`
 - `docs/system-admin/`
 - `docs/technical-reference/api/`
 

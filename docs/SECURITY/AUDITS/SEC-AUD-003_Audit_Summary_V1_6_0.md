@@ -212,7 +212,7 @@ Comprehensive audit of the classroom-economy repository completed in preparation
        PROJECT_HISTORY.md
     security/ (security audits and guides)
     technical-reference/ (architecture, API, database)
-    user-guides/ (teacher and student manuals)
+    archive/v1-user-guides/ (teacher and student manuals)
  app/ (application code)
  templates/ (Jinja2 templates)
  static/ (CSS, JS, images)

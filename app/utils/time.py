@@ -2,7 +2,7 @@
 Centralized time utility for Classroom Economy.
 
 This module provides the authoritative source for "current time" and timezone handling.
-As per docs/development/TIMEZONE_HANDLING_SPECIFICATION.md:
+As per docs/ARCHITECTURE/OPERATIONS/ARC-OPS-012_Datetime_Handling_Specification.md:
 - All datetimes MUST be UTC-aware.
 - No direct calls to datetime.now() or datetime.utcnow() allowed elsewhere.
 """

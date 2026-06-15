@@ -42,11 +42,13 @@ CATEGORY_MAP = {
     'LOGS': 'Logs',
     'SECURITY': 'Security',
     'STANDARD_OPERATING_PROCEDURES': 'Standard Operating Procedures',
-    'user-guides': 'User Guides',
-    'technical-reference': 'Technical Reference',
-    'development': 'Development',
-    'operations': 'Operations',
-    'security': 'Security',
+    'TESTING': 'Testing',
+    'SPECS': 'Specs',
+    'TRACKING': 'Tracking',
+    'DOMAIN': 'Domain',
+    'FEATURE-EXECUTION': 'Feature Execution',
+    'INVARIANT': 'Invariant',
+    'MAP': 'Map',
     'archive': 'Archive'
 }
 
@@ -523,7 +525,7 @@ def view_doc(doc_path):
             abort(404)
 
         # Canonicalize directory-style docs URLs so relative markdown links resolve
-        # under the directory (e.g. /docs/user-guides/features/teacher/).
+        # under the directory (e.g. /docs/DOMAIN/DOM-CORE-001/).
         if doc_file.name.lower() in {'index.md', 'readme.md'}:
             canonical_path = re.sub(
                 r'/(?:index|readme)(?:\.md)?/?$',
@@ -679,13 +681,16 @@ def search():
                     continue
                     
                 # Strict audience isolation
+                # NOTE: v1 user-guides are now archived under archive/
+                # (excluded above). User audience filtering is a no-op
+                # until v2 user docs are created in a dedicated directory.
                 if audience == 'user':
-                    # User audience can ONLY see user-guides
-                    if top_dir_raw != 'user-guides':
+                    # User audience can ONLY see archive/v1-user-guides
+                    if top_dir_raw != 'archive':
                         continue
                 else:
-                    # DevOps audience can see everything EXCEPT user-guides
-                    if top_dir_raw == 'user-guides':
+                    # DevOps audience can see everything EXCEPT archive
+                    if top_dir_raw == 'archive':
                         continue
 
                 content = doc_file.read_text(encoding='utf-8')

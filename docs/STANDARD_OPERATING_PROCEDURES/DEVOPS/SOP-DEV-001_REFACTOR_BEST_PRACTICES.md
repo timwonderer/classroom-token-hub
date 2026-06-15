@@ -45,10 +45,10 @@ work is being performed on the v2 launch path.
 
 - INV-CORE-000_CORE_INVARIANTS.md
 - INV-CORE-001_Authority_Model.md
-- ../../development/v2_restructure_doc/SOP-DOC-000_DOCUMENTATION_STANDARD.md
-- docs/development/tracking/V2_LAUNCH_PROJECT_CHECKLIST.md
-- docs/development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md
-- docs/development/tracking/V2_LAUNCH_READINESS_MATRIX.md
+- ../../STANDARD_OPERATING_PROCEDURES/SOP-DOC-000_DOCUMENTATION_STANDARD.md
+- docs/TRACKING/V2_LAUNCH_PROJECT_CHECKLIST.md
+- docs/TRACKING/V2_MAIN_RECONCILIATION_TRACKER.md
+- docs/TRACKING/V2_LAUNCH_READINESS_MATRIX.md
 
 ---
 

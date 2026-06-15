@@ -60,7 +60,6 @@ from app.feats.attendance import (
     return_hall_pass as feat_return_hall_pass,
 )
 from app.routes.student import (
-    get_current_teacher_id,
     get_feature_settings_for_student,
     get_rent_settings_for_context,
     _calculate_rent_coverage_due_date,

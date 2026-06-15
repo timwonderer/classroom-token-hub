@@ -4,7 +4,7 @@ Migration Linter - Enforce Idempotency and Safety Best Practices
 
 This script validates that database migrations follow the project's standards
 as documented in:
-  - docs/development/migration-specifications.md
+  - docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-011_Migration_Specifications.md
   - .claude/rules/database-migrations.md
 
 Usage:
@@ -23,7 +23,7 @@ Exit Codes:
     2: Warnings found but no errors
 
 Reference:
-    See docs/development/MIGRATION_COMPLIANCE_REVIEW.md for detailed findings.
+    See docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-009_Migration_Compliance_Review.md for detailed findings.
 """
 
 import re
@@ -217,8 +217,8 @@ Examples:
   %(prog)s --report                           # Show summary report
 
 For more information, see:
-  - docs/development/MIGRATION_BEST_PRACTICES.md
-  - docs/development/MIGRATION_COMPLIANCE_REVIEW.md
+  - docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-011_Migration_Specifications.md
+  - docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-009_Migration_Compliance_Review.md
         """
     )
     parser.add_argument(
@@ -322,7 +322,7 @@ For more information, see:
         print("  1. Add idempotency helpers from migrations/migration_template.py.mako")
         print("  2. Wrap CREATE operations in existence checks")
         print("  3. See MIGRATION_BEST_PRACTICES.md for examples")
-        print("\nOr see docs/development/MIGRATION_COMPLIANCE_REVIEW.md for full audit report")
+        print("\nOr see docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-009_Migration_Compliance_Review.md for full audit report")
         sys.exit(1)
     elif total_warnings > 0:
         print(f"\n{'='*70}")

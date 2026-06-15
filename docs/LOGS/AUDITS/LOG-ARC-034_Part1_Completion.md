@@ -50,14 +50,14 @@ Part 1 documentation updates have been successfully completed with comprehensive
 
 ### 2. Feature Documentation (2 comprehensive guides created)
 
-✅ **docs/user-guides/features/analytics/interpreting-analytics.md** (16KB, ~800 lines)
+✅ **docs/archive/v1-user-guides/features/analytics/interpreting-analytics.md** (16KB, ~800 lines)
 
 - Complete metrics explanation
 - Action playbooks for 5 common scenarios
 - Best practices and privacy guidelines
 - Troubleshooting section
 
-✅ **docs/user-guides/features/rent/itemization-guide.md** (18KB, ~580 lines)
+✅ **docs/archive/v1-user-guides/features/rent/itemization-guide.md** (18KB, ~580 lines)
 
 - Complete setup walkthrough
 - Purchase duration options and strategies
@@ -84,13 +84,13 @@ Part 1 documentation updates have been successfully completed with comprehensive
 
 ### 4. Diagnostic Guides (2 quick-reference guides created)
 
-✅ **docs/user-guides/diagnostics/teacher-analytics.md** (7KB, ~400 lines)
+✅ **docs/archive/v1-user-guides/diagnostics/teacher-analytics.md** (7KB, ~400 lines)
 
 - Dashboard troubleshooting
 - Metrics accuracy issues
 - Performance problems
 
-✅ **docs/user-guides/diagnostics/teacher-rent-itemization.md** (9KB, ~450 lines)
+✅ **docs/archive/v1-user-guides/diagnostics/teacher-rent-itemization.md** (9KB, ~450 lines)
 
 - Store sync issues
 - Privilege badge problems
@@ -100,7 +100,7 @@ Part 1 documentation updates have been successfully completed with comprehensive
 
 ### 5. User Guides (1 file updated)
 
-✅ **docs/user-guides/teacher_manual.md**
+✅ **docs/archive/v1-user-guides/teacher_manual.md**
 
 - Added v1.7 diagnostic links
 - Added Feature Guides section
@@ -144,11 +144,11 @@ modified:   DEVELOPMENT.md
 modified:   docs/archive/releases/RELEASE_NOTES_v1.7.0.md
 modified:   docs/technical-reference/database_schema.md
 modified:   docs/PWA_ICON_REQUIREMENTS.md
-modified:   docs/user-guides/teacher_manual.md
-new file:   docs/user-guides/features/analytics/interpreting-analytics.md
-new file:   docs/user-guides/features/rent/itemization-guide.md
-new file:   docs/user-guides/diagnostics/teacher-analytics.md
-new file:   docs/user-guides/diagnostics/teacher-rent-itemization.md
+modified:   docs/archive/v1-user-guides/teacher_manual.md
+new file:   docs/archive/v1-user-guides/features/analytics/interpreting-analytics.md
+new file:   docs/archive/v1-user-guides/features/rent/itemization-guide.md
+new file:   docs/archive/v1-user-guides/diagnostics/teacher-analytics.md
+new file:   docs/archive/v1-user-guides/diagnostics/teacher-rent-itemization.md
 new file:   DOCUMENTATION_UPDATE_PLAN.md
 new file:   PART1_COMPLETION_SUMMARY.md
 ```

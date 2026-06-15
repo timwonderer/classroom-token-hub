@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = ROOT / "app"
-DEFAULT_BASELINE = ROOT / "docs/development/tracking/wave3_identity_drop_surface_baseline.json"
+DEFAULT_BASELINE = ROOT / "docs/TRACKING/wave3_identity_drop_surface_baseline.json"
 
 EXCLUDED_PATHS = {
     "app/models.py",

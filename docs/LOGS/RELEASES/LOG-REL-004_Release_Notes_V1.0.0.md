@@ -294,7 +294,7 @@ See [../../DEVELOPMENT.md](../../../DEVELOPMENT.md) for the complete roadmap.
 
 Classroom Token Hub is released under the **PolyForm Noncommercial License 1.0.0**. This software is free for educational and nonprofit use. Commercial use is not permitted under this license.
 
-For questions about licensing, please see [LICENSE.md](../../user-guides/legal/license.md).
+For questions about licensing, please see [LICENSE.md](../../archive/v1-user-guides/legal/license.md).
 
 ---
 
@@ -309,8 +309,8 @@ For technical questions, bug reports, or feature requests, please open an issue 
 ## Resources
 
 - **Documentation:** [docs/README.md](../../README.md)
-- **Student Guide:** [docs/user-guides/student_guide.md](../../user-guides/student_guide.md)
-- **Teacher Manual:** [docs/user-guides/teacher_manual.md](../../user-guides/teacher_manual.md)
+- **Student Guide:** [docs/archive/v1-user-guides/student_guide.md](../../archive/v1-user-guides/student_guide.md)
+- **Teacher Manual:** [docs/archive/v1-user-guides/teacher_manual.md](../../archive/v1-user-guides/teacher_manual.md)
 - **Development Priorities:** [../../DEVELOPMENT.md](../../../DEVELOPMENT.md)
 - **Security Audits:** [docs/security/](../../security/)
 - **Changelog:** [../../CHANGELOG.md](../../../CHANGELOG.md)
