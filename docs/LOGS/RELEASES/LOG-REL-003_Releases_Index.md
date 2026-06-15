@@ -2,12 +2,13 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-REL-003      | 1.0     | 2026-03-01     | N/A        | Informative                |
+| LOG-REL-003      | 1.1     | 2026-06-14     | N/A        | Informative     |
 
-This directory contains historical release notes for Classroom Token Hub.
+This directory contains release notes for all Classroom Token Hub Version 1 releases. Version 1 is now retired; v1.10.0 (June 14, 2026) is the final release.
 
 ## Available Releases
 
+- **[v1.10.0](LOG-REL-017_Release_Notes_V1.10.0.md)** - **Final Release — Version 1 Retired** (June 14, 2026)
 - **[v1.9.0](LOG-REL-016_Release_Notes_V1.9.0.md)** - Security/data hygiene, recovery simplification, docs-system consolidation (March 4, 2026)
 - **[v1.8.0](LOG-REL-015_Release_Notes_V1.8.0.md)** - Rent item types, coverage tracking, stability fixes (February 9, 2026)
 - **[v1.7.1](LOG-REL-014_Release_Notes_V1.7.1.md)** - Financial precision fixes, payroll stability (January 22, 2026)
@@ -22,10 +23,10 @@ This directory contains historical release notes for Classroom Token Hub.
 - **[v1.1.0](LOG-REL-005_Release_Notes_V1.1.0.md)** - Dashboard analytics, projection graphs, and UI redesign (December 13, 2024)
 - **[v1.0.0](LOG-REL-004_Release_Notes_V1.0.0.md)** - Initial stable release (November 29, 2024)
 
-## Current Releases
+## Version 1 Status
 
-For the latest release information, see [CHANGELOG.md](../../../CHANGELOG.md).
+Version 1 is **retired**. v1.10.0 is the final release. All v1 release history is preserved in this directory and in [CHANGELOG.md](../../../CHANGELOG.md). Active development continues on Version 2.
 
 ---
 
-**Note:** These release notes have been archived for historical reference. For current development status and upcoming features, see [DEVELOPMENT.md](../../../DEVELOPMENT.md).
+**Note:** These release notes are archived for historical reference. Version 1 is end-of-life. For v2 development status, see [DEVELOPMENT.md](../../../DEVELOPMENT.md).

@@ -1,11 +1,11 @@
-# 🎓Classroom Token Hub v1.9.0
+# 🎓Classroom Token Hub v1.10.0 — Version 1 Final Release
 
 An interactive banking and classroom management platform for teaching students about money while tracking classroom participation.
 
-**Release Track:** Sunsetting — see [CHANGELOG.md](CHANGELOG.md) for current version
+**Release Track:** End-of-Life — v1.10.0 is the final Version 1 release. See [CHANGELOG.md](CHANGELOG.md) for the complete version history.
 
 > [!IMPORTANT]
-> Classroom Token Hub v1 will be officially deprecated after June 30, 2026. All v1 releases will no longer be supported after that date. Because v2 is a major rebuild, no data migration will occur. Classroom Token Hub v2 is scheduled for public release by August 2026.
+> **Classroom Token Hub Version 1 is now retired.** v1.10.0 (June 14, 2026) is the last Version 1 release. No further v1 patches or features will be developed. Because v2 is a full architectural rebuild, no data migration from v1 will occur. Classroom Token Hub v2 is scheduled for public release by August 2026.
 
 ---
 
@@ -15,7 +15,7 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
-**Project Status:** Actively maintained classroom-economy platform with ongoing security hardening, documentation cleanup, and feature work. For the current release history, see [CHANGELOG.md](CHANGELOG.md). For the canonical system and feature docs, start at [docs/README.md](docs/README.md).
+**Project Status:** End-of-Life. v1.10.0 is the final Version 1 release. The codebase is stable and production-ready for existing deployments, but no further v1 development will occur. For the complete release history, see [CHANGELOG.md](CHANGELOG.md). For the canonical system and feature docs, start at [docs/README.md](docs/README.md).
 
 ---
 
@@ -312,16 +312,14 @@ Operational script behavior and arguments are documented in [docs/LOGS/AUDITS/LO
 
 ---
 
-## Roadmap
+## What's Next
 
-Active development priorities, architectural follow-up work, and operational tasks are tracked in [DEVELOPMENT.md](DEVELOPMENT.md).
+Version 1 is complete. The full v1 development history and all shipped features are documented in [CHANGELOG.md](CHANGELOG.md) and [DEVELOPMENT.md](DEVELOPMENT.md).
 
-This repository is under active maintenance. Current capability and release history are reflected in [CHANGELOG.md](CHANGELOG.md) and the canonical docs under [`docs/`](docs/README.md).
-
-v2.0 is under active development with brand new join-code centric schema design, complete API rework, and with even more privacy invariants and even less PII stored. 
+v2.0 is under active development with a ground-up join-code-centric schema redesign, a complete API rework, stronger privacy invariants, and significantly less PII stored overall.
 
 > [!NOTE]
-> v2.0 is on track to begin testing by June 2026. Until then, v1.x remains under active maintenance with occasional feature push.
+> v2.0 is targeting a public release by August 2026. v1.10.0 remains a stable, production-ready reference implementation in the meantime.
 
 ---
 
