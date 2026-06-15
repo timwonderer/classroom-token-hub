@@ -6,7 +6,7 @@ on:
       - '**'
   push:
     branches:
-      - main
+      - codex/v2.0
   workflow_dispatch:
 
 jobs:
@@ -28,7 +28,7 @@ jobs:
         run: python scripts/policy_guardrails.py --git-diff-base "origin/${{ github.base_ref }}" --git-diff-head "${{ github.sha }}"
 
   guardrails-main:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/codex/v2.0'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -41,7 +41,7 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Run policy guardrails (no waivers allowed on main)
+      - name: Run policy guardrails (no waivers allowed on codex/v2.0)
         run: |
           if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
             python scripts/policy_guardrails.py --strict --no-waivers
