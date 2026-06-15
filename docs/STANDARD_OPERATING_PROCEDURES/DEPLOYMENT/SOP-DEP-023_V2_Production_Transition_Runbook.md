@@ -138,7 +138,7 @@ Record:
 ## XII. Deferral Boundary
 
 - This runbook is limited to launch-critical transition steps and operator records.
-- Broader operational taxonomy changes, route-family cleanup, and post-port architecture alignment are deferred until after `../../development/specs/V2_ADMIN_ROUTE_REFACTOR.md` and `../../development/v2_restructure_doc/MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md`.
+- Broader operational taxonomy changes, route-family cleanup, and post-port architecture alignment are deferred until after `../../SPECS/V2_ADMIN_ROUTE_REFACTOR.md` and `../../MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md`.
 
 ## XIII. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

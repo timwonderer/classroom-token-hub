@@ -71,34 +71,36 @@ class AnalyticsEngine:
     - Bias toward actionable interpretation
     """
     
-    def __init__(self, teacher_id: int, join_code: str):
+    def __init__(self, class_id: str, join_code: str = None):
         """
         Initialize analytics engine for a specific class economy.
-        
+
         Args:
-            teacher_id: The teacher's ID
-            join_code: The class period join code (CRITICAL for multi-tenancy)
+            class_id: The canonical class identifier (UUID).
+                      Legacy callers may pass teacher_id here with join_code —
+                      if join_code is provided, class_id is resolved from it.
+            join_code: Deprecated — if provided, resolves class_id from join_code
         """
-        self.teacher_id = teacher_id
-        self.join_code = join_code
-        self.class_id = self._resolve_class_id()
+        from app.models import ClassEconomy
+        if join_code is not None:
+            class_row = ClassEconomy.query.filter_by(join_code=join_code).first()
+        else:
+            class_row = ClassEconomy.query.get(class_id)
+        if not class_row:
+            raise ValueError(f"Invalid class lookup: class_id={class_id}, join_code={join_code}")
+
+        self.class_id = class_row.class_id
+        self.teacher_id = class_row.teacher_id
+        self.join_code = class_row.join_code
         self.policy_mode = get_active_policy_mode_for_class(self.class_id)
         self.policy_profile = get_policy_profile(self.policy_mode)
         self.analytics_policy = get_analytics_policy(self.policy_mode)
         self.economy_checker = EconomyBalanceChecker(
-            teacher_id,
+            self.teacher_id,
             policy_mode=self.policy_mode,
             class_id=self.class_id,
         )
 
-    def _resolve_class_id(self) -> Optional[str]:
-        class_row = ClassEconomy.query.with_entities(ClassEconomy.class_id).filter_by(
-            teacher_id=self.teacher_id,
-            join_code=self.join_code,
-        ).first()
-        if not class_row or not class_row[0]:
-            return None
-        return class_row[0]
 
     def _get_enrolled_students(self) -> List[Student]:
         """Get all students enrolled in this class period via canonical class membership."""

@@ -112,7 +112,7 @@ For critical issues:
 
 1. Check the relevant operational guide in this directory
 2. Review error logs via the System Admin portal
-3. Consult the [Teacher Diagnostics Index](../../user-guides/diagnostics/teacher.md) for troubleshooting checklists
+3. Consult the [Teacher Diagnostics Index](../../archive/v1-user-guides/diagnostics/teacher.md) for troubleshooting checklists
 4. Review recent changes in [CHANGELOG.md](../RELEASES/LOG-REL-002_Changelog_Mirror.md)
 
 ---

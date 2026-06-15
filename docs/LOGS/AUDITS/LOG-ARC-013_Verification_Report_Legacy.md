@@ -38,7 +38,7 @@ The incident-postmortem-and-reorganization branch implements significant improve
 **Document Location:** `/codebase_organization_documentation_hygiene_playbook.md`
 
 #### ✅ PASS: Documentation Structure
-- **Expected:** docs/ structure with development/, technical-reference/, operations/, security/, user-guides/, archive/
+- **Expected:** docs/ structure with development/, technical-reference/, operations/, security/, archive/v1-user-guides/, archive/
 - **Actual:** All expected directories present and properly organized
 - **Evidence:**
   ```
@@ -47,7 +47,7 @@ The incident-postmortem-and-reorganization branch implements significant improve
   ├── technical-reference/  ✓ Present
   ├── operations/           ✓ Present
   ├── security/             ✓ Present
-  ├── user-guides/          ✓ Present
+  ├── archive/v1-user-guides/          ✓ Present
   └── archive/              ✓ Present
   ```
 
@@ -81,7 +81,7 @@ The incident-postmortem-and-reorganization branch implements significant improve
   ```
 
 #### ⚠️ INFO: Additional Documentation Directories
-- **Found:** user-guides/diagnostics/, user-guides/features/, ai/, fixes/, user-guides/legal/
+- **Found:** archive/v1-user-guides/diagnostics/, archive/v1-user-guides/features/, ai/, fixes/, archive/v1-user-guides/legal/
 - **Status:** Not mentioned in playbook but appear to serve valid purposes
 - **Recommendation:** Document these in playbook or consolidate if appropriate
 
@@ -317,8 +317,8 @@ Schema Contraction & Destructive Migration Policy (./SCHEMA_CONTRACTION_AND_DEST
 **Target:** < 15 per playbook
 **Candidates for Consolidation:**
 
-- ATTRIBUTION.md → docs/user-guides/legal/
-- COMMERCIAL.md → docs/user-guides/legal/
+- ATTRIBUTION.md → docs/archive/v1-user-guides/legal/
+- COMMERCIAL.md → docs/archive/v1-user-guides/legal/
 - codebase_organization_documentation_hygiene_playbook.md → docs/development/
 
 ---

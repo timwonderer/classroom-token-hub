@@ -31,8 +31,8 @@ docs_bp = Blueprint('docs', __name__, url_prefix='/docs')
 # Documentation root directory
 DOCS_ROOT = Path(__file__).parent.parent.parent / 'docs'
 
-# Directories excluded from user-facing search (internal documentation only)
-EXCLUDED_DIRECTORIES = {'security', 'archive'}
+# Directories excluded from ALL search audiences (internal documentation only)
+EXCLUDED_DIRECTORIES = {'security'}
 
 # Friendly category names for search results
 CATEGORY_MAP = {
@@ -42,11 +42,15 @@ CATEGORY_MAP = {
     'LOGS': 'Logs',
     'SECURITY': 'Security',
     'STANDARD_OPERATING_PROCEDURES': 'Standard Operating Procedures',
-    'user-guides': 'User Guides',
-    'technical-reference': 'Technical Reference',
-    'development': 'Development',
-    'operations': 'Operations',
-    'security': 'Security',
+    'TESTING': 'Testing',
+    'SPECS': 'Specs',
+    'TRACKING': 'Tracking',
+    'DOMAIN': 'Domain',
+    'FEATURE-EXECUTION': 'Feature Execution',
+    'INVARIANT': 'Invariant',
+    'MAP': 'Map',
+    'ARCHITECTURE': 'Architecture',
+    'self-hosting': 'Self Hosting',
     'archive': 'Archive'
 }
 
@@ -523,7 +527,7 @@ def view_doc(doc_path):
             abort(404)
 
         # Canonicalize directory-style docs URLs so relative markdown links resolve
-        # under the directory (e.g. /docs/user-guides/features/teacher/).
+        # under the directory (e.g. /docs/DOMAIN/DOM-CORE-001/).
         if doc_file.name.lower() in {'index.md', 'readme.md'}:
             canonical_path = re.sub(
                 r'/(?:index|readme)(?:\.md)?/?$',
@@ -679,13 +683,12 @@ def search():
                     continue
                     
                 # Strict audience isolation
+                is_archived_user_guide = "v1-user-guides" in doc_file.parts
                 if audience == 'user':
-                    # User audience can ONLY see user-guides
-                    if top_dir_raw != 'user-guides':
+                    if not is_archived_user_guide:
                         continue
                 else:
-                    # DevOps audience can see everything EXCEPT user-guides
-                    if top_dir_raw == 'user-guides':
+                    if is_archived_user_guide:
                         continue
 
                 content = doc_file.read_text(encoding='utf-8')

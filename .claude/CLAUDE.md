@@ -220,12 +220,12 @@ if not allowed:
 
 The v2 authority hierarchy is: **INV → DOM → FEAT**
 
-Specs live in `docs/development/`:
-- `specs/` — target-state architecture and authority contracts
-- `tracking/` — launch checklists and current status
-- `v2_restructure_doc/INVARIANT/` — core invariants
-- `v2_restructure_doc/DOMAIN/` — per-domain authority specs
-- `v2_restructure_doc/FEATURE-EXECUTION/` — FEAT contracts
+Specs live in `docs/`:
+- `SPECS/` — target-state architecture and authority contracts
+- `TRACKING/` — launch checklists and current status
+- `INVARIANT/` — core invariants
+- `DOMAIN/` — per-domain authority specs
+- `FEATURE-EXECUTION/` — FEAT contracts
 
 ### Domain Summary
 
@@ -310,24 +310,31 @@ pytest tests/
 1. **CHANGELOG.md** — All changes, following Keep a Changelog format
 2. **DEVELOPMENT.md** — Add to roadmap or mark as completed
 3. **README.md** — Update if it affects installation/quick start
-4. **User guides** in `docs/user-guides/` — If user-facing
-5. **Technical reference** in `docs/technical-reference/` — For architecture changes
+4. **Architecture docs** in `docs/ARCHITECTURE/` — For architecture changes
+5. **Domain specs** in `docs/DOMAIN/` — For domain authority changes
 
 ### Documentation Organization
 
 ```
 docs/
 ├── README.md
-├── user-guides/               # Teachers and students
-├── technical-reference/       # Architecture, database, API
-├── operations/                # Deployment and maintenance
-├── security/                  # Security audits
-├── development/               # Dev guides and policies
-│   ├── specs/                 # Target-state architecture specs
-│   ├── tracking/              # Launch readiness and status
-│   ├── v2_restructure_doc/    # v2 domain/invariant/FEAT specs
-│   └── archive/               # Historical docs
-└── archive/                   # Historical docs
+├── INV-CORE-000_Core_Invariants.md   # Constitutional root
+├── INV-CORE-001_Authority_Model.md   # Constitutional root
+├── ARCHITECTURE/              # Cross-domain architectural rules
+├── DOMAIN/                    # Per-domain authority specs
+├── DOMAINS/                   # Domain-level design specs
+├── FEATURE-EXECUTION/         # FEAT contracts
+├── FEATURES/                  # Feature specifications
+├── INVARIANT/                 # Core and architecture invariants
+├── MAP/                       # Domain-to-FEAT capability maps
+├── TESTING/                   # Test creation and validation
+├── SPECS/                     # Target-state architecture specs
+├── TRACKING/                  # Launch readiness and status
+├── LOGS/                      # Historical audit and release logs
+├── SECURITY/                  # Security audits, controls, incidents
+├── STANDARD_OPERATING_PROCEDURES/  # Database, deployment, devops SOPs
+├── self-hosting/              # Self-hosting guide
+└── archive/                   # v1 docs (user-guides, GitHub Pages, etc.)
 ```
 
 ---
@@ -552,7 +559,7 @@ class_id = session.get("current_class_id")
 - [ ] Re-upgrade: `flask db upgrade`
 - [ ] Verify single head still: `flask db heads`
 - [ ] Run tests: `pytest`
-- [ ] Update `docs/technical-reference/database_schema.md` if significant
+- [ ] Update `docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md` if significant
 - [ ] Update CHANGELOG.md
 - [ ] Commit migration with model changes
 
@@ -560,26 +567,26 @@ class_id = session.get("current_class_id")
 
 ## Additional Resources
 
-- **v2 Invariants:** `docs/development/v2_restructure_doc/INVARIANT/`
-- **v2 Domain specs:** `docs/development/v2_restructure_doc/DOMAIN/`
-- **v2 FEAT specs:** `docs/development/v2_restructure_doc/FEATURE-EXECUTION/`
-- **v2 Architecture specs:** `docs/development/specs/`
-- **v2 Launch status:** `docs/development/tracking/V2_LAUNCH_READINESS_MATRIX.md`
+- **v2 Invariants:** `docs/INVARIANT/`
+- **v2 Domain specs:** `docs/DOMAIN/`
+- **v2 FEAT specs:** `docs/FEATURE-EXECUTION/`
+- **v2 Architecture specs:** `docs/SPECS/`
+- **v2 Launch status:** `docs/TRACKING/`
 - **Detailed Rules:** `.claude/rules/` for in-depth guidance
-- **Security Audits:** `docs/security/`
-- **Architecture:** `docs/technical-reference/architecture.md`
+- **Security Audits:** `docs/SECURITY/`
+- **Architecture:** `docs/ARCHITECTURE/`
 
 ---
 
 ## Questions or Clarifications?
 
 When uncertain about:
-- **v2 architecture decisions** → `docs/development/v2_restructure_doc/DOMAIN/DOM-CORE-001_DOMAIN_AUTHORITY_SUMMARY.md`
-- **FEAT execution rules** → `docs/development/v2_restructure_doc/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
-- **Core invariants** → `docs/development/v2_restructure_doc/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
-- **Multi-tenancy** → `.claude/rules/multi-tenancy.md` and `docs/security/MULTI_TENANCY_AUDIT.md`
-- **Database design** → `docs/technical-reference/database_schema.md`
-- **Deployment** → `docs/operations/Deployment_Guide.md`
+- **v2 architecture decisions** → `docs/DOMAIN/DOM-CORE-001_DOMAIN_AUTHORITY_SUMMARY.md`
+- **FEAT execution rules** → `docs/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
+- **Core invariants** → `docs/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
+- **Multi-tenancy** → `.claude/rules/multi-tenancy.md` and `docs/SECURITY/AUDITS/SEC-AUD-015_Multi_Tenancy_Audit.md`
+- **Database design** → `docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md`
+- **Deployment** → `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md`
 
 Always prefer reading existing code and documentation before making assumptions.
 

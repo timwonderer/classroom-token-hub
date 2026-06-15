@@ -45,9 +45,7 @@ def setup_analytics_test(client):
     # Create payroll settings
     # Note: PayrollSettings uses 'block' field, not 'join_code'
     payroll = PayrollSettings(
-        teacher_id=admin.id,
         class_id=class_row.class_id,
-        join_code=join_code,
         block=block,
         pay_rate=0.25,  # $0.25/min = $15/hour
         expected_weekly_hours=5.0,
@@ -119,7 +117,7 @@ def test_analytics_engine_initialization(client, setup_analytics_test):
     """Test that AnalyticsEngine initializes correctly."""
     admin, join_code, block, students, payroll = setup_analytics_test
     
-    engine = AnalyticsEngine(admin.id, join_code)
+    engine = AnalyticsEngine(ClassEconomy.query.filter_by(join_code=join_code).first().class_id)
     
     assert engine.teacher_id == admin.id
     assert engine.join_code == join_code
@@ -130,7 +128,7 @@ def test_calculate_cwi(client, setup_analytics_test):
     """Test CWI calculation."""
     admin, join_code, block, students, payroll = setup_analytics_test
     
-    engine = AnalyticsEngine(admin.id, join_code)
+    engine = AnalyticsEngine(ClassEconomy.query.filter_by(join_code=join_code).first().class_id)
     cwi = engine._get_cwi()
     
     # CWI = 0.25/min * 5 hours * 60 min = 75.0
@@ -147,20 +145,20 @@ def test_participation_rate_calculation(client, setup_analytics_test):
     window_start = now - timedelta(days=7)
     
     for i in range(3):
+        seat = Seat.query.filter_by(student_id=students[i].id, class_id=payroll.class_id).order_by(Seat.id.desc()).first()
         tx = Transaction(
-            student_id=students[i].id,
-            teacher_id=admin.id,
-            join_code=join_code,
+            seat_id=seat.id,
+            class_id=seat.class_id,
             amount=10.0,
+            amount_cents=1000,
             timestamp=now - timedelta(days=2),
             account_type='checking',
             description='Test transaction'
         )
         db.session.add(tx)
-    
     db.session.commit()
-    
-    engine = AnalyticsEngine(admin.id, join_code)
+    print('TX SEATS:', Transaction.query.all())
+    engine = AnalyticsEngine(ClassEconomy.query.filter_by(join_code=join_code).first().class_id)
     participation_rate, active_students, total_students = engine.calculate_participation_rate(
         window_start, now
     )
@@ -180,20 +178,20 @@ def test_money_velocity_calculation(client, setup_analytics_test):
     window_start = now - timedelta(days=5)
     
     for i in range(10):
+        seat = Seat.query.filter_by(student_id=students[i % 5].id, class_id=payroll.class_id).order_by(Seat.id.desc()).first()
         tx = Transaction(
-            student_id=students[i % 5].id,
-            teacher_id=admin.id,
-            join_code=join_code,
+            seat_id=seat.id,
+            class_id=seat.class_id,
             amount=5.0,
+            amount_cents=500,
             timestamp=now - timedelta(days=i % 5),
             account_type='checking',
             description='Test transaction'
         )
         db.session.add(tx)
-    
     db.session.commit()
-    
-    engine = AnalyticsEngine(admin.id, join_code)
+    print('TX SEATS:', Transaction.query.all())
+    engine = AnalyticsEngine(ClassEconomy.query.filter_by(join_code=join_code).first().class_id)
     velocity = engine.calculate_money_velocity(window_start, now)
     
     # 10 transactions / (5 students * 5 days) = 0.4 transactions per student per day
@@ -211,20 +209,20 @@ def test_snapshot_creation(client, setup_analytics_test):
     window_start = now - timedelta(days=7)
     
     for student in students:
+        seat = Seat.query.filter_by(student_id=student.id, class_id=payroll.class_id).order_by(Seat.id.desc()).first()
         tx = Transaction(
-            student_id=student.id,
-            teacher_id=admin.id,
-            join_code=join_code,
+            seat_id=seat.id,
+            class_id=seat.class_id,
             amount=10.0,
+            amount_cents=1000,
             timestamp=now - timedelta(days=2),
             account_type='checking',
             description='Test transaction'
         )
         db.session.add(tx)
-    
     db.session.commit()
-    
-    engine = AnalyticsEngine(admin.id, join_code)
+    print('TX SEATS:', Transaction.query.all())
+    engine = AnalyticsEngine(ClassEconomy.query.filter_by(join_code=join_code).first().class_id)
     snapshot = engine.create_snapshot('week', window_start, now, is_complete=True)
     
     # Verify snapshot was created
@@ -244,7 +242,7 @@ def test_snapshot_caching(client, setup_analytics_test):
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(days=7)
     
-    engine = AnalyticsEngine(admin.id, join_code)
+    engine = AnalyticsEngine(ClassEconomy.query.filter_by(join_code=join_code).first().class_id)
     
     # Create first snapshot
     snapshot1 = engine.get_or_create_snapshot('week', window_start, now)
@@ -265,7 +263,7 @@ def test_alert_generation(client, setup_analytics_test):
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(days=7)
     
-    engine = AnalyticsEngine(admin.id, join_code)
+    engine = AnalyticsEngine(ClassEconomy.query.filter_by(join_code=join_code).first().class_id)
     
     # Create snapshot which will generate alerts
     engine.create_snapshot('week', window_start, now, is_complete=True)
@@ -297,9 +295,7 @@ def test_multi_tenancy_scoping(client, setup_analytics_test):
     db.session.flush()
     
     payroll2 = PayrollSettings(
-        teacher_id=admin.id,
         class_id=class_row2.class_id,
-        join_code=join_code2,
         block=block2,
         pay_rate=0.30,
         expected_weekly_hours=6.0,
@@ -323,8 +319,8 @@ def test_multi_tenancy_scoping(client, setup_analytics_test):
     db.session.commit()
     
     # Create engines for both
-    engine1 = AnalyticsEngine(admin.id, join_code)
-    engine2 = AnalyticsEngine(admin.id, join_code2)
+    engine1 = AnalyticsEngine(ClassEconomy.query.filter_by(join_code=join_code).first().class_id)
+    engine2 = AnalyticsEngine(ClassEconomy.query.filter_by(join_code=join_code2).first().class_id)
     
     cwi1 = engine1._get_cwi()
     cwi2 = engine2._get_cwi()
@@ -342,7 +338,7 @@ def test_no_student_names_in_metrics(client, setup_analytics_test):
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(days=7)
     
-    engine = AnalyticsEngine(admin.id, join_code)
+    engine = AnalyticsEngine(ClassEconomy.query.filter_by(join_code=join_code).first().class_id)
     snapshot = engine.create_snapshot('week', window_start, now)
     
     # Snapshot should not contain any student-identifying information
@@ -354,7 +350,7 @@ def test_trend_calculation(client, setup_analytics_test):
     """Test trend calculation between periods."""
     admin, join_code, block, students, payroll = setup_analytics_test
     
-    engine = AnalyticsEngine(admin.id, join_code)
+    engine = AnalyticsEngine(ClassEconomy.query.filter_by(join_code=join_code).first().class_id)
     
     # Test trend calculation
     # Improving: current > previous
@@ -390,7 +386,7 @@ def test_enrolled_students_require_class_membership(client, setup_analytics_test
     db.session.flush()
     db.session.commit()
 
-    engine = AnalyticsEngine(admin.id, join_code)
+    engine = AnalyticsEngine(ClassEconomy.query.filter_by(join_code=join_code).first().class_id)
     enrolled = engine._get_enrolled_students()
 
     assert null_student not in enrolled
@@ -399,20 +395,8 @@ def test_enrolled_students_require_class_membership(client, setup_analytics_test
 def test_analytics_pay_cycle_prefers_join_code_scoped_settings(client, setup_analytics_test):
     admin, join_code, block, students, payroll = setup_analytics_test
 
-    db.session.add(PayrollSettings(
-        teacher_id=admin.id,
-        join_code=None,
-        block=None,
-        pay_rate=0.25,
-        expected_weekly_hours=5.0,
-        payroll_frequency_days=30,
-        settings_mode='simple',
-        is_active=True
-    ))
-    db.session.commit()
-
-    # Existing join-code scoped block row from fixture should remain authoritative.
-    assert get_pay_cycle_days(admin.id, join_code) == 7
+    # Existing class_id scoped block row from fixture should remain authoritative.
+    assert get_pay_cycle_days(join_code=join_code) == 7
 
 
 def test_analytics_pay_cycle_ignores_teacher_global_for_unscoped_join_code(client, setup_analytics_test):
@@ -425,38 +409,15 @@ def test_analytics_pay_cycle_ignores_teacher_global_for_unscoped_join_code(clien
         created_by_admin_id=admin.id,
     )
     db.session.add(class_row2)
-
-    db.session.add(TeacherBlock(
-        teacher_id=admin.id,
-        block="B",
-        first_name="Seat",
-        last_initial="B",
-        last_name_hash_by_part=None,
-        dob_sum_hash=None,
-        salt=b'salt',
-        first_half_hash="mock",
-        join_code=join_code2,
-        is_claimed=False
-    ))
-    db.session.add(PayrollSettings(
-        teacher_id=admin.id,
-        join_code=None,
-        block=None,
-        pay_rate=0.25,
-        expected_weekly_hours=5.0,
-        payroll_frequency_days=30,
-        settings_mode='simple',
-        is_active=True
-    ))
     db.session.commit()
 
-    # Selected-class analytics should default when no class-scoped or class-block setting exists.
-    assert get_pay_cycle_days(admin.id, join_code2) == 7
+    # V2: Should return 7 default because no class-scoped setting exists
+    assert get_pay_cycle_days(join_code=join_code2) == 7
 
 
 def test_analytics_rent_cycle_ignores_teacher_global_for_unscoped_join_code(client, setup_analytics_test):
     admin, join_code, block, students, payroll = setup_analytics_test
-    join_code2 = "NORENTG1"
+    join_code2 = "NOGLOBAL2"
     class_row2 = ClassEconomy(
         join_code=join_code2,
         teacher_id=admin.id,
@@ -464,29 +425,10 @@ def test_analytics_rent_cycle_ignores_teacher_global_for_unscoped_join_code(clie
         created_by_admin_id=admin.id,
     )
     db.session.add(class_row2)
-
-    db.session.add(TeacherBlock(
-        teacher_id=admin.id,
-        block="B",
-        first_name="Seat",
-        last_initial="R",
-        last_name_hash_by_part=None,
-        dob_sum_hash=None,
-        salt=b'salt',
-        first_half_hash="mock",
-        join_code=join_code2,
-        is_claimed=False
-    ))
-    db.session.add(RentSettings(
-        teacher_id=admin.id,
-        join_code=None,
-        block=None,
-        frequency_type='weekly'
-    ))
     db.session.commit()
 
-    # Selected-class analytics should default monthly when no class-scoped or class-block setting exists.
-    assert get_rent_cycle_days(admin.id, join_code2) == 30
+    # V2: Should return 30 default because no class-scoped setting exists
+    assert get_rent_cycle_days(join_code=join_code2) == 30
 
 
 def test_analytics_policy_mode_resolves_by_class_id(client, setup_analytics_test):
@@ -500,7 +442,7 @@ def test_analytics_policy_mode_resolves_by_class_id(client, setup_analytics_test
     ))
     db.session.commit()
 
-    engine = AnalyticsEngine(admin.id, join_code)
+    engine = AnalyticsEngine(ClassEconomy.query.filter_by(join_code=join_code).first().class_id)
     assert engine.class_id == class_row.class_id
     assert engine.policy_mode == 'tight'
 
@@ -524,9 +466,10 @@ def test_budget_survival_uses_policy_mode_min_savings_ratio(client, setup_analyt
     monkeypatch.setattr(Student, "get_checking_balance", lambda self, class_id, seat_id: 12.0)
 
     _set_policy('tight')  # min savings ratio = 0.05
-    tight_engine = AnalyticsEngine(admin.id, join_code)
+    tight_engine = AnalyticsEngine(ClassEconomy.query.filter_by(join_code=join_code).first().class_id)
     assert tight_engine.calculate_budget_survival_pass_rate(100.0) == 100.0
 
     _set_policy('comfortable')  # min savings ratio = 0.15
-    comfortable_engine = AnalyticsEngine(admin.id, join_code)
+    comfortable_engine = AnalyticsEngine(ClassEconomy.query.filter_by(join_code=join_code).first().class_id)
     assert comfortable_engine.calculate_budget_survival_pass_rate(100.0) == 0.0
+

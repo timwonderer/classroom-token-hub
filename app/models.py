@@ -505,16 +505,15 @@ class Student(db.Model):
             raise ValueError("get_savings_balance requires class_id and seat_id.")
         return get_available_balance(seat_id, class_id, 'savings')
 
-    def get_total_earnings(self, teacher_id=None, join_code=None):
+    def get_total_earnings(self, join_code=None, teacher_id=None):
         """
         Get total earnings scoped to a specific class economy.
 
         CRITICAL: For proper period isolation, callers should pass join_code.
-        The teacher_id parameter is deprecated and only kept for backward compatibility.
 
         Args:
-            teacher_id: DEPRECATED - Only for backward compatibility
             join_code: The unique class identifier for period-level isolation
+            teacher_id: Deprecated — accepted but ignored for backward compatibility
 
         Returns:
             float: The total earnings rounded to 2 decimal places
@@ -530,10 +529,7 @@ class Student(db.Model):
                 ~Transaction.description.startswith("Transfer")
             ).scalar()
             return float(round(_quantize_currency(total), 2)) if total else 0.0
-        elif teacher_id:
-            # Deprecated teacher-only lookups are intentionally disabled to avoid
-            # cross-class aggregation leaks during the join-code migration.
-            return 0.0
+
         else:
             # Unscoped totals are disabled under join-code scoping to avoid
             # leaking or conflating balances across distinct class economies.

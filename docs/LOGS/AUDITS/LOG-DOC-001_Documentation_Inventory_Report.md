@@ -33,102 +33,102 @@
 
 | Filename | Path | Summary | Last Modified | Relevancy |
 |----------|------|---------|---------------|-----------|
-| README.md | `docs/user-guides/README.md` | This directory contains all user-facing documentation. | 2026-02-28 | 🟢 High (Current) |
-| student-attendance.md | `docs/user-guides/diagnostics/student-attendance.md` | title: Student Attendance and Payroll | 2026-02-28 | 🟢 High (Current) |
-| student-classes.md | `docs/user-guides/diagnostics/student-classes.md` | title: Student Classes and Join Codes | 2026-02-28 | 🟢 High (Current) |
-| student-hall-pass.md | `docs/user-guides/diagnostics/student-hall-pass.md` | title: Student Hall Pass | 2026-02-28 | 🟢 High (Current) |
-| student-login.md | `docs/user-guides/diagnostics/student-login.md` | title: Student Login and Setup | 2026-02-28 | 🟢 High (Current) |
-| student-money.md | `docs/user-guides/diagnostics/student-money.md` | title: Student Balances, Transfers, and Interest | 2026-02-28 | 🟢 High (Current) |
-| student-rent-insurance.md | `docs/user-guides/diagnostics/student-rent-insurance.md` | title: Student Rent and Insurance | 2026-02-28 | 🟢 High (Current) |
-| student-store.md | `docs/user-guides/diagnostics/student-store.md` | title: Student Store and Purchases | 2026-02-28 | 🟢 High (Current) |
-| student-support.md | `docs/user-guides/diagnostics/student-support.md` | title: Student Help and Issue Reports | 2026-02-28 | 🟢 High (Current) |
-| student.md | `docs/user-guides/diagnostics/student.md` | title: Student Help and Support Guides | 2026-02-28 | 🟢 High (Current) |
-| teacher-analytics.md | `docs/user-guides/diagnostics/teacher-analytics.md` | title: Analytics Dashboard Troubleshooting | 2026-02-28 | 🟢 High (Current) |
-| teacher-announcements-issues.md | `docs/user-guides/diagnostics/teacher-announcements-issues.md` | title: Teacher Announcements and Issues | 2026-02-28 | 🟢 High (Current) |
-| teacher-attendance-payroll.md | `docs/user-guides/diagnostics/teacher-attendance-payroll.md` | title: Teacher Attendance and Payroll | 2026-02-28 | 🟢 High (Current) |
-| teacher-hall-pass.md | `docs/user-guides/diagnostics/teacher-hall-pass.md` | title: Teacher Hall Pass | 2026-02-28 | 🟢 High (Current) |
-| teacher-login.md | `docs/user-guides/diagnostics/teacher-login.md` | title: Teacher Login and Account Security | 2026-02-28 | 🟢 High (Current) |
-| teacher-onboarding.md | `docs/user-guides/diagnostics/teacher-onboarding.md` | title: Teacher Onboarding and Feature Settings | 2026-02-28 | 🟢 High (Current) |
-| teacher-rent-insurance.md | `docs/user-guides/diagnostics/teacher-rent-insurance.md` | title: Teacher Rent and Insurance | 2026-02-28 | 🟢 High (Current) |
-| teacher-rent-itemization.md | `docs/user-guides/diagnostics/teacher-rent-itemization.md` | title: Rent Itemization Troubleshooting | 2026-02-28 | 🟢 High (Current) |
-| teacher-store.md | `docs/user-guides/diagnostics/teacher-store.md` | title: Teacher Store and Redemptions | 2026-02-28 | 🟢 High (Current) |
-| teacher-students.md | `docs/user-guides/diagnostics/teacher-students.md` | title: Teacher Students and Join Codes | 2026-02-28 | 🟢 High (Current) |
-| teacher-transactions-banking.md | `docs/user-guides/diagnostics/teacher-transactions-banking.md` | title: Teacher Transactions and Banking | 2026-02-28 | 🟢 High (Current) |
-| teacher.md | `docs/user-guides/diagnostics/teacher.md` | title: Teacher Help and Support Guides | 2026-02-28 | 🟢 High (Current) |
-| economy_guide.md | `docs/user-guides/economy_guide.md` | title: Classroom Economy Guide | 2026-02-28 | 🟢 High (Current) |
-| interpreting-analytics.md | `docs/user-guides/features/analytics/interpreting-analytics.md` | title: Interpreting the Analytics Dashboard | 2026-02-28 | 🟢 High (Current) |
-| managing-banking.md | `docs/user-guides/features/banking/managing-banking.md` | title: Managing Banking | 2026-02-28 | 🟢 High (Current) |
-| transferring-money.md | `docs/user-guides/features/banking/transferring-money.md` | title: Banking & Transfers | 2026-02-28 | 🟢 High (Current) |
-| running-payroll.md | `docs/user-guides/features/payroll/running-payroll.md` | title: Running Payroll | 2026-02-28 | 🟢 High (Current) |
-| itemization-guide.md | `docs/user-guides/features/rent/itemization-guide.md` | title: Rent Itemization Guide | 2026-02-28 | 🟢 High (Current) |
-| managing-rent.md | `docs/user-guides/features/rent/managing-rent.md` | title: Managing Rent | 2026-02-28 | 🟢 High (Current) |
-| creating-items.md | `docs/user-guides/features/store/creating-items.md` | title: Creating Store Items | 2026-02-28 | 🟢 High (Current) |
-| dashboard-overview.md | `docs/user-guides/features/student/account/dashboard-overview.md` | title: Student Dashboard Overview | 2026-02-28 | 🟢 High (Current) |
-| index.md | `docs/user-guides/features/student/account/index.md` | title: Account Features (Student) | 2026-02-28 | 🟢 High (Current) |
-| join-class.md | `docs/user-guides/features/student/account/join-class.md` | title: Join or Add a Class | 2026-02-28 | 🟢 High (Current) |
-| login-setup.md | `docs/user-guides/features/student/account/login-setup.md` | title: Log In and First-Time Setup | 2026-02-28 | 🟢 High (Current) |
-| reset-recovery.md | `docs/user-guides/features/student/account/reset-recovery.md` | title: Reset or Recover Your Account | 2026-02-28 | 🟢 High (Current) |
-| switch-class.md | `docs/user-guides/features/student/account/switch-class.md` | title: Switch Classes | 2026-02-28 | 🟢 High (Current) |
-| accounts-transfers.md | `docs/user-guides/features/student/banking/accounts-transfers.md` | title: Accounts and Transfers | 2026-02-28 | 🟢 High (Current) |
-| index.md | `docs/user-guides/features/student/banking/index.md` | title: Banking Features (Student) | 2026-02-28 | 🟢 High (Current) |
-| savings-interest.md | `docs/user-guides/features/student/banking/savings-interest.md` | title: Savings Interest | 2026-02-28 | 🟢 High (Current) |
-| index.md | `docs/user-guides/features/student/bills/index.md` | title: Bills Features (Student) | 2026-02-28 | 🟢 High (Current) |
-| insurance-claims.md | `docs/user-guides/features/student/bills/insurance-claims.md` | title: Submit an Insurance Claim | 2026-02-28 | 🟢 High (Current) |
-| insurance-coverage.md | `docs/user-guides/features/student/bills/insurance-coverage.md` | title: Insurance Coverage and Claims | 2026-02-28 | 🟢 High (Current) |
-| rent-payments.md | `docs/user-guides/features/student/bills/rent-payments.md` | title: Pay Rent | 2026-02-28 | 🟢 High (Current) |
-| index.md | `docs/user-guides/features/student/index.md` | title: Student Feature Guides | 2026-02-28 | 🟢 High (Current) |
-| browse-buy.md | `docs/user-guides/features/student/store/browse-buy.md` | title: Browse and Buy Items | 2026-02-28 | 🟢 High (Current) |
-| index.md | `docs/user-guides/features/student/store/index.md` | title: Store Features (Student) | 2026-02-28 | 🟢 High (Current) |
-| redemption-status.md | `docs/user-guides/features/student/store/redemption-status.md` | title: Track Redemptions | 2026-02-28 | 🟢 High (Current) |
-| help-center.md | `docs/user-guides/features/student/support/help-center.md` | title: Help Center Basics | 2026-02-28 | 🟢 High (Current) |
-| index.md | `docs/user-guides/features/student/support/index.md` | title: Support Features (Student) | 2026-02-28 | 🟢 High (Current) |
-| report-issues.md | `docs/user-guides/features/student/support/report-issues.md` | title: Report Issues | 2026-02-28 | 🟢 High (Current) |
-| attendance-history.md | `docs/user-guides/features/student/work/attendance-history.md` | title: Attendance History and Pay Status | 2026-02-28 | 🟢 High (Current) |
-| index.md | `docs/user-guides/features/student/work/index.md` | title: Work and Pay Features (Student) | 2026-02-28 | 🟢 High (Current) |
-| start-end-work.md | `docs/user-guides/features/student/work/start-end-work.md` | title: Start and End Work | 2026-02-28 | 🟢 High (Current) |
-| index.md | `docs/user-guides/features/teacher/bills/index.md` | title: Bills Features (Teacher) | 2026-02-28 | 🟢 High (Current) |
-| insurance-claims.md | `docs/user-guides/features/teacher/bills/insurance-claims.md` | title: Insurance Claims and Coverage | 2026-02-28 | 🟢 High (Current) |
-| insurance-enrollment.md | `docs/user-guides/features/teacher/bills/insurance-enrollment.md` | title: Insurance Enrollment | 2026-02-28 | 🟢 High (Current) |
-| insurance-policies.md | `docs/user-guides/features/teacher/bills/insurance-policies.md` | title: Insurance Policies | 2026-02-28 | 🟢 High (Current) |
-| rent-behaviors.md | `docs/user-guides/features/teacher/bills/rent-behaviors.md` | title: Customizing Rent Behaviors | 2026-02-28 | 🟢 High (Current) |
-| rent-itemization.md | `docs/user-guides/features/teacher/bills/rent-itemization.md` | title: Rent Itemization | 2026-02-28 | 🟢 High (Current) |
-| rent-settings.md | `docs/user-guides/features/teacher/bills/rent-settings.md` | title: Rent Settings | 2026-02-28 | 🟢 High (Current) |
-| rent-waivers.md | `docs/user-guides/features/teacher/bills/rent-waivers.md` | title: Rent Waivers | 2026-02-28 | 🟢 High (Current) |
-| announcements.md | `docs/user-guides/features/teacher/classroom/announcements.md` | title: Announcements | 2026-02-28 | 🟢 High (Current) |
-| attendance-approvals.md | `docs/user-guides/features/teacher/classroom/attendance-approvals.md` | title: Attendance and Approvals | 2026-02-28 | 🟢 High (Current) |
-| attendance-corrections.md | `docs/user-guides/features/teacher/classroom/attendance-corrections.md` | title: Fix Attendance Errors | 2026-02-28 | 🟢 High (Current) |
-| class-setup.md | `docs/user-guides/features/teacher/classroom/class-setup.md` | title: Class Setup and Join Codes | 2026-02-28 | 🟢 High (Current) |
-| dashboard-overview.md | `docs/user-guides/features/teacher/classroom/dashboard-overview.md` | title: Teacher Dashboard Overview | 2026-02-28 | 🟢 High (Current) |
-| hall-pass.md | `docs/user-guides/features/teacher/classroom/hall-pass.md` | title: Hall Pass | 2026-02-28 | 🟢 High (Current) |
-| index.md | `docs/user-guides/features/teacher/classroom/index.md` | title: Classroom Features (Teacher) | 2026-02-28 | 🟢 High (Current) |
-| student-issues.md | `docs/user-guides/features/teacher/classroom/student-issues.md` | title: Student Issues Queue | 2026-02-28 | 🟢 High (Current) |
-| students-overview.md | `docs/user-guides/features/teacher/classroom/students-overview.md` | title: Student Management Overview | 2026-02-28 | 🟢 High (Current) |
-| analytics.md | `docs/user-guides/features/teacher/economy/analytics.md` | title: Analytics Dashboard | 2026-02-28 | 🟢 High (Current) |
-| banking-interest.md | `docs/user-guides/features/teacher/economy/banking-interest.md` | title: Interest and Payouts | 2026-02-28 | 🟢 High (Current) |
-| banking-overdraft.md | `docs/user-guides/features/teacher/economy/banking-overdraft.md` | title: Overdraft Rules | 2026-02-28 | 🟢 High (Current) |
-| banking-settings.md | `docs/user-guides/features/teacher/economy/banking-settings.md` | title: Banking Settings | 2026-02-28 | 🟢 High (Current) |
-| economy-health.md | `docs/user-guides/features/teacher/economy/economy-health.md` | title: Economy Health | 2026-02-28 | 🟢 High (Current) |
-| index.md | `docs/user-guides/features/teacher/economy/index.md` | title: Economy Features (Teacher) | 2026-02-28 | 🟢 High (Current) |
-| payroll-history.md | `docs/user-guides/features/teacher/economy/payroll-history.md` | title: Payroll History | 2026-02-28 | 🟢 High (Current) |
-| payroll-run.md | `docs/user-guides/features/teacher/economy/payroll-run.md` | title: Run Payroll | 2026-02-28 | 🟢 High (Current) |
-| payroll-settings.md | `docs/user-guides/features/teacher/economy/payroll-settings.md` | title: Payroll Settings | 2026-02-28 | 🟢 High (Current) |
-| store-items.md | `docs/user-guides/features/teacher/economy/store-items.md` | title: Store Items | 2026-02-28 | 🟢 High (Current) |
-| store-pricing.md | `docs/user-guides/features/teacher/economy/store-pricing.md` | title: Store Pricing Strategy | 2026-02-28 | 🟢 High (Current) |
-| store-redemptions.md | `docs/user-guides/features/teacher/economy/store-redemptions.md` | title: Store Redemptions | 2026-02-28 | 🟢 High (Current) |
-| transactions.md | `docs/user-guides/features/teacher/economy/transactions.md` | title: Transactions | 2026-02-28 | 🟢 High (Current) |
-| index.md | `docs/user-guides/features/teacher/index.md` | title: Teacher Feature Guides | 2026-02-28 | 🟢 High (Current) |
-| account-deletion.md | `docs/user-guides/features/teacher/settings/account-deletion.md` | title: Account Deletion Requests | 2026-02-28 | 🟢 High (Current) |
-| account-recovery.md | `docs/user-guides/features/teacher/settings/account-recovery.md` | title: Account Recovery | 2026-02-28 | 🟢 High (Current) |
-| feature-toggles.md | `docs/user-guides/features/teacher/settings/feature-toggles.md` | title: Feature Toggles | 2026-02-28 | 🟢 High (Current) |
-| index.md | `docs/user-guides/features/teacher/settings/index.md` | title: Settings Features (Teacher) | 2026-02-28 | 🟢 High (Current) |
-| passkey.md | `docs/user-guides/features/teacher/settings/passkey.md` | title: Passkey and Login Security | 2026-02-28 | 🟢 High (Current) |
-| personalization.md | `docs/user-guides/features/teacher/settings/personalization.md` | title: Personalization | 2026-02-28 | 🟢 High (Current) |
-| attribution.md | `docs/user-guides/legal/attribution.md` | title: Attribution & Project Philosophy | 2026-02-28 | 🟢 High (Current) |
-| commercial.md | `docs/user-guides/legal/commercial.md` | title: Commercial Use Policy | 2026-02-28 | 🟢 High (Current) |
-| license.md | `docs/user-guides/legal/license.md` | title: License | 2026-02-28 | 🟢 High (Current) |
-| third-party-notices.md | `docs/user-guides/legal/third-party-notices.md` | title: Third-Party Notices | 2026-02-28 | 🟢 High (Current) |
-| student_guide.md | `docs/user-guides/student_guide.md` | title: Student Guide | 2026-02-28 | 🟢 High (Current) |
-| teacher_manual.md | `docs/user-guides/teacher_manual.md` | title: Teacher Manual | 2026-02-28 | 🟢 High (Current) |
+| README.md | `docs/archive/v1-user-guides/README.md` | This directory contains all user-facing documentation. | 2026-02-28 | 🟢 High (Current) |
+| student-attendance.md | `docs/archive/v1-user-guides/diagnostics/student-attendance.md` | title: Student Attendance and Payroll | 2026-02-28 | 🟢 High (Current) |
+| student-classes.md | `docs/archive/v1-user-guides/diagnostics/student-classes.md` | title: Student Classes and Join Codes | 2026-02-28 | 🟢 High (Current) |
+| student-hall-pass.md | `docs/archive/v1-user-guides/diagnostics/student-hall-pass.md` | title: Student Hall Pass | 2026-02-28 | 🟢 High (Current) |
+| student-login.md | `docs/archive/v1-user-guides/diagnostics/student-login.md` | title: Student Login and Setup | 2026-02-28 | 🟢 High (Current) |
+| student-money.md | `docs/archive/v1-user-guides/diagnostics/student-money.md` | title: Student Balances, Transfers, and Interest | 2026-02-28 | 🟢 High (Current) |
+| student-rent-insurance.md | `docs/archive/v1-user-guides/diagnostics/student-rent-insurance.md` | title: Student Rent and Insurance | 2026-02-28 | 🟢 High (Current) |
+| student-store.md | `docs/archive/v1-user-guides/diagnostics/student-store.md` | title: Student Store and Purchases | 2026-02-28 | 🟢 High (Current) |
+| student-support.md | `docs/archive/v1-user-guides/diagnostics/student-support.md` | title: Student Help and Issue Reports | 2026-02-28 | 🟢 High (Current) |
+| student.md | `docs/archive/v1-user-guides/diagnostics/student.md` | title: Student Help and Support Guides | 2026-02-28 | 🟢 High (Current) |
+| teacher-analytics.md | `docs/archive/v1-user-guides/diagnostics/teacher-analytics.md` | title: Analytics Dashboard Troubleshooting | 2026-02-28 | 🟢 High (Current) |
+| teacher-announcements-issues.md | `docs/archive/v1-user-guides/diagnostics/teacher-announcements-issues.md` | title: Teacher Announcements and Issues | 2026-02-28 | 🟢 High (Current) |
+| teacher-attendance-payroll.md | `docs/archive/v1-user-guides/diagnostics/teacher-attendance-payroll.md` | title: Teacher Attendance and Payroll | 2026-02-28 | 🟢 High (Current) |
+| teacher-hall-pass.md | `docs/archive/v1-user-guides/diagnostics/teacher-hall-pass.md` | title: Teacher Hall Pass | 2026-02-28 | 🟢 High (Current) |
+| teacher-login.md | `docs/archive/v1-user-guides/diagnostics/teacher-login.md` | title: Teacher Login and Account Security | 2026-02-28 | 🟢 High (Current) |
+| teacher-onboarding.md | `docs/archive/v1-user-guides/diagnostics/teacher-onboarding.md` | title: Teacher Onboarding and Feature Settings | 2026-02-28 | 🟢 High (Current) |
+| teacher-rent-insurance.md | `docs/archive/v1-user-guides/diagnostics/teacher-rent-insurance.md` | title: Teacher Rent and Insurance | 2026-02-28 | 🟢 High (Current) |
+| teacher-rent-itemization.md | `docs/archive/v1-user-guides/diagnostics/teacher-rent-itemization.md` | title: Rent Itemization Troubleshooting | 2026-02-28 | 🟢 High (Current) |
+| teacher-store.md | `docs/archive/v1-user-guides/diagnostics/teacher-store.md` | title: Teacher Store and Redemptions | 2026-02-28 | 🟢 High (Current) |
+| teacher-students.md | `docs/archive/v1-user-guides/diagnostics/teacher-students.md` | title: Teacher Students and Join Codes | 2026-02-28 | 🟢 High (Current) |
+| teacher-transactions-banking.md | `docs/archive/v1-user-guides/diagnostics/teacher-transactions-banking.md` | title: Teacher Transactions and Banking | 2026-02-28 | 🟢 High (Current) |
+| teacher.md | `docs/archive/v1-user-guides/diagnostics/teacher.md` | title: Teacher Help and Support Guides | 2026-02-28 | 🟢 High (Current) |
+| economy_guide.md | `docs/archive/v1-user-guides/economy_guide.md` | title: Classroom Economy Guide | 2026-02-28 | 🟢 High (Current) |
+| interpreting-analytics.md | `docs/archive/v1-user-guides/features/analytics/interpreting-analytics.md` | title: Interpreting the Analytics Dashboard | 2026-02-28 | 🟢 High (Current) |
+| managing-banking.md | `docs/archive/v1-user-guides/features/banking/managing-banking.md` | title: Managing Banking | 2026-02-28 | 🟢 High (Current) |
+| transferring-money.md | `docs/archive/v1-user-guides/features/banking/transferring-money.md` | title: Banking & Transfers | 2026-02-28 | 🟢 High (Current) |
+| running-payroll.md | `docs/archive/v1-user-guides/features/payroll/running-payroll.md` | title: Running Payroll | 2026-02-28 | 🟢 High (Current) |
+| itemization-guide.md | `docs/archive/v1-user-guides/features/rent/itemization-guide.md` | title: Rent Itemization Guide | 2026-02-28 | 🟢 High (Current) |
+| managing-rent.md | `docs/archive/v1-user-guides/features/rent/managing-rent.md` | title: Managing Rent | 2026-02-28 | 🟢 High (Current) |
+| creating-items.md | `docs/archive/v1-user-guides/features/store/creating-items.md` | title: Creating Store Items | 2026-02-28 | 🟢 High (Current) |
+| dashboard-overview.md | `docs/archive/v1-user-guides/features/student/account/dashboard-overview.md` | title: Student Dashboard Overview | 2026-02-28 | 🟢 High (Current) |
+| index.md | `docs/archive/v1-user-guides/features/student/account/index.md` | title: Account Features (Student) | 2026-02-28 | 🟢 High (Current) |
+| join-class.md | `docs/archive/v1-user-guides/features/student/account/join-class.md` | title: Join or Add a Class | 2026-02-28 | 🟢 High (Current) |
+| login-setup.md | `docs/archive/v1-user-guides/features/student/account/login-setup.md` | title: Log In and First-Time Setup | 2026-02-28 | 🟢 High (Current) |
+| reset-recovery.md | `docs/archive/v1-user-guides/features/student/account/reset-recovery.md` | title: Reset or Recover Your Account | 2026-02-28 | 🟢 High (Current) |
+| switch-class.md | `docs/archive/v1-user-guides/features/student/account/switch-class.md` | title: Switch Classes | 2026-02-28 | 🟢 High (Current) |
+| accounts-transfers.md | `docs/archive/v1-user-guides/features/student/banking/accounts-transfers.md` | title: Accounts and Transfers | 2026-02-28 | 🟢 High (Current) |
+| index.md | `docs/archive/v1-user-guides/features/student/banking/index.md` | title: Banking Features (Student) | 2026-02-28 | 🟢 High (Current) |
+| savings-interest.md | `docs/archive/v1-user-guides/features/student/banking/savings-interest.md` | title: Savings Interest | 2026-02-28 | 🟢 High (Current) |
+| index.md | `docs/archive/v1-user-guides/features/student/bills/index.md` | title: Bills Features (Student) | 2026-02-28 | 🟢 High (Current) |
+| insurance-claims.md | `docs/archive/v1-user-guides/features/student/bills/insurance-claims.md` | title: Submit an Insurance Claim | 2026-02-28 | 🟢 High (Current) |
+| insurance-coverage.md | `docs/archive/v1-user-guides/features/student/bills/insurance-coverage.md` | title: Insurance Coverage and Claims | 2026-02-28 | 🟢 High (Current) |
+| rent-payments.md | `docs/archive/v1-user-guides/features/student/bills/rent-payments.md` | title: Pay Rent | 2026-02-28 | 🟢 High (Current) |
+| index.md | `docs/archive/v1-user-guides/features/student/index.md` | title: Student Feature Guides | 2026-02-28 | 🟢 High (Current) |
+| browse-buy.md | `docs/archive/v1-user-guides/features/student/store/browse-buy.md` | title: Browse and Buy Items | 2026-02-28 | 🟢 High (Current) |
+| index.md | `docs/archive/v1-user-guides/features/student/store/index.md` | title: Store Features (Student) | 2026-02-28 | 🟢 High (Current) |
+| redemption-status.md | `docs/archive/v1-user-guides/features/student/store/redemption-status.md` | title: Track Redemptions | 2026-02-28 | 🟢 High (Current) |
+| help-center.md | `docs/archive/v1-user-guides/features/student/support/help-center.md` | title: Help Center Basics | 2026-02-28 | 🟢 High (Current) |
+| index.md | `docs/archive/v1-user-guides/features/student/support/index.md` | title: Support Features (Student) | 2026-02-28 | 🟢 High (Current) |
+| report-issues.md | `docs/archive/v1-user-guides/features/student/support/report-issues.md` | title: Report Issues | 2026-02-28 | 🟢 High (Current) |
+| attendance-history.md | `docs/archive/v1-user-guides/features/student/work/attendance-history.md` | title: Attendance History and Pay Status | 2026-02-28 | 🟢 High (Current) |
+| index.md | `docs/archive/v1-user-guides/features/student/work/index.md` | title: Work and Pay Features (Student) | 2026-02-28 | 🟢 High (Current) |
+| start-end-work.md | `docs/archive/v1-user-guides/features/student/work/start-end-work.md` | title: Start and End Work | 2026-02-28 | 🟢 High (Current) |
+| index.md | `docs/archive/v1-user-guides/features/teacher/bills/index.md` | title: Bills Features (Teacher) | 2026-02-28 | 🟢 High (Current) |
+| insurance-claims.md | `docs/archive/v1-user-guides/features/teacher/bills/insurance-claims.md` | title: Insurance Claims and Coverage | 2026-02-28 | 🟢 High (Current) |
+| insurance-enrollment.md | `docs/archive/v1-user-guides/features/teacher/bills/insurance-enrollment.md` | title: Insurance Enrollment | 2026-02-28 | 🟢 High (Current) |
+| insurance-policies.md | `docs/archive/v1-user-guides/features/teacher/bills/insurance-policies.md` | title: Insurance Policies | 2026-02-28 | 🟢 High (Current) |
+| rent-behaviors.md | `docs/archive/v1-user-guides/features/teacher/bills/rent-behaviors.md` | title: Customizing Rent Behaviors | 2026-02-28 | 🟢 High (Current) |
+| rent-itemization.md | `docs/archive/v1-user-guides/features/teacher/bills/rent-itemization.md` | title: Rent Itemization | 2026-02-28 | 🟢 High (Current) |
+| rent-settings.md | `docs/archive/v1-user-guides/features/teacher/bills/rent-settings.md` | title: Rent Settings | 2026-02-28 | 🟢 High (Current) |
+| rent-waivers.md | `docs/archive/v1-user-guides/features/teacher/bills/rent-waivers.md` | title: Rent Waivers | 2026-02-28 | 🟢 High (Current) |
+| announcements.md | `docs/archive/v1-user-guides/features/teacher/classroom/announcements.md` | title: Announcements | 2026-02-28 | 🟢 High (Current) |
+| attendance-approvals.md | `docs/archive/v1-user-guides/features/teacher/classroom/attendance-approvals.md` | title: Attendance and Approvals | 2026-02-28 | 🟢 High (Current) |
+| attendance-corrections.md | `docs/archive/v1-user-guides/features/teacher/classroom/attendance-corrections.md` | title: Fix Attendance Errors | 2026-02-28 | 🟢 High (Current) |
+| class-setup.md | `docs/archive/v1-user-guides/features/teacher/classroom/class-setup.md` | title: Class Setup and Join Codes | 2026-02-28 | 🟢 High (Current) |
+| dashboard-overview.md | `docs/archive/v1-user-guides/features/teacher/classroom/dashboard-overview.md` | title: Teacher Dashboard Overview | 2026-02-28 | 🟢 High (Current) |
+| hall-pass.md | `docs/archive/v1-user-guides/features/teacher/classroom/hall-pass.md` | title: Hall Pass | 2026-02-28 | 🟢 High (Current) |
+| index.md | `docs/archive/v1-user-guides/features/teacher/classroom/index.md` | title: Classroom Features (Teacher) | 2026-02-28 | 🟢 High (Current) |
+| student-issues.md | `docs/archive/v1-user-guides/features/teacher/classroom/student-issues.md` | title: Student Issues Queue | 2026-02-28 | 🟢 High (Current) |
+| students-overview.md | `docs/archive/v1-user-guides/features/teacher/classroom/students-overview.md` | title: Student Management Overview | 2026-02-28 | 🟢 High (Current) |
+| analytics.md | `docs/archive/v1-user-guides/features/teacher/economy/analytics.md` | title: Analytics Dashboard | 2026-02-28 | 🟢 High (Current) |
+| banking-interest.md | `docs/archive/v1-user-guides/features/teacher/economy/banking-interest.md` | title: Interest and Payouts | 2026-02-28 | 🟢 High (Current) |
+| banking-overdraft.md | `docs/archive/v1-user-guides/features/teacher/economy/banking-overdraft.md` | title: Overdraft Rules | 2026-02-28 | 🟢 High (Current) |
+| banking-settings.md | `docs/archive/v1-user-guides/features/teacher/economy/banking-settings.md` | title: Banking Settings | 2026-02-28 | 🟢 High (Current) |
+| economy-health.md | `docs/archive/v1-user-guides/features/teacher/economy/economy-health.md` | title: Economy Health | 2026-02-28 | 🟢 High (Current) |
+| index.md | `docs/archive/v1-user-guides/features/teacher/economy/index.md` | title: Economy Features (Teacher) | 2026-02-28 | 🟢 High (Current) |
+| payroll-history.md | `docs/archive/v1-user-guides/features/teacher/economy/payroll-history.md` | title: Payroll History | 2026-02-28 | 🟢 High (Current) |
+| payroll-run.md | `docs/archive/v1-user-guides/features/teacher/economy/payroll-run.md` | title: Run Payroll | 2026-02-28 | 🟢 High (Current) |
+| payroll-settings.md | `docs/archive/v1-user-guides/features/teacher/economy/payroll-settings.md` | title: Payroll Settings | 2026-02-28 | 🟢 High (Current) |
+| store-items.md | `docs/archive/v1-user-guides/features/teacher/economy/store-items.md` | title: Store Items | 2026-02-28 | 🟢 High (Current) |
+| store-pricing.md | `docs/archive/v1-user-guides/features/teacher/economy/store-pricing.md` | title: Store Pricing Strategy | 2026-02-28 | 🟢 High (Current) |
+| store-redemptions.md | `docs/archive/v1-user-guides/features/teacher/economy/store-redemptions.md` | title: Store Redemptions | 2026-02-28 | 🟢 High (Current) |
+| transactions.md | `docs/archive/v1-user-guides/features/teacher/economy/transactions.md` | title: Transactions | 2026-02-28 | 🟢 High (Current) |
+| index.md | `docs/archive/v1-user-guides/features/teacher/index.md` | title: Teacher Feature Guides | 2026-02-28 | 🟢 High (Current) |
+| account-deletion.md | `docs/archive/v1-user-guides/features/teacher/settings/account-deletion.md` | title: Account Deletion Requests | 2026-02-28 | 🟢 High (Current) |
+| account-recovery.md | `docs/archive/v1-user-guides/features/teacher/settings/account-recovery.md` | title: Account Recovery | 2026-02-28 | 🟢 High (Current) |
+| feature-toggles.md | `docs/archive/v1-user-guides/features/teacher/settings/feature-toggles.md` | title: Feature Toggles | 2026-02-28 | 🟢 High (Current) |
+| index.md | `docs/archive/v1-user-guides/features/teacher/settings/index.md` | title: Settings Features (Teacher) | 2026-02-28 | 🟢 High (Current) |
+| passkey.md | `docs/archive/v1-user-guides/features/teacher/settings/passkey.md` | title: Passkey and Login Security | 2026-02-28 | 🟢 High (Current) |
+| personalization.md | `docs/archive/v1-user-guides/features/teacher/settings/personalization.md` | title: Personalization | 2026-02-28 | 🟢 High (Current) |
+| attribution.md | `docs/archive/v1-user-guides/legal/attribution.md` | title: Attribution & Project Philosophy | 2026-02-28 | 🟢 High (Current) |
+| commercial.md | `docs/archive/v1-user-guides/legal/commercial.md` | title: Commercial Use Policy | 2026-02-28 | 🟢 High (Current) |
+| license.md | `docs/archive/v1-user-guides/legal/license.md` | title: License | 2026-02-28 | 🟢 High (Current) |
+| third-party-notices.md | `docs/archive/v1-user-guides/legal/third-party-notices.md` | title: Third-Party Notices | 2026-02-28 | 🟢 High (Current) |
+| student_guide.md | `docs/archive/v1-user-guides/student_guide.md` | title: Student Guide | 2026-02-28 | 🟢 High (Current) |
+| teacher_manual.md | `docs/archive/v1-user-guides/teacher_manual.md` | title: Teacher Manual | 2026-02-28 | 🟢 High (Current) |
 
 ## Archive (Historical)
 

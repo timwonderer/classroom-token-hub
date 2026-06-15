@@ -9,14 +9,14 @@
 
 - **[Architecture Guide](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)** - System design and patterns
 - **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)** - Current data models and transitional compatibility notes
-- **[Class Scope Normalization Target](docs/development/V2_Class_Scope_Normalization_Target.md)** - Deferred post-port target for `class_id`-first internal scoping
-- **[V2 Banking Ledger Settlement Plan](docs/development/V2_BANKING_LEDGER_SETTLEMENT_PLAN.md)** - Deferred rebuild plan for per-account balances, settlement checkpoints, and reconciliation
+- **[Class Scope Normalization Target](docs/MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md)** - Deferred post-port target for `class_id`-first internal scoping
+- **[V2 Banking Ledger Settlement Plan](docs/SPECS/V2_BANKING_LEDGER_SETTLEMENT_PLAN.md)** - Deferred rebuild plan for per-account balances, settlement checkpoints, and reconciliation
 - **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)** - Runtime contract for public, student, and admin APIs
-- **[v2 Main Reconciliation Tracker](docs/development/V2_MAIN_RECONCILIATION_TRACKER.md)** - `origin/main` features not yet reconciled into `codex/v2.0`
-- **[v2 Launch Readiness Matrix](docs/development/V2_LAUNCH_READINESS_MATRIX.md)** - Current launch blockers and readiness status
-- **[v2 Documentation Compliance Sweep](docs/development/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md)** - Active-doc compliance status for v2
-- **[v2 Parallel Workstreams](docs/development/V2_PARALLEL_WORKSTREAMS.md)** - Parallel execution map for multi-threaded v2 work
-- **[v2 Class ID Invariant Backlog](docs/development/V2_CLASS_ID_INVARIANT_BACKLOG.md)** - Deferred cleanup for class lifecycle and membership semantics that violate the `class_id` model
+- **[v2 Main Reconciliation Tracker](docs/archive/v1-development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md)** - `origin/main` features not yet reconciled into `codex/v2.0`
+- **[v2 Launch Readiness Matrix](docs/archive/v1-development/tracking/V2_LAUNCH_READINESS_MATRIX.md)** - Current launch blockers and readiness status
+- **[v2 Documentation Compliance Sweep](docs/archive/v1-development/tracking/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md)** - Active-doc compliance status for v2
+- **[v2 Parallel Workstreams](docs/archive/v1-development/tracking/V2_PARALLEL_WORKSTREAMS.md)** - Parallel execution map for multi-threaded v2 work
+- **[v2 Class ID Invariant Backlog](docs/SPECS/V2_CLASS_ID_INVARIANT_BACKLOG.md)** - Deferred cleanup for class lifecycle and membership semantics that violate the `class_id` model
 - **[v2 Live-Test Runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md)** - Internal validation workflow before live testing
 
 ## Branch and Database Truth
@@ -54,7 +54,7 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 - Full-suite validation succeeded on the PostgreSQL test database.
 - Economy policy scheduling, rebalance timing, rent-cycle locking, penalty-reversal corrections, transaction idempotency, frozen economy snapshots, waiver scope, settlement safety, and related sysadmin auth/logging fixes have landed on `codex/v2.0`.
 - Pricing recommendation logic is now centralized in `app/utils/economy_policy.py`, with the checker, rebalance preview, economy APIs, and insurance setup/edit pages consuming that shared source instead of duplicating pricing math.
-- Main-branch feature divergence is now tracked in `docs/development/V2_MAIN_RECONCILIATION_TRACKER.md`.
+- Main-branch feature divergence is now tracked in `docs/archive/v1-development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md`.
 
 ### Required Before Live Testing
 
@@ -65,7 +65,7 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 - Remove or supersede stale docs that still imply deleted branches or legacy TeacherBlock fallback plans.
 - Confirm whether the remaining adjacent economy-health delta from `main` (CWI warning bypass controls) is needed before live testing or can move to the post-live-test/production lane.
 - Port launch-critical `origin/main` deltas called out in the v2 reconciliation tracker.
-- Close active-doc issues still marked open in `docs/development/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`.
+- Close active-doc issues still marked open in `docs/archive/v1-development/tracking/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`.
 
 ### Required Before Production
 
@@ -78,7 +78,7 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 ## Operations Doc Boundaries
 
 - This branch now carries only launch-critical v2 runbook fixes needed for live testing and production transition.
-- Deeper operations-document restructuring, route-taxonomy cleanup, and architecture-driven SOP rewrites are intentionally deferred until after `docs/development/V2_ADMIN_ROUTE_REFACTOR.md` and `docs/development/V2_Class_Scope_Normalization_Target.md` are ready to land.
+- Deeper operations-document restructuring, route-taxonomy cleanup, and architecture-driven SOP rewrites are intentionally deferred until after `docs/SPECS/V2_ADMIN_ROUTE_REFACTOR.md` and `docs/MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md` are ready to land.
 - Until those refactors land, prefer targeted supersession notes, explicit operator record templates, and current-command verification over broad documentation reorganization.
 
 ### Post-Live-Test Cleanup
