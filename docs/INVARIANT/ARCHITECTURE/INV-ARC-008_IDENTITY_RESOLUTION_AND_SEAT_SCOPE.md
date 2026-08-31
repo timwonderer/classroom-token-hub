@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-008      | 1.2     | 2026-08-30     | 1.1        | Foundational    |
+| INV-ARC-008      | 1.3     | 2026-08-30     | 1.2        | Foundational    |
 
 ## I. Purpose
 
@@ -46,11 +46,10 @@ canonical context has already been established.
   legacy records only. It MUST NOT be introduced into new V2 domains, routes, or FEATs
   except inside explicitly approved bridge code.
 - **Seat Public-ID Boundary**: `seats.public_id` is an outward-facing, UUID-encoded,
-  deidentified representation of an already-resolved operational actor. It MUST NOT
-  be used as an ingress identifier to discover, resolve, or reconstruct `seats.id`,
-  `classes.class_id`, `users.id`, or canonical execution context. Canonical actor and
-  class context MUST be established independently before `seats.public_id` is emitted
-  or compared as presentation/reference data.
+  deidentified representation of an operational actor. It MUST NOT establish authority
+  or class scope by itself. After an independent canonical class context is established,
+  internal code MAY resolve or compare `seats.public_id` within that class boundary.
+  `class_id` and `seat_id` MUST NOT be exposed on sysadmin or public-facing surfaces.
 - **No Alias Substitution**: Legacy numeric student IDs and role-specific public IDs MUST
   NOT be accepted as substitutes for `seats.public_id` on class-scoped participant
   routes.
@@ -76,5 +75,5 @@ all fail closed on scope mismatch.
 ## IX. Amendment
 
 Revisions must preserve fail-closed active-class resolution and the prohibition on
-alias-based participant lookup. Public actor identity remains outward-only and must
-not become a reverse-resolution authority.
+alias-based participant lookup. Public actor identity may be resolved only within an
+independently established class boundary and must never establish that boundary itself.

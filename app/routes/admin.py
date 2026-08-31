@@ -1583,14 +1583,15 @@ def _read_student_detail_nav_token(token: str) -> dict | None:
 
 def _resolve_student_detail_seat(actor_public_id: str) -> Seat | None:
     selected_class_id = (getattr(getattr(g, "canonical_context", None), "class_id", None) or "").strip()
+    if not selected_class_id:
+        return None
 
     seat_query = Seat.query.filter(
         Seat.role == "student",
         Seat.public_id == actor_public_id,
+        Seat.class_id == selected_class_id,
     )
-    if selected_class_id:
-        return seat_query.filter(Seat.class_id == selected_class_id).first()
-    return seat_query.order_by(Seat.id.asc()).first()
+    return seat_query.first()
 
 
 def _build_student_detail_url(actor_public_id: str) -> str | None:
@@ -10180,8 +10181,12 @@ def _resolve_issue_identity(actor_public_id, class_public_id):
     student_display_name = actor_public_id[:8] if actor_public_id else 'Unknown'
     class_label = None
 
-    if actor_public_id:
-        seat = Seat.query.filter_by(public_id=actor_public_id).first()
+    canonical_class_id = getattr(getattr(g, "canonical_context", None), "class_id", None)
+    if actor_public_id and canonical_class_id:
+        seat = Seat.query.filter(
+            Seat.public_id == actor_public_id,
+            Seat.class_id == canonical_class_id,
+        ).first()
         if seat and seat.identity_profile:
             student_display_name = seat.identity_profile.full_name
 
@@ -10328,8 +10333,12 @@ def issues_queue():
     from app.models import Seat
 
     actor_dict = {}
-    if actor_ids:
-        seats = Seat.query.filter(Seat.public_id.in_(actor_ids)).all()
+    canonical_class_id = getattr(getattr(g, "canonical_context", None), "class_id", None)
+    if actor_ids and canonical_class_id:
+        seats = Seat.query.filter(
+            Seat.public_id.in_(actor_ids),
+            Seat.class_id == canonical_class_id,
+        ).all()
         for seat in seats:
             if seat.identity_profile:
                 actor_dict[seat.public_id] = seat.identity_profile.full_name
@@ -10446,15 +10455,11 @@ def resolve_issue(issue_ref):
 
     try:
         # Apply resolution based on action type
-        # Resolve submitter seat from actor_public_id for transaction ownership checks
-        submitter_seat = Seat.query.filter_by(public_id=issue.actor_public_id).first()
-
         if action_type == 'reverse_transaction' and issue.related_transaction_id:
             transaction = db.session.get(Transaction, issue.related_transaction_id)
             if (
                 not transaction
-                or not submitter_seat
-                or transaction.seat_id != submitter_seat.id
+                or transaction.class_id != class_id
                 or transaction.is_void
             ):
                 flash("The related transaction could not be reversed for this issue.", "error")
@@ -10482,7 +10487,7 @@ def resolve_issue(issue_ref):
         elif action_type == 'compensating_transaction' and issue.related_transaction_id:
             # Append-only correction: create a compensating ledger entry.
             transaction = db.session.get(Transaction, issue.related_transaction_id)
-            if not transaction or not submitter_seat or transaction.seat_id != submitter_seat.id or transaction.is_void:
+            if not transaction or transaction.class_id != class_id or transaction.is_void:
                 flash("The related transaction could not be found for this issue.", "error")
                 return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 

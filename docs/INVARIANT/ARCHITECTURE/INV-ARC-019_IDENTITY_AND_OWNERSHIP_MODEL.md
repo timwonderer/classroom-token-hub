@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-019      | 1.3     | 2026-08-30     | 1.2 | Constitutional |
+| INV-ARC-019      | 1.4     | 2026-08-30     | 1.3 | Constitutional |
 
 ---
 
@@ -138,11 +138,10 @@ Rules:
 - It is stable for the lifetime of the seat.
 - It is safe to expose after canonical context has already resolved the actor and
   boundary, without exposing the internal `seats.id`.
-- It MUST NOT be used as an ingress identifier to discover, resolve, or reconstruct
-  `seats.id`, `classes.class_id`, `users.id`, or canonical execution context.
-- It MUST NOT grant authority or establish scope by itself.
-- Canonical actor and class context MUST be established independently before it is
-  emitted or compared as presentation/reference data.
+- It MUST NOT grant authority or establish class scope by itself.
+- After an independent canonical class context is established, internal code MAY resolve
+  or compare it within that class boundary.
+- `class_id` and `seat_id` MUST NOT be exposed on sysadmin or public-facing surfaces.
 
 Use `seats.public_id` for:
 
@@ -227,8 +226,8 @@ The authenticated principal and active classroom context remain separate:
 - `users.id` establishes who authenticated.
 - `seats.id` establishes who acts.
 - `classes.class_id` establishes where the actor acts.
-- `seats.public_id` exposes an already-resolved actor externally without exposing
-  `seats.id`; it is not a reverse-resolution key.
+- `seats.public_id` exposes an actor externally without exposing `seats.id`; internal
+  resolution is lawful only under an independently established class boundary.
 
 The session MUST NOT infer an actor or boundary from display fields, role-specific
 public identifiers, legacy numeric participant IDs, or aliases once canonical context
@@ -256,4 +255,4 @@ is available.
 
 ## XVI. Amendment
 
-Revisions to this document must increment the version number, update the effective date, and remain consistent with foundational documentation standards and core invariants. The outward-only public actor boundary must be preserved.
+Revisions to this document must increment the version number, update the effective date, and remain consistent with foundational documentation standards and core invariants. The public actor boundary and prohibition on self-establishing scope must be preserved.

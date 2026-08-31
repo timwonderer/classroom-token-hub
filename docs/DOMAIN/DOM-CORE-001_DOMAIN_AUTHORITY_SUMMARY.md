@@ -102,6 +102,7 @@ All domains listed below are bound by the following structural rules:
 
 ### 7. Operations (`DOM-OPS-001`)
 - **Authority**: Sovereign over operational truth, system health, and observability.
+- **Companion specification**: `DOM-OPS-003` — Bug Hunter Badge System.
 - **State Classification**:
   - `operational_events`: Authoritative Event (Telemetry).
   - `audit_log`: Authoritative Event (High-integrity side effects).
