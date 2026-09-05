@@ -14,6 +14,32 @@ from .identity import authenticated_operator_email
 from .store import FirestoreNoticeStore
 
 
+def derive_overall_status(notices: list[dict]) -> dict[str, str]:
+    """Derive the public summary from the current notice projection.
+
+    Resolved notices remain visible as history but do not keep the overall
+    signal impaired. In the absence of a fresh observation source, no active
+    notice is deliberately reported as unknown rather than healthy.
+    """
+    active = [notice for notice in notices if notice.get("state") != NoticeState.RESOLVED.value]
+    if not active:
+        return {
+            "state": "UNKNOWN",
+            "label": "STATUS NOT YET AVAILABLE",
+            "headline": "Service monitoring is starting up.",
+            "detail": "There are no active service notices. We do not yet have monitoring evidence to confirm current availability.",
+        }
+    priority = {
+        NoticeState.INVESTIGATING.value: (0, "INVESTIGATING", "We are investigating a service issue."),
+        NoticeState.IDENTIFIED.value: (1, "IDENTIFIED", "A service issue has been identified."),
+        NoticeState.MONITORING.value: (2, "MONITORING", "A service recovery is being monitored."),
+    }
+    notice = min(active, key=lambda item: priority.get(item.get("state"), (0, "INVESTIGATING", "We are investigating a service issue."))[0])
+    state = notice.get("state", NoticeState.INVESTIGATING.value)
+    _, label, headline = priority.get(state, priority[NoticeState.INVESTIGATING.value])
+    return {"state": state, "label": label, "headline": headline, "detail": notice.get("impact_statement", "")}
+
+
 def create_app(store=None) -> Flask:
     app = Flask(__name__, static_folder="static", template_folder="templates")
     app.config["STATUS_SERVICE_MODE"] = os.environ.get("STATUS_SERVICE_MODE", "operator").strip().lower()
@@ -46,7 +72,9 @@ def create_app(store=None) -> Flask:
     def public_status():
         if app.config["STATUS_SERVICE_MODE"] != "public":
             abort(404)
-        return render_template("public_status.html", notices=store.list_notices(limit=20))
+        notices = store.list_notices(limit=20)
+        active_notices = [notice for notice in notices if notice.get("state") != NoticeState.RESOLVED.value]
+        return render_template("public_status.html", notices=active_notices, overall_status=derive_overall_status(notices))
 
     @app.get("/operator/notices")
     def operator_notices_get():
