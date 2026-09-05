@@ -84,6 +84,23 @@ Verify:
 - If post-deploy smoke checks fail and cannot be corrected within the maintenance window, rollback.
 - If migration is structurally successful but business behavior is incorrect, hold maintenance mode until rollback or fix-forward is approved.
 
+### IX.1 Exact-SHA Release Failure Handling
+
+The release workflow does not automatically downgrade production. A failed
+release MUST remain in an operator-controlled state until the production
+operator and rollback approver select rollback or fix-forward.
+
+| Failure point | Required action |
+|---|---|
+| Lineage, SHA, environment approval, Tailscale, or SSH preflight | No production mutation is authorized; correct the release request or transport configuration. |
+| Migration fails before restart | Keep the existing service running if possible, keep the maintenance window controlled, capture migration output, and stop for operator review. Do not retry blindly. |
+| Migration succeeds but restart fails | Keep the environment controlled, inspect service logs/status, and restore service using the approved operator procedure. Do not run an automatic downgrade. |
+| Restart succeeds but `/health` fails | Keep maintenance active, capture the exact deployed SHA and health/service evidence, then choose approved fix-forward or restore-from-backup. |
+| Non-backward-compatible migration requires rollback | Rollback MUST use the verified backup/restore procedure and named rollback approval; `alembic downgrade` is not an automatic production recovery mechanism. |
+
+Every failure record MUST include the requested SHA, approved lineage ref,
+migration result, service state, health result, and operator decision.
+
 ## X. Transition Record Template
 
 Use this template for the production transition record:
