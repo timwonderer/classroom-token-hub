@@ -43,12 +43,17 @@ Normative (SOP Tier). Subordinate to `INV-CORE-000`.
 Current branch verification references:
 
 - maintenance workflow: `.github/workflows/toggle-maintenance.yml`
-- deployment workflow: `.github/workflows/deploy.yml`
+- release workflow: `.github/workflows/release-v2.yml` (manual exact-SHA release)
 - deployment transport: GitHub Actions connects to the production host through
   Tailscale using `PRODUCTION_TAILSCALE_HOST`; public-IP SSH is not the
   approved deployment path;
 - transport smoke test: `.github/workflows/tailscale-ssh-smoke-test.yml`
 - migration safety check: `bash scripts/check-migrations.sh`
+
+The production release lineage is configured as the protected environment
+variable `V2_RELEASE_LINEAGE_REF`. A release request MUST provide a full
+40-character commit SHA that is an ancestor of that approved lineage. A branch
+name or moving branch tip is not itself a release artifact.
 
 ## VII. Upgrade Flow
 
