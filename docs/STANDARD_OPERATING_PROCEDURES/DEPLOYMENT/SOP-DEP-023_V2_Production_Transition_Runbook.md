@@ -44,6 +44,10 @@ Current branch verification references:
 
 - maintenance workflow: `.github/workflows/toggle-maintenance.yml`
 - deployment workflow: `.github/workflows/deploy.yml`
+- deployment transport: GitHub Actions connects to the production host through
+  Tailscale using `PRODUCTION_TAILSCALE_HOST`; public-IP SSH is not the
+  approved deployment path;
+- transport smoke test: `.github/workflows/tailscale-ssh-smoke-test.yml`
 - migration safety check: `bash scripts/check-migrations.sh`
 
 ## VII. Upgrade Flow

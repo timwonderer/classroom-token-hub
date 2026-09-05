@@ -13,28 +13,36 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
+    - name: Checkout code
+      uses: actions/checkout@v7
 
-      - name: Set up SSH
-        uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.DO_DEPLOY_KEY }}
+    - name: Connect to Tailscale
+      uses: tailscale/github-action@v4
+      with:
+        oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+        oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+        tags: tag:ci
+        ping: ${{ secrets.PRODUCTION_TAILSCALE_HOST }}
 
-      # SECURITY FIX: Add SSH host key verification to prevent MITM attacks
-      - name: Set up SSH host key verification
-        env:
-          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-          echo "✓ SSH host key verification enabled"
+    - name: Set up SSH
+      uses: webfactory/ssh-agent@v0.10.0
+      with:
+        ssh-private-key: ${{ secrets.DO_DEPLOY_KEY }}
+
+    # SECURITY FIX: Add SSH host key verification to prevent MITM attacks
+    - name: Set up SSH host key verification
+      env:
+        KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+      run: |
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+        chmod 644 ~/.ssh/known_hosts
+        echo "✓ SSH host key verification enabled"
 
       - name: Deploy to DO Production Server
         env:
-          PRODUCTION_SERVER_IP: ${{ secrets.PRODUCTION_SERVER_IP }}
+          PRODUCTION_SERVER_HOST: ${{ secrets.PRODUCTION_TAILSCALE_HOST }}
           TURNSTILE_SITE: ${{ secrets.TURNSTILE_SITE_KEY }}
           TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET_KEY }}
           PASSWORDLESS_API_KEY: ${{ secrets.PASSWORDLESS_API_KEY }}
@@ -46,7 +54,7 @@ jobs:
           SSH_ENV_VARS="TURNSTILE_SITE=$(printf %q "$TURNSTILE_SITE") TURNSTILE_SECRET=$(printf %q "$TURNSTILE_SECRET") PASSWORDLESS_API_KEY=$(printf %q "$PASSWORDLESS_API_KEY") PASSWORDLESS_API_PUBLIC=$(printf %q "$PASSWORDLESS_API_PUBLIC") DIGITALOCEAN_ACCESS_TOKEN=$(printf %q "$DIGITALOCEAN_ACCESS_TOKEN")"
 
           # Connect to the production server and deploy
-          ssh root@"$PRODUCTION_SERVER_IP" "export ${SSH_ENV_VARS}; bash -s" << 'EOF'
+          ssh root@"$PRODUCTION_SERVER_HOST" "export ${SSH_ENV_VARS}; bash -s" << 'EOF'
             set -e  # Exit immediately if a command exits with a non-zero status
 
             echo 'Navigating to project directory...'
