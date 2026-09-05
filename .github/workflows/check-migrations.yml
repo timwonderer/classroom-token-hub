@@ -5,13 +5,13 @@ on:
     branches: [ codex/v2.0 ]
     paths:
       - 'migrations/versions/**'
-      - 'app/models/**'
+      - 'app/models.py'
       - 'scripts/validate-migrations.py'
   pull_request:
     branches: [ codex/v2.0 ]
     paths:
       - 'migrations/versions/**'
-      - 'app/models/**'
+      - 'app/models.py'
       - 'scripts/validate-migrations.py'
 
   # Also allow manual trigger
@@ -57,7 +57,7 @@ jobs:
 
       - name: Comment on PR (if check fails)
         if: failure() && github.event_name == 'pull_request'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { owner, repo } = context.repo;

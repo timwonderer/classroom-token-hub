@@ -5,7 +5,6 @@ on:
     paths:
       - 'migrations/versions/**'
       - 'app/models.py'
-      - 'app/models/**'
 
 permissions:
   contents: read
@@ -20,7 +19,7 @@ jobs:
     # Use a service container for true migration rehearsal (Requirement 3.5)
     services:
       postgres:
-        image: postgres:15
+        image: public.ecr.aws/docker/library/postgres:15
         env:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
@@ -55,7 +54,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Check PR Classification
         id: check_classification
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const prNumber = context.issue.number;
@@ -125,7 +124,7 @@ jobs:
 
           # AST-compare each changed model file: strip docstrings and comments,
           # then compare the AST dump. If the AST differs, it's a structural change.
-          MODEL_FILES=$(git diff "$BASE_SHA" --name-only -- app/models.py app/models/)
+          MODEL_FILES=$(git diff "$BASE_SHA" --name-only -- app/models.py)
           if [ -z "$MODEL_FILES" ]; then
             echo "✅ No model files changed."
             exit 0
@@ -265,7 +264,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Post Gate Status
         if: always()
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const classification = '${{ steps.check_classification.outputs.classification }}';
