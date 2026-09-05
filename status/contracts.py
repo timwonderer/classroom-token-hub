@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
-from .projection import EpistemicState, ObservationClass, Outcome
+from .projection import EpistemicState, EvidenceSource, ObservationClass, Outcome
 
 
 class NoticeState(str, Enum):
@@ -27,6 +27,7 @@ class ExternalObservationRecord:
     observation_id: str
     observed_at: datetime
     correlation_id: str
+    source: EvidenceSource
     capability: str
     observation_class: ObservationClass
     outcome: Outcome
@@ -36,7 +37,7 @@ class ExternalObservationRecord:
     probe_version: str
 
     def validate(self) -> None:
-        if not self.observation_id or not self.correlation_id or not self.capability:
+        if not self.observation_id or not self.correlation_id or not self.source or not self.capability:
             raise ValueError("Observation identity and capability are required.")
         if not self.diagnostic_code or len(self.diagnostic_code) > 64:
             raise ValueError("Observation diagnostic_code must be bounded.")

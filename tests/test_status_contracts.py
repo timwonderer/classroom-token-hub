@@ -6,7 +6,7 @@ from status.contracts import (
     ExternalObservationRecord, ExternalStatusNoticeEvent, NoticeState,
     RecoveryExpectationState,
 )
-from status.projection import EpistemicState, ObservationClass, Outcome
+from status.projection import EpistemicState, EvidenceSource, ObservationClass, Outcome
 
 
 NOW = datetime(2026, 9, 5, 12, tzinfo=timezone.utc)
@@ -14,7 +14,7 @@ NOW = datetime(2026, 9, 5, 12, tzinfo=timezone.utc)
 
 def test_observation_contract_rejects_unbounded_or_invalid_state():
     record = ExternalObservationRecord(
-        "obs-1", NOW, "corr-1", "public_service", ObservationClass.LIVENESS,
+        "obs-1", NOW, "corr-1", EvidenceSource.GRAFANA_TELEMETRY, "public_service", ObservationClass.LIVENESS,
         Outcome.PASS, EpistemicState.UNAVAILABLE, "ok", 10, "probe-v1",
     )
     with pytest.raises(ValueError):
