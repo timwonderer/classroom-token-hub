@@ -394,6 +394,10 @@ def create_app():
 
     @app.before_request
     def capture_correlation_context():
+        if request.path == "/metrics":
+            g.canonical_context = None
+            g.correlation_context = None
+            return None
         from app.services.context_resolver import resolve_canonical_context, ContextResolutionError
         from app.services.tlcp import resolve_actor_context
 
@@ -432,6 +436,10 @@ def create_app():
         request_id = getattr(g, "request_id", None)
         if request_id:
             response.headers.setdefault("X-Request-Id", request_id)
+        # Prometheus is an infrastructure caller, not a CTH user request. It
+        # has no canonical actor/class context and must not enter TLCP traces.
+        if request.path == "/metrics":
+            return response
         if app.config.get("TESTING"):
             # Test fixtures wrap each test in transactions; the independent TLCP
             # writer can otherwise contend with teardown deletes.
@@ -937,6 +945,34 @@ def create_app():
     app.register_blueprint(docs_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(recovery_bp)
+
+    # Private Prometheus scrape surface.  It deliberately carries no CTH
+    # session, tenant, or identity context and is useful only to a local or
+    # explicitly private Prometheus network path.
+    from time import perf_counter
+    from app.observability import metrics_payload, record_request
+
+    @app.get("/metrics")
+    def prometheus_metrics():
+        if request.remote_addr not in {"127.0.0.1", "::1"}:
+            return "Not Found", 404
+        return metrics_payload(), 200, {"Content-Type": "text/plain; version=0.0.4; charset=utf-8"}
+
+    @app.before_request
+    def start_observability_timer():
+        g._observability_started_at = perf_counter()
+
+    @app.after_request
+    def record_observability_metrics(response):
+        started = getattr(g, "_observability_started_at", None)
+        if started is not None:
+            record_request(
+                endpoint=request.endpoint,
+                method=request.method,
+                status_code=response.status_code,
+                elapsed_seconds=perf_counter() - started,
+            )
+        return response
 
     # -------------------- SECURITY HEADERS --------------------
     @app.after_request
