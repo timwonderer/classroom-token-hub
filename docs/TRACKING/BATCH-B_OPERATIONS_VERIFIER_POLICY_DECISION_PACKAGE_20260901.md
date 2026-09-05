@@ -2,7 +2,7 @@
 
 | Reference | Version | Effective Date | Supersedes | Status |
 |---|---:|---|---|---|
-| BATCH-B-OPS-VERIFIER-POLICY | 1.1 | 2026-09-01 | 1.0 | Approved policy record |
+| BATCH-B-OPS-VERIFIER-POLICY | 1.2 | 2026-09-05 | 1.1 | Approved policy record |
 
 ## I. Purpose
 
@@ -78,6 +78,7 @@ observation class, required freshness class, and public eligibility.
 | public service reachability | independent external probe | LIVENESS | eligible after capability projection |
 | dependency readiness | approved external readiness probe | READINESS | eligible after capability projection |
 | Ledger correctness | Ledger proof surfaces + bounded Operations result | CORRECTNESS | eligible after capability projection |
+| production telemetry | Grafana telemetry, bounded to the closed capability registry | LIVENESS, READINESS, or CORRECTNESS as declared by the probe | eligible after capability projection |
 | audit integrity | canonical audit-lineage verifier | CORRECTNESS | eligible after capability projection |
 | canonical incident/publication state | DOM-OPS or authorized external notice | publication state | eligible as canonical/publication projection |
 
@@ -85,6 +86,13 @@ Raw evidence is never directly public. All sources pass through a capability-lev
 DOM-OPS projection. Public output may identify a capability state such as
 `AVAILABLE`, `DEGRADED`, `UNAVAILABLE`, or `UNKNOWN`, but never check names,
 tenant detail, monetary values, row identifiers, or diagnostic findings.
+
+Grafana telemetry and Ledger invariant-verifier results are distinct evidence
+sources. Grafana observations describe the capability or infrastructure signal
+the configured telemetry query measures; they do not acquire Ledger or
+Operational Truth authority. A projection may preserve disagreement between
+the sources as `UNKNOWN`, but MUST NOT collapse telemetry into a canonical
+invariant result.
 
 ## IV. Decision Record
 

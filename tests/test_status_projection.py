@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from status.projection import (
-    EpistemicState, Observation, ObservationClass, Outcome, PublicState,
+    EpistemicState, EvidenceSource, Observation, ObservationClass, Outcome, PublicState,
     aggregate_correctness,
 )
 
@@ -13,7 +13,7 @@ NOW = datetime(2026, 9, 5, 12, tzinfo=timezone.utc)
 
 def observation(outcome, epistemic=EpistemicState.KNOWN, age=timedelta(minutes=1)):
     return Observation(
-        capability="ledger_correctness",
+        source=EvidenceSource.INVARIANT_VERIFIER, capability="ledger_correctness",
         observation_class=ObservationClass.CORRECTNESS,
         outcome=outcome,
         epistemic_state=epistemic,

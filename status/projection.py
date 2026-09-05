@@ -32,6 +32,13 @@ class PublicState(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class EvidenceSource(str, Enum):
+    INVARIANT_VERIFIER = "INVARIANT_VERIFIER"
+    GRAFANA_TELEMETRY = "GRAFANA_TELEMETRY"
+    EXTERNAL_PROBE = "EXTERNAL_PROBE"
+    DOM_OPS_PUBLICATION = "DOM_OPS_PUBLICATION"
+
+
 FRESHNESS_MAX_AGE = {
     "REALTIME": timedelta(minutes=5),
     "PERIODIC_CORRECTNESS": timedelta(minutes=30),
@@ -48,6 +55,7 @@ _VALID_RAW_STATES = {
 
 @dataclass(frozen=True)
 class Observation:
+    source: EvidenceSource
     capability: str
     observation_class: ObservationClass
     outcome: Outcome
@@ -57,6 +65,8 @@ class Observation:
     diagnostic_code: str | None = None
 
     def validate(self) -> None:
+        if not self.source:
+            raise ValueError("Observation evidence source is required.")
         if (self.outcome, self.epistemic_state) not in _VALID_RAW_STATES:
             raise ValueError("Invalid raw observation outcome/epistemic-state combination.")
         if self.freshness_class not in FRESHNESS_MAX_AGE:
@@ -85,6 +95,6 @@ def aggregate_correctness(observations: tuple[Observation, ...], *, now: datetim
 
 
 __all__ = [
-    "EpistemicState", "FRESHNESS_MAX_AGE", "Observation", "ObservationClass",
+    "EpistemicState", "EvidenceSource", "FRESHNESS_MAX_AGE", "Observation", "ObservationClass",
     "Outcome", "PublicState", "aggregate_correctness",
 ]
