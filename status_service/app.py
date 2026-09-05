@@ -27,7 +27,10 @@ def create_app(store=None) -> Flask:
     app.extensions["notice_store"] = store
 
     def operator_identity() -> str | None:
-        return authenticated_operator_email(request.headers.get("X-Goog-IAP-JWT-Assertion"))
+        return authenticated_operator_email(
+            request.headers.get("X-Goog-IAP-JWT-Assertion"),
+            request.headers.get("X-Goog-Authenticated-User-Email"),
+        )
 
     def require_operator() -> str:
         actor = operator_identity()
