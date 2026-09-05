@@ -6,10 +6,10 @@
 # by generating the KNOWN_HOSTS content that needs to be added to GitHub Secrets.
 #
 # Usage:
-#   ./scripts/setup-ssh-security.sh <production-server-ip>
+#   ./scripts/setup-ssh-security.sh <production-server-host>
 #
 # Example:
-#   ./scripts/setup-ssh-security.sh 142.93.123.45
+#   ./scripts/setup-ssh-security.sh classroom-token-hub.tailnet-name.ts.net
 #
 
 set -e
@@ -46,22 +46,22 @@ print_header() {
     echo ""
 }
 
-# Check if server IP was provided
+# Check if server host was provided
 if [ -z "$1" ]; then
-    print_error "Production server IP not provided"
+    print_error "Production server host not provided"
     echo ""
-    echo "Usage: $0 <production-server-ip>"
-    echo "Example: $0 142.93.123.45"
+    echo "Usage: $0 <production-server-host>"
+    echo "Example: $0 classroom-token-hub.tailnet-name.ts.net"
     echo ""
     exit 1
 fi
 
-SERVER_IP="$1"
+SERVER_HOST="$1"
 KNOWN_HOSTS_FILE="known_hosts_github_secret.txt"
 
 print_header "SSH Security Setup for GitHub Actions"
 
-print_info "Production Server IP: $SERVER_IP"
+print_info "Production Server Host: $SERVER_HOST"
 echo ""
 
 # Step 1: Get SSH host keys
@@ -75,12 +75,12 @@ if ! command -v ssh-keyscan &> /dev/null; then
 fi
 
 # Scan for host keys
-print_info "Running: ssh-keyscan -H $SERVER_IP"
-if ssh-keyscan -H "$SERVER_IP" > "$KNOWN_HOSTS_FILE" 2>/dev/null; then
+print_info "Running: ssh-keyscan -H $SERVER_HOST"
+if ssh-keyscan -H "$SERVER_HOST" > "$KNOWN_HOSTS_FILE"; then
     print_success "Successfully retrieved SSH host keys"
 else
     print_error "Failed to retrieve SSH host keys"
-    print_warning "Make sure the server is reachable and SSH port 22 is open"
+    print_warning "Make sure the host is reachable and SSH is listening"
     exit 1
 fi
 
