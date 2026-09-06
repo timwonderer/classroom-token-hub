@@ -16,9 +16,15 @@ class FirestoreNoticeStore:
 
     def append_event(self, notice: dict, event_type: str, actor: str) -> str:
         now = datetime.now(timezone.utc)
-        notice_id = notice.get("external_notice_id") or f"notice-{uuid4().hex}"
+        notice_id = notice.get("external_notice_id")
+        if not notice_id:
+            for snapshot in self.client.collection("external_status_notices").stream():
+                if snapshot.to_dict().get("incident_ref") == notice["incident_ref"]:
+                    notice_id = snapshot.id
+                    break
+        notice_id = notice_id or f"notice-{uuid4().hex}"
         event_id = f"event-{uuid4().hex}"
-        event = {"external_notice_id": notice_id, "event_id": event_id, "event_type": event_type, "published_at": now, "state": notice["state"], "capability": notice["capability"], "impact_statement": notice["impact_statement"], "recommended_user_action": notice["recommended_user_action"], "recovery_state": notice["recovery_state"], "recovery_expectation": notice.get("recovery_expectation"), "next_update_at": notice.get("next_update_at"), "next_update_unavailable": notice.get("next_update_unavailable", False), "source_observation_ids": notice["source_observation_ids"], "actor": actor}
+        event = {"external_notice_id": notice_id, "incident_ref": notice["incident_ref"], "event_id": event_id, "event_type": event_type, "published_at": now, "state": notice["state"], "capability": notice["capability"], "impact_statement": notice["impact_statement"], "recommended_user_action": notice["recommended_user_action"], "recovery_state": notice["recovery_state"], "recovery_expectation": notice.get("recovery_expectation"), "next_update_at": notice.get("next_update_at"), "next_update_unavailable": notice.get("next_update_unavailable", False), "source_observation_ids": notice["source_observation_ids"], "actor": actor}
         self.client.collection("external_status_notice_events").document(event_id).create(event)
         projection = {**notice, "external_notice_id": notice_id, "updated_at": now, "last_event_id": event_id}
         self.client.collection("external_status_notices").document(notice_id).set(projection)
