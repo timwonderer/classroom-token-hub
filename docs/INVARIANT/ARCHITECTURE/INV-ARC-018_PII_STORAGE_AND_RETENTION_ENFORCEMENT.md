@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-018      | 1.0     | 2026-06-13     | None       | Constitutional |
+| INV-ARC-018      | 1.1     | 2026-09-06     | 1.0        | Constitutional |
 
 ---
 
@@ -38,6 +38,7 @@ Constitutional (Tier 1). This document derives from `INV-CORE-000` Section III.2
 - `docs/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 - `docs/INVARIANT/ARCHITECTURE/INV-ARC-005_NO_PII_LEAKAGE_IN_EXECUTION_LAYER.md`
 - `docs/INVARIANT/ARCHITECTURE/INV-ARC-019_IDENTITY_AND_OWNERSHIP_MODEL.md`
+- `docs/SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md` (incorporated; see Section V)
 
 ---
 
@@ -62,6 +63,26 @@ Every PII field at rest must use exactly one of two storage forms. No other form
 ### Dual-Column Rule
 
 When a single PII value serves both lookup and display purposes, it MUST be stored in two separate columns — one hashed, one encrypted. A single column MUST NOT serve both purposes.
+
+### Incorporation of SPEC-SEC-001
+
+This section names the two permitted forms. The code-level construction of each — normalization
+through one canonical documented function, HMAC-SHA-256 under `PEPPER_KEY` with a field/domain
+separation label, non-recoverability of the digest, and separate fields where both purposes exist —
+is `SPEC-SEC-001` Section V.2, which is incorporated here and binding.
+
+`SPEC-SEC-001` Section V.5 is likewise incorporated as the code-level expression of Section VIII of
+this document: security event records may carry a request identifier, owning FEAT identifier,
+outcome class, and non-sensitive technical metadata, and must carry no PII, credential material,
+raw lookup inputs, digests, or keys. A security artifact must not outlive the identity it describes
+absent an explicitly authorized, separately scoped requirement.
+
+One boundary is worth stating explicitly, because the two keys are easy to conflate when reading
+this section alongside `INV-ARC-019`: the HMAC key named in Storage Form 1 is a *lookup* key.
+`SPEC-SEC-001` Section V.1.3 prohibits it — and every other application secret — from being an
+input to password hashing. The forms governed here and the credential primitive governed by
+`INV-ARC-019` Section VI use different keys with independent rotation semantics, and no code may
+fall back from one to the other.
 
 ---
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-000      | 3.0     | 2026-06-08     | SOP-DOC-000 v2.0, SOP-DOC-003 v1.2, SOP-DOC-005 v2.1, SOP-DOC-006 v1.0 | Foundational |
+| SOP-DOC-000      | 3.1     | 2026-09-05     | SOP-DOC-000 v3.0 | Foundational |
 
 ---
 
@@ -49,8 +49,14 @@ All documents are classified into four tiers representing their normative author
 ### Tier 2 — Normative
 - **Definition**: Governs concrete implementation flows, transactions, and operational standard procedures.
 - **Location**: 
+  - `docs/SPEC/` (Technical specifications)
   - `docs/FEATURE-EXECUTION/` (Prefix: `FEAT-*`)
   - `docs/STANDARD_OPERATING_PROCEDURES/` (Prefix: `SOP-*`)
+
+`SPEC` documents are technical contracts, not an independent runtime authority
+namespace. Their requirements bind implementation only when incorporated by the
+applicable `INV-*`, `DOM-*`, or `FEAT-*` contract. This classification does not
+alter the `INV → DOM → FEAT` runtime hierarchy established by `INV-CORE-001`.
 
 ### Tier 3 — Informative
 - **Definition**: Preserves institutional memory, timelines, target plans, releases, and user guides. Must not define runtime rules.

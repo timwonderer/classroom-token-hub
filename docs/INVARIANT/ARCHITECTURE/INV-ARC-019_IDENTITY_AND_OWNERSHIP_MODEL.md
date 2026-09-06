@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-019      | 1.2     | 2026-07-10     | 1.1 | Constitutional |
+| INV-ARC-019      | 1.3     | 2026-09-06     | 1.2 | Constitutional |
 
 ---
 
@@ -28,6 +28,7 @@ Constitutional (Tier 1) within `INV-ARC`. Derived from `INV-CORE-000` Section II
 
 - `docs/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
 - `docs/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
+- `docs/SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md` (incorporated; see Section VI)
 
 ---
 
@@ -73,6 +74,43 @@ No identifier answers more than its assigned question.
 
 Passkey metadata is stored in the unified `passkey_credentials` table for both teacher and sysadmin, and the owning
 principal is always `users.id`.
+
+### Incorporation of SPEC-SEC-001
+
+This document assigns ownership of authentication credentials to `users`, but ownership alone does
+not say how a credential is constructed, verified, or failed. That code-level contract is
+`SPEC-SEC-001`, which by its own Section III is "binding only where incorporated by a governing
+`INV-*`, `DOM-*`, or `FEAT-*` contract." No `DOM-*` contract sits above credential material —
+`DOM-IDEN-002` and `DOM-IDEN-003` name the fields (`pin_hash`, `passphrase_hash`) and deliberately
+specify no algorithm. This section is therefore the incorporating authority.
+
+The following parts of `SPEC-SEC-001` are incorporated and binding on all code in this repository:
+
+- **Section V.1, Credential material.** One canonical password-hashing primitive; the scrypt profile
+  `scrypt:32768:8:1` with a per-hash random salt in the encoded verifier format; no application
+  secret as a KDF input; verifier-only storage; boolean-only verification results with algorithm and
+  parameters centralized in the primitive rather than duplicated at call sites; and fail-closed,
+  non-disclosing handling of unusable verifiers.
+- **Section V.2, Lookup and PII representation**, to the extent it governs identity lookup digests.
+  The storage *forms* those digests may take remain owned by `INV-ARC-018` Section V, which
+  incorporates the same specification for that purpose.
+- **Section V.3.1**, that authentication establishes `users.id` and does not by itself establish
+  `seat_id` or `class_id`. This restates in code terms what Section V of this document requires:
+  no identifier answers more than its assigned question.
+- **Section V.4, Recovery and capability artifacts**, consistent with Section XIV's settled decision
+  that recovery tokens are user-owned recovery capability.
+
+Two consequences follow that are easy to get wrong in code and are stated here so they are not
+rediscovered as preferences:
+
+1. `PEPPER_KEY` is not a credential input. It keys deterministic lookup digests only. Peppering
+   passwords would couple every credential to a key whose rotation is a lookup-digest migration
+   event, silently converting it into a credential-invalidating event. `SPEC-SEC-001` Section V.1.3
+   prohibits this, and Section V.1a requires the rotation semantics of each key to stay independent.
+2. Because the KDF profile is fixed by specification rather than by a library default, code must not
+   rely on a dependency's default to supply it. A default that happens to match is a coincidence
+   that a future upgrade may end, and `SPEC-SEC-001` Section VII prohibits substituting parameters
+   outside those it governs.
 
 ## VII. Operational Actor
 
@@ -242,6 +280,8 @@ is available.
 - roster lookup hashes = seat-owned claim verification artifacts
 - recovery tokens = user-owned recovery capability
 - passkey metadata = user-owned authentication capability
+- credential construction and verification = `SPEC-SEC-001` Section V.1, incorporated by Section VI
+  of this document; `PEPPER_KEY` is a lookup-digest key and is never a credential input
 
 ## XV. Open Decisions
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-016      | 2.0     | 2026-05-20     | N/A        | Foundational    |
+| INV-ARC-016      | 2.1     | 2026-09-06     | 2.0        | Foundational    |
 
 ## I. Purpose
 
@@ -32,6 +32,7 @@ Foundational within `INV-ARC`. Derived from `INV-CORE-000` Section III.3, `Deter
 - `INV-ARC-007_GET_MUST_BE_PURE.md`
 - `DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md`
 - `DOM-CLASS-003_ECONOMIC_POLICY.md`
+- `docs/SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md` (incorporated in part; see Section VII)
 
 ## V. Core Rule
 
@@ -71,6 +72,35 @@ Every protected row has exactly one of four lineage states. All code that reads,
 ## VII. HMAC Key Requirement
 
 The `AUDIT_HMAC_KEY` environment variable is required at application startup. The application shall refuse to start if this variable is absent. It is separate from `PEPPER_KEY` and must never be shared between environments.
+
+"At startup" is the operative clause and it is not satisfied by an equivalent check somewhere
+later. A verifier that raises on the first audited write fails inside a FEAT's transaction, in
+front of a user, on a deployment that already booted clean — which is the failure mode this
+section exists to prevent. The `DEGRADED` row in Section VI is the state for a key that becomes
+unusable at runtime, not a licence to start without one.
+
+### Incorporation of SPEC-SEC-001
+
+The handling requirements for `AUDIT_HMAC_KEY` as an environment variable — high entropy,
+environment-specific, never logged and never exposed in an application response — are
+`SPEC-SEC-001` Section V.1a, which is incorporated here for that variable's row and for the
+independent-rotation rule that follows the table. `AUDIT_HMAC_KEY` rotation is an audit-lineage
+verification event and must be planned separately from `PEPPER_KEY`, `SECRET_KEY`, and
+`ENCRYPTION_KEY` rotation; no code may fall back from one to another. This restates in code terms
+what the paragraph above already requires of key separation.
+
+Two boundaries on that incorporation, stated so they are not read wider than intended:
+
+1. Only the `AUDIT_HMAC_KEY` row and the rotation-independence paragraph are incorporated by this
+   document. The other rows of the Section V.1a table belong to the contracts that own those keys —
+   `INV-ARC-018` for `ENCRYPTION_KEY` and `PEPPER_KEY`, `INV-ARC-019` for credential material.
+2. Section V.1a states the startup gate more broadly than this section does: it requires refusal
+   when a required variable is "absent, blank, malformed, or uses a development/default value."
+   The implementation in `app/__init__.py` currently rejects only absent and blank values. The
+   malformed and development-default conditions are a known, recorded gap rather than a
+   requirement in force, and this section incorporates only the absent/blank gate it has always
+   stated. Closing that gap requires its own change and its own verification; it must not be
+   assumed closed on the strength of this reference.
 
 ## VIII. AuditEvent Immutability
 
