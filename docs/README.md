@@ -11,8 +11,8 @@ All documents are classified into one of three tiers. See [SOP-DOC-000 Section V
 | Tier               | Authority                              | Namespaces / Locations                        |
 |--------------------|----------------------------------------|-----------------------------------------------|
 | **Constitutional** | Inviolable — cannot be overridden      | `INV-CORE-*`, `INV-ARC-*`                    |
-| **Normative**      | Binding — must be followed             | `DOM`, `FEAT`, `REF`, `SOP`, `.claude/rules/`, `SEC-CONT-*` |
-| **Informative**    | Descriptive — no normative authority   | `LOG`, `SEC-AUD/INC/VUL/THR-*`, root files   |
+| **Normative**      | Binding — must be followed             | `DOM`, `FEAT`, `SOP`,|
+| **Informative**    | Descriptive — no normative authority   |`REF`, any agent docs,  root files   |
 
 ---
 
@@ -25,10 +25,10 @@ All documents are classified into one of three tiers. See [SOP-DOC-000 Section V
 | **[INVARIANT/](INVARIANT/)** | Constitutional | Core invariants and architecture invariants |
 | **[DOMAIN/](DOMAIN/)** | Normative | Per-domain authority specs and contracts |
 | **[FEATURE-EXECUTION/](FEATURE-EXECUTION/)** | Normative | FEAT contracts for all state mutations |
-| **[MAP/](MAP/)** | Normative | Domain-to-FEAT capability maps and scope normalization |
-| **[TESTING/](TESTING/)** | Normative | Test creation, validation, and accessibility compliance |
+| **[MAP/](MAP/)** | Normative/Informative | Domain to UI interface wiring specification |
+| **[SPEC/](SPEC/)** | Normative | Build specifications and requirements|
 | **[STANDARD_OPERATING_PROCEDURES/](STANDARD_OPERATING_PROCEDURES/)** | Normative | SOPs for database, deployment, devops, documentation |
-| **[SECURITY/](SECURITY/)** | Normative (CONT) / Informative | Security controls, audits, incidents, threat models |
+
 
 ### Reference & Principles
 
@@ -47,23 +47,19 @@ All documents are classified into one of three tiers. See [SOP-DOC-000 Section V
 
 | Directory | Tier | Purpose |
 |-----------|------|---------|
-| **[SPEC/](SPEC/)** | Normative | Target-state architecture and implementation specs (`SPEC-*`, `V2_*`) |
 | **[TRACKING/](TRACKING/)** | Informative | Migration progress, compliance validation, launch readiness |
 
 ### Historical
 
 | Directory | Tier | Purpose |
 |-----------|------|---------|
-| **[LOGS/](LOGS/)** | Informative | Historical audit logs and release notes |
 | **[archive/](archive/)** | Informative | v1 docs (GitHub Pages assets, old dev artifacts) |
-| **[archive/PHASE_PLANNING/](archive/PHASE_PLANNING/)** | Informative | Phase 3-5 roadmaps, phase extensions (authority clarifications, delayed-use redemption, hall-pass coordination), and store domain implementation logs (Phases 2-6, completed work) |
 
 ### Other
 
 | Location | Tier | Purpose |
 |----------|------|---------|
-| `.claude/rules/` | Normative | AI agent operational rules |
-| `self-hosting/` | Informative | Self-hosting deployment guide |
+| `.claude/rules/` | Informative | AI agent operational rules, non-normative for repo operation |
 | Root files | Informative | Project orientation and contributor reference |
 
 ---
