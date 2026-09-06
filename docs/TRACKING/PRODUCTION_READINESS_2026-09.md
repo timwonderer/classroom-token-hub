@@ -709,6 +709,35 @@ fixed while landing it, in ascending order of how well each was disguised:
 rule matches zero tracked files, any evidence command names a missing file, or any auxiliary
 evidence id has no backing script. A dead rule is a build failure, not a silent pass.
 
+**`CI-XDOMAIN` now carries evidence — closed 2026-09-05.** It previously declared none while
+selecting on `app/feats/**`, `app/routes/**`, `app/services/**`, and `migrations/**` — nearly
+everything — so most substantive PRs aggregated to `NOT_EVALUATED` and exited 1. That was honest,
+not a defect, but a gate that is always red is a gate people learn to ignore. Closed in two moves,
+both taken from INV-ARC-021 rather than from convenience:
+
+- **Real evidence.** `scripts/validate-cross-domain.py` answers the two questions INV-ARC-021 makes
+  statically decidable. §V.2/§V.6: no service or FEAT imports a route, and no domain service imports
+  a coordination FEAT — `app.feats.base` excepted, since it is the execution harness a service
+  legitimately enlists in, not a coordination unit. §V.7: no foreign key crosses a domain boundary
+  except through `class_id`, `seat_id`, or `user_id`, with table ownership read from DOM-CORE-002 §V
+  under its §IV.2 one-owning-domain rule. Both are pure AST checks — no database, no app import.
+- **Narrowed selection.** `app/routes/**` was dropped and `app/models.py` added. There is no
+  `app/domains/**` tree and no normative module-to-domain map — MAP-CORE-001 is marked *Informative*
+  and its FEAT names do not match real modules — so nothing about a routes-only change can be
+  falsified without inventing authority, and selecting it anyway would have rebuilt the CI-RENDER
+  vacuous-pass defect. Route-layer composition under INV-ARC-021 is not thereby ungoverned:
+  `CI-ARC-EXEC` already names that authority, already selects `app/routes/**`, and runs
+  FEAT-enforcement evidence plus `policy_guardrails`. A test pins that so the narrowing cannot
+  quietly become a coverage hole.
+
+The check runs against an **enumerated baseline** of 11 pre-existing violations — 2 service-to-FEAT
+imports (`ledger_fee_service`, `payroll/settlement`), 6 cross-domain foreign keys, and 3 findings on
+tables with no DOM-CORE-002 §V attribution. Remediating those requires migrations and module
+relocation, out of scope here. The baseline is not a mute button: a **new** violation fails the
+build, and so does a baseline entry that **no longer reproduces**, because a stale exemption is
+exactly the matches-nothing failure class this system exists to catch. The baseline shrinks by
+deletion or the gate goes red.
+
 **`CI-PII` now declares evidence — closed 2026-09-05.** It was the second family with none, and it
 selects on `app/models.py`, `app/services/identity/**`, `migrations/**`, and
 `tests/dom/identity/**`, so every schema or identity change failed the gate for an unrelated reason.
@@ -728,12 +757,16 @@ what is under test rather than the deletion helper. Verified load-bearing by mut
 particular **INV-ARC-005 is not evidenced at all**, and `DisplayMetadata` writes decrypted names and
 the teacher note into the Flask session with no test on that boundary.
 
-**Keep it out of required status checks until it runs green on a real PR.** The aggregate is
-currently `NOT_EVALUATED` for most PRs because `CI-XDOMAIN` — now the only family with no evidence —
-selects on `app/feats/**`, `app/routes/**`, `app/services/**`, and `migrations/**`, nearly
-everything. That is the honest answer, not a defect, but it exits 1. Every other family passes on
-this branch as of 2026-09-05: CI-ARC-EXEC, CI-SCOPE, CI-TEMPORAL, CI-PERSIST, CI-PII, CI-RENDER,
-CI-VALIDATION.
+**Every family now declares evidence, and every family passes on this branch as of 2026-09-05:**
+CI-ARC-EXEC, CI-SCOPE, CI-TEMPORAL, CI-PERSIST, CI-PII, CI-XDOMAIN, CI-RENDER, CI-VALIDATION.
+`CI-PII` and `CI-XDOMAIN` were closed independently and merged here; each closure was written while
+the other was still open, so each originally named the other as the last gap. Neither is. There is
+no longer any family that aggregates a substantive change to `NOT_EVALUATED` for want of evidence.
+
+**Keep the workflow out of required status checks until it runs green on a real PR.** Declared
+evidence is not the same as evidence observed under PR conditions, and the two closures have never
+executed together on the same selection until this merge. Promote it after that, not before.
+
 
 **Latent trap in the `testing` environment.** It carries a `branch_policy` protection rule with
 `custom_branch_policies: true` and an **empty** policy list — the same shape that made the

@@ -23,11 +23,37 @@ def test_route_change_selects_execution_scope_and_validation():
     result = classify(["app/routes/admin.py"], MANIFEST)
     selected = {family["family_id"] for family in result["selected_families"]}
     # Routes are intentionally conservative: they can execute mutation,
-    # class-scoped behavior, rendering, persistence, or cross-domain calls.
-    assert selected == {"CI-ARC-EXEC", "CI-SCOPE", "CI-PERSIST", "CI-XDOMAIN", "CI-RENDER"}
+    # class-scoped behavior, rendering, or persistence. Route-layer composition
+    # under INV-ARC-021 is CI-ARC-EXEC's surface — it names that authority and
+    # runs FEAT-enforcement evidence — so selecting CI-XDOMAIN here would add a
+    # family whose static service/model evidence asks nothing about the change.
+    assert selected == {"CI-ARC-EXEC", "CI-SCOPE", "CI-PERSIST", "CI-RENDER"}
     assert {item["family_id"] for item in result["unselected_families"]} == {
-        "CI-TEMPORAL", "CI-PII", "CI-VALIDATION"
+        "CI-TEMPORAL", "CI-PII", "CI-VALIDATION", "CI-XDOMAIN"
     }
+
+
+def test_route_change_still_has_an_inv_arc_021_family_selected():
+    """Narrowing CI-XDOMAIN must not leave INV-ARC-021 ungoverned for routes."""
+    result = classify(["app/routes/admin.py"], MANIFEST)
+    authorities = {
+        authority
+        for family in result["selected_families"]
+        for authority in family["governing_authority"]
+    }
+    assert "INV-ARC-021" in authorities
+
+
+@pytest.mark.parametrize("path", [
+    "app/services/ledger_fee_service.py",
+    "app/feats/store.py",
+    "app/models.py",
+    "migrations/versions/new_revision.py",
+])
+def test_cross_domain_selects_the_surfaces_its_evidence_can_judge(path):
+    result = classify([path], MANIFEST)
+    selected = {family["family_id"] for family in result["selected_families"]}
+    assert "CI-XDOMAIN" in selected
 
 
 def test_migration_change_event_wide_selects_persistence_pii_and_validation():
