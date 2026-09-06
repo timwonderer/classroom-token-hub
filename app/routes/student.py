@@ -1517,7 +1517,6 @@ def insurance_marketplace():
         )
     current_class_context = SimpleNamespace(
         teacher_name="",
-        block_display=class_identifier,
         class_timezone=getattr(context, "class_timezone", ""),
         student_full_name=(
             context.identity_profile.full_name
@@ -1859,7 +1858,6 @@ def view_policy(enrollment_id):
         student=student_name,
         current_class_context=SimpleNamespace(
             teacher_name="",
-            block_display=class_identifier,
             class_timezone=getattr(context, "class_timezone", ""),
             student_full_name=student_name,
             join_code=class_identifier,

@@ -143,7 +143,7 @@
                         <select id="class-switcher-select" class="form-select form-select-sm">
                             {% for class_option in available_classes %}
                             <option value="{{ class_option.class_id }}" {% if class_option.is_current %}selected{% endif %}>
-                                {{ class_option.block_display }} with {{ class_option.teacher_name }}
+                                {{ class_option.class_identifier }} with {{ class_option.teacher_name }}
                             </option>
                             {% endfor %}
                         </select>
@@ -214,7 +214,7 @@
                             </h1>
                             {% if student_layout_view.has_class_context %}
                             <div class="meta">
-                                {{ student_layout_view.teacher_display_name }} • {{ student_layout_view.block_display }}
+                                {{ student_layout_view.teacher_display_name }} • {{ student_layout_view.class_display_name }}
                                 <span class="badge bg-light text-dark ms-2">Join Code: {{ student_layout_view.class_join_code }}</span>
                             </div>
                             {% endif %}

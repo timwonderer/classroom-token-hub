@@ -32,8 +32,6 @@ class DisplayMetadata:
     class_identifier: str | None
     class_timezone: str | None
     section: str | None
-    block: str | None
-    block_display: str | None
     actor_first_name: str | None
     actor_last_name: str | None
     actor_full_name: str | None
@@ -56,9 +54,7 @@ class DisplayMetadata:
             "class_timezone": self.class_timezone,
             "teacher_name": self.teacher_display_name,
             "user_id": self.user_id,
-            "block": self.block,
             "section": self.section,
-            "block_display": self.block_display,
             "student_full_name": self.student_full_name or "",
         }
 
@@ -138,8 +134,6 @@ def resolve_display_metadata(ctx: CanonicalContext | None) -> DisplayMetadata | 
         class_identifier=class_display_name,
         class_timezone=class_row.class_timezone,
         section=class_row.section,
-        block=class_row.section,
-        block_display=class_display_name,
         actor_first_name=actor_profile.first_name if actor_profile else None,
         actor_last_name=actor_profile.last_name if actor_profile else None,
         actor_full_name=_full_name(actor_profile),

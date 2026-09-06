@@ -170,13 +170,6 @@ class StudentLayoutContextView:
     Empty string if no class context.
     """
 
-    block_display: str
-    """Block/period display label for the current class.
-
-    Example: "Period 1", "Block A". Displayed in page header meta line.
-    Empty string if no class context.
-    """
-
     is_maintenance_bypass_active: bool
     """Whether the maintenance mode bypass is active for this user.
 
@@ -565,7 +558,6 @@ def build_student_layout_context_view(
             class_join_code="",
             class_timezone="",
             teacher_display_name="",
-            block_display="",
             is_maintenance_bypass_active=is_maintenance_bypass_active,
         )
 
@@ -582,7 +574,6 @@ def build_student_layout_context_view(
     # 'Etc/UTC'), so pass it through as-is. Empty only means no class context.
     class_timezone = (getattr(display_metadata, "class_timezone", None) or "").strip()
     teacher_name = (getattr(display_metadata, "teacher_display_name", None) or "").strip()
-    block_display = (getattr(display_metadata, "block_display", None) or "").strip()
 
     return StudentLayoutContextView(
         student_display_full_name=full_name.upper() if full_name else "",
@@ -593,7 +584,6 @@ def build_student_layout_context_view(
         class_join_code=class_join_code,
         class_timezone=class_timezone,
         teacher_display_name=teacher_name,
-        block_display=block_display,
         is_maintenance_bypass_active=is_maintenance_bypass_active,
     )
 
