@@ -43,12 +43,13 @@ def derive_overall_status(notices: list[dict]) -> dict[str, str]:
 def derive_capability_cards(notices: list[dict], capabilities: tuple[str, ...]) -> list[dict[str, str]]:
     cards = []
     active_by_capability = {notice.get("capability"): notice for notice in notices if notice.get("state") != NoticeState.RESOLVED.value}
-    names = {"public_service_reachability": "App availability", "ledger_correctness": "Ledger correctness"}
+    names = {"public_service_reachability": ("App availability", "Can I access Classroom Token Hub right now?"), "ledger_correctness": ("Ledger correctness", "Are account balances and transactions correct?")}
     for capability in capabilities:
         notice = active_by_capability.get(capability)
         cards.append({
-            "key": capability,
-            "name": names.get(capability, capability.replace("_", " ").title()),
+            "key": names.get(capability, ("", "Is this service working right now?"))[1].rstrip("?"),
+            "name": names.get(capability, (capability.replace("_", " ").title(), "Is this service working right now?"))[0],
+            "question": names.get(capability, ("", "Is this service working right now?"))[1],
             "state": notice.get("state", "UNKNOWN") if notice else "UNKNOWN",
             "label": notice.get("impact_statement", "Monitoring evidence is not available yet.") if notice else "Monitoring evidence is not available yet.",
             "checked": "No verified observation yet" if not notice else "Active status notice",
