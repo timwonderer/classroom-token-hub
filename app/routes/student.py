@@ -1417,7 +1417,6 @@ def insurance_marketplace():
         flash("No class selected. Please select a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
 
-    class_identifier = get_display_join_code(context.class_id) if context.class_id else ""
     class_id = context.class_id
     seat_id = context.seat_id
 
@@ -1515,24 +1514,12 @@ def insurance_marketplace():
             incident_date=incident_dt,
             filed_date=claim.submitted_at,
         )
-    current_class_context = SimpleNamespace(
-        teacher_name="",
-        block_display=class_identifier,
-        class_timezone=getattr(context, "class_timezone", ""),
-        student_full_name=(
-            context.identity_profile.full_name
-            if getattr(context, "identity_profile", None) else ""
-        ),
-        join_code=class_identifier,
-        class_identifier=class_identifier,
-    )
     return render_template(
         'student_insurance_marketplace.html',
         student=(
             context.identity_profile.full_name
             if getattr(context, "identity_profile", None) else ""
         ),
-        current_class_context=current_class_context,
         available_policies=available_policies,
         grouped_policies=grouped_policies,
         ungrouped_policies=ungrouped_policies,
@@ -1766,7 +1753,6 @@ def view_policy(enrollment_id):
         flash("No class selected. Please select a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
 
-    class_identifier = get_display_join_code(context.class_id) if context.class_id else ""
     student_name = (
         context.identity_profile.full_name
         if getattr(context, "identity_profile", None) else ""
@@ -1857,14 +1843,6 @@ def view_policy(enrollment_id):
     return render_template(
         'student_view_policy.html',
         student=student_name,
-        current_class_context=SimpleNamespace(
-            teacher_name="",
-            block_display=class_identifier,
-            class_timezone=getattr(context, "class_timezone", ""),
-            student_full_name=student_name,
-            join_code=class_identifier,
-            class_identifier=class_identifier,
-        ),
         enrollment=enrollment,
         claims=[
             _claim_display_row(claim)
