@@ -709,11 +709,44 @@ fixed while landing it, in ascending order of how well each was disguised:
 rule matches zero tracked files, any evidence command names a missing file, or any auxiliary
 evidence id has no backing script. A dead rule is a build failure, not a silent pass.
 
-**Keep it out of required status checks until it runs green on a real PR.** The aggregate is
-currently `NOT_EVALUATED` for most PRs because `CI-XDOMAIN` declares no evidence and selects on
-`app/feats/**`, `app/routes/**`, `app/services/**`, and `migrations/**` — nearly everything. That is
-the honest answer, not a defect, but it exits 1. Every family that *does* declare evidence passes on
-this branch as of 2026-09-05: CI-ARC-EXEC, CI-SCOPE, CI-PERSIST, CI-RENDER, CI-VALIDATION.
+**`CI-XDOMAIN` now carries evidence — closed 2026-09-05.** It previously declared none while
+selecting on `app/feats/**`, `app/routes/**`, `app/services/**`, and `migrations/**` — nearly
+everything — so most substantive PRs aggregated to `NOT_EVALUATED` and exited 1. That was honest,
+not a defect, but a gate that is always red is a gate people learn to ignore. Closed in two moves,
+both taken from INV-ARC-021 rather than from convenience:
+
+- **Real evidence.** `scripts/validate-cross-domain.py` answers the two questions INV-ARC-021 makes
+  statically decidable. §V.2/§V.6: no service or FEAT imports a route, and no domain service imports
+  a coordination FEAT — `app.feats.base` excepted, since it is the execution harness a service
+  legitimately enlists in, not a coordination unit. §V.7: no foreign key crosses a domain boundary
+  except through `class_id`, `seat_id`, or `user_id`, with table ownership read from DOM-CORE-002 §V
+  under its §IV.2 one-owning-domain rule. Both are pure AST checks — no database, no app import.
+- **Narrowed selection.** `app/routes/**` was dropped and `app/models.py` added. There is no
+  `app/domains/**` tree and no normative module-to-domain map — MAP-CORE-001 is marked *Informative*
+  and its FEAT names do not match real modules — so nothing about a routes-only change can be
+  falsified without inventing authority, and selecting it anyway would have rebuilt the CI-RENDER
+  vacuous-pass defect. Route-layer composition under INV-ARC-021 is not thereby ungoverned:
+  `CI-ARC-EXEC` already names that authority, already selects `app/routes/**`, and runs
+  FEAT-enforcement evidence plus `policy_guardrails`. A test pins that so the narrowing cannot
+  quietly become a coverage hole.
+
+The check runs against an **enumerated baseline** of 11 pre-existing violations — 2 service-to-FEAT
+imports (`ledger_fee_service`, `payroll/settlement`), 6 cross-domain foreign keys, and 3 findings on
+tables with no DOM-CORE-002 §V attribution. Remediating those requires migrations and module
+relocation, out of scope here. The baseline is not a mute button: a **new** violation fails the
+build, and so does a baseline entry that **no longer reproduces**, because a stale exemption is
+exactly the matches-nothing failure class this system exists to catch. The baseline shrinks by
+deletion or the gate goes red.
+
+Every family that declares evidence passes on this branch as of 2026-09-05: CI-ARC-EXEC, CI-SCOPE,
+CI-PERSIST, CI-RENDER, CI-VALIDATION, CI-XDOMAIN. A change under `app/services/**` now aggregates
+to **PASS** on earned evidence rather than `NOT_EVALUATED`.
+
+**`CI-PII` is the last evidence-less family.** It selects `app/models.py`, `app/services/identity/**`,
+`migrations/**`, and `tests/dom/identity/**`, so any migration or model change still aggregates to
+`NOT_EVALUATED`. `scripts/validate-pii-storage.py` exists and is wired as auxiliary evidence to no
+family; combining it with deletion-retention and execution-layer leakage evidence is the remaining
+work before the workflow can be promoted to a required status check.
 
 **Latent trap in the `testing` environment.** It carries a `branch_policy` protection rule with
 `custom_branch_policies: true` and an **empty** policy list — the same shape that made the
