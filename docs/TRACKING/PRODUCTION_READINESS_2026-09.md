@@ -849,6 +849,40 @@ remediation it complements.
 Note: HEAD carries an empty `content/` directory and an untracked `app/content/__pycache__` — ghosts
 of a partial application. Clean both before starting the port.
 
+**Disposition 2026-09-06: post-launch quality-of-life, no pre-ship port.** The one thing on
+`support-text-extraction` that looked release-relevant was a pair of `/admin/rent-settings` fixes, and
+both are already resolved on HEAD by better mechanisms than the branch used:
+
+- `b3c9d18a7` "resolve crash on waiver enumeration" added a `RentWaiverView` projection so the route
+  could enumerate *active* waivers. HEAD carries the projection **and** has since removed the concept
+  the crash was in service of — `templates/admin_rent_settings.html` now states outright that there is
+  "intentionally no 'active waivers,' 'current period'" surface, per DOM-OBL-001 §V.6. Cherry-picking
+  the fix would reintroduce a surface HEAD deliberately deleted.
+- `537cbd89a` "replace Python list comprehensions with selectattr" is already present verbatim at
+  `admin_rent_settings.html:309,338`. Verified by parsing the template through the real Jinja
+  environment rather than by grep, since a `TemplateSyntaxError` is exactly what a grep would miss.
+
+Nothing else on that branch fixes a defect on HEAD. Defer the whole branch.
+
+### Uncommitted worktree work — deferred 2026-09-06
+
+Two worktrees hold uncommitted, unreachable work. Both were evaluated against one question — *does
+this fix something broken on HEAD, or is it required to ship?* — and both answer no.
+
+`insurance-rec-card` (307 insertions across `app/routes/admin.py`,
+`templates/admin_edit_insurance_policy.html`, plus a new test) surfaces the Economic Engine's advisory
+starting values as a card on the insurance policy form. Its own changelog entry files it under
+**Added**. It is a usability improvement over an existing passive footnote, not a repair.
+
+`loving-banzai-564730` (730 insertions) is Phase 5/6 class-configuration view-model wiring plus a new
+`admin_create_class_form.html` and a bulk-add-students test. It is mid-flight — its diff leaves a blank
+line where `create_class_with_roster` was removed from an import block — and it is additive: HEAD
+already ships `admin_create_class.html`, rendered from three call sites in `app/routes/admin.py`, so
+there is no missing-template failure for it to fix.
+
+Neither is lost; both remain in their worktrees. Neither should be swept up in a cleanup pass without
+first being committed to a branch.
+
 ### Bug-hunter badge system (backlog)
 
 `DOM-OPS-003_BADGE_SYSTEM.md`, `SPEC-OPS-001_BUG_HUNTER_BADGE_SYSTEM.md`,
