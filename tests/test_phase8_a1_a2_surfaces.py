@@ -74,6 +74,46 @@ class TestA1StudentRentSurface:
 
         print("✅ A1.1: Student rent route renders with canonical schema")
 
+    def test_a1_bills_tab_nav_renders_when_rent_and_insurance_enabled(self, app, client):
+        """
+        A1.3: The Rent/Insurance tab nav renders when both features are enabled.
+
+        Regression guard. `student_rent.html` gates the nav on
+        `feature_settings.rent_enabled and feature_settings.insurance_enabled`.
+        `feature_settings` is supplied by the `inject_feature_settings` context
+        processor, but the route used to pass `feature_settings=g.get(
+        'feature_settings', {})` explicitly. `g.feature_settings` is never
+        assigned anywhere, and values passed to `render_template` take
+        precedence over context processors, so the empty dict shadowed the real
+        settings and the nav silently never rendered.
+        """
+        classroom, student = initialize_as_student("chemistry_p1", client, app, student_index=0)
+
+        with app.app_context():
+            customize_rent_settings(
+                classroom.class_id,
+                rent_amount=Decimal('100.00'),
+                frequency_type='monthly',
+                grace_period_days=3,
+                late_penalty_amount=Decimal('10.00'),
+            )
+            enable_class_feature(class_id=classroom.class_id, feature='rent')
+            enable_class_feature(class_id=classroom.class_id, feature='insurance')
+
+        response = client.get('/student/rent')
+
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+        # Match the nav element itself, not the bare `bills-tabs` token: that
+        # also appears in the always-rendered <style> block, so asserting on it
+        # would pass vacuously even with the nav suppressed.
+        assert b'nav nav-pills bills-tabs' in response.data, (
+            "The Rent/Insurance tab nav should render when both features are "
+            "enabled; an empty feature_settings shadowing the context processor "
+            "would suppress it."
+        )
+
+        print("✅ A1.3: Bills tab nav renders when rent and insurance are enabled")
+
     def test_a1_query_helpers_work_with_event_discriminator(self, app):
         """
         A1.2: Canonical query functions retrieve ASSESSMENT events correctly using event_type discriminator.

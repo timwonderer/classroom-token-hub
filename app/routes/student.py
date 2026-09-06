@@ -2846,15 +2846,17 @@ def rent():
     payment_nonce = uuid.uuid4().hex
 
     # Phase 6-7 VERIFIED: Render template with ONLY view model fields
-    # No raw variables passed; all template access via view.* namespace
+    # No raw variables passed; all template access via view.* namespace.
+    # `feature_settings` is deliberately NOT passed: the inject_feature_settings
+    # context processor supplies it, and an explicit kwarg would take precedence
+    # over the processor (Flask update_template_context re-applies the caller's
+    # values last).
     return render_template(
         'student_rent.html',
         view=view,
         checking_balance=checking_balance,
         savings_balance=savings_balance,
         payment_nonce=payment_nonce,
-        feature_settings=g.get('feature_settings', {}),
-        current_class_context=g.get('current_class_context', {}),
     )
 
 
