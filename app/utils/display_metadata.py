@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 
 from flask import session
 
@@ -43,7 +43,6 @@ class DisplayMetadata:
     teacher_first_name: str | None
     teacher_last_name: str | None
     teacher_display_name: str | None
-    teacher_note: str | None
 
     def to_session_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -149,7 +148,6 @@ def resolve_display_metadata(ctx: CanonicalContext | None) -> DisplayMetadata | 
         teacher_first_name=teacher_profile.first_name if teacher_profile else None,
         teacher_last_name=teacher_profile.last_name if teacher_profile else None,
         teacher_display_name=teacher_display_name,
-        teacher_note=actor_profile.notes if actor_profile else None,
     )
 
 
@@ -160,6 +158,12 @@ def get_cached_display_metadata(ctx: CanonicalContext | None) -> DisplayMetadata
     if not isinstance(cached, dict):
         return None
     if cached.get("context_key") != _context_key(ctx):
+        return None
+    # Sessions outlive deploys, so a cookie may carry a stale field set. Reject
+    # rather than adapt: decoding a mismatched payload would raise, and merely
+    # tolerating an extra key would strand it (and any PII it holds) in the
+    # cookie forever. Rejecting re-resolves and overwrites it.
+    if cached.keys() != {f.name for f in fields(DisplayMetadata)}:
         return None
     return DisplayMetadata(**cached)
 
