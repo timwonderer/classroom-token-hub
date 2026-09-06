@@ -48,10 +48,30 @@ families:
     governing_authority: [INV-ARC-005, INV-ARC-018, INV-ARC-019]
     path_rules: [app/models.py, app/services/identity/**, migrations/**, tests/dom/identity/**, docs/INVARIANT/ARCHITECTURE/INV-ARC-018*]
     evidence_kind: [static, runtime, persistence]
-    evidence_commands: []
+    evidence_commands:
+      - tests/dom/identity/test_pii_retention_deletion.py
+      - tests/dom/identity/test_orphaned_user_deletion.py
+    auxiliary_evidence: [pii_storage_validator]
     mandatory: true
-    pass_contract: No current sufficient evidence; selected changes remain NOT_EVALUATED.
-    known_limits: Storage allowlist, deletion-retention, and execution-layer leakage evidence are not yet combined into a complete family gate.
+    pass_contract: >-
+      INV-ARC-018 storage form and retention are both evidenced. The storage allowlist
+      (§V-§VII) is checked statically against app/models.py, and the four §VIII deletion
+      rules are exercised against a real database: seat deletion destroys the identity
+      profile and claim hashes in the same transaction, the schema cascade destroys
+      profile PII independently of the deletion helper, user deletion destroys the
+      username hash, and class teardown leaves no profile referencing a deleted seat.
+    known_limits: >-
+      INV-ARC-005 is named in this family's governing authority but is not evidenced at
+      all. Nothing here gates PII in logs, telemetry, error messages, or URLs, and in
+      particular DisplayMetadata serializes decrypted names and the teacher-authored
+      notes field into the Flask session with no test on that boundary. The storage
+      check is an AST scan of app/models.py by column name: it reads neither the live
+      database schema nor migrations/**, and it cannot prove a column named *_hash is
+      HMAC-produced at runtime rather than merely named so. Free-text columns are
+      governed only by storage form, since their contents are author-supplied and the
+      application does not interpret them. §VII.4 backup retention is outside CI
+      entirely. Of INV-ARC-019 this family covers only the PII-bearing subset of the
+      identity model; its scope and ownership rules are evidenced under CI-SCOPE.
   - family_id: CI-XDOMAIN
     governing_authority: [INV-ARC-021]
     path_rules: [app/feats/**, app/routes/**, app/services/**, migrations/**]
@@ -84,6 +104,7 @@ families:
       - tests/test_ci_classifier.py
       - tests/test_ci_evidence_runner.py
       - tests/test_migration_validator.py
+      - tests/test_pii_storage_validator.py
     mandatory: true
-    pass_contract: Classifier selection, manifest self-check, and the migration idempotency gate execute successfully.
+    pass_contract: Classifier selection, manifest self-check, and the migration idempotency and PII storage gates execute successfully.
     known_limits: This family does not establish application invariant behavior.

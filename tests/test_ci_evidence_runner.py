@@ -31,8 +31,8 @@ def test_aggregate_fail_closed_precedence():
 
 def test_family_without_evidence_is_not_evaluated():
     family = {
-        "family_id": "CI-PII", "mandatory": True,
-        "governing_authority": ["INV-ARC-018"], "evidence_commands": [],
+        "family_id": "CI-XDOMAIN", "mandatory": True,
+        "governing_authority": ["INV-ARC-021"], "evidence_commands": [],
     }
     result = run_family(family, root=ROOT, pytest_executable="pytest")
     assert result["status"] == "NOT_EVALUATED"
@@ -131,10 +131,11 @@ def test_self_check_reports_dangling_evidence_references(tmp_path, field, value,
 
 
 def test_selection_with_missing_families_is_not_evaluated():
+    """One unevidenced family drags the whole selection down, even beside passing ones."""
     selection = classify(["migrations/versions/new.py"], MANIFEST)
     result = execute_selection(selection, root=ROOT, pytest_executable="pytest", manifest=MANIFEST,
                                runner=lambda *args, **kwargs: completed())
     assert result["status"] == "NOT_EVALUATED"
     statuses = {item["family_id"]: item["status"] for item in result["family_results"]}
-    assert statuses["CI-PII"] == "NOT_EVALUATED"
     assert statuses["CI-XDOMAIN"] == "NOT_EVALUATED"
+    assert statuses["CI-PII"] == "PASS"

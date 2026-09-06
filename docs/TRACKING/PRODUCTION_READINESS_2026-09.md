@@ -709,11 +709,31 @@ fixed while landing it, in ascending order of how well each was disguised:
 rule matches zero tracked files, any evidence command names a missing file, or any auxiliary
 evidence id has no backing script. A dead rule is a build failure, not a silent pass.
 
+**`CI-PII` now declares evidence — closed 2026-09-05.** It was the second family with none, and it
+selects on `app/models.py`, `app/services/identity/**`, `migrations/**`, and
+`tests/dom/identity/**`, so every schema or identity change failed the gate for an unrelated reason.
+Closing it surfaced three further defects. `scripts/validate-pii-storage.py` was registered in
+`ALLOWED_AUXILIARY` but referenced by no family, so it had never run — the self-check validates that
+declared ids resolve, not that registered scripts are declared, and that gap remains. It would have
+failed the live tree if it had run, because it read `IdentityProfile.notes` as an unamended §VI
+identity field; `notes` is opaque teacher-authored text the application never interprets, so the
+enforceable rule is storage form (§V.2 encryption), not §VI membership. And it selected classes and
+columns by name, so a rename would have left it auditing nothing and printing success — the same
+matches-nothing shape as `CI-RENDER`; absence is now a finding in both directions. Separately,
+INV-ARC-018 **§VIII retention had no evidence anywhere in the tree**: nothing asserted PII is
+destroyed with the record that owns it. `tests/dom/identity/test_pii_retention_deletion.py` covers
+all four rules against a real database, including a raw-SQL seat delete so the schema cascade is
+what is under test rather than the deletion helper. Verified load-bearing by mutation.
+`known_limits` states what is still uncovered rather than letting the pass imply it — in
+particular **INV-ARC-005 is not evidenced at all**, and `DisplayMetadata` writes decrypted names and
+the teacher note into the Flask session with no test on that boundary.
+
 **Keep it out of required status checks until it runs green on a real PR.** The aggregate is
-currently `NOT_EVALUATED` for most PRs because `CI-XDOMAIN` declares no evidence and selects on
-`app/feats/**`, `app/routes/**`, `app/services/**`, and `migrations/**` — nearly everything. That is
-the honest answer, not a defect, but it exits 1. Every family that *does* declare evidence passes on
-this branch as of 2026-09-05: CI-ARC-EXEC, CI-SCOPE, CI-PERSIST, CI-RENDER, CI-VALIDATION.
+currently `NOT_EVALUATED` for most PRs because `CI-XDOMAIN` — now the only family with no evidence —
+selects on `app/feats/**`, `app/routes/**`, `app/services/**`, and `migrations/**`, nearly
+everything. That is the honest answer, not a defect, but it exits 1. Every other family passes on
+this branch as of 2026-09-05: CI-ARC-EXEC, CI-SCOPE, CI-TEMPORAL, CI-PERSIST, CI-PII, CI-RENDER,
+CI-VALIDATION.
 
 **Latent trap in the `testing` environment.** It carries a `branch_policy` protection rule with
 `custom_branch_policies: true` and an **empty** policy list — the same shape that made the
