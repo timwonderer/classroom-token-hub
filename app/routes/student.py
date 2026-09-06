@@ -240,6 +240,7 @@ from app.utils.display_name_session import (
     upsert_teacher_display_name_cache,
     clear_teacher_display_name_cache,
 )
+from app.session_lifetime import SESSION_EXPIRES_AT_KEY
 from app.services.tlcp import has_recent_error_for_actor
 from app.services.context_resolver import (
     resolve_canonical_context,
@@ -3089,6 +3090,15 @@ def login():
         from app.auth import SESSION_TIMEOUT_MINUTES
         user.current_session_started_at = now
         user.current_session_expires_at = now + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
+
+        # Mirror the authoritative expiry onto the cookie so the browser evicts
+        # it at the same instant login_required stops honoring it. Without this
+        # the cookie outlives the session by Flask's 31-day default whenever the
+        # student closes the tab, since the server-side check only runs on a
+        # request. Set here rather than in either branch below: both the
+        # class-selection path and the direct-dashboard path pass through this
+        # line, and no session.clear() intervenes.
+        session[SESSION_EXPIRES_AT_KEY] = user.current_session_expires_at.isoformat()
 
         linked_user = user
 

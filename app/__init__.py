@@ -248,10 +248,50 @@ def create_app():
     flask_env = os.environ["FLASK_ENV"]
     dev_rate_limit_enabled = os.getenv("DEV_ENABLE_RATELIMIT", "").lower() in {"1", "true", "yes", "on"}
 
+    # SECRET_KEY rotation support.
+    #
+    # SECRET_KEY signs session cookies. Replacing it outright invalidates every
+    # live session, logging everyone out mid-class.
+    #
+    # SECRET_KEY_FALLBACKS lets the new key sign while retired keys still
+    # verify, so existing sessions survive the cutover. Procedure:
+    #   1. Set SECRET_KEY=<new>, SECRET_KEY_FALLBACKS=<old>, deploy.
+    #   2. Wait longer than the maximum live authenticated session so every
+    #      session cookie in circulation has been reissued under the new key.
+    #      That maximum is 60 minutes: the sysadmin idle limit, the longest of
+    #      the three role lifetimes in app/auth.py, which RoleScopedSessionInterface
+    #      applies to the cookie itself. Do NOT read PERMANENT_SESSION_LIFETIME
+    #      here -- it is unset, so it is Flask's 31-day default, and it does not
+    #      bound authenticated cookies.
+    #   3. Remove SECRET_KEY_FALLBACKS, deploy again.
+    #
+    # Comma-separated, oldest last. Only ever holds *retired* keys — never the
+    # current one, and never a key you would not accept a session from.
+    #
+    # SCOPE LIMIT: this covers sessions ONLY. Flask-WTF signs CSRF tokens with a
+    # single key (`URLSafeTimedSerializer(secret_key, ...)`) and has no fallback
+    # mechanism, so a bare SECRET_KEY rotation still breaks every form that was
+    # rendered before the cutover. That is why CSRF is given its own key below.
+    secret_key_fallbacks = [
+        key.strip()
+        for key in os.getenv("SECRET_KEY_FALLBACKS", "").split(",")
+        if key.strip()
+    ]
+
+    # Decouple CSRF signing from session signing so the two can rotate
+    # independently. Unset, Flask-WTF falls back to SECRET_KEY (previous
+    # behavior), which means a SECRET_KEY rotation also invalidates open forms.
+    #
+    # Set conditionally below: Flask-WTF reads WTF_CSRF_SECRET_KEY via
+    # `config.get(name, secret_key)`, so a present-but-None entry shadows the
+    # SECRET_KEY default and raises "CSRF is not configured."
+    csrf_secret_key = os.getenv("CSRF_SECRET_KEY", "").strip() or None
+
     app.config.from_mapping(
         DEBUG=False,
         ENV=flask_env,
         SECRET_KEY=os.environ["SECRET_KEY"],
+        SECRET_KEY_FALLBACKS=secret_key_fallbacks,
         SQLALCHEMY_DATABASE_URI=os.environ["DATABASE_URL"],
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SESSION_COOKIE_SECURE=flask_env == "production",  # Only require HTTPS in production
@@ -265,6 +305,17 @@ def create_app():
         # Dev ergonomics: disable limiter in local development unless explicitly re-enabled.
         RATELIMIT_ENABLED=(flask_env != "development") or dev_rate_limit_enabled,
     )
+
+    if csrf_secret_key:
+        app.config["WTF_CSRF_SECRET_KEY"] = csrf_secret_key
+
+    # Bound the session cookie to the authoritative per-role session lifetimes
+    # already enforced server-side in app/auth.py. PERMANENT_SESSION_LIFETIME is
+    # left at Flask's default on purpose; see app/session_lifetime.py for why it
+    # is not a PII-retention control.
+    from app.session_lifetime import RoleScopedSessionInterface
+
+    app.session_interface = RoleScopedSessionInterface()
 
     # Enable Jinja2 template hot reloading without server restart
     app.jinja_env.auto_reload = True
