@@ -75,9 +75,15 @@ def upgrade():
         if "uq_balance_snapshot_scope" not in constraints:
             op.create_unique_constraint("uq_balance_snapshot_scope", "ledger_balance_snapshot", ["class_id", "seat_id", "account_type"])
         return
-    op.add_column("ledger_balance_snapshot", sa.Column("account_type", sa.String(length=20), nullable=True))
-    op.add_column("ledger_balance_snapshot", sa.Column("posted_balance_cents", sa.Integer(), nullable=True))
-    op.add_column("ledger_balance_snapshot", sa.Column("reconciled_through_posting_sequence", sa.BigInteger(), nullable=True))
+    if "account_type" not in snapshot_columns:
+        op.add_column("ledger_balance_snapshot", sa.Column("account_type", sa.String(length=20), nullable=True))
+    if "posted_balance_cents" not in snapshot_columns:
+        op.add_column("ledger_balance_snapshot", sa.Column("posted_balance_cents", sa.Integer(), nullable=True))
+    if "reconciled_through_posting_sequence" not in snapshot_columns:
+        op.add_column(
+            "ledger_balance_snapshot",
+            sa.Column("reconciled_through_posting_sequence", sa.BigInteger(), nullable=True),
+        )
     op.execute(sa.text("""
         UPDATE ledger_balance_snapshot
         SET account_type = 'checking',
