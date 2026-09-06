@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
-from scripts.ci_classifier import classify
+from scripts.ci_classifier import classify, load_manifest
 from scripts.ci_evidence_runner import (
+    ALLOWED_AUXILIARY,
     aggregate_status,
     execute_selection,
     manifest_self_check,
@@ -137,4 +139,27 @@ def test_selection_with_missing_families_is_not_evaluated():
     assert result["status"] == "NOT_EVALUATED"
     statuses = {item["family_id"]: item["status"] for item in result["family_results"]}
     assert statuses["CI-PII"] == "NOT_EVALUATED"
-    assert statuses["CI-XDOMAIN"] == "NOT_EVALUATED"
+    # CI-XDOMAIN declares auxiliary evidence, so it reports an earned result on
+    # the same selection. CI-PII is now the sole remaining evidence-less family.
+    assert statuses["CI-XDOMAIN"] == "PASS"
+
+
+def test_cross_domain_evidence_is_declared_and_runnable():
+    """The family must not be able to drift back to a declared-nothing PASS."""
+    family = next(f for f in load_manifest(MANIFEST) if f["family_id"] == "CI-XDOMAIN")
+    assert family["auxiliary_evidence"] == ["cross_domain_validator"]
+    assert ALLOWED_AUXILIARY["cross_domain_validator"] == ["scripts/validate-cross-domain.py"]
+    result = run_family(family, root=ROOT, pytest_executable=sys.executable)
+    assert result["status"] == "PASS"
+    assert result["executions"][0]["returncode"] == 0
+
+
+def test_cross_domain_failure_propagates_to_the_aggregate():
+    """A failing validator must turn the family, and the run, red."""
+    family = next(f for f in load_manifest(MANIFEST) if f["family_id"] == "CI-XDOMAIN")
+    result = run_family(
+        family, root=ROOT, pytest_executable="pytest",
+        runner=lambda *args, **kwargs: completed(returncode=1),
+    )
+    assert result["status"] == "FAIL"
+    assert aggregate_status([result, {"status": "PASS"}]) == "FAIL"

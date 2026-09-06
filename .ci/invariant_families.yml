@@ -54,12 +54,23 @@ families:
     known_limits: Storage allowlist, deletion-retention, and execution-layer leakage evidence are not yet combined into a complete family gate.
   - family_id: CI-XDOMAIN
     governing_authority: [INV-ARC-021]
-    path_rules: [app/feats/**, app/routes/**, app/services/**, migrations/**]
+    path_rules: [app/feats/**, app/services/**, app/models.py, migrations/**]
     evidence_kind: [static, persistence]
     evidence_commands: []
+    auxiliary_evidence: [cross_domain_validator]
     mandatory: true
-    pass_contract: No current sufficient evidence; selected changes remain NOT_EVALUATED.
-    known_limits: No dedicated dependency or cross-domain schema gate exists.
+    pass_contract: >-
+      No service or FEAT imports a route, no domain service imports a coordination
+      FEAT outside the app.feats.base execution harness (§V.2, §V.6), and no foreign
+      key crosses a DOM-CORE-002 §V domain boundary except through the class_id,
+      seat_id, or user_id anchors (§V.7) — beyond an enumerated baseline of
+      pre-existing violations, which must shrink by deletion rather than decay.
+    known_limits: >-
+      Static declaration only. Coordination performed through dynamic import or
+      service-locator lookup is not observable, and §V.1, §V.3, §V.5, and §V.8 are
+      not covered. Route-layer composition is evidenced by CI-ARC-EXEC, which also
+      governs INV-ARC-021. Tables absent from DOM-CORE-002 §V are reported as
+      unattributed rather than judged.
   - family_id: CI-RENDER
     governing_authority: [INV-ARC-020]
     path_rules: [templates/**, static/css/**, static/js/**, app/services/*view*.py, app/routes/**, tests/test_accessibility.py]
@@ -84,6 +95,7 @@ families:
       - tests/test_ci_classifier.py
       - tests/test_ci_evidence_runner.py
       - tests/test_migration_validator.py
+      - tests/test_cross_domain_validator.py
     mandatory: true
-    pass_contract: Classifier selection, manifest self-check, and the migration idempotency gate execute successfully.
+    pass_contract: Classifier selection, manifest self-check, and the migration idempotency and cross-domain gates execute successfully.
     known_limits: This family does not establish application invariant behavior.

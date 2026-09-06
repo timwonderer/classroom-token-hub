@@ -31,6 +31,7 @@ ALLOWED_AUXILIARY = {
     "migration_validator": ["scripts/validate-migrations.py"],
     "policy_guardrails": ["scripts/policy_guardrails.py", "--strict", "--no-waivers"],
     "pii_storage_validator": ["scripts/validate-pii-storage.py"],
+    "cross_domain_validator": ["scripts/validate-cross-domain.py"],
 }
 
 
