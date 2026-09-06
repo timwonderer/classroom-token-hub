@@ -73,12 +73,16 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Create .env
-cat > .env << 'EOF'
+# Note: the heredoc delimiter is deliberately unquoted so the $(...) calls are
+# evaluated. With 'EOF' quoted, the file receives the literal command text as
+# each key's value and the app starts with unusable secrets.
+cat > .env << EOF
 SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 DATABASE_URL=postgresql://user:password@localhost:5432/classroom_economy
 ENCRYPTION_KEY=$(openssl rand -base64 32)
 PEPPER_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 CSRF_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+AUDIT_HMAC_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 FLASK_ENV=development
 EOF
 

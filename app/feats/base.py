@@ -544,8 +544,23 @@ def audit_protected(
     """Emit an AuditEvent for a protected row write and attach lineage fields.
 
     Must be called after db.session.flush() (so row.id is populated) and
-    before the owning FEAT commits. Does nothing if AUDIT_HMAC_KEY is absent
-    (dev/test without the key configured — CI enforces the key in production).
+    before the owning FEAT commits.
+
+    This previously documented itself as doing "nothing if AUDIT_HMAC_KEY is
+    absent (dev/test without the key configured — CI enforces the key in
+    production)". Every clause of that was wrong. It does not do nothing: a
+    missing key raises `AuditContextError` out of `emit_audit_event`, which the
+    handler below deliberately re-raises. No CI job references AUDIT_HMAC_KEY at
+    all. And a fail-open audit hook would violate INV-ARC-016 §VII, which
+    requires the application to refuse to start without the key rather than
+    proceed with lineage silently disabled.
+
+    The docstring was the dangerous half: a reader auditing this function for a
+    fail-open gap would have found one described here and stopped, when the real
+    gap was upstream — `required_env_vars` omitted the key, so the process
+    started and failed at the first protected write instead. That is now closed
+    at startup in `app/__init__.py`, and this function fails closed, as it
+    always did.
     """
     try:
         from app.services.audit_service import emit_audit_event, AuditContextError

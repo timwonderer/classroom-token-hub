@@ -30,8 +30,23 @@ dotenv_path = project_root / '.env'
 # still allowing local defaults when env vars are absent.
 load_dotenv(dotenv_path=dotenv_path, override=False)
 
-# Validate required environment variables
-required_env_vars = ["SECRET_KEY", "DATABASE_URL", "FLASK_ENV", "ENCRYPTION_KEY", "PEPPER_KEY"]
+# Validate required environment variables.
+#
+# AUDIT_HMAC_KEY is here because INV-ARC-016 §VII requires it to be: "required at
+# application startup. The application shall refuse to start if this variable is
+# absent." Enforcing it anywhere later is not equivalent — audit_service catches
+# its own RuntimeError at import so the module can load under pytest, which meant
+# a deployment missing the key booted clean and then failed on the first audited
+# write, mid-transaction, in front of a user. Startup is the only place the
+# invariant's "refuse to start" can actually be honored.
+required_env_vars = [
+    "SECRET_KEY",
+    "DATABASE_URL",
+    "FLASK_ENV",
+    "ENCRYPTION_KEY",
+    "PEPPER_KEY",
+    "AUDIT_HMAC_KEY",
+]
 missing_vars = [var for var in required_env_vars if not os.getenv(var)]
 if missing_vars:
     raise RuntimeError(
