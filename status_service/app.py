@@ -25,14 +25,14 @@ def derive_overall_status(notices: list[dict]) -> dict[str, str]:
     if not active:
         return {
             "state": "UNKNOWN",
-            "label": "STATUS NOT YET AVAILABLE",
+            "label": "UNKNOWN",
             "headline": "Service monitoring is starting up.",
             "detail": "There are no active service notices. We do not yet have monitoring evidence to confirm current availability.",
         }
     priority = {
-        NoticeState.INVESTIGATING.value: (0, "INVESTIGATING", "We are investigating a service issue."),
-        NoticeState.IDENTIFIED.value: (1, "IDENTIFIED", "A service issue has been identified."),
-        NoticeState.MONITORING.value: (2, "MONITORING", "A service recovery is being monitored."),
+        NoticeState.INVESTIGATING.value: (0, "DETECTED PROBLEMS", "We are investigating a service issue."),
+        NoticeState.IDENTIFIED.value: (1, "DETECTED PROBLEMS", "A service issue has been identified."),
+        NoticeState.MONITORING.value: (2, "UNDER MAINTENANCE", "A service recovery is being monitored."),
     }
     notice = min(active, key=lambda item: priority.get(item.get("state"), (0, "INVESTIGATING", "We are investigating a service issue."))[0])
     state = notice.get("state", NoticeState.INVESTIGATING.value)
