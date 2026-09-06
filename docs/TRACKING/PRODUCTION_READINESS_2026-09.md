@@ -811,8 +811,41 @@ content already present on HEAD.
 | Support-content registry | `support-text-extraction` @ `fe3e3e0d..` | **Backlog** — see below |
 | Bug-hunter badge system | `codex/compliance-check-legacy-structure` @ `3cdb1294` | **Backlog** — see below |
 | `github-pages/v2transition.html` | `CTH_v2.0`, `docs/v2-progress-page` | **Pre-promotion** — see below |
-| Ledger decomposition | `codex/ledger-canonicalization` @ `eafc6510..1a8eeb99` | **Landed 2026-09-05** — merge `8201f2935` |
+| Ledger decomposition | `codex/ledger-canonicalization` @ `eafc6510..1a8eeb99` | **Landed 2026-09-05** — merge `8201f2935`; follow-up commit reviewed and declined 2026-09-06, see below |
 | Release-process replacement | `codex/ledger-canonicalization` @ `389d78b7..60297398` | **Owner decision** — see below |
+
+### Ledger follow-up commit — reviewed and declined 2026-09-06
+
+`codex/ledger-canonicalization` gained one further ledger commit after the 2026-09-05 merge:
+`97041b62b`, "Guard canonical ledger snapshot column additions". It wraps the three
+`op.add_column` calls in `e6f7a8b9c0d1_canonicalize_ledger_persistence.py` in
+`if "<name>" not in snapshot_columns:` checks. **Not ported** — the guards cannot fire.
+
+The first is a tautology readable from the control flow alone: eight lines above, the migration
+already does `if "account_type" in snapshot_columns: ... return`, so the only way to reach the
+`add_column` block is for `account_type` to be absent. Guarding it against being present guards
+against the branch that returned. That early return was already there at the merge base, so this is
+not a stale-context artifact — the guard was inert when it was written.
+
+The other two need a database question answered rather than reasoned about, so it was: a scratch
+database was built from `0001_bootstrap` through head. All three columns exist in
+`ledger_balance_snapshot` **before** `e6f7a8b9c0d1` runs, because `0001` materializes the current ORM
+schema and `LedgerBalanceSnapshot` declares them. So a fresh database takes the early return and
+never reaches the block at all; a real-history database has the pre-split columns and none of the
+three, so every guard is vacuously true. There is no third shape: nothing creates
+`posted_balance_cents` without `account_type`, and Postgres DDL is transactional, so a crashed
+partial run leaves none of them rather than some.
+
+`scripts/validate-migrations.py` passes on HEAD without the change, because the guard-clause fix
+landed on this branch already recognizes an `if` ending in `return` as protecting its following
+siblings — which is the accurate reading, and the reason those `add_column` calls were never
+unguarded in the first place.
+
+This is the seventh instance of the matches-nothing class recorded on this branch and the first
+that arrived as a *proposed addition* rather than as existing code. Landing it would have been
+harmless at runtime and actively misleading on the page: it implies partial application is a state
+this migration tolerates and defends against, when the real (and unreachable) hazard sits in the
+early return above it.
 
 ### Release-process replacement (owner decision, blocks nothing)
 

@@ -68,3 +68,6 @@ ocp.db-wal
 google-cloud-sdk/
 google-cloud-cli-*.tar.gz
 iap-settings.yaml
+
+# Machine-local scheduler lock (pid + session id, not shared state)
+.claude/scheduled_tasks.lock
