@@ -12,7 +12,6 @@ from functools import wraps
 
 import sqlalchemy as sa
 from flask import session, flash, redirect, url_for, request, current_app, jsonify, abort, g
-from werkzeug.security import generate_password_hash
 from app.extensions import db
 from app.hash_utils import hash_username_lookup
 from app.utils.auth_username import normalize_auth_username

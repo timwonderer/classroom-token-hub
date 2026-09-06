@@ -67,3 +67,4 @@ ocp.db-wal
 # Vendor SDKs downloaded into the repo root
 google-cloud-sdk/
 google-cloud-cli-*.tar.gz
+iap-settings.yaml

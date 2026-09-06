@@ -286,7 +286,7 @@ def activate_student_credentials(
     All mutations are atomic. On IntegrityError (duplicate username),
     returns error result instead of raising.
     """
-    from werkzeug.security import generate_password_hash
+    from app.hash_utils import hash_password
     from app.hash_utils import hash_username_lookup
     from app.services.classroom_setup import create_student_user_for_seat
 
@@ -311,8 +311,8 @@ def activate_student_credentials(
             )
         user.username_lookup_hash = hash_username_lookup(username)
         user.username_hash = hash_username_lookup(username)
-        user.pin_hash = generate_password_hash(pin)
-        user.passphrase_hash = generate_password_hash(passphrase)
+        user.pin_hash = hash_password(pin)
+        user.passphrase_hash = hash_password(passphrase)
         user.reset_code = None
         user.reset_code_generated_at = None
         user.reset_code_expires_at = None

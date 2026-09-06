@@ -18,7 +18,7 @@ from sqlalchemy import func, or_
 import sqlalchemy as sa
 from sqlalchemy.orm import aliased
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from werkzeug.security import check_password_hash
+from app.hash_utils import verify_password
 
 from app.extensions import db, limiter
 from app.models import (
@@ -348,7 +348,7 @@ def purchase_item():
         return jsonify({"status": "error", "message": "Quantity must be at least 1."}), 400
 
     # 3. Verify passphrase
-    if not check_password_hash(user.passphrase_hash or '', passphrase):
+    if not verify_password(passphrase, user.passphrase_hash or ''):
         return jsonify({"status": "error", "message": "Incorrect passphrase."}), 403
 
     # 4. Call FEAT-STOR-001: Create entitlement grants via purchase
@@ -392,7 +392,7 @@ def use_item():
         return jsonify({"status": "error", "message": "Missing entitlement ID or passphrase."}), 400
 
     # 1. Verify passphrase
-    if not check_password_hash(user.passphrase_hash or '', passphrase):
+    if not verify_password(passphrase, user.passphrase_hash or ''):
         return jsonify({"status": "error", "message": "Incorrect passphrase."}), 403
 
     # 2. Get the entitlement lineage
@@ -1638,7 +1638,7 @@ def handle_tap():
     pin = data.get("pin", "").strip()
 
 
-    if not check_password_hash(student_user.pin_hash or '', pin):
+    if not verify_password(pin, student_user.pin_hash or ''):
         current_app.logger.warning(f"TAP ERROR: Invalid PIN for student {student_user.id}")
         return jsonify({"error": "Invalid PIN"}), 403
 

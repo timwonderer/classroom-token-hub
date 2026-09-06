@@ -174,7 +174,7 @@ def create_student(
     Returns (user, seat, profile).
     """
     from app.utils.canonical_temporal_resolver import utc_now
-    from werkzeug.security import generate_password_hash
+    from app.hash_utils import hash_password
 
     if username:
         _salt, u_hash, u_lookup = build_hashed_username_fields(username)
@@ -187,7 +187,7 @@ def create_student(
         user_role=UserRole.STUDENT,
         username_hash=u_hash,
         username_lookup_hash=u_lookup,
-        pin_hash=generate_password_hash(pin) if pin else None,
+        pin_hash=hash_password(pin) if pin else None,
     )
     db.session.add(student)
     db.session.flush()
@@ -226,15 +226,15 @@ def create_student_user_for_seat(
     passphrase: str,
 ) -> User:
     """Create the canonical student User and bind it to an already-claimed seat."""
-    from werkzeug.security import generate_password_hash
+    from app.hash_utils import hash_password
 
     _salt, u_hash, u_lookup = build_hashed_username_fields(username)
     student = User(
         user_role=UserRole.STUDENT,
         username_hash=u_hash,
         username_lookup_hash=u_lookup,
-        pin_hash=generate_password_hash(pin),
-        passphrase_hash=generate_password_hash(passphrase),
+        pin_hash=hash_password(pin),
+        passphrase_hash=hash_password(passphrase),
     )
     db.session.add(student)
     db.session.flush()

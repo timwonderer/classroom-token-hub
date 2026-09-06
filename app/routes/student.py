@@ -20,7 +20,7 @@ from types import SimpleNamespace
 from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app, has_app_context, abort, g
 from sqlalchemy import or_, func, select, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from werkzeug.security import generate_password_hash, check_password_hash
+from app.hash_utils import hash_password, verify_password
 import pytz
 from dateutil.relativedelta import relativedelta
 
@@ -1241,7 +1241,7 @@ def transfer():
 
         passphrase = request.form.get("passphrase")
         user = get_current_user()
-        if not user or not check_password_hash(user.passphrase_hash or '', passphrase):
+        if not user or not verify_password(passphrase, user.passphrase_hash or ''):
             if is_json:
                 return jsonify(status="error", message="Incorrect passphrase"), 400
             flash("Incorrect passphrase. Transfer canceled.", "transfer_error")
@@ -3026,7 +3026,7 @@ def login():
         user = find_canonical_user_by_auth_username(username, expected_role="student")
 
         try:
-            pin_valid = bool(user and check_password_hash(user.pin_hash or '', pin))
+            pin_valid = bool(user and verify_password(pin, user.pin_hash or ''))
             has_claimed_seat = False
             if pin_valid:
                 has_claimed_seat = Seat.query.filter(
@@ -3559,7 +3559,7 @@ def verify_recovery(code_id):
 
         # Verify passphrase
         user = get_current_user()
-        if not user or not user.passphrase_hash or not check_password_hash(user.passphrase_hash, passphrase):
+        if not user or not user.passphrase_hash or not verify_password(passphrase, user.passphrase_hash):
             current_app.logger.warning(f"Recovery verification failed: incorrect passphrase for student {student.id}")
             flash("Incorrect passphrase. Please try again.", "error")
             return render_template('student_verify_recovery.html',

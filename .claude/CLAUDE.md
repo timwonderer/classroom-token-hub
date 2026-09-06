@@ -108,7 +108,7 @@ Every query involving student/seat data MUST be scoped by `class_id`. `join_code
 3. **Mutate through FEATs.** No direct `db.session.add/commit` in routes. See `app/feats/base.py`.
 4. **Migrations require idempotency helpers.** Copy helpers from `migrations/migration_template.py.mako`, wrap all CREATE ops in existence checks. See `.claude/rules/database-migrations.md`.
 5. **CSRF on all forms.** Include `{{ form.csrf_token }}` in templates, validate on POST.
-6. **Encrypt PII.** Use `PIIEncryptedType` for names. Use `hash_password()`/`verify_password()` from `hash_utils.py`.
+6. **Encrypt PII.** Use `PIIEncryptedType` for names. Use `hash_password()`/`verify_password()` from `app/hash_utils.py` (a named seam over werkzeug scrypt; credentials are not peppered).
 7. **`class_id` is canonical, `join_code` is alias.** New domain queries must use `class_id`. `join_code` is only for ClassEconomy boundary lookups and user-facing display.
 8. **`seat_id` is the activity anchor.** All activity records (transactions, attendance, hall passes) key off `seat_id`, not `student_id`.
 9. **No GET side effects.** GET handlers must not write to the database.

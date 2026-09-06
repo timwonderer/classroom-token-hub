@@ -9,7 +9,7 @@
 1. **NEVER commit secrets, API keys, or passwords** to git
 2. **ALWAYS encrypt PII** (names, email, phone, etc.)
 3. **ALWAYS use CSRF protection** on forms and state-changing requests
-4. **ALWAYS hash passwords** with salt AND pepper
+4. **ALWAYS hash passwords** with `hash_password()` from `app.hash_utils` (scrypt, salted, unpeppered)
 5. **ALWAYS validate and sanitize** user input
 6. **NEVER trust client-side validation alone**
 7. **ALWAYS use parameterized queries** (SQLAlchemy ORM, never raw SQL)
@@ -25,25 +25,45 @@
 **ALWAYS use the project's hash utilities:**
 
 ```python
-from hash_utils import hash_password, verify_password
+from app.hash_utils import hash_password, verify_password
 
-# Hashing a password (automatically adds salt AND pepper)
-password_hash = hash_password("user_password")
+# Hashing a credential (salt generated and embedded per call)
+user.passphrase_hash = hash_password(passphrase)
+user.pin_hash = hash_password(pin)
 
-# Verifying a password
-is_valid = verify_password("user_password", stored_hash)
+# Verifying a credential — (plaintext, stored_hash) order
+is_valid = verify_password(passphrase, user.passphrase_hash or '')
 ```
 
+`hash_password` / `verify_password` are a **named seam**, not an algorithm. They
+wrap `werkzeug.security` so call sites don't bind to a specific KDF.
+
 **Implementation Details:**
-- Uses bcrypt for salting
-- Uses PEPPER_KEY from environment for additional security
-- Minimum 12 rounds of bcrypt
+- Werkzeug's default: **scrypt** — memory-hard, which bcrypt is not.
+- The salt is random per hash and embedded in the returned string. You do not
+  manage it.
+- **Credentials are NOT peppered.** `PEPPER_KEY` is not an input here — see
+  "Username Hashing" below for its actual scope.
+- Credentials live on `users` (`passphrase_hash`, `pin_hash`), per INV-ARC-019 §VI.
+
+> **On peppering credentials.** It has been proposed and deliberately not adopted.
+> Pepper helps only under one threat model — the attacker gets the credential
+> table but *not* the application environment. If they have the running app, they
+> have `PEPPER_KEY` too and the benefit largely evaporates. Against that partial
+> gain it makes every password depend on a second secret, so rotating
+> `PEPPER_KEY` becomes a credential-invalidating event. That is an
+> authentication contract, not a hardening tweak. Before adopting it, an
+> authoritative identity document must define: the threat it mitigates, which
+> key owns the responsibility, what rotation means, whether recovery is required
+> afterward, whether old peppers may be retained, and the behavior during
+> partial migration. No namespaced `DOM-IDEN-*` or `INV-*` document requires it
+> today.
 
 **NEVER:**
 - ❌ Store passwords in plaintext
-- ❌ Use basic hashing without salt
 - ❌ Use MD5 or SHA1 for passwords
 - ❌ Implement your own password hashing
+- ❌ Add a pepper to `hash_password()` without the contract above being written down
 
 #### TOTP Two-Factor Authentication
 
@@ -105,23 +125,34 @@ session.clear()
 - Addresses
 - Any other personally identifiable information
 
-**ALWAYS use the project's encryption utilities:**
+**PII encryption is a column type, not a function you call:**
 
 ```python
-from hash_utils import encrypt_value, decrypt_value
+from app.utils.encryption import PIIEncryptedType
 
-# Encrypting PII
-encrypted_name = encrypt_value(student_first_name)
-student.first_name = encrypted_name
+class IdentityProfile(db.Model):
+    first_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=False)
+    last_name  = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=False)
+    notes      = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=True)
 
-# Decrypting PII for display
-decrypted_name = decrypt_value(student.first_name)
+# Read and write normally — encryption/decryption happens in the type decorator.
+profile.first_name = "Ada"
+display_name = profile.first_name
 ```
 
 **Implementation Details:**
-- Uses Fernet symmetric encryption (AES-128)
-- Key from ENCRYPTION_KEY environment variable
-- Encrypted data stored as strings in database
+- Uses Fernet symmetric encryption (AES-128-CBC + HMAC), via `cryptography`.
+- Key from the `ENCRYPTION_KEY` environment variable.
+- Stored as `LargeBinary`, not a string.
+- **TOTP secrets share this same key** — `encrypt_totp()` / `decrypt_totp()` in
+  `app/utils/encryption.py` call `_get_fernet()`, which also reads `ENCRYPTION_KEY`.
+  Rotating that key therefore touches both PII columns *and* every TOTP secret.
+- The `Fernet` instance is constructed **once at class-definition time**, so there is
+  currently no multi-key/rotation support. See the rotation notes below.
+
+> **There is no `encrypt_value()` or `decrypt_value()` in this repo.** That was
+> another never-implemented API described by earlier revisions of this document.
+> Only the three PII columns above and the TOTP helpers use `ENCRYPTION_KEY`.
 
 **NEVER:**
 - ❌ Store PII in plaintext
@@ -131,23 +162,44 @@ decrypted_name = decrypt_value(student.first_name)
 
 #### Username Hashing
 
-**For secure username matching without revealing usernames:**
+**This is the only place `PEPPER_KEY` is used.** It is NOT involved in credential hashing.
+
+Usernames are never stored in plaintext. There is no `users.username` column — the
+username exists only as an HMAC-SHA256 digest keyed by `PEPPER_KEY`. That digest is a
+**query key**: it must be reproducible from the typed username, so it is deliberately
+unsalted.
 
 ```python
-from hash_utils import hash_hmac
+from app.hash_utils import hash_username_lookup
 
-# Create consistent username hash
-username_hash = hash_hmac(username.encode(), b'')
-student.username_hash = username_hash
+# Write (app/feats/identity_feat.py:312-313)
+user.username_lookup_hash = hash_username_lookup(username)
+user.username_hash = hash_username_lookup(username)
 
-# Lookup by hash
-student = Student.query.filter_by(username_hash=username_hash).first()
+# Read (app/auth.py:291)
+user = User.query.filter_by(
+    username_lookup_hash=hash_username_lookup(normalized)
+).first()
+```
+
+Seat claim matching uses the same primitive over **names** rather than usernames, and
+the resulting hashes are stored on the seat, per INV-ARC-019 §VII ("Name-lookup hashes
+used during roster claim belong on the seat"):
+
+```python
+# app/feats/identity_feat.py:222-223 → Seat.claim_first_name_hash / claim_last_name_hash
+claim_first_hash = hash_username_lookup(first_name.lower())
+claim_last_hash = hash_username_lookup(last_name.lower())
 ```
 
 **Use Cases:**
-- Duplicate username prevention
-- Join code claiming
-- Student roster matching
+- Username uniqueness and login lookup
+- Roster claim matching (seat-owned, `models.py:240-241`)
+
+**Consequence to understand before touching `PEPPER_KEY`:** because the digest is the
+only representation of the username, a new pepper cannot reproduce any existing
+lookup hash. Rotation is an identity-reset event, not a transparent re-key. See
+`docs/SECURITY/KEY_ROTATION.md`.
 
 ---
 
@@ -679,23 +731,35 @@ def set_security_headers(response):
 ### Encryption Functions
 
 ```python
-from hash_utils import encrypt_value, decrypt_value, hash_password, verify_password, hash_hmac
+from app.hash_utils import (
+    hash_password, verify_password,
+    hash_username_lookup, hash_hmac, get_random_salt,
+)
+from app.utils.encryption import PIIEncryptedType, encrypt_totp, decrypt_totp
 
-# Encrypt PII
-encrypted = encrypt_value(plaintext)
+# Hash a credential (scrypt via werkzeug; salt embedded, NOT peppered)
+user.passphrase_hash = hash_password(passphrase)
 
-# Decrypt PII
-plaintext = decrypt_value(encrypted)
+# Verify a credential — (plaintext, stored_hash)
+is_valid = verify_password(passphrase, user.passphrase_hash or '')
 
-# Hash password
-password_hash = hash_password(password)
+# Username / claim-name lookup digest (HMAC-SHA256 keyed by PEPPER_KEY, unsalted)
+lookup = hash_username_lookup(username)
 
-# Verify password
-is_valid = verify_password(password, stored_hash)
+# Salted HMAC, where a reproducible query key is NOT needed
+digest = hash_hmac(value.encode(), get_random_salt())
 
-# Hash username
-username_hash = hash_hmac(username.encode(), b'')
+# PII: declare the column type; do not call an encrypt function
+first_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=False)
 ```
+
+| Key | Protects | Rotatable in place? |
+|-----|----------|---------------------|
+| `SECRET_KEY` | Session cookies, CSRF tokens | Yes, via `SECRET_KEY_FALLBACKS` |
+| `ENCRYPTION_KEY` | PII columns **and** TOTP secrets | Only with re-encryption; no multi-key support today |
+| `PEPPER_KEY` | Username + claim-name lookup digests (NOT credentials) | **No.** Rotation is an identity-reset ceremony |
+
+Passwords depend on **none** of these three — scrypt salts are self-contained.
 
 ### Decorators
 
@@ -709,6 +773,6 @@ username_hash = hash_hmac(username.encode(), b'')
 ---
 
 **Last Updated:** 2025-12-13
-**Security Framework:** Flask-WTF, bcrypt, Fernet, pyotp
+**Security Framework:** Flask-WTF, werkzeug scrypt, Fernet, pyotp
 **Bot Protection:** Cloudflare Turnstile
 **Rate Limiting:** Flask-Limiter with Redis
