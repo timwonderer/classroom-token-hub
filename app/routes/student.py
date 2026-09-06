@@ -1877,7 +1877,6 @@ def shop():
         flash("No class selected. Please select a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
 
-    join_code = get_display_join_code(context.class_id)
     if not class_id:
         class_id = context.class_id
 
@@ -2056,18 +2055,11 @@ def shop():
         if seat and seat.identity_profile
         else ""
     )
-    current_class_context = SimpleNamespace(
-        student_full_name=student_display_name,
-        class_identifier=join_code or class_id,
-        join_code=join_code,
-        class_timezone=getattr(context, "class_timezone", ""),
-    )
     student_display = SimpleNamespace(full_name=student_display_name)
 
     return render_template(
         'student_shop.html',
         student=student_display,
-        current_class_context=current_class_context,
         items=store_item_views,
         entitlements=entitlement_views,
         class_size=class_size,
