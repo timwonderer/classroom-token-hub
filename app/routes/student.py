@@ -1418,7 +1418,6 @@ def insurance_marketplace():
         flash("No class selected. Please select a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
 
-    class_identifier = get_display_join_code(context.class_id) if context.class_id else ""
     class_id = context.class_id
     seat_id = context.seat_id
 
@@ -1516,23 +1515,12 @@ def insurance_marketplace():
             incident_date=incident_dt,
             filed_date=claim.submitted_at,
         )
-    current_class_context = SimpleNamespace(
-        teacher_name="",
-        class_timezone=getattr(context, "class_timezone", ""),
-        student_full_name=(
-            context.identity_profile.full_name
-            if getattr(context, "identity_profile", None) else ""
-        ),
-        join_code=class_identifier,
-        class_identifier=class_identifier,
-    )
     return render_template(
         'student_insurance_marketplace.html',
         student=(
             context.identity_profile.full_name
             if getattr(context, "identity_profile", None) else ""
         ),
-        current_class_context=current_class_context,
         available_policies=available_policies,
         grouped_policies=grouped_policies,
         ungrouped_policies=ungrouped_policies,
@@ -1766,7 +1754,6 @@ def view_policy(enrollment_id):
         flash("No class selected. Please select a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
 
-    class_identifier = get_display_join_code(context.class_id) if context.class_id else ""
     student_name = (
         context.identity_profile.full_name
         if getattr(context, "identity_profile", None) else ""
@@ -1857,13 +1844,6 @@ def view_policy(enrollment_id):
     return render_template(
         'student_view_policy.html',
         student=student_name,
-        current_class_context=SimpleNamespace(
-            teacher_name="",
-            class_timezone=getattr(context, "class_timezone", ""),
-            student_full_name=student_name,
-            join_code=class_identifier,
-            class_identifier=class_identifier,
-        ),
         enrollment=enrollment,
         claims=[
             _claim_display_row(claim)
@@ -1898,7 +1878,6 @@ def shop():
         flash("No class selected. Please select a class to continue.", "error")
         return redirect(url_for('student.dashboard'))
 
-    join_code = get_display_join_code(context.class_id)
     if not class_id:
         class_id = context.class_id
 
@@ -2077,18 +2056,11 @@ def shop():
         if seat and seat.identity_profile
         else ""
     )
-    current_class_context = SimpleNamespace(
-        student_full_name=student_display_name,
-        class_identifier=join_code or class_id,
-        join_code=join_code,
-        class_timezone=getattr(context, "class_timezone", ""),
-    )
     student_display = SimpleNamespace(full_name=student_display_name)
 
     return render_template(
         'student_shop.html',
         student=student_display,
-        current_class_context=current_class_context,
         items=store_item_views,
         entitlements=entitlement_views,
         class_size=class_size,
@@ -2875,15 +2847,17 @@ def rent():
     payment_nonce = uuid.uuid4().hex
 
     # Phase 6-7 VERIFIED: Render template with ONLY view model fields
-    # No raw variables passed; all template access via view.* namespace
+    # No raw variables passed; all template access via view.* namespace.
+    # `feature_settings` is deliberately NOT passed: the inject_feature_settings
+    # context processor supplies it, and an explicit kwarg would take precedence
+    # over the processor (Flask update_template_context re-applies the caller's
+    # values last).
     return render_template(
         'student_rent.html',
         view=view,
         checking_balance=checking_balance,
         savings_balance=savings_balance,
         payment_nonce=payment_nonce,
-        feature_settings=g.get('feature_settings', {}),
-        current_class_context=g.get('current_class_context', {}),
     )
 
 

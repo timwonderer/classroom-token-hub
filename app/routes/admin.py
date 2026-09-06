@@ -6114,7 +6114,6 @@ def insurance_management():
         flash("Select a class from the sidebar before managing insurance.", "warning")
         return redirect(url_for('admin.dashboard'))
     selected_class_id = class_context['class_id']
-    selected_join_code = class_context['join_code']
     selected_scope = resolve_feature_class_for_class(selected_class_id, 'insurance')
     if not selected_scope or not selected_scope.get('enabled'):
         abort(404)
@@ -6131,10 +6130,6 @@ def insurance_management():
         'admin_insurance.html',
         current_page='insurance',
         policies=policies,
-        current_class_context=SimpleNamespace(
-            join_code=selected_join_code,
-            teacher_name=class_context.get('display_name', ''),
-        ),
         selected_scope=selected_scope,
     )
 
