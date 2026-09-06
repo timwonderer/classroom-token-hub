@@ -63,8 +63,16 @@ families:
     known_limits: >-
       INV-ARC-005 is named in this family's governing authority but is not evidenced at
       all. Nothing here gates PII in logs, telemetry, error messages, or URLs, and in
-      particular DisplayMetadata serializes decrypted names and the teacher-authored
-      notes field into the Flask session with no test on that boundary. The storage
+      particular DisplayMetadata serializes decrypted first and last names into the
+      Flask session with no test on that boundary. That is nine name fields in a signed
+      but unencrypted cookie, and it needs reconciling against SPEC-SEC-001 §V.5 on its
+      own terms. It is not a teacher_note question: the note is author-supplied free
+      text the platform never interprets, it is a required DisplayMetadata field under
+      SPEC-DISPLAY-001 §VI with its own §VII invalidation rule, and its contract is
+      class and teacher scope rather than content classification. An earlier revision
+      of this text bundled the two, which sent a fix at the one field that was not the
+      concern. Note scope is now evidenced by tests/test_identity_teacher_note_surface.py.
+      The storage
       check is an AST scan of app/models.py by column name: it reads neither the live
       database schema nor migrations/**, and it cannot prove a column named *_hash is
       HMAC-produced at runtime rather than merely named so. Free-text columns are

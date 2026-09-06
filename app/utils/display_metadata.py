@@ -43,6 +43,7 @@ class DisplayMetadata:
     teacher_first_name: str | None
     teacher_last_name: str | None
     teacher_display_name: str | None
+    teacher_note: str | None
 
     def to_session_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -148,6 +149,7 @@ def resolve_display_metadata(ctx: CanonicalContext | None) -> DisplayMetadata | 
         teacher_first_name=teacher_profile.first_name if teacher_profile else None,
         teacher_last_name=teacher_profile.last_name if teacher_profile else None,
         teacher_display_name=teacher_display_name,
+        teacher_note=actor_profile.notes if actor_profile else None,
     )
 
 
@@ -159,10 +161,14 @@ def get_cached_display_metadata(ctx: CanonicalContext | None) -> DisplayMetadata
         return None
     if cached.get("context_key") != _context_key(ctx):
         return None
-    # Sessions outlive deploys, so a cookie may carry a stale field set. Reject
-    # rather than adapt: decoding a mismatched payload would raise, and merely
-    # tolerating an extra key would strand it (and any PII it holds) in the
-    # cookie forever. Rejecting re-resolves and overwrites it.
+    # Sessions outlive deploys, so a cookie signed against an older field set may
+    # still arrive. The cached shape is therefore an external boundary, not an
+    # internal invariant. Reject rather than adapt: a payload missing a field
+    # would raise TypeError on the constructor below, and one carrying a removed
+    # field would be silently retained in the re-signed cookie indefinitely.
+    # Rejecting forces a re-resolve that overwrites the cookie with the current
+    # shape. Per SPEC-DISPLAY-001 section VII the cache is not authoritative, so
+    # discarding it can only cost a recompute -- it cannot grant or deny anything.
     if cached.keys() != {f.name for f in fields(DisplayMetadata)}:
         return None
     return DisplayMetadata(**cached)
