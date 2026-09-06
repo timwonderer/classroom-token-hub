@@ -65,8 +65,12 @@ families:
       all. Nothing here gates PII in logs, telemetry, error messages, or URLs, and in
       particular DisplayMetadata serializes decrypted first and last names into the
       Flask session with no test on that boundary. That is nine name fields in a signed
-      but unencrypted cookie, and it needs reconciling against SPEC-SEC-001 §V.5 on its
-      own terms. It is not a teacher_note question: the note is author-supplied free
+      but unencrypted cookie, and it needs reconciling against INV-ARC-005 §V on its own
+      terms: that rule bars sensitive personal information from request context beyond
+      allowed invariant-defined fields, and a cached DisplayMetadata is request context.
+      SPEC-SEC-001 §V.2.3 is adjacent but weaker, reading on storage form rather than
+      session transport; §V.5 does not reach this at all, since it governs what a
+      security event record may contain. It is not a teacher_note question: the note is author-supplied free
       text the platform never interprets, it is a required DisplayMetadata field under
       SPEC-DISPLAY-001 §VI with its own §VII invalidation rule, and its contract is
       class and teacher scope rather than content classification. An earlier revision
