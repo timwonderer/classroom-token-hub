@@ -21,6 +21,7 @@ class RecoveryExpectationState(str, Enum):
 @dataclass(frozen=True)
 class ExternalStatusNoticeEvent:
     external_notice_id: str
+    incident_ref: str
     event_id: str
     event_type: str
     published_at: datetime
@@ -35,7 +36,7 @@ class ExternalStatusNoticeEvent:
     source_observation_ids: tuple[str, ...]
 
     def validate(self) -> None:
-        if not self.external_notice_id or not self.event_id or not self.event_type:
+        if not self.external_notice_id or not self.incident_ref or not self.event_id or not self.event_type:
             raise ValueError("Notice identity and event type are required.")
         if not self.capability or not self.impact_statement or not self.recommended_user_action:
             raise ValueError("Notice communication fields are required.")
