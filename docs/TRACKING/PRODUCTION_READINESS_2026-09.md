@@ -781,9 +781,16 @@ v1-era code, and shipping v2 requires an explicit decision — merge `CTH_v2.0` 
 repoint the deploy trigger. This is a decision for the owner, not a defect to silently fix: it
 determines what "ship" means on 2026-09-17.
 
-**Retirement pass.** `v2progress.html` and the "transition site" vocabulary (see §VI) go stale the
-moment this branch is promoted. `github-pages/v2transition.html` is absent from HEAD and would
-vanish from the published site on promotion.
+**Retirement pass — CLOSED 2026-09-06.** `v2progress.html` and the "transition site" vocabulary
+(see §VI) go stale the moment this branch is promoted. Both are now retired deliberately rather than
+left to rot: `github-pages/v2transition.html` was deleted in `669741934` with `index.html` retargeted
+to `./landing.html` in the same commit, and `v2progress.html` is deleted here. The progress page had
+**no inbound link from any page on the site** — `grep -rniE 'href="[^"]*progress'` across
+`github-pages/` returns nothing — so its only reachable reference was the axe audit's
+`PUBLIC_ROUTES` list in `tests/test_axe_compliance.py`, which is updated in the same change. Deleting
+it therefore produces no 404 and no dangling nav entry. It is retired because the page exists to
+narrate an in-flight migration; once v2 *is* the product, a public "here is what we are still
+building" page describes a state that no longer exists.
 
 **Stale branch references in guidance.** `CLAUDE.md` names `codex/v2.0` as the base branch. It is
 the same nonexistent ref the CI workflows point at, and it will keep reproducing this class of

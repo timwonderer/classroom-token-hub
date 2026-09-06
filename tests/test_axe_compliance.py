@@ -37,7 +37,6 @@ PUBLIC_ROUTES = [
     "/gh/district.html",
     "/gh/privacy.html",
     "/gh/terms.html",
-    "/gh/v2progress.html",
 ]
 
 
