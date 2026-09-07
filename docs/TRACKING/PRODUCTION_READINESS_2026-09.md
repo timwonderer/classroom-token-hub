@@ -984,13 +984,27 @@ a branch never was; the name was dropped in favor of "v2"), and **dated record**
 dated audits, `docs/archive/`, and the narrative above, left intact because rewriting them would
 falsify what was true at the time).
 
-Two consequences to carry into the remote step. First, `origin/HEAD` currently points at
-`CTH_v2.0`, so the default branch moves with the rename rather than needing a separate change.
-Second, "port `origin/main` deltas" in `DEVELOPMENT.md` meant the v1 branch; after the rename that
-phrase would instruct porting `main` into itself, so those items now measure against
-`legacy_v1.10.0` explicitly. Before executing: check for open PRs targeting `main` (a rename
-retargets them), confirm branch protection followed the rename, then `git fetch --prune` in every
-worktree and set `V2_RELEASE_LINEAGE_REF=main`.
+**Amended 2026-09-07 — the branch being renamed is `claude/ci-onto-landed`, not `CTH_v2.0`.** The
+integration work landed on `claude/ci-onto-landed`, which is 212 commits ahead of `CTH_v2.0`; that
+branch becomes `main` directly. No merge down to `CTH_v2.0` happens first, and `CTH_v2.0` is retired
+along with every other outstanding branch rather than being the thing promoted. `CTH_v2.0` carries
+two commits (`f84ea7f1c`, `1063d6bdc`) that are deliberately not carried over: they reduce
+`github-pages/` to `index.html` alone, which would leave the `/privacy`, `/terms`, and `/district`
+redirects in `app/routes/main.py` pointing at files that no longer exist.
+
+One consequence of the amendment. `origin/HEAD` points at `CTH_v2.0`, and the original plan noted
+that the default branch would move with the rename rather than needing a separate change — true when
+the branch being renamed *was* `CTH_v2.0`. It no longer is, so **the default branch must be
+repointed explicitly**, or it keeps naming a branch that is about to be deleted. This is the same
+defect class the rename exists to remove, one level up: a default-branch pointer that resolves to
+nothing is not distinguishable, from most tooling's view, from one that was never consulted.
+
+Carried unchanged from the original plan: "port `origin/main` deltas" in `DEVELOPMENT.md` meant the
+v1 branch; after the rename that phrase would instruct porting `main` into itself, so those items
+now measure against `legacy_v1.10.0` explicitly. Before executing: check for open PRs targeting
+`main` (a rename retargets them — none were open as of 2026-09-07), confirm branch protection
+followed the rename, repoint `origin/HEAD`, then `git fetch --prune` in every worktree and set
+`V2_RELEASE_LINEAGE_REF=main`.
 
 ---
 
