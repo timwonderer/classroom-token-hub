@@ -221,24 +221,21 @@ def test_documentation_timeline_disclosures_have_keyboard_contract():
     assert "aria-expanded" in str(soup)
 
 
-def test_public_pages_load_an_icon_font_under_both_hosts():
-    """The public pages must render icons from BOTH hosts that serve them.
+def test_public_pages_load_an_icon_font():
+    """The published public pages must render their icons.
 
-    These files are served twice, under opposite constraints:
+    These files are published to GitHub Pages, where the artifact is
+    ``github-pages/`` alone (see
+    ``.github/workflows/github-pages-transition.yml``). A relative
+    ``../static/`` path cannot resolve there, so the source must name a CDN.
 
-    * Published to GitHub Pages, where the artifact is ``github-pages/`` alone
-      (see ``.github/workflows/github-pages-transition.yml``). A relative
-      ``../static/`` path cannot resolve there, so the source must name a CDN.
-    * Served by the application at ``/gh/<page>`` so a certification run stays
-      on one origin. There the application's CSP applies and blocks that CDN,
-      which would drop every Material Symbols glyph and re-expose ligature
-      names as visible text. ``github_pages_asset`` therefore rewrites the
-      stylesheet link back to the same-origin font on the way out.
-
-    This test owns the published half. The app-served half is pinned by
-    ``tests/dom/platform/test_security_headers.py``. An earlier version of this
-    test asserted the CDN was absent from the source, which encoded a
-    single-host assumption and made the correct published markup look broken.
+    They used to be served a second time by the application at ``/gh/<page>``,
+    under a CSP that blocked that CDN, which is why the app rewrote the
+    stylesheet link on the way out and why this test was once framed as
+    covering one of two hosts. The application no longer serves them, so there
+    is only one host and one constraint. An earlier version asserted the CDN
+    was absent from the source, which encoded the opposite single-host
+    assumption and made the correct published markup look broken.
     """
     pages = sorted((REPO_ROOT / "github-pages").glob("*.html"))
     assert pages, "No public pages found to check"
@@ -261,8 +258,9 @@ def test_public_pages_load_an_icon_font_under_both_hosts():
 
     assert icon_pages, "No public page uses icons; this contract checks nothing"
 
-    # The same-origin font the app-served copy is rewritten to must keep
-    # ligatures on, or the rewrite trades one broken host for the other.
+    # The application's own same-origin icon font, loaded by `base.html` and
+    # every standalone template, must keep ligatures on or each glyph renders
+    # as its literal ligature name.
     fonts_css = (REPO_ROOT / "static" / "css" / "fonts.css").read_text(encoding="utf-8")
     assert "font-feature-settings: 'liga';" in fonts_css
 

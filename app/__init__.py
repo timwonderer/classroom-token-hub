@@ -317,6 +317,20 @@ def create_app():
         TURNSTILE_SITE_KEY=os.getenv("TURNSTILE_SITE_KEY"),
         TURNSTILE_SECRET_KEY=os.getenv("TURNSTILE_SECRET_KEY"),
         EXTERNAL_DOCS_BASE_URL=os.getenv("EXTERNAL_DOCS_BASE_URL", "").strip() or None,
+        # The marketing site is published from `github-pages/` to GitHub Pages
+        # and is not served by this application, so `/`, `/privacy`, `/terms`,
+        # and `/district` all redirect off this origin. The default is the
+        # CNAME in `github-pages/CNAME`, which is where Pages actually answers.
+        #
+        # This has a default rather than being required because the previous
+        # arrangement — read with `.get()`, set nowhere — meant the production
+        # branch had never once executed, and `/` silently fell through to a
+        # copy of the site served by the app itself. Override it in development
+        # if you do not want `/` leaving localhost.
+        MARKETING_SITE_URL=(
+            os.getenv("MARKETING_SITE_URL", "").strip()
+            or "https://classroomtokenhub.com"
+        ),
         # Dev ergonomics: disable limiter in local development unless explicitly re-enabled.
         RATELIMIT_ENABLED=(flask_env != "development") or dev_rate_limit_enabled,
     )

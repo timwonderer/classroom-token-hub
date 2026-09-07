@@ -5,15 +5,12 @@ Contains public-facing utility routes including health checks, legal pages,
 debug endpoints, and public hall pass verification.
 """
 
-import os
-import re
 import unicodedata
 from types import SimpleNamespace
 from flask import (
-    Blueprint, Response, abort, redirect, url_for, jsonify, current_app,
-    session, request, send_from_directory,
+    Blueprint, redirect, url_for, jsonify, current_app,
+    session, request,
 )
-from werkzeug.security import safe_join
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -27,32 +24,15 @@ from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canoni
 main_bp = Blueprint('main', __name__)
 
 
-GITHUB_PAGES_DEFAULT_URL = 'https://timwonderer.github.io/classroom-economy'
+def _marketing_site_redirect(page_filename: str = ''):
+    """Redirect to a page on the published marketing site.
 
-# The published marketing site (GitHub Pages) and the application live on two
-# different hosts, so its sign-in links must be absolute to reach the app. When
-# that same HTML is served locally under /gh/ for certification, those absolute
-# links would send a tester to production, so they are rewritten back to the
-# local origin on the way out. See ``github_pages_asset``.
-APP_PRODUCTION_ORIGIN = 'https://app.classroomtokenhub.com'
-
-# The published site loads fonts from Google's CDN because the GitHub Pages
-# artifact contains only ``github-pages/`` and cannot reach ``static/``. Served
-# locally under /gh/, that same markup is subject to the application CSP, which
-# blocks those hosts and would drop every Material Symbols glyph. Swap the CDN
-# block for the app's own font stylesheet on the way out.
-_CDN_FONT_BLOCK = re.compile(
-    r'[ \t]*<link rel="preconnect" href="https://fonts\.googleapis\.com">\n'
-    r'[ \t]*<link rel="preconnect" href="https://fonts\.gstatic\.com" crossorigin>\n'
-    r'(?:[ \t]*<link href="https://fonts\.googleapis\.com/[^"]*" rel="stylesheet">\n)+'
-)
-_LOCAL_FONT_BLOCK = '    <link href="/static/css/fonts.css" rel="stylesheet">\n'
-
-
-def _github_pages_redirect(page_filename: str):
-    """Redirect to a policy page hosted on the configured GitHub Pages site."""
-    github_pages_url = current_app.config.get('GITHUB_PAGES_URL', GITHUB_PAGES_DEFAULT_URL).rstrip('/')
-    return redirect(f"{github_pages_url}/{page_filename}")
+    The application does not serve that site. It is published from
+    ``github-pages/`` to GitHub Pages and answers on its own host, so every
+    marketing URL the app emits is an absolute redirect off this origin.
+    """
+    marketing_url = current_app.config['MARKETING_SITE_URL'].rstrip('/')
+    return redirect(f"{marketing_url}/{page_filename}" if page_filename else marketing_url)
 
 
 # -------------------- HOME AND LEGAL PAGES --------------------
@@ -79,48 +59,7 @@ def home():
         elif role == 'student':
             return redirect(url_for('student.dashboard'))
     else:
-        # Default: send unauthenticated visitors to the landing page. When a
-        # MARKETING_SITE_URL is configured (production GitHub Pages host), use it;
-        # otherwise serve the locally-bundled landing so the certification
-        # environment stays entirely on the local origin.
-        marketing_url = current_app.config.get('MARKETING_SITE_URL')
-        if marketing_url:
-            return redirect(marketing_url)
-        # Serve the locally-bundled landing so the certification environment
-        # stays entirely on the local origin. Relative asset paths in the
-        # landing HTML (./style.css, ./learnmore.html) resolve under /gh/.
-        return redirect(url_for('main.github_pages_asset', filename='landing.html'))
-
-
-# -------------------- LOCAL LANDING / GITHUB-PAGES ASSETS --------------------
-
-def _github_pages_dir():
-    """Absolute path to the bundled ``github-pages/`` static marketing site."""
-    return os.path.join(current_app.root_path, os.pardir, 'github-pages')
-
-
-@main_bp.route('/gh/<path:filename>')
-def github_pages_asset(filename):
-    """Serve the bundled github-pages landing site (landing.html, style.css,
-    learnmore.html, etc.) from the local origin for the certification run.
-
-    HTML is rewritten so links pointing at the production application host
-    resolve against this origin instead. Without that, a sign-in click during a
-    local certification run would land on production.
-    """
-    if filename.endswith('.html'):
-        path = safe_join(_github_pages_dir(), filename)
-        if path is None:
-            abort(404)
-        try:
-            with open(path, encoding='utf-8') as handle:
-                markup = handle.read()
-        except (OSError, ValueError):
-            abort(404)
-        markup = markup.replace(f'href="{APP_PRODUCTION_ORIGIN}/', 'href="/')
-        markup = _CDN_FONT_BLOCK.sub(_LOCAL_FONT_BLOCK, markup)
-        return Response(markup, mimetype='text/html')
-    return send_from_directory(_github_pages_dir(), filename)
+        return _marketing_site_redirect()
 
 
 @main_bp.route('/health')
@@ -235,19 +174,19 @@ def health_check_deep():
 @main_bp.route('/privacy')
 def privacy():
     """Redirect to the hosted Privacy & Data Handling Policy page."""
-    return _github_pages_redirect('privacy.html')
+    return _marketing_site_redirect('privacy.html')
 
 
 @main_bp.route('/terms')
 def terms():
     """Redirect to the hosted Terms of Service page."""
-    return _github_pages_redirect('terms.html')
+    return _marketing_site_redirect('terms.html')
 
 
 @main_bp.route('/district')
 def district():
     """Redirect to the hosted district assurance brief page."""
-    return _github_pages_redirect('district.html')
+    return _marketing_site_redirect('district.html')
 
 
 @main_bp.route('/offline')

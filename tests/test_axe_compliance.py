@@ -1,23 +1,22 @@
-"""Rendered axe-core smoke audits for the public application surface.
+"""Rendered axe-core audit of the published marketing site.
 
-This audit drives a real browser against a RUNNING dev server, so it has three
-environment prerequisites: the Playwright package, a Chromium build, and a
-server listening on ``BASE_URL``. It is not part of the accessibility CI gate
-(``.github/workflows/accessibility-gate.yml`` runs ``tests/test_accessibility.py``),
-so in an ordinary suite run the server is normally absent.
+The site in ``github-pages/`` is deployed to GitHub Pages and is not served by
+the application, so this audit serves the directory directly over a throwaway
+``http.server`` rather than driving the Flask app. It previously went through
+the app's ``/gh/<path>`` route, which existed only so a local certification run
+could stay on one origin; that route is gone, and with it the last reason for
+this audit to need a running dev server.
 
-All three prerequisites are therefore treated alike and skip rather than fail.
-Previously the first two skipped and the third raised ``ERR_CONNECTION_REFUSED``,
-which put a permanent red in every full-suite run — noise that makes a real
-regression harder to see. A skip says "not audited here"; a failure should be
+Playwright and a Chromium build are still environment-dependent, so their
+absence skips rather than fails. A skip says "not audited here"; a failure is
 reserved for "audited, and the page has a violation".
-
-To actually run it: ``flask run`` in another shell, then invoke pytest.
 """
 
-import socket
+import http.server
+import socketserver
+import threading
+from contextlib import contextmanager
 from pathlib import Path
-from urllib.parse import urlparse
 
 import pytest
 
@@ -28,57 +27,77 @@ except ImportError:  # pragma: no cover - environment-dependent dependency
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+SITE_ROOT = REPO_ROOT / "github-pages"
 AXE_SOURCE = (REPO_ROOT / "tests" / "assets" / "axe-core.min.js").read_text(encoding="utf-8")
-BASE_URL = "http://127.0.0.1:5000"
-PUBLIC_ROUTES = [
-    "/",
-    # `index.html` was a three-line redirect stub with nothing to audit, so it was
-    # never listed. It is now the deployment holding page and carries the real
-    # content, which puts it in scope.
-    "/gh/index.html",
-    "/gh/landing.html",
-    "/gh/learnmore.html",
-    "/gh/district.html",
-    "/gh/privacy.html",
-    "/gh/terms.html",
+
+# Every page published to GitHub Pages. `index.html` is the v2.0 holding page;
+# `landing.html` and `learnmore.html` are orphaned from the site root until
+# launch but are still deployed, so they are still audited.
+PUBLIC_PAGES = [
+    "index.html",
+    "landing.html",
+    "learnmore.html",
+    "district.html",
+    "privacy.html",
+    "terms.html",
 ]
 
 
-def _server_is_listening(base_url: str, timeout: float = 0.5) -> bool:
-    parsed = urlparse(base_url)
-    try:
-        with socket.create_connection(
-            (parsed.hostname, parsed.port or 80), timeout=timeout
-        ):
-            return True
-    except OSError:
-        return False
+@contextmanager
+def _serve_site():
+    """Serve ``github-pages/`` on an ephemeral port for the duration of a test."""
+
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(SITE_ROOT), **kwargs)
+
+        def log_message(self, *args):  # noqa: A003 - silence per-request stderr noise
+            pass
+
+    with socketserver.TCPServer(("127.0.0.1", 0), Handler) as httpd:
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield f"http://127.0.0.1:{httpd.server_address[1]}"
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
+
+
+def test_every_published_page_is_audited():
+    """The audit list must cover the directory it claims to audit.
+
+    A page added to `github-pages/` without being listed here would ship
+    unaudited while this suite still reported green — the audit would be passing
+    over a set that no longer matches what is deployed.
+    """
+    on_disk = {path.name for path in SITE_ROOT.glob("*.html")}
+    assert on_disk == set(PUBLIC_PAGES), (
+        f"github-pages/ has {sorted(on_disk - set(PUBLIC_PAGES))} unaudited and "
+        f"PUBLIC_PAGES lists {sorted(set(PUBLIC_PAGES) - on_disk)} which no longer exist"
+    )
 
 
 @pytest.mark.skipif(sync_playwright is None, reason="Playwright Python package is unavailable")
-def test_public_pages_have_no_axe_violations():
-    """Audit every unauthenticated public page against the local dev server."""
-    if not _server_is_listening(BASE_URL):
-        pytest.skip(
-            f"No dev server listening on {BASE_URL}; start one with `flask run` "
-            "to run the rendered axe audit"
-        )
-
+def test_published_pages_have_no_axe_violations():
+    """Audit every published marketing page against WCAG 2 A and AA."""
     with sync_playwright() as playwright:
         try:
             browser = playwright.chromium.launch(headless=True)
         except Exception as exc:  # pragma: no cover - browser installation varies
             pytest.skip(f"Chromium is unavailable: {exc}")
 
-        with browser:
+        with browser, _serve_site() as base_url:
             page = browser.new_page()
-            for route in PUBLIC_ROUTES:
-                response = page.goto(f"{BASE_URL}{route}", wait_until="networkidle")
-                assert response is not None and response.ok, f"Could not load {route}"
+            for filename in PUBLIC_PAGES:
+                response = page.goto(f"{base_url}/{filename}", wait_until="networkidle")
+                assert response is not None and response.ok, f"Could not load {filename}"
                 page.add_script_tag(content=AXE_SOURCE)
                 result = page.evaluate("""async () => {
                     return await axe.run(document, {
                         runOnly: {type: 'tag', values: ['wcag2a', 'wcag2aa']}
                     });
                 }""")
-                assert not result["violations"], f"axe violations on {route}: {result['violations']}"
+                assert not result["violations"], (
+                    f"axe violations on {filename}: {result['violations']}"
+                )

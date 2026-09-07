@@ -869,12 +869,37 @@ The holding page removes the *invitation* to sign in. It is not an access contro
 application is reachable is decided by the application — maintenance mode and the login routes — and
 that must be verified independently before this page is treated as a gate.
 
-`index.html` is now in `PUBLIC_ROUTES` in `tests/test_axe_compliance.py`. It was absent because a
-three-line redirect stub had nothing to audit; now it carries the real content and INV-ARC-020's
-accessibility contract applies to it. A page can otherwise acquire content and silently leave the
-audited set, which is the same shape as the stale-glob defect this tracker records elsewhere. The
-tab-switching script copied in with the content was also removed: its `.tab-btn` / `.tab-content`
-selectors exist only in `learnmore.html`, so on this page it bound zero listeners.
+`index.html` is now audited by `tests/test_axe_compliance.py`. It was absent because a three-line
+redirect stub had nothing to audit; now it carries the real content and INV-ARC-020's accessibility
+contract applies to it. A page can otherwise acquire content and silently leave the audited set,
+which is the same shape as the stale-glob defect this tracker records elsewhere. That gap is now
+closed structurally rather than by vigilance: a companion test asserts the audited list equals the
+`.html` files in `github-pages/`, so adding a page without listing it fails. The tab-switching
+script copied in with the content was also removed: its `.tab-btn` / `.tab-content` selectors exist
+only in `learnmore.html`, so on this page it bound zero listeners.
+
+**The application no longer serves the marketing site — RESOLVED 2026-09-06.** `github-pages/` was
+served twice: published to GitHub Pages, and served by the app at `/gh/<path>` so a local
+certification run could stay on one origin. The second copy is removed, along with the two rewrites
+that existed only to make one file correct under two hosts (absolute sign-in links mapped back to
+the serving origin; the CDN font block swapped for the same-origin stylesheet, because the app's CSP
+blocked the CDN and every Material Symbols glyph would have rendered as its ligature name).
+
+Removing it exposed a latent production defect worth recording separately, because it is the same
+failure class as the inert CI filters above. `MARKETING_SITE_URL` was read at `main.py` with
+`.get()` and **set nowhere in the repository** — no config module, no environment template, no
+workflow. `if marketing_url:` had therefore never been true in any environment, and `/` fell through
+to the app-served copy in production as well as locally. A configuration branch that has never once
+executed is indistinguishable, from the outside, from one that works. It is now set in `app.config`
+from the environment, defaulting to the CNAME in `github-pages/CNAME`. The separate
+`GITHUB_PAGES_URL` key behind `/privacy`, `/terms`, and `/district` — also never set, and defaulting
+to the `timwonderer.github.io` URL rather than the custom domain — collapses into the same key.
+
+The audit was moved rather than dropped. It drove a browser against the local Flask server, so
+`/gh/` was the only reason the marketing pages were auditable; deleting the route would have reduced
+the audited set to `/` while the gate stayed green. It now serves `github-pages/` over a throwaway
+`http.server`, needs no Flask, and no longer has a skip-if-no-server-listening branch that made an
+unrun audit read as a pass.
 
 **Branch rename — PREPARED 2026-09-06, remote step not yet executed.** The decision recorded above
 ("merge `CTH_v2.0` into `main`, or repoint the deploy trigger") was resolved by renaming rather than

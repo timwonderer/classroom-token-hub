@@ -28,24 +28,21 @@ def test_DOM_OPS_001__csp_header(client):
     assert insights_url in csp_directives['script-src']
 
 
-def test_landing_page_uses_csp_compatible_local_fonts(client):
-    """Verify the landing page does not request fonts blocked by its CSP."""
-    response = client.get('/gh/landing.html')
+def test_root_redirects_off_origin_to_the_marketing_site(client):
+    """The application does not serve the marketing site.
 
-    assert response.status_code == 200
-    assert b'/static/css/fonts.css' in response.data
-    assert b'fonts.googleapis.com' not in response.data
-    assert b'fonts.gstatic.com' not in response.data
+    Two tests used to live here covering the `/gh/<path>` route: one asserting
+    its CDN-font block was rewritten to the app's own stylesheet, another
+    asserting the landing page's absolute sign-in links were rewritten back to
+    this origin. Both rewrites existed only because the app served that markup
+    under its own CSP. The route is gone, the marketing site is published to
+    GitHub Pages alone, and so both rewrites and both tests went with it. What
+    remains verifiable here is that `/` leaves this origin rather than falling
+    through to a copy the app serves itself.
+    """
+    response = client.get('/')
 
-
-def test_landing_page_signin_links_stay_on_local_origin(client):
-    """The published landing page points sign-in at the production app host so
-    it works from the marketing domain. Served locally under /gh/ for a
-    certification run, those links must be rewritten to this origin so a tester
-    is never sent to production."""
-    response = client.get('/gh/landing.html')
-
-    assert response.status_code == 200
-    assert b'app.classroomtokenhub.com' not in response.data
-    for route in (b'"/admin/login"', b'"/student/login"', b'"/sysadmin/login"'):
-        assert route in response.data
+    assert response.status_code == 302
+    assert response.headers['Location'].startswith(
+        client.application.config['MARKETING_SITE_URL']
+    )
