@@ -1028,7 +1028,7 @@ content already present on HEAD.
 | Bug-hunter badge system | `codex/compliance-check-legacy-structure` @ `3cdb1294` | **Backlog** — see below |
 | `github-pages/v2transition.html` | `CTH_v2.0`, `docs/v2-progress-page` | **Pre-promotion** — see below |
 | Ledger decomposition | `codex/ledger-canonicalization` @ `eafc6510..1a8eeb99` | **Landed 2026-09-05** — merge `8201f2935`; follow-up commit reviewed and declined 2026-09-06, see below |
-| Release-process replacement | `codex/ledger-canonicalization` @ `389d78b7..60297398` | **Owner decision** — see below |
+| Release-process replacement | `codex/ledger-canonicalization` @ `389d78b7..60297398` | **Landed independently; branch deleted 2026-09-07** — see below |
 
 ### Ledger follow-up commit — reviewed and declined 2026-09-06
 
@@ -1063,7 +1063,42 @@ harmless at runtime and actively misleading on the page: it implies partial appl
 this migration tolerates and defends against, when the real (and unreachable) hazard sits in the
 early return above it.
 
-### Release-process replacement (owner decision, blocks nothing)
+### Release-process replacement — **DECIDED 2026-09-07: already landed; branch deleted**
+
+The decision below was framed as open. It is not: **events answered it.** Every artifact the
+"owner decision" was about is on HEAD already, having arrived by a different route —
+`.github/workflows/deploy.yml` is deleted, and `release-v2.yml`, `docs-links.yml`,
+`tailscale-ssh-smoke-test.yml`, `app/observability.py`, `status/`, and `status_service/` are all
+present. `599dc7e7b` ("Add bounded status signals and automated deployment") and its successors
+carried them. The process change shipped; what remained on the branch was the branch, not the change.
+
+**The branch is 103 commits behind HEAD and 22 ahead, and the 22 add nothing.** Measured by content
+rather than by count, every file the branch still touches is *net-negative* against HEAD —
+`status/projection.py` −57, `app/observability.py` −59, `scripts/check_production_docs.py` −42,
+`SPEC-OPS-003` −39. `status_service/app.py` is the clearest single case: the branch defines
+`derive_capability_cards` inline and has no `derive_platform_checks`, while HEAD has moved the former
+into `status/projection.py` and added the latter. The branch is the earlier draft of HEAD's code.
+
+Merging it would also restore `docs/LOGS/` in full — removed 2026-09-05 and, per `CLAUDE.md`, "must
+not be reintroduced" — delete `constitutional-ci.yml` and `deploy-status.yml`, revert `docs/user-guides/`
+to the v1 tree, and remove roughly twenty test modules including `test_pii_storage_validator.py`,
+`test_session_cookie_lifetime.py`, and `test_route_registration_contract.py`. Same shape as
+`loving-banzai-564730`: a branch whose age, not its intent, made it destructive.
+
+**Disposition: deleted.** Tagged `archive/ledger-canonicalization-20260907` at `97041b62b` first —
+not because the content is needed, but because this branch alone had no remote, so deletion would
+have been irreversible where every other deletion in this pass was not. A tag is the cheapest way to
+make that asymmetry go away. Its worktree was verified clean and removed.
+
+**A method note this branch earns.** The three-dot diffstat (`HEAD...branch`) reported 43 files and
+`deploy.yml −152`, which reads as "this branch removes the deploy workflow." It does not — HEAD
+already had. Three-dot measures from the merge base, so on a stale branch it describes a tree that no
+longer exists. The two-dot diff (`HEAD..branch`) is what answers *"what would merging this do to what
+I have now"*, and it returned 416 files of mostly reversion. **This is the third time on this branch
+that a merge-base-relative number nearly produced a wrong call** — after `codex/status-page-integration`
+and `insurance/recommendation-card`. Use two-dot for disposition; three-dot only for review.
+
+### Release-process replacement — original framing (superseded, retained for the reasoning)
 
 `codex/ledger-canonicalization` is two unrelated bodies of work sharing a branch. Commits 1–13 are the
 ledger decomposition and were merged. Commits 14–21 are observability, status reporting, and CI, and
@@ -1207,7 +1242,7 @@ missing.
 | `origin/claude/ci-onto-landed` | The ship branch. |
 | 8 `dependabot/*` refs | Each backs an **open PR** (#1354, #1353, #1287, #1286, #1284, #1281, #1270, #1236). Deleting the branch closes the PR. `reviewdog/action-actionlint-1.73.2` had no open PR and was already pruned. |
 | `origin/copilot/codexv20` (117) | Held, not cleared. Large and not independently verified this session; the 2026-09-04 sweep's coverage of it is asserted, not re-checked. Cheap to keep, expensive to be wrong about. |
-| `codex/ledger-canonicalization` (22, **local-only**) | The release-process replacement awaiting an owner decision. No remote exists, so deletion is destruction rather than pruning. |
+| ~~`codex/ledger-canonicalization`~~ | **Resolved 2026-09-07 — deleted.** The decision it was held for had already been made by events. Tagged `archive/ledger-canonicalization-20260907` because it had no remote. |
 
 `insurance/recommendation-card` and `archive/class-config-phase5-6` are new this pass and are the
 reason the worktrees could be removed at all.
