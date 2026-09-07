@@ -1,8 +1,17 @@
-# SPEC-OPS-003: System Administration Console
+# SPEC-OPS-004: System Administration Console
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-003 | 1.0 | 2026-09-04 | — | Normative |
+| SPEC-OPS-004 | 1.1 | 2026-09-06 | SPEC-OPS-003 v1.0 | Normative |
+
+> [!NOTE]
+> Renumbered from `SPEC-OPS-003` on 2026-09-06. This document and
+> `SPEC-OPS-003_APPLICATION_OBSERVABILITY_CONTRACT.md` were authored in parallel on separate
+> branches and both claimed `SPEC-OPS-003`, which made the reference number ambiguous as a citation
+> handle. The `OPS` sequence now runs in dependency order: `002` the external status persistence
+> model, `003` the observability contract that produces the signal, `004` the console that surfaces
+> it. Citations of `SPEC-OPS-003` dated before 2026-09-06 that concern the console refer to this
+> document.
 
 ## I. Purpose
 

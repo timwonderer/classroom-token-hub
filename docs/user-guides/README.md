@@ -2,7 +2,7 @@
 
 This directory contains all user-facing documentation for teachers and students.
 Platform operator documentation is not part of this corpus; the system administration
-console is specified in `docs/SPEC/SPEC-OPS-003_SYSTEM_ADMINISTRATION_CONSOLE.md`.
+console is specified in `docs/SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE.md`.
 
 ## Core Guides
 

@@ -30,7 +30,7 @@ The 26 templates with no rendering route are layouts, macros, error pages, and p
 2. **Roughly a quarter of the corpus is wrong, not merely thin.** Guides name sidebar destinations that no longer exist, tabs that were removed, and buttons that were never built in v2.
 3. **Eight guides are orphaned** — they document features with no route, no template, and no nav entry.
 4. **The contextual help wiring is systematically miscategorized.** All 34 wired pages open a *troubleshooting* page. Not one opens a feature guide. 24 pages have no help link at all.
-5. **The sysadmin guides were in the wrong corpus entirely** and unreachable by their own audience. Resolved 2026-09-04 — rescoped to `SPEC-OPS-003`. See "Sysadmin Scope Decision" below.
+5. **The sysadmin guides were in the wrong corpus entirely** and unreachable by their own audience. Resolved 2026-09-04 — rescoped to `SPEC-OPS-004`. See "Sysadmin Scope Decision" below.
 
 ---
 
@@ -187,7 +187,7 @@ The docs site already contradicted the old placement. `app/routes/docs.py:365-38
 Executed:
 
 - Deleted `docs/user-guides/features/sysadmin/` (5 files) and `docs/user-guides/sysadmin_manual.md`. Roughly two-thirds of their content described screens that do not exist — "Manage Teachers", "Manage Admins", "Reset TOTP", "Global Announcements", "Sysadmin Registration Phrase" — so none of it was worth carrying forward verbatim.
-- Wrote `docs/SPEC/SPEC-OPS-003_SYSTEM_ADMINISTRATION_CONSOLE.md` against the real blueprint: the four-destination nav (Dashboard, Support, Logs, Passkeys), the access-control model, the mutation boundary (the console may not touch classroom domain truth), and the known non-conformances.
+- Wrote `docs/SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE.md` against the real blueprint: the four-destination nav (Dashboard, Support, Logs, Passkeys), the access-control model, the mutation boundary (the console may not touch classroom domain truth), and the known non-conformances.
 - Removed the sysadmin card from `templates/docs/index.html` and the sysadmin accordion from `templates/docs/view.html`; added the new spec under the devops **Operations** card.
 - Updated `docs/user-guides/README.md`, `docs/user-guides/features/index.md`, and `SOP-DOC-002`.
 
@@ -204,7 +204,7 @@ Documentation work surfaced these product bugs. None are docs problems; recorded
 3. **Three sysadmin log pages are hollow** — `/error-logs`, `/network-activity`, `/logs-testing` hardcode empty result sets.
 4. **PIN length is inconsistent** — setup allows 4–8 digits (`student_pin_setup.html:275`) while `student/recovery/reset_form.html` states 4–6.
 5. **`templates/admin_nav.html` is a dead v1 navbar** still linking `admin.transactions` and `admin.economy_health`.
-6. **`sysadmin.update_user_report` never commits.** `app/routes/system_admin.py:1000-1015` assigns status, notes, and review metadata directly on the `Issue` model, then flashes success inside a `try` with no `db.session.commit()` — and mutates outside the FEAT layer. Recorded in `SPEC-OPS-003` §VIII.
+6. **`sysadmin.update_user_report` never commits.** `app/routes/system_admin.py:1000-1015` assigns status, notes, and review metadata directly on the `Issue` model, then flashes success inside a `try` with no `db.session.commit()` — and mutates outside the FEAT layer. Recorded in `SPEC-OPS-004` §VIII.
 7. **Payroll "Save Template" is a no-op that reports success.** `app/routes/admin.py:8001-8005` is a bare `pass`, yet `save_only` flashes `Template "<name>" saved successfully!`. Nothing is persisted and no picker exists to load a template back — the `presetSelector` / `clearFormBtn` elements the JS at `admin_payroll.html:949-985` binds to are not in the markup.
 8. **The Payroll help drawer describes a tab that does not exist.** `admin_payroll.html:129-142` renders a "Rewards & Fines" accordion item telling teachers to use the "Rewards & Fines tab". There are four tabs — Overview, History, Settings, Manual Payments — and deductions belong to Obligations (`admin.py:7989-7991`).
 9. **Teachers have no navigable path to insurance claims.** `admin.view_student_policy` (`app/routes/admin.py:6291`) carries `@admin_required` but **no `@admin_bp.route(...)` decorator**, so it is absent from the URL map and its template `admin_view_student_policy.html` can never render. That template is the only thing linking to `admin.process_claim`, so the 254-line `admin_process_claim.html` review screen — approve/reject, approved amount, validation status, claims history, caps — is reachable only by hand-typing `/admin/insurance/claim/<claim_id>`, and nothing in the UI exposes a claim ID. Meanwhile students *can* file claims (`/student/insurance/claim/<policy_uuid>`), so claims accumulate with no teacher-facing queue. `admin_insurance.html` has no tabs and no claims or enrollment listing at all.
