@@ -857,7 +857,22 @@ building" page describes a state that no longer exists.
 the same nonexistent ref the CI workflows point at, and it will keep reproducing this class of
 error in future work until corrected.
 
-**`index.html` is a deployment holding page, and `landing.html` is deliberately orphaned.**
+**The landing pages are held on a branch, not orphaned in the artifact — REVISED 2026-09-07.** The
+arrangement described immediately below kept `landing.html` and `learnmore.html` in `github-pages/`
+and merely stopped linking to them. The note correctly recorded that this was not an access control,
+and that is the reason it has been replaced rather than merely annotated: leaving a published
+`landing.html` with three live sign-in buttons makes the site's pre-launch posture depend on nobody
+guessing a filename. Both files are now removed from this branch and live on
+`launch/v2-landing-pages`, whose entire diff is those two files plus their entries in the axe list.
+Merging it is the act of launching. The deletion commit precedes the branch point, because branching
+first would leave git treating the branch as already merged and the launch merge would restore
+nothing.
+
+This closes the static-site half of the question only. **The application's own gating is still
+unverified** — maintenance mode and the login routes decide whether `app.classroomtokenhub.com` is
+reachable, and nothing above establishes that. It remains an open pre-ship item.
+
+**Superseded — `index.html` as holding page with `landing.html` orphaned (2026-09-06).**
 `index.html` no longer redirects to `./landing.html` (see the retirement pass above); it is a
 "v2.0 launching soon" page announcing the v1 data deletion, the new support address, and the status
 page. The intent is that deploying the site does not yet expose the application. **Understand what

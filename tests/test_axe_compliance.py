@@ -30,13 +30,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SITE_ROOT = REPO_ROOT / "github-pages"
 AXE_SOURCE = (REPO_ROOT / "tests" / "assets" / "axe-core.min.js").read_text(encoding="utf-8")
 
-# Every page published to GitHub Pages. `index.html` is the v2.0 holding page;
-# `landing.html` and `learnmore.html` are orphaned from the site root until
-# launch but are still deployed, so they are still audited.
+# Every page published to GitHub Pages. `index.html` is the v2.0 holding page.
+# `landing.html` and `learnmore.html` are not in this directory before launch —
+# they live on `launch/v2-landing-pages` and return with it, at which point the
+# equality assertion below requires them to be listed here again.
 PUBLIC_PAGES = [
     "index.html",
-    "landing.html",
-    "learnmore.html",
     "district.html",
     "privacy.html",
     "terms.html",
