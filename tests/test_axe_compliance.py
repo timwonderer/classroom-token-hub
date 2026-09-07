@@ -31,9 +31,10 @@ SITE_ROOT = REPO_ROOT / "github-pages"
 AXE_SOURCE = (REPO_ROOT / "tests" / "assets" / "axe-core.min.js").read_text(encoding="utf-8")
 
 # Every page published to GitHub Pages. `index.html` is the v2.0 holding page.
-# `landing.html` and `learnmore.html` are not in this directory before launch —
-# they live on `launch/v2-landing-pages` and return with it, at which point the
-# equality assertion below requires them to be listed here again.
+# The landing page and its learn-more companion are not in this directory before
+# launch — they live on `launch/v2-landing-pages`, where the landing page *is*
+# `index.html`, and arrive when that branch merges. `learnmore.html` is a new
+# filename at that point, so the equality assertion below requires listing it.
 PUBLIC_PAGES = [
     "index.html",
     "district.html",

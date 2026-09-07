@@ -863,10 +863,16 @@ and merely stopped linking to them. The note correctly recorded that this was no
 and that is the reason it has been replaced rather than merely annotated: leaving a published
 `landing.html` with three live sign-in buttons makes the site's pre-launch posture depend on nobody
 guessing a filename. Both files are now removed from this branch and live on
-`launch/v2-landing-pages`, whose entire diff is those two files plus their entries in the axe list.
-Merging it is the act of launching. The deletion commit precedes the branch point, because branching
-first would leave git treating the branch as already merged and the launch merge would restore
-nothing.
+`launch/v2-landing-pages`. Merging it is the act of launching. The deletion commit precedes the
+branch point, because branching first would leave git treating the branch as already merged and the
+launch merge would restore nothing.
+
+On that branch the landing page occupies `index.html` rather than sitting beside it, so the merge
+replaces the holding page with the front door in a single step. The holding page is only true until
+launch, which is exactly when the merge happens; publishing both would leave two pages disagreeing
+about whether the product has shipped. No `landing.html` filename survives — a second name serving
+the same content would be a second front door to keep in sync, and nothing ever linked to that name
+because the file was never deployed.
 
 This closes the static-site half of the question only. **The application's own gating is still
 unverified** — maintenance mode and the login routes decide whether `app.classroomtokenhub.com` is
