@@ -6,10 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Classroom Token Hub — a multi-tenant educational banking simulation. Flask + SQLAlchemy + PostgreSQL. Python 3.10+. License: PolyForm Noncommercial 1.0.0.
 
-**Active branch:** `CTH_v2.0` — all work merges here, never to `main`. Older docs call this
-same branch `codex/v2.0`; that name is retired and no ref by it exists. If a tool, workflow,
-or instruction names `codex/v2.0`, it is stale and pointing at nothing — fix it rather than
-creating the branch.
+**Active branch:** `main` — all work merges here. This is the same branch that older documents
+call `codex/v2.0` and then `CTH_v2.0`; both names are retired and no ref by either exists. The
+v1 `main` that preceded it was renamed to `legacy_main` and deleted on 2026-09-06; `legacy_v1.10.0`
+carries the v1 line. If a tool, workflow, or instruction names `codex/v2.0` or `CTH_v2.0`, it is
+stale and pointing at nothing — retarget it to `main` rather than creating the branch. Instructions
+that say "never merge to `main`" describe the former v1 branch and no longer apply.
 
 ## Commands
 

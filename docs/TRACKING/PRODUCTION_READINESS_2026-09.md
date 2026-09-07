@@ -856,6 +856,30 @@ building" page describes a state that no longer exists.
 the same nonexistent ref the CI workflows point at, and it will keep reproducing this class of
 error in future work until corrected.
 
+**Branch rename — PREPARED 2026-09-06, remote step not yet executed.** The decision recorded above
+("merge `CTH_v2.0` into `main`, or repoint the deploy trigger") was resolved by renaming rather than
+merging: `main` → `legacy_main`, then `CTH_v2.0` → `main`, then delete `legacy_main`. The v1 line is
+preserved on `legacy_v1.10.0`, so deleting `legacy_main` loses nothing. This makes `main` the branch
+every workflow, SOP, and contribution instruction already names by default, which removes the
+standing source of the "filter names a ref that does not exist" defect class rather than relocating
+it to a third name.
+
+The in-repo half is done: workflow branch filters, SOP and runbook instructions, `README.md`,
+`DEVELOPMENT.md`, and `CLAUDE.md` now name `main`, closing the stale-guidance item above. References
+were triaged three ways and only the first was rewritten — **binding** (a filter or instruction that
+must resolve, retargeted), **descriptive** (prose that identified the codebase by branch name, which
+a branch never was; the name was dropped in favor of "v2"), and **dated record** (`CHANGELOG.md`,
+dated audits, `docs/archive/`, and the narrative above, left intact because rewriting them would
+falsify what was true at the time).
+
+Two consequences to carry into the remote step. First, `origin/HEAD` currently points at
+`CTH_v2.0`, so the default branch moves with the rename rather than needing a separate change.
+Second, "port `origin/main` deltas" in `DEVELOPMENT.md` meant the v1 branch; after the rename that
+phrase would instruct porting `main` into itself, so those items now measure against
+`legacy_v1.10.0` explicitly. Before executing: check for open PRs targeting `main` (a rename
+retargets them), confirm branch protection followed the rename, then `git fetch --prune` in every
+worktree and set `V2_RELEASE_LINEAGE_REF=main`.
+
 ---
 
 ## VI. Deferred Work Recovered From Branch Triage

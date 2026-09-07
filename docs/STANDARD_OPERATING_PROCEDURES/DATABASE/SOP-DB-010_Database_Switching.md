@@ -26,7 +26,7 @@ This repository uses branch-based database switching through the shared git hook
 
 ### Protected v2 Branches
 
-- `codex/v2.0`
+- `main`
 - `codex/v2-*`
 
 These branches must use:

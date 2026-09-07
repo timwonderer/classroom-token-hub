@@ -6,7 +6,7 @@
 
 ## I. Purpose
 
-Define a commit-safe documentation contract for adversarial engagement runs on `codex/v2.0` so evidence is always captured without storing raw runtime payloads.
+Define a commit-safe documentation contract for adversarial engagement runs on v2 so evidence is always captured without storing raw runtime payloads.
 
 ## II. Scope
 

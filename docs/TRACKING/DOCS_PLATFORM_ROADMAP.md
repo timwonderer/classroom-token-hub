@@ -3,7 +3,7 @@
 **Status:** Partially superseded — see note below
 **Created:** 2026-06-14
 **Last Reconciled:** 2026-09-06
-**Branch:** `CTH_v2.0` (this document was authored on `docs/cleanup-and-organization`)
+**Branch:** `main` (this document was authored on `docs/cleanup-and-organization`)
 
 ---
 

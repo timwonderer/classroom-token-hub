@@ -20,7 +20,7 @@ Normative (SOP Tier). Subordinate to INV-CORE-000.
 
 ## V. Environment Truth
 
-- Branch: `codex/v2.0`
+- Branch: `main`
 - Dev/migration DB: the team-configured v2 dev database for migration rehearsal
 - Test DB: the team-configured PostgreSQL test database used for v2 validation
 

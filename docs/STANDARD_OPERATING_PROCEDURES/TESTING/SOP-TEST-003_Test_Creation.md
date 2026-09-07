@@ -6,7 +6,7 @@
 
 ## I. Purpose
 
-This SOP defines the canonical procedure for creating tests in the `codex/v2.0` codebase. It standardizes when tests must be added, what the test should prove, how to scope the test, how to structure the test, and how to validate that the test itself is fit for use.
+This SOP defines the canonical procedure for creating tests in the v2 codebase. It standardizes when tests must be added, what the test should prove, how to scope the test, how to structure the test, and how to validate that the test itself is fit for use.
 
 ## II. Scope
 

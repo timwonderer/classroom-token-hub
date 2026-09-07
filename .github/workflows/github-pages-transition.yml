@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - codex/landed-architecture-execution-fixes
-      - CTH_v2.0
+      - main
     paths:
       - 'github-pages/**'
       - '.github/workflows/github-pages-transition.yml'

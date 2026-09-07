@@ -2,9 +2,15 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-009       | 1.4     | 2026-04-08     | 1.3        | Normative       |
+| SOP-DB-009       | 1.5     | 2026-09-06     | 1.4        | Normative       |
 
-**Branch:** `codex/v2.0`
+> [!NOTE]
+> v1.5 (2026-09-06) retargets branch names only. This document states current branch status, so a
+> retired branch name here is a false present-tense claim rather than a historical record. The
+> engineering branch previously called `codex/v2.0` and then `CTH_v2.0` is now `main`. No migration
+> finding, compliance verdict, or readiness assessment was added, removed, or altered.
+
+**Branch:** `main`
 **Status:** Current-state readiness summary for v2 live testing
 
 ## I. Purpose
@@ -28,7 +34,7 @@ The earlier migration-compliance audit remains historically useful, but it shoul
 
 ### Confirmed Now
 
-- Active engineering branch is `codex/v2.0`.
+- Active engineering branch is `main`.
 - Current repository migration heads are resolved by `e8f1a2b3c4d5_merge_remaining_v2_heads.py`.
 - Membership constraint hardening is present in `a11213ca4afb_harden_class_economy_membership_checks.py`.
 - Local live-test rehearsal report on 2026-04-03 confirmed:

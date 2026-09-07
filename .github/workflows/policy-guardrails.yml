@@ -4,14 +4,16 @@ on:
   pull_request:
     branches:
       - '**'
-  # `codex/v2.0` does not exist on this remote; the integration branch is
-  # `CTH_v2.0`. While this pointed at a nonexistent ref the push leg never fired,
-  # which meant `guardrails-main` — the strict, no-waivers gate — had never run
-  # even once. The PR leg was unaffected, so waivers were accepted on every PR
-  # and never subsequently re-checked without them.
+  # This leg previously filtered on `codex/v2.0`, a ref that existed neither
+  # locally nor on the remote. While it pointed at nothing the push leg never
+  # fired, which meant `guardrails-main` — the strict, no-waivers gate — had
+  # never run even once. The PR leg was unaffected, so waivers were accepted on
+  # every PR and never subsequently re-checked without them. The integration
+  # branch is now `main`; a filter that names a branch is exactly the thing that
+  # goes silently dead on the next rename, so treat this line as load-bearing.
   push:
     branches:
-      - CTH_v2.0
+      - main
   workflow_dispatch:
 
 jobs:
@@ -35,7 +37,7 @@ jobs:
         run: python scripts/policy_guardrails.py --git-diff-base "origin/${{ github.base_ref }}" --git-diff-head "${{ github.sha }}"
 
   guardrails-main:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/CTH_v2.0'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -50,7 +52,7 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Run policy guardrails (no waivers allowed on CTH_v2.0)
+      - name: Run policy guardrails (no waivers allowed on main)
         run: |
           if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
             python scripts/policy_guardrails.py --strict --no-waivers

@@ -10,7 +10,7 @@ name: Check Database Migrations
 # not a package. Both spellings are listed so the filter survives a future split.
 on:
   push:
-    branches: [ CTH_v2.0 ]
+    branches: [ main ]
     paths:
       - 'migrations/versions/**'
       - 'app/models.py'

@@ -3,7 +3,7 @@
 A classroom management platform that uses a simulated token economy to drive student engagement and participation. Built with Flask + SQLAlchemy + PostgreSQL, designed for multi-tenant deployment across multiple schools and class periods.
 
 **Version:** 2.0 (Reconstruction in Progress)  
-**Active Branch:** `CTH_v2.0` (never merge to main)  
+**Active Branch:** `main`  
 **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
 
 ---

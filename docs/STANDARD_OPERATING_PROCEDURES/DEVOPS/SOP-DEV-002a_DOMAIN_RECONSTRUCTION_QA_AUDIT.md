@@ -22,7 +22,7 @@
 
 ### Repository State
 - [x] All commits are on the feature branch (never on main)
-- [ ] Branch is up-to-date with origin/codex/v2.0
+- [ ] Branch is up-to-date with origin/main
 - [ ] No uncommitted changes (`git status` is clean)
 - [x] No merge conflicts
 
@@ -266,7 +266,7 @@
 
 ### Git (MANDATORY)
 - [x] All commits are on feature branch — *SOP-DEV-002*
-- [ ] Branch is up-to-date with origin/codex/v2.0 — *SOP-DEV-002*
+- [ ] Branch is up-to-date with origin/main — *SOP-DEV-002*
 - [x] No merge conflicts
 - [x] Branch is pushed to remote
 

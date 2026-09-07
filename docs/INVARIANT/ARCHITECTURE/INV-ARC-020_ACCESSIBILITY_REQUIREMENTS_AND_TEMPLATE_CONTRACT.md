@@ -6,7 +6,7 @@
 
 ## I. Purpose
 
-This document defines the canonical accessibility requirements for user-facing templates, shared UI shells, template-driven JavaScript interactions, and template-supporting CSS in the `codex/v2.0` codebase.
+This document defines the canonical accessibility requirements for user-facing templates, shared UI shells, template-driven JavaScript interactions, and template-supporting CSS in the v2 codebase.
 
 It exists to ensure that template work is governed by explicit accessibility contracts rather than visual preference or one-off cleanup.
 

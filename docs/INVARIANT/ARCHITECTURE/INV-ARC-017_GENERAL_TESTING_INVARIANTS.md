@@ -6,7 +6,7 @@
 
 ## I. Purpose
 
-This document defines the canonical testing invariants for the `codex/v2.0` rebuild. It standardizes what testing must prove, when testing is required, and which reporting behaviors are mandatory before a change can be represented as validated.
+This document defines the canonical testing invariants for the v2 rebuild. It standardizes what testing must prove, when testing is required, and which reporting behaviors are mandatory before a change can be represented as validated.
 
 Execution details, command sequences, and PR-operational gates belong in SOP documents, not here. Canonical test initializer, canonical identity, and canonical temporal behavior belong in SPEC documents, not here.
 

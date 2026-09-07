@@ -3,7 +3,7 @@
 **Last Updated:** 2026-08-06
 **Current Released Version:** 1.9.0
 **Engineering State:** v2.0 with 3 domains Phase 10 certified (Identity, Obligations, Store)
-**Active Integration Branch:** `CTH_v2.0`
+**Active Integration Branch:** `main`
 
 ## Quick Links
 
@@ -25,10 +25,13 @@
 
 ## Branch and Database Truth
 
-- Only `CTH_v2.0` is an active protected v2 branch. It is the same branch that older
-  documents and CHANGELOG entries call `codex/v2.0`; that name was retired, and no ref
-  by that name exists locally or on the remote. Read historical references accordingly
-  rather than looking for a second branch.
+- `main` is the active protected branch and carries v2. It is the same branch that older
+  documents and CHANGELOG entries call `codex/v2.0` and then `CTH_v2.0`; both names were
+  retired and no ref by either exists locally or on the remote. Read historical references
+  accordingly rather than looking for a second branch.
+- The v1 `main` that preceded this was renamed to `legacy_main` and deleted on 2026-09-06.
+  It was 1053 commits behind and `legacy_v1.10.0` already carried the v1 line. CHANGELOG
+  entries that say "never merge to `main`" describe that former branch, not this one.
 - Dev and migration work must use the team-configured v2 dev database.
 - Test runs must use the team-configured PostgreSQL test database.
 - The validated v2 branch state passed:
@@ -71,8 +74,10 @@ Run once after clone:
 - Rehearse migration upgrade flow on the v2 dev database with operator-facing verification steps.
 - Complete smoke-route checklist and confirm it can be executed by someone who did not author the branch.
 - Remove or supersede stale docs that still imply deleted branches or legacy TeacherBlock fallback plans.
-- Confirm whether the remaining adjacent economy-health delta from `main` (CWI warning bypass controls) is needed before live testing or can move to the post-live-test/production lane.
-- Port launch-critical `origin/main` deltas. The v2 reconciliation tracker that enumerated them is
+- Confirm whether the remaining adjacent economy-health delta from the v1 line (CWI warning bypass controls) is needed before live testing or can move to the post-live-test/production lane.
+- Port launch-critical v1-line deltas. These are measured against `legacy_v1.10.0`, not against
+  `main` — `main` now carries v2 itself, so a "port from `main`" instruction reads as porting a
+  branch into itself. The v2 reconciliation tracker that enumerated them is
   archived (`docs/archive/v1-development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md`, superseded);
   the surviving open items are carried in `docs/TRACKING/PRODUCTION_READINESS_2026-09.md`.
 - Close the open documentation-compliance items now tracked in
@@ -85,7 +90,7 @@ Run once after clone:
 - Re-audit rollback expectations for migrations that are forward-safe but not business-safe to downgrade after live data changes.
 - Finish operator backup/restore rehearsal on the intended production topology.
 - Confirm monitoring, maintenance-mode usage, and post-deploy verification steps are current.
-- Port production-required `origin/main` deltas still marked open in the reconciliation tracker.
+- Port production-required v1-line deltas (against `legacy_v1.10.0`) still marked open in the reconciliation tracker.
 
 ## Operations Doc Boundaries
 
@@ -139,7 +144,7 @@ Run once after clone:
 
 #### 1. Documentation Consistency
 
-- Keep architecture, SOP, and user guides aligned with `codex/v2.0`.
+- Keep architecture, SOP, and user guides aligned with `main`.
 - Prefer superseding notes on historical audits over rewriting release-history records.
 
 #### 2. Live-Test Feedback Loop

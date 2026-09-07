@@ -74,7 +74,7 @@ Use this checklist when you're ready for Phase 10 certification audit.
 
 **Pre-Audit:**
 - [ ] All commits are on feature branch
-- [ ] Branch is up-to-date with origin/codex/v2.0
+- [ ] Branch is up-to-date with origin/main
 - [ ] No uncommitted changes
 - [ ] No merge conflicts
 

@@ -10,7 +10,7 @@ Provide the explicit operator workflow for moving the current v2 branch from liv
 
 ## II. Scope
 
-Production transition work for `codex/v2.0` after successful live testing, including maintenance-mode usage, migration execution, post-deploy verification, rollback decision points, and operator sign-off.
+Production transition work for `main` after successful live testing, including maintenance-mode usage, migration execution, post-deploy verification, rollback decision points, and operator sign-off.
 
 ## III. Authority Level
 
@@ -25,7 +25,7 @@ Normative (SOP Tier). Subordinate to `INV-CORE-000`.
 
 ## V. Preconditions
 
-- `codex/v2.0` is the approved deployment branch.
+- `main` is the approved deployment branch.
 - Live-test runbook has been executed successfully.
 - Migration compliance status has been reviewed.
 - Backup, maintenance window, and rollback contacts are confirmed.
