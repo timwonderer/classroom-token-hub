@@ -23,7 +23,7 @@ jobs:
     environment: testing
     services:
       postgres:
-        image: postgres:15
+        image: public.ecr.aws/docker/library/postgres:15
         env:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password

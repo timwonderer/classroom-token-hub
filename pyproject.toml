@@ -1,0 +1,20 @@
+[tool.md_dead_link_check]
+timeout = 10
+check_web_links = true
+validate_ssl = true
+catch_response_codes = [404, 410, 500]
+# `docs/LOGS/` was removed on 2026-09-05 and must not be reintroduced, so an
+# exclude naming it can only ever match nothing. Archived material is excluded
+# instead: it is superseded by definition, and its outbound links are a record
+# of what was once true rather than a claim that still has to hold.
+exclude_files = ["templates/*", "docs/archive/*"]
+exclude_links = [
+  "https://fonts.googleapis.com/*",
+  "https://fonts.gstatic.com/*",
+  "https://cdn.jsdelivr.net/*",
+  "https://img.shields.io/*",
+]
+force_get_requests_for_links = ["https://app.classroomtokenhub.com/*"]
+throttle_groups = 40
+throttle_delay = 30
+throttle_max_delay = 240
