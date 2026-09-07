@@ -11,6 +11,7 @@ from flask import Flask, abort, jsonify, redirect, render_template, request, ses
 
 from .contracts import ExternalStatusNoticeEvent, NoticeState, RecoveryExpectationState
 from .identity import authenticated_operator_email
+from status.projection import derive_capability_cards, derive_platform_checks
 from .store import FirestoreNoticeStore
 
 
@@ -40,23 +41,6 @@ def derive_overall_status(notices: list[dict]) -> dict[str, str]:
     return {"state": state, "label": label, "headline": headline, "detail": notice.get("impact_statement", "")}
 
 
-def derive_capability_cards(notices: list[dict], capabilities: tuple[str, ...]) -> list[dict[str, str]]:
-    cards = []
-    active_by_capability = {notice.get("capability"): notice for notice in notices if notice.get("state") != NoticeState.RESOLVED.value}
-    names = {"public_service_reachability": ("App availability", "Can I access Classroom Token Hub right now?"), "ledger_correctness": ("Ledger correctness", "Are account balances and transactions correct?")}
-    for capability in capabilities:
-        notice = active_by_capability.get(capability)
-        cards.append({
-            "key": names.get(capability, ("", "Is this service working right now?"))[1].rstrip("?"),
-            "name": names.get(capability, (capability.replace("_", " ").title(), "Is this service working right now?"))[0],
-            "question": names.get(capability, ("", "Is this service working right now?"))[1],
-            "state": notice.get("state", "UNKNOWN") if notice else "UNKNOWN",
-            "label": notice.get("impact_statement", "Monitoring evidence is not available yet.") if notice else "Monitoring evidence is not available yet.",
-            "checked": "No verified observation yet" if not notice else "Active status notice",
-        })
-    return cards
-
-
 def create_app(store=None) -> Flask:
     app = Flask(__name__, static_folder="static", template_folder="templates")
     app.config["STATUS_SERVICE_MODE"] = os.environ.get("STATUS_SERVICE_MODE", "operator").strip().lower()
@@ -64,6 +48,7 @@ def create_app(store=None) -> Flask:
         raise RuntimeError("STATUS_SERVICE_MODE must be public or operator")
     app.config["SECRET_KEY"] = os.environ.get("STATUS_SESSION_SECRET", "")
     app.config["STATUS_CAPABILITIES"] = tuple(item.strip() for item in os.environ.get("STATUS_CAPABILITIES", "public_service_reachability").split(",") if item.strip())
+    app.config["STATUS_PLATFORM_CHECKS"] = tuple(item.strip() for item in os.environ.get("STATUS_PLATFORM_CHECKS", "database,background_jobs,monitoring_freshness").split(",") if item.strip())
     if store is None:
         from google.cloud import firestore
         store = FirestoreNoticeStore(firestore.Client(database=os.environ.get("FIRESTORE_DATABASE", "cth-status-prod")))
@@ -91,7 +76,13 @@ def create_app(store=None) -> Flask:
             abort(404)
         notices = store.list_notices(limit=20)
         active_notices = [notice for notice in notices if notice.get("state") != NoticeState.RESOLVED.value]
-        return render_template("public_status.html", notices=active_notices, overall_status=derive_overall_status(notices), capability_cards=derive_capability_cards(notices, app.config["STATUS_CAPABILITIES"]))
+        return render_template(
+            "public_status.html",
+            notices=active_notices,
+            overall_status=derive_overall_status(notices),
+            capability_cards=derive_capability_cards(notices, app.config["STATUS_CAPABILITIES"]),
+            platform_checks=derive_platform_checks(notices, app.config["STATUS_PLATFORM_CHECKS"]),
+        )
 
     @app.get("/operator/notices")
     def operator_notices_get():

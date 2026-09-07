@@ -6,6 +6,7 @@ debug endpoints, and public hall pass verification.
 """
 
 import unicodedata
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from flask import (
     Blueprint, redirect, url_for, jsonify, current_app,
@@ -73,10 +74,9 @@ def health_check():
         return jsonify(error='Database error'), 500
 
 
-@main_bp.route('/health/deep')
-def health_check_deep():
-    """
-    Extended health check that validates critical system components.
+@main_bp.route('/health/status')
+def health_status():
+    """Return bounded capability and platform signals for status publication.
 
     Checks:
     - Database connectivity
@@ -86,89 +86,23 @@ def health_check_deep():
 
     Returns JSON with component status for detailed monitoring.
     Individual table checks that fail are logged but don't fail the entire check.
+    This endpoint intentionally does not expose table counts, tenant data, raw
+    errors, or internal diagnostics. Capability checks remain UNKNOWN until a
+    lawful read-only probe is registered for that capability.
     """
-    checks = {}
-    overall_status = 'ok'
+    observed_at = datetime.now(timezone.utc).isoformat()
+    signals = []
 
-    # Check database connectivity
     try:
-        with db.engine.connect() as conn:
-            conn.execute(text('SELECT 1'))
-        checks['database'] = 'connected'
-    except SQLAlchemyError as e:
-        current_app.logger.exception('Database connectivity check failed')
-        checks['database'] = 'error'
-        overall_status = 'degraded'
-
-    # Check if seat table is accessible
-    try:
-        with db.engine.connect() as conn:
-            seat_count = conn.execute(text('SELECT COUNT(*) FROM seats')).scalar()
-        checks['seats_table'] = 'accessible'
-        checks['seat_count'] = seat_count
-    except SQLAlchemyError as e:
-        current_app.logger.warning('Seats table check failed: %s', str(e))
-        checks['seats_table'] = 'error'
-        overall_status = 'degraded'
-
-    # Check if teacher user rows are accessible
-    try:
-        teacher_count = User.query.filter(User.user_role == UserRole.TEACHER).count()
-        checks['teachers_table'] = 'accessible'
-        checks['teacher_count'] = teacher_count
-    except SQLAlchemyError as e:
-        current_app.logger.warning('Teachers table check failed: %s', str(e))
-        checks['teachers_table'] = 'error'
-        overall_status = 'degraded'
-
-    # Check if hall pass logs table is accessible (may fail due to RLS/tenant context)
-    try:
-        with db.engine.connect() as conn:
-            hall_pass_count = conn.execute(text('SELECT COUNT(*) FROM hall_pass_logs')).scalar()
-        checks['hall_pass_logs_table'] = 'accessible'
-        checks['hall_pass_count'] = hall_pass_count
-    except SQLAlchemyError as e:
-        current_app.logger.warning('Hall pass logs table check failed: %s', str(e))
-        checks['hall_pass_logs_table'] = 'not_accessible'
-        # Don't mark as degraded - this might be expected due to RLS
-
-    # Audit lineage integrity check (reads operational_events — never runs verifier inline)
-    try:
-        with db.engine.connect() as conn:
-            row = conn.execute(text("""
-                SELECT level, payload
-                FROM operational_events
-                WHERE level IN ('ERROR', 'CRITICAL')
-                ORDER BY created_at DESC, id DESC
-                LIMIT 1
-            """)).mappings().first()
-        if row is None:
-            checks['audit_lineage'] = 'not_initialized'
-            checks['audit_lineage_last_checked'] = None
-        else:
-            checks['audit_lineage'] = 'passing'
-            checks['audit_lineage_last_checked'] = None
-            checks['audit_lineage_latest_level'] = row.get('level')
-            payload = row.get('payload') or {}
-            if isinstance(payload, dict):
-                checks['audit_lineage_latest_error_type'] = payload.get('error_type')
-    except Exception:
-        current_app.logger.exception('Audit lineage status check failed')
-        checks['audit_lineage'] = 'error'
-        overall_status = 'degraded'
-
-    # Return 200 if at least database is working, 500 if database is down
-    if checks.get('database') == 'connected':
-        return jsonify({
-            'status': overall_status,
-            'checks': checks
-        }), 200
-    else:
-        return jsonify({
-            'status': 'error',
-            'error': 'Database connectivity failed',
-            'checks': checks
-        }), 500
+        db.session.scalar(text('SELECT 1'))
+        signals.append({"key": "database", "layer": "platform", "outcome": "PASS", "epistemic_state": "KNOWN", "diagnostic_code": "DATABASE_REACHABLE"})
+    except SQLAlchemyError:
+        signals.append({"key": "database", "layer": "platform", "outcome": "FAIL", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "DATABASE_UNAVAILABLE"})
+    for key in ("login", "attendance", "payroll", "roster", "classroom_economy"):
+        signals.append({"key": key, "layer": "capability", "outcome": "UNKNOWN", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "CHECK_NOT_REGISTERED"})
+    for key in ("background_jobs", "external_integrations", "monitoring_freshness", "invariant_verification"):
+        signals.append({"key": key, "layer": "platform", "outcome": "UNKNOWN", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "CHECK_NOT_REGISTERED"})
+    return jsonify({"observed_at": observed_at, "signals": signals}), 200
 
 
 @main_bp.route('/privacy')

@@ -440,8 +440,8 @@ def run_audit_invariant_check_job():
     """Nightly audit chain integrity verification.
 
     Walks all active class chains and the system chain, recomputing HMAC
-    signatures and verifying hash continuity. Writes the aggregate result to
-    the deep health endpoint.
+    signatures and verifying hash continuity. The result is consumed by the
+    Operations status-signal pipeline.
     """
     logger = logging.getLogger('scheduled_tasks')
     logger.info("Starting nightly audit invariant check")

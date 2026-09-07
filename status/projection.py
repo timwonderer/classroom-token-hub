@@ -39,6 +39,60 @@ class EvidenceSource(str, Enum):
     DOM_OPS_PUBLICATION = "DOM_OPS_PUBLICATION"
 
 
+CAPABILITY_LABELS = {
+    "login": ("Log in", "Can I sign in right now?"),
+    "attendance": ("Attendance", "Can I record or view attendance right now?"),
+    "payroll": ("Payroll", "Can I run or view payroll right now?"),
+    "roster": ("Roster management", "Can I add or edit a roster right now?"),
+    "classroom_economy": ("Classroom economy", "Can I use classroom economy features right now?"),
+    "public_service_reachability": ("App availability", "Can I access Classroom Token Hub right now?"),
+    "ledger_correctness": ("Ledger correctness", "Are account balances and transactions correct?"),
+}
+
+PLATFORM_CHECK_LABELS = {
+    "database": "Database connectivity",
+    "background_jobs": "Background jobs",
+    "external_integrations": "External integrations",
+    "monitoring_freshness": "Monitoring freshness",
+    "invariant_verification": "Invariant verification",
+}
+
+
+def _active_notice_index(notices: list[dict]) -> dict:
+    return {notice.get("capability"): notice for notice in notices if notice.get("state") != "RESOLVED"}
+
+
+def derive_capability_cards(notices: list[dict], capabilities: tuple[str, ...]) -> list[dict[str, str]]:
+    active = _active_notice_index(notices)
+    cards = []
+    for capability in capabilities:
+        name, question = CAPABILITY_LABELS.get(capability, (capability.replace("_", " ").title(), "Is this service working right now?"))
+        notice = active.get(capability)
+        cards.append({
+            "key": capability,
+            "name": name,
+            "question": question,
+            "state": notice.get("state", "UNKNOWN") if notice else "UNKNOWN",
+            "label": notice.get("impact_statement", "Monitoring evidence is not available yet.") if notice else "Monitoring evidence is not available yet.",
+            "checked": "Active status notice" if notice else "No verified observation yet",
+        })
+    return cards
+
+
+def derive_platform_checks(notices: list[dict], checks: tuple[str, ...]) -> list[dict[str, str]]:
+    active = _active_notice_index(notices)
+    rows = []
+    for check in checks:
+        notice = active.get(check)
+        rows.append({
+            "key": check,
+            "name": PLATFORM_CHECK_LABELS.get(check, check.replace("_", " ").title()),
+            "state": notice.get("state", "UNKNOWN") if notice else "UNKNOWN",
+            "detail": notice.get("impact_statement", "No current platform evidence is available.") if notice else "No current platform evidence is available.",
+        })
+    return rows
+
+
 FRESHNESS_MAX_AGE = {
     "REALTIME": timedelta(minutes=5),
     "PERIODIC_CORRECTNESS": timedelta(minutes=30),
@@ -95,6 +149,7 @@ def aggregate_correctness(observations: tuple[Observation, ...], *, now: datetim
 
 
 __all__ = [
-    "EpistemicState", "EvidenceSource", "FRESHNESS_MAX_AGE", "Observation", "ObservationClass",
-    "Outcome", "PublicState", "aggregate_correctness",
+    "CAPABILITY_LABELS", "EpistemicState", "EvidenceSource", "FRESHNESS_MAX_AGE", "Observation", "ObservationClass",
+    "Outcome", "PLATFORM_CHECK_LABELS", "PublicState", "aggregate_correctness", "derive_capability_cards",
+    "derive_platform_checks",
 ]

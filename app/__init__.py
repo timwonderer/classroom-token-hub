@@ -678,7 +678,7 @@ def create_app():
         # Skip for static files and health checks
         if request.path.startswith("/static/"):
             return None
-        if request.endpoint in {"main.health_check", "main.health_check_deep"}:
+        if request.endpoint in {"main.health_check", "main.health_status"}:
             return None
 
         # Only check in production

@@ -170,7 +170,7 @@ These are HTML page routes that return JSON only on their XHR branch (`student.p
 | Method | Path | Auth | Disposition |
 |--------|------|------|-------------|
 | GET | `/health` | — | Live. Liveness probe, returns `ok`. No in-app caller by design. |
-| GET | `/health/deep` | — | Live. Dependency probe. No in-app caller by design. |
+| GET | `/health/status` | — | Live. Bounded capability/platform status signals. No tenant data or raw diagnostics. |
 
 `/debug/filters` and `/debug/admin-db-test` were registered here at the time of the
 audit and have since been removed — see §VIII-A.
@@ -184,7 +184,7 @@ Counts are as-of this revision, after the §VIII-A and §VIII-B removals landed.
 | Disposition | Count | Meaning |
 |-------------|-------|---------|
 | Live | 52 | Reachable from a shipped client. |
-| Operational | 2 | No in-app caller by design (`/health`, `/health/deep`). |
+| Operational | 2 | No in-app caller by design (`/health`, `/health/status`). |
 | Stale | 6 | Registered, functional, zero callers. §VII-C |
 | Broken | 0 | Was 1 before §VIII-B was resolved. |
 | Prohibited | 0 | Was 2 before §VIII-A was resolved. |

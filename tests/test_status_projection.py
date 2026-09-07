@@ -6,6 +6,7 @@ from status.projection import (
     EpistemicState, EvidenceSource, Observation, ObservationClass, Outcome, PublicState,
     aggregate_correctness,
 )
+from status.projection import derive_capability_cards, derive_platform_checks
 
 
 NOW = datetime(2026, 9, 5, 12, tzinfo=timezone.utc)
@@ -38,3 +39,12 @@ def test_correctness_aggregation_is_fail_closed_for_missing_stale_or_unknown():
 def test_correctness_aggregation_maps_pass_and_failure():
     assert aggregate_correctness((observation(Outcome.PASS),), now=NOW) == PublicState.AVAILABLE
     assert aggregate_correctness((observation(Outcome.FAIL),), now=NOW) == PublicState.DEGRADED
+
+
+def test_status_registry_separates_user_capabilities_from_platform_checks():
+    capabilities = derive_capability_cards([], ("login", "payroll"))
+    platform = derive_platform_checks([], ("database", "background_jobs"))
+
+    assert [item["name"] for item in capabilities] == ["Log in", "Payroll"]
+    assert [item["name"] for item in platform] == ["Database connectivity", "Background jobs"]
+    assert all(item["state"] == "UNKNOWN" for item in capabilities + platform)

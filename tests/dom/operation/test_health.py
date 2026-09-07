@@ -21,3 +21,17 @@ def test_DOM_OPS_001__health_db_error(monkeypatch, client):
     assert resp.status_code == 500
     assert resp.is_json
     assert resp.json['error'] == 'Database error'
+
+
+def test_DOM_OPS_001__bounded_status_signals(client):
+    resp = client.get('/health/status')
+    assert resp.status_code == 200
+    assert 'observed_at' in resp.json
+    assert {signal['key'] for signal in resp.json['signals']} >= {
+        'login', 'attendance', 'payroll', 'database', 'invariant_verification'
+    }
+    assert all('class_id' not in signal for signal in resp.json['signals'])
+
+
+def test_DOM_OPS_001__deep_health_surface_is_retired(client):
+    assert client.get('/health/deep').status_code == 404

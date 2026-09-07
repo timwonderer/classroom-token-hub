@@ -39,15 +39,15 @@ else
 fi
 echo ""
 
-# Test 2: Deep health check
-echo -e "${BLUE}Test 2: Deep Health Check (/health/deep)${NC}"
-echo "Testing: ${BASE_URL}/health/deep"
-RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/health/deep")
+# Test 2: bounded status signals
+echo -e "${BLUE}Test 2: Status Signals (/health/status)${NC}"
+echo "Testing: ${BASE_URL}/health/status"
+RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/health/status")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 BODY=$(echo "$RESPONSE" | head -n-1)
 
 if [ "$HTTP_CODE" = "200" ]; then
-    echo -e "${GREEN}✓ PASSED${NC} - Deep health check returned 200 OK"
+    echo -e "${GREEN}✓ PASSED${NC} - Status signals returned 200 OK"
     echo "  Response preview:"
     echo "$BODY" | head -c 200
     echo "..."
@@ -80,14 +80,14 @@ else
     exit 1
 fi
 
-# Test /health/deep with explicit no-credentials
-RESPONSE=$(curl -s -w "\n%{http_code}" -H "Cookie: " "${BASE_URL}/health/deep")
+# Test /health/status with explicit no-credentials
+RESPONSE=$(curl -s -w "\n%{http_code}" -H "Cookie: " "${BASE_URL}/health/status")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 
 if [ "$HTTP_CODE" = "200" ]; then
-    echo -e "${GREEN}✓ PASSED${NC} - /health/deep is publicly accessible (no auth required)"
+    echo -e "${GREEN}✓ PASSED${NC} - /health/status is publicly accessible (no auth required)"
 else
-    echo -e "${RED}✗ FAILED${NC} - /health/deep endpoint may require authentication"
+    echo -e "${RED}✗ FAILED${NC} - /health/status endpoint may require authentication"
     exit 1
 fi
 echo ""
@@ -105,8 +105,8 @@ echo "   Expected Response: 'ok'"
 echo "   Expected Status: 200"
 echo ""
 echo "2. Advanced Monitoring (Optional):"
-echo "   URL: ${BASE_URL}/health/deep"
-echo "   Expected Response: Contains 'status': 'ok'"
+echo "   URL: ${BASE_URL}/health/status"
+echo "   Expected Response: Contains bounded 'signals'"
 echo "   Expected Status: 200"
 echo ""
 echo -e "${YELLOW}Next Steps:${NC}"

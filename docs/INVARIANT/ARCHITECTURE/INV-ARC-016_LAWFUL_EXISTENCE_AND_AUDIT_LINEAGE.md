@@ -127,7 +127,7 @@ Immediate economic policy changes and delayed economic policy changes are equall
 
 ## X. Rebuild Intent
 
-This invariant exists to make unauthorized, hidden, or convenience-based database mutations visible and operationally embarrassing. Its goal is not to prevent all possible privileged compromise, but to ensure that any mutation outside the canonical execution path is detectable during the nightly chain walk and surfaces in `/health/deep` as a degraded state.
+This invariant exists to make unauthorized, hidden, or convenience-based database mutations visible and operationally embarrassing. Its goal is not to prevent all possible privileged compromise, but to ensure that any mutation outside the canonical execution path is detectable during the nightly chain walk and surfaces through the Operations status-signal pipeline as a degraded state.
 
 This includes hidden future economic law, delayed policy mutation outside lawful transition lineage, and constitutional economic state that bypasses canonical policy governance.
 
@@ -146,4 +146,3 @@ CI guardrails in `scripts/policy_guardrails.py` enforce this structurally.
 ## XII. Amendment
 
 Revisions must preserve the distinction between `UNVERIFIED` and `INVALID`, the two-path lawful write model, and the HMAC key startup requirement.
-

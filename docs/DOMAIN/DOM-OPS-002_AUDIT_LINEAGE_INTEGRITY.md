@@ -42,7 +42,7 @@ Constitutional. Subordinate to `INV-ARC-016` and `DOM-OPS-001`. Supersedes any p
 - **AuditEvent chain schema** — the structure of `audit_events` and `chain_heads`
 - **Emission protocol** — the rules governing when and how `emit_audit_event()` is called
 - **Chain verification logic** — the algorithm for walking a chain scope and detecting tampering
-- **IntegrityStatus** — the singleton operational status record consumed by `/health/deep`
+- **IntegrityStatus** — the singleton operational status record consumed by the Operations status-signal pipeline
 - **Protected fields registry** — the declaration of which fields per table are included in `payload_digest`
 - **Lawful write path enumeration** — what constitutes a valid execution context for chain emission
 
