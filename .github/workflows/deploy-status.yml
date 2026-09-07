@@ -7,14 +7,12 @@ on:
       - "status/**"
       - "status_service/**"
       - "tests/test_status_*.py"
-      - "tests/dom/operation/test_health.py"
       - ".github/workflows/deploy-status.yml"
   pull_request:
     paths:
       - "status/**"
       - "status_service/**"
       - "tests/test_status_*.py"
-      - "tests/dom/operation/test_health.py"
       - ".github/workflows/deploy-status.yml"
   workflow_dispatch:
 
@@ -33,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        image: public.ecr.aws/docker/library/postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -100,7 +98,10 @@ jobs:
           --set-env-vars "STATUS_SERVICE_MODE=operator,FIRESTORE_DATABASE=cth-status-prod"
           --set-secrets "STATUS_SESSION_SECRET=status-session-secret:latest"
           --quiet
-      - name: Verify public status signal endpoint
+      # `/health/status` is the application's endpoint, not this service's. The
+      # status service exposes `/health`, so asking it for the other path would
+      # 404 and fail the deploy after both revisions had already gone live.
+      - name: Verify public status service is answering
         run: |
-          URL="$(gcloud run services describe cth-status-public --region "$GCP_REGION" --project "$GCP_PROJECT_ID" --format='value(status.url)')/health/status"
+          URL="$(gcloud run services describe cth-status-public --region "$GCP_REGION" --project "$GCP_PROJECT_ID" --format='value(status.url)')/health"
           curl --fail --silent --show-error "$URL"
