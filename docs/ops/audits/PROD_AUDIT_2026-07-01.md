@@ -294,3 +294,31 @@ Relevant env values observed:
 
 The production host appears operational and moderately well-instrumented. The main pre-migration concerns are the required reboot, accumulated package updates in the observability stack, and the fact that nginx/UFW/firewall posture should be reviewed in the context of the planned v2 migration.
 
+---
+
+## Addendum — network-layer firewall (added 2026-09-07)
+
+The sections above are a 2026-07-01 snapshot and are left as recorded. This addendum documents a
+control they do not cover, and is dated separately because it was observed later.
+
+**The droplet sits behind a DigitalOcean cloud firewall that admits `80`/`443` only from
+Cloudflare's published IPv4 ranges** (`103.21.244.0/22`, `103.22.200.0/22`, `103.31.4.0/22`,
+`104.16.0.0/13`, `104.24.0.0/14`, `108.162.192.0/18`, `131.0.72.0/22`, `141.101.64.0/18`,
+`162.158.0.0/15`, `172.64.0.0/13`, and further ranges). Traffic that has not transited Cloudflare
+never reaches nginx, so the origin does not answer on its public IP even though it holds a valid
+certificate for `app.classroomtokenhub.com`.
+
+**Why this is worth stating explicitly.** §11 and §12 above report "UFW status: inactive" and
+"Active firewall: No UFW policy active on the host." Both are accurate — and both describe the
+*host*, which is the only thing a read-only pass from inside the droplet can see. A cloud firewall
+is enforced by the provider's network before packets arrive, so it is invisible from that vantage
+point. §14 gestures at it ("security currently relies on provider/network controls"), but a reader
+scanning the firewall tables reasonably concludes the origin is exposed. It is not. Anything that
+depends on the origin being unreachable — Cloudflare Access in front of the application, for
+instance — rests on this control, and that dependency should not require opening the DO console to
+discover.
+
+**Consequences for the audit's scope.** A host-only snapshot cannot answer "is this reachable from
+the internet." Future passes should either capture provider-level networking alongside the host, or
+say plainly that they do not, so an absent firewall row is not read as an absent firewall.
+

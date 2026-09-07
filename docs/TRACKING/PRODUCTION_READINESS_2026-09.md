@@ -874,9 +874,33 @@ about whether the product has shipped. No `landing.html` filename survives — a
 the same content would be a second front door to keep in sync, and nothing ever linked to that name
 because the file was never deployed.
 
-This closes the static-site half of the question only. **The application's own gating is still
-unverified** — maintenance mode and the login routes decide whether `app.classroomtokenhub.com` is
-reachable, and nothing above establishes that. It remains an open pre-ship item.
+This closes the static-site half of the question only; the application's own gating is answered
+separately, immediately below.
+
+**Application gating: Cloudflare Access, not maintenance mode — DECIDED 2026-09-07.** Pre-launch
+access to `app.classroomtokenhub.com` is gated by a Cloudflare Access policy on the hostname, not by
+`MAINTENANCE_MODE` or per-route login checks. Access is enforced at the edge, before a request
+reaches Flask, so one policy covers every route — including ones nobody thought to audit — and the
+gate cannot be undone by a route that forgets to consult a flag. This is a pre-launch control and
+comes off at launch; it does not replace maintenance mode for operational use afterward.
+
+**Why the claim holds.** An edge policy on a hostname is only as good as the origin's unreachability
+around it, and this origin is unreachable: a DigitalOcean cloud firewall admits `80`/`443` only from
+Cloudflare's IP ranges, so nothing that has not transited Cloudflare reaches nginx. Without that, the
+policy would be the same shape of defect as an unlinked-but-published `landing.html` — real to anyone
+who used the front door, absent to anyone who did not. See the 2026-09-07 addendum to
+`docs/ops/audits/PROD_AUDIT_2026-07-01.md`, which records the firewall; the audit body reports "UFW
+inactive" and describes the host only, which reads as an exposed origin and is not.
+
+**Health checks are unaffected, with one exception.** `release-v2.yml` verifies production by SSH-ing
+over Tailscale and curling `http://127.0.0.1/health` on the box, so Cloudflare is not in that path.
+The status service does not poll the application at all — it has no outbound HTTP and reads Firestore.
+The exception is `scripts/test_monitoring.sh`, which hits the public hostname and currently *asserts*
+`/health` and `/health/status` require no authentication, failing if they do. Behind Access that
+assertion inverts and reports failure for the correct configuration. It needs the
+`CF-Access-Client-Id` / `CF-Access-Client-Secret` service-token headers and a corrected expectation
+before it is run against a gated host. **This is the one open item in this block.** Any uptime monitor
+configured outside the repository needs the same token.
 
 **Superseded — `index.html` as holding page with `landing.html` orphaned (2026-09-06).**
 `index.html` no longer redirects to `./landing.html` (see the retirement pass above); it is a
