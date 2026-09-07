@@ -30,13 +30,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SITE_ROOT = REPO_ROOT / "github-pages"
 AXE_SOURCE = (REPO_ROOT / "tests" / "assets" / "axe-core.min.js").read_text(encoding="utf-8")
 
-# Every page published to GitHub Pages. `index.html` is the v2.0 holding page.
-# The landing page and its learn-more companion are not in this directory before
-# launch — they live on `launch/v2-landing-pages`, where the landing page *is*
-# `index.html`, and arrive when that branch merges. `learnmore.html` is a new
-# filename at that point, so the equality assertion below requires listing it.
+# Every page published to GitHub Pages. On `main`, `index.html` is the holding
+# page and there is no learn-more page; this branch replaces the former with the
+# landing page and adds the latter, and the equality assertion below is what
+# requires `learnmore.html` to be listed here when it returns.
 PUBLIC_PAGES = [
     "index.html",
+    "learnmore.html",
     "district.html",
     "privacy.html",
     "terms.html",
