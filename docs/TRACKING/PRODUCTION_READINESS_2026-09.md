@@ -999,6 +999,12 @@ repointed explicitly**, or it keeps naming a branch that is about to be deleted.
 defect class the rename exists to remove, one level up: a default-branch pointer that resolves to
 nothing is not distinguishable, from most tooling's view, from one that was never consulted.
 
+**Sequencing constraint discovered 2026-09-07.** `CTH_v2.0` cannot be deleted before the default
+branch is repointed — GitHub rejected the delete outright with *"refusing to delete the current
+branch."* It is also the repository's **only protected branch**. So the order is fixed, not
+preferential: repoint `origin/HEAD` and move protection to the new `main` **first**, delete `CTH_v2.0`
+**second**. Attempting the prune in the other order fails safely, but it fails.
+
 Carried unchanged from the original plan: "port `origin/main` deltas" in `DEVELOPMENT.md` meant the
 v1 branch; after the rename that phrase would instruct porting `main` into itself, so those items
 now measure against `legacy_v1.10.0` explicitly. Before executing: check for open PRs targeting
@@ -1107,15 +1113,31 @@ both are already resolved on HEAD by better mechanisms than the branch used:
 
 Nothing else on that branch fixes a defect on HEAD. Defer the whole branch.
 
-### Uncommitted worktree work — deferred 2026-09-06
+### Uncommitted worktree work — deferred 2026-09-06, **resolved 2026-09-07**
 
-Two worktrees hold uncommitted, unreachable work. Both were evaluated against one question — *does
-this fix something broken on HEAD, or is it required to ship?* — and both answer no.
+Two worktrees held uncommitted, unreachable work. Both were evaluated against one question — *does
+this fix something broken on HEAD, or is it required to ship?* — and both answered no. Both worktrees
+are now gone and both bodies of work are on branches, because uncommitted work is the one category
+that cannot be recovered after the fact. Neither branch is in the ship path.
 
 `insurance-rec-card` (307 insertions across `app/routes/admin.py`,
 `templates/admin_edit_insurance_policy.html`, plus a new test) surfaces the Economic Engine's advisory
 starting values as a card on the insurance policy form. Its own changelog entry files it under
 **Added**. It is a usability improvement over an existing passive footnote, not a repair.
+
+**Disposition: preserved at `84b677b7f` on `insurance/recommendation-card`**, cut from
+`stash@{0}` onto its own merge base (`66ab3368b`, 2026-09-02) rather than onto HEAD, so its 752
+insertions are measured against the tree it was written on. `.claude/launch.json` was excluded —
+machine-local, hardcoded to one absolute interpreter path. The stash was left intact as a fallback.
+
+Committing it surfaced a **ninth instance of the matches-nothing class**, in a shape none of the
+previous eight took: not a filter matching nothing, but a producer with no consumer.
+`recommend_insurance_terms` is defined at
+`app/feats/class_configuration/feat_class_003_insurance_policy_management.py:348`, exported from
+`app/feats/class_configuration/__init__.py`, and imported at `app/routes/admin.py:125` — and called
+from nowhere in the application. HEAD compensates with a passive footnote at
+`templates/admin_edit_insurance_policy.html:163`. The branch is what would consume it. Until it
+lands, the import is dead weight that reads as live wiring.
 
 `loving-banzai-564730` (730 insertions) is Phase 5/6 class-configuration view-model wiring plus a new
 `admin_create_class_form.html` and a bulk-add-students test. It is mid-flight — its diff leaves a blank
@@ -1123,8 +1145,72 @@ line where `create_class_with_roster` was removed from an import block — and i
 already ships `admin_create_class.html`, rendered from three call sites in `app/routes/admin.py`, so
 there is no missing-template failure for it to fix.
 
-Neither is lost; both remain in their worktrees. Neither should be swept up in a cleanup pass without
-first being committed to a branch.
+**Disposition: archived at `217789387` on `archive/class-config-phase5-6`, discard rather than
+defer.** Applying it to HEAD moved it from "additive" to "regressive": it predates the accessibility
+remediation now protected by an active CI gate, predates CWI gating, edits
+`templates/admin_settings.html` which HEAD deleted in favor of `templates/admin_customizations.html`,
+and replaces a JSON endpoint with a form flow that raw-`INSERT`s names into `identity_profiles`,
+bypassing `PIIEncryptedType`. Its own test fails on HEAD with `405 != 400` because
+`/admin/students/bulk-add` is not a registered route. The branch is a record, not a candidate — it
+must never be merged.
+
+**Method note, recorded because it cost a full cycle.** `loving-banzai-564730` was first judged "new
+and worth preserving" on metadata alone — insertion count, untracked-file presence, "306 commits
+behind" read as merge difficulty rather than as direction. The error compounded when the applied
+patch was grepped *in the conflicted working tree* and two of its own additions were reported back as
+properties of clean HEAD. Metadata describes size and presence; it never establishes direction
+relative to HEAD. A conflicted tree is not a source of truth. Both checks must run against a clean
+checkout.
+
+### Branch and worktree prune — executed 2026-09-07
+
+The triage above exists so branches can be deleted. This is the deletion record. Every SHA below is
+written down because a deleted remote branch is recoverable — `git push origin <sha>:refs/heads/<name>`
+restores it while GitHub still holds the object — and an unrecorded one is not.
+
+**Worktrees: 12 → 2.** Removed `loving-banzai-564730` and `insurance-rec-card` (both preserved to
+branches first, above), the six clean agent worktrees `crazy-moore-315b8b`,
+`exciting-zhukovsky-acf1e8`, `magical-ramanujan-3fced7`, `pensive-matsumoto-2cd959`,
+`strange-lovelace-d0e6a4`, `upbeat-lalande-0f5a4a`, and the two `~/.codex/worktrees/` checkouts
+holding branches slated for deletion (`constitutional-ci`, `status-page-integration`) — both verified
+clean before removal. Remaining: this repo, plus `~/.codex/worktrees/ledger-canonicalization`.
+
+**Local branches: 21 → 6.** Deleted, each verified contained in or superseded by HEAD:
+`CTH_v2.0` (1063d6bdc), `claude/strange-lovelace-d0e6a4` (f8cf5894f),
+`codex/compliance-check-legacy-structure` (3cdb12945), `codex/constitutional-ci-reconstruction`
+(ca4836204), `codex/status-page-integration` (86fca6692), `docs/v2-progress-page` (8e4224b41),
+`ledger-canonicalization-pre-rebase` (3356bd2ff), `support-text-extraction` (8f48643cb), plus the ten
+fully-contained branches deleted earlier in the same pass.
+
+**Remote branches: 25 → 13.** Deleted: `codex/compliance-check-legacy-structure` (9aa2c7b97),
+`support-text-extraction` (be16fff3b), `insurance-recommendation` (6b9c316ce),
+`fix/obligation-template-broken-urls` (00d00c8d0), `fix/classroom-setup-column-mismatch` (1ac8e2885),
+`codex/landed-architecture-execution-fixes` (213cafdc6),
+`codex/accessibility-usability-review-remedy` (09bdc3530), `claude/adoring-elbakyan-aa061f`
+(38af5d8bf), `claude/class-config-domain-complete-iuaniy` (cdaad3c48),
+`feat/identity-route-wiring-phase6-7` (b35ad592d), `feat-context-correction` (1668bb1d7),
+`copilot/review-dependency-upgrade-findings` (7508aba13).
+
+The two domain branches were the only ones in that list not already covered by a dated sweep, so they
+were checked by outcome rather than by commit count: `IdentityProfileView` is present on HEAD at
+`app/services/view_model_builders.py`, and all five `app/feats/class_configuration/feat_class_00*.py`
+modules are present. Commit-count divergence measures history shape; neither branch's *result* is
+missing.
+
+**Deliberately kept, with the reason each survives a prune described as "all obsolete branches":**
+
+| Ref | Why it stays |
+|-----|--------------|
+| `origin/main` (136 unique) | The rename ceremony consumes it. Deleting it now removes the thing being renamed. |
+| `origin/legacy_v1.10.0` (133) | Carries the v1 line per `CLAUDE.md`. Never delete. |
+| `origin/CTH_v2.0` (2) | Default and only protected branch — delete is refused until `origin/HEAD` moves. Sequenced above. |
+| `origin/claude/ci-onto-landed` | The ship branch. |
+| 8 `dependabot/*` refs | Each backs an **open PR** (#1354, #1353, #1287, #1286, #1284, #1281, #1270, #1236). Deleting the branch closes the PR. `reviewdog/action-actionlint-1.73.2` had no open PR and was already pruned. |
+| `origin/copilot/codexv20` (117) | Held, not cleared. Large and not independently verified this session; the 2026-09-04 sweep's coverage of it is asserted, not re-checked. Cheap to keep, expensive to be wrong about. |
+| `codex/ledger-canonicalization` (22, **local-only**) | The release-process replacement awaiting an owner decision. No remote exists, so deletion is destruction rather than pruning. |
+
+`insurance/recommendation-card` and `archive/class-config-phase5-6` are new this pass and are the
+reason the worktrees could be removed at all.
 
 ### Bug-hunter badge system (backlog)
 
