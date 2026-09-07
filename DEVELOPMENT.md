@@ -29,9 +29,12 @@
   documents and CHANGELOG entries call `codex/v2.0` and then `CTH_v2.0`; both names were
   retired and no ref by either exists locally or on the remote. Read historical references
   accordingly rather than looking for a second branch.
-- The v1 `main` that preceded this was renamed to `legacy_main` and deleted on 2026-09-06.
-  It was 1053 commits behind and `legacy_v1.10.0` already carried the v1 line. CHANGELOG
-  entries that say "never merge to `main`" describe that former branch, not this one.
+- The v1 `main` that preceded this was renamed on 2026-09-07 and now lives at
+  `main_legacy_v1.10.0`. It was 1053 commits behind. The separate `legacy_v1.10.0` ref no
+  longer exists; its tip (`1f7bfeb40`) is contained in `main_legacy_v1.10.0`, which is the
+  superset of the two, so **`main_legacy_v1.10.0` is the single ref carrying the v1 line**.
+  All `v1.*` tags remain. CHANGELOG entries that say "never merge to `main`" describe the
+  former v1 branch, not this one.
 - Dev and migration work must use the team-configured v2 dev database.
 - Test runs must use the team-configured PostgreSQL test database.
 - The validated v2 branch state passed:
@@ -75,7 +78,7 @@ Run once after clone:
 - Complete smoke-route checklist and confirm it can be executed by someone who did not author the branch.
 - Remove or supersede stale docs that still imply deleted branches or legacy TeacherBlock fallback plans.
 - Confirm whether the remaining adjacent economy-health delta from the v1 line (CWI warning bypass controls) is needed before live testing or can move to the post-live-test/production lane.
-- Port launch-critical v1-line deltas. These are measured against `legacy_v1.10.0`, not against
+- Port launch-critical v1-line deltas. These are measured against `main_legacy_v1.10.0`, not against
   `main` — `main` now carries v2 itself, so a "port from `main`" instruction reads as porting a
   branch into itself. The v2 reconciliation tracker that enumerated them is
   archived (`docs/archive/v1-development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md`, superseded);
@@ -90,7 +93,7 @@ Run once after clone:
 - Re-audit rollback expectations for migrations that are forward-safe but not business-safe to downgrade after live data changes.
 - Finish operator backup/restore rehearsal on the intended production topology.
 - Confirm monitoring, maintenance-mode usage, and post-deploy verification steps are current.
-- Port production-required v1-line deltas (against `legacy_v1.10.0`) still marked open in the reconciliation tracker.
+- Port production-required v1-line deltas (against `main_legacy_v1.10.0`) still marked open in the reconciliation tracker.
 
 ## Operations Doc Boundaries
 

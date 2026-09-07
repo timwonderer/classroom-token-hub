@@ -8,6 +8,24 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+
+- **The branch rename is executed, and the v1 line now lives under one ref (2026-09-07)** — `main` is the default and only protected branch, `origin/HEAD` resolves to it, and `CTH_v2.0` is gone. Two things differ from the plan and are worth stating rather than discovering later. The v1 `main` became `main_legacy_v1.10.0` instead of `legacy_main`, and the separate `legacy_v1.10.0` branch was deleted; that is safe because the deleted tip (`1f7bfeb40`) is an ancestor of the surviving branch, verified rather than assumed, so **`main_legacy_v1.10.0` is the single ref carrying the v1 line** and every `v1.*` tag remains. `DEVELOPMENT.md` and `.claude/CLAUDE.md` are retargeted accordingly — they named a ref that no longer resolves, which is precisely the defect the rename existed to remove.
+
+  GitHub refused to delete `CTH_v2.0` until the default moved, since a repository cannot delete its own default branch. That makes the ordering a constraint rather than a preference: repoint `origin/HEAD` and move protection first, delete second.
+
+  Deleting the Dependabot branches closed their eight PRs (#1354, #1353, #1287, #1286, #1284, #1281, #1270, #1236). No vulnerability fix was lost — those were `pip` and `github-actions` bumps, a different ecosystem from every open advisory — but Dependabot does not recreate a PR for a version whose PR was closed, so those specific bumps will not return unprompted.
+
+### Removed
+
+- **`codex/ledger-canonicalization` deleted; its "owner decision" was already answered by events (2026-09-07)** — The branch was held open for a decision about replacing `deploy.yml` with an exact-SHA release workflow. Every artifact that decision concerned is already on `main`, having arrived via `599dc7e7b` rather than via this branch. What remained was the branch, not the change. Measured by content instead of commit count, the 22 "unique" commits are net-negative in every file they touch — `status/projection.py` −57, `app/observability.py` −59 — and `status_service/app.py` is the clearest case: it defines `derive_capability_cards` inline with no `derive_platform_checks`, where `main` has moved the first into `status/projection.py` and added the second. It is the earlier draft of the code it would overwrite. Merging it would also have restored `docs/LOGS/`, deleted `constitutional-ci.yml` and `deploy-status.yml`, and dropped roughly twenty test modules. Tagged `archive/ledger-canonicalization-20260907` before deletion, because it was the one branch with no remote and therefore the one deletion that would otherwise have been irreversible.
+
+  The method cost is recorded too: the three-dot diffstat read as though the branch deleted the deploy workflow, when `main` had already deleted it. Three-dot measures from the merge base, so on a stale branch it describes a tree that no longer exists. Two-dot returned 416 files of near-total reversion. Use two-dot to decide disposition; three-dot only to review.
+
+### Fixed
+
+- **Dependabot raises `npm` alerts it is not configured to fix (2026-09-07)** — All eleven open advisories resolve to one manifest, `docs-site/package-lock.json`, while `.github/dependabot.yml` declares only `pip` and `github-actions`, both at `/`. There is no `npm` entry and none for `/docs-site`, so no pull request can ever be opened against the file the alerts are about; the security tab and the update configuration describe disjoint sets. Scoped rather than escalated: nothing builds or deploys `docs-site/`, its `build/` and `node_modules/` are gitignored, and the application's only touch is reading `route-map.json`, a data file — so the advisories are real but carry no production exposure. Recorded as build-tooling hygiene with the configuration gap named, so the count is not rediscovered later and misread as a neglected backlog.
+
 ### Added
 
 - **`/health/status` replaces `/health/deep`, and the status service deploys from CI (2026-09-06)** — The deep health endpoint reported internal diagnostics; the replacement returns bounded signals only — a key, a layer, an outcome, an epistemic state, and a diagnostic code — and deliberately carries no table counts, no tenant data, and no raw exception text. The distinction that makes it useful is `UNKNOWN`/`CHECK_NOT_REGISTERED`: a capability with no registered check reports that it was not observed rather than reporting health, so an unmonitored surface cannot read as a healthy one. `tests/dom/operation/test_health.py` pins both halves — the signal keys and the absence of `class_id` in any signal — and asserts `/health/deep` now 404s, so the retired surface cannot come back unnoticed.

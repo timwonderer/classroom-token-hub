@@ -717,8 +717,27 @@ to `get_rent_waiver_history_for_class` under DOM-OBL-001 §V.6 one-time-immutabl
 `.coverage_start_time` / `.coverage_end_time`, attributes DOM-OBL-001 v2.5 removed from
 `assessment_events`. Delete all three.
 
-**Cross-cutting** — 9 Dependabot advisories on the default branch (8 high, 1 moderate); accessibility
+**Cross-cutting** — 11 Dependabot advisories on the default branch (10 high, 1 moderate); accessibility
 remediation tracked separately in `ACCESSIBILITY_REVIEW_2026-09-03.md`.
+
+**Scoped 2026-09-07 — not a ship blocker, and not for the reason the count suggests.** All eleven
+alerts resolve to a single manifest, `docs-site/package-lock.json`: `fast-uri` ×4, `image-size` ×2
+(no patch available), `browserslist` ×2, `nanoid`, `js-yaml`, `qs`. They are transitive dependencies
+of the Docusaurus workspace, which **no workflow builds and nothing deploys** — `docs-site/build/`
+and `docs-site/node_modules/` are gitignored, and the only runtime touch from the application is
+`app/utils/helpers.py:30` reading `docs-site/route-map.json`, a data file. No shipped artifact
+executes this code. The advisories are real; the production exposure is not. Treat as build-tooling
+hygiene, post-ship.
+
+**But the reason they have gone unpatched is a live defect, and it is the tenth matches-nothing
+instance.** `.github/dependabot.yml` declares exactly two ecosystems — `pip` at `/` and
+`github-actions` at `/`. There is **no `npm` entry, and no entry for `/docs-site`**. So Dependabot
+cannot open a pull request against the only manifest it is raising alerts about. The security tab and
+the update configuration describe disjoint sets. This is the same failure shape as the others on this
+branch: a configuration that reads as coverage, produces no error, and matches nothing. The alert
+count is not evidence of a backlog being ignored — it is evidence of an automation that was never
+pointed at the file. Adding an `npm` / `/docs-site` block is the fix; it is safe to do post-ship, but
+it should be done deliberately rather than discovered again from a rising number.
 
 ### Launch checklist (must clear before promotion) — verified 2026-09-05
 
@@ -968,6 +987,8 @@ this branch. The filter now names only what the job runs; that test's evidence i
 constitutional CI, which is where it belongs. The Postgres service image also moves to the ECR
 mirror, matching the three other workflows that run one.
 
+> **EXECUTED 2026-09-07 — verified, with two deviations from plan. See "Rename — executed" below.**
+
 **Branch rename — PREPARED 2026-09-06, remote step not yet executed.** The decision recorded above
 ("merge `CTH_v2.0` into `main`, or repoint the deploy trigger") was resolved by renaming rather than
 merging: `main` → `legacy_main`, then `CTH_v2.0` → `main`, then delete `legacy_main`. The v1 line is
@@ -1004,6 +1025,38 @@ branch is repointed — GitHub rejected the delete outright with *"refusing to d
 branch."* It is also the repository's **only protected branch**. So the order is fixed, not
 preferential: repoint `origin/HEAD` and move protection to the new `main` **first**, delete `CTH_v2.0`
 **second**. Attempting the prune in the other order fails safely, but it fails.
+
+### Rename — executed 2026-09-07
+
+Verified against the remote rather than taken on report, because the rename has parts that complete
+independently and a partial one looks identical to a finished one from inside the repo:
+
+| Check | Result |
+|-------|--------|
+| Default branch | `main` |
+| Branch protection | `main` (and only `main`) |
+| `origin/HEAD` | `refs/remotes/origin/main` |
+| Local `main` vs `origin/main` | `0 0` — identical |
+| Remote branches | 3: `main`, `main_legacy_v1.10.0`, `copilot/codexv20` |
+| `CTH_v2.0` | gone |
+
+**Deviation 1 — the v1 line is under one name, not two, and the name is not `legacy_main`.** The plan
+was `main` → `legacy_main`, delete `legacy_main`, rely on `legacy_v1.10.0`. What happened instead:
+`main` → `main_legacy_v1.10.0` at `db275ee37`, and the separate `legacy_v1.10.0` ref is gone. This is
+safe, and it was checked rather than assumed — `git merge-base --is-ancestor 1f7bfeb40
+origin/main_legacy_v1.10.0` returns true, so the old `legacy_v1.10.0` tip is contained in the surviving
+branch, which is the superset of the two. All ten `v1.*` tags are intact. **`CLAUDE.md` needs a small
+correction**: it names `legacy_v1.10.0` as the ref carrying the v1 line, and that ref no longer exists.
+
+**Deviation 2 — the eight Dependabot PRs closed, as flagged.** Deleting the branches closed #1354,
+#1353, #1287, #1286, #1284, #1281, #1270, #1236. No open PRs remain. This costs little in substance:
+they were `pip` and `github-actions` version bumps, in different ecosystems from all eleven open
+security advisories (which are `npm`, see §"Cross-cutting" above), so no vulnerability fix was lost.
+The cost is procedural — Dependabot does not recreate a PR for a version whose PR was closed, so these
+specific bumps will not return on their own. If they are wanted, they need `@dependabot reopen` or a
+fresh run; if they are not, nothing further is required. Worth noting that the branch deletion and the
+rename together mean the next scheduled Dependabot run is the first one to evaluate the *new* default
+branch, so its output is the real baseline.
 
 Carried unchanged from the original plan: "port `origin/main` deltas" in `DEVELOPMENT.md` meant the
 v1 branch; after the rename that phrase would instruct porting `main` into itself, so those items

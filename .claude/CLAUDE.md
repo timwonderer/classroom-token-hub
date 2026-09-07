@@ -8,8 +8,9 @@ Classroom Token Hub — a multi-tenant educational banking simulation. Flask + S
 
 **Active branch:** `main` — all work merges here. This is the same branch that older documents
 call `codex/v2.0` and then `CTH_v2.0`; both names are retired and no ref by either exists. The
-v1 `main` that preceded it was renamed to `legacy_main` and deleted on 2026-09-06; `legacy_v1.10.0`
-carries the v1 line. If a tool, workflow, or instruction names `codex/v2.0` or `CTH_v2.0`, it is
+v1 `main` that preceded it was renamed on 2026-09-07 to `main_legacy_v1.10.0`, which is now the
+**single** ref carrying the v1 line — the separate `legacy_v1.10.0` branch no longer exists, and its
+tip is contained in `main_legacy_v1.10.0`. If a tool, workflow, or instruction names `codex/v2.0` or `CTH_v2.0`, it is
 stale and pointing at nothing — retarget it to `main` rather than creating the branch. Instructions
 that say "never merge to `main`" describe the former v1 branch and no longer apply.
 
