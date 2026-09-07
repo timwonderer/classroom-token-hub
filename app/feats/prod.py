@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from decimal import Decimal
 from datetime import datetime
 
-from sqlalchemy import func
 
 from app.extensions import db
 from app.feats.base import requires_feat_context, get_correlation_id
@@ -16,10 +15,10 @@ from app.models import (
     HallPassSettings,
     PayrollEvent,
     PolicyVersion,
-    PayrollSettings,
     Seat,
     Transaction,
 )
+from app.payroll import get_pay_rate_for_class
 from app.services.context_resolver import CanonicalContext
 from app.services.entitlement_service import consume_hall_pass, get_hall_pass_balance
 from app.services.ledger_posting_service import create_pending_transaction
@@ -60,20 +59,15 @@ def _resolve_class_economy(class_id: str) -> ClassEconomy:
     return economy
 
 
-def _resolve_pay_rate_per_second(class_id: str, *, block: str | None = None) -> Decimal:
-    query = PayrollSettings.query.filter(
-        PayrollSettings.class_id == class_id,
-        PayrollSettings.availability_state == 'IN_USE',
-    )
-    if block:
-        query = query.filter(func.upper(PayrollSettings.block) == block.upper())
-    else:
-        query = query.filter(PayrollSettings.block.is_(None))
+def _resolve_pay_rate_per_second(class_id: str) -> Decimal:
+    """The class's per-second pay rate.
 
-    setting = query.order_by(PayrollSettings.updated_at.desc(), PayrollSettings.id.desc()).first()
-    if setting and setting.pay_rate:
-        return Decimal(setting.pay_rate) / Decimal("60")
-    return Decimal("0.25") / Decimal("60")
+    Scoped by ``class_id`` alone — `block` is display metadata and never an
+    execution key (INV-ARC-014 §V). Delegates to the single canonical reader so
+    a payroll run and the projection shown to the student before it cannot
+    price the same work differently.
+    """
+    return get_pay_rate_for_class(class_id=class_id)
 
 
 def _latest_hall_pass_attendance_state(log: HallPassLog) -> str:
@@ -513,8 +507,10 @@ def _record_payroll_event_impl(
         reference_time_utc=reference_time_utc,
     )
     recorded_at = evaluation.canonical_now_utc
-    class_row = _resolve_class_economy(ctx.class_id)
-    section = getattr(class_row, "section", None)
+    # Asserted for existence only: a payroll event must not be written against a
+    # class that has no economy. The class's `section` is deliberately NOT read
+    # here — pay rate is resolved from `class_id` alone (INV-ARC-014 §V).
+    _resolve_class_economy(ctx.class_id)
 
     if payroll_event_type == "payroll" and amount is None:
         last_payroll_time = _last_payroll_event_time(seat_id=target_seat_id, class_id=ctx.class_id)
@@ -525,7 +521,7 @@ def _record_payroll_event_impl(
             since_utc=last_payroll_time,
             current_time_utc=recorded_at,
         )
-        rate_per_second = _resolve_pay_rate_per_second(ctx.class_id, block=section)
+        rate_per_second = _resolve_pay_rate_per_second(ctx.class_id)
         amount = (Decimal(attendance_seconds) * rate_per_second).quantize(Decimal("0.01"))
     elif payroll_event_type == "manual_credit" and amount is None:
         raise ValueError("manual_credit payroll events require an amount.")

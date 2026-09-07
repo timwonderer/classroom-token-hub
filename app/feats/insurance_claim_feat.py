@@ -97,12 +97,12 @@ from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     ensure_utc,
 )
-from app.models import _quantize_currency, PayrollSettings, PolicyVersion, ClassEconomy
+from app.models import _quantize_currency, PolicyVersion
 from app.services.economic_engine import require_ready_base, EconomicEngineNotReady
 from app.services.attendance_service import (
     calculate_worked_attendance_seconds_for_date,
 )
-from app.payroll import get_daily_limit_seconds
+from app.payroll import get_daily_limit_seconds, get_pay_rate_for_class
 
 _TRANSACTION_INSURANCE_TYPE = "TRANSACTION"
 _PRODUCTIVITY_INSURANCE_TYPE = "PRODUCTIVITY"
@@ -649,15 +649,13 @@ def _enforce_productivity_daily_capacity(
 ) -> Optional["InsuranceClaimSubmissionResult"]:
     """Req 3: claimed loss-time ≤ remaining daily capacity after time worked.
 
-    The daily limit is the canonical ``get_daily_limit_seconds`` authority, keyed by
-    the class ``section`` (block). When no limit is configured the resolver returns
+    The daily limit is the canonical ``get_daily_limit_seconds`` authority, keyed
+    by ``class_id`` alone. When no limit is configured the resolver returns
     ``None`` and PRODUCTIVITY imposes no per-day ceiling. The worked duration is an
     authoritative attendance read for the exact class-local date — PRODUCTIVITY
     never interprets AttendanceSession rows itself.
     """
-    class_row = db.session.get(ClassEconomy, class_id)
-    block = class_row.section if class_row is not None else None
-    daily_cap_seconds = get_daily_limit_seconds(block, class_id=class_id)
+    daily_cap_seconds = get_daily_limit_seconds(class_id=class_id)
     if daily_cap_seconds is None:
         return None
 
@@ -1082,18 +1080,15 @@ def _resolve_hourly_pay_rate(class_id: str) -> Decimal:
     is a *payroll fact* read at adjudication time — the resulting per-date
     ``recognized_payout`` is then persisted immutably, so a later rate change never
     retroactively re-values a settled PRODUCTIVITY claim.
+
+    Scoped by ``class_id`` alone. The previous ``block IS NULL`` filter meant a
+    class whose policy row carried any block label matched nothing here, and the
+    claim silently adjudicated at the fallback rate rather than the configured
+    one (INV-ARC-014 §V). Resolving through the shared reader also keeps claim
+    adjudication and payroll priced from the same row.
     """
-    setting = (
-        PayrollSettings.query.filter(
-            PayrollSettings.class_id == class_id,
-            PayrollSettings.availability_state == 'IN_USE',
-            PayrollSettings.block.is_(None),
-        )
-        .order_by(PayrollSettings.updated_at.desc(), PayrollSettings.id.desc())
-        .first()
-    )
-    per_minute = Decimal(setting.pay_rate) if (setting and setting.pay_rate) else Decimal("0.25")
-    return per_minute * Decimal("60")
+    per_second = get_pay_rate_for_class(class_id=class_id)
+    return per_second * Decimal("3600")
 
 
 @dataclass

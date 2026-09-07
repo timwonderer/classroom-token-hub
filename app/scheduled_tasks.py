@@ -83,10 +83,11 @@ def enforce_daily_limits_job():
             if class_row is None:
                 continue
 
-            daily_limit = (
-                get_daily_limit_seconds(class_row.section, class_id=class_id)
-                if class_row.section else None
-            )
+            # Previously guarded on `class_row.section`, so a class with no
+            # section label never had its configured daily limit enforced here
+            # at all. The limit is class-scoped policy; the label is not a
+            # precondition for it (INV-ARC-014 §V).
+            daily_limit = get_daily_limit_seconds(class_id=class_id)
             if not daily_limit:
                 continue
 

@@ -121,7 +121,7 @@ from app.feats.rent_payment_feat import execute_rent_payment, execute_rent_bill_
 from app.feats.transfer_feat import execute_account_transfer
 from app.feats.store_purchase_feat import execute_store_purchase
 from app.feats.insurance_claim_feat import submit_insurance_claim
-from app.payroll import get_pay_rate_for_block
+from app.payroll import get_pay_rate_for_class
 from app.utils.join_code import get_display_join_code
 from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
 from app.utils.canonical_temporal_resolver import (
@@ -1132,7 +1132,6 @@ def payroll():
     effective_class_id = class_id or context.class_id
 
     class_row = seat.class_economy if seat and seat.class_economy else None
-    current_section = class_row.section.upper() if class_row and class_row.section else ""
     class_label = (
         (class_row.display_name or class_row.section or class_row.join_code or class_row.class_id)
         if class_row
@@ -1141,12 +1140,7 @@ def payroll():
     # Scope payroll display data to the selected class context only.
     payroll_state = get_class_attendance_status(student, class_id=class_id, ctx=context)
 
-    # Existing PayrollSettings persistence is still keyed by section; the page
-    # contract remains canonical class_id/class_label only.
-    pay_rate_per_second = get_pay_rate_for_block(
-        current_section,
-        class_id=class_id,
-    )
+    pay_rate_per_second = get_pay_rate_for_class(class_id=class_id)
     pay_rate_per_minute = round(pay_rate_per_second * 60, 2)
 
     unpaid_seconds = int(payroll_state.get("duration", 0) or 0)

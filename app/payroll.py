@@ -1,6 +1,5 @@
-import sqlalchemy as sa
 from app.extensions import db
-from app.models import Transaction, PayrollSettings, ClassEconomy
+from app.models import Transaction, PayrollSettings
 from app.utils.canonical_temporal_resolver import ensure_utc
 from app.attendance import (
     get_batch_attendance_events,
@@ -16,70 +15,72 @@ DEFAULT_PAY_RATE_PER_SECOND_DECIMAL = DEFAULT_PAY_RATE_PER_MINUTE / Decimal('60'
 DEFAULT_PAY_RATE_PER_SECOND = DEFAULT_PAY_RATE_PER_SECOND_DECIMAL
 
 
-def _fetch_single_active_setting(*, class_id: str, block: str | None):
-    """Return exactly one active payroll setting for class/block or None.
+def _fetch_active_setting(*, class_id: str):
+    """Return the class's single active payroll policy, or None.
+
+    ``class_id`` is the whole scope. `block` is display metadata and is never a
+    scoping key (INV-ARC-014 §V, which forbids execution depending on sections or
+    periods; INV-ARC-019; DOM-CLASS-001). The partial unique index
+    ``uq_payroll_settings_active_scope`` is on ``class_id`` alone WHERE
+    ``availability_state = 'IN_USE'``, so at most one row can match.
+
+    That index is what makes the multiplicity check below an integrity assertion
+    rather than a tie-break: if it ever returns two rows the index is missing or
+    disabled, and picking the "newest" would quietly paper over that. Raising
+    keeps a schema failure from presenting as a pay rate.
 
     Raises:
-        ValueError: when class scope is missing or duplicate active rows exist.
+        ValueError: when class scope is missing, or when the active-scope index
+            is not holding.
     """
     if not class_id:
         raise ValueError("PayrollSettings lookup requires class_id.")
-    query = PayrollSettings.query.filter(
-        PayrollSettings.class_id == class_id,
-        PayrollSettings.availability_state == 'IN_USE',
+    rows = (
+        PayrollSettings.query
+        .filter(
+            PayrollSettings.class_id == class_id,
+            PayrollSettings.availability_state == 'IN_USE',
+        )
+        .order_by(PayrollSettings.updated_at.desc(), PayrollSettings.id.desc())
+        .limit(2)
+        .all()
     )
-    if block:
-        query = query.filter(sa.func.upper(PayrollSettings.block) == block.upper())
-    else:
-        query = query.filter(PayrollSettings.block.is_(None))
-    rows = query.order_by(PayrollSettings.updated_at.desc(), PayrollSettings.id.desc()).limit(2).all()
     if len(rows) > 1:
         raise ValueError(
-            f"Ambiguous PayrollSettings scope for class_id={class_id} block={block or '__GLOBAL__'}."
+            f"Multiple IN_USE PayrollSettings rows for class_id={class_id}; "
+            "uq_payroll_settings_active_scope is not holding."
         )
     return rows[0] if rows else None
 
 
-def get_pay_rate_for_block(block, *, class_id: str):
+def get_pay_rate_for_class(*, class_id: str):
     """
-    Get the pay rate for a specific block from settings, falling back to global/default.
+    Get the per-second pay rate for a class, falling back to the default.
 
     Args:
-        block (str): The block/period identifier.
         class_id (str): Canonical class scope.
 
     Returns:
         Decimal: The pay rate per second as Decimal for precise financial calculations.
     """
-    from decimal import Decimal
-    
-    # Try block-specific settings first
-    setting = _fetch_single_active_setting(class_id=class_id, block=block)
+    setting = _fetch_active_setting(class_id=class_id)
     if setting and setting.pay_rate:
         return setting.pay_rate / Decimal('60')
 
-    # Fall back to class-scoped global settings
-    global_setting = _fetch_single_active_setting(class_id=class_id, block=None)
-    if global_setting and global_setting.pay_rate:
-        return global_setting.pay_rate / Decimal('60')
-
-    # Ultimate fallback to hardcoded default
     return DEFAULT_PAY_RATE_PER_SECOND_DECIMAL
 
 
-def get_daily_limit_seconds(block, *, class_id: str):
+def get_daily_limit_seconds(*, class_id: str):
     """
-    Get the daily time limit in seconds for a specific block from settings.
+    Get the daily time limit in seconds for a class.
 
     Args:
-        block (str): The block/period identifier.
         class_id (str): Canonical class scope.
 
     Returns:
         int or None: The daily limit in seconds, or None if no limit is set.
     """
-    # Try block-specific settings first
-    setting = _fetch_single_active_setting(class_id=class_id, block=block)
+    setting = _fetch_active_setting(class_id=class_id)
     if setting:
         # Simple mode: daily_limit_hours
         if setting.settings_mode == 'simple' and setting.daily_limit_hours:
@@ -94,21 +95,6 @@ def get_daily_limit_seconds(block, *, class_id: str):
             }
             multiplier = unit_to_seconds.get(setting.max_time_per_day_unit, 3600)
             return int(setting.max_time_per_day * multiplier)
-
-    # Fall back to class-scoped global settings
-    global_setting = _fetch_single_active_setting(class_id=class_id, block=None)
-    if global_setting:
-        if global_setting.settings_mode == 'simple' and global_setting.daily_limit_hours:
-            return int(global_setting.daily_limit_hours * 3600)
-        elif global_setting.settings_mode == 'advanced' and global_setting.max_time_per_day:
-            unit_to_seconds = {
-                'seconds': 1,
-                'minutes': 60,
-                'hours': 3600,
-                'days': 86400
-            }
-            multiplier = unit_to_seconds.get(global_setting.max_time_per_day_unit, 3600)
-            return int(global_setting.max_time_per_day * multiplier)
 
     # No limit set
     return None
@@ -148,12 +134,9 @@ def calculate_payroll_breakdown(class_id, seat_ids, last_payroll_time):
 
     # --- 3. In-Memory Calculation ---
     for seat in seats:
-        block_upper = (seat.class_economy.section if seat.class_economy and seat.class_economy.section else "").upper()
-        
-        rate_per_second = pay_rates.get(
-            (class_id, block_upper),
-            pay_rates.get((class_id, None), DEFAULT_PAY_RATE_PER_SECOND_DECIMAL),
-        )
+        # Rate is a property of the class, not of any section/period label
+        # (INV-ARC-014 §V). Every seat in the class prices identically.
+        rate_per_second = pay_rates.get(class_id, DEFAULT_PAY_RATE_PER_SECOND_DECIMAL)
 
         payroll_anchor = student_last_payrolls.get((seat.id, class_id))
         if payroll_anchor is None:
@@ -172,8 +155,14 @@ def calculate_payroll_breakdown(class_id, seat_ids, last_payroll_time):
     return summary
 
 def _get_batch_pay_rates(class_ids):
-    """Batch fetch pay rates scoped to canonical class IDs."""
-    from decimal import Decimal
+    """Batch fetch per-second pay rates keyed by canonical class_id.
+
+    One rate per class: ``uq_payroll_settings_active_scope`` permits a single
+    IN_USE row per ``class_id``, and `block` is not a scoping key
+    (INV-ARC-014 §V). Ordering makes the load deterministic even if that index
+    is not holding, so a batch run cannot disagree with the single-class reader
+    in ``_fetch_active_setting``.
+    """
     if not class_ids:
         return {}
     settings = (
@@ -182,17 +171,14 @@ def _get_batch_pay_rates(class_ids):
             PayrollSettings.class_id.in_(class_ids),
             PayrollSettings.availability_state == 'IN_USE',
         )
+        .order_by(PayrollSettings.updated_at.asc(), PayrollSettings.id.asc())
         .all()
     )
     rates = {}
-
-    # Populate specific blocks and class-global defaults.
     for s in settings:
         if s.pay_rate and s.class_id:
-            rate_sec = s.pay_rate / Decimal('60')
-            key = (s.class_id, s.block.upper() if s.block else None)
-            rates[key] = rate_sec
-            
+            rates[s.class_id] = s.pay_rate / Decimal('60')
+
     return rates
 
 

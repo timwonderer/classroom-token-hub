@@ -96,7 +96,7 @@ from app.services.attendance_service import (
 )
 from app.services.ledger_posting_service import create_pending_transaction, create_pending_transaction_idempotent
 from app.services.ledger_balance_query_service import get_available_balances
-from app.payroll import get_pay_rate_for_block
+from app.payroll import get_pay_rate_for_class
 
 # Create blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -1756,9 +1756,7 @@ def handle_tap():
         ctx=context,
     )
 
-    class_row = get_class_economy(class_id)
-    settings_section = class_row.section if class_row and class_row.section else None
-    rate_per_second = get_pay_rate_for_block(settings_section, class_id=class_id)
+    rate_per_second = get_pay_rate_for_class(class_id=class_id)
     projected_pay = duration * rate_per_second
     duration_today = calculate_worked_attendance_seconds_today(
         seat_id, class_id, ctx=context
