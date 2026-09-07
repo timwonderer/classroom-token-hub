@@ -2,9 +2,12 @@
 
 A classroom management platform that uses a simulated token economy to drive student engagement and participation. Built with Flask + SQLAlchemy + PostgreSQL, designed for multi-tenant deployment across multiple schools and class periods.
 
-**Version:** 2.0 (Reconstruction in Progress)  
-**Active Branch:** `main`  
+**Version:** 2.0 (Launch preparation) — **Branch:** `claude/ci-onto-landed`
 **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
+
+> [!NOTE]
+>
+> This branch is the v2 integration and launch-preparation line. The public GitHub Pages artifact currently uses a `launching soon` holding page; the v2 landing pages are kept on the separate `launch/v2-landing-pages` branch until launch. The application and the static marketing site are separate hosts, and the application is not exposed through a Flask `/gh/` mirror.
 
 ---
 
@@ -40,8 +43,8 @@ A classroom management platform that uses a simulated token economy to drive stu
 - **Multi-Tenant** — Full class-period isolation; students share identity across teachers
 - **Progressive Web App** — Installable on mobile; offline fallback included
 - **Accessibility** — WCAG 2.1 AA design, keyboard nav, ARIA labels, screen readers
-- **Security** — PII encryption at rest, TOTP 2FA, CSRF protection, bcrypt hashing, Cloudflare Turnstile, post-claim PII deletion
-- **Observability** — OpenTelemetry instrumentation (Flask, SQLAlchemy) with OTLP export
+- **Security** — PII encryption at rest, TOTP 2FA, CSRF protection, centralized scrypt password hashing, Cloudflare Turnstile, post-claim PII deletion
+- **Observability and status** — OpenTelemetry instrumentation (Flask, SQLAlchemy) with OTLP export, plus bounded `/health/status` signals that do not expose tenant data or raw exceptions
 - **Rate Limiting** — Flask-Limiter with Cloudflare IP detection; disabled in dev
 
 > [!IMPORTANT]
@@ -97,7 +100,11 @@ flask run  # Navigate to http://localhost:5000
 ### Running Tests
 
 ```bash
-# All tests (requires TEST_DATABASE_URL set)
+# Targeted tests (preferred during development)
+pytest tests/dom/operation/test_health.py -v
+pytest tests/test_status_contracts.py tests/test_status_projection.py -v
+
+# Full suite (requires TEST_DATABASE_URL set; run separately for release certification)
 TEST_DATABASE_URL=postgresql://... pytest
 
 # Specific domain
@@ -119,6 +126,18 @@ flask db downgrade       # Rollback
 All migrations must include idempotency helpers. See [.claude/rules/database-migrations.md](.claude/rules/database-migrations.md).
 
 ---
+
+## v2 Launch Readiness
+
+The v2 runtime is governed by the documented authority chain rather than by route-local behavior:
+
+```text
+INV-CORE → INV-ARC → DOM-* → FEAT-*
+```
+
+The branch includes the v2 bounded domains, canonical FEAT mutation boundaries, class-scoped tenancy, canonical Ledger persistence and monetary resolution, Interpretation reporting, constitutional CI evidence selection, and production documentation/link checks. These are implementation and evidence updates, not a declaration that every launch gate is green. In particular, authenticated rendered journeys and any evidence marked `NOT_EVALUATED`, `BLOCKED`, or otherwise unresolved in the tracking documents remain launch work.
+
+Before launch, use the [v2 production transition runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md), [tracking index](docs/TRACKING/), and [changelog](CHANGELOG.md) as the current source for release evidence. Do not infer application availability from the GitHub Pages holding page: verify application maintenance mode, login routes, deployment health, and the exact release SHA independently.
 
 ## Architecture
 
@@ -153,11 +172,13 @@ All queries must be scoped by `class_id`, never by `teacher_id` alone.
 # Health check
 curl http://localhost:5000/health  # Returns 200 if DB is reachable
 
-# Production
+# Application production
 gunicorn wsgi:app --workers 4 --bind 0.0.0.0:8000
 ```
 
 See [SOP-DEP-023](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md) for the full runbook.
+
+The static public site is published separately from `github-pages/`. Until launch, `github-pages/index.html` is the holding page; the launch branch supplies the public landing pages. The application does not serve the marketing site as a Flask route.
 
 ---
 
