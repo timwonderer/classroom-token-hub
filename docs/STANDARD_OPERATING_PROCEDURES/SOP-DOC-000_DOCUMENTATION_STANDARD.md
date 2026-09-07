@@ -62,9 +62,25 @@ alter the `INV → DOM → FEAT` runtime hierarchy established by `INV-CORE-001`
 - **Definition**: Preserves institutional memory, timelines, target plans, releases, and user guides. Must not define runtime rules.
 - **Location**:
   - `docs/MAP/` (Prefix: `MAP-*`)
+  - `docs/PRINCIPLES/` (Prefix: `PRN-*`) — rationale documents explaining *why* a design was chosen
   - `docs/user-guides/` (User guides)
-  - `docs/LOGS/` (Prefix: `LOG-*`)
+  - `docs/archive/` — superseded v1 material, retained for history only
   - Root directory files (`README.md`, `CHANGELOG.md`, `DEVELOPMENT.md`, etc.)
+
+The `LOG-*` prefix and the `docs/LOGS/` tree were **removed on 2026-09-05**. Do not reintroduce
+either; institutional memory belongs in `docs/PRINCIPLES/` (rationale) or `CHANGELOG.md`
+(chronology).
+
+### Citing archived material
+
+A document under `docs/archive/` is superseded by definition. A live document MUST NOT cite one in a
+**Dependencies** section, or link to one without labelling it as archived — an unlabelled link to
+archived material is indistinguishable from a citation of current authority, which is the exact
+confusion the archive exists to prevent. Where an archived document must be referenced, mark it
+inline (e.g. *"(archived)"*) and state what supersedes it.
+
+`CHANGELOG.md` is maintained for developers. It is **not** published to the in-app documentation
+site and must not be mirrored into `docs/`; a mirrored copy drifts from the original silently.
 
 ---
 

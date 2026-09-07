@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-017      | 1.2     | 2026-06-13     | V2-TEST-000 v1.0 | Constitutional |
+| INV-ARC-017      | 1.3     | 2026-09-06     | INV-ARC-017 v1.2 | Constitutional |
 
 ## I. Purpose
 
@@ -30,8 +30,6 @@ Constitutional within `INV-ARC`. Derived from `INV-CORE-000` Section III.7, `No 
 ## IV. Dependencies
 
 - `docs/STANDARD_OPERATING_PROCEDURES/SOP-DOC-000_DOCUMENTATION_STANDARD.md`
-- `docs/archive/v2-tracking-2026/V2_Full_compliance_migration_plan.md`
-- `docs/TRACKING/V2_REBUILD_VALIDATION_REPORT.md`
 - `docs/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
 - `docs/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 - `docs/INVARIANT/ARCHITECTURE/INV-ARC-007_GET_MUST_BE_PURE.md`

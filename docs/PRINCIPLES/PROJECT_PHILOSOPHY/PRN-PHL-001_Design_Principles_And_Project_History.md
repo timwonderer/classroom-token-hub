@@ -1,11 +1,28 @@
-# Classroom Token Hub — Design Principles, Philosophy, and Memory
+---
+title: Design Principles, Philosophy, and Project History
+description: The design philosophy, guiding principles, anti-goals, and formative lessons of Classroom Token Hub
+keywords: [philosophy, principles, history, milestones, evolution, anti-goals, design]
+roles: [teacher, developer]
+---
+
+# PRN-PHL-001: Design Principles, Philosophy, and Memory
+
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| PRN-PHL-001 | 1.2 | 2026-09-06 | `LOG-ARC-031` v1.1, root `PROJECT_HISTORY.md` | Informative |
 
 ## Document Purpose
 
 This document preserves the design philosophy, guiding principles, and formative lessons of Classroom Token Hub.  
 *It is not a changelog. It is a record of decisions that survived real classrooms.*
 
-For chronological releases and versioned changes, see [CHANGELOG.md](CHANGELOG.md).
+Chronological releases and versioned changes live in the repository's `CHANGELOG.md`, which is
+maintained for developers and is deliberately not published to this documentation site.
+
+> [!NOTE]
+> This document is Informative. It records why the system is shaped the way it is; it does not
+> define runtime rules and cannot modify or supersede any `INV-*`, `DOM-*`, or `FEAT-*` contract.
+> Where this document and a normative contract appear to disagree, the contract governs.
 
 ## Project Vision
 

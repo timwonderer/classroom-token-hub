@@ -21,7 +21,6 @@
 ├── CHANGELOG.md              # All changes (required for every PR)
 ├── DEVELOPMENT.md            # Roadmap and planned features
 ├── README.md                 # Project overview and quick start
-├── PROJECT_HISTORY.md        # Project evolution and philosophy
 ├── CLAUDE.md                 # Guide for AI assistants (this guide's parent)
 ├── CONTRIBUTING.md           # Contribution guidelines
 ├── .claude/                  # Claude-specific rules and settings
@@ -29,23 +28,29 @@
 │   └── rules/                # Detailed rule files
 ├── docs/
 │   ├── README.md             # Documentation index
-│   ├── ARCHITECTURE/         # Cross-domain architectural rules
-│   ├── DOMAIN/               # Per-domain authority specs
-│   ├── FEATURE-EXECUTION/    # FEAT contracts
-│   ├── INVARIANT/            # Core and architecture invariants
-│   ├── MAP/                  # Domain-to-FEAT capability maps
-│   ├── TESTING/              # Test creation and validation
-│   ├── SPECS/                # Target-state architecture specs
+│   ├── INVARIANT/            # Core and architecture invariants (Tier 0/1)
+│   ├── DOMAIN/               # Per-domain authority specs (Tier 1)
+│   ├── FEATURE-EXECUTION/    # FEAT contracts (Tier 2)
+│   ├── SPEC/                 # Technical contracts (Tier 2, binding only when incorporated)
+│   ├── STANDARD_OPERATING_PROCEDURES/  # SOPs (Tier 2)
+│   ├── MAP/                  # Domain-to-FEAT capability maps (Tier 3)
+│   ├── PRINCIPLES/           # PRN-* rationale: why a design was chosen (Tier 3)
+│   ├── REFERENCE/            # REF-* interface references
 │   ├── TRACKING/             # Launch readiness and status
-│   ├── LOGS/                 # Historical audit and release logs
-│   ├── SECURITY/             # Security audits and controls
-│   ├── STANDARD_OPERATING_PROCEDURES/  # SOPs
-│   ├── self-hosting/         # Self-hosting guide
 │   ├── user-guides/          # User-facing help served by the in-app /docs site
-│   └── archive/              # Historical documents
+│   ├── ops/                  # Operational notes
+│   ├── assets/               # Documentation images and assets
+│   └── archive/              # Superseded v1 material — history only, never authority
 │       ├── v1-development/   # Archived v1 dev docs
 │       └── github-pages/     # Archived GitHub Pages assets
 ```
+
+**Two rules the tree does not show:**
+
+- `docs/LOGS/` (`LOG-*`) was removed on 2026-09-05 and must not be reintroduced. Rationale goes in
+  `docs/PRINCIPLES/`, chronology in `CHANGELOG.md`.
+- `CHANGELOG.md` is developer-facing. Do not mirror it into `docs/` and do not link it from the
+  in-app docs site — a mirror drifts from the original without announcing it.
 
 ---
 

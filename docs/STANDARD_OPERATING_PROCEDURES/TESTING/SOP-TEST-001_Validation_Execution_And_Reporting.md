@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-TEST-001     | 1.0     | 2026-06-13     | None       | Standard Operating Procedure |
+| SOP-TEST-001     | 1.1     | 2026-09-06     | SOP-TEST-001 v1.0 | Standard Operating Procedure |
 
 ## I. Purpose
 
@@ -15,7 +15,6 @@ This SOP defines how repository validation is executed and reported after the te
 - `docs/SPEC/SPEC-TEST-002_CANONICAL_TEST_IDENTITIES.md`
 - `docs/SPEC/SPEC-TIME-001_CANONICAL_TEMPORAL_RESOLVER.md`
 - `docs/STANDARD_OPERATING_PROCEDURES/TESTING/SOP-TEST-003_Test_Creation.md`
-- `docs/archive/v2-tracking-2026/V2_Full_compliance_migration_plan.md`
 
 ## III. Canonical Test Scope Sets
 

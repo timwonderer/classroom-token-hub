@@ -57,7 +57,10 @@ audit is now closed, twelve days ahead of the 2026-09-17 target.
 new pins in `test_escalation_disclosure_and_scope.py`. What remains before ship is the launch
 checklist in §V (CI branch references, deploy trigger, retirement pass), not domain readiness.*
 
-Six defects (B1, B2, B3, B8, B9, B10) have been found and closed on 2026-09-04/05. B1's closure
+Seven defects (B1, B2, B3, B8, B9, B10, B11) have been found and closed on 2026-09-04/06. **B11** —
+payroll readers scoped by a display label, silently substituting the default pay rate — was promoted
+out of §V on 2026-09-06 by answering that note's own open question, and is the only blocker on this
+branch that changed money. B1's closure
 returned Obligations to ready and B2's returned Policies, clearing fix track T1. **B10** — a
 `LedgerBalanceSnapshot` model/schema drift that broke the posted-balance read path — was found on
 2026-09-05 by triaging the full suite during B2's closure, where it accounted for roughly
@@ -565,6 +568,60 @@ clean after the domain-command split.
 
 *Status: closed on `codex/landed-architecture-execution-fixes` @ `25b54fcb` (2026-09-04).*
 
+### B11 — Payroll readers scoped by a display label, silently paying the default rate — **CLOSED 2026-09-06**
+**Domains:** Productivity & Payroll · **Severity:** Critical · **Violates:** INV-ARC-014 §V, INV-ARC-019, DOM-CLASS-001
+
+Promoted from the §V non-blocking note below, which asked whether the label filter "can select the
+wrong rate." It can. **The answer arrived by the opposite mechanism from the one the note
+hypothesized**, and the real defect is worse for being quiet.
+
+This was never a cross-tenant leak — `class_id` was on every query, and every read call site derived
+`section` from the same `class_id` it queried with, so the two could not disagree at read time. The
+failure runs the other way. `uq_payroll_settings_active_scope` is UNIQUE on `class_id` alone WHERE
+`availability_state = 'IN_USE'`, so a class has **exactly one** selectable policy row. The readers
+filtered on `(class_id, block)`, matching `block` against `ClassEconomy.section`, and on a miss fell
+back to `block IS NULL`. Whenever the single row's `block` was a non-null string not equal to the
+class's section, **both queries missed the only row that existed** and every seat in the class was
+paid the hardcoded `DEFAULT_PAY_RATE_PER_SECOND` instead of the configured rate. No error, no log.
+Measured against a fixture configured at 2.00/minute: an **8× silent underpayment**.
+
+The writer was already canonical — `upsert_payroll_settings` scopes by `class_id` alone, and the
+model's own `__table_args__` comment states that `block` "is display metadata and is never a scoping
+key." Only the readers were stale, so writer and reader disagreed about what identifies a policy.
+
+Three routes into that state, none exotic: (1) `ClassEconomy.section` is mutable — configure payroll,
+then rename the section; (2) `block` is in `PayrollSettings._FROZEN_POLICY_FIELDS`, so it is
+submittable and carried forward from the predecessor on every subsequent submission, propagating a
+stale value untouched and never revalidating it; (3) rows predating the class_id-only scope.
+
+**Two further instances of the same defect class were found beyond the reported one**, and were fixed
+with it rather than left for a later pass:
+- `insurance_claim_feat._resolve_hourly_pay_rate` filtered `PayrollSettings.block.is_(None)`, so a
+  class whose policy row carried *any* block label adjudicated PRODUCTIVITY claims at the fallback
+  rate.
+- `scheduled_tasks.py:87` resolved the daily limit only `if class_row.section`, so a class with no
+  section label never had its configured daily limit enforced by auto tap-out at all.
+
+**Fixed.** `_fetch_active_setting(*, class_id)` is the single canonical reader; `class_id` is the
+whole scope. `get_pay_rate_for_block(block, *, class_id)` is gone, replaced by
+`get_pay_rate_for_class(*, class_id)`; `get_daily_limit_seconds` lost its `block` parameter. Because
+the partial unique index guarantees one row, a second row means the index is not holding — the reader
+raises rather than tie-breaking, so a schema failure cannot present as a pay rate.
+`_get_batch_pay_rates` is keyed by `class_id` with deterministic ordering, so the batch reader used by
+`calculate_payroll_breakdown` cannot disagree with the scalar reader (paying a student one amount
+while showing them another). `app/feats/prod.py` lost its duplicated hardcoded fallback and delegates
+to the shared reader; the class-existence guard is deliberately retained while the dead label binding
+is removed. Call sites updated in `app/routes/api.py` and `app/routes/student.py`.
+
+Regression: `tests/dom/prod/test_payroll_rate_scope_is_class_id.py`, 6 tests. Verified non-vacuous
+against the pre-fix query replicated verbatim on the same fixture — old reader `0.004166…`
+(the default), new reader `0.033333…` (the configured 2.00/60). Suites re-run green: `tests/dom/prod`
++ `tests/test_insurance_claim_feat.py` (58 passed); `-k "payroll or attendance or scheduled or api"`
+(91 passed).
+
+*A dev-DB probe found 6 IN_USE rows, all `block IS NULL`, 0 currently unreachable. The defect was
+latent there, not live. Absence of live instances is not absence of the defect.*
+
 ---
 
 ## IV. Fix Tracks
@@ -634,9 +691,12 @@ Seat (`app/routes/student.py:761`); residual `join_code` / `user_id` columns on 
 drift, which was missed here and became **B10** — the ops-script `ImportError` was the same migration's
 fallout, which is why both closed together.)*
 
-**Productivity & Payroll** — `daily_limit` missing from the `AttendanceReasonCode` enum; pay-rate
-selection filters on a block/section label (**INV-ARC-014 violation, promote to blocking if it can
-select the wrong rate**); hardcoded `0.25/60` fallback rate; heuristic reversal correlation.
+**Productivity & Payroll** — `daily_limit` missing from the `AttendanceReasonCode` enum;
+~~pay-rate selection filters on a block/section label~~ **promoted to B11 and closed 2026-09-06** —
+it could select the wrong rate, by missing the only row that existed and falling through to the
+default (8× underpayment); the duplicated hardcoded fallback in `app/feats/prod.py` went with it,
+though `DEFAULT_PAY_RATE_PER_SECOND` remains as the genuinely-unconfigured fallback. Remaining:
+heuristic reversal correlation.
 
 **Store & Entitlements** — dual `StoreItem` / `StoreProduct` catalog; `InsuranceClaim` has mutable
 status; reliance on FK cascade rather than explicit teardown.

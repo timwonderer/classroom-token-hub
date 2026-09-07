@@ -7,17 +7,21 @@
 
 ## Quick Links
 
-- **[Architecture Guide](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)** - System design and patterns
-- **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)** - Current data models and transitional compatibility notes
+- **[Production Readiness 2026-09](docs/TRACKING/PRODUCTION_READINESS_2026-09.md)** - The tracker of record: launch blockers, open defects, and readiness status
+- **[Core Invariants](docs/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md)** - Non-negotiable system laws
+- **[Capability-Based Architecture and Authority Model](docs/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md)** - System design, the `INV → DOM → FEAT` hierarchy, and where authority lives
+- **[Documentation Index](docs/STANDARD_OPERATING_PROCEDURES/SOP-DOC-002_DOCUMENTATION_INDEX.md)** - Full map of every live document by namespace
 - **[Class Scope Normalization Target](docs/MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md)** - Deferred post-port target for `class_id`-first internal scoping
-- **[V2 Banking Ledger Settlement Plan](docs/SPECS/V2_BANKING_LEDGER_SETTLEMENT_PLAN.md)** - Deferred rebuild plan for per-account balances, settlement checkpoints, and reconciliation
-- **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)** - Runtime contract for public, student, and admin APIs
-- **[v2 Main Reconciliation Tracker](docs/archive/v1-development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md)** - `origin/main` features not yet reconciled into `codex/v2.0`
-- **[v2 Launch Readiness Matrix](docs/archive/v1-development/tracking/V2_LAUNCH_READINESS_MATRIX.md)** - Current launch blockers and readiness status
-- **[v2 Documentation Compliance Sweep](docs/archive/v1-development/tracking/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md)** - Active-doc compliance status for v2
-- **[v2 Parallel Workstreams](docs/archive/v1-development/tracking/V2_PARALLEL_WORKSTREAMS.md)** - Parallel execution map for multi-threaded v2 work
-- **[v2 Class ID Invariant Backlog](docs/SPECS/V2_CLASS_ID_INVARIANT_BACKLOG.md)** - Deferred cleanup for class lifecycle and membership semantics that violate the `class_id` model
 - **[v2 Live-Test Runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md)** - Internal validation workflow before live testing
+- **[Design Principles & Project History](docs/PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History.md)** - Why the system is shaped the way it is
+
+> [!NOTE]
+> The former quick links to the v2 reconciliation tracker, launch readiness matrix, documentation
+> compliance sweep, parallel workstreams map, banking ledger settlement plan, `class_id` invariant
+> backlog, and the `ARC-*` architecture/schema/API guides all resolved into `docs/archive/` or to
+> paths that no longer exist. Superseded material is not a quick link. Launch status now lives in
+> the readiness tracker above; architecture lives in `docs/INVARIANT/`; schema truth lives in
+> `app/models.py` and `migrations/`.
 
 ## Branch and Database Truth
 
@@ -68,8 +72,12 @@ Run once after clone:
 - Complete smoke-route checklist and confirm it can be executed by someone who did not author the branch.
 - Remove or supersede stale docs that still imply deleted branches or legacy TeacherBlock fallback plans.
 - Confirm whether the remaining adjacent economy-health delta from `main` (CWI warning bypass controls) is needed before live testing or can move to the post-live-test/production lane.
-- Port launch-critical `origin/main` deltas called out in the v2 reconciliation tracker.
-- Close active-doc issues still marked open in `docs/archive/v1-development/tracking/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`.
+- Port launch-critical `origin/main` deltas. The v2 reconciliation tracker that enumerated them is
+  archived (`docs/archive/v1-development/tracking/V2_MAIN_RECONCILIATION_TRACKER.md`, superseded);
+  the surviving open items are carried in `docs/TRACKING/PRODUCTION_READINESS_2026-09.md`.
+- Close the open documentation-compliance items now tracked in
+  `docs/TRACKING/PRODUCTION_READINESS_2026-09.md`. The v1 sweep that originated them is archived
+  (`docs/archive/v1-development/tracking/V2_DOCUMENTATION_COMPLIANCE_SWEEP.md`, superseded).
 
 ### Required Before Production
 

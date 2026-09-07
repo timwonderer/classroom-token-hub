@@ -158,8 +158,8 @@
                                 target="_blank" rel="noopener" class="text-decoration-none">Development Roadmap <span class="visually-hidden">(opens in a new tab)</span></a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/SOP-DOC-002_DOCUMENTATION_INDEX') }}"
                                 class="text-decoration-none">Documentation Index</a></li>
-                        <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/PROJECT_HISTORY.md"
-                                target="_blank" rel="noopener" class="text-decoration-none">Project History <span class="visually-hidden">(opens in a new tab)</span></a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History') }}"
+                                class="text-decoration-none">Design Principles &amp; Project History</a></li>
                     </ul>
                 </div>
             </div>
@@ -206,8 +206,6 @@
                     <ul>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook') }}"
                                 class="text-decoration-none">Production Transition Runbook</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='LOGS/RELEASES/LOG-REL-002_Changelog_Mirror') }}"
-                                class="text-decoration-none">Changelog</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='SPEC/SPEC-OPS-003_SYSTEM_ADMINISTRATION_CONSOLE') }}"
                                 class="text-decoration-none">System Administration Console</a></li>
                     </ul>

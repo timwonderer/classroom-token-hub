@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-002      | 3.1     | 2026-08-03     | 3.0        | Normative       |
+| SOP-DOC-002      | 3.2     | 2026-09-06     | 3.1        | Normative       |
 
 ---
 
@@ -73,9 +73,9 @@ These documents conform to the V2 capability-based architecture and domain autho
 - [INVARIANT/ARCHITECTURE/INV-ARC-021_CROSS_DOMAIN_REFERENCE_AND_COORDINATION.md](../INVARIANT/ARCHITECTURE/INV-ARC-021_CROSS_DOMAIN_REFERENCE_AND_COORDINATION.md)
 
 ### Testing (SOP-TEST)
-- [TESTING/SOP-TEST-001_Validation_Execution_And_Reporting.md](../TESTING/SOP-TEST-001_Validation_Execution_And_Reporting.md)
-- [TESTING/SOP-TEST-002_Accessibility_Validation_And_PR_Gate.md](../TESTING/SOP-TEST-002_Accessibility_Validation_And_PR_Gate.md)
-- [TESTING/SOP-TEST-003_Test_Creation.md](../TESTING/SOP-TEST-003_Test_Creation.md)
+- [TESTING/SOP-TEST-001_Validation_Execution_And_Reporting.md](TESTING/SOP-TEST-001_Validation_Execution_And_Reporting.md)
+- [TESTING/SOP-TEST-002_Accessibility_Validation_And_PR_Gate.md](TESTING/SOP-TEST-002_Accessibility_Validation_And_PR_Gate.md)
+- [TESTING/SOP-TEST-003_Test_Creation.md](TESTING/SOP-TEST-003_Test_Creation.md)
 
 ### Implementation Specifications (SPEC)
 - [SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md](../SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md) — Logical persistence model for independent external status infrastructure
@@ -114,12 +114,12 @@ These documents conform to the V2 capability-based architecture and domain autho
 - [DOMAIN/DOM-CLASS-002_CLASS_ECONOMY_GOVERNANCE.md](../DOMAIN/DOM-CLASS-002_CLASS_ECONOMY_GOVERNANCE.md)
 - [DOMAIN/DOM-CLASS-003_ECONOMIC_POLICY.md](../DOMAIN/DOM-CLASS-003_ECONOMIC_POLICY.md)
 - [SPEC/SPEC-ECON-002_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE.md](../SPEC/SPEC-ECON-002_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE.md)
-- [DOMAIN/DOM-BANK-001_SAVINGS_INTEREST_ACCRUAL_AND_DISBURSEMENT_SPECIFICATION.md](../DOMAIN/DOM-BANK-001_SAVINGS_INTEREST_ACCRUAL_AND_DISBURSEMENT_SPECIFICATION.md)
+- [SPEC/SPEC-ECON-001_SAVINGS_INTEREST_ACCRUAL_AND_DISBURSEMENT_SPECIFICATION.md](../SPEC/SPEC-ECON-001_SAVINGS_INTEREST_ACCRUAL_AND_DISBURSEMENT_SPECIFICATION.md)
 
 ### Feature Execution (FEAT)
 - [FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md](../FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md)
 - [FEATURE-EXECUTION/FEAT-ECON-001_ECONOMIC_POLICY_TRANSITION_EXECUTION_AND_ACTIVATION_ORCHESTRATION.md](../FEATURE-EXECUTION/FEAT-ECON-001_ECONOMIC_POLICY_TRANSITION_EXECUTION_AND_ACTIVATION_ORCHESTRATION.md)
-- [FEATURE-EXECUTION/FEAT-IDEN-001_STUDENT_SEAT_CLAIM.md](../FEATURE-EXECUTION/FEAT-IDEN-001_STUDENT_SEAT_CLAIM.md)
+- [FEATURE-EXECUTION/FEAT-IDEN-001_UNAUTHENTICATED_STUDENT_SEAT_CLAIM_REMEDIATED.md](../FEATURE-EXECUTION/FEAT-IDEN-001_UNAUTHENTICATED_STUDENT_SEAT_CLAIM_REMEDIATED.md)
 - [FEATURE-EXECUTION/FEAT-LED-000_CANONICAL_MONETARY_RESOLUTION_WORKFLOW.md](../FEATURE-EXECUTION/FEAT-LED-000_CANONICAL_MONETARY_RESOLUTION_WORKFLOW.md)
 - [FEATURE-EXECUTION/FEAT-LED-001_POST_LEDGER_TRANSACTION.md](../FEATURE-EXECUTION/FEAT-LED-001_POST_LEDGER_TRANSACTION.md)
 - [FEATURE-EXECUTION/FEAT-LED-002_VOID_REVERSE_TRANSACTION.md](../FEATURE-EXECUTION/FEAT-LED-002_VOID_REVERSE_TRANSACTION.md)
@@ -145,105 +145,70 @@ These documents conform to the V2 capability-based architecture and domain autho
 - [PRINCIPLES/SECURITY_AND_PRIVACY/PRN-SNP-001_Why_Classroom_Token_Hub_Does_Not_Implement_SSO.md](../PRINCIPLES/SECURITY_AND_PRIVACY/PRN-SNP-001_Why_Classroom_Token_Hub_Does_Not_Implement_SSO.md) — Why CTH does not federate identity through institutional SSO
 - [PRINCIPLES/SECURITY_AND_PRIVACY/PRN-SNP-002_Trust_Based_Account_Recovery.md](../PRINCIPLES/SECURITY_AND_PRIVACY/PRN-SNP-002_Trust_Based_Account_Recovery.md) — SATAR and TISAR trust-based account recovery flows
 
----
-
-## VI. Legacy Specifications (Deprecated/Transitional)
-
-These legacy specifications remain active for reference during the transitional phase of the V2 port.
-
-### Architecture
-- [ARC-CORE-000_Architecture_Foundation.md](../../ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)
-- [ARC-IDEN-001_Admin_Identity_Handling.md](../archive/v1-architecture/identity/ARC-IDEN-001_Admin_Identity_Handling.md)
-- [ARC-IDEN-002_Account_Recovery.md](../archive/v1-architecture/identity/ARC-IDEN-002_Account_Recovery.md)
-- [ARC-OPS-000_Operational_Constraints.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-000_Operational_Constraints.md)
-- [ARC-OPS-001_Transaction_Based_Reimbursement_Architecture.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-001_Transaction_Based_Reimbursement_Architecture.md)
-- [ARC-OPS-005_Api_Reference.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)
-- [ARC-OPS-007_Database_Schema.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)
-- [ARC-OPS-012_Datetime_Handling_Specification.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-012_Datetime_Handling_Specification.md)
-- [ARC-OPS-013_Money_Handling.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-013_Money_Handling.md)
-- [ARC-OPS-015_Multi_tenancy_and_Join_Code_Interface.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-015_Multi_tenancy_and_Join_Code_Interface.md)
-- [ARC-SYS-001_Sysadmin_Interface.md](../../ARCHITECTURE/SYSADMIN/ARC-SYS-001_Sysadmin_Interface.md)
-- [ARC-SYS-002_Deterministic_Analytics_Alerting_Pipeline.md](../../ARCHITECTURE/SYSADMIN/ARC-SYS-002_Deterministic_Analytics_Alerting_Pipeline.md)
-
-### Domains
-- [DOM-CLASS-002_Class_Economy_Governance.md](../DOMAIN/DOM-CLASS-002_CLASS_ECONOMY_GOVERNANCE.md)
-- [DOM-CLASS-003_Economic_Policy.md](../DOMAIN/DOM-CLASS-003_ECONOMIC_POLICY.md)
-- [DOM-CLASS-003_Ledger_Integrity_and_Determinism.md](../archive/v1-docs/DOMAINS/ECONOMY_DESIGN/DOM-ECON-003_Ledger_Integrity_and_Determinism.md)
-- [SPEC-ECON-002_Automated_Rent_Linked_Benefit_Resolution.md](../archive/v1-docs/DOMAINS/ECONOMY_DESIGN/DOM-ECON-004_Automated_Rent_Linked_Benefit_Resolution.md)
-
-### Features
-- [FEAT-MET-001_Analytics_Specification.md](../../FEATURES/ANALYTICS/FEAT-MET-001_Analytics_Specification.md)
-- [FEAT-ECON-001_Policy_Mode_and_Rebalancer.md](../../FEATURES/ECONOMY/FEAT-ECON-001_Policy_Mode_and_Rebalancer.md)
-- [FEAT-DES-001_Design_System.md](../../FEATURES/DESIGN/FEAT-DES-001_Design_System.md)
-- [FEAT-CORE-000_Feature_Foundation.md](../../FEATURES/FEAT-CORE-000_Feature_Foundation.md)
-- [FEAT-HALL-001_Hall_Pass.md](../../FEATURES/HALL_PASS/FEAT-HALL-001_Hall_Pass.md)
-- [FEAT-RENT-002_Rent_Item_Types.md](../../FEATURES/RENT/FEAT-RENT-002_Rent_Item_Types.md)
-- [FEAT-TICK-001_Ticket_Lifecycle.md](../../FEATURES/SUPPORT/FEAT-TICK-001_Ticket_Lifecycle.md)
-
-### Security & Audits
-- [SEC-AUD-001_Multi_Tenancy_Violations_Audit.md](../../SECURITY/AUDITS/SEC-AUD-001_Multi_Tenancy_Violations_Audit.md)
-- [SEC-AUD-002_Security_Audit_Insurance_Overhaul.md](../../SECURITY/AUDITS/SEC-AUD-002_Security_Audit_Insurance_Overhaul.md)
-- [SEC-AUD-003_Audit_Summary_V1_6_0.md](../../SECURITY/AUDITS/SEC-AUD-003_Audit_Summary_V1_6_0.md)
-- [SEC-AUD-004_Read_Path_Audit_Stage1.md](../../SECURITY/AUDITS/SEC-AUD-004_Read_Path_Audit_Stage1.md)
-- [SEC-AUD-005_Read_Path_Audit_Stage2.md](../../SECURITY/AUDITS/SEC-AUD-005_Read_Path_Audit_Stage2.md)
-- [SEC-AUD-006_Static_Structure_Audit.md](../../SECURITY/AUDITS/SEC-AUD-006_Static_Structure_Audit.md)
-- [SEC-AUD-007_Economic_Invariant_Risk.md](../../SECURITY/AUDITS/SEC-AUD-007_Economic_Invariant_Risk.md)
-- [SEC-AUD-008_Audits_Index.md](../../SECURITY/AUDITS/SEC-AUD-008_Audits_Index.md)
-- [SEC-AUD-009_Template_Audit.md](../../SECURITY/AUDITS/SEC-AUD-009_Template_Audit.md)
-- [SEC-AUD-010_Access_and_Secrets_Report.md](../../SECURITY/AUDITS/SEC-AUD-010_Access_and_Secrets_Report.md)
-- [SEC-AUD-011_Class_Deletion_Audit.md](../../SECURITY/AUDITS/SEC-AUD-011_Class_Deletion_Audit.md)
-- [SEC-AUD-012_Attack_Surface_Audit.md](../../SECURITY/AUDITS/SEC-AUD-012_Attack_Surface_Audit.md)
-- [SEC-AUD-015_Multi_Tenancy_Audit.md](../../SECURITY/AUDITS/SEC-AUD-015_Multi_Tenancy_Audit.md)
-- [SEC-AUD-016_Multi_Tenancy_Audit_Results.md](../../SECURITY/AUDITS/SEC-AUD-016_Multi_Tenancy_Audit_Results.md)
-- [SEC-AUD-018_Pii_Audit.md](../../SECURITY/AUDITS/SEC-AUD-018_Pii_Audit.md)
-- [SEC-AUD-020_Security_Audit_2025.md](../../SECURITY/AUDITS/SEC-AUD-020_Security_Audit_2025.md)
-- [SEC-AUD-025_Validation_Report.md](../../SECURITY/AUDITS/SEC-AUD-025_Validation_Report.md)
-- [SEC-CONT-014_Github_Secrets_Management.md](../../SECURITY/CONTROLS/SEC-CONT-014_Github_Secrets_Management.md)
-- [SEC-CONT-019_Promptpwnd_Remediation.md](../../SECURITY/CONTROLS/SEC-CONT-019_Promptpwnd_Remediation.md)
-- [SEC-CONT-021_Security_Fixes_Summary.md](../../SECURITY/CONTROLS/SEC-CONT-021_Security_Fixes_Summary.md)
-- [SEC-CONT-022_Security_Improvements_Implementation.md](../../SECURITY/CONTROLS/SEC-CONT-022_Security_Improvements_Implementation.md)
-- [SEC-CONT-023_Security_Remediation_Guide.md](../../SECURITY/CONTROLS/SEC-CONT-023_Security_Remediation_Guide.md)
-- [SEC-CONT-026_Authorization_Architecture.md](../../SECURITY/CONTROLS/SEC-CONT-026_Authorization_Architecture.md)
-- [SEC-INC-013_Critical_Same_Teacher_Leak.md](../../SECURITY/INCIDENTS/SEC-INC-013_Critical_Same_Teacher_Leak.md)
-- [SEC-CORE-000_Security_Foundation.md](../../SECURITY/SEC-CORE-000_Security_Foundation.md)
-- [SEC-THR-027_Multi_Tenancy_Threat_Model.md](../../SECURITY/THREATS/SEC-THR-027_Multi_Tenancy_Threat_Model.md)
-- [SEC-VUL-017_Network_Vulnerability_Report.md](../../SECURITY/VULNERABILITIES/SEC-VUL-017_Network_Vulnerability_Report.md)
-- [SEC-VUL-024_Source_Code_Vulnerability_Report.md](../../SECURITY/VULNERABILITIES/SEC-VUL-024_Source_Code_Vulnerability_Report.md)
-
-### Standard Operating Procedures (Legacy)
-- [SOP-CORE-000_Sop_Foundation.md](../../STANDARD_OPERATING_PROCEDURES/SOP-CORE-000_Sop_Foundation.md)
-- [SOP-DB-009_Migration_Compliance_Review.md](../../STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-009_Migration_Compliance_Review.md)
-- [SOP-DB-010_Database_Switching.md](../../STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-010_Database_Switching.md)
-- [SOP-DB-011_Migration_Specifications.md](../../STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-011_Migration_Specifications.md)
-- [SOP-DB-013_Database_Migration_Rollback.md](../../STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-013_Database_Migration_Rollback.md)
-- [SOP-DB-014_Deprecated_Symbols_Registry.md](../../STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-014_Deprecated_Symbols_Registry.md)
-- [SOP-DB-015_Schema_Change_Proposals.md](../../STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-015_Schema_Change_Proposals.md)
-- [SOP-DEP-001_Production_Deployment_Instructions.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-001_Production_Deployment_Instructions.md)
-- [SOP-DEP-005_Digitalocean_Cloudflare_Setup.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-005_Digitalocean_Cloudflare_Setup.md)
-- [SOP-DEP-006_Deployment_Guide.md](../archive/v1-docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)
-- [SOP-DEP-007_Github_Pages_Setup.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-007_Github_Pages_Setup.md)
-- [SOP-DEP-008_Grafana_Fix_Guide.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-008_Grafana_Fix_Guide.md)
-- [SOP-DEP-009_Landing_Page_Deployment.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-009_Landing_Page_Deployment.md)
-- [SOP-DEP-012_Pulsetic_Setup.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-012_Pulsetic_Setup.md)
-- [SOP-DEP-015_Ci_Cd_Pipeline_Documentation.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-015_Ci_Cd_Pipeline_Documentation.md)
-- [SOP-DEP-016_Rollback_Procedures.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-016_Rollback_Procedures.md)
-- [SOP-DEP-020_Seeding_Instructions.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-020_Seeding_Instructions.md)
-- [SOP-DEP-021_Pwa_Icon_Requirements.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-021_Pwa_Icon_Requirements.md)
-- [SOP-DEP-022_V2_Live_Test_Runbook.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md)
-- [SOP-DEP-023_V2_Production_Transition_Runbook.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md)
+### Principles — Project Philosophy (PRN-PHL)
+- [PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History.md](../PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History.md) — Design philosophy, anti-goals, and the decisions that survived real classrooms (supersedes `LOG-ARC-031` and root `PROJECT_HISTORY.md`)
 
 ---
+
+## VI. Legacy Specifications (v1 — Archived)
+
+**Every document formerly listed in this section is archived.** This section previously read
+"these legacy specifications remain active for reference during the transitional phase of the V2
+port" and then listed roughly 90 links: the `ARC-*` architecture specs, the v1 `FEATURES/*` and
+`DOMAINS/*` trees, the `SEC-*` audit corpus, and the v1 deployment/database SOPs. Of those links,
+about two-thirds resolved to nothing at all — the paths pointed at repository-root directories
+(`ARCHITECTURE/`, `FEATURES/`, `SECURITY/`) that have not existed since the v2 reorganization — and
+the remainder pointed into `docs/archive/` without saying so.
+
+An unlabelled link to archived material is indistinguishable from a citation of current authority
+(`SOP-DOC-000` §V, *Citing archived material*), and a link that resolves to nothing is
+indistinguishable from one that was satisfied. Enumerating them here reproduced both failures at
+once, so the enumeration is removed rather than repaired.
+
+The material itself is preserved and browsable:
+
+| Archive location | Contents |
+|---|---|
+| `docs/archive/v1-architecture/` | Early v1 identity and core architectural specs (`ARC-*`) |
+| `docs/archive/v1-docs/` | v1 security audits (`SEC-*`), deployment SOPs, `ARC-*` specs, `FEATURES/*`, `DOMAINS/*` |
+| `docs/archive/v1-development/` | v1→v2 migration planning and legacy schema analysis |
+| `docs/archive/v2-tracking-2026/` | Superseded v2 tracking, audits, and migration plans |
+| `docs/archive/PHASE_PLANNING/` | Phase 3–5 roadmaps and store domain implementation tracking |
+| `docs/archive/github-pages/` | Historical GitHub Pages landing site assets |
+
+None of it is authority. For current architecture read `docs/INVARIANT/`; for current domain truth
+read `docs/DOMAIN/`; for current procedures read the SOP sections above.
 
 ## VII. Informative Logs (LOG)
-- [LOG-CORE-000_Logs_Foundation.md](../../LOGS/LOG-CORE-000_Logs_Foundation.md)
-- [LOG-REL-002_Changelog_Mirror.md](../../LOGS/RELEASES/LOG-REL-002_Changelog_Mirror.md)
-- [LOG-REL-003_Releases_Index.md](../../LOGS/RELEASES/LOG-REL-003_Releases_Index.md)
-- [LOGS/RELEASES/LOG-REL-016_Release_Notes_V1.9.0.md](../../LOGS/RELEASES/LOG-REL-016_Release_Notes_V1.9.0.md)
-- [LOGS/AUDITS/LOG-DEP-022_Scripts_Operations_Reference.md](../../LOGS/AUDITS/LOG-DEP-022_Scripts_Operations_Reference.md)
+
+**The `LOG-*` namespace and the `docs/LOGS/` tree no longer exist.** They were removed on 2026-09-05
+to prevent v1 material from being cited as authority. Nothing in this repository should link into
+`docs/LOGS/`; the five entries formerly listed here resolved to deleted files.
+
+Their surviving content lives at:
+
+| Removed | Now |
+|---|---|
+| `LOG-REL-002_Changelog_Mirror` | Root `CHANGELOG.md` — maintained for developers and deliberately **not** published to the documentation site |
+| `LOG-ARC-031_Project_History` | [PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001](../PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History.md) |
+| `LOG-REL-003` / `LOG-REL-016` release notes | Root `CHANGELOG.md` version sections |
+| `LOG-DEP-022_Scripts_Operations_Reference` | Not carried forward |
 
 ---
 
 ## VIII. Change Notes
+
+**Version 3.2 (2026-09-06):**
+- Audited every link in this index: 69 of 158 did not resolve. All 87 surviving links now resolve.
+- Replaced §VI (`Legacy Specifications`) with an archive pointer. It had claimed ~90 v1 documents
+  "remain active for reference"; two-thirds of those paths no longer existed and the rest pointed
+  into `docs/archive/` unlabelled.
+- Replaced §VII (`Informative Logs`) with a removal notice and supersession table. The `LOG-*`
+  namespace and `docs/LOGS/` tree were deleted on 2026-09-05; all five entries were dead.
+- Repaired five near-miss paths (`SOP-TEST-001/002/003`, the savings-interest spec, `FEAT-IDEN-001`)
+  that pointed one directory level wrong or at a since-renamed file.
+- Added the `PRN-PHL` section for `PRN-PHL-001`, which supersedes `LOG-ARC-031` and root
+  `PROJECT_HISTORY.md`.
 
 **Version 3.1 (2026-08-03):**
 - Consolidated Phase 3-5 planning and store domain implementation logs into `docs/archive/PHASE_PLANNING/` (20 documents archived)

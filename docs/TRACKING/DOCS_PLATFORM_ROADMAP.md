@@ -1,14 +1,30 @@
 # Documentation Platform Roadmap
 
-**Status:** Planned
+**Status:** Partially superseded — see note below
 **Created:** 2026-06-14
-**Branch:** docs/cleanup-and-organization
+**Last Reconciled:** 2026-09-06
+**Branch:** `CTH_v2.0` (this document was authored on `docs/cleanup-and-organization`)
 
 ---
 
 ## Context
 
-The `codex/v2.0` branch is now the default branch. The v2 documentation reorganization (completed 2026-06-14) promoted all v2 canonical docs to top-level directories under `docs/` and archived v1 content to `docs/archive/`. This roadmap covers the remaining documentation work.
+The v2 documentation reorganization (completed 2026-06-14) promoted all v2 canonical docs to
+top-level directories under `docs/` and archived v1 content to `docs/archive/`. This roadmap covers
+the remaining documentation work.
+
+> [!IMPORTANT]
+> Two of this roadmap's premises no longer hold, and its remaining phases must be read against
+> current state rather than the state described here.
+>
+> - **`docs/LOGS/` no longer exists.** The `LOG-*` namespace was removed on 2026-09-05. Rationale
+>   belongs in `docs/PRINCIPLES/`, chronology in root `CHANGELOG.md`. Any step below that proposes
+>   promoting content *into* `docs/LOGS/` is void.
+> - **`docs/archive/v1-user-guides/` no longer exists.** Its 100 files were promoted to
+>   `docs/user-guides/` — see `docs/TRACKING/USER_GUIDE_INVENTORY_2026-09.md`. Phase 2's premise
+>   that the guides are still archived is stale; the open work is content quality, not relocation.
+>
+> References to `docs/archive/` below are deliberate and point at genuinely superseded v1 material.
 
 ---
 
@@ -17,10 +33,10 @@ The `codex/v2.0` branch is now the default branch. The v2 documentation reorgani
 **Goal:** Review archived v1 documentation and migrate still-relevant content into the v2 namespace system.
 
 ### Scope
-- Review `docs/archive/v1-development/` for content that remains relevant to v2
-- Review `docs/LOGS/AUDITS/` for entries that should be promoted or updated
-- Migrate relevant content using v2 namespace prefixes (ARC, DOM, FEAT, SOP, SEC, LOG)
-- Content that is purely historical stays in `docs/archive/` or `docs/LOGS/`
+- Review `docs/archive/v1-development/` (archived) for content that remains relevant to v2
+- Migrate relevant content using live v2 namespace prefixes (`INV`, `DOM`, `FEAT`, `SPEC`, `SOP`,
+  `MAP`, `PRN`). Do **not** use `ARC`, `SEC`, or `LOG` — those namespaces are retired.
+- Content that is purely historical stays in `docs/archive/`
 
 ### Acceptance Criteria
 - [ ] Every file in `docs/archive/v1-development/` has been triaged (keep in archive, promote, or delete)
@@ -34,7 +50,8 @@ The `codex/v2.0` branch is now the default branch. The v2 documentation reorgani
 **Goal:** Rewrite user-facing documentation for the v2 architecture, UX, and terminology.
 
 ### Scope
-- Review archived guides in `docs/archive/v1-user-guides/`
+- Review the guides now live at `docs/user-guides/` (promoted out of the archive; the former
+  `docs/archive/v1-user-guides/` path no longer exists)
 - Rewrite for v2:
   - **Teacher Manual** — updated for seat-based identity, class_id scoping, FEAT execution model
   - **Student Guide** — updated for v2 student portal UX
@@ -105,7 +122,7 @@ Features:
 
 3. **Diagnostics Interface**
    - Troubleshooting guides organized by problem category
-   - Based on content from `docs/archive/v1-user-guides/diagnostics/` (ported to v2)
+   - Based on the diagnostics content ported to `docs/user-guides/`
    - Interactive diagnostic flows where applicable
 
 #### Acceptance Criteria

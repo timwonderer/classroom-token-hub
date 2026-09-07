@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| MAP-ADV-001      | 1.1     | 2026-06-08     | V2-ADV-EVID-001 v1.0 | Informative |
+| MAP-ADV-001      | 1.2     | 2026-09-06     | MAP-ADV-001 v1.1 | Informative |
 
 ## I. Purpose
 
@@ -19,7 +19,6 @@ Informative. This document is subordinate to `SOP-DOC-000` and must not override
 ## IV. Dependencies
 
 - `docs/STANDARD_OPERATING_PROCEDURES/SOP-DOC-000_DOCUMENTATION_STANDARD.md`
-- `docs/archive/v2-tracking-2026/V2_Full_compliance_migration_plan.md`
 - `scripts/adversarial/build_evidence_bundle.py`
 
 ## V. Documentation Rule
