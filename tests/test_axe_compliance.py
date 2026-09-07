@@ -32,6 +32,10 @@ AXE_SOURCE = (REPO_ROOT / "tests" / "assets" / "axe-core.min.js").read_text(enco
 BASE_URL = "http://127.0.0.1:5000"
 PUBLIC_ROUTES = [
     "/",
+    # `index.html` was a three-line redirect stub with nothing to audit, so it was
+    # never listed. It is now the deployment holding page and carries the real
+    # content, which puts it in scope.
+    "/gh/index.html",
     "/gh/landing.html",
     "/gh/learnmore.html",
     "/gh/district.html",

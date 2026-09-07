@@ -844,7 +844,8 @@ determines what "ship" means on 2026-09-17.
 **Retirement pass — CLOSED 2026-09-06.** `v2progress.html` and the "transition site" vocabulary
 (see §VI) go stale the moment this branch is promoted. Both are now retired deliberately rather than
 left to rot: `github-pages/v2transition.html` was deleted in `669741934` with `index.html` retargeted
-to `./landing.html` in the same commit, and `v2progress.html` is deleted here. The progress page had
+to `./landing.html` in the same commit — since superseded, see the holding-page note below — and
+`v2progress.html` is deleted here. The progress page had
 **no inbound link from any page on the site** — `grep -rniE 'href="[^"]*progress'` across
 `github-pages/` returns nothing — so its only reachable reference was the axe audit's
 `PUBLIC_ROUTES` list in `tests/test_axe_compliance.py`, which is updated in the same change. Deleting
@@ -855,6 +856,25 @@ building" page describes a state that no longer exists.
 **Stale branch references in guidance.** `CLAUDE.md` names `codex/v2.0` as the base branch. It is
 the same nonexistent ref the CI workflows point at, and it will keep reproducing this class of
 error in future work until corrected.
+
+**`index.html` is a deployment holding page, and `landing.html` is deliberately orphaned.**
+`index.html` no longer redirects to `./landing.html` (see the retirement pass above); it is a
+"v2.0 launching soon" page announcing the v1 data deletion, the new support address, and the status
+page. The intent is that deploying the site does not yet expose the application. **Understand what
+this does and does not gate.** `landing.html` still exists, is still deployed, and still carries the
+three sign-in buttons to `app.classroomtokenhub.com`; `learnmore.html` is orphaned alongside it.
+Nothing links to either from the site root, but an unlinked page is not an unreachable one — both
+answer on a direct URL, and `landing.html` is in the axe route list, so it is a published surface.
+The holding page removes the *invitation* to sign in. It is not an access control. Whether the
+application is reachable is decided by the application — maintenance mode and the login routes — and
+that must be verified independently before this page is treated as a gate.
+
+`index.html` is now in `PUBLIC_ROUTES` in `tests/test_axe_compliance.py`. It was absent because a
+three-line redirect stub had nothing to audit; now it carries the real content and INV-ARC-020's
+accessibility contract applies to it. A page can otherwise acquire content and silently leave the
+audited set, which is the same shape as the stale-glob defect this tracker records elsewhere. The
+tab-switching script copied in with the content was also removed: its `.tab-btn` / `.tab-content`
+selectors exist only in `learnmore.html`, so on this page it bound zero listeners.
 
 **Branch rename — PREPARED 2026-09-06, remote step not yet executed.** The decision recorded above
 ("merge `CTH_v2.0` into `main`, or repoint the deploy trigger") was resolved by renaming rather than
