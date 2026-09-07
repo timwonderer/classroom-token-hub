@@ -5907,6 +5907,14 @@ def _insurance_submission_from_form(form):
         raw = form.get(name)
         return raw.strip() if isinstance(raw, str) else raw
 
+    # Tier grouping: the form posts a group SELECT plus a "new group" text input.
+    # A "__new__" selection carries the name in ``tier_group_new``. When the policy
+    # is not tiered (the toggle is off), the group + rank fields are submitted blank
+    # so FEAT-CLASS-003 treats it as an ungrouped ("single") offering.
+    tier_group = _v("tier_group")
+    if tier_group == "__new__":
+        tier_group = _v("tier_group_new")
+
     return {
         "insurance_type": _v("insurance_type"),
         "premium": _v("premium"),
@@ -5919,9 +5927,164 @@ def _insurance_submission_from_form(form):
         "waiting_period_days": _v("waiting_period_days"),
         "tier_level": _v("tier_level"),
         "tier_name": _v("tier_name"),
-        "tier_group": _v("tier_group"),
+        "tier_group": tier_group,
         "title": _v("title"),
         "description": _v("description"),
+    }
+
+
+def _existing_tier_groups(class_id):
+    """Existing tier groups in the class with the ranks already taken (IN_USE).
+
+    Feeds the policy form's group dropdown and lets it disable ranks that a group
+    already fills, surfacing the three-tier cap (FEAT-CLASS-003 §VIII) in the UI.
+    Returns ``[{'name': str, 'taken': [int, ...]}]`` sorted by name.
+    """
+    rows = insurance_defs.list_insurance_definitions(
+        class_id=class_id, availability_states=[insurance_defs.IN_USE],
+    )
+    groups: dict[str, set] = {}
+    for r in rows:
+        if not r.tier_group:
+            continue
+        taken = groups.setdefault(r.tier_group, set())
+        if r.tier_level in (1, 2, 3):
+            taken.add(r.tier_level)
+    return [
+        {"name": name, "taken": sorted(taken)}
+        for name, taken in sorted(groups.items())
+    ]
+
+
+# Tier levels the form's Basic/Mid/Premium selector maps to the Engine tiers.
+# Level 0 (ungrouped/"single") is surfaced separately as the SINGLE reference.
+_INSURANCE_FORM_TIERS = (
+    (1, "basic"),
+    (2, "mid"),
+    (3, "premium"),
+)
+
+
+def _insurance_recommendations(class_id):
+    """Precompute deterministic Economic Engine insurance references for the form.
+
+    Advisory only (SPEC-ECON-003 §4.5). Returns a JSON-safe dict the template
+    embeds and reactively surfaces per (Insurance Type × tier). The Engine is
+    pure and non-persisted, so this is safe inside a GET handler (INV-ARC-007).
+
+    Shape::
+
+        {
+          "ready": bool,
+          "reason": str | None,
+          "cwi": float | None,
+          "mode": str,
+          "products": {
+            "TRANSACTION": {
+              "single":  {..per-tier reference..},
+              "basic": {...}, "mid": {...}, "premium": {...}
+            },
+            "PRODUCTIVITY": {...},
+            "NON_MONETARY": {...}
+          }
+        }
+
+    Reimbursement is returned in PERCENT units (Engine fraction × 100) to match
+    the form's "Reimbursement %" field; currency figures are quantized floats.
+    """
+    import calendar
+    from datetime import date as _date
+
+    from app.services.economic_engine import (
+        resolve_base,
+        resolve_insurance,
+        SINGLE,
+        TRANSACTION,
+        PRODUCTIVITY,
+        NON_MONETARY,
+    )
+
+    base = resolve_base(class_id)
+    cwi = base.cwi
+    mode = base.economy_policy_mode
+
+    def _f(value):
+        return float(value) if value is not None else None
+
+    # Frequency normalization (SPEC-ECON-003 §4.5.2). The premium envelope is
+    # expressed per canonical week; a monthly policy is NOT a fixed 4-week period —
+    # its week-equivalent is the ACTUAL class-local calendar-day span of the
+    # coverage interval over 7. For this advisory (pre-creation) recommendation we
+    # surface a representative real calendar month anchored at the class-local
+    # current day, so the monthly figure scales by genuine calendar days rather
+    # than an arbitrary constant.
+    def _representative_month_days():
+        try:
+            eval_day = canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=g.canonical_context,
+                primitive="current_evaluation_day",
+            ).evaluation_date
+        except Exception:
+            eval_day = _date.today()
+        if eval_day.month == 12:
+            ny, nm = eval_day.year + 1, 1
+        else:
+            ny, nm = eval_day.year, eval_day.month + 1
+        day = min(eval_day.day, calendar.monthrange(ny, nm)[1])
+        # Half-open [start, next_renewal): covered days = next_renewal - start.
+        return (_date(ny, nm, day) - eval_day).days
+
+    month_days = _representative_month_days()
+    frequency = {
+        "WEEKLY": {"week_equiv": 1.0, "days": 7, "label": "week"},
+        "MONTHLY": {"week_equiv": month_days / 7.0, "days": month_days, "label": "month"},
+    }
+
+    # Mode premium band (fraction of CWI) — the recommended pricing envelope
+    # (SPEC-ECON-003 §4.5.2 / §4.5.8). This band IS the recommendation range;
+    # the per-tier deterministic rate (§4.5.8) is a single point within it.
+    band = None
+
+    def _reference(product, tier):
+        nonlocal band
+        res = resolve_insurance(product=product, tier=tier, cwi=cwi, mode=mode)
+        if band is None:
+            envelope = (res.recommended_ranges or {}).get("premium_rate")
+            if envelope:
+                band = {"lower": _f(envelope[0]), "upper": _f(envelope[1])}
+        reimb = res.reimbursement_percentage
+        return {
+            # Weekly premium/payout retained as base figures; the template scales
+            # them per the selected charge frequency and expresses them as a range.
+            "premium": _f(res.period_premium),
+            "premium_rate": _f(res.recommended_premium_rate),
+            "reimbursement_percentage": (
+                _f(reimb * Decimal("100")) if reimb is not None else None
+            ),
+            "payout_multiple": _f(res.payout_multiple),
+            "max_payout": _f(res.maximum_policy_payout),
+            "claims_per_week": res.claims_allowance_period,
+            "claimable_days_per_week": res.claimable_days_period,
+            "claim_window_days": res.claim_window_days,
+            "waiting_period_days": res.waiting_period_days,
+        }
+
+    products = {}
+    for product in (TRANSACTION, PRODUCTIVITY, NON_MONETARY):
+        tiers = {"single": _reference(product, SINGLE)}
+        for _level, tier_key in _INSURANCE_FORM_TIERS:
+            tiers[tier_key] = _reference(product, tier_key)
+        products[product] = tiers
+
+    return {
+        "ready": base.is_ready,
+        "reason": base.readiness_reason,
+        "cwi": _f(cwi),
+        "mode": mode,
+        "band": band,
+        "frequency": frequency,
+        "products": products,
     }
 
 
@@ -6003,6 +6166,8 @@ def new_insurance_policy():
                 current_page="insurance",
                 insurance_type_choices=_INSURANCE_TYPE_CHOICES,
                 charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
+                tier_groups=_existing_tier_groups(class_id),
+                recommendations=_insurance_recommendations(class_id),
             )
         flash(f"Insurance policy '{row.title or row.policy_uuid}' created.", "success")
         return redirect(url_for("admin.insurance_management"))
@@ -6015,6 +6180,8 @@ def new_insurance_policy():
         current_page="insurance",
         insurance_type_choices=_INSURANCE_TYPE_CHOICES,
         charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
+        tier_groups=_existing_tier_groups(class_id),
+        recommendations=_insurance_recommendations(class_id),
     )
 
 
@@ -6053,6 +6220,8 @@ def edit_insurance_policy(policy_uuid):
                 current_page="insurance",
                 insurance_type_choices=_INSURANCE_TYPE_CHOICES,
                 charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
+                tier_groups=_existing_tier_groups(class_id),
+                recommendations=_insurance_recommendations(class_id),
             )
         flash(f"Insurance policy '{new_row.title or new_row.policy_uuid}' updated (new version).", "success")
         return redirect(url_for("admin.insurance_management"))
@@ -6065,6 +6234,8 @@ def edit_insurance_policy(policy_uuid):
         current_page="insurance",
         insurance_type_choices=_INSURANCE_TYPE_CHOICES,
         charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
+        tier_groups=_existing_tier_groups(class_id),
+        recommendations=_insurance_recommendations(class_id),
     )
 
 

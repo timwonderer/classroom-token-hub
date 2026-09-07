@@ -31,6 +31,29 @@
   </div>
   {% endif %}
 
+  {# --- Economic Engine recommendation (advisory, SPEC-ECON-003 §4.5) ------- #}
+  {% if not recommendations or not recommendations.ready %}
+  <div class="alert alert-light border small text-muted mb-4" id="rec-card">
+    <span class="fw-semibold text-body d-block mb-1">Economic Engine recommendation</span>
+    The Economic Engine can suggest starting values once your class economy is configured.
+    {% if recommendations and recommendations.reason %}<br>{{ recommendations.reason }}.{% endif %}
+  </div>
+  {% else %}
+  <div class="alert alert-light border mb-4" id="rec-card">
+    <span class="fw-semibold small text-uppercase text-muted d-block mb-1">Economic Engine recommendation</span>
+    <p class="mb-1" id="rec-summary"></p>
+    <details class="small">
+      <summary style="cursor: pointer;" class="text-primary">Suggested values</summary>
+      <div class="mt-2" id="rec-detail"></div>
+      <div class="text-muted mt-2">
+        Derived from your class wage index (CWI {{ '$%.2f' % recommendations.cwi }}),
+        {{ recommendations.mode }} mode. Advisory only — you may override any value.
+      </div>
+    </details>
+  </div>
+  {% endif %}
+  <script type="application/json" id="insurance-rec-data">{{ recommendations | tojson }}</script>
+
   <div class="card shadow-sm mb-4">
     <div class="card-header bg-primary text-white">
       <h2 class="h5 mb-0">{{ 'Create insurance policy' if is_new else 'Edit insurance policy' }}</h2>
@@ -47,17 +70,13 @@
             <label class="form-label fw-bold" for="title">Policy Title</label>
             <input class="form-control" id="title" name="title" maxlength="120" value="{{ cur('title') }}">
           </div>
-          <div class="col-md-3">
+          <div class="col-md-6">
             <label class="form-label fw-bold" for="insurance_type">Insurance Type</label>
             <select class="form-select" id="insurance_type" name="insurance_type">
               {% for value, label in insurance_type_choices %}
               <option value="{{ value }}" {% if current_type == value %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label fw-bold" for="tier_level">Tier Level <span class="text-muted fw-normal">(optional)</span></label>
-            <input class="form-control" id="tier_level" name="tier_level" type="number" min="0" value="{{ cur('tier_level') }}">
           </div>
 
           <div class="col-12">
@@ -119,16 +138,49 @@
                    id="waiting_period_days" name="waiting_period_days" type="number" min="0" value="{{ cur('waiting_period_days') }}">
           </div>
 
-          <!-- Presentation grouping (optional) -->
-          <div class="col-md-6 type-field" data-types="TRANSACTION PRODUCTIVITY NON_MONETARY">
-            <label class="form-label fw-bold" for="tier_group">Tier Group <span class="text-muted fw-normal">(optional)</span></label>
-            <input class="form-control" id="tier_group" name="tier_group" value="{{ cur('tier_group') }}">
-          </div>
-          <div class="col-md-6 type-field" data-types="TRANSACTION PRODUCTIVITY NON_MONETARY">
-            <label class="form-label fw-bold" for="tier_name">Tier Name <span class="text-muted fw-normal">(optional)</span></label>
-            <input class="form-control" id="tier_name" name="tier_name" value="{{ cur('tier_name') }}">
+          <!-- Tier grouping ------------------------------------------------- -->
+          <div class="col-12">
+            <hr class="my-2">
+            <div class="form-check form-switch mb-1">
+              <input class="form-check-input" type="checkbox" id="tiered_toggle">
+              <label class="form-check-label fw-bold" for="tiered_toggle">Part of a tier group</label>
+            </div>
+            <div class="form-text mb-2">
+              Group up to three plans students choose one of — Basic, Mid, Premium.
+              A student may hold only one plan per group. Max 3 tiers per group.
+            </div>
+            <div id="tier_group_section" class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label fw-bold" for="tier_group">Group</label>
+                <select class="form-select" id="tier_group" name="tier_group">
+                  <option value="">— select a group —</option>
+                  {% for g in tier_groups %}
+                  <option value="{{ g.name }}" {% if cur('tier_group') == g.name %}selected{% endif %}>{{ g.name }}</option>
+                  {% endfor %}
+                  <option value="__new__">＋ New group…</option>
+                </select>
+              </div>
+              <div class="col-md-4" id="tier_group_new_wrap" style="display:none;">
+                <label class="form-label fw-bold" for="tier_group_new">New group name</label>
+                <input class="form-control" id="tier_group_new" name="tier_group_new" maxlength="60" placeholder="e.g. Paycheck Protection">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-bold" for="tier_level">Tier</label>
+                <select class="form-select" id="tier_level" name="tier_level">
+                  <option value="">— select tier —</option>
+                  <option value="1" {% if cur('tier_level')|string == '1' %}selected{% endif %}>Basic</option>
+                  <option value="2" {% if cur('tier_level')|string == '2' %}selected{% endif %}>Mid</option>
+                  <option value="3" {% if cur('tier_level')|string == '3' %}selected{% endif %}>Premium</option>
+                </select>
+                <div class="form-text" id="tier_rank_hint"></div>
+              </div>
+              <input type="hidden" id="tier_name" name="tier_name" value="{{ cur('tier_name') }}">
+            </div>
           </div>
         </div>
+
+        {# Map of existing group name -> ranks already taken (IN_USE), for the UI cap. #}
+        <script type="application/json" id="tier-taken-data">{{ tier_groups | tojson }}</script>
 
         <p class="text-muted small mt-3 mb-0">
           Only the fields that apply to the selected insurance type are submitted. Values may fall outside the Economic Engine's recommended ranges, but hard limits (premium ≥ 0, reimbursement ≤ 100%, non-negative terms) are enforced.
@@ -164,6 +216,210 @@
 
     typeSelect.addEventListener('change', applyTypeVisibility);
     applyTypeVisibility();
+  })();
+
+  // --- Tier grouping ------------------------------------------------------- //
+  (function () {
+    var toggle = document.getElementById('tiered_toggle');
+    var section = document.getElementById('tier_group_section');
+    var groupSel = document.getElementById('tier_group');
+    var newWrap = document.getElementById('tier_group_new_wrap');
+    var newInput = document.getElementById('tier_group_new');
+    var rankSel = document.getElementById('tier_level');
+    var hint = document.getElementById('tier_rank_hint');
+    if (!toggle || !section || !groupSel || !rankSel) return;
+
+    var RANK_LABEL = {1: 'Basic', 2: 'Mid', 3: 'Premium'};
+    var takenByGroup = {};
+    try {
+      var raw = JSON.parse(document.getElementById('tier-taken-data').textContent || '[]');
+      raw.forEach(function (g) { takenByGroup[g.name] = g.taken || []; });
+    } catch (e) { takenByGroup = {}; }
+
+    // A policy is "tiered" if it already carries a group (edit / sticky resubmit).
+    var initiallyTiered = groupSel.value && groupSel.value !== '__new__' ? true
+                        : (groupSel.value === '__new__');
+    toggle.checked = !!groupSel.value;
+
+    function applyToggle() {
+      section.style.display = toggle.checked ? '' : 'none';
+      // When untiered, clear group + rank so they submit blank (ungrouped/single).
+      groupSel.disabled = !toggle.checked;
+      rankSel.disabled = !toggle.checked;
+      if (newInput) newInput.disabled = !toggle.checked || groupSel.value !== '__new__';
+    }
+
+    function applyGroup() {
+      var isNew = groupSel.value === '__new__';
+      if (newWrap) newWrap.style.display = isNew ? '' : 'none';
+      if (newInput) newInput.disabled = !toggle.checked || !isNew;
+
+      // Disable ranks already taken in the selected existing group (the 3-tier cap),
+      // but keep the currently-selected rank selectable so an edit/resubmit sticks.
+      var taken = (!isNew && takenByGroup[groupSel.value]) ? takenByGroup[groupSel.value] : [];
+      var current = rankSel.value;
+      Array.prototype.forEach.call(rankSel.options, function (opt) {
+        if (!opt.value) return;
+        var rank = parseInt(opt.value, 10);
+        var isTaken = taken.indexOf(rank) !== -1 && opt.value !== current;
+        opt.disabled = isTaken;
+        opt.textContent = RANK_LABEL[rank] + (isTaken ? ' (in use)' : '');
+      });
+      if (hint) {
+        hint.textContent = (!isNew && taken.length >= 3)
+          ? 'This group is full (3 tiers). Retire a tier to add another.'
+          : '';
+      }
+    }
+
+    toggle.addEventListener('change', function () { applyToggle(); applyGroup(); });
+    groupSel.addEventListener('change', applyGroup);
+    applyToggle();
+    applyGroup();
+  })();
+
+  // --- Economic Engine recommendation (compact, rent-style) ---------------- //
+  (function () {
+    var dataEl = document.getElementById('insurance-rec-data');
+    var summaryEl = document.getElementById('rec-summary');
+    var detailEl = document.getElementById('rec-detail');
+    if (!dataEl || !summaryEl || !detailEl) return;
+    var REC;
+    try { REC = JSON.parse(dataEl.textContent || '{}'); } catch (e) { return; }
+    if (!REC || !REC.ready) return;
+
+    var typeSelect = document.getElementById('insurance_type');
+    var freqSelect = document.getElementById('charge_frequency');
+    var toggle = document.getElementById('tiered_toggle');
+    var rankSel = document.getElementById('tier_level');
+    if (!typeSelect) return;
+
+    var TYPE_LABEL = {TRANSACTION: 'Transaction', PRODUCTIVITY: 'Productivity', NON_MONETARY: 'Non-monetary'};
+    var TIER_LABEL = {single: 'Single plan', basic: 'Basic', mid: 'Mid', premium: 'Premium'};
+    var BAND_POS = {single: 'the band midpoint', basic: 'the band bottom', mid: 'the band midpoint', premium: 'the band top'};
+    var LEVEL_TIER = {'1': 'basic', '2': 'mid', '3': 'premium'};
+
+    function money(v) { return v == null ? '—' : '$' + Number(v).toFixed(2); }
+    function pct(v) { return v == null ? '—' : Number(v).toFixed(0) + '%'; }
+
+    // Charge-frequency scaling (SPEC-ECON-003 §4.5.2). The premium envelope is
+    // per canonical week; the monthly week-equivalent is the actual calendar span
+    // over 7 (never a fixed 4-week constant), supplied by the server.
+    function currentFreq() {
+      var key = (freqSelect && freqSelect.value) || 'WEEKLY';
+      return (REC.frequency || {})[key] || {week_equiv: 1, days: 7, label: 'week'};
+    }
+
+    // The recommendation is a RANGE — the mode premium band applied to CWI,
+    // scaled to the selected charge frequency (SPEC-ECON-003 §4.5.2 / §4.5.8).
+    function premiumRange(freq) {
+      var cwi = REC.cwi, band = REC.band;
+      if (!cwi || !band) return null;
+      return {
+        low: cwi * band.lower * freq.week_equiv,
+        high: cwi * band.upper * freq.week_equiv
+      };
+    }
+
+    function rangeMoney(r) {
+      if (!r) return '—';
+      return '<strong>' + money(r.low) + '</strong> to <strong>' + money(r.high) + '</strong>';
+    }
+
+    function rows(ref, freq) {
+      var out = [];
+      if (ref.reimbursement_percentage != null) out.push(['Reimbursement', pct(ref.reimbursement_percentage)]);
+      if (ref.payout_multiple != null) out.push(['Payout multiple', ref.payout_multiple + '×']);
+      var per = ' / ' + freq.label;
+      // Integer per-period allowances scale by ceil(weekly × week_equiv) — SPEC §4.5.8.
+      function perPeriod(weekly) { return String(Math.ceil(weekly * freq.week_equiv)); }
+      if (ref.claims_per_week != null) out.push(['Claims' + per, perPeriod(ref.claims_per_week)]);
+      if (ref.claimable_days_per_week != null) out.push(['Claimable days' + per, perPeriod(ref.claimable_days_per_week)]);
+      if (ref.claim_window_days != null) out.push(['Claim window', ref.claim_window_days + ' days']);
+      if (ref.waiting_period_days != null) out.push(['Waiting period', ref.waiting_period_days + ' days']);
+      return out;
+    }
+
+    function detailBlock(tierKey, ref, freq) {
+      var body = rows(ref, freq).map(function (r) {
+        return '<div class="d-flex justify-content-between">'
+          + '<span class="text-muted">' + r[0] + '</span>'
+          + '<span class="fw-semibold">' + r[1] + '</span></div>';
+      }).join('');
+      return '<div class="fw-semibold mb-1">' + TIER_LABEL[tierKey] + ' coverage</div>' + body;
+    }
+
+    // How the suggested range is derived for the tier and frequency on show.
+    function mathLines(tierKey, ref, freq) {
+      var cwi = REC.cwi, band = REC.band, out = [];
+      if (cwi && band) {
+        var scale = freq.week_equiv;
+        var basis = 'CWI (' + money(cwi) + ') × ' + (band.lower * 100).toFixed(0) + '–'
+          + (band.upper * 100).toFixed(0) + '% (' + REC.mode + ' mode band)';
+        if (freq.label === 'week') {
+          out.push('Premium range = ' + basis + ' = ' + money(cwi * band.lower) + ' to ' + money(cwi * band.upper) + ' / week.');
+        } else {
+          out.push('Premium range = ' + basis + ' × ' + scale.toFixed(2)
+            + ' wk (≈' + freq.days + '-day month) = ' + money(cwi * band.lower * scale)
+            + ' to ' + money(cwi * band.upper * scale) + ' / month.');
+        }
+      }
+      if (ref.premium_rate != null) {
+        out.push('The ' + (TIER_LABEL[tierKey] || tierKey) + ' tier lands at ' + (ref.premium_rate * 100).toFixed(0)
+          + '% of CWI — ' + (BAND_POS[tierKey] || 'within the band') + ' (SPEC §4.5.8).');
+      }
+      if (ref.payout_multiple != null && ref.reimbursement_percentage != null) {
+        var pr = premiumRange(freq);
+        if (pr) {
+          out.push('Max payout = premium × ' + ref.payout_multiple + ' = '
+            + money(pr.low * ref.payout_multiple) + ' to ' + money(pr.high * ref.payout_multiple) + '.');
+        }
+      }
+      if (ref.reimbursement_percentage != null) {
+        out.push('Reimbursement is a fixed ' + pct(ref.reimbursement_percentage)
+          + ' of each covered loss (not derived from CWI).');
+      }
+      if (!out.length) return '';
+      return '<div class="text-muted mt-2">'
+        + out.map(function (l) { return '<div>' + l + '</div>'; }).join('') + '</div>';
+    }
+
+    function summaryLine(tierKey, ref, freq) {
+      var label = TYPE_LABEL[typeSelect.value] || typeSelect.value;
+      var lead = tierKey === 'single'
+        ? 'For <strong>' + label + '</strong> insurance, we suggest a premium '
+        : 'For the <strong>' + TIER_LABEL[tierKey] + '</strong> tier of <strong>' + label + '</strong> insurance, we suggest a premium ';
+      var pr = premiumRange(freq);
+      var bits = ['between ' + rangeMoney(pr) + ' per ' + freq.label];
+      if (ref.reimbursement_percentage != null) bits.push('reimbursing ' + pct(ref.reimbursement_percentage) + ' of each covered loss');
+      if (pr && ref.payout_multiple != null && ref.reimbursement_percentage != null) {
+        bits.push('up to ' + money(pr.low * ref.payout_multiple) + '–' + money(pr.high * ref.payout_multiple) + ' back');
+      } else if (ref.claims_per_week != null) {
+        bits.push(Math.ceil(ref.claims_per_week * freq.week_equiv) + ' claim(s) per ' + freq.label);
+      }
+      return lead + bits.join(', ') + '.';
+    }
+
+    function render() {
+      var prod = (REC.products || {})[typeSelect.value] || {};
+      var tiered = !!(toggle && toggle.checked);
+      var focusKey = tiered ? (LEVEL_TIER[rankSel && rankSel.value] || 'basic') : 'single';
+      var focusRef = prod[focusKey] || prod.single || prod.basic;
+      var freq = currentFreq();
+
+      summaryEl.innerHTML = focusRef ? summaryLine(focusKey, focusRef, freq) : 'Recommendation unavailable.';
+
+      // Only the tier the teacher is actually configuring, plus its derivation.
+      detailEl.innerHTML = focusRef
+        ? detailBlock(focusKey, focusRef, freq) + mathLines(focusKey, focusRef, freq)
+        : '';
+    }
+
+    typeSelect.addEventListener('change', render);
+    if (freqSelect) freqSelect.addEventListener('change', render);
+    if (toggle) toggle.addEventListener('change', render);
+    if (rankSel) rankSel.addEventListener('change', render);
+    render();
   })();
 </script>
 {% endblock %}

@@ -60,6 +60,7 @@ ocp.db
 ocp.db-*
 ocp.db-shm
 ocp.db-wal
+iap-settings.yaml
 
 # Agent worktree artifacts
 .claude/worktrees/
