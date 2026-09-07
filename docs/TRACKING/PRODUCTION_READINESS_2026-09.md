@@ -901,6 +901,28 @@ the audited set to `/` while the gate stayed green. It now serves `github-pages/
 `http.server`, needs no Flask, and no longer has a skip-if-no-server-listening branch that made an
 unrun audit read as a pass.
 
+**Status-page branch fully ported — CLOSED 2026-09-07.** `codex/status-page-integration` was merged
+at `5a16d8ea5` and then gained one further commit, `86fca6692`, which is now cherry-picked as
+`599dc7e7b`. It retires `/health/deep` in favor of `/health/status`, which returns bounded signals —
+key, layer, outcome, epistemic state, diagnostic code — and no table counts, tenant data, or raw
+exception text. The distinction that makes it worth having is `UNKNOWN`/`CHECK_NOT_REGISTERED`: an
+unmonitored capability reports that it was not observed rather than reporting health, so the absence
+of a check cannot read as a passing one. That is the same discipline as the CI evidence runner's
+`NOT_EVALUATED`, applied to runtime. `derive_capability_cards` / `derive_platform_checks` move into
+`status/projection.py` and the public page gains a platform-health section. The branch carries no
+further unported work.
+
+Two defects in the new `deploy-status.yml` were fixed rather than ported (`d50838d10`). Its final
+verification step curled `/health/status` on the **status service**, but that path belongs to the
+application; the status service exposes `/health`. `curl --fail` would have 404'd on every deploy
+*after* both Cloud Run revisions were already live — a gate failing for a reason unrelated to what it
+checks, at the point where it is least actionable. And its `paths` filters triggered on
+`tests/dom/operation/test_health.py` while the test job never ran that file: a trigger that gates on
+a file it does not execute is the matches-nothing shape again, in its eighth recorded instance on
+this branch. The filter now names only what the job runs; that test's evidence is selected by
+constitutional CI, which is where it belongs. The Postgres service image also moves to the ECR
+mirror, matching the three other workflows that run one.
+
 **Branch rename — PREPARED 2026-09-06, remote step not yet executed.** The decision recorded above
 ("merge `CTH_v2.0` into `main`, or repoint the deploy trigger") was resolved by renaming rather than
 merging: `main` → `legacy_main`, then `CTH_v2.0` → `main`, then delete `legacy_main`. The v1 line is
