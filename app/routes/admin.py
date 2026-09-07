@@ -131,7 +131,7 @@ from app.services.insurance_policy_service import (
 # TODO (Phase 4): store_entitlement_service deleted
 # from app.services.store_entitlement_service import get_insurance_claim, get_last_entitlement_end_for_policy_version, derive_display_status
 from app.services.classroom_setup import (
-    create_class_with_roster,
+
     create_teacher_account_with_class,
     create_pending_student_seat,
     delete_seat_with_profile,
@@ -161,6 +161,10 @@ from app.services.class_configuration_query_service import (
     get_banking_settings,
     get_hall_pass_settings,
     has_personalized_class,
+)
+from app.services.class_configuration_view_models import (
+    build_account_settings_page_view,
+    build_feature_settings_page_view,
 )
 from app.services.admin_identity_service import delete_admin_account_rows
 from app.services.admin_settings_service import create_rent_settings, create_banking_settings
@@ -3524,17 +3528,12 @@ def settings():
         return redirect(url_for('admin.settings'))
 
     # GET: Show settings form
-    # Derive blocks from ClassEconomy (canonical class anchor)
-    blocks = [
-        {'block': cls.section or cls.join_code or '', 'class_label': cls.display_name}
-        for cls in get_all_classes_by_teacher(user_id)
-    ]
+    class_view = build_account_settings_page_view(user_id)
 
-    # Pass admin object directly so template can call methods like get_display_username()
     return render_template(
         'admin_settings.html',
         admin=admin,
-        blocks=blocks,
+        view=class_view,
         current_page='settings',
         page_title='Account Personalization'
     )
@@ -8367,7 +8366,6 @@ def upload_students():
         flash("No file provided", "admin_error")
         return redirect(url_for('admin.students'))
 
-    force_new_class = request.form.get("force_new_class") == "1"
     roster_sync = request.form.get("roster_sync") == "1"
     confirm_roster_delete = request.form.get("confirm_roster_delete") == "1"
 
@@ -8396,66 +8394,6 @@ def upload_students():
                     "updated_at": utc_now(),
                 },
             )
-
-        if force_new_class and not roster_sync:
-            from app.models import Seat, IdentityProfile
-            from app.utils.join_code import generate_join_code
-            from app.hash_utils import hash_username_lookup
-
-            def _row_value(row, *keys):
-                for key in keys:
-                    value = row.get(key)
-                    if value is not None and str(value).strip():
-                        return _sanitize_roster_text(value)
-                return ""
-
-            stream = io.StringIO(content, newline=None)
-            csv_input = csv.DictReader(stream)
-            rows = []
-            class_sections = set()
-            class_names = set()
-            for row in csv_input:
-                first_name = _row_value(row, "first_name", "First Name")
-                last_name = _row_value(row, "last_name", "Last Name")
-                notes = _row_value(row, "notes", "Notes", "Additional Notes")
-                class_section = _row_value(row, "class_section", "Class Section", "Class Section Name", "Section")
-                class_name = _row_value(row, "class_name", "Class Name", "Class Names", "ClassName", "Class")
-                if class_section:
-                    class_sections.add(class_section.strip().upper())
-                if class_name:
-                    class_names.add(class_name.strip().lower())
-                if first_name or last_name or notes:
-                    rows.append({
-                        "first_name": first_name,
-                        "last_name": last_name,
-                        "notes": notes or None,
-                        "class_section": class_section or None,
-                        "class_name": class_name or None,
-                    })
-
-            if not rows:
-                flash("Template is empty. Add at least one student row before creating the class.", "error")
-                return redirect(url_for("admin.onboarding"))
-            if len(class_sections) > 1 or len(class_names) > 1:
-                flash("You can only create one class at a time", "error")
-                return redirect(url_for("admin.onboarding"))
-
-            join_code = generate_join_code()
-
-            class_name = next((row.get("class_name") for row in rows if row.get("class_name")), None)
-            if not class_name:
-                class_name = next((row.get("class_section") for row in rows if row.get("class_section")), None)
-            class_name = (class_name or "").strip() or "New Class"
-            class_row = create_class_with_roster(
-                user_id=user_id,
-                join_code=join_code,
-                class_name=class_name,
-                rows=rows,
-            )
-
-            establish_teacher_session(db.session.get(User, user_id))
-            flash("Class created and roster uploaded. You are now switched into the new class.", "admin_success")
-            return redirect(url_for("admin.dashboard"))
 
         if roster_sync:
             from app.models import Seat, IdentityProfile
@@ -8582,149 +8520,124 @@ def upload_students():
             )
             return redirect(url_for("admin.students"))
 
-        stream = io.StringIO(content, newline=None)
-        csv_input = csv.DictReader(stream)
-        added_count = 0
-        errors = 0
-        duplicated = 0
-
-        from app.models import Seat, IdentityProfile
-        from app.hash_utils import hash_username_lookup
-        import random
-        import string
-
-        # v2: All CSV uploads target the current canonical class.
-        # block/period is display metadata only (INV-CORE) — never a scoping key.
-        class_id = (getattr(g.canonical_context, "class_id", None) or "").strip()
-        if not class_id:
-            flash("Select a class before uploading roster data.", "error")
-            return redirect(url_for("admin.students"))
-
-        class_row = verify_teacher_owns_class(class_id, user_id)
-        if not class_row:
-            flash("Class not found or you do not own it.", "error")
-            return redirect(url_for("admin.students"))
-
-        join_code = get_display_join_code(class_id)
-
-        # Keep track of matched DB seats during this upload to avoid recreating them
-        matched_seats = set()
-        name_counts_in_run = {}  # (class_id, name_key) -> count
-
-        for row in csv_input:
-            try:
-                first_name = (row.get('first_name') or row.get('First Name') or '').strip()
-                last_name = (row.get('last_name') or row.get('Last Name') or '').strip()
-
-                if not first_name and not last_name:
-                    continue
-                if not first_name or not last_name:
-                    raise ValueError("Missing required fields.")
-
-                claim_first_name_hash = hash_username_lookup(first_name.lower())
-                claim_last_name_hash = hash_username_lookup(last_name.lower())
-                name_key = (first_name.lower(), last_name.lower())
-
-                # Find all seats in the DB for this class with the same name hashes.
-                db_seats = (
-                    Seat.query
-                    .join(IdentityProfile, IdentityProfile.seat_id == Seat.id)
-                    .filter(
-                        Seat.class_id == class_id,
-                        Seat.claim_first_name_hash == claim_first_name_hash,
-                        Seat.claim_last_name_hash == claim_last_name_hash,
-                    )
-                    .all()
-                )
-
-                # Check if we can match this row to an unmatched existing seat in the DB
-                matched_seat = None
-                for s in db_seats:
-                    if s.id not in matched_seats:
-                        matched_seat = s
-                        matched_seats.add(s.id)
-                        break
-
-                if matched_seat:
-                    # This seat already exists, skip creating it
-                    duplicated += 1
-                    continue
-
-                # If we got here, we need to create a new Seat.
-                # Dedupe symmetry rule: once any duplicate exists in this class (either in the
-                # DB or created in this upload run), ALL seats with this name require a
-                # dedupe_code — including seats that already exist without one. This prevents
-                # the asymmetry where seat #1 is claimable without a code but seat #2 requires
-                # one.
-                total_existing = len(db_seats) + name_counts_in_run.get((class_id, name_key), 0)
-                is_collision = total_existing > 0
-
-                dedupe_code = None
-                if is_collision:
-                    alphabet = string.ascii_uppercase + string.digits
-                    dedupe_code = "".join(random.choices(alphabet, k=4))
-
-                    # Backfill: if the first DB seat for this name still has no dedupe_code,
-                    # assign one now so it cannot be claimed without a code either.
-                    for s in db_seats:
-                        if s.dedupe_code is None:
-                            backfill_code = "".join(random.choices(alphabet, k=4))
-                            s.dedupe_code = backfill_code
-                            # Regenerate its fingerprint to be code-scoped too.
-                            s.roster_fingerprint = hash_username_lookup(
-                                f"{class_id}|{first_name.lower()}|{last_name.lower()}|{backfill_code}"
-                            )
-
-                name_counts_in_run[(class_id, name_key)] = name_counts_in_run.get((class_id, name_key), 0) + 1
-
-                # Roster fingerprint is class-scoped (INV-CORE: no cross-class correlators).
-                if dedupe_code:
-                    roster_fingerprint = hash_username_lookup(
-                        f"{class_id}|{first_name.lower()}|{last_name.lower()}|{dedupe_code}"
-                    )
-                else:
-                    roster_fingerprint = hash_username_lookup(
-                        f"{class_id}|{first_name.lower()}|{last_name.lower()}"
-                    )
-
-                # Create Seat (unclaimed account)
-                seat = create_roster_student_seat(
-                    class_id=class_id,
-                    first_name=first_name,
-                    last_name=last_name,
-                    dedupe_code=dedupe_code,
-                    claim_first_name_hash=claim_first_name_hash,
-                    claim_last_name_hash=claim_last_name_hash,
-                    roster_fingerprint=roster_fingerprint,
-                )
-                added_count += 1
-            except Exception as e:
-                current_app.logger.error(f"Error processing row {row}: {e}")
-                errors += 1
-
-        # Build success message
-        success_msg = f"{added_count} roster seats created successfully"
-        if errors > 0:
-            success_msg += f"\n{errors} rows could not be processed"
-        if duplicated > 0:
-            success_msg += f"\n{duplicated} duplicate seats skipped"
-        if join_code:
-            success_msg += f"\n\nJoin Code: {join_code}"
-            success_msg += "\nShare this code with your students so they can claim their accounts."
-
-        flash(success_msg, "admin_success")
+        flash("CSV add-only upload has been replaced. Use the Add Students grid on the Students page.", "error")
 
     return redirect(url_for('admin.students'))
 
 
-@admin_bp.route('/download-csv-template')
+@admin_bp.route('/students/bulk-add', methods=['POST'])
 @admin_required
-def download_csv_template():
+def bulk_add_students():
+    """Provision new student seats from a paste-based staging grid.
+
+    Accepts JSON: {"students": [{"first_name": "...", "last_name": "...", "notes": "..."}, ...]}
+    Class scope comes from g.canonical_context.class_id.
     """
-    Serves the student_upload_template.csv from app/data/.
-    """
-    template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "student_upload_template.csv")
-    return send_file(template_path, as_attachment=True, download_name="student_upload_template.csv", mimetype='text/csv')
+    import random
+    import string
+    from app.hash_utils import hash_username_lookup
+    from app.services.classroom_setup import create_roster_student_seat
+
+    class_id = getattr(g.canonical_context, "class_id", None)
+    if not class_id:
+        return jsonify({"status": "error", "message": "No class selected."}), 400
+
+    user_id = g.canonical_context.user_id
+    class_row = verify_teacher_owns_class(class_id, user_id)
+    if not class_row:
+        return jsonify({"status": "error", "message": "Class not found or you do not own it."}), 403
+
+    data = request.get_json(silent=True) or {}
+    raw_students = data.get("students", [])
+    if not isinstance(raw_students, list) or not raw_students:
+        return jsonify({"status": "error", "message": "No students provided."}), 400
+
+    # --- Pass 1: validate, normalize, determine collision groups ---
+    validated = []  # list of (index, first_name, last_name, notes)
+    errors = []
+    for i, row in enumerate(raw_students):
+        if not isinstance(row, dict):
+            errors.append({"row": i, "message": "Invalid row."})
+            continue
+        fn = _sanitize_roster_text((row.get("first_name") or "").strip())
+        ln = _sanitize_roster_text((row.get("last_name") or "").strip())
+        notes = _sanitize_roster_text((row.get("notes") or "").strip()) or None
+        if not fn and not ln:
+            continue
+        if not fn:
+            errors.append({"row": i, "message": "First name is required."})
+            continue
+        if not ln:
+            errors.append({"row": i, "message": "Last name is required."})
+            continue
+        validated.append((i, fn, ln, notes))
+
+    if not validated and errors:
+        return jsonify({"status": "error", "message": "No valid students.", "errors": errors}), 400
+    if not validated:
+        return jsonify({"status": "error", "message": "No students provided."}), 400
+
+    # Group by canonical fingerprint to detect batch-local collisions
+    from collections import defaultdict
+    name_groups: dict[tuple[str, str], list[int]] = defaultdict(list)
+    for idx, (i, fn, ln, notes) in enumerate(validated):
+        name_key = (fn.lower(), ln.lower())
+        name_groups[name_key].append(idx)
+
+    collision_keys = {k for k, v in name_groups.items() if len(v) > 1}
+
+    # Pre-assign dedupe codes for all members of collision groups
+    dedupe_codes: dict[int, str] = {}
+    alphabet = string.ascii_uppercase + string.digits
+    for name_key in collision_keys:
+        for idx in name_groups[name_key]:
+            dedupe_codes[idx] = "".join(random.choices(alphabet, k=4))
+
+    # --- Pass 2: provision all seats with complete claim state ---
+    idempotency_hash = hashlib.sha256(
+        "|".join(f"{fn}:{ln}" for _, fn, ln, _ in validated).encode("utf-8")
+    ).hexdigest()[:16]
+    idempotency_key = f"feat:iden:bulk-add-students:{user_id}:{class_id}:{idempotency_hash}"
+
+    created = 0
+    with FEATContext("FEAT-IDEN-001", idempotency_key=idempotency_key):
+        for idx, (i, fn, ln, notes) in enumerate(validated):
+            try:
+                dedupe_code = dedupe_codes.get(idx)
+                claim_fn_hash = hash_username_lookup(fn.lower())
+                claim_ln_hash = hash_username_lookup(ln.lower())
+
+                if dedupe_code:
+                    roster_fp = hash_username_lookup(
+                        f"{class_id}|{fn.lower()}|{ln.lower()}|{dedupe_code}"
+                    )
+                else:
+                    roster_fp = hash_username_lookup(
+                        f"{class_id}|{fn.lower()}|{ln.lower()}"
+                    )
+
+                create_roster_student_seat(
+                    class_id=class_id,
+                    first_name=fn,
+                    last_name=ln,
+                    notes=notes,
+                    dedupe_code=dedupe_code,
+                    claim_first_name_hash=claim_fn_hash,
+                    claim_last_name_hash=claim_ln_hash,
+                    roster_fingerprint=roster_fp,
+                )
+                created += 1
+            except Exception as e:
+                current_app.logger.error(f"Error provisioning student row {i}: {e}")
+                errors.append({"row": i, "message": "Failed to create student."})
+
+    join_code = get_display_join_code(class_id)
+    return jsonify({
+        "status": "success" if not errors else "partial",
+        "created": created,
+        "errors": errors,
+        "join_code": join_code,
+    })
 
 
 @admin_bp.route('/export-class-roster')
@@ -9761,43 +9674,73 @@ def feature_settings():
     GET: Display feature settings page with toggles for each period
     POST: Update feature settings
     """
-    user_id = g.canonical_context.user_id
+    class_id = g.canonical_context.class_id
+    if not class_id:
+        flash("Please select a class first.", "warning")
+        return redirect(url_for("admin.select_class_context"))
 
-    # Get all configured periods for this teacher from class economy anchors.
-    periods = _get_teacher_blocks(g.canonical_context)
-    join_codes_by_period = _get_join_codes_by_block(g.canonical_context, periods)
-    class_id_by_period = {
-        block: class_id
-        for block, class_id in _get_class_ids_by_block(g.canonical_context, periods).items()
-        if class_id
-    }
-
-    period_settings = {}
-    for period in periods:
-        scoped_features = get_class_feature_settings(None, class_id=class_id_by_period.get(period))
-        period_settings[period] = scoped_features["features"] if scoped_features else ClassFeature.defaults_dict()
+    view = build_feature_settings_page_view(class_id)
+    if not view:
+        abort(404)
 
     return render_template(
         'admin_feature_settings.html',
         current_page='feature_settings',
-        periods=periods,
-        period_settings=period_settings,
-        join_codes_by_period=join_codes_by_period,
-        features_list=[
-            ('payroll_enabled', 'Payroll', 'payments', 'Time tracking and student payments'),
-            ('insurance_enabled', 'Insurance', 'shield', 'Insurance policies and claims'),
-            ('banking_enabled', 'Banking', 'account_balance', 'Savings accounts and interest'),
-            ('rent_enabled', 'Rent', 'home', 'Housing costs and payments'),
-            ('hall_pass_enabled', 'Hall Pass', 'confirmation_number', 'Bathroom and water break passes'),
-            ('store_enabled', 'Store', 'storefront', 'Marketplace for student rewards'),
-        ]
+        view=view,
     )
+
+
+@admin_bp.route('/feature-settings/update', methods=['POST'])
+@admin_required
+def update_class_feature_setting():
+    """Toggle a single feature for the current class via AJAX."""
+    class_id = g.canonical_context.class_id
+    if not class_id:
+        return jsonify({'status': 'error', 'message': 'No class selected.'}), 400
+
+    try:
+        data = request.get_json()
+        feature = data.get('feature', '').strip()
+        enabled = bool(data.get('enabled', False))
+
+        valid_features = {'payroll', 'insurance', 'banking', 'rent', 'hall_pass', 'store'}
+        if feature not in valid_features:
+            return jsonify({'status': 'error', 'message': f'Unknown feature: {feature}'}), 400
+
+        current_features = get_class_feature_settings(None, class_id=class_id)
+        enabled_features = {
+            name for name in valid_features
+            if current_features and current_features["features"].get(f'{name}_enabled')
+        }
+        if enabled:
+            enabled_features.add(feature)
+        else:
+            enabled_features.discard(feature)
+
+        payload_hash = hashlib.sha256(
+            json.dumps({"class_id": class_id, "feature": feature, "enabled": enabled}, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:16]
+        idempotency_key = f"feat:class:feature-toggle:{class_id}:{payload_hash}"
+
+        db.session.rollback()
+        with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
+            replace_enabled_class_features(class_id, enabled_features)
+
+        return jsonify({
+            'status': 'success',
+            'message': f'{feature} {"enabled" if enabled else "disabled"}.',
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error updating feature setting: {e}")
+        return jsonify({'status': 'error', 'message': 'An internal error occurred.'}), 500
 
 
 @admin_bp.route('/feature-settings/period/<period>', methods=['POST'])
 @admin_required
 def update_period_feature_settings(period):
-    """Update feature settings for a specific period via AJAX."""
+    """Update feature settings for a specific period via AJAX (legacy)."""
     user_id = g.canonical_context.user_id
 
     try:
@@ -10219,8 +10162,61 @@ def onboarding_status():
 @admin_bp.route('/onboarding', methods=['GET'])
 @admin_required
 def onboarding():
-    """Teacher onboarding page for creating a brand-new class from a blank roster template."""
-    return render_template('admin_create_class.html')
+    """Redirect to the standalone create-class form."""
+    return redirect(url_for('admin.create_new_class'))
+
+
+@admin_bp.route('/create-class', methods=['GET', 'POST'])
+@admin_required
+def create_new_class():
+    """Create a new class for an authenticated teacher."""
+    if request.method == 'GET':
+        return render_template('admin_create_class_form.html')
+
+    ctx = g.canonical_context
+    user_id = ctx.user_id
+
+    class_display_name = request.form.get('class_display_name', '').strip()
+    section = request.form.get('section', '').strip() or None
+    teacher_display_name = request.form.get('teacher_display_name', '').strip()
+
+    if not class_display_name or not teacher_display_name:
+        flash("Class name and your display name are required.", "error")
+        return render_template('admin_create_class_form.html')
+
+    from app.utils.join_code import generate_join_code
+    from app.services.classroom_setup import create_class
+
+    join_code = generate_join_code()
+    payload_hash = hashlib.sha256(
+        f"{user_id}:{class_display_name}:{section}:{join_code}".encode("utf-8")
+    ).hexdigest()[:16]
+    idempotency_key = f"feat:class:create-class:{user_id}:{payload_hash}"
+
+    db.session.rollback()
+    with FEATContext("FEAT-CLASS-001", idempotency_key=idempotency_key):
+        economy = create_class(
+            user_id,
+            join_code=join_code,
+            display_name=class_display_name,
+            section=section,
+        )
+        teacher_seat = Seat.query.filter_by(
+            user_id=user_id, class_id=economy.class_id, role="teacher"
+        ).first()
+        profile = IdentityProfile(
+            seat_id=teacher_seat.id,
+            class_id=economy.class_id,
+            profile_type="teacher",
+            first_name=teacher_display_name,
+            last_name="",
+        )
+        db.session.add(profile)
+        db.session.flush()
+
+    establish_teacher_session(db.session.get(User, user_id))
+    flash(f"Class \"{class_display_name}\" created. You are now in the new class.", "success")
+    return redirect(url_for('admin.dashboard'))
 
 
 @admin_bp.route('/onboarding/skip', methods=['POST'])
