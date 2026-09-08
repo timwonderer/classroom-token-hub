@@ -54,7 +54,20 @@ class StoreItemForm(FlaskForm):
     # Redemption settings (for delayed-use items)
     redemption_prompt = TextAreaField('Redemption Prompt (optional, for delayed-use items)', validators=[Optional()])
 
+    # Rent linkage. The store owns this, not Rent Settings: the teacher decides
+    # here whether paying rent hands the student this item, and how many. The
+    # flag is stored on the rent policy rather than on the product, which is
+    # what makes a change apply from the next cycle onward — see
+    # RentSettings.validate_satisfaction_benefits.
+    is_rent_linked = BooleanField('Students receive this item when they pay rent', default=False)
+    rent_linked_quantity = IntegerField('Quantity granted per rent payment', validators=[Optional()])
+
     submit = SubmitField('Save Item')
+
+    def validate_rent_linked_quantity(self, field):
+        """Require a positive quantity when the item is rent linked."""
+        if self.is_rent_linked.data and (not field.data or field.data <= 0):
+            raise ValidationError('Quantity is required and must be greater than 0 for a rent-linked item.')
 
     def validate_bundle_quantity(self, field):
         """Validate bundle quantity when bundle is enabled."""
@@ -143,7 +156,7 @@ class StudentPinPassphraseForm(FlaskForm):
 
 class StudentLoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
-    pin = PasswordField('PIN', validators=[DataRequired()])
+    passphrase = PasswordField('Passphrase', validators=[DataRequired()])
     turnstile_token = HiddenField('cf-turnstile-response')
     submit = SubmitField('Login')
 

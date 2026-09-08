@@ -17,13 +17,13 @@ from datetime import datetime
 from typing import Any
 
 from app.extensions import db
-from app.models import StoreItem, EntitlementEvent, RentSettings, ClassEconomy
+from app.models import StoreProduct, EntitlementEvent, RentSettings, ClassEconomy
 
 
 @dataclass(frozen=True)
 class CollectiveProgressView:
     """Pre-computed progress state for collective goal items."""
-    item_id: int
+    item_id: str
     purchase_count: int
     target_count: int
     remaining_count: int
@@ -41,14 +41,18 @@ class StoreItemCardView:
     Eliminates all template-level rent entitlement logic (lines 30-39 of student_shop.html).
     All boolean flags and pricing state are pre-calculated.
     """
-    item_id: int
+    # The product lineage — stable across edits. Use this for anything that
+    # aggregates over the product (visibility, goal progress, stock).
+    item_id: str
     name: str
     description: str | None
     display_price: str  # Pre-formatted as "$X.XX"
     display_regular_price: str  # Pre-formatted as "$X.XX" (used in rent perk badges)
     price_amount: str  # Unformatted decimal string for data attributes
     regular_price_amount: str  # Unformatted decimal string for data attributes
-    policy_uuid: str | None  # For rent policy tracking in purchase modal
+    # The exact version on sale. This is what a purchase must quote back, so
+    # the terms the student saw are the terms they are charged.
+    policy_uuid: str | None
     item_type: str  # 'immediate', 'delayed', 'collective', 'hall_pass'
     inventory_available: int | None  # None means unlimited
     limit_per_student: int | None
@@ -65,7 +69,6 @@ class StoreItemCardView:
     is_rent_perk_item: bool
     is_rent_covered: bool  # Rendered with reduced opacity if True
     has_rent_free_purchase: bool
-    has_legacy_rent_free_purchase: bool
     has_any_rent_free_purchase: bool
     rent_free_units_available: int | None  # None, -1 (unlimited), or count
 
@@ -79,16 +82,19 @@ class StoreItemCardView:
 
     @property
     def display_rent_perk_message(self) -> str | None:
-        """Return the rent perk badge message, or None if not applicable."""
+        """Return the rent perk badge message, or None if not applicable.
+
+        The message describes units the student already **holds**, so it says
+        where to find them. Wording it as a price ("free purchase") invited the
+        reading that buying again costs nothing, which was never true.
+        """
         if not self.has_any_rent_free_purchase:
             return None
         if self.rent_free_units_available == -1:
-            return "Unlimited free uses"
-        if self.has_legacy_rent_free_purchase:
-            return "Free with paid rent"
+            return "Unlimited free uses in My Items"
         if self.rent_free_units_available and self.rent_free_units_available > 0:
             plural = "use" if self.rent_free_units_available == 1 else "uses"
-            return f"{self.rent_free_units_available} free {plural} remaining"
+            return f"{self.rent_free_units_available} free {plural} in My Items"
         return None
 
 
@@ -101,7 +107,7 @@ class EntitlementCardView:
     Eliminates template-level ORM access (lines 198-234 of student_shop.html).
     """
     entitlement_id: str
-    item_id: int
+    item_id: str
     item_name: str  # Flattened from ORM: entitlement.store_item.name
     item_type: str  # 'immediate', 'delayed', 'collective', 'hall_pass'
     item_description: str | None  # Flattened from ORM
@@ -123,60 +129,66 @@ class EntitlementCardView:
 
 
 def build_store_item_card_view(
-    item: StoreItem,
+    item: StoreProduct,
     class_id: str,
     has_paid_rent: bool,
-    rent_item_types_by_store_id: dict[int, Collection[str]],
-    rent_free_entitlement_counts: dict[int, int | None],
-    collective_progress_by_item: dict[int, CollectiveProgressView] | None = None,
+    rent_item_types_by_lineage: dict[str, Collection[str]],
+    rent_free_entitlement_counts: dict[str, int | None],
+    collective_progress_by_item: dict[str, CollectiveProgressView] | None = None,
+    stock_remaining: int | None = None,
 ) -> StoreItemCardView:
     """
     Build a pre-computed view model for a store item card.
 
     Eliminates all {% set %} logic from template (lines 30-39, 100-135).
 
+    Every caller-supplied map is keyed by ``product_lineage_uuid``, not by the
+    version's ``policy_uuid``. Rent linkage, goal progress and remaining stock
+    are all properties of the *product*; keying them by version would make a
+    teacher's edit look like a brand-new product with a fresh goal and full
+    shelves.
+
     Args:
-        item: The StoreItem model
+        item: The StoreProduct version currently on sale
         class_id: Class scope for multi-tenancy
         has_paid_rent: Whether current student has paid rent
-        rent_item_types_by_store_id: Dict mapping item.id to list of rent types
-        rent_free_entitlement_counts: Dict mapping item.id to free use count
-        collective_progress_by_item: Pre-computed collective progress, if available
+        rent_item_types_by_lineage: lineage uuid -> rent perk types
+        rent_free_entitlement_counts: lineage uuid -> free use count (-1 unlimited)
+        collective_progress_by_item: lineage uuid -> pre-computed progress
+        stock_remaining: Derived units left, or None when inventory is unlimited
 
     Returns:
         Frozen StoreItemCardView ready for template consumption
     """
+    lineage = item.product_lineage_uuid
+
     # Pre-compute all rent entitlement flags (audit violations lines 30-39)
-    rent_item_types = rent_item_types_by_store_id.get(item.id, [])
+    rent_item_types = rent_item_types_by_lineage.get(lineage, [])
     is_privilege_rent_item = 'privilege' in rent_item_types
     is_per_use_rent_item = 'per_use' in rent_item_types
     is_hall_pass_item = item.item_type == 'hall_pass'
-    is_rent_perk_item = (not is_hall_pass_item) and (
-        (len(rent_item_types) > 0) or item.is_rent_linked
-    )
+    is_rent_perk_item = (not is_hall_pass_item) and len(rent_item_types) > 0
     is_rent_covered = (
         has_paid_rent and is_privilege_rent_item and not is_per_use_rent_item
     )
 
-    rent_free_units_available = rent_free_entitlement_counts.get(item.id)
+    rent_free_units_available = rent_free_entitlement_counts.get(lineage)
     has_rent_free_purchase = (
         rent_free_units_available is not None
         and (rent_free_units_available == -1 or rent_free_units_available > 0)
     )
-    has_legacy_rent_free_purchase = (
-        (not is_hall_pass_item)
-        and has_paid_rent
-        and item.is_rent_linked
-        and not is_rent_covered
-        and not has_rent_free_purchase
-    )
-    has_any_rent_free_purchase = has_rent_free_purchase or has_legacy_rent_free_purchase
+    has_any_rent_free_purchase = has_rent_free_purchase
 
     # Pre-compute pricing display (pre-formatted, no Jinja filters)
+    #
+    # Holding rent-perk units does NOT discount a purchase. A PERK grant
+    # (DOM-STORE-001 §A) is an entitlement the student already possesses — it
+    # is redeemed from My Items, not re-bought at $0. This branch used to quote
+    # $0.00 for anyone holding one, which nothing on the server ever honoured;
+    # it was invisible only for as long as purchases failed to debit at all.
     if is_rent_covered:
-        display_price = "$0.00"
-        price_amount = "0.00"
-    elif has_any_rent_free_purchase:
+        # Distinct case: the button is disabled ("Already Included"), so no
+        # purchase can be attempted and the zero is a statement, not a quote.
         display_price = "$0.00"
         price_amount = "0.00"
     else:
@@ -186,8 +198,10 @@ def build_store_item_card_view(
     display_regular_price = f"${item.price:.2f}"
     regular_price_amount = f"{item.price:.2f}"
 
-    # Pre-compute inventory state
-    is_out_of_stock = item.inventory is not None and item.inventory <= 0
+    # Pre-compute inventory state. ``inventory_total`` is the ceiling the
+    # teacher configured; what is left is derived from granted entitlements and
+    # supplied by the caller, so it is never stored and never drifts.
+    is_out_of_stock = stock_remaining is not None and stock_remaining <= 0
     button_disabled = is_rent_covered or is_out_of_stock
     if is_out_of_stock:
         button_text = "Out of Stock"
@@ -199,19 +213,19 @@ def build_store_item_card_view(
     # Pre-compute collective goal progress (audit violations lines 100-135)
     collective_progress = None
     if item.item_type == 'collective' and collective_progress_by_item:
-        collective_progress = collective_progress_by_item.get(item.id)
+        collective_progress = collective_progress_by_item.get(lineage)
 
     return StoreItemCardView(
-        item_id=item.id,
+        item_id=lineage,
         name=item.name,
         description=item.description,
         display_price=display_price,
         display_regular_price=display_regular_price,
         price_amount=price_amount,
         regular_price_amount=regular_price_amount,
-        policy_uuid=getattr(item, 'policy_uuid', None),
+        policy_uuid=item.policy_uuid,
         item_type=item.item_type,
-        inventory_available=item.inventory,
+        inventory_available=stock_remaining,
         limit_per_student=item.limit_per_student,
         is_bundle=item.is_bundle,
         bundle_quantity=item.bundle_quantity,
@@ -224,7 +238,6 @@ def build_store_item_card_view(
         is_rent_perk_item=is_rent_perk_item,
         is_rent_covered=is_rent_covered,
         has_rent_free_purchase=has_rent_free_purchase,
-        has_legacy_rent_free_purchase=has_legacy_rent_free_purchase,
         has_any_rent_free_purchase=has_any_rent_free_purchase,
         rent_free_units_available=rent_free_units_available,
         collective_progress=collective_progress,
@@ -340,7 +353,7 @@ def build_entitlement_card_view(
 
     return EntitlementCardView(
         entitlement_id=str(entitlement_id),
-        item_id=int(item_id),
+        item_id=str(item_id),
         item_name=item_name,
         item_type=item_type,
         item_description=item_description,
@@ -361,7 +374,7 @@ def build_entitlement_card_view(
 
 
 def build_collective_progress_view(
-    item: StoreItem,
+    item: StoreProduct,
     purchase_count: int,
     class_size: int | None = None,
 ) -> CollectiveProgressView:
@@ -371,7 +384,7 @@ def build_collective_progress_view(
     Pre-computes all calculations (audit violations lines 100-135).
 
     Args:
-        item: The StoreItem with collective_goal_type and collective_goal_target
+        item: The StoreProduct with collective_goal_type and collective_goal_target
         purchase_count: Current number of purchases for this item
         class_size: Total students in class (for 'whole_class' goals)
 
@@ -395,7 +408,7 @@ def build_collective_progress_view(
         display_expires_at = item.collective_goal_expires_at.strftime("%b %d, %Y")
 
     return CollectiveProgressView(
-        item_id=item.id,
+        item_id=item.product_lineage_uuid,
         purchase_count=purchase_count,
         target_count=target,
         remaining_count=remaining,

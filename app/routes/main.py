@@ -320,10 +320,10 @@ def verify_hall_pass(teacher_public_token):
             None,
         )
         status = "returned" if return_row else "left" if left_row else "approved"
-        time_out_str = None
+        time_out_value = None
         elapsed_mins = None
         if left_row:
-            time_out_str = left_row.timestamp.isoformat().replace('+00:00', 'Z')
+            time_out_value = left_row.timestamp
             if status == "left":
                 elapsed = canonical_temporal_resolver(
                     CLASS_LEVEL_EVALUATION,
@@ -334,9 +334,9 @@ def verify_hall_pass(teacher_public_token):
                 )
                 elapsed_mins = elapsed.elapsed_seconds // 60
 
-        return_time_str = None
+        return_time_value = None
         if return_row:
-            return_time_str = return_row.timestamp.isoformat().replace('+00:00', 'Z')
+            return_time_value = return_row.timestamp
 
         result = {
             'outcome': 'match',
@@ -348,10 +348,10 @@ def verify_hall_pass(teacher_public_token):
             ).strip(),
             'class_label': class_label,
             'destination': entry.destination,
-            'time_out': time_out_str,
+            'time_out': time_out_value,
             'status': status,
             'elapsed_mins': elapsed_mins,
-            'return_time': return_time_str,
+            'return_time': return_time_value,
         }
 
     return render_template(

@@ -33,6 +33,7 @@ that transitions the obligation from underpaid to fully paid.
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass, field
 from decimal import Decimal
 
@@ -42,9 +43,12 @@ from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.ledger_balance_query_service import get_available_balance
 from app.services.ledger_posting_service import create_pending_transaction_idempotent
 from app.services import entitlement_service
+from app.services import store_service
 from app.services.class_configuration_query_service import get_rent_settings
 from app.feats.base import requires_feat_context, FEATContext
 from app.feats.satisfy_obligation_feat import satisfy_obligation, SatisfyObligationRequest
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -73,22 +77,61 @@ class RentPaymentRequest:
 
 
 def _award_satisfaction_perks(settings: RentSettings, seat: Seat, correlation_id: str) -> int:
-    """Grant the configured PERK hall-pass entitlements for a satisfied rent obligation."""
+    """Grant the configured PERK entitlements for a satisfied rent obligation.
+
+    The benefit list is read from ``settings`` — the *frozen* rent policy the
+    obligation was assessed under, not the class's current one. That is what
+    makes rent-linked store items apply from the next cycle only: a teacher who
+    toggles an item today edits a policy version that no open obligation
+    references.
+    """
     grants = settings.get_satisfaction_benefit_grants()
+    if not grants:
+        return 0
+
     actor_seat_id = resolve_teacher_seat_for_class(seat.class_id).id
     awarded = 0
     for grant in grants:
-        # Phase-1 closed schema guarantees entitlement_type == HALL_PASS.
-        if grant["entitlement_type"] != "HALL_PASS":
-            continue
-        entitlement_service.grant_hall_passes(
-            seat,
-            grant["quantity"],
-            actor_seat_id=actor_seat_id,
-            correlation_id=correlation_id,
-            acquisition_type="PERK",
-            trigger_id=f"rent-perk:{correlation_id}",
+        lineage = grant.get("product_lineage_uuid")
+        product = (
+            store_service.get_current_version(seat.class_id, lineage)
+            if lineage
+            else None
         )
+        if lineage and product is None:
+            # The teacher deleted the product after linking it. Skip rather than
+            # fail: rent has already been paid, and refusing the perk must not
+            # unwind a settled obligation.
+            logger.warning(
+                "Rent perk references missing store product lineage=%s class=%s",
+                lineage,
+                seat.class_id,
+            )
+            continue
+
+        if grant["entitlement_type"] == "HALL_PASS":
+            entitlement_service.grant_hall_passes(
+                seat,
+                grant["quantity"],
+                actor_seat_id=actor_seat_id,
+                correlation_id=correlation_id,
+                acquisition_type="PERK",
+                trigger_id=f"rent-perk:{correlation_id}",
+                product_lineage_uuid=lineage,
+                policy_uuid=product.policy_uuid if product else None,
+            )
+        else:
+            entitlement_service.grant_store_entitlements(
+                seat,
+                grant["quantity"],
+                entitlement_type=grant["entitlement_type"],
+                product_lineage_uuid=lineage,
+                policy_uuid=product.policy_uuid,
+                actor_seat_id=actor_seat_id,
+                correlation_id=correlation_id,
+                acquisition_type="PERK",
+                trigger_id=f"rent-perk:{correlation_id}",
+            )
         awarded += grant["quantity"]
     return awarded
 

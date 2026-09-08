@@ -51,7 +51,7 @@ from app.feats.base import requires_feat_context, FEATContext, InvariantViolatio
 from app.access.scope import Scope
 from app.access import AccessScopeDenied, resolve_scope
 from app.models import (
-    ClassEconomy, EconomicEngine, Transaction, TransactionStatus, AttendanceSession, StoreItem, StoreItemVisibility,
+    ClassEconomy, EconomicEngine, Transaction, TransactionStatus, AttendanceSession, StoreProduct, StoreItemVisibility,
     # Legacy tap table removed; use attendance_sessions (DOM-PROD-001).
     # StudentItem removed — student_items unauthorized; use store_purchases + redemption_events (DOM-STORE-001)
     # StoreItemBlock removed — store_item_blocks unauthorized; use store_item_visibility (DOM-STORE-001)
@@ -65,7 +65,7 @@ from app.models import (
     LedgerBalanceSnapshot, User, UserRole, _quantize_currency,
     ObligationAssessment,
     AttendanceReasonCode, IdentityProfile, PayrollEvent, PolicyVersion,
-    EntitlementEvent, PendingAction,
+    EntitlementEvent, InsuranceClaim, InsurancePolicy, PendingAction,
 )
 from app.auth import (
     admin_required,
@@ -91,6 +91,7 @@ from app.utils.economy_policy import (
     get_class_feature_settings,
     get_feature_settings_row_for_class,
     get_price_recommendation_context,
+    get_policy_profile,
     normalize_policy_mode,
     replace_enabled_class_features,
     resolve_class_scope,
@@ -126,7 +127,7 @@ from app.feats.class_configuration import (
     InsuranceContractViolation,
 )
 # TODO (Phase 4): insurance_claim_feat deleted; use FEAT-STOR-003 instead
-# from app.feats.insurance_claim_feat import execute_claim_approval, execute_claim_rejection
+from app.feats.insurance_claim_feat import resolve_insurance_claim
 # TODO (Phase 4): store_entitlement_service deleted
 # from app.services.store_entitlement_service import get_insurance_claim, get_last_entitlement_end_for_policy_version, derive_display_status
 from app.services.classroom_setup import (
@@ -137,12 +138,18 @@ from app.services.classroom_setup import (
     update_or_create_roster_seat,
 )
 from app.services.payroll_settings_service import upsert_payroll_settings
+from app.services import store_service
+from app.services.store import collective_goals
 from app.services.store_service import (
-    create_store_item,
-    deactivate_store_item,
-    create_store_item_block,
-    deactivate_linked_store_item,
-    delete_rent_item,
+    publish_product,
+    supersede_product,
+    retire_lineage,
+    create_product_block,
+    get_live_product,
+    get_current_version,
+    list_products,
+    units_sold_by_lineage,
+    StoreServiceError,
 )
 from app.services.view_model_builders import build_identity_profile_view, build_store_management_view
 from app.services.class_configuration_economic_service import build_economic_view
@@ -286,6 +293,21 @@ _table_names_cache_lock = threading.Lock()
 
 # Create blueprint
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+
+def list_insurance_claims(*, class_id: str) -> list[InsuranceClaim]:
+    """Return canonical class-scoped insurance claims for teacher surfaces."""
+    return (
+        InsuranceClaim.query
+        .filter(InsuranceClaim.class_id == class_id)
+        .order_by(InsuranceClaim.submitted_at.desc(), InsuranceClaim.claim_id.desc())
+        .all()
+    )
+
+
+def get_insurance_claim(*, claim_id: str) -> InsuranceClaim | None:
+    """Resolve one canonical insurance claim by its UUID."""
+    return InsuranceClaim.query.filter(InsuranceClaim.claim_id == claim_id).first()
 
 _BANKING_REDIRECT_QUERY_KEYS = {
     "student",
@@ -1243,27 +1265,23 @@ def _destroy_class_scope_rows(*, class_id, canonical_context, **_ignored):
     # This is unconditional: destroying a class always tears down its store
     # catalog. (Previously gated on teacher block/section labels, which is
     # display-only metadata and never a valid precondition for cleanup.)
-    visible_seat_ids_for_class = (
-        db.session.query(StoreItemVisibility.seat_id)
-        .join(Seat, Seat.id == StoreItemVisibility.seat_id)
-        .filter(Seat.class_id == class_id)
+    # ``store_products.class_id`` is the isolation boundary, so every product
+    # version in this class is deletable and no other class can reference one.
+    # The previous version of this block asked the question sideways — it kept
+    # any product that still had a visibility row, and it spared class-wide
+    # products (which have no visibility rows at all) entirely.
+    class_product_lineages = (
+        db.session.query(StoreProduct.product_lineage_uuid)
+        .filter(StoreProduct.class_id == class_id)
         .subquery()
     )
     StoreItemVisibility.query.filter(
-        StoreItemVisibility.seat_id.in_(sa.select(visible_seat_ids_for_class))
+        StoreItemVisibility.product_lineage_uuid.in_(sa.select(class_product_lineages))
     ).delete(synchronize_session=False)
 
-    deletable_store_item_ids = (
-        db.session.query(StoreItem.id)
-        .filter(StoreItem.class_id == class_id)
-        .outerjoin(StoreItemVisibility, StoreItem.id == StoreItemVisibility.store_item_id)
-        .filter(StoreItemVisibility.store_item_id.is_(None))
-        .subquery()
-    )
     class_item_entitlement_ids = (
         db.session.query(EntitlementEvent.entitlement_id)
         .filter(
-            EntitlementEvent.product_id.in_(sa.select(deletable_store_item_ids)),
             EntitlementEvent.class_id == class_id,
             EntitlementEvent.event_type == "GRANTED",
             EntitlementEvent.acquisition_type == "PURCHASE",
@@ -1276,10 +1294,9 @@ def _destroy_class_scope_rows(*, class_id, canonical_context, **_ignored):
     ).delete(synchronize_session=False)
     EntitlementEvent.query.filter(
         EntitlementEvent.class_id == class_id,
-        EntitlementEvent.product_id.in_(sa.select(deletable_store_item_ids)),
     ).delete(synchronize_session=False)
-    StoreItem.query.filter(
-        StoreItem.id.in_(sa.select(deletable_store_item_ids))
+    StoreProduct.query.filter(
+        StoreProduct.class_id == class_id
     ).delete(synchronize_session=False)
 
     # Seats/ownership for this class
@@ -1403,11 +1420,20 @@ def _delete_teacher_recovery_and_credentials_rows(canonical_context):
 def _delete_teacher_store_rows(canonical_context):
     """Delete store rows owned by the teacher user."""
     user_id = canonical_context.user_id
-    store_item_ids_subq = db.session.query(StoreItem.id).filter_by(user_id=user_id).subquery()
-    EntitlementEvent.query.filter(
-        EntitlementEvent.product_id.in_(sa.select(store_item_ids_subq))
+    # Entitlements point at the lineage, not at any one version, so the subquery
+    # collects lineages rather than primary keys.
+    lineages_subq = (
+        db.session.query(StoreProduct.product_lineage_uuid)
+        .filter_by(user_id=user_id)
+        .subquery()
+    )
+    StoreItemVisibility.query.filter(
+        StoreItemVisibility.product_lineage_uuid.in_(sa.select(lineages_subq))
     ).delete(synchronize_session=False)
-    StoreItem.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    EntitlementEvent.query.filter(
+        EntitlementEvent.product_id.in_(sa.select(lineages_subq))
+    ).delete(synchronize_session=False)
+    StoreProduct.query.filter_by(user_id=user_id).delete(synchronize_session=False)
 
 
 def _delete_orphan_students(affected_student_ids):
@@ -2534,29 +2560,31 @@ def dashboard():
         .filter(
             PendingAction.class_id == active_class_id,
             PendingAction.authoritative_feat == "FEAT-STOR-002",
+            PendingAction.payload["outcome"].as_string().is_(None),
             EntitlementEvent.event_type == "GRANTED",
         )
         .count()
     )
     pending_hall_pass_requests = list_pending_hall_pass_requests_for_class(ctx.class_id)
     pending_hall_passes_count = len(pending_hall_pass_requests)
-    pending_insurance_claims_count = 0
-    total_pending_actions = pending_redemptions_count + pending_hall_passes_count
+    pending_insurance_claims = (
+        InsuranceClaim.query
+        .filter(
+            InsuranceClaim.class_id == active_class_id,
+            InsuranceClaim.status == 'SUBMITTED',
+        )
+        .order_by(InsuranceClaim.submitted_at.desc(), InsuranceClaim.claim_id.desc())
+        .all()
+    )
+    pending_insurance_claims_count = len(pending_insurance_claims)
+    total_pending_actions = (
+        pending_redemptions_count
+        + pending_hall_passes_count
+        + pending_insurance_claims_count
+    )
 
     # Get recent items for each pending type (limited for display)
-    recent_redemptions = [
-        SimpleNamespace(
-            id=ent.entitlement_id,
-            seat_id=ent.target_seat_id,
-            reason="",
-            request_time=ent.granted_at,
-        )
-        for ent in EntitlementEvent.query.filter(
-            EntitlementEvent.class_id == active_class_id,
-            EntitlementEvent.event_type == "GRANTED",
-            EntitlementEvent.acquisition_type == "PURCHASE",
-        ).order_by(EntitlementEvent.timestamp.desc()).limit(5).all()
-    ]
+    recent_redemptions = []
     recent_hall_passes = [
         SimpleNamespace(
             id=pending_request.request_id,
@@ -2566,15 +2594,29 @@ def dashboard():
         )
         for pending_request in pending_hall_pass_requests[:5]
     ]
-    recent_insurance_claims = []
+    recent_insurance_claims = [
+        SimpleNamespace(
+            claim_id=claim.claim_id,
+            seat_id=claim.target_seat_id,
+            description=(claim.claim_basis or {}).get('description', 'Insurance claim'),
+            claim_amount=(claim.claim_basis or {}).get('amount') or claim.result_amount,
+            filed_date=claim.submitted_at,
+        )
+        for claim in pending_insurance_claims[:5]
+    ]
 
+    # The product is resolved per row rather than joined. A product now has one
+    # row per version and ``EntitlementEvent.product_id`` names the lineage, so
+    # a SQL join on it would fan out to every version the teacher has ever
+    # saved. ``resolve_entitlement_product`` picks the single version the
+    # entitlement was actually created under.
     pending_redemptions = (
-        db.session.query(PendingAction, EntitlementEvent, StoreItem)
+        db.session.query(PendingAction, EntitlementEvent)
         .join(EntitlementEvent, EntitlementEvent.entitlement_id == PendingAction.entitlement_id)
-        .join(StoreItem, StoreItem.id == EntitlementEvent.product_id)
         .filter(
             PendingAction.class_id == active_class_id,
             PendingAction.authoritative_feat == "FEAT-STOR-002",
+            PendingAction.payload["outcome"].as_string().is_(None),
         )
         .order_by(PendingAction.submitted_at.desc())
         .limit(10)
@@ -2583,20 +2625,22 @@ def dashboard():
     pending_redemptions = [
         SimpleNamespace(
             id=pending.pending_action_id,
-            seat=SimpleNamespace(id=ent.target_seat_id),
-            store_item=item,
+            seat_id=ent.target_seat_id,
+            store_item=store_service.resolve_entitlement_product(ent),
             class_id=pending.class_id,
             purchased_at=pending.submitted_at,
             status='processing',
+            redemption_details=(pending.payload or {}).get('redemption_details', ''),
         )
-        for pending, ent, item in pending_redemptions
+        for pending, ent in pending_redemptions
     ]
+    recent_redemptions = pending_redemptions[:5]
 
     # Recent transactions (limited to 5 for display)
     recent_transactions = (
         Transaction.query
         .filter(Transaction.class_id == active_class_id)
-        .filter_by(is_void=False)
+        .filter(Transaction.status != TransactionStatus.VOID)
         .order_by(Transaction.timestamp.desc())
         .limit(5)
         .all()
@@ -2610,7 +2654,7 @@ def dashboard():
         .filter(Transaction.class_id == active_class_id)
         .filter(
             Transaction.timestamp >= today_start_db,
-            Transaction.is_void == False,
+            Transaction.status != TransactionStatus.VOID,
         )
         .count()
     )
@@ -3608,10 +3652,17 @@ def logout():
 
 
 def _get_rent_privileges_for_student(student, class_id, seat_id):
-    """Return rent privileges for a single student in the current class context.
+    """Return the privilege entitlements a student actually holds in this class.
 
-    Pre-paid system: Check if student has paid rent that COVERS the current period.
-    A payment made for January covers the student until the February due date.
+    This reads granted entitlements rather than predicting them from rent
+    configuration. The previous version listed every privilege the *policy*
+    promised whenever the student's rent looked paid, so a teacher who added a
+    rent-linked item mid-cycle immediately saw it credited to students who had
+    never received it, and a grant that failed left no trace at all.
+
+    ``acquisition_type`` already records why the student has the thing —
+    ``PERK`` for a rent grant, ``PURCHASE`` for a shop purchase — so the source
+    label is read off the event instead of being inferred.
     """
     rent_privileges = []
     if not class_id:
@@ -3622,67 +3673,43 @@ def _get_rent_privileges_for_student(student, class_id, seat_id):
     if not seat_id:
         return rent_privileges
 
-    rent_settings = get_rent_settings(class_id)
-    if not rent_settings:
+    granted = EntitlementEvent.query.filter(
+        EntitlementEvent.target_seat_id == seat_id,
+        EntitlementEvent.class_id == class_id,
+        EntitlementEvent.event_type == "GRANTED",
+        EntitlementEvent.entitlement_type == "PRIVILEGE",
+        EntitlementEvent.acquisition_type.in_(["PURCHASE", "PERK"]),
+    ).all()
+    if not granted:
         return rent_privileges
 
-    # Use a timezone-aware UTC datetime to match how expiry dates are stored.
-    now = utc_now()
-
-    # Calculate current due date and determine which coverage period we're in.
-    # Use the most recently PASSED due date for correct coverage matching.
-    from app.routes.student import _calculate_rent_coverage_due_date
-    coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
-    if not coverage_due_date:
-        return rent_privileges
-    coverage_month = coverage_due_date.month
-    coverage_year = coverage_due_date.year
-    seat_ids = [seat_id]
-    from app.services.obligations_service import get_paid_rent_assessments_for_cycle
-    has_paid_rent = bool(
-        seat_ids
-        and get_paid_rent_assessments_for_cycle(
-            class_id,
-            coverage_month,
-            coverage_year,
-            seat_ids=seat_ids,
+    # Drop anything already consumed, expired, or revoked.
+    terminal_ids = {
+        row[0]
+        for row in db.session.query(EntitlementEvent.entitlement_id)
+        .filter(
+            EntitlementEvent.class_id == class_id,
+            EntitlementEvent.entitlement_id.in_([e.entitlement_id for e in granted]),
+            EntitlementEvent.event_type.in_(("CONSUMED", "EXPIRED", "REVOKED")),
         )
-    )
+        .all()
+    }
 
-    # Read privilege items from canonical rent settings so mid-cycle edits
-    # don't change what students see until next cycle.
-    from app.services.store_service import get_frozen_privilege_items
-    rent_settings = get_rent_settings(class_id)
-    if not rent_settings:
-        return rent_privileges
-
-    frozen_privileges = get_frozen_privilege_items(rent_settings)
-    store_item_ids = [item['store_item_id'] for item in frozen_privileges if item.get('store_item_id')]
-    items_by_seat = set()
-    if store_item_ids and seat_id:
-        student_seat = Seat.query.filter_by(id=seat_id, class_id=class_id).first()
-        if student_seat:
-            student_items = EntitlementEvent.query.filter(
-                EntitlementEvent.target_seat_id == seat_id,
-                EntitlementEvent.product_id.in_(store_item_ids),
-                EntitlementEvent.event_type == "GRANTED",
-                EntitlementEvent.acquisition_type.in_(["PURCHASE", "PERK"]),
-            ).all()
-            items_by_seat = {si.product_id for si in student_items}
-
-    for frozen_item in frozen_privileges:
-        source = None
-        if has_paid_rent:
-            source = 'rent'
-        elif frozen_item.get('store_item_id') and frozen_item['store_item_id'] in items_by_seat:
-            source = 'purchased'
-
-        if source:
-            rent_privileges.append({
-                'name': frozen_item['name'],
-                'description': frozen_item.get('description'),
-                'source': source
-            })
+    seen_lineages = set()
+    for event in granted:
+        if event.entitlement_id in terminal_ids:
+            continue
+        if event.product_id in seen_lineages:
+            continue
+        product = store_service.resolve_entitlement_product(event)
+        if product is None:
+            continue
+        seen_lineages.add(event.product_id)
+        rent_privileges.append({
+            'name': product.name,
+            'description': product.description,
+            'source': 'rent' if event.acquisition_type == 'PERK' else 'purchased',
+        })
 
     return rent_privileges
 
@@ -3969,7 +3996,7 @@ def student_detail_public(actor_public_id):
             id=ent.entitlement_id,
             seat_id=ent.target_seat_id,
             class_id=ent.class_id,
-            store_item=db.session.get(StoreItem, ent.product_id),
+            store_item=store_service.resolve_entitlement_product(ent),
             store_item_id=ent.product_id,
             status=derive_display_status(ent.entitlement_id),
             purchased_at=ent.timestamp,
@@ -4010,8 +4037,40 @@ def student_detail_public(actor_public_id):
         if class_id else None
     )
 
-    # Removed legacy insurance enrollment lookup.
+    # Derive the student's current insurance from class-scoped entitlement
+    # history. Claims/consumptions do not end coverage; EXPIRED and REVOKED do.
     active_insurance = None
+    if class_id and scoped_seat:
+        insurance_grants = (
+            EntitlementEvent.query
+            .filter(
+                EntitlementEvent.class_id == class_id,
+                EntitlementEvent.target_seat_id == scoped_seat.id,
+                EntitlementEvent.entitlement_type == 'INSURANCE',
+                EntitlementEvent.event_type == 'GRANTED',
+            )
+            .order_by(EntitlementEvent.timestamp.asc(), EntitlementEvent.event_id.asc())
+            .all()
+        )
+        for grant in insurance_grants:
+            terminal = EntitlementEvent.query.filter(
+                EntitlementEvent.class_id == class_id,
+                EntitlementEvent.entitlement_id == grant.entitlement_id,
+                EntitlementEvent.event_type.in_(['EXPIRED', 'REVOKED']),
+            ).first()
+            if terminal:
+                continue
+            policy_uuid = (grant.payload or {}).get('policy_uuid')
+            policy = (
+                InsurancePolicy.query.filter_by(
+                    policy_uuid=policy_uuid,
+                    class_id=class_id,
+                ).first()
+                if policy_uuid else None
+            )
+            if policy:
+                active_insurance = SimpleNamespace(policy=policy, payment_current=True)
+                break
 
     # CRITICAL: Get scoped balances for current class_id + seat_id only.
     scoped_checking_balance = 0
@@ -4660,6 +4719,115 @@ import uuid
 def generate_collective_goal_instance_code():
     return str(uuid.uuid4())
 
+
+# Store item type -> the entitlement type a rent grant of it produces.
+_RENT_LINK_ENTITLEMENT_TYPES = {
+    'immediate': 'IMMEDIATE_USE',
+    'delayed': 'DELAYED_USE',
+    'collective': 'PRIVILEGE',
+    'hall_pass': 'HALL_PASS',
+}
+
+
+def _store_definition_from_form(form) -> dict:
+    """Translate the store form into a product-version definition.
+
+    Every field here is immutable once written; ``availability_state`` is
+    supplied separately by the caller because it is the one thing a saved row
+    may still change.
+    """
+    is_collective = form.item_type.data == 'collective'
+    return {
+        'name': form.name.data,
+        'description': form.description.data,
+        'item_type': form.item_type.data,
+        'price': form.price.data,
+        'tier': form.tier.data or None,
+        'inventory_total': form.inventory.data,
+        'limit_per_student': form.limit_per_student.data,
+        'auto_delist_date': _end_of_day_utc(form.auto_delist_date.data),
+        'auto_expiry_days': form.auto_expiry_days.data,
+        'is_long_term_goal': bool(form.is_long_term_goal.data),
+        'bypass_cwi_warnings': bool(form.bypass_cwi_warnings.data),
+        'is_bundle': bool(form.is_bundle.data),
+        'bundle_quantity': form.bundle_quantity.data if form.is_bundle.data else None,
+        'bulk_discount_enabled': bool(form.bulk_discount_enabled.data),
+        'bulk_discount_quantity': (
+            form.bulk_discount_quantity.data if form.bulk_discount_enabled.data else None
+        ),
+        'bulk_discount_percentage': (
+            form.bulk_discount_percentage.data if form.bulk_discount_enabled.data else None
+        ),
+        'collective_goal_type': form.collective_goal_type.data if is_collective else None,
+        'collective_goal_target': form.collective_goal_target.data if is_collective else None,
+        'collective_goal_expires_at': (
+            _end_of_day_utc(form.collective_goal_expires_at.data) if is_collective else None
+        ),
+        'collective_goal_instance_code': (
+            generate_collective_goal_instance_code()
+            if is_collective and form.is_active.data
+            else None
+        ),
+        'redemption_prompt': form.redemption_prompt.data or None,
+    }
+
+
+def _rent_link_for_lineage(class_id: str, product_lineage_uuid: str) -> dict | None:
+    """The current rent benefit granting this product, if any."""
+    settings = get_rent_settings(class_id)
+    if not settings:
+        return None
+    for benefit in settings.get_satisfaction_benefit_grants():
+        if benefit.get('product_lineage_uuid') == product_lineage_uuid:
+            return benefit
+    return None
+
+
+def _apply_rent_link_from_form(form, *, class_id: str, product_lineage_uuid: str) -> None:
+    """Record the store form's rent-link choice on the class's rent policy.
+
+    The linkage is deliberately stored on ``RentSettings.satisfaction_benefits``
+    rather than on the product. Rent is versioned and an assessment freezes the
+    ``policy_uuid`` it was raised under, so writing the link here means a
+    teacher who adds or removes a rent-linked item today is editing a policy
+    version that no open obligation references — which is exactly the promised
+    behaviour that the change applies from the next cycle only. A flag on the
+    product would instead be a live read, reaching backwards into cycles
+    already underway.
+
+    Does nothing when the item is not rent linked and was not rent linked
+    before, so ordinary store edits do not mint pointless rent versions.
+    """
+    settings = get_rent_settings(class_id)
+    existing = settings.get_satisfaction_benefit_grants() if settings else []
+    others = [
+        benefit for benefit in existing
+        if benefit.get('product_lineage_uuid') != product_lineage_uuid
+    ]
+    was_linked = len(others) != len(existing)
+
+    if not form.is_rent_linked.data:
+        if not was_linked:
+            return
+        updated = others
+    else:
+        entitlement_type = _RENT_LINK_ENTITLEMENT_TYPES.get(form.item_type.data)
+        if entitlement_type is None:
+            raise StoreServiceError(
+                f"'{form.item_type.data}' items cannot be granted for paying rent."
+            )
+        updated = others + [{
+            'entitlement_type': entitlement_type,
+            'quantity': int(form.rent_linked_quantity.data or 1),
+            'product_lineage_uuid': product_lineage_uuid,
+        }]
+
+    supersede_rent_settings(
+        class_id=class_id,
+        updates={'satisfaction_benefits': updated or None},
+    )
+
+
 @admin_bp.route('/store', methods=['GET', 'POST'])
 @admin_required
 def store_management():
@@ -4680,6 +4848,21 @@ def store_management():
     selected_join_code = selected_scope['join_code']
     selected_block = selected_scope['block']
     form = StoreItemForm()
+
+    def _set_tier_choices(target_form):
+        mode = get_active_policy_mode_for_class(selected_scope['class_id'])
+        profile = get_policy_profile(mode)
+        tier_ranges = profile.get('ratios', {}).get('store_tiers', {})
+        labels = [('','No Tier')]
+        for key, title in (
+            ('basic', 'Basic'), ('standard', 'Standard'),
+            ('premium', 'Premium'), ('luxury', 'Luxury'),
+        ):
+            band = tier_ranges.get(key, {})
+            labels.append((key, f"{title} ({band.get('min', 0):g}-{band.get('max', 0):g}% of CWI)"))
+        target_form.tier.choices = labels
+
+    _set_tier_choices(form)
 
     # Limit store scope to classes where the feature is enabled.
     blocks = [option['block'] for option in feature_options if option.get('block')]
@@ -4716,51 +4899,43 @@ def store_management():
         ).hexdigest()[:16]
         idempotency_key = f"feat:store:item-create:{selected_scope['class_id']}:{payload_hash}"
 
-        with FEATContext("FEAT-SETTINGS-001", idempotency_key=idempotency_key):
-            new_item = create_store_item(
-                user_id=user_id,
-                class_id=selected_scope['class_id'],
-                name=form.name.data,
-                description=form.description.data,
-                item_type=form.item_type.data,
-                price=form.price.data,
-                limit_per_student=form.limit_per_student.data,
-                is_active=form.is_active.data,
-                is_long_term_goal=form.is_long_term_goal.data,
-                bypass_cwi_warnings=form.bypass_cwi_warnings.data,
-                is_bundle=form.is_bundle.data,
-                bundle_quantity=form.bundle_quantity.data if form.is_bundle.data else None,
-                bulk_discount_enabled=form.bulk_discount_enabled.data,
-                bulk_discount_quantity=form.bulk_discount_quantity.data if form.bulk_discount_enabled.data else None,
-                bulk_discount_percentage=form.bulk_discount_percentage.data if form.bulk_discount_enabled.data else None,
-                collective_goal_type=form.collective_goal_type.data if form.item_type.data == 'collective' else None,
-                collective_goal_target=form.collective_goal_target.data if form.item_type.data == 'collective' else None,
-                collective_goal_expires_at=(
-                    _end_of_day_utc(form.collective_goal_expires_at.data)
-                    if form.item_type.data == 'collective'
-                    else None
-                ),
-                collective_goal_instance_code=(
-                    generate_collective_goal_instance_code()
-                    if form.item_type.data == 'collective' and form.is_active.data
-                    else None
-                ),
-                redemption_prompt=form.redemption_prompt.data if form.redemption_prompt.data else None,
-            )
-            # Set blocks using many-to-many relationship
-            if form.blocks.data:
-                new_item.set_blocks(form.blocks.data)
-        flash(f"'{new_item.name}' has been added to the store.", "success")
+        item_name = form.name.data
+        try:
+            with FEATContext("FEAT-SETTINGS-001", idempotency_key=idempotency_key):
+                # One row, published once. There is no longer a catalog record
+                # to create and a policy to publish afterwards — the version IS
+                # the record, so an item can no longer exist unsellable.
+                new_item = publish_product(
+                    user_id=user_id,
+                    class_id=selected_scope['class_id'],
+                    definition=_store_definition_from_form(form),
+                    availability_state=store_service.IN_USE if form.is_active.data else store_service.HIDDEN,
+                )
+                if form.blocks.data:
+                    new_item.set_blocks(form.blocks.data)
+                _apply_rent_link_from_form(
+                    form,
+                    class_id=selected_scope['class_id'],
+                    product_lineage_uuid=new_item.product_lineage_uuid,
+                )
+        except StoreServiceError as exc:
+            flash(f"'{item_name}' could not be put on sale: {exc}", "error")
+            return redirect(url_for('admin.store_management'))
+        flash(f"'{item_name}' has been added to the store.", "success")
         return redirect(url_for('admin.store_management'))
 
+    # Current versions only. RETIRED rows are prior versions and withdrawn
+    # products; they stay in the table so entitlements sold under them remain
+    # resolvable, but they are not part of the teacher's catalog view.
     items = [
-        item for item in StoreItem.query.filter_by(class_id=selected_scope['class_id']).order_by(StoreItem.name).all()
+        item for item in list_products(selected_scope['class_id'])
         if not item.blocks_list or selected_block in {b.strip().upper() for b in item.blocks_list if b}
     ]
+    items.sort(key=lambda item: (item.name or '').lower())
 
     # Get store statistics for overview tab
     total_items = len(items)
-    active_items = len([i for i in items if i.is_active])
+    active_items = len([i for i in items if i.availability_state == store_service.IN_USE])
     total_purchases = (
         EntitlementEvent.query
         .filter(
@@ -4776,6 +4951,7 @@ def store_management():
         PendingAction.query.filter(
             PendingAction.class_id == selected_scope['class_id'],
             PendingAction.authoritative_feat == "FEAT-STOR-002",
+            PendingAction.payload["outcome"].as_string().is_(None),
         )
         .order_by(PendingAction.submitted_at.desc())
         .limit(10)
@@ -4794,11 +4970,13 @@ def store_management():
             if grant.entitlement_id not in grants_dict or grant.timestamp > grants_dict[grant.entitlement_id].timestamp:
                 grants_dict[grant.entitlement_id] = grant
 
-        store_item_ids = {grant.product_id for grant in grants_dict.values() if grant.product_id}
-        store_items_dict = {}
-        if store_item_ids:
-            store_items = StoreItem.query.filter(StoreItem.id.in_(store_item_ids)).all()
-            store_items_dict = {i.id: i for i in store_items}
+        # Resolve to the version each entitlement was bought under, so a
+        # redemption row shows the terms the student agreed to rather than
+        # whatever the teacher has since edited the product into.
+        store_items_by_entitlement = {
+            entitlement_id: store_service.resolve_entitlement_product(grant)
+            for entitlement_id, grant in grants_dict.items()
+        }
 
         for event in pending_redemption_events:
             # Enforce class_id validation: seat must belong to the selected class
@@ -4806,9 +4984,9 @@ def store_management():
             if not seat or seat.class_id != selected_scope['class_id']:
                 continue
             profile = seat.identity_profile if seat else None
-            grant = grants_dict.get(event.entitlement_id)
-            store_item = store_items_dict.get(grant.product_id) if grant and grant.product_id else None
-            
+            store_item = store_items_by_entitlement.get(event.entitlement_id)
+
+
             pending_redemptions.append(SimpleNamespace(
                 id=event.entitlement_id,
                 student_name=profile.full_name if profile else 'Unknown',
@@ -4832,7 +5010,7 @@ def store_management():
         .all()
     )
     for entitlement in recent_entitlements:
-        item = db.session.get(StoreItem, entitlement.product_id)
+        item = store_service.resolve_entitlement_product(entitlement)
         seat = db.session.get(Seat, entitlement.target_seat_id)
         profile = seat.identity_profile if seat else None
 
@@ -4864,22 +5042,7 @@ def store_management():
         join_code_to_label = {}
 
         # Count unique claimed seats per class
-        class_sizes = {}
-        class_size_query = (
-            db.session.query(
-                ClassEconomy.class_id,
-                db.func.count(db.func.distinct(Seat.id)).label('student_count')
-            )
-            .join(Seat, Seat.class_id == ClassEconomy.class_id)
-            .filter(
-                ClassEconomy.class_id == selected_scope['class_id'],
-                Seat.role == 'student',
-                Seat.claimed_at.isnot(None),
-            )
-            .group_by(ClassEconomy.class_id)
-            .all()
-        )
-        class_sizes = {row.class_id: int(row.student_count or 0) for row in class_size_query}
+        class_size = collective_goals.count_class_size(selected_scope['class_id'])
 
         for ce_row in class_economy_rows:
             if not ce_row.class_id:
@@ -4890,26 +5053,15 @@ def store_management():
             join_code_to_block.setdefault(display_join_code, (ce_row.section or '').strip().upper())
             join_code_to_label.setdefault(display_join_code, ce_row.display_name or display_join_code)
 
-        collective_item_ids = [item.id for item in collective_items]
-        collective_counts = (
-            db.session.query(
-                EntitlementEvent.product_id,
-                EntitlementEvent.class_id,
-                db.func.count(db.distinct(EntitlementEvent.target_seat_id)).label('student_count'),
-            )
-            .filter(
-                EntitlementEvent.class_id == selected_scope['class_id'],
-                EntitlementEvent.product_id.in_(collective_item_ids),
-                EntitlementEvent.event_type == "GRANTED",
-                EntitlementEvent.acquisition_type == "PURCHASE",
-            )
-            .group_by(EntitlementEvent.product_id, EntitlementEvent.class_id)
-            .all()
+        # Goal progress belongs to the product, not to any one version of it,
+        # so it is counted per lineage. Counting per policy_uuid would reset
+        # the goal to zero every time the teacher saved an edit. The count comes
+        # from the shared authority so this bar, the student's bar, and the
+        # expiry sweep cannot disagree about whether the goal was met.
+        collective_item_ids = [item.product_lineage_uuid for item in collective_items]
+        counts_lookup = collective_goals.count_goal_participants(
+            selected_scope['class_id'], collective_item_ids
         )
-        counts_lookup = {
-            (row.product_id, row.class_id): int(row.student_count or 0)
-            for row in collective_counts
-        }
 
         for item in collective_items:
             if item.blocks_list:
@@ -4922,11 +5074,8 @@ def store_management():
 
             per_class = []
             for jc in sorted(applicable_join_codes):
-                count = counts_lookup.get((item.id, selected_scope['class_id']), 0)
-                if item.collective_goal_type == 'fixed':
-                    target = int(item.collective_goal_target or 0)
-                else:
-                    target = class_sizes.get(selected_scope['class_id'], 0)
+                count = counts_lookup.get(item.product_lineage_uuid, 0)
+                target = collective_goals.resolve_goal_target(item, class_size)
                 per_class.append({
                     'join_code': jc,
                     'class_label': join_code_to_label.get(jc, jc),
@@ -4934,9 +5083,9 @@ def store_management():
                     'target': target,
                     'remaining': max(0, target - count),
                     'percent': min(100, int((count / target) * 100)) if target > 0 else 0,
-                    'is_complete': bool(target > 0 and count >= target),
+                    'is_complete': collective_goals.is_goal_met(count, target),
                 })
-            collective_progress_by_item[item.id] = per_class
+            collective_progress_by_item[item.product_lineage_uuid] = per_class
 
     # -------------------- Redemption Audit --------------------
     audit_student = request.args.get('audit_student', '').strip()
@@ -4955,10 +5104,9 @@ def store_management():
             PendingAction.entitlement_id.label("entitlement_id"),
             Seat.id.label("seat_id"),
             Seat.class_id.label("class_id"),
-            PendingAction.authoritative_feat.label("action"),
+            PendingAction.payload["action"].as_string().label("action"),
+            PendingAction.payload["outcome"].as_string().label("outcome"),
             PendingAction.payload.label("notes"),
-            ClassEconomy.teacher_user_id.label("user_id"),
-            PendingAction.class_id.label("class_id"),
             PendingAction.submitted_at.label("timestamp"),
             sa.literal("LIVE").label("source"),
         )
@@ -4972,7 +5120,10 @@ def store_management():
             ClassEconomy.display_name == audit_class
         )
     if parsed_audit_action:
-        live_query = live_query.filter(PendingAction.payload["action"].as_string() == parsed_audit_action)
+        if parsed_audit_action == "REQUEST":
+            live_query = live_query.filter(PendingAction.payload["outcome"].as_string().is_(None))
+        elif parsed_audit_action in {"APPROVED", "REJECTED"}:
+            live_query = live_query.filter(PendingAction.payload["outcome"].as_string() == parsed_audit_action)
     if audit_start_date:
         try:
             start_day = datetime.strptime(audit_start_date, '%Y-%m-%d').date()
@@ -4992,12 +5143,13 @@ def store_management():
     live_rows = live_query.order_by(PendingAction.submitted_at.desc()).limit(5000).all()
     if audit_student:
         audit_student_lower = audit_student.lower()
-        live_rows = [
-            row for row in live_rows
-            if audit_student_lower in (
-                row.student_display_name or "Unknown"
-            ).lower()
-        ]
+        filtered_rows = []
+        for row in live_rows:
+            seat = db.session.get(Seat, row.seat_id)
+            profile = seat.identity_profile if seat else None
+            if audit_student_lower in (profile.full_name if profile else "Unknown").lower():
+                filtered_rows.append(row)
+        live_rows = filtered_rows
     live_keys = {
         (row.id, row.action.value if hasattr(row.action, 'value') else row.action)
         for row in live_rows
@@ -5012,7 +5164,10 @@ def store_management():
             'student_item_id': row.entitlement_id,
             'student_display_name': profile.full_name if profile else "Unknown",
             'class_display_label': selected_scope.get('join_code') or selected_scope.get('block') or "Unknown",
-            'action': row.action.value if hasattr(row.action, 'value') else row.action,
+            'action': (
+                (row.outcome.value if hasattr(row.outcome, 'value') else row.outcome)
+                or 'REQUEST'
+            ),
             'notes': row.notes,
             'timestamp': row.timestamp,
             'source': row.source.value if hasattr(row.source, 'value') else row.source,
@@ -5032,25 +5187,29 @@ def store_management():
 
     audit_class_options = sorted(set(class_labels_by_block.values()))
 
+    # Which products this class's rent currently grants on payment. Read from
+    # the rent policy, which is where the linkage lives now — the product no
+    # longer carries a flag, because a flag there would be a live read into
+    # cycles already underway.
+    _rent_settings = get_rent_settings(selected_scope['class_id'])
     rent_managed_item_ids = {
-        item.id for item in StoreItem.query.filter_by(
-            class_id=selected_scope['class_id'],
-            is_rent_linked=True,
-        ).all()
+        benefit['product_lineage_uuid']
+        for benefit in (_rent_settings.get_satisfaction_benefit_grants() if _rent_settings else [])
+        if benefit.get('product_lineage_uuid')
     }
 
-    # Group recent purchases by item for template iteration
-    purchases_by_item_id = {}
+    # Group recent purchases by product lineage for template iteration. Keying
+    # by version would split one product's purchase history across every edit
+    # the teacher has ever made.
+    purchases_by_lineage = {}
     for purchase in recent_purchases:
-        if purchase.store_item and hasattr(purchase.store_item, 'id'):
-            item_id = purchase.store_item.id
-            if item_id not in purchases_by_item_id:
-                purchases_by_item_id[item_id] = []
-            purchases_by_item_id[item_id].append(purchase)
+        if purchase.store_item is not None:
+            lineage = purchase.store_item.product_lineage_uuid
+            purchases_by_lineage.setdefault(lineage, []).append(purchase)
 
     # Add purchases list to each item for template access
     for item in items:
-        item.purchases = purchases_by_item_id.get(item.id, [])
+        item.purchases = purchases_by_lineage.get(item.product_lineage_uuid, [])
 
     # Build economic view from Class Configuration domain
     economic_view = build_economic_view(selected_scope['class_id'])
@@ -5083,34 +5242,63 @@ def store_management():
     return render_template('admin_store.html', form=form, view=view, current_page="store")
 
 
-@admin_bp.route('/store/edit/<int:item_id>', methods=['GET', 'POST'])
+@admin_bp.route('/store/edit/<product_lineage_uuid>', methods=['GET', 'POST'])
 @admin_required
-def edit_store_item(item_id):
-    """Edit an existing store item.
+def edit_store_item(product_lineage_uuid):
+    """Edit a store product by publishing a new version of it.
+
+    Nothing is rewritten. A save retires the version currently on sale and
+    mints its successor in the same lineage, so students holding entitlements
+    bought under the old terms keep those terms (DOM-STORE-001 §VII) while the
+    shop starts selling the new ones. Derived quantities — units sold,
+    collective-goal progress, per-seat visibility — hang off the lineage and
+    therefore survive the edit untouched.
+
+    The route is keyed by lineage rather than by version: the teacher is
+    editing *the product*, and which version is current is the store's
+    business, not the URL's.
 
     Envelope rationale as in :func:`store_management`: the single FEAT is the
     inner ``FEAT-SETTINGS-001``, and a route decorator would nest inside it.
     """
-    user_id = g.canonical_context.user_id
     selected_scope = require_admin_feature_scope(
         'store',
         canonical_context=g.canonical_context,
     )
-    item = StoreItem.query.filter_by(id=item_id, class_id=selected_scope['class_id']).first_or_404()
+    item = get_current_version(selected_scope['class_id'], product_lineage_uuid)
+    if item is None:
+        abort(404)
     if item.blocks_list and selected_scope['block'] not in {b.strip().upper() for b in item.blocks_list if b}:
         abort(404)
     form = StoreItemForm(obj=item)
+    mode = get_active_policy_mode_for_class(selected_scope['class_id'])
+    tier_ranges = get_policy_profile(mode).get('ratios', {}).get('store_tiers', {})
+    form.tier.choices = [('', 'No Tier')] + [
+        (key, f"{title} ({tier_ranges.get(key, {}).get('min', 0):g}-{tier_ranges.get(key, {}).get('max', 0):g}% of CWI)")
+        for key, title in (
+            ('basic', 'Basic'), ('standard', 'Standard'),
+            ('premium', 'Premium'), ('luxury', 'Luxury'),
+        )
+    ]
 
     # Populate blocks choices from the teacher's students
     blocks = [option['block'] for option in get_admin_feature_join_code_options('store', canonical_context=g.canonical_context) if option.get('block')]
     form.blocks.choices = [(block, f"Period {block}") for block in blocks]
 
+    rent_link = _rent_link_for_lineage(selected_scope['class_id'], product_lineage_uuid)
+
     # Pre-populate selected blocks on GET request (using many-to-many relationship)
     if request.method == 'GET':
         form.blocks.data = item.blocks_list
-        # Convert stored datetime to date for the DateField
+        form.is_active.data = item.availability_state == store_service.IN_USE
+        form.inventory.data = item.inventory_total
+        form.is_rent_linked.data = rent_link is not None
+        form.rent_linked_quantity.data = rent_link['quantity'] if rent_link else None
+        # Convert stored datetimes to dates for the DateFields
         if item.collective_goal_expires_at:
             form.collective_goal_expires_at.data = item.collective_goal_expires_at.date()
+        if item.auto_delist_date:
+            form.auto_delist_date.data = item.auto_delist_date.date()
 
     if form.validate_on_submit():
         submitted_blocks = {block.strip().upper() for block in (form.blocks.data or []) if block}
@@ -5120,7 +5308,7 @@ def edit_store_item(item_id):
         payload_hash = hashlib.sha256(
             json.dumps(
                 {
-                    "item_id": item.id,
+                    "product_lineage_uuid": product_lineage_uuid,
                     "class_id": selected_scope["class_id"],
                     "name": form.name.data,
                     "item_type": form.item_type.data,
@@ -5132,29 +5320,44 @@ def edit_store_item(item_id):
                 default=str,
             ).encode("utf-8")
         ).hexdigest()[:16]
-        idempotency_key = f"feat:store:item-edit:{selected_scope['class_id']}:{item.id}:{payload_hash}"
+        idempotency_key = (
+            f"feat:store:item-edit:{selected_scope['class_id']}"
+            f":{product_lineage_uuid}:{payload_hash}"
+        )
 
-        with FEATContext("FEAT-SETTINGS-001", idempotency_key=idempotency_key):
-            item = StoreItem.query.filter_by(id=item_id, class_id=selected_scope['class_id']).first_or_404()
-            was_active = item.is_active
+        item_name = form.name.data
+        try:
+            with FEATContext("FEAT-SETTINGS-001", idempotency_key=idempotency_key):
+                current = get_current_version(selected_scope['class_id'], product_lineage_uuid)
+                if current is None:
+                    abort(404)
+                definition = _store_definition_from_form(form)
 
-            # Populate other fields first
-            form.populate_obj(item)
-            # Set blocks using many-to-many relationship
-            item.set_blocks(form.blocks.data if form.blocks.data else [])
+                # A collective goal keeps its instance code across an edit;
+                # a fresh one is issued only when the goal is being restarted
+                # (revived from hidden, or newly made collective), because the
+                # code is what separates one run of the goal from the next.
+                if form.item_type.data == 'collective' and form.is_active.data:
+                    was_live = current.availability_state == store_service.IN_USE
+                    if was_live and current.collective_goal_instance_code:
+                        definition['collective_goal_instance_code'] = (
+                            current.collective_goal_instance_code
+                        )
 
-            item.collective_goal_expires_at = (
-                _end_of_day_utc(form.collective_goal_expires_at.data)
-                if item.item_type == 'collective'
-                else None
-            )
-
-            # Rotate instance code if reviving an inactive collective goal or changing to collective
-            if item.item_type == 'collective' and form.is_active.data:
-                if not was_active or not item.collective_goal_instance_code:
-                    # Issue new instance code
-                    item.collective_goal_instance_code = generate_collective_goal_instance_code()
-        flash(f"'{item.name}' has been updated.", "success")
+                successor = supersede_product(current=current, definition=definition)
+                if not form.is_active.data:
+                    store_service.hide_product(successor)
+                successor.set_blocks(form.blocks.data if form.blocks.data else [])
+                _apply_rent_link_from_form(
+                    form,
+                    class_id=selected_scope['class_id'],
+                    product_lineage_uuid=product_lineage_uuid,
+                )
+                item_name = successor.name
+        except StoreServiceError as exc:
+            flash(f"'{item_name}' could not be updated: {exc}", "error")
+            return redirect(url_for('admin.store_management'))
+        flash(f"'{item_name}' has been updated.", "success")
         return redirect(url_for('admin.store_management'))
     payroll_settings = PayrollSettings.query.filter_by(
         class_id=selected_scope['class_id'], availability_state='IN_USE'
@@ -5170,144 +5373,85 @@ def edit_store_item(item_id):
     )
 
 
-@admin_bp.route('/store/delete/<int:item_id>', methods=['POST'])
-@admin_bp.route('/item/deactivate/<int:item_id>', methods=['POST'])
+@admin_bp.route('/item/deactivate/<product_lineage_uuid>', methods=['POST'])
 @admin_required
-def delete_store_item(item_id):
-    """Deactivate a store item (soft delete).
+def delete_store_item(product_lineage_uuid):
+    """Withdraw a product from the store.
+
+    Every version in the lineage is retired, which is what "deleted" means for
+    an append-only catalog: nothing is destroyed, so entitlements sold under
+    any version stay resolvable, but no version is sellable again.
+
+    A rent-linked product is no longer refused here. Rent Settings does not own
+    store items anymore — the linkage is a benefit entry on the rent policy —
+    so withdrawing the product also removes that entry, and the removal takes
+    effect from the next rent cycle like every other rent change.
 
     Envelope rationale as in :func:`store_management`: the single FEAT is the
     inner ``FEAT-SETTINGS-001``, and a route decorator would nest inside it.
     """
-    user_id = g.canonical_context.user_id
     selected_scope = require_admin_feature_scope(
         'store',
         canonical_context=g.canonical_context,
     )
-    item = StoreItem.query.filter_by(id=item_id, class_id=selected_scope['class_id']).first_or_404()
+    item = get_current_version(selected_scope['class_id'], product_lineage_uuid)
+    if item is None:
+        abort(404)
     if item.blocks_list and selected_scope['block'] not in {b.strip().upper() for b in item.blocks_list if b}:
         abort(404)
 
-    # Prevent deletion if linked to rent settings
-    if _block_rent_linked_store_item(item):
-        return redirect(url_for('admin.store_management'))
-
-    idempotency_key = f"feat:store:item-deactivate:{selected_scope['class_id']}:{item.id}"
+    item_name = item.name
+    idempotency_key = (
+        f"feat:store:item-retire:{selected_scope['class_id']}:{product_lineage_uuid}"
+    )
     with FEATContext("FEAT-SETTINGS-001", idempotency_key=idempotency_key):
-        item = StoreItem.query.filter_by(id=item_id, class_id=selected_scope['class_id']).first_or_404()
-        deactivate_store_item(item)
-    flash(f"'{item.name}' has been deactivated and hidden from new purchases.", "success")
+        retire_lineage(selected_scope['class_id'], product_lineage_uuid)
+        _unlink_product_from_rent(selected_scope['class_id'], product_lineage_uuid)
+    flash(f"'{item_name}' has been withdrawn and hidden from new purchases.", "success")
     return redirect(url_for('admin.store_management'))
 
 
-@admin_bp.route('/store/hard-delete/<int:item_id>', methods=['POST'])
+@admin_bp.route('/store/hard-delete/<product_lineage_uuid>', methods=['POST'])
 @admin_required
-def hard_delete_store_item(item_id):
+def hard_delete_store_item(product_lineage_uuid):
     """Hard item deletion is restricted to the join-code deletion workflow."""
-    user_id = g.canonical_context.user_id
     selected_scope = require_admin_feature_scope(
         'store',
         canonical_context=g.canonical_context,
     )
-    item = StoreItem.query.filter_by(id=item_id, class_id=selected_scope['class_id']).first_or_404()
+    item = get_current_version(selected_scope['class_id'], product_lineage_uuid)
+    if item is None:
+        abort(404)
     if item.blocks_list and selected_scope['block'] not in {b.strip().upper() for b in item.blocks_list if b}:
         abort(404)
 
-    # Prevent deletion if linked to rent settings
-    if _block_rent_linked_store_item(item):
-        return redirect(url_for('admin.store_management'))
-
     flash(
-        f"Hard deletion for '{item.name}' is disabled. Deactivate items instead, "
+        f"Hard deletion for '{item.name}' is disabled. Withdraw items instead, "
         "or delete the class join code for full scoped cleanup.",
         "error",
     )
     return redirect(url_for('admin.store_management'))
 
 
-# -------------------- RENT SETTINGS --------------------
-
-def _block_rent_linked_store_item(item: StoreItem) -> bool:
-    """Return True if store item is rent-linked and deletion should be blocked."""
-    is_managed_by_rent = bool(item.is_rent_linked)
-
-    if is_managed_by_rent:
-        flash(f"Cannot delete '{item.name}' because it is managed by Rent Settings. Please remove it from Rent Settings instead.", "error")
-        return True
-    return False
-
-def _sync_rent_items_to_store(rent_settings, user_id, class_id):
-    """
-    Sync rent items with store items.
-    Creates or updates store items for rent items that are marked as available in store.
-    Deactivates store items for rent items that are no longer available.
-
-    FIX: Prevents duplicate store items when applying rent settings to all periods.
-    Store items use canonical seat-level visibility rows; block labels are derived metadata.
-    """
-    from app.models import StoreItem, StoreItemVisibility, Seat
-
-    if not class_id:
-        current_app.logger.warning(
-            "Skipping rent-to-store sync for teacher %s: no class_id provided",
-            user_id,
-        )
+def _unlink_product_from_rent(class_id: str, product_lineage_uuid: str) -> None:
+    """Drop a product from the class's rent benefits, if it is listed there."""
+    settings = get_rent_settings(class_id)
+    if not settings:
         return
-
-    rent_store_items = (
-        StoreItem.query.filter(
-            StoreItem.class_id == class_id,
-            StoreItem.is_rent_linked.is_(True),
-        )
-        .order_by(StoreItem.id.asc())
-        .all()
+    existing = settings.get_satisfaction_benefit_grants()
+    remaining = [
+        benefit for benefit in existing
+        if benefit.get('product_lineage_uuid') != product_lineage_uuid
+    ]
+    if len(remaining) == len(existing):
+        return
+    supersede_rent_settings(
+        class_id=class_id,
+        updates={'satisfaction_benefits': remaining or None},
     )
 
-    # Hard gate: if the store feature is disabled for this class, no rent item
-    # may appear in the store. Deactivate every rent-linked store item and stop
-    # — do not (re)activate or build visibility rows.
-    _store_scope = resolve_feature_class_for_class(class_id, 'store')
-    if not (_store_scope and _store_scope.get("enabled")):
-        for store_item in rent_store_items:
-            store_item.is_active = False
-            store_item.is_available_in_store = False
-        return
 
-    for store_item in rent_store_items:
-        if not store_item.name:
-            continue
-
-        if store_item.class_id != class_id:
-            store_item.class_id = class_id
-        store_item.is_active = True
-
-        desired_blocks = {block.strip().upper() for block in store_item.blocks_list if block}
-        if not desired_blocks:
-            continue
-
-        for block in desired_blocks:
-            create_store_item_block(store_item_id=store_item.id, block=block)
-
-        existing_visibility_seat_ids = [
-            seat_id
-            for (seat_id,) in (
-                db.session.query(StoreItemVisibility.seat_id)
-                .join(Seat, Seat.id == StoreItemVisibility.seat_id)
-                .join(ClassEconomy, ClassEconomy.class_id == Seat.class_id)
-                .filter(
-                    StoreItemVisibility.store_item_id == store_item.id,
-                    ClassEconomy.class_id == class_id,
-                    ClassEconomy.section.isnot(None),
-                    ~ClassEconomy.section.in_(desired_blocks),
-                )
-                .all()
-            )
-        ]
-        if existing_visibility_seat_ids:
-            StoreItemVisibility.query.filter(
-                StoreItemVisibility.store_item_id == store_item.id,
-                StoreItemVisibility.seat_id.in_(existing_visibility_seat_ids),
-            ).delete(synchronize_session=False)
+# -------------------- RENT SETTINGS --------------------
 
 
 def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, current_month: int) -> Decimal:
@@ -5471,181 +5615,12 @@ def rent_settings():
             }
             block_settings = supersede_rent_settings(class_id=class_id, updates=payload)
 
-        # Handle rent items (for all blocks in blocks_to_update)
-        # Parse rent items from form once
-        rent_item_indices = set()
-        for key in request.form.keys():
-            if key.startswith('rent_item_name_'):
-                idx = key.split('_')[-1]
-
-        parsed_items = []
-        for idx in sorted(rent_item_indices):
-            name = request.form.get(f'rent_item_name_{idx}', '').strip()
-            if not name:
-                continue
-
-            rent_item_type = request.form.get(f'rent_item_type_{idx}', 'privilege') # Default to privilege if missing
-            if rent_item_type == 'privilege':
-                purchase_duration = 'per_period'
-            elif rent_item_type == 'per_use':
-                purchase_duration = 'per_use'
-            else:
-                purchase_duration = None
-            if rent_item_type == 'privilege' and request.form.get(f'rent_item_purchase_duration_{idx}', '').strip() == 'per_use':
-                flash(
-                    f"'{name}' cannot be saved as privilege with per-use duration. Use the per-use item type instead.",
-                    'error',
-                )
-                continue
-            use_limit = None
-            if rent_item_type == 'per_use':
-                use_limit_val = request.form.get(f'rent_item_use_limit_{idx}', '').strip()
-                if use_limit_val and use_limit_val.isdigit():
-                    use_limit = int(use_limit_val)
-
-            hall_pass_count = None
-            if rent_item_type == 'hall_pass':
-                hall_pass_val = request.form.get(f'rent_item_hall_pass_count_{idx}', '').strip()
-                if hall_pass_val and hall_pass_val.isdigit():
-                    hall_pass_count = int(hall_pass_val)
-
-            # Logic changes based on type
-            is_available = request.form.get(f'rent_item_store_available_{idx}') == 'on'
-            if rent_item_type == 'per_use':
-                is_available = True  # Always available in store for per_use items
-            elif rent_item_type == 'hall_pass':
-                # Hall passes are not typically listed in store via this mechanism
-                pass
-
-            # Hard gate: when the store feature is disabled for this class, no
-            # rent item may be added to the store — this overrides the per-use
-            # "always available" default above.
-            if not store_enabled:
-                is_available = False
-
-            item_data = {
-                'id': request.form.get(f'rent_item_id_{idx}'),
-                'name': name,
-                'description': request.form.get(f'rent_item_description_{idx}', '').strip(),
-                'is_available': is_available,
-                'store_price_str': request.form.get(f'rent_item_store_price_{idx}', '').strip(),
-                'purchase_duration': purchase_duration,
-                'order_index': int(idx),
-                'rent_item_type': rent_item_type,
-                'use_limit': use_limit,
-                'hall_pass_count': hall_pass_count
-            }
-
-            # Validation logic reuse
-            store_price = None
-            if item_data['is_available']:
-                if not item_data['store_price_str']:
-                    flash(f"Store price is required for '{name}' which is available in the store.", 'error')
-                    item_data['is_available'] = False
-                else:
-                    try:
-                        from app.models import _quantize_currency
-                        store_price = _quantize_currency(item_data['store_price_str'])
-                        if store_price <= Decimal('0'):
-                            flash(f"Store price must be positive for '{name}'.", 'error')
-                            item_data['is_available'] = False
-                            store_price = None
-                    except (ValueError, InvalidOperation):
-                        flash(f"Invalid store price for '{name}'.", 'error')
-                        item_data['is_available'] = False
-                        store_price = None
-
-            item_data['store_price'] = store_price
-            parsed_items.append(item_data)
-
-        # Apply parsed items to the current class (canonical single-class scope)
-        idempotency_key_items = f"feat:rent:items-update:{class_id}:{payload_hash}"
-        with FEATContext("FEAT-SETTINGS-001", idempotency_key=idempotency_key_items):
-            block_settings = get_rent_settings(class_id)
-            if block_settings:
-                existing_items = (
-                    StoreItem.query.filter(
-                        StoreItem.class_id == class_id,
-                        StoreItem.is_rent_linked.is_(True),
-                    )
-                    .order_by(StoreItem.id.asc())
-                    .all()
-                )
-                existing_map = {str(item.id): item for item in existing_items}
-                processed_items = set()
-
-                # Mid-period lock: detect if any student has paid rent for current coverage period
-                mid_period_locked = False
-                from app.routes.student import _calculate_rent_coverage_due_date
-                now = utc_now()
-                coverage_due = _calculate_rent_coverage_due_date(block_settings, now)
-                if coverage_due:
-                    current_bill_cycle = obligations_service.get_latest_bill_cycle_for_class(class_id)
-                    paid_count = 0
-                    if current_bill_cycle:
-                        current_cycle_assessments = obligations_service.get_assessments_for_bill_cycle(
-                            current_bill_cycle.id,
-                            obligation_type='RENT',
-                        )
-                        for assessment in current_cycle_assessments:
-                            satisfaction_events = obligations_service.get_satisfaction_events(assessment.correlation_id)
-                            if satisfaction_events:
-                                paid_count += 1
-                    if paid_count > 0:
-                        mid_period_locked = True
-
-                for item_data in parsed_items:
-                    target_item = existing_map.get(item_data['id'])
-
-                    if target_item:
-                        # Update existing - always allow cosmetic fields
-                        target_item.name = item_data['name']
-                        target_item.description = item_data['description'] if item_data['description'] else None
-                        target_item.order_index = item_data['order_index']
-                        target_item.store_price = item_data['store_price']
-                        if item_data['purchase_duration'] is not None:
-                            target_item.purchase_duration = item_data['purchase_duration']
-
-                        if mid_period_locked:
-                            # Semantic fields locked: rent_item_type, use_limit, hall_pass_count
-                            # Only allow is_available_in_store change for privilege items
-                            if target_item.rent_item_type == 'privilege':
-                                target_item.is_available_in_store = item_data['is_available']
-                        else:
-                            # No lock - update all fields freely
-                            target_item.is_available_in_store = item_data['is_available']
-                            target_item.rent_item_type = item_data['rent_item_type']
-                            target_item.use_limit = item_data['use_limit']
-                            target_item.hall_pass_count = item_data['hall_pass_count']
-                        processed_items.add(target_item)
-                    else:
-                        # Create new
-                        create_store_item(
-                            user_id=user_id,
-                            class_id=class_id,
-                            name=item_data['name'],
-                            description=item_data['description'] if item_data['description'] else None,
-                            item_type='delayed',
-                            price=item_data['store_price'],
-                            limit_per_student=(1 if item_data['rent_item_type'] == 'privilege' else None),
-                            is_active=item_data['is_available'],
-                            is_rent_linked=True,
-                        )
-
-                # Delete items that were not in the form (and thus not processed)
-                for item in existing_items:
-                    if item not in processed_items:
-                        if item.store_item_id:
-                            deactivate_linked_store_item(item.store_item_id)
-                        delete_rent_item(item)
-
-                # Sync to store
-                _sync_rent_items_to_store(block_settings, user_id, class_id)
-
-                if mid_period_locked:
-                    flash("Some changes are locked because students have already paid rent this period. "
-                          "Item type, use limits, and hall pass counts will apply next period.", "warning")
-
+        # Rent no longer creates or manages store items. A teacher marks an
+        # item rent-linked in the store itself, which records the grant on this
+        # policy's satisfaction_benefits — see _apply_rent_link_from_form. The
+        # form block that used to be parsed here maintained a parallel catalog
+        # of "rent items" that were synchronised into store rows after the
+        # fact, and the two drifted apart in every direction they could.
         # Rent settings are canonical; no policy-version snapshotting in v2.
         flash("Rent settings updated successfully!", "success")
         return redirect(url_for('admin.rent_settings'))
@@ -5729,17 +5704,23 @@ def rent_settings():
         if rent_per_month > estimated_monthly_payroll * Decimal('0.8'):  # If rent is more than 80% of payroll
             payroll_warning = f"Rent (${rent_per_month:.2f}/month) exceeds recommended 80% of estimated monthly payroll (${estimated_monthly_payroll:.2f}). Students may struggle to afford rent."
 
-    # Get rent items for this setting
+    # The products this rent policy hands out when a student pays. Read from
+    # the policy's own benefit list — the product carries no rent flag, so this
+    # is the frozen answer for this policy version rather than a live one.
     rent_items = []
     if settings:
-        rent_items = (
-            StoreItem.query.filter(
-                StoreItem.class_id == settings.class_id,
-                StoreItem.is_rent_linked.is_(True),
+        for benefit in settings.get_satisfaction_benefit_grants():
+            lineage = benefit.get('product_lineage_uuid')
+            product = (
+                get_current_version(settings.class_id, lineage) if lineage else None
             )
-            .order_by(StoreItem.id.asc())
-            .all()
-        )
+            rent_items.append(SimpleNamespace(
+                product_lineage_uuid=lineage,
+                name=product.name if product else 'Hall pass',
+                description=product.description if product else None,
+                entitlement_type=benefit['entitlement_type'],
+                quantity=benefit['quantity'],
+            ))
 
     # Calculate current rent period dates for settings summary
     rent_active_for_period = False
@@ -6077,6 +6058,30 @@ def _insurance_submission_from_form(form):
     }
 
 
+def _insurance_submission_from_row(row):
+    """Marshal an existing definition row back into a FEAT-CLASS-003 submission.
+
+    Used by reactivation, which re-offers a hidden policy's exact terms as a new
+    definition rather than flipping the immutable row back to IN_USE.
+    """
+    return {
+        "insurance_type": row.insurance_type,
+        "premium": row.premium,
+        "charge_frequency": row.charge_frequency,
+        "reimbursement_percentage": row.reimbursement_percentage,
+        "payout_multiple": row.payout_multiple,
+        "claims_per_week_equivalent": row.claims_per_week_equivalent,
+        "claim_window_days": row.claim_window_days,
+        "claimable_dates_per_week_equivalent": row.claimable_dates_per_week_equivalent,
+        "waiting_period_days": row.waiting_period_days,
+        "tier_level": row.tier_level,
+        "tier_name": row.tier_name,
+        "tier_group": row.tier_group,
+        "title": row.title,
+        "description": row.description,
+    }
+
+
 def _existing_tier_groups(class_id):
     """Existing tier groups in the class with the ranks already taken (IN_USE).
 
@@ -6125,11 +6130,13 @@ def insurance_management():
         availability_states=[insurance_defs.IN_USE, insurance_defs.HIDDEN],
     )
     policies = [_insurance_definition_view(r) for r in rows]
+    claims = list_insurance_claims(class_id=selected_class_id)
 
     return render_template(
         'admin_insurance.html',
         current_page='insurance',
         policies=policies,
+        claims=claims,
         selected_scope=selected_scope,
     )
 
@@ -6196,8 +6203,10 @@ def edit_insurance_policy(policy_uuid):
     """Edit an insurance definition — an edit is a new immutable version.
 
     GET prefills the form from the existing (class-scoped) row. POST validates
-    the resubmitted contract through FEAT-CLASS-003 and stores a *new*
-    ``policy_uuid`` row; the prior definition is never mutated.
+    the resubmitted contract through FEAT-CLASS-003, which retires the edited row
+    and stores a *new* ``policy_uuid`` row in one context; the prior definition's
+    terms are never mutated, so seats already covered under them keep them until
+    their coverage ends.
     """
     class_id = g.canonical_context.class_id
     row = insurance_defs.get_insurance_definition(policy_uuid, class_id=class_id)
@@ -6212,6 +6221,7 @@ def edit_insurance_policy(policy_uuid):
                 submission=submission,
                 canonical_context=g.canonical_context,
                 availability_state=row.availability_state,
+                supersedes_policy_uuid=row.policy_uuid,
                 correlation_id=f"feat:class003:insurance-edit:{uuid.uuid4().hex}",
                 idempotency_key=f"feat:class003:insurance-edit:{uuid.uuid4().hex}",
             )
@@ -6262,6 +6272,38 @@ def deactivate_insurance_policy(policy_uuid):
         flash(f"{exc}", "danger")
         return redirect(url_for('admin.insurance_management'))
     flash("Insurance policy hidden from new enrollment.", "success")
+    return redirect(url_for('admin.insurance_management'))
+
+
+@admin_bp.route('/insurance/reactivate/<policy_uuid>', methods=['POST'])
+@admin_required
+def reactivate_insurance_policy(policy_uuid):
+    """Put a hidden policy back on sale by re-offering its exact terms.
+
+    A definition row is immutable, so "reactivate" is not a flip back to IN_USE:
+    it copies the hidden row's configuration into a new IN_USE ``policy_uuid``
+    and supersedes the hidden one. Seats covered under the hidden version keep
+    their terms — the terms are identical anyway.
+    """
+    class_id = g.canonical_context.class_id
+    row = insurance_defs.get_insurance_definition(policy_uuid, class_id=class_id)
+    if row is None or row.availability_state != insurance_defs.HIDDEN:
+        abort(404)
+
+    try:
+        configure_insurance_definition(
+            class_id=class_id,
+            submission=_insurance_submission_from_row(row),
+            canonical_context=g.canonical_context,
+            availability_state=insurance_defs.IN_USE,
+            supersedes_policy_uuid=row.policy_uuid,
+            correlation_id=f"feat:class003:insurance-reactivate:{uuid.uuid4().hex}",
+            idempotency_key=f"feat:class003:insurance-reactivate:{uuid.uuid4().hex}",
+        )
+    except InsuranceContractViolation as exc:
+        flash(f"That policy cannot go back on sale: {exc}", "danger")
+        return redirect(url_for('admin.insurance_management'))
+    flash("Insurance policy is available for new enrollment again.", "success")
     return redirect(url_for('admin.insurance_management'))
 
 
@@ -6369,26 +6411,48 @@ def view_student_policy(enrollment_id):
     )
 
 
-@admin_bp.route('/insurance/claim/<int:claim_id>', methods=['GET', 'POST'])
+@admin_bp.route('/insurance/claim/<claim_id>', methods=['GET', 'POST'])
 @admin_required
 def process_claim(claim_id):
     """Process insurance claim with auto-deposit for monetary claims."""
     claim = get_insurance_claim(claim_id=str(claim_id))
-    if claim is None:
+    if claim is None or claim.class_id != g.canonical_context.class_id:
         abort(404)
     form = AdminClaimProcessForm()
     if request.method == 'GET':
         form.status.data = getattr(claim.status, "value", claim.status)
     claims = list_insurance_claims(class_id=g.canonical_context.class_id)
+    claim_basis = claim.claim_basis or {}
+    policy_uuid = claim_basis.get('policy_uuid')
+    policy = (
+        InsurancePolicy.query.filter_by(
+            class_id=claim.class_id,
+            policy_uuid=policy_uuid,
+        ).first()
+        if policy_uuid else None
+    )
+    student_profile = IdentityProfile.query.filter_by(seat_id=claim.target_seat_id).first()
+    incident_dates = claim_basis.get('claimed_dates') or []
+    parsed_incident_dates = []
+    for raw_date in incident_dates:
+        if isinstance(raw_date, str):
+            try:
+                parsed_incident_dates.append(datetime.fromisoformat(raw_date))
+            except ValueError:
+                continue
+        elif isinstance(raw_date, datetime):
+            parsed_incident_dates.append(raw_date)
+    if not parsed_incident_dates:
+        parsed_incident_dates = [claim.submitted_at]
     placeholder_policy = SimpleNamespace(
-        title=getattr(getattr(claim.entitlement, "store_item", None), "title", "Insurance"),
-        description=getattr(getattr(claim.entitlement, "store_item", None), "description", ""),
+        title=policy.title if policy and policy.title else "Insurance",
+        description=policy.description if policy and policy.description else "",
         premium=Decimal("0.00"),
         charge_frequency="monthly",
         waiting_period_days=0,
         autopay=False,
         auto_cancel_nonpay_days=0,
-        claim_type="TRANSACTION",
+        claim_type=claim_basis.get('claim_type', 'TRANSACTION'),
         no_repurchase_after_cancel=False,
         repurchase_wait_days=0,
     )
@@ -6398,46 +6462,49 @@ def process_claim(claim_id):
         days_unpaid=0,
     )
     claim_view = SimpleNamespace(
-        id=claim.id,
+        id=claim.claim_id,
         claim_id=claim.claim_id,
         student=SimpleNamespace(
             full_name=(
-                (lambda profile: profile.full_name if profile else getattr(claim.target_seat, "public_id", ""))(
-                    IdentityProfile.query.filter_by(seat_id=claim.target_seat_id).first()
-                )
+                student_profile.full_name if student_profile else getattr(claim.target_seat, "public_id", "")
                 if claim.target_seat_id else getattr(claim.target_seat, "public_id", "")
             )
         ),
         target_seat=claim.target_seat,
-        transaction=getattr(claim, "referenced_transaction", None),
+        transaction=(db.session.get(Transaction, claim.ledger_transaction_id)
+                     if claim.ledger_transaction_id else None),
         submitted_at=claim.submitted_at,
         decided_at=claim.decided_at,
-        claimed_dates=claim.claimed_dates or [],
+        claimed_dates=parsed_incident_dates,
         status=getattr(claim.status, "value", claim.status),
-        entitlement=claim.entitlement,
-        description="",
+        entitlement=None,
+        description=claim_basis.get('description', ''),
         comments="",
         rejection_reason="",
         teacher_notes="",
         incident_date=claim.submitted_at,
         filed_date=claim.submitted_at,
-        claim_amount=None,
+        claim_amount=claim_basis.get('amount') or claim.result_amount,
         claim_item=None,
     )
     if form.validate_on_submit():
         decision = (form.status.data or "").strip().lower()
         if decision == "approved":
-            execute_claim_approval(
+            resolve_insurance_claim(
+                canonical_context=g.canonical_context,
                 claim_id=claim.claim_id,
-                decided_by_seat_id=g.canonical_context.seat_id,
-                ctx=g.canonical_context,
+                approved=True,
+                idempotency_key=f"admin-insurance-approve:{claim.claim_id}",
             )
             flash("Claim approved.", "success")
             return redirect(url_for("admin.insurance_management"))
         if decision == "rejected":
-            execute_claim_rejection(
+            resolve_insurance_claim(
+                canonical_context=g.canonical_context,
                 claim_id=claim.claim_id,
-                decided_by_seat_id=g.canonical_context.seat_id,
+                approved=False,
+                override_reason=form.rejection_reason.data or form.teacher_notes.data,
+                idempotency_key=f"admin-insurance-reject:{claim.claim_id}",
             )
             flash("Claim rejected.", "info")
             return redirect(url_for("admin.insurance_management"))
@@ -6500,7 +6567,7 @@ def void_transaction(transaction_id):
     if tx is None:
         abort(404)
 
-    if tx.is_void:
+    if tx.status == TransactionStatus.VOID:
         return _void_error("Transaction is already voided.")
 
     try:
@@ -6640,22 +6707,36 @@ def hall_pass():
     # Get available sections from ClassEconomy
     class_row = get_class_economy(selected_class_id)
     periods = [class_row.section] if class_row and class_row.section else []
+    hall_pass_settings = get_hall_pass_settings(selected_class_id)
+    out_limit = hall_pass_settings.max_queue_limit if hall_pass_settings else 1
 
     # Lazily generate the hall pass verification token if needed
     canonical_teacher_user = db.session.get(User, g.canonical_context.user_id) if hasattr(g, 'canonical_context') else None
 
     verify_url = None
+    verify_qr_data_uri = None
     if canonical_teacher_user and canonical_teacher_user.hall_pass_verify_token:
-        verify_url = f"/verify/hallpass/{canonical_teacher_user.hall_pass_verify_token}"
+        verify_url = url_for(
+            'main.verify_hall_pass',
+            teacher_public_token=canonical_teacher_user.hall_pass_verify_token,
+            _external=True,
+        )
+        qr_buffer = io.BytesIO()
+        qrcode.make(verify_url).save(qr_buffer, format='PNG')
+        verify_qr_data_uri = (
+            'data:image/png;base64,' + base64.b64encode(qr_buffer.getvalue()).decode('ascii')
+        )
 
     return render_template(
         'admin_hall_pass.html',
         pending_requests=pending_requests,
         issued_passes=issued_passes,
         out_of_class=out_of_class,
+        out_limit=out_limit,
         available_periods=periods,
         current_page="hall_pass",
         verify_url=verify_url,
+        verify_qr_data_uri=verify_qr_data_uri,
         feature_options=feature_options,
         selected_feature_scope=selected_scope,
         current_join_code=selected_join_code,
@@ -6786,7 +6867,9 @@ def apply_economy_rebalance():
     effective_class_id = selected_scope.get("class_id")
     effective_class = get_class_economy(effective_class_id) if effective_class_id else None
     scoped_store_items = (
-        StoreItem.query.filter_by(class_id=effective_class.class_id, is_active=True).all()
+        # Sellable versions only: a retired version is a prior draft or a
+        # withdrawn product and priced nothing that a student can buy today.
+        store_service.list_products(effective_class.class_id, states=(store_service.IN_USE,))
         if effective_class else []
     )
     analysis = checker.analyze_economy(
@@ -6852,7 +6935,7 @@ def apply_economy_rebalance():
                 g.canonical_context.user_id,
                 settings_row,
                 scheduled_changes,
-                activation_mode=REBALANCE_ACTIVATION_NEXT_RENEWAL,
+                activation_mode=activation_mode,
             )
             current_app.logger.info(
                 "Scheduled economy rebalance teacher=%s class_id=%s changes=%s",
@@ -6888,7 +6971,7 @@ def economic_engine():
     selected_class_id = selected_scope['class_id']
     fines = []
     store_items = (
-        StoreItem.query.filter_by(class_id=selected_class_id, is_active=True).all()
+        store_service.list_products(selected_class_id, states=(store_service.IN_USE,))
         if selected_class_id else []
     )
 
@@ -7883,7 +7966,7 @@ def void_payroll_transaction(transaction_id):
             .first_or_404()
         )
 
-        if transaction.is_void:
+        if transaction.status == TransactionStatus.VOID:
             return jsonify({'success': False, 'message': 'Transaction is already voided'}), 400
 
         idempotency_key = (
@@ -7897,7 +7980,7 @@ def void_payroll_transaction(transaction_id):
             .first_or_404()
         )
 
-        if transaction.is_void:
+        if transaction.status == TransactionStatus.VOID:
             return jsonify({'success': False, 'message': 'Transaction is already voided'}), 400
 
         execute_void_transaction(
@@ -7950,7 +8033,7 @@ def void_transactions_bulk():
                 .filter(Transaction.class_id == selected_scope['class_id'])
                 .first()
             )
-            if transaction and not transaction.is_void:
+            if transaction and transaction.status != TransactionStatus.VOID:
                 transactions_to_void.append(transaction)
         execute_void_transactions(
             transactions_to_void,
@@ -7978,7 +8061,7 @@ def payroll_manual_payment():
     if form.validate_on_submit():
         try:
             student_ids = request.form.getlist('student_ids')
-            save_action = request.form.get('save_action', 'apply_only') # apply_only, save_and_apply, save_only
+            save_action = 'apply_only'
             payment_type = request.form.get('payment_type', 'deposit')
 
             description = form.description.data
@@ -7999,13 +8082,6 @@ def payroll_manual_payment():
             selected_scope = _require_payroll_feature_scope_from_request()
             selected_class_id = selected_scope['class_id']
             policy_version_id = _require_active_payroll_policy_version_id(selected_class_id)
-
-            # Save Template Logic
-            if save_action in ['save_only', 'save_and_apply']:
-                pass
-                if save_action == 'save_only':
-                    flash(f'Template "{description}" saved successfully!', 'success')
-                    return redirect(url_for('admin.payroll'))
 
             applied_count = 0
             request_nonce = secrets.token_hex(12)
@@ -8314,18 +8390,54 @@ def export_students():
             'earnings': earnings_total,
         }
 
-    # Prefetch active insurances to avoid N+1 queries.
-    # (Insurance policy prefetch is not yet wired; kept empty rather than
-    # reconstructing a teacher-wide class set.)
-    active_insurances_map = {}
+    # Derive active insurance coverage from entitlement history, scoped to this
+    # class. A consumed claim does not end coverage; only EXPIRED/REVOKED does.
+    insurance_grants = (
+        EntitlementEvent.query
+        .filter(
+            EntitlementEvent.class_id == selected_class_id,
+            EntitlementEvent.target_seat_id.in_([seat.id for seat in seats]),
+            EntitlementEvent.entitlement_type == 'INSURANCE',
+            EntitlementEvent.event_type == 'GRANTED',
+        )
+        .order_by(EntitlementEvent.timestamp.asc(), EntitlementEvent.event_id.asc())
+        .all()
+    )
+    terminal_entitlement_ids = {
+        row[0]
+        for row in (
+            db.session.query(EntitlementEvent.entitlement_id)
+            .filter(
+                EntitlementEvent.class_id == selected_class_id,
+                EntitlementEvent.entitlement_id.in_([grant.entitlement_id for grant in insurance_grants]),
+                EntitlementEvent.event_type.in_(['EXPIRED', 'REVOKED']),
+            )
+            .all()
+        )
+    }
+    active_insurance_policy_by_seat = {}
+    for grant in insurance_grants:
+        if grant.entitlement_id in terminal_entitlement_ids:
+            continue
+        policy_uuid = (grant.payload or {}).get('policy_uuid')
+        if policy_uuid and grant.target_seat_id not in active_insurance_policy_by_seat:
+            active_insurance_policy_by_seat[grant.target_seat_id] = policy_uuid
+    policy_uuids = set(active_insurance_policy_by_seat.values())
+    policies_by_uuid = {
+        policy.policy_uuid: policy
+        for policy in InsurancePolicy.query.filter(
+            InsurancePolicy.class_id == selected_class_id,
+            InsurancePolicy.policy_uuid.in_(policy_uuids),
+        ).all()
+    } if policy_uuids else {}
 
     for seat in seats:
         # Every seat here already belongs to the single active class, so its
         # section is just a display label pulled off that class row.
         export_block = seat.class_economy.section if seat and seat.class_economy else None
 
-        active_insurance = active_insurances_map.get(seat.id)
-        insurance_name = active_insurance.policy.title if active_insurance else 'None'
+        policy = policies_by_uuid.get(active_insurance_policy_by_seat.get(seat.id))
+        insurance_name = policy.title if policy and policy.title else 'None'
 
         scoped_balances = scoped_balances_by_student.get(seat.id, {})
         checking_balance = scoped_balances.get('checking', Decimal('0.00'))
@@ -8763,7 +8875,7 @@ def banking():
             'account_type': tx.account_type,
             'description': tx.description,
             'type': tx.type,
-            'is_void': tx.is_void,
+            'is_void': tx.status == TransactionStatus.VOID,
         })
 
     transaction_types = sorted(
@@ -9096,7 +9208,7 @@ def help_support():
 
             views.append({
                 'report': {
-                    'title': 'Support Ticket',
+                    'title': issue.title or 'Support Ticket',
                     'status': issue.status,
                     'submitted_at': issue.submitted_at,
                     'report_type': issue.issue_type,
@@ -9238,7 +9350,7 @@ def help_support():
         scoped_description = f"{metadata_header}\n\n{description}"
 
         try:
-            with FEATContext("FEAT-SUP-001", idempotency_key=f"admin_help_support:{user_id}:{'account' if is_account_scope else selected_class_id}:{title}"):
+            with FEATContext("FEAT-SUP-001", idempotency_key=f"admin_help_support:{user_id}:{uuid.uuid4().hex}"):
                 category = IssueCategory.query.filter_by(
                     name=category_to_report_type[issue_category],
                 ).first()
@@ -9248,6 +9360,7 @@ def help_support():
                     actor_public_id=anonymous_code,
                     class_public_id=ticket_class_public_id,
                     category_id=category.id,
+                    title=title,
                     scoped_description=scoped_description,
                     expected_behavior=expected_behavior,
                     page_url=page_url,
@@ -9658,8 +9771,8 @@ def onboarding_status():
             payroll_done = PayrollSettings.query.filter(
                 PayrollSettings.class_id == active_class_id
             ).first() is not None
-            store_done = StoreItem.query.filter(
-                StoreItem.class_id == active_class_id
+            store_done = StoreProduct.query.filter(
+                StoreProduct.class_id == active_class_id
             ).count() > 0
             banking_done = EconomicEngine.query.filter(
                 EconomicEngine.class_id == active_class_id
@@ -9945,14 +10058,10 @@ def api_economy_analyze():
 
         insurance_policies_query = []
         fines_query = []
-        store_items_query = StoreItem.query.filter(
-            StoreItem.class_id == class_id,
-            StoreItem.is_active.is_(True),
-        )
 
         insurance_policies = insurance_policies_query
         fines = fines_query
-        store_items = store_items_query.all()
+        store_items = store_service.list_products(class_id, states=(store_service.IN_USE,))
 
         # Perform analysis
         # Use expected_weekly_hours from payroll_settings unless explicitly overridden in request
@@ -10674,14 +10783,14 @@ def resolve_issue(issue_ref):
                 or transaction.class_id != class_id
                 or not submitter_seat
                 or transaction.seat_id != submitter_seat.id
-                or transaction.is_void
+                or transaction.status == TransactionStatus.VOID
             ):
                 flash("The related transaction could not be reversed for this issue.", "error")
                 return redirect(url_for('admin.view_issue', issue_ref=issue_ref))
 
-            from app.services.ledger_correction_service import compensate_posted_transaction
+            from app.services.ledger_correction_service import reverse_transaction
             from app.utils.transaction_idempotency import build_transaction_idempotency_key
-            reversal_tx = compensate_posted_transaction(
+            reversal_tx = reverse_transaction(
                 transaction,
                 description=f"Issue #{issue.id} reversal for transaction #{transaction.id}",
                 compensation_type='issue_reversal',
@@ -10715,14 +10824,14 @@ def resolve_issue(issue_ref):
                 or transaction.class_id != class_id
                 or not submitter_seat
                 or transaction.seat_id != submitter_seat.id
-                or transaction.is_void
+                or transaction.status == TransactionStatus.VOID
             ):
                 flash("The related transaction could not be found for this issue.", "error")
                 return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
-            from app.services.ledger_correction_service import compensate_posted_transaction
+            from app.services.ledger_correction_service import reverse_transaction
             from app.utils.transaction_idempotency import build_transaction_idempotency_key
-            compensating_tx = compensate_posted_transaction(
+            compensating_tx = reverse_transaction(
                 transaction,
                 description=f"Issue #{issue.id} compensating entry for transaction #{transaction.id}",
                 compensation_type='issue_compensation',

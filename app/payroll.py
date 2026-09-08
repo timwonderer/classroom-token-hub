@@ -1,12 +1,12 @@
 from app.extensions import db
-from app.models import Transaction, PayrollSettings
+from app.models import Transaction, TransactionStatus, PayrollSettings
 from app.utils.canonical_temporal_resolver import ensure_utc
 from app.attendance import (
     get_batch_attendance_events,
     calculate_seconds_in_memory
 )
 from flask import has_request_context, session
-from decimal import Decimal
+from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP
 
 
 DEFAULT_PAY_RATE_PER_MINUTE = Decimal('0.25')
@@ -118,6 +118,7 @@ def calculate_payroll_breakdown(class_id, seat_ids, last_payroll_time):
     allowed_class_ids = [class_id]
     scoped_seat_ids = [s.id for s in seats]
     pay_rates = _get_batch_pay_rates(allowed_class_ids)
+    payroll_settings = _get_batch_payroll_settings(allowed_class_ids)
     student_last_payrolls = _get_batch_last_payroll_times(
         scoped_seat_ids,
         allowed_class_ids=allowed_class_ids,
@@ -146,13 +147,36 @@ def calculate_payroll_breakdown(class_id, seat_ids, last_payroll_time):
         events = events_map.get((seat.id, class_id), [])
         total_seconds = calculate_seconds_in_memory(events, payroll_anchor)
 
-        if total_seconds > 0:
-            amount = (Decimal(total_seconds) * rate_per_second).quantize(Decimal('0.01'))
+        setting = payroll_settings.get(class_id)
+        billable_seconds = _round_billable_seconds(total_seconds, setting)
+
+        if billable_seconds > 0:
+            amount = (Decimal(billable_seconds) * rate_per_second).quantize(Decimal('0.01'))
             if amount > 0:
                 summary.setdefault(seat.id, Decimal('0.00'))
                 summary[seat.id] += amount
 
     return summary
+
+
+def _round_billable_seconds(total_seconds: int, setting) -> int:
+    """Apply advanced-mode time-increment rounding to elapsed attendance."""
+    if total_seconds <= 0 or not setting or setting.settings_mode != 'advanced':
+        return max(0, total_seconds)
+    increment = {
+        'seconds': 1,
+        'minutes': 60,
+        'hours': 3600,
+        'days': 86400,
+    }.get((setting.time_unit or 'minutes').lower(), 60)
+    units = Decimal(total_seconds) / Decimal(increment)
+    mode = (setting.rounding_mode or 'down').lower()
+    rounding = {
+        'up': ROUND_CEILING,
+        'nearest': ROUND_HALF_UP,
+        'down': ROUND_FLOOR,
+    }.get(mode, ROUND_FLOOR)
+    return int(units.quantize(Decimal('1'), rounding=rounding)) * increment
 
 def _get_batch_pay_rates(class_ids):
     """Batch fetch per-second pay rates keyed by canonical class_id.
@@ -182,6 +206,21 @@ def _get_batch_pay_rates(class_ids):
     return rates
 
 
+def _get_batch_payroll_settings(class_ids):
+    if not class_ids:
+        return {}
+    settings = (
+        PayrollSettings.query
+        .filter(
+            PayrollSettings.class_id.in_(class_ids),
+            PayrollSettings.availability_state == 'IN_USE',
+        )
+        .order_by(PayrollSettings.updated_at.asc(), PayrollSettings.id.asc())
+        .all()
+    )
+    return {setting.class_id: setting for setting in settings}
+
+
 
 def _get_batch_last_payroll_times(seat_ids, allowed_class_ids):
     """
@@ -200,7 +239,7 @@ def _get_batch_last_payroll_times(seat_ids, allowed_class_ids):
         Transaction.seat_id.in_(seat_ids),
         Transaction.class_id.in_(allowed_class_ids),
         Transaction.type.in_(["payroll", "manual_payment"]),
-        Transaction.is_void.isnot(True),
+        Transaction.status != TransactionStatus.VOID,
     )
 
     results = query.group_by(Transaction.seat_id, Transaction.class_id).all()

@@ -488,14 +488,12 @@ class Transaction(db.Model):
     )
     amount_cents = db.Column(db.Integer, nullable=False)  # Signed integer (e.g. 100 = $1.00)
     posted_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    voided_at = db.Column(db.DateTime(timezone=True), nullable=True)
     effective_at = db.Column(db.DateTime(timezone=True), default=utc_now)
 
     description = db.Column(db.String(255))
     correlation_id = db.Column(db.String(100), nullable=False, index=True)
     feat_code = db.Column(db.String(100), nullable=True, index=True)
     idempotency_key = db.Column(db.String(128), nullable=True, index=True)
-    is_void = db.Column(db.Boolean, default=False)
     # References for compensating/reversal ledger entries.
     # Stored as IDs for backend portability.
     original_transaction_id = db.Column(db.Integer, nullable=True, index=True)
@@ -771,7 +769,9 @@ class HallPassLog(db.Model):
     correlation_id = db.Column(db.String(100), nullable=False, index=True)
     policy_uuid = db.Column(db.String(36), nullable=False, index=True)
     # FK-style reference to EntitlementEvent.entitlement_id for the consumed pass.
-    hall_pass_id = db.Column(db.String(100), nullable=False, unique=False, index=True)
+    # Non-consuming destinations have no entitlement lifecycle to reference;
+    # the correlation_id remains the audit identity for those logs.
+    hall_pass_id = db.Column(db.String(100), nullable=True, unique=False, index=True)
     destination = db.Column(db.String(255), nullable=True)
 
     # CRITICAL: class_id is the source of truth for class isolation
@@ -938,21 +938,72 @@ def _reject_hall_pass_policy_payload_mutation(mapper, connection, target):
 
 # -------------------- STORE MODELS --------------------
 
-class StoreItem(db.Model):
-    __tablename__ = 'store_items'
-    id = db.Column(db.Integer, primary_key=True)
+class StoreProduct(db.Model):
+    """Immutable, versioned store product definition — DOM-POL-001 / DOM-STORE-001.
+
+    This is the *single* store product table. It replaces the former
+    ``store_items`` (mutable, integer-keyed catalog row) / ``store_products``
+    (JSON-payload policy row) split, in which one product was described by two
+    records joined by nothing but ``payload["product_id"]`` and kept in step by a
+    synchronization routine. That arrangement had no owner: teacher forms wrote
+    one table, purchases resolved against the other, and nothing kept them
+    honest.
+
+    The shape here is the one every other policy family in this codebase already
+    uses (``InsurancePolicy``, ``RentSettings``, ``PayrollSettings``,
+    ``HallPassSettings``): a UUID-keyed, append-only definition row with a
+    mutable availability projection.
+
+    Two identifiers, deliberately distinct (DOM-POL-001 §VI.0):
+
+    ``policy_uuid``
+        The **version**. Primary key. Every create *and* every edit mints a
+        fresh one; economic and identity fields are never rewritten in place.
+        An entitlement freezes this value, so a student keeps the exact terms
+        they bought under even after the teacher edits the product.
+
+    ``product_lineage_uuid``
+        The **product**. Stable across every version. Derived quantities
+        (units sold, collective-goal progress, inventory remaining) and
+        per-seat visibility hang off this, because they describe the product
+        rather than any one version of it. Pointing them at ``policy_uuid``
+        instead would silently reset goal progress and restore stock on every
+        edit.
+
+    Only ``availability_state`` (and its retirement metadata) may change on an
+    existing row (DOM-POL-001 §IX). Students see ``IN_USE`` only.
+
+    No mutable balance is stored. ``inventory_total`` is the ceiling the teacher
+    configured — configuration, not a balance — and the remaining count is
+    derived by counting ``GRANTED`` entitlement events for the lineage, the same
+    way collective-goal progress has always been computed. DOM-STORE-001 §VII.A
+    forbids persisting remaining balances.
+    """
+    __tablename__ = 'store_products'
+
+    # The version. Immutable once written.
+    policy_uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    # The product. Shared by every version in the lineage; this is what
+    # entitlement history and visibility rows point at.
+    product_lineage_uuid = db.Column(
+        db.String(36), nullable=False, index=True, default=lambda: str(uuid.uuid4())
+    )
+
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
     price = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
     tier = db.Column(db.String(20), nullable=True) # basic, standard, premium, luxury (teacher-only organizational label)
     item_type = db.Column(db.String(20), nullable=False, default='delayed') # immediate, delayed, collective
-    inventory = db.Column(db.Integer, nullable=True) # null for unlimited
+    # Configured ceiling, not a balance. NULL = unlimited. Units remaining are
+    # derived from GRANTED entitlement events for the lineage; DOM-STORE-001
+    # §VII.A forbids persisting the remainder.
+    inventory_total = db.Column(db.Integer, nullable=True)
     limit_per_student = db.Column(db.Integer, nullable=True) # null for no limit
     auto_delist_date = db.Column(db.DateTime(timezone=True), nullable=True)
     auto_expiry_days = db.Column(db.Integer, nullable=True) # days student has to use the item
-    is_active = db.Column(db.Boolean, default=True, nullable=False)
     is_long_term_goal = db.Column(db.Boolean, default=False, nullable=False) # if true, exclude from CWI balance checks
     bypass_cwi_warnings = db.Column(db.Boolean, default=False, nullable=False)
 
@@ -974,17 +1025,48 @@ class StoreItem(db.Model):
     # Redemption prompt (for delayed use items)
     redemption_prompt = db.Column(db.Text, nullable=True)  # Optional prompt shown to students when redeeming delayed items
 
-    # Rent Linked
-    is_rent_linked = db.Column(db.Boolean, default=False, nullable=False)
+    # Availability projection (DOM-POL-001 §IX) — the ONLY mutable field on an
+    # otherwise immutable row. Replaces the old `is_active` boolean, which could
+    # not distinguish "teacher hid this" from "superseded by a newer version".
+    #   IN_USE  — sellable; exactly one version per lineage may hold this
+    #   HIDDEN  — withheld by the teacher, restorable
+    #   RETIRED — superseded or withdrawn; never sellable again
+    availability_state = db.Column(
+        db.String(16), nullable=False, server_default='IN_USE', default='IN_USE'
+    )
+
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    created_by_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True)
+    retired_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Relationships
-    teacher = db.relationship('User', backref=db.backref('store_items', lazy='dynamic'))
-    # Seat-level visibility is the canonical replacement for legacy block visibility.
+    teacher = db.relationship('User', backref=db.backref('store_products', lazy='dynamic'))
+    # Seat-level visibility keys off the LINEAGE, not this version, so a teacher
+    # edit does not silently drop every per-seat visibility grant.
     visible_seats = db.relationship(
         'StoreItemVisibility',
-        back_populates='store_item',
+        primaryjoin='foreign(StoreItemVisibility.product_lineage_uuid) == StoreProduct.product_lineage_uuid',
+        back_populates='store_product',
         lazy='dynamic',
-        cascade='all, delete-orphan'
+        viewonly=False,
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "availability_state IN ('IN_USE','HIDDEN','RETIRED')",
+            name='ck_store_products_availability_state',
+        ),
+        # At most one sellable version per product. This is the constraint that
+        # makes "edit = supersede" safe: minting a new IN_USE version without
+        # retiring the old one would put two prices on one product.
+        db.Index(
+            'uq_store_products_one_live_per_lineage',
+            'product_lineage_uuid',
+            unique=True,
+            postgresql_where=db.text("availability_state = 'IN_USE'"),
+        ),
+        db.Index('ix_store_products_class_availability', 'class_id', 'availability_state'),
+        db.Index('ix_store_products_class_created', 'class_id', 'created_at'),
     )
 
     @property
@@ -1003,8 +1085,14 @@ class StoreItem(db.Model):
         return [section for (section,) in rows if section]
 
     def set_blocks(self, block_list):
-        """Set the visibility blocks using canonical seat-level visibility rows."""
-        StoreItemVisibility.query.filter_by(store_item_id=self.id).delete()
+        """Set the visibility blocks using canonical seat-level visibility rows.
+
+        Keyed by lineage: visibility describes the product, so it survives the
+        supersession that an edit performs.
+        """
+        StoreItemVisibility.query.filter_by(
+            product_lineage_uuid=self.product_lineage_uuid
+        ).delete()
         if not block_list:
             return
         normalized_blocks = {block.strip().upper() for block in block_list if block and block.strip()}
@@ -1026,18 +1114,58 @@ class StoreItem(db.Model):
         ]
         if seat_ids:
             db.session.add_all([
-                StoreItemVisibility(store_item_id=self.id, seat_id=seat_id)
+                StoreItemVisibility(
+                    product_lineage_uuid=self.product_lineage_uuid, seat_id=seat_id
+                )
                 for seat_id in seat_ids
             ])
 
 
-@sa.event.listens_for(StoreItem, "before_insert")
-@sa.event.listens_for(StoreItem, "before_update")
-def _sync_store_item_scope(_mapper, connection, target):
-    """Synchronize store_items class scope during the transition."""
-    class_id = getattr(target, "class_id", None)
-    if not class_id:
-        raise ValueError("store_items require canonical class_id")
+# Fields frozen once a version exists. An "edit" mints a new version instead of
+# rewriting these, so a student's purchased terms cannot move underneath them
+# (DOM-POL-001 §VI.0). Only the availability projection and its retirement
+# metadata may change on a persisted row.
+_STORE_PRODUCT_IMMUTABLE_FIELDS = frozenset({
+    'policy_uuid', 'product_lineage_uuid', 'class_id', 'user_id', 'name',
+    'description', 'price', 'tier', 'item_type', 'inventory_total',
+    'limit_per_student', 'auto_delist_date', 'auto_expiry_days',
+    'is_long_term_goal', 'bypass_cwi_warnings', 'is_bundle', 'bundle_quantity',
+    'bulk_discount_enabled', 'bulk_discount_quantity', 'bulk_discount_percentage',
+    'collective_goal_type', 'collective_goal_target', 'collective_goal_expires_at',
+    'collective_goal_instance_code', 'redemption_prompt', 'created_at',
+    'created_by_seat_id',
+})
+
+
+@sa.event.listens_for(StoreProduct, "before_insert")
+def _validate_store_product_scope(_mapper, connection, target):
+    """A product definition is meaningless outside a class boundary."""
+    if not getattr(target, "class_id", None):
+        raise ValueError("store_products require canonical class_id")
+    if not getattr(target, "product_lineage_uuid", None):
+        raise ValueError("store_products require a product_lineage_uuid")
+
+
+@sa.event.listens_for(StoreProduct, "before_update")
+def _guard_store_product_immutability(_mapper, connection, target):
+    """Reject in-place edits to frozen definition fields.
+
+    This is the DB-adjacent backstop for supersession. Without it, a well-meaning
+    ``item.price = new_price`` anywhere in the codebase would silently rewrite
+    the terms of every entitlement already sold under this version — which is
+    precisely the defect the two-table split used to hide.
+    """
+    state = sa.inspect(target)
+    changed = [
+        attr.key
+        for attr in state.attrs
+        if attr.key in _STORE_PRODUCT_IMMUTABLE_FIELDS and attr.history.has_changes()
+    ]
+    if changed:
+        raise ValueError(
+            f"store_products fields are immutable: {sorted(changed)}. "
+            "Publish a new version instead of editing this one."
+        )
 
 
 # StoreItemBlock removed — store_item_blocks unauthorized; canonical replacement: store_item_visibility (DOM-STORE-001)
@@ -1052,16 +1180,31 @@ def _sync_store_item_scope(_mapper, connection, target):
 
 
 class StoreItemVisibility(db.Model):
+    """Per-seat visibility grant for a store product.
+
+    Keyed by ``product_lineage_uuid`` rather than a version, because visibility
+    is a property of the product: a teacher who restricted an item to one class
+    section expects that restriction to hold after they edit the price. There is
+    deliberately no FK — the lineage is a locator shared by many rows, the same
+    non-FK-UUID discipline ``policy_uuid`` follows (DOM-POL-001 §VI.0).
+    """
     __tablename__ = 'store_item_visibility'
     id = db.Column(db.Integer, primary_key=True)
-    store_item_id = db.Column(db.Integer, db.ForeignKey('store_items.id', ondelete='CASCADE'), nullable=False, index=True)
+    product_lineage_uuid = db.Column(db.String(36), nullable=False, index=True)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
 
     __table_args__ = (
-        db.UniqueConstraint('store_item_id', 'seat_id', name='uq_store_item_visibility_item_seat'),
+        db.UniqueConstraint(
+            'product_lineage_uuid', 'seat_id', name='uq_store_item_visibility_lineage_seat'
+        ),
     )
 
-    store_item = db.relationship('StoreItem', back_populates='visible_seats')
+    store_product = db.relationship(
+        'StoreProduct',
+        primaryjoin='foreign(StoreItemVisibility.product_lineage_uuid) == StoreProduct.product_lineage_uuid',
+        back_populates='visible_seats',
+        viewonly=True,
+    )
     seat = db.relationship('Seat', backref=db.backref('store_visibility_grants', lazy='dynamic'))
 
 # DELETED per Phase 2 Migration: StorePurchaseStatus, StorePurchase, RedemptionEventAction, RedemptionEventSource, RedemptionEvent
@@ -1085,24 +1228,53 @@ class StoreItemVisibility(db.Model):
 # ================================================================================
 
 
-# Phase-1 closed set of entitlement types a rent satisfaction benefit may grant.
-# DOM-STORE-001 defines the broader entitlement catalog; rent perks are limited to
-# HALL_PASS for now and this tuple is the single gate that must widen to add more.
-_SATISFACTION_BENEFIT_ENTITLEMENT_TYPES = ("HALL_PASS",)
+# Closed set of entitlement types a rent satisfaction benefit may grant.
+# DOM-STORE-001 defines the broader entitlement catalog; this tuple is the single
+# gate that must widen to add more.
+_SATISFACTION_BENEFIT_ENTITLEMENT_TYPES = (
+    "HALL_PASS",
+    "IMMEDIATE_USE",
+    "DELAYED_USE",
+    "PRIVILEGE",
+)
+
+_SATISFACTION_BENEFIT_KEYS = {
+    "entitlement_type",
+    "quantity",
+    "product_lineage_uuid",
+}
 
 
 def validate_satisfaction_benefits(raw):
     """Validate and normalize a rent ``satisfaction_benefits`` payload.
 
-    Contract (Option-C typed JSON, Phase-1 closed schema):
+    Contract (typed JSON, closed schema):
       - ``None`` -> ``[]`` (unset means no grants).
-      - Must be a list; each entry a dict with exactly the keys
-        ``entitlement_type`` and ``quantity``.
-      - ``entitlement_type`` must be in the Phase-1 closed set (HALL_PASS only).
+      - Must be a list; each entry a dict drawn from the keys
+        ``entitlement_type``, ``quantity`` and ``product_lineage_uuid``.
+      - ``entitlement_type`` must be in the closed set above.
       - ``quantity`` must be a positive ``int`` (bools are rejected).
+      - ``product_lineage_uuid``, when present, must be a non-empty string
+        naming a store product lineage.
 
-    Returns a fresh list of ``{"entitlement_type", "quantity"}`` dicts.
-    Raises ``ValueError`` on any violation.
+    ``product_lineage_uuid`` is what makes a store item "rent linked". The
+    linkage lives here rather than on ``store_products`` for two reasons.
+
+    First, DOM-STORE-001 §VII.A requires a granted entitlement to name "a
+    Policy-owned product definition"; without it, rent perks were granted with
+    no product at all, so nothing downstream could say *which* hall pass a
+    student had been given.
+
+    Second, it is what makes the teacher-facing rule — that changing rent-linked
+    items never disturbs the cycle already underway — true rather than merely
+    intended. Rent policy is versioned and an assessment freezes the
+    ``policy_uuid`` it was raised under, so a benefit list edited today is
+    physically a different row from the one the current cycle resolves against.
+    Storing the flag on the product instead would have made it a live read, and
+    every edit would have reached backwards into open cycles.
+
+    Returns a fresh list of normalized dicts. Raises ``ValueError`` on any
+    violation.
     """
     if raw is None:
         return []
@@ -1132,13 +1304,34 @@ def validate_satisfaction_benefits(raw):
                 f"satisfaction_benefits[{index}].quantity must be positive"
             )
 
-        extra_keys = set(entry.keys()) - {"entitlement_type", "quantity"}
+        extra_keys = set(entry.keys()) - _SATISFACTION_BENEFIT_KEYS
         if extra_keys:
             raise ValueError(
                 f"satisfaction_benefits[{index}] has unexpected keys: {sorted(extra_keys)}"
             )
 
-        normalized.append({"entitlement_type": entitlement_type, "quantity": quantity})
+        benefit = {"entitlement_type": entitlement_type, "quantity": quantity}
+
+        product_lineage_uuid = entry.get("product_lineage_uuid")
+        if product_lineage_uuid is not None:
+            if (
+                not isinstance(product_lineage_uuid, str)
+                or not product_lineage_uuid.strip()
+            ):
+                raise ValueError(
+                    f"satisfaction_benefits[{index}].product_lineage_uuid must be "
+                    "a non-empty string"
+                )
+            benefit["product_lineage_uuid"] = product_lineage_uuid.strip()
+        elif entitlement_type != "HALL_PASS":
+            # A generic hall pass is meaningful on its own; every other type is
+            # only meaningful as a specific thing from the catalog.
+            raise ValueError(
+                f"satisfaction_benefits[{index}].product_lineage_uuid is required "
+                f"for entitlement_type {entitlement_type}"
+            )
+
+        normalized.append(benefit)
 
     return normalized
 
@@ -1420,7 +1613,12 @@ class EntitlementEvent(db.Model):
     entitlement_id = db.Column(db.String(36), nullable=False, index=True)  # Stable lineage across lifecycle
     target_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False)
-    product_id = db.Column(db.Integer, nullable=True)  # References Policy-owned product (can be nullable if cross-domain)
+    # Policy-owned product this event concerns (DOM-STORE-001 §VII.A). This is
+    # the product LINEAGE, not the version: derived quantities (units sold,
+    # collective-goal progress, inventory remaining) aggregate over it, and they
+    # must not reset when a teacher edits the product. The exact version bought
+    # is frozen separately as ``payload["policy_uuid"]``.
+    product_id = db.Column(db.String(36), nullable=True, index=True)
     entitlement_type = db.Column(db.String(50), nullable=False)  # INSURANCE, PRIVILEGE, IMMEDIATE_USE, DELAYED_USE, COLLECTIVE_GOAL, HALL_PASS
     acquisition_type = db.Column(db.String(20), nullable=False)  # PURCHASE, GRANT, PERK
     event_type = db.Column(db.String(20), nullable=False, index=True)  # GRANTED, CONSUMED, EXPIRED, REVOKED
@@ -1698,6 +1896,7 @@ class Issue(db.Model):
     # Issue categorization
     category_id = db.Column(db.Integer, db.ForeignKey('issue_categories.id'), nullable=False)
     issue_type = db.Column(db.String(50), nullable=False)  # 'transaction', 'general'
+    title = db.Column(db.String(200), nullable=False, default='Support Ticket')
 
     # Student submission (immutable after submission)
     student_explanation = db.Column(db.Text, nullable=False)
@@ -2288,44 +2487,13 @@ class PolicyTransition(db.Model):
 # -------------------- POLICIES DOMAIN: STORE PRODUCTS --------------------
 
 
-class StoreProduct(db.Model):
-    """Immutable store product policy configuration — DOM-POL-001 / SPEC-STORE-001.
-
-    Policies domain owns product policy definitions.
-    Store and Entitlements consumes these policies when creating entitlements.
-
-    Key principle: UUID is the immutable locator (not FK).
-    Allows historical entitlements to reference deleted policies without breaking.
-    A policy may only be deleted when no executable entitlement depends on it.
-    """
-    __tablename__ = 'store_products'
-
-    id = db.Column(db.Integer, primary_key=True)
-
-    # Immutable UUID locator for cross-domain references (not FK)
-    policy_uuid = db.Column(db.String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
-
-    # Class scope: policy is defined for a specific class period
-    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
-
-    # Payload: SPEC-STORE-001 schema per SPEC-STORE-001
-    # Contains required fields: product_id, is_purchasable, supports_direct_grants, price, entitlement_type
-    # And optional fields: limit_per_student, auto_expiry_days, name, description, tier, etc.
-    payload = db.Column(db.JSON, nullable=False)
-
-    # Immutable metadata
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    created_by_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True)
-
-    # Lifecycle: is_retired indicates policy is no longer applicable for new purchases
-    # But historical entitlements created under this policy remain valid
-    is_retired = db.Column(db.Boolean, default=False, nullable=False)
-    retired_at = db.Column(db.DateTime(timezone=True), nullable=True)
-
-    __table_args__ = (
-        db.Index('ix_store_products_class_retired', 'class_id', 'is_retired'),
-        db.Index('ix_store_products_class_created', 'class_id', 'created_at'),
-    )
+# The JSON-payload ``StoreProduct`` that formerly lived here has been folded into
+# the single typed ``StoreProduct`` definition above. It was one half of a
+# two-table split (mutable ``store_items`` + immutable ``store_products`` joined
+# only by ``payload["product_id"]``) in which no code path ever wrote the policy
+# half, so no catalog item had a resolvable ``policy_uuid`` and every purchase
+# was refused. Typed columns replace the JSON payload; ``availability_state``
+# replaces ``is_retired``.
 
 
 class InsurancePolicy(db.Model):

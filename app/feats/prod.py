@@ -20,7 +20,11 @@ from app.models import (
 )
 from app.payroll import get_pay_rate_for_class
 from app.services.context_resolver import CanonicalContext
-from app.services.entitlement_service import consume_hall_pass, get_hall_pass_balance
+from app.services.entitlement_service import (
+    consume_hall_pass,
+    get_available_hall_pass_grant,
+    get_hall_pass_balance,
+)
 from app.services.ledger_posting_service import create_pending_transaction
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
@@ -426,25 +430,55 @@ def _record_hall_pass_log_impl(
         reference_time_utc=now,
     )
 
+    settings = (
+        HallPassSettings.query
+        .filter(
+            HallPassSettings.class_id == ctx.class_id,
+            HallPassSettings.effective_date <= now,
+        )
+        .order_by(HallPassSettings.effective_date.desc(), HallPassSettings.id.desc())
+        .first()
+    )
+    pass_types = settings.get_pass_types() if settings else HallPassSettings.get_default_pass_types()
+    pass_type = next(
+        (
+            item for item in pass_types
+            if (item.get("pass_name") or "").strip().lower()
+            == (destination or "").strip().lower()
+        ),
+        None,
+    )
+    consume_pass = pass_type.get("consume_pass", True) if pass_type else True
+
     if not requested_by_seat_id or not ctx.class_id:
         raise ValueError("Hall-pass consumption requires requested_by_seat_id and class_id")
-    consume_event, _balance = consume_hall_pass(
-        requested_by_seat_id,
-        ctx.class_id,
-        trigger_id=idempotency_key or f"hall_pass_log:{ctx.class_id}:{requested_by_seat_id}:{now.isoformat()}",
-    )
-    if not consume_event.correlation_id:
-        raise ValueError("Hall-pass entitlement consumption missing correlation_id")
-    if not consume_event.entitlement_id:
-        raise ValueError("Hall-pass entitlement consumption missing entitlement_id")
+    consume_event = None
+    hall_pass_grant = get_available_hall_pass_grant(requested_by_seat_id, ctx.class_id)
+    if consume_pass and hall_pass_grant is None:
+        raise ValueError("No available hall-pass entitlement grant")
+    if consume_pass:
+        consume_event, _balance = consume_hall_pass(
+            requested_by_seat_id,
+            ctx.class_id,
+            trigger_id=idempotency_key or f"hall_pass_log:{ctx.class_id}:{requested_by_seat_id}:{now.isoformat()}",
+        )
+        if not consume_event.correlation_id:
+            raise ValueError("Hall-pass entitlement consumption missing correlation_id")
+        if not consume_event.entitlement_id:
+            raise ValueError("Hall-pass entitlement consumption missing entitlement_id")
 
     log = HallPassLog(
         requested_by_seat_id=requested_by_seat_id,
         approved_by_seat_id=approved_by_seat_id,
         class_id=ctx.class_id,
         timestamp=now,
-        hall_pass_id=consume_event.entitlement_id,
-        correlation_id=consume_event.correlation_id,
+        hall_pass_id=(consume_event.entitlement_id if consume_event else getattr(hall_pass_grant, "entitlement_id", None)),
+        correlation_id=(
+            consume_event.correlation_id
+            if consume_event
+            else (getattr(hall_pass_grant, "correlation_id", None) or idempotency_key
+                  or f"hall_pass_log:{ctx.class_id}:{requested_by_seat_id}:{now.isoformat()}")
+        ),
         policy_uuid=policy_uuid,
         destination=destination,
     )

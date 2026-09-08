@@ -64,7 +64,7 @@ from app.models import (
     Transaction,
     # TapEvent removed — tap_events unauthorized; use attendance_sessions (DOM-ATT-001)
     HallPassLog,
-    StoreItem,
+    StoreProduct,
     # StudentItem removed — student_items unauthorized; use store_purchases + redemption_events (DOM-STORE-001)
     RentSettings,
     User,

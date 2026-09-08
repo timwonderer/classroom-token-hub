@@ -23,6 +23,10 @@ def apply_overdraft_fee_if_needed(
         user_id=seat.user_id,
         debit_amount=Decimal("0.00"),
         description="Overdraft fee",
+        # Declared even though the debit is zero and nothing is posted under
+        # it: the command is "charge a fee", and a plan that could not say so
+        # would be relying on the amount to stay zero forever.
+        transaction_type="overdraft_fee",
     )
     economic_engine = get_current_economic_engine(seat.class_id)
     resolved_plan = resolve_intended_ledger_plan(

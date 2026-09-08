@@ -481,7 +481,7 @@ class EconomyBalanceChecker:
         Check if store items are balanced relative to CWI.
 
         Args:
-            store_items: List of StoreItem model instances
+            store_items: List of StoreProduct model instances
             cwi: Calculated CWI value
 
         Returns:
@@ -861,7 +861,7 @@ class EconomyBalanceChecker:
             rent_settings: RentSettings instance (optional)
             insurance_policies: Policy rows (optional)
             fines: List of PayrollFine instances (optional)
-            store_items: List of StoreItem instances (optional)
+            store_items: List of StoreProduct instances (optional)
             expected_weekly_hours: Expected weekly attendance hours
             average_store_spending: Average weekly store spending (estimated if None)
 

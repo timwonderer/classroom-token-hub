@@ -23,6 +23,7 @@ class IntendedLedgerPlan:
     user_id: int | None
     debit_amount: Decimal
     description: str
+    transaction_type: str
     source_account: str = "checking"
     target_account: str | None = None
 
@@ -44,15 +45,25 @@ def build_intended_ledger_plan(
     user_id: int | None,
     debit_amount,
     description: str,
+    transaction_type: str,
     source_account: str = "checking",
     target_account: str | None = None,
 ) -> IntendedLedgerPlan:
+    """Build a plan.
+
+    ``transaction_type`` has no default on purpose. Ledger is domain-blind
+    (DOM-LED-001 §II) — it cannot infer what kind of economic act a debit
+    represents — and the type is what downstream operations key off (void, for
+    one, only refunds a ``purchase``). A default here would silently mistype
+    every future caller's rows.
+    """
     return IntendedLedgerPlan(
         seat_id=seat_id,
         class_id=class_id,
         user_id=user_id,
         debit_amount=_quantize_currency(debit_amount),
         description=description,
+        transaction_type=transaction_type,
         source_account=source_account,
         target_account=target_account,
     )
@@ -257,6 +268,40 @@ def apply_resolved_ledger_plan(
             to_account="checking",
             withdraw_description="Overdraft protection transfer to checking",
             deposit_description="Overdraft protection transfer from savings",
+        )
+        db.session.flush()
+
+    # The principal debit — the act the caller actually asked for.
+    #
+    # It was never posted. ``resolve`` read the balance, ``apply`` moved
+    # recovery funds and charged the NSF fee, and the amount itself was
+    # dropped: a store purchase granted its entitlements and took no money, and
+    # an underfunded student could be charged an NSF fee for a debit that never
+    # landed. The docstring above has claimed this posted the debit since the
+    # function was written, which is why the gap survived review.
+    #
+    # Anchored on class_id + seat_id (INV-ARC-019). The student is both target
+    # and actor: this is a self-initiated economic act, unlike the fee below.
+    debit_amount = resolved_plan.intended_plan.debit_amount
+    if debit_amount > Decimal("0.00"):
+        # Distinct from the fee's key: one resolved plan can post both, and they
+        # are separate effects that must not collide in the reservation table.
+        debit_idempotency_key = (
+            f"{idempotency_key}:debit" if idempotency_key
+            else f"ledger-debit:{seat.id}:{resolved_plan.intended_plan.class_id}"
+        )
+        create_pending_transaction_idempotent(
+            idempotency_key=debit_idempotency_key,
+            seat_id=seat.id,
+            class_id=seat.class_id,
+            target_seat_id=seat.id,
+            actor_seat_id=seat.id,
+            mechanism="self",
+            user_id=resolved_plan.intended_plan.user_id,
+            amount=-debit_amount,
+            account_type=resolved_plan.intended_plan.source_account,
+            type=resolved_plan.intended_plan.transaction_type,
+            description=resolved_plan.intended_plan.description,
         )
         db.session.flush()
 

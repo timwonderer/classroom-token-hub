@@ -26,7 +26,7 @@ from dateutil.relativedelta import relativedelta
 
 from app.extensions import db, limiter
 from app.models import (
-    Transaction, TransactionStatus, AttendanceSession, StoreItem, StoreItemVisibility,
+    Transaction, TransactionStatus, AttendanceSession, StoreItemVisibility,
     # StoreItemBlock removed — store_item_blocks unauthorized; use store_item_visibility (DOM-STORE-001)
     RentSettings,
     ClassFeature, Issue, Seat, User, UserRole, PendingAction,
@@ -82,7 +82,6 @@ from app.services.entitlement_read_service import (
     get_entitlement_status,
 )
 from app.services.insurance_policy_service import list_insurance_policy_versions
-from app.services.insurance_policy_service import get_insurance_entitlement_item_id
 from app.services import insurance_definition_service as insurance_defs
 from app.services.entitlement_read_service import (
     has_active_insurance_coverage,
@@ -104,6 +103,7 @@ from app.services.entitlement_service import (
     get_hall_pass_balance,
 )
 from app.services.entitlement_read_service import get_active_entitlements
+from app.services.store import collective_goals
 from app.services.store.builders import (
     build_store_item_card_view,
     build_entitlement_card_view,
@@ -343,7 +343,7 @@ def _get_total_earnings_for_seat(seat_id: int | None, *, class_id: str | None = 
     query = Transaction.query.filter(
         Transaction.seat_id == seat_id,
         Transaction.amount > 0,
-        Transaction.is_void == False,
+        Transaction.status != TransactionStatus.VOID,
         ~Transaction.description.startswith("Transfer"),
     )
     if class_id:
@@ -757,6 +757,42 @@ def add_class():
     return render_template('student_add_class.html', form=form)
 
 
+def _resolve_entitlement_products(class_id: str) -> dict[str, StoreProduct]:
+    """Index every product version in a class by both of its identifiers.
+
+    Entitlement history is a list of dicts, not ORM rows, and a page may render
+    hundreds of them. Loading the class's products once and indexing them by
+    ``policy_uuid`` *and* ``product_lineage_uuid`` turns what would be two
+    queries per entitlement into one query per page.
+
+    Both keys are needed because the two answer different questions: the
+    version says what the student bought, the lineage says which product it
+    was. UUIDs collide across neither, so one dict can safely hold both.
+    """
+    index: dict[str, StoreProduct] = {}
+    products = (
+        StoreProduct.query.filter_by(class_id=class_id)
+        .order_by(StoreProduct.created_at.asc())
+        .all()
+    )
+    for product in products:
+        index[product.policy_uuid] = product
+        # Later rows win, so the lineage key lands on the newest version — the
+        # right fallback for events written before payloads carried a version.
+        index[product.product_lineage_uuid] = product
+    return index
+
+
+def _product_for_entitlement(
+    index: dict[str, StoreProduct], entitlement: dict
+) -> StoreProduct | None:
+    """The product version behind one entitlement-history entry."""
+    frozen_uuid = entitlement.get("policy_uuid")
+    if frozen_uuid and frozen_uuid in index:
+        return index[frozen_uuid]
+    return index.get(entitlement.get("product_id"))
+
+
 # -------------------- STUDENT DASHBOARD --------------------
 
 @student_bp.route('/dashboard')
@@ -797,13 +833,14 @@ def dashboard():
 
     # Canonical store purchases scoped to the active seat/class.
     entitlements = []
+    product_by_key = _resolve_entitlement_products(scope.class_id)
     for entitlement in get_entitlement_history(seat_id=scope.seat_id, class_id=scope.class_id):
-        # Insurance entitlements resolve through StoreProduct (policy_uuid), never
-        # StoreItem — skip them so a shared product_id int can never misrender an
-        # insurance grant as a general store item.
+        # Insurance entitlements are governed by InsurancePolicy, not by the
+        # store catalog. Skip them so an insurance grant is never rendered as a
+        # store item.
         if entitlement["entitlement_type"] == "INSURANCE":
             continue
-        item = db.session.get(StoreItem, entitlement["product_id"])
+        item = _product_for_entitlement(product_by_key, entitlement)
         if item is None:
             continue
         entitlements.append(SimpleNamespace(
@@ -1037,12 +1074,12 @@ def dashboard():
     # FIX: Add null check to prevent decimal.InvalidOperation on corrupted data
     earnings_this_week = sum(
         (tx.amount for tx in transactions
-        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_in_period(tx.timestamp, start=week_start, end=week_end) and not tx.is_void),
+        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_in_period(tx.timestamp, start=week_start, end=week_end) and tx.status != TransactionStatus.VOID),
         Decimal('0.00')
     )
     earnings_this_month = sum(
         (tx.amount for tx in transactions
-        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_in_period(tx.timestamp, start=month_start, end=now_utc) and not tx.is_void),
+        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_in_period(tx.timestamp, start=month_start, end=now_utc) and tx.status != TransactionStatus.VOID),
         Decimal('0.00')
     )
 
@@ -1050,12 +1087,12 @@ def dashboard():
     # FIX: Add null check to prevent decimal.InvalidOperation on corrupted data
     spending_this_week = abs(sum(
         (tx.amount for tx in transactions
-        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_in_period(tx.timestamp, start=week_start, end=week_end) and not tx.is_void),
+        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_in_period(tx.timestamp, start=week_start, end=week_end) and tx.status != TransactionStatus.VOID),
         Decimal('0.00')
     ))
     spending_this_month = abs(sum(
         (tx.amount for tx in transactions
-        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_in_period(tx.timestamp, start=month_start, end=now_utc) and not tx.is_void),
+        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_in_period(tx.timestamp, start=month_start, end=now_utc) and tx.status != TransactionStatus.VOID),
         Decimal('0.00')
     ))
 
@@ -1233,12 +1270,12 @@ def transfer():
             flash(message, "transfer_error")
             return redirect(url_for("student.transfer"))
 
-        passphrase = request.form.get("passphrase")
+        pin = request.form.get("pin")
         user = get_current_user()
-        if not user or not verify_password(passphrase, user.passphrase_hash or ''):
+        if not user or not verify_password(pin, user.pin_hash or ''):
             if is_json:
-                return jsonify(status="error", message="Incorrect passphrase"), 400
-            flash("Incorrect passphrase. Transfer canceled.", "transfer_error")
+                return jsonify(status="error", message="Incorrect PIN"), 400
+            flash("Incorrect PIN. Transfer canceled.", "transfer_error")
             return redirect(url_for("student.transfer"))
 
         from_account = request.form.get('from_account')
@@ -1321,7 +1358,7 @@ def transfer():
     transactions = Transaction.query.filter(
         Transaction.seat_id == context.seat_id,
         Transaction.class_id == context.class_id,
-        Transaction.is_void == False,
+        Transaction.status != TransactionStatus.VOID,
     ).order_by(Transaction.timestamp.desc()).all()
     checking_transactions = [t for t in transactions if t.account_type == 'checking']
     savings_transactions = [t for t in transactions if t.account_type == 'savings']
@@ -1375,6 +1412,7 @@ def transfer():
                          savings_transactions=savings_transactions,
                          checking_balance=checking_balance,
                          savings_balance=savings_balance,
+                         posted_savings_balance=posted_savings_balance,
                          forecast_interest=forecast_interest,
         scoped_total_earnings=_get_total_earnings_for_seat(student.id, class_id=context.class_id),
                          settings=settings,
@@ -1481,6 +1519,7 @@ def insurance_marketplace():
                 insurance_type=d.insurance_type,
                 premium=d.premium,
                 charge_frequency=d.charge_frequency,
+                waiting_period_days=d.waiting_period_days,
                 purchased_at=grant.timestamp,
             )
         )
@@ -1531,6 +1570,12 @@ def purchase_insurance(policy_uuid):
     context = resolve_canonical_context()
     if not context:
         flash("No class selected. Please select a class to continue.", "error")
+        return redirect(url_for('student.student_insurance'))
+
+    passphrase = request.form.get('passphrase', '')
+    user = get_current_user()
+    if not user or not user.passphrase_hash or not verify_password(passphrase, user.passphrase_hash):
+        flash("Enter your passphrase to confirm the insurance purchase.", "error")
         return redirect(url_for('student.student_insurance'))
 
     # A fresh per-request key: a double-submit is caught by POLICY_ALREADY_HELD
@@ -1738,9 +1783,9 @@ def file_claim(policy_uuid):
     )
 
 
-@student_bp.route('/insurance/policy/<int:enrollment_id>')
+@student_bp.route('/insurance/policy/<policy_uuid>')
 @login_required
-def view_policy(enrollment_id):
+def view_policy(policy_uuid):
     """View policy details and claims history."""
     from app.services.insurance_policy_service import normalize_insurance_type
     context = resolve_canonical_context()
@@ -1752,20 +1797,16 @@ def view_policy(enrollment_id):
         context.identity_profile.full_name
         if getattr(context, "identity_profile", None) else ""
     )
-    policy_version = db.session.get(PolicyVersion, enrollment_id)
-    if policy_version is None or policy_version.class_id != context.class_id or policy_version.domain != "insurance":
+    policy = insurance_defs.get_insurance_definition(policy_uuid, class_id=context.class_id)
+    if policy is None:
         flash("That insurance policy is not available for this class.", "error")
         return redirect(url_for('student.student_insurance'))
-    payload = json.loads(policy_version.policy_payload_json or "{}")
-    entitlement_item_id = get_insurance_entitlement_item_id(policy_version)
-    entitlement = None
-    if entitlement_item_id is not None:
-        active_entitlements = _list_available_insurance_entitlements(
-            target_seat_id=context.seat_id,
-            class_id=context.class_id,
-            entitlement_item_id=entitlement_item_id,
-        )
-        entitlement = active_entitlements[0] if active_entitlements else None
+    active_entitlements = _list_available_insurance_entitlements(
+        target_seat_id=context.seat_id,
+        class_id=context.class_id,
+        entitlement_item_id=policy_uuid,
+    )
+    entitlement = active_entitlements[0] if active_entitlements else None
     if entitlement is None:
         flash("You do not have an active insurance entitlement for this policy.", "warning")
     def _claim_display_row(claim):
@@ -1793,18 +1834,18 @@ def view_policy(enrollment_id):
             filed_date=claim.submitted_at,
         )
     placeholder_policy = SimpleNamespace(
-        id=policy_version.id,
-        title=payload.get("title") or f"Policy v{policy_version.version_number}",
-        description=payload.get("description", ""),
-        premium=Decimal(str(payload.get("premium", "0.00"))),
-        charge_frequency=payload.get("charge_frequency", "monthly"),
-        waiting_period_days=int(payload.get("waiting_period_days", 0) or 0),
-        max_claims_count=payload.get("max_claims_count"),
-        claim_type=normalize_insurance_type(payload.get("claim_type")),
-        autopay=bool(payload.get("autopay", False)),
-        auto_cancel_nonpay_days=int(payload.get("auto_cancel_nonpay_days", 0) or 0),
-        entitlement_item_id=entitlement_item_id,
-        payload=payload,
+        id=policy.policy_uuid,
+        title=policy.title or "Insurance policy",
+        description=policy.description or "",
+        premium=policy.premium,
+        charge_frequency=policy.charge_frequency,
+        waiting_period_days=int(policy.waiting_period_days or 0),
+        max_claims_count=policy.claims_per_week_equivalent,
+        claim_type=normalize_insurance_type(policy.insurance_type),
+        autopay=True,
+        auto_cancel_nonpay_days=0,
+        entitlement_item_id=policy.policy_uuid,
+        payload={},
     )
     coverage_start_date = None
     if entitlement is not None:
@@ -1813,14 +1854,14 @@ def view_policy(enrollment_id):
             ObligationAssessment.query.filter_by(
                 class_id=context.class_id,
                 seat_id=context.seat_id,
-                policy_version_id=policy_version.id,
+                policy_uuid=policy_uuid,
             )
             .order_by(ObligationAssessment.timestamp.desc(), ObligationAssessment.id.desc())
             .first()
         )
         coverage_start_date = getattr(coverage_row, "coverage_start_time", None)
     enrollment = SimpleNamespace(
-        id=enrollment_id,
+        id=policy_uuid,
         policy=placeholder_policy,
         contract_title=placeholder_policy.title,
         contract_description=placeholder_policy.description,
@@ -1830,9 +1871,9 @@ def view_policy(enrollment_id):
         days_unpaid=0,
         status="active" if entitlement is not None else "inactive",
         next_payment_due=None,
-        contract_claim_time_limit_days=int(payload.get("claim_time_limit_days", 0) or 0),
+        contract_claim_time_limit_days=int(policy.claim_window_days or 0),
         contract_max_claim_amount=None,
-        contract_max_claims_count=None,
+        contract_max_claims_count=policy.claims_per_week_equivalent,
         contract_max_claims_period="period",
     )
     return render_template(
@@ -1877,29 +1918,31 @@ def shop():
 
     now = utc_now()
     now_db = ensure_utc(now)
-    items_query = StoreItem.query.filter(
-        StoreItem.class_id == class_id,
-        StoreItem.is_active == True,
-        or_(StoreItem.auto_delist_date == None, StoreItem.auto_delist_date > now_db),
+    # Only IN_USE versions are sellable, and the partial unique index
+    # guarantees at most one per lineage — so this cannot show a student two
+    # prices for the same product.
+    items_query = StoreProduct.query.filter(
+        StoreProduct.class_id == class_id,
+        StoreProduct.availability_state == store_service.IN_USE,
+        or_(
+            StoreProduct.auto_delist_date == None,
+            StoreProduct.auto_delist_date > now_db,
+        ),
     )
     items = [
-        item for item in items_query.order_by(StoreItem.name).all()
-        if store_service.is_item_visible_to_seat(item.id, seat.id)
+        item for item in items_query.order_by(StoreProduct.name).all()
+        if store_service.is_product_visible_to_seat(item.product_lineage_uuid, seat.id)
     ]
-    policy_uuid_by_item_id = {}
-    for store_product in StoreProduct.query.filter_by(class_id=class_id, is_retired=False).all():
-        product_id = (store_product.payload or {}).get("product_id")
-        if isinstance(product_id, int):
-            policy_uuid_by_item_id[product_id] = store_product.policy_uuid
 
     entitlements = []
+    product_by_key = _resolve_entitlement_products(class_id)
     for entry in get_entitlement_history(seat_id=seat.id, class_id=class_id):
-        # Insurance entitlements resolve through StoreProduct (policy_uuid), never
-        # StoreItem — skip them so a shared product_id int can never misrender an
-        # insurance grant as a general store item.
+        # Insurance entitlements are governed by InsurancePolicy, not by the
+        # store catalog. Skip them so an insurance grant is never rendered as a
+        # store item.
         if entry["entitlement_type"] == "INSURANCE":
             continue
-        item = db.session.get(StoreItem, entry["product_id"])
+        item = _product_for_entitlement(product_by_key, entry)
         if item is None:
             continue
         entitlements.append(SimpleNamespace(
@@ -1916,8 +1959,7 @@ def shop():
     # Check if student has paid rent this month using canonical rent settings only.
     from app.models import RentSettings
     has_paid_rent = False
-    rent_item_types_by_store_id = {}
-    per_use_limit_by_store_id = {}
+    rent_item_types_by_lineage = {}
 
     # v2: scope is class_id + seat_id from canonical context (INV-ARC-019)
     if class_id and context:
@@ -1939,97 +1981,73 @@ def shop():
                     include_waivers=False,
                 )
 
-            # Read store-linked rent items from canonical rent settings so
-            # mid-cycle teacher edits don't change what students see.
-            from app.services.store_service import get_frozen_store_linked_items
-            frozen_store_items = get_frozen_store_linked_items(rent_settings)
-            for frozen_item in frozen_store_items:
-                sid = frozen_item['store_item_id']
-                effective_type = frozen_item.get('rent_item_type', 'privilege')
-                # Some rows can still carry privilege as the
-                # default type while semantically behaving per-use via duration.
-                if effective_type == 'privilege' and frozen_item.get('purchase_duration') == 'per_use':
-                    effective_type = 'per_use'
-                rent_item_types_by_store_id.setdefault(sid, set()).add(effective_type)
+            # Which products this class's rent currently grants on payment.
+            # Read from the rent policy, not from the products themselves, so a
+            # mid-cycle change to the linked set cannot alter what the student
+            # is looking at right now.
+            for benefit in rent_settings.get_satisfaction_benefit_grants():
+                lineage = benefit.get("product_lineage_uuid")
+                if lineage:
+                    rent_item_types_by_lineage.setdefault(lineage, set()).add('privilege')
 
-                if effective_type == 'per_use':
-                    use_limit = frozen_item.get('use_limit')
-                    per_use_limit_by_store_id[sid] = use_limit if use_limit else -1
-
-    # Build rent-perk availability map for rent-linked per-use items.
-    rent_free_entitlement_counts = {}  # {store_item_id: available_units or -1 for unlimited}
+    # Units the student actually holds, per product. Derived by counting
+    # non-terminal PERK grants — never predicted from configuration, so the
+    # badge cannot promise a perk that was never granted.
+    rent_free_entitlement_counts = {}
     if seat:
         active_entitlements = get_active_entitlements(seat_id=seat.id, class_id=class_id)
         for entitlement in active_entitlements:
-            if entitlement.product_id:
-                rent_free_entitlement_counts[entitlement.product_id] = -1
-
-        # Backfill UI for paid-rent students who are entitled to per-use perks
-        # but are missing grant rows (edge-state). Do not override items
-        # that already have an explicit grant record (including exhausted = 0).
-        if has_paid_rent and per_use_limit_by_store_id:
-            existing_per_use_ids = {
-                entitlement.product_id
-                for entitlement in active_entitlements
-                if entitlement.product_id in per_use_limit_by_store_id
-            }
-
-            for store_item_id, granted_uses in per_use_limit_by_store_id.items():
-                if store_item_id not in existing_per_use_ids and store_item_id not in rent_free_entitlement_counts:
-                    rent_free_entitlement_counts[store_item_id] = granted_uses
+            if entitlement.product_id and entitlement.acquisition_type == "PERK":
+                rent_free_entitlement_counts[entitlement.product_id] = (
+                    rent_free_entitlement_counts.get(entitlement.product_id, 0) + 1
+                )
 
     # Calculate class size for collective goals (count unique students in this class)
-    from app.models import Seat
-    class_size = 0
-    if class_id:
-        class_size = (
-            db.session.query(db.func.count(db.func.distinct(Seat.id)))
-            .filter(
-                Seat.class_id == class_id,
-                Seat.claimed_at.isnot(None),
-                Seat.role == "student",  # Exclude teacher account from class size
-            )
-            .scalar() or 0
-        )
+    class_size = collective_goals.count_class_size(class_id) if class_id else 0
 
     # Phase 1: Build collective progress view models (eliminates template-level calculations)
     collective_progress_by_item = {}
     collective_items = [item for item in items if item.item_type == 'collective']
-    collective_item_ids = [item.id for item in collective_items]
-    if collective_item_ids and class_id:
-        progress_rows = (
-            db.session.query(
-                EntitlementEvent.product_id,
-                db.func.count(db.distinct(EntitlementEvent.target_seat_id)).label('student_count'),
-            )
-            .filter(
-                EntitlementEvent.product_id.in_(collective_item_ids),
-                EntitlementEvent.class_id == class_id,
-                EntitlementEvent.event_type == "GRANTED",
-            )
-            .group_by(EntitlementEvent.product_id)
-            .all()
+    # Progress is counted over the lineage, so a teacher who edits a collective
+    # item mid-drive does not reset the class back to zero. The count itself
+    # comes from the shared authority so this bar, the teacher's bar, and the
+    # expiry sweep cannot disagree about whether the goal was met.
+    collective_lineages = [item.product_lineage_uuid for item in collective_items]
+    if collective_lineages and class_id:
+        progress_counts = collective_goals.count_goal_participants(
+            class_id, collective_lineages
         )
-        progress_counts = {row.product_id: int(row.student_count or 0) for row in progress_rows}
 
         for item in collective_items:
-            count = progress_counts.get(item.id, 0)
-            collective_progress_by_item[item.id] = build_collective_progress_view(
+            lineage = item.product_lineage_uuid
+            collective_progress_by_item[lineage] = build_collective_progress_view(
                 item=item,
-                purchase_count=count,
+                purchase_count=progress_counts.get(lineage, 0),
                 class_size=class_size,
             )
+
+    # Remaining stock for every listed product, in one grouped query rather
+    # than one per card.
+    sold_by_lineage = store_service.units_sold_by_lineage(
+        class_id, [item.product_lineage_uuid for item in items]
+    )
 
     # Phase 1: Build store item card view models (eliminates template-level rent logic)
     store_item_views = []
     for item in items:
+        remaining = None
+        if item.inventory_total is not None:
+            remaining = max(
+                0, item.inventory_total - sold_by_lineage.get(item.product_lineage_uuid, 0)
+            )
         view = build_store_item_card_view(
             item=item,
             class_id=class_id,
             has_paid_rent=has_paid_rent,
-            rent_item_types_by_store_id=rent_item_types_by_store_id,
+            rent_item_types_by_lineage=rent_item_types_by_lineage,
             rent_free_entitlement_counts=rent_free_entitlement_counts,
             collective_progress_by_item=collective_progress_by_item,
+            stock_remaining=remaining,
         )
         store_item_views.append(view)
 
@@ -2412,7 +2430,7 @@ def _match_valid_rent_payments(payments, candidate_txns):
     for payment in payments:
         candidates = txns_by_amount.get(-payment.amount_paid, [])
         for txn in candidates:
-            if txn.id in used_txn_ids or txn.is_void:
+            if txn.id in used_txn_ids or txn.status == TransactionStatus.VOID:
                 continue
             if not txn.timestamp or not payment.payment_date:
                 continue
@@ -3000,7 +3018,7 @@ def rent_pay(period):
 @limiter.limit("60 per minute")
 @requires_feat_context("FEAT-IDEN-001")
 def login():
-    """Student login with username and PIN."""
+    """Student login with username and passphrase."""
     form = StudentLoginForm()
     if form.validate_on_submit():
         is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
@@ -3015,21 +3033,21 @@ def login():
             return redirect(url_for('student.login', next=request.args.get('next')))
 
         username = form.username.data.strip()
-        pin = form.pin.data.strip()
+        passphrase = form.passphrase.data.strip()
 
         user = find_canonical_user_by_auth_username(username, expected_role="student")
 
         try:
-            pin_valid = bool(user and verify_password(pin, user.pin_hash or ''))
+            passphrase_valid = bool(user and verify_password(passphrase, user.passphrase_hash or ''))
             has_claimed_seat = False
-            if pin_valid:
+            if passphrase_valid:
                 has_claimed_seat = Seat.query.filter(
                     Seat.user_id == user.id,
                     Seat.role == "student",
                     Seat.claimed_at.isnot(None),
                 ).count() > 0
 
-            if not pin_valid or not has_claimed_seat:
+            if not passphrase_valid or not has_claimed_seat:
                 if is_json:
                     return jsonify(status="error", message="Invalid credentials"), 401
                 flash("Invalid credentials", "error")

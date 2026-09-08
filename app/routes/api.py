@@ -22,7 +22,7 @@ from app.hash_utils import verify_password
 
 from app.extensions import db, limiter
 from app.models import (
-    StoreItem, Transaction, TransactionStatus, AttendanceSession,
+    Transaction, TransactionStatus, AttendanceSession,
     AttendanceReasonCode, HallPassLog, HallPassSettings,
     # Legacy tap models are unauthorized; use attendance_sessions (DOM-PROD-001).
     # StoreItemBlock removed — store_item_blocks unauthorized; use store_item_visibility (DOM-STORE-001)
@@ -59,7 +59,7 @@ from app.feats.base import FEATContext, requires_feat_context
 from app.feats.store_purchase_feat import execute_store_purchase
 from app.feats.ledger_resolution_feat import build_intended_ledger_plan, resolve_intended_ledger_plan, apply_resolved_ledger_plan
 from app.services import store_service
-from app.services.entitlement_read_service import get_purchase_count, get_active_rent_grant
+from app.services.entitlement_read_service import get_purchase_count
 from app.services.class_configuration_query_service import (
     get_class_economy,
     get_all_classes_by_teacher,
@@ -147,7 +147,10 @@ def _entitlement_terminal_event(entitlement_id: str):
 def _pending_action_for_entitlement(entitlement_id: str):
     return (
         PendingAction.query
-        .filter(PendingAction.entitlement_id == entitlement_id)
+        .filter(
+            PendingAction.entitlement_id == entitlement_id,
+            PendingAction.payload["outcome"].as_string().is_(None),
+        )
         .order_by(PendingAction.submitted_at.desc(), PendingAction.pending_action_id.desc())
         .first()
     )
@@ -405,7 +408,7 @@ def use_item():
     if display_status not in ('purchased', 'processing'):
         return jsonify({"status": "error", "message": "This item is not available for redemption."}), 400
 
-    store_item = db.session.get(StoreItem, entitlement.product_id)
+    store_item = store_service.resolve_entitlement_product(entitlement)
     if not store_item or store_item.class_id != entitlement.class_id:
         return jsonify({"status": "error", "message": "Invalid item."}), 404
 
@@ -493,7 +496,7 @@ def approve_redemption():
     if not has_membership:
         return jsonify({"status": "error", "message": "You do not have access to this class."}), 403
 
-    store_item = db.session.get(StoreItem, entitlement.product_id)
+    store_item = store_service.resolve_entitlement_product(entitlement)
     if not store_item or not store_item.class_id or store_item.class_id != entitlement.class_id:
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
     if not _admin_has_class_scope(g.canonical_context, store_item.class_id):
@@ -548,7 +551,7 @@ def reject_redemption():
 
     # SECURITY: Verify the current admin has class scope for this store item
     user_id = g.canonical_context.user_id
-    store_item = db.session.get(StoreItem, entitlement.product_id)
+    store_item = store_service.resolve_entitlement_product(entitlement)
     if not store_item or not store_item.class_id or store_item.class_id != entitlement.class_id:
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
     if not _admin_has_class_scope(g.canonical_context, store_item.class_id):
