@@ -3,7 +3,7 @@
 {% set current_page = "banking" %}
 {% block title %}Banking Management{% endblock %}
 {% block page_icon %}account_balance{% endblock %}
-{% block page_header_actions %}
+{% block contextual_help_trigger %}
 <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
   data-bs-target="#bankingGuide" aria-controls="bankingGuide">
   <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
@@ -17,6 +17,7 @@
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
   </div>
   <div class="offcanvas-body">
+    {{ help.offcanvas_resource_links(help_doc_path, 'user-guides/diagnostics/teacher/transactions-banking') }}
     <p>Check class balances, review transactions, and manage savings interest.</p>
     <div class="accordion mt-4 mb-4" id="bankingGuideAccordion">
       <div class="accordion-item">
@@ -299,7 +300,7 @@
             <tbody>
               {% if transactions %}
               {% for tx in transactions %}
-              <tr class="{% if tx.status.value == 'void' %}table-secondary text-muted{% endif %}">
+              <tr class="{% if tx.is_void %}table-secondary text-muted{% endif %}">
                 <td>
                   {% if tx.timestamp %}{{ tx.timestamp|fmt_timestamp }}{% else %}N/A{% endif %}
                 </td>
@@ -316,11 +317,11 @@
                 </td>
                 <td class="{% if tx.amount > 0 %}text-success{% else %}text-danger{% endif %} fw-bold text-end">
                   ${{ "%.2f"|format(tx.amount) }}
-                  {% if tx.status.value == 'void' %}<span class="badge bg-secondary ms-1">VOID</span>{% endif %}
+                  {% if tx.is_void %}<span class="badge bg-secondary ms-1">VOID</span>{% endif %}
                 </td>
                 <td>{{ tx.description or '—' }}</td>
                 <td>
-                  {% if tx.status.value != 'void' %}
+                  {% if not tx.is_void %}
                   <button type="button" class="btn btn-sm btn-outline-danger" onclick="voidTransaction({{ tx.id }})"
                     title="Void transaction">
                     <span class="material-symbols-outlined">cancel</span>

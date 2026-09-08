@@ -43,14 +43,14 @@ A reversed event does not disappear. Its row greys out and its amount picks up a
 
 ### Filtering by date range
 
-The History tab has no filters. For those, there is a separate page — **Detailed Payroll History** — with **From** and **To** date boxes and a **Filter** button. Its table drops the **Type** column and shows **Class** instead, which is useful when you want a plain date-bounded list.
+The History tab has no date filters. Use **Detailed history and date filters** below the table to open **Detailed Payroll History**, which has **From** and **To** date boxes and a **Filter** button. Its table drops the **Type** column and shows **Class** instead, which is useful when you want a plain date-bounded list.
 
 Reach it at `/admin/payroll-history` (see the warning below).
 
 ## Important notes
 
 > [!WARNING]
-> **Detailed Payroll History has no link anywhere in the app.** No sidebar entry, no button on the Payroll page. The only way in is to type `/admin/payroll-history` after your site address. Everything it shows is scoped to the class selected in your sidebar, so switch class first if you want a different period.
+> **Detailed Payroll History is reached from the Payroll History tab.** Select **Detailed history and date filters** below the table. Everything it shows is scoped to the class selected in your sidebar, so switch class first if you want a different period.
 
 > [!IMPORTANT]
 > **History is per-class.** The tab shows the class currently selected in the sidebar and nothing else. A payment you remember making may simply belong to another period.

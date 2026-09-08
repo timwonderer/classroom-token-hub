@@ -14,7 +14,7 @@ related:
 
 ## Overview
 
-Rent lives under **Bills**, on the **Rent** tab. One card tells you where you stand, and one button settles what you owe.
+Rent has its own **Rent** item in the sidebar. One card tells you where you stand, and one button settles what you owe. Rent is independent of Insurance; disabling Insurance does not hide Rent.
 
 Rent and its late fees are a single bill. You do not pay them separately — the app adds them up, shows you the itemised total, and clears both at once.
 

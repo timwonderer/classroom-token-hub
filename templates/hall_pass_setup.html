@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% if not embedded|default(false) %}<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -13,12 +13,13 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: var(--surface);
+            background-color: var(--background);
+            color: var(--text-primary);
         }
         .setup-container {
-            max-width: 900px;
-            margin: 2rem auto;
-            padding: 0 1rem;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 2rem 2.5rem 3rem;
         }
 
         /* Master toggle styling */
@@ -94,10 +95,6 @@
         .form-check-input:disabled {
             cursor: not-allowed;
         }
-        .form-check-input.blocked-toggle {
-            cursor: not-allowed !important;
-        }
-
         /* Total fields styling */
         .totals-container {
             background: var(--surface);
@@ -156,6 +153,14 @@
             font-size: 0.875rem;
         }
 
+        .cth-section-header { background: var(--primary); color: #fff; }
+        .cth-section-header h2 { color: inherit; }
+        @media (max-width: 768px) {
+            .setup-container { padding: 1.25rem 1rem 2rem; }
+            .setup-page-header { align-items: flex-start !important; flex-direction: column; gap: 1rem; }
+            .pass-type-limits { grid-template-columns: 1fr; }
+        }
+
         /* Tooltip styling */
         .tooltip-inner {
             background-color: var(--text-primary);
@@ -165,52 +170,45 @@
             border-top-color: var(--text-primary);
         }
     </style>
-</head>
-<body>
-    <main id="main-content" aria-labelledby="hall-pass-configuration-heading">
+</head>{% endif %}
+{% if not embedded|default(false) %}<body>
+    <main id="main-content" aria-labelledby="hall-pass-configuration-heading">{% endif %}
     <div class="setup-container">
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        {% if not embedded|default(false) %}
+        <div class="setup-page-header d-flex justify-content-between align-items-center mb-4">
             <div>
+                <div class="eyebrow">Classroom Token Hub</div>
                 <h1 id="hall-pass-configuration-heading" class="mb-2">
                     <span class="material-symbols-outlined align-middle" aria-hidden="true">settings</span>
                     Hall Pass Configuration
                 </h1>
                 <p class="text-muted">Configure pass types, limits, and availability for your classroom.</p>
             </div>
-            <a href="{{ url_for('admin.hall_pass') }}" class="btn btn-outline-secondary">
+            <a href="{{ url_for('admin.hall_pass') }}" class="btn btn-outline-secondary{% if embedded|default(false) %} d-none{% endif %}">
                 <span class="material-symbols-outlined align-middle">arrow_back</span>
                 Back to Hall Passes
             </a>
         </div>
+        {% endif %}
 
-        <div class="card mb-4">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header cth-section-header">
+                <h2 class="h5 mb-0">How It Works</h2>
+            </div>
             <div class="card-body">
-                <h5 class="card-title">How It Works</h5>
                 <ul class="mb-0">
-                    <li><strong>Master Toggle:</strong> Enable or disable the entire hall pass system</li>
                     <li><strong>Pass Type Toggle:</strong> Enable or disable individual pass types</li>
                     <li><strong>Queue Limit:</strong> Maximum number of students who can be approved and waiting for this destination (leave blank for unlimited)</li>
-                    <li><strong>Simultaneous Limit:</strong> Maximum number of students who can be out at the same time for this destination (leave blank for unlimited)</li>
-                    <li><strong>Total Queue Limit:</strong> Overall cap for approved & waiting students across all pass types (only editable when any pass type has unlimited queue)</li>
-                    <li><strong>Total Simultaneous Limit:</strong> Overall cap for students currently out across all pass types (only editable when any pass type has unlimited out)</li>
+                    <li><strong>Simultaneous Limit:</strong> Display-only; not persisted or enforced by the current runtime.</li>
+                    <li><strong>Total Queue Limit:</strong> Display-only; the class-wide Out Limit on Hall Pass Management controls approvals.</li>
+                    <li><strong>Total Simultaneous Limit:</strong> Display-only; not persisted or enforced by the current runtime.</li>
                 </ul>
             </div>
         </div>
 
-        <!-- Master Toggle -->
-        <div class="master-toggle-container">
-            <div>
-                <div class="master-toggle-label">Hall Pass System</div>
-                <div class="master-toggle-status" id="masterToggleStatus">Currently enabled</div>
-            </div>
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="masterToggle" aria-label="Hall Pass System" checked>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Pass Types</h5>
+        <div class="card border-0 shadow-sm">
+            <div class="card-header cth-section-header d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0">Pass Types</h2>
                 <button type="button" class="btn btn-sm btn-primary" onclick="openAddPassTypeModal()">
                     <span class="material-symbols-outlined align-middle" style="font-size: 1rem;">add</span>
                     Add New Pass Type
@@ -275,7 +273,7 @@
                         <input type="number" class="form-control" id="newQueueLimit" placeholder="Unlimited" min="0">
                     </div>
                     <div class="mb-3">
-                        <label for="newSimultaneousLimit" class="form-label">Simultaneous Limit <span class="info-text">(optional)</span></label>
+                        <label for="newSimultaneousLimit" class="form-label">Simultaneous Limit <span class="info-text">(display-only; not enforced)</span></label>
                         <input type="number" class="form-control" id="newSimultaneousLimit" placeholder="Unlimited" min="0">
                     </div>
                 </div>
@@ -296,32 +294,6 @@
             const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
             [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
         }
-
-        // Master toggle handler
-        document.getElementById('masterToggle').addEventListener('change', function() {
-            const enabled = this.checked;
-            document.getElementById('masterToggleStatus').textContent = enabled ? 'Currently enabled' : 'Currently disabled';
-
-            // Update all individual pass type toggles
-            document.querySelectorAll('.pass-type-toggle').forEach(toggle => {
-                if (!enabled) {
-                    // Disable and uncheck all individual toggles
-                    toggle.disabled = true;
-                    toggle.checked = false;
-                    toggle.classList.add('blocked-toggle');
-                    const row = toggle.closest('.pass-type-row');
-                    row.classList.add('disabled');
-                } else {
-                    // Enable all individual toggles
-                    toggle.disabled = false;
-                    toggle.classList.remove('blocked-toggle');
-                    const row = toggle.closest('.pass-type-row');
-                    row.classList.remove('disabled');
-                }
-            });
-
-            updateTotalFields();
-        });
 
         function openAddPassTypeModal() {
             // Clear form
@@ -377,7 +349,7 @@
                 pass_name: name,
                 max_queue: queueLimitValue === null ? 0 : queueLimitValue,
                 consume_pass: true,
-                enabled: document.getElementById('masterToggle').checked
+                enabled: true
             };
             // The API has one authoritative per-destination limit. The legacy
             // simultaneous field is display-only and is not serialized.
@@ -407,8 +379,6 @@
 
         function renderPassTypes() {
             const container = document.getElementById('passTypesContainer');
-            const masterEnabled = document.getElementById('masterToggle').checked;
-
             if (passTypesData.length === 0) {
                 container.innerHTML = '<p class="text-muted text-center py-4">No pass types configured. Add one to get started.</p>';
                 updateTotalFields();
@@ -423,9 +393,7 @@
             };
 
             const html = passTypesData.map((pt, index) => {
-                const toggleDisabled = !masterEnabled ? 'disabled' : '';
-                const toggleClass = !masterEnabled ? 'blocked-toggle' : '';
-                const rowClass = !masterEnabled || !pt.enabled ? 'disabled' : '';
+                const rowClass = !pt.enabled ? 'disabled' : '';
 
                 // Escape pass type name to prevent XSS
                 const passTypeName = escapeHtml(pt.name || '');
@@ -436,12 +404,10 @@
                         <div class="pass-type-name">${passTypeName}</div>
                         <div class="d-flex align-items-center gap-3">
                             <div class="form-check form-switch">
-                                <input class="form-check-input pass-type-toggle ${toggleClass}"
+                                <input class="form-check-input pass-type-toggle"
                                        type="checkbox"
                                        ${pt.enabled ? 'checked' : ''}
-                                       ${toggleDisabled}
                                        aria-label="Enable ${passTypeName} hall pass type"
-                                       ${!masterEnabled ? 'data-bs-toggle="tooltip" data-bs-placement="top" title="You must enable hall pass first"' : ''}
                                        onchange="togglePassType(${index}, this.checked)">
                             </div>
                             <button type="button" class="btn btn-danger btn-sm" onclick="removePassType(${index})" aria-label="Remove this hall pass type">
@@ -461,7 +427,7 @@
                                    onchange="updatePassTypeLimit(${index}, 'queue_limit', this.value)">
                         </div>
                         <div class="limit-field">
-                            <label>Simultaneous Limit</label>
+                            <label>Simultaneous Limit <span class="text-muted small">(not enforced)</span></label>
                             <input type="number"
                                    class="form-control"
                                    aria-label="${passTypeName} simultaneous limit"
@@ -586,8 +552,6 @@
             }));
 
             const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            const hallPassEnabled = document.getElementById('masterToggle').checked;
-
             fetch('/api/hall-pass/setup', {
                 method: 'POST',
                 headers: {
@@ -595,7 +559,7 @@
                     'X-CSRFToken': csrfToken
                 },
                 body: JSON.stringify({
-                    hall_pass_enabled: hallPassEnabled,
+                    hall_pass_enabled: true,
                     pass_type_payload: passTypesToSave
                 })
             })
@@ -618,15 +582,15 @@
         function loadConfiguration() {
             const url = '/api/hall-pass/setup';
             fetch(url)
-            .then(response => response.json())
+            .then(async response => {
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.message || 'Unable to load hall pass configuration.');
+                }
+                return data;
+            })
             .then(data => {
                 if (data.status === 'success') {
-                    // Set master toggle
-                    const masterToggle = document.getElementById('masterToggle');
-                    masterToggle.checked = data.hall_pass_enabled;
-                    document.getElementById('masterToggleStatus').textContent =
-                        data.hall_pass_enabled ? 'Currently enabled' : 'Currently disabled';
-
                     // Load pass types
                     passTypesData = (data.pass_type_payload || []).map(pt => ({
                         ...pt,
@@ -644,7 +608,7 @@
             })
             .catch(error => {
                 console.error('Error loading configuration:', error);
-                showFeedback('An error occurred while loading.', true);
+                showFeedback(error.message || 'An error occurred while loading.', true);
             });
         }
 
@@ -655,6 +619,6 @@
     </script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    </main>
+{% if not embedded|default(false) %}    </main>
 </body>
-</html>
+</html>{% endif %}

@@ -2,7 +2,7 @@
 {% set page_title = "Attendance Log" %}
 {% block title %}Attendance Log{% endblock %}
 {% block page_icon %}fact_check{% endblock %}
-{% block page_header_actions %}
+{% block contextual_help_trigger %}
 <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
     data-bs-target="#attendanceGuide" aria-controls="attendanceGuide">
     <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
@@ -16,6 +16,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
     <div class="offcanvas-body">
+        {{ help.offcanvas_resource_links(help_doc_path, 'user-guides/diagnostics/teacher/attendance-payroll') }}
         <p>Use this page to control attendance taps and review student attendance records.</p>
         <div class="accordion mt-4 mb-4" id="attendanceGuideAccordion">
             <div class="accordion-item">

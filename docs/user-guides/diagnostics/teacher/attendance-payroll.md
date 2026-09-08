@@ -21,7 +21,7 @@ Diagnostic guide for resolving payroll calculation errors and attendance trackin
 
 ### Causes & Solutions
 **Cause 1: Payroll feature is disabled**
-- **Check:** Go to Feature Settings and verify that Payroll is enabled for the class period.
+- **Check:** Payroll is always on; instead verify the student is in the intended class and that payroll settings and attendance records are configured.
 - **Fix:** Enable the Payroll feature.
 
 **Cause 2: No attendance activity**

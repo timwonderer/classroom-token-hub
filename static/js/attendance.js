@@ -256,7 +256,9 @@ function renderBreakDestinations(passTypes) {
   }
 
   passTypes.forEach(passType => {
-    const destination = (passType && passType.name) ? String(passType.name) : '';
+    const destination = (passType && (passType.name || passType.pass_name))
+      ? String(passType.name || passType.pass_name)
+      : '';
     if (!destination) return;
     const button = document.createElement('button');
     button.type = 'button';

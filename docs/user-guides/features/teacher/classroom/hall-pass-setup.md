@@ -4,7 +4,7 @@ category: features
 subcategory: teacher-classroom
 roles: [teacher]
 description: How to configure hall-pass destinations and their limits.
-keywords: [hall pass setup, pass types, queue limit, destinations, bathroom, master toggle, configuration]
+keywords: [hall pass setup, pass types, queue limit, destinations, bathroom, configuration]
 related:
   - user-guides/features/teacher/classroom/hall-pass
   - user-guides/diagnostics/teacher/hall-pass
@@ -15,7 +15,7 @@ related:
 
 ## Overview
 
-**Hall Passes → Configure** opens **Hall Pass Configuration**, where you would set your destinations and their limits.
+**Classroom → Hall Pass → Configure** opens the **Hall Pass Configuration** tab, where you set your destinations and their limits.
 
 Use this page to configure the destinations and limits students can request in your class.
 
@@ -27,18 +27,17 @@ The saved destinations and their queue limits are the options students see and t
 
 ### Reading the page
 
-**How It Works** at the top defines the six controls:
+**How It Works** at the top defines the five setup controls:
 
 | Control | What it is meant to do |
 | --- | --- |
-| **Master Toggle** | Turn the whole hall pass system on or off |
 | **Pass Type Toggle** | Turn one destination on or off |
 | **Queue Limit** | Most students approved and waiting for that destination. Blank means unlimited |
-| **Simultaneous Limit** | Most students out at once for that destination. Blank means unlimited |
+| **Simultaneous Limit** | Displayed in the form, but not persisted or enforced by the current runtime. Do not rely on it. |
 | **Total Queue Limit** | Cap on approved-and-waiting across all destinations |
 | **Total Simultaneous Limit** | Cap on students out across all destinations |
 
-Below that, the **Hall Pass System** switch reads *Currently enabled* or *Currently disabled*. Switching it off greys out every destination row and locks its toggle; hovering a locked toggle explains *You must enable hall pass first*.
+Enable or disable the Hall Pass feature from **Class Tools → Economy Features**. The **Configure** tab only controls destinations and their limits.
 
 ### The Pass Types card
 
@@ -74,7 +73,7 @@ Saving with an empty list is refused with *Please add at least one pass type.* S
 > The saved **Queue Limit** is enforced per destination, and the class-wide **Out Limit** is enforced across destinations. There is no separate simultaneous-limit field in the current runtime payload.
 
 > [!NOTE]
-> **Total Limits are display-only.** They are calculated and shown for your reference. The app does not enforce a cross-destination cap.
+> **Simultaneous and Total Limits are not enforcement controls in the current runtime.** The per-destination **Queue Limit** and class-wide **Out Limit** are the limits that affect approvals. The simultaneous and total-limit fields may be displayed, but their values are not persisted or enforced.
 
 > [!TIP]
 > Approvals are the control that actually works. Configure the destinations your class uses here, then use your judgement at the [Hall Pass](hall-pass.md) queue — nothing is silently letting students out.

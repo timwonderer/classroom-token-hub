@@ -40,6 +40,22 @@
   {{ help_link(doc_path, icon_only=True, tooltip=tooltip) }}
 {% endmacro %}
 
+{% macro offcanvas_resource_links(doc_path, troubleshooting_path) %}
+  <div class="contextual-help-resources border-top mt-4 pt-3">
+    <p class="small fw-semibold mb-2">More help</p>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="{{ url_for('docs.view_doc', doc_path=doc_path) }}" class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener">
+        <span class="material-symbols-outlined align-middle" aria-hidden="true">menu_book</span>
+        Open full guide <span class="visually-hidden">(opens in a new tab)</span>
+      </a>
+      <a href="{{ url_for('docs.view_doc', doc_path=troubleshooting_path) }}" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">
+        <span class="material-symbols-outlined align-middle" aria-hidden="true">troubleshoot</span>
+        Troubleshooting <span class="visually-hidden">(opens in a new tab)</span>
+      </a>
+    </div>
+  </div>
+{% endmacro %}
+
 {% macro help_section(title, doc_path, description=None) %}
   {#
     Render a help section banner for a page.

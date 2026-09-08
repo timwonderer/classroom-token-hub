@@ -45,7 +45,7 @@ The card sits on your **Dashboard** and shows:
 
 Requesting is only the first step. Your teacher has to approve it, and your paid time keeps running until you press **Leave** and actually go. The full sequence is in [Hall Passes](hall-passes.md).
 
-If the destination list shows *No hall-pass destinations are currently available*, that is a known app defect rather than a setup problem — see the warning in [Hall Passes](hall-passes.md). **Done for the day** still works.
+If the destination list shows *No hall-pass destinations are currently available*, confirm that you are in the intended class and ask your teacher to confirm Hall Pass is enabled and has at least one enabled destination. **Done for the day** still works.
 
 ### Ending the day
 

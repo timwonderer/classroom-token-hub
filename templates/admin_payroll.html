@@ -3,7 +3,7 @@
 {% set current_page = "payroll" %}
 {% block title %}Payroll Management - Classroom Token Hub{% endblock %}
 {% block page_icon %}receipt_long{% endblock %}
-{% block page_header_actions %}
+{% block contextual_help_trigger %}
 <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
   data-bs-target="#payrollGuide" aria-controls="payrollGuide">
   <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
@@ -22,6 +22,7 @@
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
   </div>
   <div class="offcanvas-body">
+    {{ help.offcanvas_resource_links(help_doc_path, 'user-guides/diagnostics/teacher/attendance-payroll') }}
     <p>Set pay rules, run payroll, and review payouts for the current class.</p>
     <div class="accordion mt-4 mb-4" id="payrollGuideAccordion">
       <div class="accordion-item">
@@ -269,7 +270,6 @@
               <tr>
                 <th scope="col">Date</th>
                 <th scope="col">Student Name</th>
-                <th scope="col">Class</th>
                 <th scope="col">Amount</th>
                 <th scope="col">Account</th>
               </tr>
