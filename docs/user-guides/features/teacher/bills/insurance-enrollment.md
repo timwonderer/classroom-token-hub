@@ -24,7 +24,7 @@ That distinction drives everything else on this page. A purchased policy is a co
 
 A student buys a policy from their own insurance page. At the moment of purchase the terms are frozen onto their contract — premium, charge frequency, claim time limit, and every cap.
 
-Coverage starts at that moment. There is no delay, whatever **Waiting Period** you set on the policy — see *Important notes*. The only thing a claim is checked against is the purchase itself: an incident dated before the student bought the policy is rejected, and nothing else about timing is enforced.
+Coverage starts at that moment, unless the policy is a non-monetary one carrying a **Waiting Period** — then claims open *N* days later. Either way an incident dated before the purchase is never covered.
 
 ### Withdrawing a policy from sale
 
@@ -52,23 +52,23 @@ There is no early termination, no refund, and no way for you to revoke a policy 
 > [!IMPORTANT]
 > **Purchased policies are enforceable contracts.** Editing a policy changes what *future* buyers get. Everyone already holding it keeps the terms they bought until their coverage period ends. This is deliberate — it is the lesson the feature exists to teach.
 
-> [!CAUTION]
-> **Waiting Period does not delay coverage.** The field saves and the suggested values imply a real wait, but nothing enforces it — a student can claim minutes after buying. See [Insurance Policies](insurance-policies.md).
+> [!IMPORTANT]
+> **A non-monetary policy's Waiting Period is enforced.** Claims filed before it elapses are refused. It applies only to non-monetary policies; every other type is claimable from purchase. See [Insurance Policies](insurance-policies.md).
 
-> [!WARNING]
-> **Editing does not withdraw the version you edited.** Saving a new version leaves the original for sale alongside it, so hiding or retiring the old one is a step you have to take yourself. [Insurance Policies](insurance-policies.md) covers this.
+> [!IMPORTANT]
+> **Editing retires the version you edited.** The revision takes the original's place on the shelf and the original comes off, in one action — you do not hide or retire it yourself. [Insurance Policies](insurance-policies.md) covers this.
 
 > [!IMPORTANT]
 > **You cannot revoke a student's coverage.** Not for discipline, not for a policy change, not by hiding or retiring the product. If you need a consequence, use a different tool — insurance is not one of them.
 
 > [!NOTE]
-> **Hiding is reversible in effect, retiring is not.** A retired policy is permanently unavailable for new enrollment. If you are unsure, hide it.
+> **Hiding is reversible, retiring is not.** A hidden policy carries **Put back on sale**, which re-offers its exact terms. A retired policy is permanently unavailable for new enrollment. If you are unsure, hide it.
 
 > [!NOTE]
 > **There is no roster of who is covered.** The Insurance Management page lists your policies, not your policyholders. To check one student's coverage, ask them to show you their insurance page. A teacher-facing enrollment list is a known gap.
 
 > [!TIP]
-> If a claims dispute turns on when coverage started, the answer is the purchase date. Not the waiting period, and not the terms currently shown in your settings — the student's own insurance page carries the contract they actually bought.
+> If a claims dispute turns on when coverage started, the answer is the purchase date plus that student's own waiting period — not the terms currently shown in your settings. The student's insurance page carries the contract they actually bought.
 
 ## Related guides
 

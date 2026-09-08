@@ -3,8 +3,8 @@ title: Hall Pass Configuration
 category: features
 subcategory: teacher-classroom
 roles: [teacher]
-description: What the Hall Pass Configuration page offers, what your class actually runs on today, and why saving does not stick.
-keywords: [hall pass setup, pass types, queue limit, simultaneous limit, destinations, bathroom, master toggle, configuration]
+description: How to configure hall-pass destinations and their limits.
+keywords: [hall pass setup, pass types, queue limit, destinations, bathroom, master toggle, configuration]
 related:
   - user-guides/features/teacher/classroom/hall-pass
   - user-guides/diagnostics/teacher/hall-pass
@@ -17,19 +17,11 @@ related:
 
 **Hall Passes → Configure** opens **Hall Pass Configuration**, where you would set your destinations and their limits.
 
-Read the warning at the top of *Important notes* before you spend time on this page. The page does not currently save, and your class runs on a fixed set of five destinations regardless of what you enter here.
+Use this page to configure the destinations and limits students can request in your class.
 
 ## What your class actually uses
 
-Until the page is fixed, every class uses the same five built-in destinations, each with a queue limit of 10:
-
-- Bathroom
-- Water Fountain
-- Office
-- Nurse
-- Counselor
-
-These are what the approval queue on the [Hall Pass](hall-pass.md) page works against.
+The saved destinations and their queue limits are the options students see and the destinations the approval queue on the [Hall Pass](hall-pass.md) page works against. New classes start with the built-in destinations; edit the list here when your class uses different destinations or limits.
 
 ## Step-by-step instructions
 
@@ -52,7 +44,7 @@ Below that, the **Hall Pass System** switch reads *Currently enabled* or *Curren
 
 The card lists your destinations, each with a name, an on/off switch, a red delete button, and its two limit fields.
 
-Because the page cannot read your saved configuration, this list always opens empty, reading *No pass types configured. Add one to get started.*
+The list opens with the saved destinations for the active class. If none have been configured, it starts with the built-in defaults.
 
 **Add New Pass Type** opens a modal asking for a **Pass Type Name** and, optionally, a **Queue Limit** and a **Simultaneous Limit**. Both limit boxes show *Unlimited* as their placeholder — leaving them blank means no cap. The modal rejects a blank name, a duplicate name, and any negative number.
 
@@ -73,19 +65,19 @@ Saving with an empty list is refused with *Please add at least one pass type.* S
 ## Important notes
 
 > [!CAUTION]
-> **This page cannot save, and saving makes things worse.** The page and the server disagree about the name of the field that carries your destinations, so nothing you enter reaches the server. What the server receives is an empty configuration, which it accepts. Your previous settings are retired and the class falls back to the five built-in destinations. You are told *Configuration saved successfully!* and the page reloads empty. This is a known defect; leave the page alone until it is fixed.
+> **Save applies to the active class.** After saving, reload the page to confirm the destinations and limits shown are the ones you intended.
 
 > [!WARNING]
-> **Students cannot pick a destination anyway.** The student **Choose Break Type** menu is empty for the same reason, so *Done for the day* is currently the only option that works there. Configuring destinations would not change that today. See [Hall Pass Troubleshooting](../../../diagnostics/teacher/hall-pass.md).
+> Students see the enabled destinations in their **Choose Break Type** menu. A destination with no available capacity is unavailable until a place opens.
 
 > [!NOTE]
-> **Simultaneous Limit is not enforced separately.** Where limits are applied, the app uses the destination's queue limit for both purposes. A distinct cap on students out at once is not currently checked.
+> The saved **Queue Limit** is enforced per destination, and the class-wide **Out Limit** is enforced across destinations. There is no separate simultaneous-limit field in the current runtime payload.
 
 > [!NOTE]
 > **Total Limits are display-only.** They are calculated and shown for your reference. The app does not enforce a cross-destination cap.
 
 > [!TIP]
-> Approvals are the control that actually works. The five built-in destinations plus your judgement at the [Hall Pass](hall-pass.md) queue is the whole of hall-pass management right now — nothing is silently letting students out.
+> Approvals are the control that actually works. Configure the destinations your class uses here, then use your judgement at the [Hall Pass](hall-pass.md) queue — nothing is silently letting students out.
 
 ## Related guides
 

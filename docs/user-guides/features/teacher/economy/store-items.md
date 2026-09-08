@@ -61,22 +61,25 @@ The four **Pricing Tier** options are **Basic**, **Standard**, **Premium**, and 
 
 Tick **This is a Bundled Item** and set **Bundle Quantity**. The form describes this as *Bundled items give students multiple uses that can be redeemed separately*; the quantity is required and must be greater than 1 once the box is ticked.
 
-Leave this box unticked. Bundles do not currently deliver multiple uses — see [Bundles, Bulk Discounts, and Collective Goals](store-bundles-goals.md).
+One purchase is charged once and delivers that many separately redeemable items. Available on **Delayed Use** and **Hall Pass** items only — those are the two types that can sit unredeemed in an inventory. See [Bundles, Bulk Discounts, and Collective Goals](store-bundles-goals.md).
 
 #### Bulk Discount Settings
 
 Tick **Enable Bulk Discount**, then set **Minimum Quantity for Discount** and **Discount Percentage (%)**. Both are required once enabled; the percentage cannot exceed 100.
 
-This is meant to be distinct from a bundle: a bundle changes what one purchase contains, a bulk discount changes the price when a student buys several. Leave it off — the discount is shown to the student but not charged. See [Bundles, Bulk Discounts, and Collective Goals](store-bundles-goals.md).
+This is distinct from a bundle: a bundle changes what one purchase contains, a bulk discount changes the price when a student buys several. At or above the threshold the discount applies to the whole order, not only to the units past it. See [Bundles, Bulk Discounts, and Collective Goals](store-bundles-goals.md).
+
+Bulk discounts are for **Delayed Use** and **Hall Pass** items only. Immediate-use and privilege items are single-unit purchases; collective goals represent a shared class pot.
 
 #### Collective Goal Settings
 
-Only meaningful when **Item Type** is **Collective Goal**, where **Collective Goal Type** becomes required.
+> [!NOTE]
+> This setting only applies to Collective Goal items.
 
 - **Fixed Number of Purchases** — you set **Target Number of Purchases**.
 - **Whole Class Must Purchase (1 per person)** — *Every student in the class must purchase. The target dynamically updates based on class size.*
 
-**Goal Expiration Date** is required for this item type. The form claims *If the goal is not reached, the item deactivates and must be reactivated to start fresh* — that does not happen, and the deadline is yours to enforce. [Bundles, Bulk Discounts, and Collective Goals](store-bundles-goals.md) covers what the progress bar does and does not do.
+**Goal Expiration Date** is required for this item type. If the goal is not reached, the hourly expiry sweep deactivates the product, refunds every buyer their initial payment, and clears the live progress bar. The expired product remains in history but cannot be reactivated as the same goal; create a new goal if you want to try again.
 
 #### Advanced Settings
 
@@ -107,9 +110,13 @@ Each card has three controls in its footer: **Edit**, **Deactivate**, and **Dele
 
 **Delete Permanently** is a different operation. It warns *This action cannot be undone* and *completely removes the item from the database and deletes related purchase records.* Ledger transaction history survives — the money movement stays on record — but the purchase records tying students to that item do not.
 
-### Items you cannot edit here
+### Rent-linked items
 
-An item carrying a **Rent Perk** badge is labelled *Managed by rent settings*. Its Deactivate control is disabled, and Delete is not offered at all. Change it in **Bills > Rent Settings** instead — that is where it was created and that is the only place it can be retired.
+An item carrying a **Rent Perk** badge is one you built here with the rent-link toggle on. It is an ordinary store item in every other respect — edit, deactivate, and delete all work normally, and this page is the only place it is defined.
+
+What the toggle changes is what paying rent does: students who pay receive the item as a perk. That set is read at the start of each cycle, so adding or removing a rent-linked item takes effect on the **next** cycle and never disturbs one already open.
+
+A student holding rent perks sees them in their **My Items** tab as free uses. Those uses are not a discount in the store — if the same student buys the item again, they pay the listed price.
 
 ## Pricing against the CWI
 
@@ -126,10 +133,10 @@ Two checkboxes opt an item out of that scrutiny, and they are not the same thing
 > **Deactivate and Delete are not two strengths of the same action.** Deactivating hides an item and keeps its history. Deleting destroys the purchase records that connect students to it. If you only want the item gone from the store, deactivate.
 
 > [!IMPORTANT]
-> **Rent-linked items are owned by Rent Settings.** The Store page shows them so your catalogue is complete, but the controls are locked. Editing them anywhere but Rent Settings is not possible by design.
+> **Rent-linked items are ordinary store items carrying a toggle.** They are built here, not in Rent Settings. You build one like any other item and tick the rent-link option; a change to the rent-linked set takes effect on the *next* rent cycle, so adding or removing one never disturbs a cycle already open.
 
-> [!CAUTION]
-> **Three of the sale mechanics on this form are unfinished.** Bundles give the student one use while promising several, bulk discounts are displayed but not charged, and collective goal deadlines are never enforced. Read [Bundles, Bulk Discounts, and Collective Goals](store-bundles-goals.md) before you build an item around any of them.
+> [!WARNING]
+> **Meeting a collective goal is not automatic.** The deadline is enforced — the item stops selling once it passes — but reaching the target unlocks nothing on its own. A goal that lapses *unmet* refunds itself; a goal that was *reached* is yours to fulfil. Read [Bundles, Bulk Discounts, and Collective Goals](store-bundles-goals.md) before you build one.
 
 > [!TIP]
 > Use **Delayed Use** with a **Redemption Prompt** for anything that costs you classroom time — seating changes, homework passes, music choice. The prompt collects the details when the student asks, instead of leaving you to chase them.

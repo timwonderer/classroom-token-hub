@@ -65,7 +65,7 @@ Empty tabs read *No checking transactions yet.* or *No savings transactions yet.
 > **Only checking can spend.** The store and your bills draw on checking. Money in savings is safe from being spent, which is the point, but it also means you have to transfer it back before you can use it.
 
 > [!NOTE]
-> **Transfers need your passphrase, not your PIN.** Same credential as buying something in the store. Your PIN is only for redeeming items you already own.
+> **Transfers need your PIN, not your passphrase.** A transfer only moves your own money between your checking and savings accounts, so it is reversible. The passphrase is reserved for account authentication and irreversible expense actions.
 
 > [!WARNING]
 > **Each history tab shows only your 50 most recent entries.** When there are more, the table ends with *Showing most recent 50 transactions*. If you are hunting for something older than that, ask your teacher — they can see the full history.

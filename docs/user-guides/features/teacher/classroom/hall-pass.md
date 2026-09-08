@@ -46,7 +46,7 @@ Empty states are distinct so you can tell them apart at a glance: *No pending re
 
 **Configure Pass Types** opens **Hall Pass Configuration**, a separate page with its own master switch, a list of destinations, and per-destination limits.
 
-That page does not currently save, and your class runs on five fixed destinations whatever it shows. [Hall Pass Configuration](hall-pass-setup.md) covers what it offers and what actually applies.
+That page controls the destinations and per-destination limits students see. [Hall Pass Configuration](hall-pass-setup.md) covers the setup fields.
 
 ### Office Verification
 
@@ -55,10 +55,10 @@ That page does not currently save, and your class runs on five fixed destination
 ## Important notes
 
 > [!WARNING]
-> **Pass type configuration does not currently save, and saving resets it.** The setup page and the server disagree about the field name, so an apparently successful save stores an empty list — which drops your class back to the five built-in destinations — and the page reloads empty. The message still reads *Configuration saved successfully!* Students also see no destinations in their break menu, for the same reason. Leave the setup page alone until this is fixed.
+> **Pass type configuration is class-scoped.** Save while the intended class is active, then reload the setup page to confirm the saved destinations.
 
 > [!IMPORTANT]
-> **Only one student can be marked out at a time, whatever the Out Limit says.** The **Left Class** button on the Issued tab is disabled while anyone is in the **Out** tab. Mark the first student **Returned** before you can send the next one, even if the Out Limit is set to 10.
+> **Out Limit is enforced.** The **Left Class** button becomes unavailable once the configured number of students are out. Mark a student **Returned** to open a place.
 
 > [!NOTE]
 > **Approving is not the same as sending.** An approved pass sits in **Issued** until you mark **Left Class**. That is what starts the duration clock, and the History tab's Duration column measures from there — not from approval.

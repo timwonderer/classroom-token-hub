@@ -50,10 +50,7 @@ Each tab shows five at a time. Past that you get *Showing 5 of N pending [type]*
 
 ### Setup banners
 
-Two banners can appear above the stats:
-
-- **Action Required: Setup Account Recovery** — *Your account security details are missing or outdated. Please update your security setup to enable student-assisted recovery.* Choose **Setup Now**.
-- **Update insurance to the new tiered design** — *Your existing policies use the legacy setup. Group them into tiers so students see the modern plan layout.* Choose **Review policies**. This is a *One-time prompt for legacy policies*.
+The legacy recovery and insurance-migration banners are not rendered on the v2 dashboard. Account recovery and insurance configuration are reached from their dedicated settings pages.
 
 ## Important notes
 
@@ -65,9 +62,6 @@ Two banners can appear above the stats:
 
 > [!NOTE]
 > **Pending Actions hides itself when empty.** An absent section means nothing is waiting, not that something failed to load.
-
-> [!TIP]
-> Deal with the **Action Required: Setup Account Recovery** banner the day you see it. Student-assisted recovery is how you get back into your own account if you lose your credentials, and it only works if it was configured beforehand.
 
 ## Related guides
 

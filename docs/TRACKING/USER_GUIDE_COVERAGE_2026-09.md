@@ -199,17 +199,59 @@ Executed:
 
 Documentation work surfaced these product bugs. None are docs problems; recorded here so they are not lost.
 
+**Reading rule:** the original numbered paragraphs below are historical evidence
+and may describe the pre-fix behavior in detail. A paragraph is current open
+work only when it has no closure note or when the open-work checklist above
+explicitly lists it. The latest ✅ note and the checklist status are authoritative
+for current state.
+
+### Open-work checklist
+
+This table is the current working register. The detailed findings below remain
+the evidence record; update the row here whenever an item changes state.
+
+| Status | Item | Kind | Next evidence required |
+|---|---|---|---|
+| ✅ CLOSED | #3 Hollow sysadmin log pages (`/error-logs`, `/network-activity`, `/logs-testing`) | Runtime / scope | Legacy routes now redirect to the canonical combined-logs tabs instead of rendering empty pages. |
+| ✅ CLOSED | #4 PIN length mismatch (setup 4–8 vs recovery copy 4–6) | Runtime/docs contract | Setup UI and recovery copy now both state the canonical 4–6 digit `FEAT-IDEN-002` contract. Targeted validation coverage remains part of the focused test run. |
+| ✅ CLOSED | #5 Dead `templates/admin_nav.html` links | Dead code | Removed the unreferenced v1 navbar; live admin layout/navigation remains the sole navigation surface. |
+| ✅ CLOSED | #6 Sysadmin report update bypasses FEAT/commit boundary | Runtime / canonical mutation | Route now requires `FEAT-OPS-001`, records canonical status history and Operations notes, and commits atomically. |
+| ✅ CLOSED (SCOPED) | #40 Rebalance preview only supports rent | Runtime / documentation scope | `SPEC-ECON-003` keeps this migration rent-only; the UI now says **Rent Rebalance Preview** and the guide explains where other domains are edited. |
+| ✅ CLOSED | Phase 5 contextual-help wiring | Documentation / navigation | Feature-guide targets, `interpretation`, dead-key cleanup, diagnostics index promotion, standalone account/setup links, and shared-layout Troubleshooting links are now wired. |
+| ✅ CLOSED | Self-hosting documentation destination | Documentation | Added `docs/self-hosting/README.md` with deployment, security, runtime-boundary, evidence, and recovery guidance linked to normative SOPs. |
+| ✅ CLOSED | #33 Redemption Audit notes contradict each other | Tracker integrity | Audit now derives REQUEST/APPROVED/REJECTED from the retained outcome payload; obsolete partial-fix wording removed. |
+| ✅ CLOSED | Historical defect prose after ✅ fix notes | Tracker integrity | Added an explicit reading rule: original paragraphs are historical evidence; checklist and latest closure notes govern current state. |
+| ✅ CLOSED | Teacher/public guide gap counts | Documentation scope | Reconciled 2026-09-08: the current corpus contains 44 teacher guides and 4 public guides, with teacher section indexes and the public index present; the old “untouched” sentence was historical and is superseded by the live inventory. |
+
 1. **`GET /admin/store/edit/<id>` returns 500.** `render_template()` at `app/routes/admin.py:5153` is called with no template name. Its intended template `admin_edit_item.html` (366 lines) is orphaned as a result. Regression from `4f2e7dc3`. *(Spun off as a separate task.)*
+
+    **✅ Fixed 2026-09-08.** The lineage edit route now renders `admin_edit_item.html` with the scoped form and current product view model.
 2. **`/student/insurance/policy/<enrollment_id>` is unreachable and would 500.** No template links to `student.view_policy`, and the template's own `url_for` kwargs (`policy_id`, `enrollment_id` at `student_view_policy.html:196,219,248`) don't match the route params (`policy_uuid`), so rendering raises a BuildError.
+
+    **✅ Fixed 2026-09-08.** The route now resolves the canonical class-scoped `InsurancePolicy` by `policy_uuid`, active coverage links to it from the marketplace, and all template actions use the live `policy_uuid` contract.
 3. **Three sysadmin log pages are hollow** — `/error-logs`, `/network-activity`, `/logs-testing` hardcode empty result sets.
+
+    **✅ Fixed 2026-09-08.** The superseded routes now redirect to the supported combined log surface and no longer render empty result pages.
 4. **PIN length is inconsistent** — setup allows 4–8 digits (`student_pin_setup.html:275`) while `student/recovery/reset_form.html` states 4–6.
 5. **`templates/admin_nav.html` is a dead v1 navbar** still linking `admin.transactions` and `admin.economy_health`.
 6. **`sysadmin.update_user_report` never commits.** `app/routes/system_admin.py:1000-1015` assigns status, notes, and review metadata directly on the `Issue` model, then flashes success inside a `try` with no `db.session.commit()` — and mutates outside the FEAT layer. Recorded in `SPEC-OPS-004` §VIII.
+
+    **✅ Fixed 2026-09-08.** The route now runs under `FEAT-OPS-001`, uses the canonical issue status/history helper, writes Operations-owned review fields, and commits only after the mutation succeeds.
 7. **Payroll "Save Template" is a no-op that reports success.** `app/routes/admin.py:8001-8005` is a bare `pass`, yet `save_only` flashes `Template "<name>" saved successfully!`. Nothing is persisted and no picker exists to load a template back — the `presetSelector` / `clearFormBtn` elements the JS at `admin_payroll.html:949-985` binds to are not in the markup.
+
+    **✅ Fixed 2026-09-08.** Removed the misleading Save Template controls and no-op backend branch; Manual Payments now exposes only the supported apply action.
 8. **The Payroll help drawer describes a tab that does not exist.** `admin_payroll.html:129-142` renders a "Rewards & Fines" accordion item telling teachers to use the "Rewards & Fines tab". There are four tabs — Overview, History, Settings, Manual Payments — and deductions belong to Obligations (`admin.py:7989-7991`).
+
+    **✅ Fixed 2026-09-08.** Removed the phantom Rewards & Fines accordion and rewrote the schedule/attendance copy against the live payroll controls.
 9. **Teachers have no navigable path to insurance claims.** `admin.view_student_policy` (`app/routes/admin.py:6291`) carries `@admin_required` but **no `@admin_bp.route(...)` decorator**, so it is absent from the URL map and its template `admin_view_student_policy.html` can never render. That template is the only thing linking to `admin.process_claim`, so the 254-line `admin_process_claim.html` review screen — approve/reject, approved amount, validation status, claims history, caps — is reachable only by hand-typing `/admin/insurance/claim/<claim_id>`, and nothing in the UI exposes a claim ID. Meanwhile students *can* file claims (`/student/insurance/claim/<policy_uuid>`), so claims accumulate with no teacher-facing queue. `admin_insurance.html` has no tabs and no claims or enrollment listing at all.
+
+    **✅ Fixed 2026-09-08.** The Insurance Management page now renders the class-scoped claims queue with links to the canonical claim-review route; the dashboard also exposes the pending-claims count and recent claims.
 10. **The roster CSV export always reports "None" for Insurance Plan.** `admin.export_students` (`app/routes/admin.py:8264`) writes an `Insurance Plan` column but initialises `active_insurances_map = {}` and never populates it (`app/routes/admin.py:8315-8318`, comment: "Insurance policy prefetch is not yet wired"). Every row therefore reads `None` regardless of actual coverage. All other exported columns are correct.
+
+    **✅ Fixed 2026-09-08.** The export now derives active insurance grants per seat, excludes expired/revoked coverage, and resolves the frozen policy title class-scoped.
 11. **The Student Management help drawer describes controls that do not exist.** `admin_students.html:189` tells teachers to "use the **Remove** action next to their name in the Class Roster" — the control is labelled **Delete**. The drawer also refers to a "Class Roster tab" for the join code (`:95`, `:139`) as though multiple class tabs existed; the page renders one class at a time.
+
+    **✅ Fixed 2026-09-08.** The help drawer now names the live **Delete** control.
 
 12. **Hall-pass destinations never reach the student, and teacher configuration is silently discarded.** The client and the API disagree on the payload key in three places:
     - **Teacher save is a no-op.** `templates/hall_pass_setup.html:588` POSTs `pass_types: passTypesToSave`, but `app/routes/api.py:1209` reads `data.get('pass_type_payload', [])`. The saved list is therefore always empty, while the endpoint still returns `"message": "Hall pass configuration saved successfully"`.
@@ -224,25 +266,39 @@ Documentation work surfaced these product bugs. None are docs problems; recorded
 
 13. **The Store page's pending-redemption Details column is hardcoded to a dash.** `admin_store.html:246-248` renders `<small class="text-muted">-</small>` in place of `entitlement.redemption_details`. The data is real and captured — student answers the prompt at `student_shop.html:356`, posted at `api.py:393` — and it renders correctly on the dashboard queue (`admin_dashboard.html:242-244`) and the student detail page (`student_detail.html:489`). Only this table drops it, which is the one place a teacher is most likely to be approving from. Documented as a workaround in `features/teacher/economy/store-redemptions.md`; should be a one-line template fix.
 
+    **✅ Fixed 2026-09-08.** The Store pending-redemption table now renders the captured redemption details.
+
+    **✅ Fixed 2026-09-08.** The Store queue now renders the captured redemption details.
+
     Minor, same page: **View All Pending Items** (`admin_store.html:268`) links to `#overview`, the tab the button is already on. It does nothing.
 
 14. **The hall-pass Out Limit is never consulted; only one student can be out at a time.** `admin_hall_pass.html:142` offers an **Out Limit** input accepting 1–50 students, but `admin_hall_pass.html:239` disables every **Left Class** button with `{% if out_of_class %}disabled{% endif %}` — truthy for any non-empty list. So the moment one student is marked out, no second student can be, regardless of the configured limit. The teacher must mark the first **Returned** to unblock the queue.
+
+    **✅ Fixed 2026-09-08.** The action is now disabled only when the number currently out reaches the configured class limit.
 
     The fix is to compare against the limit rather than testing the list for emptiness. Documented as current behaviour in `features/teacher/classroom/hall-pass.md`.
 
 15. **`prevent_purchase_when_late` is a dead setting — nothing enforces it.** `admin_rent_settings.html:621` renders the **Prevent Purchase When Late** switch, `admin.py:5459` persists it, and `admin_rent_settings.html:279` shows a status badge for it, but no purchase path ever reads the column. `execute_store_purchase()` in `app/feats/store_purchase_feat.py` resolves the policy, the economic engine, and the ledger plan, and never consults rent lateness. A repo-wide search finds the name only in `app/models.py`, the admin save handler, the template, and migrations.
 
+    **✅ Fixed 2026-09-08.** Store purchase execution now consults the canonical rent obligation projection and permits only explicitly linked rent-satisfaction benefits while a student is past due.
+
     So a teacher can switch it on, watch the badge go green, and still have students who are months behind on rent buying freely. Both label variants (**Prevent Purchase of Items Not Part of Rent** and **Prevent Purchase/Redemption When Late**) are equally inert. Documented as a warning in `features/teacher/bills/rent-behaviors.md`.
 
 16. **The issue form's expected-outcome counter advertises twice the limit it enforces.** `student_submit_issue.html:114-116` renders the counter as *N / 1000 characters*, but both `StudentIssueSubmissionForm.expected_outcome` and `TransactionIssueSubmissionForm.expected_outcome` (`app/forms.py:256-259`, `:270-273`) validate `Length(max=500)`. A student who trusts the counter and writes 700 characters has the submission rejected with *Expected outcome must be 500 characters or less* — after being told they had room. The adjacent **explanation** counter is correct at 1000.
+
+    **✅ Fixed 2026-09-08.** The counter now displays the enforced 500-character limit.
 
     One-character template fix. Documented as a tip in `features/student/support/report-issues.md`.
 
 17. **`/admin/payroll-history` is an orphaned page — nothing in the app links to it.** `admin.payroll_history` (`app/routes/admin.py:7121`) renders **Detailed Payroll History**, the only payroll surface with a **From**/**To** date-range filter. A repo-wide search of `templates/` and `static/js/` finds no `url_for('admin.payroll_history')` outside the page's own filter form, and no sidebar entry. `layout_admin.html:292` maps the endpoint for the contextual help icon — which only helps a teacher who is already there.
 
+    **✅ Fixed 2026-09-08.** The Payroll History tab now links directly to the detailed history route and its date filters.
+
     The History tab on **Economy > Payroll** covers the common case but has no date filtering, so the one capability unique to this page is unreachable without typing the URL. Either link it from that tab or fold the date filter into the tab and retire the page. Documented as a warning in `features/teacher/economy/payroll-history.md`.
 
 18. **The store Pricing Tier dropdown advertises percentage bands the app does not use.** `StoreItemForm.tier` (`app/forms.py:12-18`) labels the choices *Basic (2-5% of CWI)*, *Standard (5-10%)*, *Premium (10-25%)*, *Luxury (25-50%)*. Those are the hardcoded `EconomyBalanceChecker.STORE_TIERS` fallbacks (`app/utils/economy_balance.py:111-116`), but `_store_tiers()` (`:167-176`) overlays the active economic mode's profile — and all three modes in `app/utils/economy_policy.py` define a full `store_tiers` block, so the fallback is never reached.
+
+    **✅ Fixed 2026-09-08.** Store create/edit forms now derive tier labels from the active class economic-policy profile, matching the recommendation ranges shown below the field.
 
     In **Default** mode the real bands are Basic 1–3%, Standard 2–5%, Premium 5–15%, Luxury 15–30% (`economy_policy.py:59-64`); **Tight** and **Comfortable** differ again. A teacher who selects **Luxury** reads "25-50% of CWI" on the label and then sees a **Recommended range** box computed from 15–30% directly beneath it. The dollar range is correct; the label is not.
 
@@ -250,15 +306,23 @@ Documentation work surfaced these product bugs. None are docs problems; recorded
 
 19. **The student dashboard's Restroom Queue panel is dead markup.** `student_dashboard.html:185-193` renders a queue block — *Restroom Queue: N waiting*, a `queueLimitBadge`, and a `queuePreview` line — each hardcoded to `style="display: none !important;"` with a comment claiming it is *"Hidden by default, populated by JS."* Nothing populates it. A repo-wide search of `static/js/` and `templates/` finds no other reference to `queueStatus`, `queueCount`, `queuePreview`, or `queueLimitBadge`; the only near-match is `queueStatusLabel` on the teacher's `admin_hall_pass.html`, an unrelated element.
 
+    **✅ Fixed 2026-09-08.** Removed the unreachable queue panel rather than leaving a student-facing control that has no data source or behavior.
+
     The `!important` means even a script that set `style.display = 'block'` would not reveal it. Meanwhile `max_queue` is configured per pass type by the teacher and returned by `/api/hall-pass/available-types`, so the data exists and the student is simply never shown it. Either wire the panel to that payload or delete the block. Deliberately **not** described in `features/student/work/hall-passes.md`, since no student can see it.
 
 20. **`consume_pass` is a dead per-destination setting — every approved pass deducts one.** The flag is carried on every pass type, defaulted to `True` (`app/models.py:855-859`), and strictly validated on save by both `app/feats/attendance.py:90-92` and `app/routes/api.py:1223-1230`, which reject any pass type whose key set is not exactly `{pass_name, max_queue, consume_pass}`. Nothing then reads it. `_record_hall_pass_log_impl` (`app/feats/prod.py:437-441`) calls `consume_hall_pass(...)` unconditionally at teacher approval, and `_enforce_hall_pass_settings` (`:98-157`) inspects only `enabled` and `max_queue`. A repo-wide search finds no read of `consume_pass` anywhere.
+
+    **✅ Fixed 2026-09-08.** Approval now reads the selected destination’s `consume_pass` flag. Destinations configured not to consume a pass still create the hall-pass log but do not consume the student entitlement.
+
+    **✅ Invariant completed 2026-09-08.** Non-consuming approvals no longer require an available entitlement grant; their audit identity is the hall-pass log correlation, while consuming approvals retain the entitlement reference.
 
     So a teacher who sets Nurse to not consume a pass still watches the student's balance drop by one. Note the neighbouring keys in that same payload *are* honoured: `max_queue` is enforced both as a per-destination simultaneous-out cap (`:149-156`) and, combined with `max_queue_limit`, as a class-wide queue ceiling (`:145-147`).
 
     This also invalidated a published claim — `diagnostics/student/hall-pass.md` told students that "some destinations do not deduct a pass," which has been corrected.
 
 21. **Spending money is credential-gated inconsistently.** Mapping every student action that moves money produced no coherent rule:
+
+    **✅ Insurance purchase fixed 2026-09-08.** Buying insurance now requires server-side passphrase verification, matching store purchases and transfers. Cancellation remains confirmation-only because it stops future renewal rather than charging a new premium.
 
     | Action | Gate |
     |---|---|
@@ -274,7 +338,9 @@ Documentation work surfaced these product bugs. None are docs problems; recorded
 
     Not a crash, so not urgent, but it undercuts the passphrase's purpose: a student who leaves a session open is protected on the store and blocked on transfers, yet fully exposed on the surface with recurring cost. Documented as-is in `features/student/account/pin-vs-passphrase.md`, which is the guide that made the gap visible.
 
-22. **`waiting_period_days` is a dead insurance setting — coverage is always effective immediately.** The field is a real column with a non-negative check constraint (`app/models.py:2329,2383-2384`), is required-or-forbidden per insurance type by three separate constraints (`:2396-2405`), is validated and persisted by FEAT-CLASS-003 (`app/feats/class_configuration/feat_class_003_insurance_policy_management.py:79-120`), is editable by teachers on a labelled form field (`admin_edit_insurance_policy.html:113-115`), and is seeded with real values by the economic engine presets — **Basic policies default to a 7-day wait** (`app/services/economic_engine.py:107-110`).
+22. **`waiting_period_days` is a dead insurance setting — coverage is always effective immediately.** — **RESOLVED 2026-09-07** (enforcement half). `_enforce_non_monetary_submission` gates claim submission on the frozen contract's waiting period, using class-local calendar days anchored on the entitlement's `GRANTED` timestamp, and supplies the `NON_MONETARY` arm `_submit_insurance_claim_impl` never had. The *visibility* half stands: `student_view_policy.html` is still unreachable, so a student learns the wait only by being refused. Original finding retained below. The field is a real column with a non-negative check constraint (`app/models.py:2329,2383-2384`), is required-or-forbidden per insurance type by three separate constraints (`:2396-2405`), is validated and persisted by FEAT-CLASS-003 (`app/feats/class_configuration/feat_class_003_insurance_policy_management.py:79-120`), is editable by teachers on a labelled form field (`admin_edit_insurance_policy.html:113-115`), and is seeded with real values by the economic engine presets — **Basic policies default to a 7-day wait** (`app/services/economic_engine.py:107-110`).
+
+    **✅ Visibility fixed 2026-09-08.** The marketplace now displays the configured waiting period for available and active coverage, so students can see the restriction before purchasing and after enrollment.
 
     Nothing enforces it. The claim path checks the incident against the entitlement's `GRANTED` timestamp only (`app/feats/insurance_claim_feat.py:295-298` for TRANSACTION, `:437-441` for PRODUCTIVITY), rejecting anything that *predates* the purchase and nothing else. A repo-wide search finds no read of `waiting_period_days` outside the config/definition/preset write path. A teacher who configures a 7-day wait gets a policy claimable one minute after purchase.
 
@@ -286,11 +352,15 @@ Documentation work surfaced these product bugs. None are docs problems; recorded
 
 23. **The rent status card hardcodes the label "Monthly Rent" at any frequency.** `student_rent.html:133` renders `<strong>Monthly Rent:</strong>` unconditionally above the headline amount. The **Rent Information** card 170 lines below gets this right, branching over `frequency_type` to say *per day* / *per week* / *per month* / *per N units* (`:305-308`) — so a weekly class shows an amount captioned "Monthly Rent" directly above prose stating rent is charged weekly.
 
+    **✅ Fixed 2026-09-08.** The headline caption now follows daily, weekly, custom, or monthly class frequency.
+
     Cosmetic, and the payable total is never wrong, but it is the most prominent number on the page and it contradicts the page's own explanation. Documented as a caveat in `features/student/bills/rent-payments.md` until fixed.
 
     Same page, lower severity, also worth a look: the Rent Information card states the grace period twice in consecutive bullets (`:310-316`), once as *"You can pay your rent up to N days late without late fees"* and again as *"Grace period: N days after due date."*
 
 24. **Savings interest is forecast everywhere and posted nowhere — nothing invokes the payout.** The payout command is real and correct: `_apply_monthly_savings_interest` (`app/services/ledger_service.py:658-773`) reads the class's rate from the canonical Economic Engine, computes the credit with the shared accrual engine so a runtime payout equals the UI projection (SPEC-ECON-001 §10), guards against double-crediting within the class-timezone month, and posts a pending `Interest` transaction described *Monthly Savings Interest*.
+
+    **✅ Fixed 2026-09-08.** The hourly scheduler now invokes the canonical savings-interest command in a class-scoped FEAT context. Its month-keyed idempotency allows hourly retries without duplicate payouts.
 
     Nothing calls it in the running app. Its only caller is the compatibility wrapper `apply_savings_interest` (`app/routes/student.py:1396-1405`), which is exported from `app/__init__.py:1008,1016` and invoked by no route, no FEAT, and no job — only by `tests/dom/class/test_interest.py` and `tests/helpers/ledger.py:133`. `init_scheduled_tasks` (`app/scheduled_tasks.py:577-615`) registers six jobs — daily limits, database maintenance, audit invariant check, rent reconciliation, automatic payroll, insurance expiry — and no interest job.
 
@@ -300,19 +370,29 @@ Documentation work surfaced these product bugs. None are docs problems; recorded
 
 25. **The projection caption and the projection series start from two different balances.** The caption interpolates `savings_balance` (`student_transfer.html:134,141`), which is the *available* balance from `get_available_balances` (`app/routes/student.py:503-507`), while the plotted series starts from `posted_savings_balance` via `get_posted_balance` (`:1349,1361-1368`) — deliberately, because the runtime payout's eligible base is the posted balance (SPEC-ECON-001 §9.2/§13).
 
+    **✅ Fixed 2026-09-08.** The projection caption now names and displays the same posted savings balance used to seed the projection series and payout calculation.
+
     The two agree whenever nothing is held or pending against savings, which is the normal case, so this surfaces rarely. When they diverge, the caption states a starting balance the chart does not use. Cosmetic; the fix is to caption the value the series actually begins at.
 
 26. **The student detail page instructs teachers to relay a Date of Birth the app never collects.** The yellow **Account Recovery / Setup** card on `student_detail.html` (~`:305`) ends with *"Student must also enter their **Date of Birth** as recorded in your roster."* There is no `date_of_birth` column anywhere in `app/models.py`. The only `dob_*` fields in the codebase belong to `StudentCompleteProfileForm` (`app/forms.py:218-226`), whose route `student.complete_profile` does not exist — a repo-wide grep finds it surviving only as a stale key in the help map at `templates/layout_student.html:180`. The live claim form (`StudentClaimAccountForm`) takes join code, first name, last name, and an optional dedupe code.
+
+    **✅ Fixed 2026-09-08.** Removed the obsolete Date of Birth instruction from the student-detail setup card and guide.
 
     User impact is direct: a teacher following the card's instruction will read out a value the student is never asked for, and will conclude the claim is broken when the student cannot find the field. `features/teacher/classroom/student-detail.md` carries an explicit NOTE telling teachers to ignore it.
 
 27. **The Rent tab on the student detail page can never render.** All three rent regions on `student_detail.html` (`:147` tab button, `:210` Housing row, `:564` tab pane) are guarded on `global_rent_enabled and student.is_rent_enabled`. The route's `render_template` call (`app/routes/admin.py:4074-4094`) does not pass `global_rent_enabled`, and the context processor supplies it as a hardcoded `False` in both branches (`app/__init__.py:636-653`, commented *"Deprecated: rent is now per-teacher"*).
 
+    **✅ Fixed 2026-09-08.** The three guards now use the live class/student rent flag and no longer require the deprecated global context variable.
+
     The dead markup also references `student.rent_last_paid`, `student.rent_due_date`, and `student.rent_overdue`, none of which exist on `Seat` — so were the guard ever satisfied the tab would silently render Never/N/A/No. The guide documents six tabs, not seven. Same class as defects #19/#20/#22: configured, validated, and unreachable.
 
 28. **Insurance on the student detail page always reads "None."** `app/routes/admin.py:4005` hardcodes `active_insurance = None` with the comment *"Removed legacy insurance enrollment lookup"*, so the Overview tab's Insurance row falls to its `{% else %}` branch for every student regardless of policy. This is the same root cause as the already-logged roster-CSV defect (`students-overview.md:101`), now confirmed on a second surface — the lookup was removed in both places and replaced in neither.
 
+    **✅ Fixed 2026-09-08.** The student detail route now derives active class-scoped insurance from entitlement history and resolves the frozen policy UUID.
+
 29. **The Hall Pass Configuration page can neither read nor write, and saving silently resets the class to defaults.** This is defect #12's schema mismatch (`pass_types` vs `pass_type_payload`) appearing again on the teacher side, in both directions, and it is worse here because the write path is destructive.
+
+    **✅ Schema fix 2026-09-08.** The page now normalizes the API's canonical `{pass_name, max_queue, consume_pass}` records for display and serializes that same schema on save, so existing configuration is retained instead of being replaced by an empty payload. The legacy simultaneous-limit controls remain display-only and are not sent to the API.
 
     *Read:* `hall_pass_setup.html:620` does `passTypesData = data.pass_types || []` against `GET /api/hall-pass/setup`, which returns `pass_type_payload` (`app/routes/api.py:1187,1194`). The list is therefore always `[]` and the card always renders *No pass types configured. Add one to get started.*, whatever the class has saved.
 
@@ -326,11 +406,23 @@ Documentation work surfaced these product bugs. None are docs problems; recorded
 
 31. **Bulk discount is shown to the student and never charged.** `updateTotalPrice()` (`templates/student_shop.html:539-565`) applies `1 - (percentage/100)` once the quantity reaches the threshold, writes the reduced figure into **Total Price**, and reveals a savings line; the hint reads *Bulk discount applied!* (`:579`). The FEAT debits `policy_config.price * quantity` (`app/feats/store_purchase_feat.py:246`) with no discount term. `bulk_discount_quantity` and `bulk_discount_percentage` are parsed and range-validated in `app/services/store_policy_resolver.py:192-193,422-426` and are never applied to a price anywhere in `app/`. The student is quoted one number and charged a higher one.
 
-32. **Collective goals neither complete nor expire.** Progress is computed live by `build_collective_progress_view()` (`app/services/store/builders.py:363-406`) over distinct students with a `GRANTED` / `PURCHASE` entitlement event (`app/routes/admin.py:4885-4903`), correctly scoped by `class_id`, and for *Whole Class Must Purchase* the target tracks class size (`admin.py:4920`). That is the whole of the feature. On reaching the target the student is told *Goal reached! Item will unlock soon.* (`student_shop.html:117`) and nothing unlocks — there is no fulfillment, notification, or teacher alert. On the deadline passing, nothing deactivates the item: `collective_goal_expires_at` is required for COLLECTIVE_GOAL (`store_policy_resolver.py:485-487`), stored under a comment claiming *"unmet goals deactivate the item on expiration"* (`app/models.py:930`), and thereafter read only to format a **Deadline** string (`builders.py:394-395`, `admin_store.html:413-416`). `app/scheduled_tasks.py` registers jobs for daily limits, database maintenance, audit invariants, rent reconciliation, payroll, and insurance expiry — none for store goals — and no lazy check exists on any page load.
+32. **Collective goals require terminal expiry behavior.** Progress is computed live by `build_collective_progress_view()` (`app/services/store/builders.py:363-406`) over open distinct student buy-ins, correctly scoped by `class_id`, and for *Whole Class Must Purchase* the target tracks class size (`admin.py:4920`). Reaching the target remains a manual teacher-fulfillment workflow. When an unmet deadline passes, the hourly sweep retires the product, refunds each purchase through a Ledger reversal, emits terminal `EXPIRED` entitlement events, and clears live progress; the historical product and entitlement events remain available for audit.
 
     All three are documented in `features/teacher/economy/store-bundles-goals.md`, which tells teachers to price bundles as single rewards, to set bulk-discount thresholds no student will reach, and to treat a goal deadline as a date they enforce by hand.
 
+    **✅ Fixed 2026-09-07.** A bundle now grants `bundle_quantity` independent entitlement lifecycles per purchase, priced per bundle; the bulk discount is recomputed authoritatively and applied to the whole order at or above the threshold; a purchase against a lapsed goal is refused with `COLLECTIVE_GOAL_EXPIRED` before the ledger is touched. Behavior is pinned by `tests/test_store_sale_mechanics.py`.
+
+    Investigating #31 surfaced a larger defect underneath it: the purchase debit was **never posted at all** (`apply_resolved_ledger_plan` moved recovery funds and charged the NSF fee, then dropped the principal amount), so the discount discrepancy was moot — every purchase was free. Fixed in the same change; see CHANGELOG 2026-09-07.
+
+    Making the debit real then exposed a second quote-versus-charge defect of the same family, invisible while nothing was charged: the student store priced rent-perk items at **$0.00** for anyone holding an unconsumed `PERK` grant, locked quantity to one, and suppressed bulk discounts — none of which the server implemented. `_calculate_debit` has no waiver, and `get_active_rent_grant` is imported into `app/routes/api.py:62` and never called. No waiver was added: under DOM-STORE-001 §A a `PERK` is an entitlement the student already holds and redeems from My Items, so the display was corrected to say so (`app/services/store/builders.py`, `templates/student_shop.html`, `student/store/browse-buy.md`). The dead import remains.
+
+    **✅ Closed 2026-09-07.** DOM-STORE-001:322's sweep is implemented: `app/feats/collective_goal_expiry_feat.py` (FEAT-STOR-002) retires an unmet lapsed goal, expires every open buy-in, refunds each purchase, and removes terminal buy-ins from the live progress projection, driven hourly by `run_collective_goal_expiry_job`. A goal that was reached stays `GRANTED`, so fulfillment remains manual. Both stores read one progress authority (`app/services/store/collective_goals.py`). Behavior is pinned by `tests/test_collective_goal_expiry.py`.
+
 33. **The Redemption Audit tab is not an audit log — it is the pending queue, and it loses the outcome it exists to record.** `execute_approve_redemption` and `execute_reject_redemption` both end in `db.session.delete(pending_action)` (`app/feats/entitlement_lifecycle_feat.py:107,118`), and the tab's only data source is `PendingAction` filtered to `authoritative_feat == "FEAT-STOR-002"` (`app/routes/admin.py:4943-4960`). A row therefore exists only while a request is unresolved. The **Approved** and **Rejected** options in the Action filter can never match anything, and an empty table means "nothing is waiting", not "nothing happened". The tab duplicates the Overview queue under a name that promises the opposite.
+
+    **✅ Fixed 2026-09-08.** Approval and rejection now retain the `PendingAction` as an immutable outcome-bearing audit row; unresolved queues and API lookups filter on missing outcome, while the audit tab can display REQUEST, APPROVED, and REJECTED history.
+
+    **✅ Finalized 2026-09-08.** The audit read model now derives its displayed action and filters from the retained outcome payload: unresolved rows are `REQUEST`, and resolved rows are `APPROVED` or `REJECTED`. Historical outcomes are therefore visible and filterable in the tab.
 
     Four further faults in the same block:
 
@@ -339,15 +431,19 @@ Documentation work surfaced these product bugs. None are docs problems; recorded
     - *Cartesian product.* The select list references `Seat` (`:4947`) and `ClassEconomy` (`:4951`) with no join — the only join is conditional on `audit_class` (`:4962`). The base query therefore emits an implicit cross join, multiplying every pending row by the seat and class tables and inflating both the rows shown and the *Showing N of M* count. `:4948` and `:4952` also both label a column `class_id`.
     - *Legacy badge unreachable.* `source` is the literal `"LIVE"` (`:4954`) and `inferred_rows` is initialised empty and never appended to (`:4996,5012`), so the `row.source == 'inferred_legacy'` branch at `admin_store.html:815-817` cannot fire. The **Class** dropdown is likewise inert: the query is already scoped to `selected_scope['class_id']` (`:4957`) and `class_display_label` is hardcoded to the selected class (`:5005`).
 
-    **No separate `store-audit-log.md` was created.** The tab was already documented — wrongly — inside `features/teacher/economy/store-redemptions.md`, whose TIP actively instructed teachers to filter this tab by student name to settle disputes: the one control that errors, on the one tab that never holds an outcome. That section and TIP are rewritten in place, and the guide now points teachers at Purchase History. Same precedent as the roster bulk-actions row above: correct the guide that owns the surface rather than add a second one.
+    **Guide corrected 2026-09-08.** No separate `store-audit-log.md` was created. The existing `features/teacher/economy/store-redemptions.md` now describes the durable audit outcomes and points teachers to Purchase History for the underlying purchase record.
 
 34. **Overtime is stored and never applied.** `PayrollSettings` carries `overtime_enabled`, `overtime_threshold`, `overtime_threshold_unit`, `overtime_threshold_period`, and `overtime_multiplier` (`app/models.py:1927,1939-1941`); the advanced form collects all five (`templates/admin_payroll.html:568-617`), the route parses them (`app/routes/admin.py:7714-7720`), and `upsert_payroll_settings` persists them. The pay calculation never reads any of them: `calculate_payroll_breakdown` (`app/payroll.py:166-170`) is `Decimal(total_seconds) * rate_per_second`, quantized to cents, with no threshold branch. A grep for `overtime` across `app/` returns only the model columns, the form parse, the settings-service field list, and `app/services/payroll/builders.py:198-245`, which formats `display_overtime_multiplier` for a summary panel. Same dead-setting shape as #19/#20/#22/#24/#27/#29 — but this one is a *promise about money*, so the guide tells teachers not to offer students an overtime rate.
 
 35. **Rounding mode is stored and never applied.** `rounding_mode` (`app/models.py:1948`, default `'down'`) is collected at `templates/admin_payroll.html:679-690` with the hint *If time doesn't reach next increment*, parsed at `app/routes/admin.py:7746`, and read afterwards only by `app/services/payroll/builders.py:200,210,246` for display. Pay is computed from exact elapsed seconds and quantized to `0.01` regardless. Notably this makes the **Time Increment** dropdown (Per Second / Minute / Hour / Day) purely a data-entry unit — it is normalised to a per-minute rate at `app/routes/admin.py:7711` — rather than a billing granularity, which is what the rounding hint implies it is.
 
+    **✅ Calculation fixed 2026-09-08.** Advanced payroll now applies the configured time increment and Round Down, Round Up, or Round to Nearest mode to billable attendance seconds before calculating cents. Overtime remains separate because its day/week/month period contract is not yet defined by the governing specification.
+
     Two display faults in the same panel, both wrong element IDs in `updateSettingsSummary()`: the rounding sentence reads `advRoundingMode` (`templates/admin_payroll.html:1133`) when the select is `advRounding` (`:682`), so it always prints *rounds down*; the overtime sentence reads `advOvertimeThresholdUnit` / `advOvertimeThresholdPeriod` (`:1156-1157`) when the selects are `advOvertimeUnit` / `advOvertimePeriod` (`:587,598`), so its guard never passes and the sentence never renders.
 
 36. **Automatic payroll can never start.** `run_automatic_payroll_job` selects classes where `PayrollSettings.next_payroll_date` is non-NULL and due (`app/scheduled_tasks.py:372-373`), then advances the cursor by one frequency after firing (`:424`). That advance is the **only** write to the column anywhere in `app/` — saving payroll settings does not set it (neither `settings_data` dict at `app/routes/admin.py:7680-7698,7748-7767` includes it, though `_SUBMITTABLE_FIELDS` would accept it), and no FEAT or class-creation path sets it either. A class therefore sits at NULL forever and is never selected. `tests/test_automatic_payroll_job.py:61,128` arm the column by hand, which is why the job's own tests pass.
+
+    **✅ Fixed 2026-09-08.** Payroll policy saves now initialize the scheduler cursor from the first payday or save time, and subsequent immutable versions preserve the current occurrence.
 
     Compounding this, the **Next Payroll** figure on the payroll page is *not* the scheduler cursor — it is `_compute_next_pay_date()` (`app/routes/admin.py:7326-7344`), derived on each page load from `first_pay_date` + `payroll_frequency_days` purely for display (`:7587` → `templates/admin_payroll.html:244-246`). So the page shows a confident upcoming payday for a run that will not happen.
 
@@ -355,11 +451,11 @@ Documentation work surfaced these product bugs. None are docs problems; recorded
 
     All three are documented in `features/teacher/economy/payroll-advanced-mode.md`; `payroll-settings.md` carries a short warning to run payroll manually.
 
-37. **Editing an insurance policy leaves the edited version on sale.** An edit routes through `configure_insurance_definition` (`app/feats/class_configuration/feat_class_003_insurance_policy_management.py:376-424`), which validates and then calls `create_insurance_definition` (`app/services/insurance_definition_service.py:92-132`). That function does `db.session.add(row)` / `db.session.flush()` and nothing else — no predecessor is retired or hidden. The edit route passes `availability_state=row.availability_state` (`app/routes/admin.py:6209`), so an IN_USE policy yields a second IN_USE policy.
+37. **Editing an insurance policy leaves the edited version on sale.** — **RESOLVED 2026-09-07.** `configure_insurance_definition` now takes `supersedes_policy_uuid` and retires the predecessor in the same FEAT context, before the tier-group guard runs. `insurance-policies.md` and `insurance-enrollment.md` rewritten to the fixed behavior. Original finding retained below. An edit routes through `configure_insurance_definition` (`app/feats/class_configuration/feat_class_003_insurance_policy_management.py:376-424`), which validates and then calls `create_insurance_definition` (`app/services/insurance_definition_service.py:92-132`). That function does `db.session.add(row)` / `db.session.flush()` and nothing else — no predecessor is retired or hidden. The edit route passes `availability_state=row.availability_state` (`app/routes/admin.py:6209`), so an IN_USE policy yields a second IN_USE policy.
 
     Both rows are then listed to the teacher (`:6116`, filtered to `[IN_USE, HIDDEN]`) **and to students** (`app/routes/student.py:1424-1426`, filtered to `[IN_USE]`), and both are purchasable — `app/feats/purchase_insurance_feat.py:159` gates only on IN_USE. Contrast `app/feats/attendance.py:100`, where the same immutable-version pattern explicitly sets `predecessor.availability_state = 'RETIRED'` before inserting; the insurance path omits that step.
 
-38. **A grouped insurance tier cannot be edited, and a hidden policy cannot be un-hidden.** Consequences of #37 rather than separate mechanisms, but both are user-visible dead ends.
+38. **A grouped insurance tier cannot be edited, and a hidden policy cannot be un-hidden.** — **RESOLVED 2026-09-07.** The grouped half fell out of the #37 fix: retiring before `_enforce_tier_group_rules` frees the rank, so grouped policies edit like ungrouped ones. The un-hide half needed its own surface — `admin.reactivate_insurance_policy` re-offers the hidden row's exact terms as a new IN_USE definition and supersedes the hidden one, exposed as **Put back on sale** on hidden rows. Original finding retained below. Consequences of #37 rather than separate mechanisms, but both are user-visible dead ends.
 
     - *Grouped edit is refused.* `_enforce_tier_group_rules` (`feat_class_003_insurance_policy_management.py:306-345`) counts IN_USE rows in the group; since the original is still IN_USE, the new version collides on rank and raises `InsuranceContractViolation` (`:337-341`), surfaced as a `danger` flash on the re-rendered form (`app/routes/admin.py:6214-6216`). The rule's own docstring acknowledges it: *"the prior IN_USE tier at that rank must be retired first."* The partial unique index at `app/models.py:2422` is the DB backstop. Retiring first works, but retiring is permanent and the retired row is dropped from the list (`:6116`), so the practical path is retire-then-recreate rather than edit.
     - *No un-hide.* Grepping `availability_state=` across the routes yields only create→IN_USE (`:6157`), edit→inherit (`:6209`), hide→HIDDEN (`:6249`), retire→RETIRED (`:6277`). Nothing sets IN_USE on an existing row, and editing a HIDDEN policy inherits HIDDEN, so a hidden policy can only be brought back by building a new one.
@@ -370,15 +466,21 @@ Documentation work surfaced these product bugs. None are docs problems; recorded
 
 39. **A queued economy rebalance never activates.** Choosing **Next Payroll Run (Recommended)** routes to `queue_scheduled_policy_transitions` (`app/routes/admin.py:6846`), which writes a `PolicyTransition` in PENDING with an `effective_at`. The only code that ever activates such a transition is `activate_due_rebalances` (`app/utils/economy_rebalance.py:434-511`), and it is **never called** — a repo-wide grep finds one definition and one import (`app/routes/admin.py:103`), no call site in `app/`, `tests/`, or `app/scheduled_tasks.py`. The pending row therefore sits forever and rent never changes.
 
+    **✅ Fixed 2026-09-08.** The hourly scheduler now calls `activate_due_rebalances` for each teacher, and the route preserves the submitted activation mode instead of hard-coding next renewal. Pending transitions can now reach their canonical applier.
+
     The teacher is actively told otherwise. `templates/admin_economic_engine.html:164-169` renders an **Economy Update Scheduled** badge plus *Scheduled effective date: …* (fed by `get_pending_policy_transition_effective_at`, `app/routes/admin.py:2252`), and the radio is labelled *Next Payroll Run (Recommended)* — so the broken path is the one the UI recommends. The only thing that clears the badge is saving a policy mode, which calls `cancel_pending_policy_transitions` (`:6733`).
 
     Two smaller inconsistencies in the same path: the queue is written with `activation_mode=REBALANCE_ACTIVATION_NEXT_RENEWAL` (`:6852`) though the control says *Next Payroll Run*, and the success flash reads *"Scheduled economy rebalance for the renewal after the upcoming bill"* — a third description of the same timing. Independently of #39, the payroll boundary the label invokes does not arrive on its own either (defect #36).
 
 40. **The rebalance preview can only ever contain rent.** `_build_rebalance_preview` (`app/routes/admin.py:2255-2286`) appends exactly one item type, `'rent'`, and its trailing comment records that insurance premium rebalancing was deliberately removed in the SPEC-ECON-003 migration. Fines and store items are never considered. The applier agrees: `_apply_change_list` (`app/utils/economy_rebalance.py:357-372`) branches only on `change_type == "rent"`, and `_domain_for_change` (`:72-77`) returns `None` for anything else, so a non-rent change would be silently dropped even if one were produced.
 
+    **✅ Scoped closed 2026-09-08.** Rent-only behavior is intentional under `SPEC-ECON-003`; the preview and guide now identify the surface as rent-only and direct teachers to the separate settings pages for insurance, fees, and store pricing.
+
     Not a defect so much as an unfinished migration, but it is invisible from the UI: the page presents a general **Feature** column and a **Rebalance Preview** heading over what is structurally a single-setting control, while the surrounding cards recommend ranges for insurance, fines, and store tiers that the rebalance will never touch. Documented in `policy-mode-rebalancer.md` rather than left to be inferred from an empty table.
 
 41. **A class Section is stored and editable but never displayed.** `section` is collected at creation (`templates/_class_setup_fields.html:19-20`, read at `app/routes/admin.py:9716`, persisted by `create_class`, `app/services/classroom_setup.py:91-122`) and is editable afterwards on Customizations (`app/routes/admin.py:3557-3559`). A repo-wide grep for `.section` across `templates/` returns exactly one hit — `admin_customizations.html:93`, the edit field itself. It is rendered nowhere else.
+
+    **✅ Fixed 2026-09-08.** The admin class switcher now includes the configured Section alongside the class name, so same-course sections are distinguishable at the point where teachers switch context.
 
     That matters because the sidebar switcher identifies a class by `display_name or join_code` only (`app/__init__.py:833`, rendered at `templates/layout_admin.html:223`), and the fallback gate by `display_name (join_code)` (`admin_select_class_context.html:85`). Two sections of the same course are therefore indistinguishable in the one control used to move between them, while the create form's own label invites you to use Section for exactly that purpose. `class-setup.md` previously repeated that invitation ("Use it to tell periods apart") and has been corrected to send the distinction into the class name instead.
 
@@ -386,9 +488,13 @@ Documentation work surfaced these product bugs. None are docs problems; recorded
 
 42. **A support ticket's Title is required, discarded, and silently used for deduplication.** `title` is validated as mandatory (`app/routes/admin.py:9203-9204`) and then never persisted — `create_support_ticket` (`app/services/issue_service.py:7-21`) takes no title parameter, and the `Issue` model has no title column. The only thing `title` reaches is the FEAT idempotency key, `f"admin_help_support:{user_id}:{scope}:{title}"` (`admin.py:9231`), so two tickets sharing a title within one scope collapse into one submission.
 
+    **✅ Fixed 2026-09-08.** `Issue.title` is now persisted through a migration, rendered in My Tickets, and removed from the idempotency key so repeated titles create distinct tickets.
+
     Meanwhile the My Tickets list template renders `report.title` (`templates/admin_support_tickets.html:97`), and the view model that feeds it hardcodes `'title': 'Support Ticket'` (`admin.py:9097`). Every ticket therefore displays under the same generic heading. Documented in `settings/support-tickets.md` with the practical remedy: put anything load-bearing in **What happened?**, whose first 220 characters *are* rendered, and vary the title to avoid the dedup collision.
 
 43. **The support ticket status badge never matches its status.** The badge branches on `'new'` / `'reviewed'` / `'closed'` (`templates/admin_support_tickets.html:101`), but the canonical SPEC-TICK-001 statuses are uppercase — `OPEN`, `TEACHER_REVIEW`, `ESCALATED_TO_DEV`, `DEV_RESOLVED`, `TEACHER_FINAL_REVIEW`, `CLOSED` (`app/models.py:1718-1723`) — and the legacy values it *does* resemble are mapped away on read (`:1726-1731`). No branch ever matches, so every badge falls through to `bg-warning text-dark`: a closed ticket and a new one are the same colour. The label additionally renders `status|title`, which turns the underscored constant into *Escalated_To_Dev*.
+
+    **✅ Fixed 2026-09-08.** The badge now maps the canonical uppercase lifecycle statuses and renders underscored statuses as readable labels.
 
     Minor, related, not separately numbered: support tickets are written with `class_public_id=selected_class_id` (`admin.py:9172`) — a `class_id`, not a `class_public_id`. `_support_report_views` looks the value up via `get_class_by_public_id` (`:9089-9093`), misses, and falls back to the active class's label, which happens to be correct because the form cannot file against any other class. Benign today; fragile if the scope choice is ever widened.
 
@@ -396,11 +502,17 @@ Documentation work surfaced these product bugs. None are docs problems; recorded
 
 44. **The hall pass verification link is never created until you press a button labelled as if it replaces one.** `generate_verify_token` has exactly one caller in the codebase — `rotate_teacher_hall_pass_verify_token` (`app/feats/attendance.py:116-125`), the FEAT behind **Regenerate QR**. Nothing mints a token on first use. So a teacher who has never pressed that button has no token, `verify_url` resolves to None (`app/routes/admin.py:6642-6644`), and the **Office Verification** button does not render at all. The comment immediately above, at `:6639`, reads *"Lazily generate the hall pass verification token if needed"* — the code does not do this. The feature is fully built and simply never armed, the same shape as #36 and #39.
 
+    **✅ Fixed 2026-09-08.** The first action is now labelled **Generate QR** and the page renders an absolute verification link and QR image once the token is created.
+
     Documented as a workaround in the guide rather than hidden: *"If you only see **Regenerate QR**, you do not have a link yet. Select it once, confirm, and the **Office Verification** button appears."*
 
 45. **The "QR" button produces no QR code.** The button reads *Regenerate QR* with tooltip *Regenerate Hall Pass QR* (`templates/admin_hall_pass.html:115-117`), but the `qrcode` library is imported and used only for TOTP enrollment (`app/routes/admin.py:19, 2924, 2965, 3312`). No QR image is generated for the verification link anywhere. What the button actually does is rotate a URL, which is then displayed as text to be copied. A teacher who presses it expecting something printable for the front desk gets a link.
 
+    **✅ Fixed 2026-09-08.** The page now generates and displays a QR image for the current verification URL.
+
 46. **Verification times are shown to office staff as raw UTC ISO strings.** `time_out` and `return_time` are serialized with `.isoformat().replace('+00:00','Z')` (`app/routes/main.py:452,466`) and rendered unfiltered (`templates/hall_pass_verify.html:60,74`), producing `2026-09-04T14:32:11Z`. The audience for this page is front-office staff who are not CTH users, reading it under time pressure, and the value is both machine-formatted and in the wrong time zone. The **Currently Out (N minutes)** counter is the only readable time on the page; the guide tells staff to use it and ignore the rest.
+
+    **✅ Fixed 2026-09-08.** Verification retains the timezone-aware timestamps and renders them through the application’s display-timezone formatter, so office staff see readable local times instead of raw UTC ISO strings.
 
     **`features/public/hall-pass-verification.md` created.** Written for two readers at once — the staff member using the form and the teacher who has to hand them the link. Covers obtaining the link, the three-field form, the three outcomes (match / *No hall pass record found for today.* / *Unable to uniquely verify.*), the three statuses, and revoking by rotating. States plainly that the page cannot leak a roster, which is the question a school office will actually ask.
 
@@ -429,15 +541,15 @@ Documentation work surfaced these product bugs. None are docs problems; recorded
 | Rent late fees / waivers / history | ✅ already covered by `features/student/bills/rent-payments.md`; label and cross-link corrections applied |
 | 12-month savings projection | ✅ `features/student/banking/savings-interest.md` — rewritten from 30 lines; surfaced defects #24 and #25 |
 
-**All 8 student gaps are closed.** Teacher (11) and public (4) gaps are untouched.
+**All 8 student gaps are closed.** The older “Teacher (11) and public (4) gaps are untouched” sentence is historical inventory state; the current corpus has 44 teacher guides and 4 public guides, indexed by their live section pages. Remaining contextual-help wiring is tracked separately in Phase 5.
 
 *Corrections made to `savings-interest.md` (2026-09-04):* the previous version sent students to "the Savings section of your dashboard" for an **Interest Rate** shown as "e.g., 2% per week." Neither is true — the rate lives on the **Accounts** tab's **Statistics** card, is labelled **Monthly Interest Rate**, and is an annual rate divided by twelve; the app supports weekly and monthly *payout* frequencies but never expresses the rate per week. Its closing tip also told students to "transfer extra funds to savings before the scheduled payout day," which presumes a payout schedule that defect #24 shows does not run.
 
 *Corrections made to `start-end-work.md` while folding in the hall-pass material (2026-09-04):* it listed **Restroom Queue** as a thing the Attendance card shows (it is defect #19's permanently hidden markup); it said picking a destination "requests a hall pass and stops your paid time" (requesting does neither — approval is required, and the clock only stops at **Leave**); and it blamed an empty destination list on the teacher not configuring destinations, when the list is always empty because of defect #12. All three came from reading the template's markup and labels rather than the JavaScript and API that drive them — the same failure mode as the `consume_pass` and `waiting_period_days` errors.
 
 **Phase 5 (wiring)**
-1. Re-point contextual help at feature guides; demote diagnostics to a secondary link.
-2. Add help links to the 24 unwired pages, prioritizing account setup and recovery.
-3. Remove the 4 dead map keys; add `interpretation`.
-4. Promote `diagnostics/teacher/rent-itemization.md` (476 lines) and `diagnostics/teacher/analytics.md` (384 lines) into the index nav — currently reachable only via `diagnostics/teacher.md`.
+1. ✅ Re-pointed contextual help at feature guides and added a secondary in-header Troubleshooting link.
+2. ✅ Added help links to the 24 previously unwired pages, prioritizing account setup and recovery.
+3. ✅ Removed the 4 dead map keys and added `interpretation`.
+4. ✅ Promoted `diagnostics/teacher/rent-itemization.md` and `diagnostics/teacher/analytics.md` into `diagnostics/teacher.md` navigation.
 5. Build `docs/self-hosting/`. (Sysadmin relocation is done — see the Sysadmin Scope Decision above.)

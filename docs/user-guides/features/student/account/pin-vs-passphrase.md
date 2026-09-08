@@ -25,7 +25,7 @@ The rule behind the split is roughly *how much damage could someone do*. Clockin
 
 | | PIN | Passphrase |
 | --- | --- | --- |
-| **Looks like** | 4–8 digits | At least four words, with numbers and symbols |
+| **Looks like** | 4–6 digits | At least four words, with numbers and symbols |
 | **Typed** | Many times a day | A few times a term |
 | **Job** | Proving it's still you at this device | Proving it's really you |
 
@@ -35,29 +35,30 @@ You set both when you first claim your account. See [Log In and First-Time Setup
 
 | What you're doing | What it asks for |
 | --- | --- |
-| Signing in | Username + **PIN** |
+| Signing in | Username + **Passphrase** |
 | **Start Work** | **PIN** |
 | **Done for the day** | **PIN** |
 | Using an item you already own | **PIN** |
 | Buying something in the store | **Passphrase** |
-| Moving money between checking and savings | **Passphrase** |
+| Moving money between checking and savings | **PIN** |
 | Verifying your teacher's recovery request | **Passphrase** |
 | Requesting a hall pass | Neither |
-| Paying a rent bill | Neither — just a confirmation box |
-| Buying or cancelling insurance | Neither |
+| Paying a rent bill | **Passphrase** |
+| Buying insurance | **Passphrase** |
+| Cancelling insurance | **Passphrase** |
 
-The pattern worth remembering: **money leaving your control needs the passphrase; everything routine needs the PIN.** Insurance and rent are the exceptions, and they are covered in the warning below.
+The pattern worth remembering: **non-monetary or reversible actions use the PIN; account authentication and irreversible expense actions use the passphrase.** Hall-pass use is the exception among entitlements and uses the PIN.
 
 ### If one of them stops working
 
-- **PIN rejected at sign-in.** Ask your teacher to reset it. They can do this from your student page without knowing your old one.
+- **Passphrase rejected at sign-in.** Ask your teacher to reset it. They can do this from your student page without knowing your old one.
 - **Passphrase rejected at a purchase or transfer.** Check capitalisation and spacing first — it is case-sensitive and the spaces between words count. If it is genuinely lost, see [Reset or Recover Your Account](reset-recovery.md).
 - **You know both but the page keeps sending you back to sign in.** That is a session timeout, not a credential problem. Sign in again.
 
 ## Important notes
 
 > [!WARNING]
-> **Buying insurance takes one click and asks for nothing.** The **Buy — $X** button commits you to a recurring premium immediately, with no passphrase and no confirmation. It is the least protected way to spend money in the app, and the money it spends repeats every billing period. Read the tier before you press it — see [Insurance Coverage](../bills/insurance-coverage.md).
+> **Buying insurance asks for your passphrase.** The **Buy — $X** form commits you to a recurring premium only after the passphrase is verified. Cancelling remains confirmation-only because it stops renewal rather than taking a new payment.
 
 > [!IMPORTANT]
 > **Never tell anyone your passphrase, including someone claiming to be your teacher.** Your teacher never needs it. The one time they ask you to *use* it — verifying a recovery request — you type it into your own screen yourself and hand over a code instead. See [Verify a Teacher Recovery Request](verify-teacher-recovery.md).

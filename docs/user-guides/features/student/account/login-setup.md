@@ -57,7 +57,7 @@ Enter your **Username** and **PIN** on the student sign-in page. That is all.
 > **Your name has to match the roster.** If the app cannot find you, spelling is usually the reason. Ask your teacher what they typed — nicknames and missing hyphens are the usual culprits.
 
 > [!NOTE]
-> **PIN and passphrase do different jobs.** The PIN is for daily sign-in and clock actions. The passphrase is the stronger credential, used for recovery and for verifying a teacher's recovery request.
+> **PIN and passphrase do different jobs.** The passphrase is for logging in, recovery, and irreversible expense actions. The PIN is for clock actions, transfers between your own accounts, and routine or reversible actions.
 
 > [!TIP]
 > Locked out? **I can't log into my account** on the sign-in page starts recovery. Do not try to claim a second account — you only have one seat, and claiming is not how you get back in.

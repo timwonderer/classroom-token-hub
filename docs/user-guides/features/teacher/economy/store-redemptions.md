@@ -87,11 +87,11 @@ The rest of the tab is unfinished in ways worth knowing before you spend time on
 > [!NOTE]
 > **Immediate-use items never reach you.** They are granted at purchase and appear only in Purchase History. If you want a say in when a student gets something, it has to be a **Delayed Use** item.
 
-> [!CAUTION]
-> **Redemption Audit is not an audit trail.** It holds only requests still waiting on you, and it drops a request as soon as you approve or reject it — so the outcome you want to look up is precisely the thing it never keeps. Do not use it to settle a dispute, and do not read an empty table as evidence that nothing happened.
+> [!NOTE]
+> **Redemption Audit keeps the outcome.** It includes open requests plus requests you approved or rejected, with the requested action and resolution visible. An empty table means there is no matching history for the selected filters.
 
 > [!TIP]
-> When a student insists they bought something they never received, sort **Purchase History** by Student. The purchase and its current status sit on one row, which is the closest thing to a record the page offers. Their [student detail page](../classroom/student-detail.md) carries the same purchase under its Items tab if you would rather look at one student at a time.
+> When a student insists they bought something they never received, check **Redemption Audit** for the request and outcome, then use **Purchase History** for the underlying purchase and current entitlement status.
 
 ## Related guides
 

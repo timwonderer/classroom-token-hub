@@ -104,7 +104,7 @@ There is no upgrade button. To move from **Basic** to **Premium** in the same gr
 > **Plan the tier switch around the billing period.** Cancelling Basic on Monday of a weekly cycle leaves you unable to buy Premium in that group until the week is out — and unable to buy Basic back either, since it is cancelled. Switch at the start of a period, not the middle.
 
 > [!NOTE]
-> **Coverage starts immediately — there is no waiting period.** You can file a claim against something that happens right after you buy, as long as the incident is *after* your purchase. Claims about things that happened before you bought the policy are rejected.
+> **Coverage usually starts immediately.** You can file a claim against something that happens right after you buy, as long as the incident is *after* your purchase. Claims about things that happened before you bought the policy are rejected. The one exception is a non-monetary policy with a **waiting period** — those become claimable a set number of days after you buy, and switching tiers restarts that wait because it is a new purchase.
 
 > [!TIP]
 > Insurance is only worth buying if the loss it covers is one you actually risk. Compare the premium across a whole term against the size of the thing it protects, and remember the *up to N× payout* ceiling caps what you can recover in a period no matter how much you lost.

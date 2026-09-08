@@ -3,7 +3,7 @@ title: Economic Policy and Rebalancing
 category: features
 subcategory: teacher-economy
 roles: [teacher]
-description: Choose an economic policy mode, read the rebalance preview, and know why a queued rebalance never applies itself.
+description: Choose an economic policy mode, review the rent rebalance, and schedule or apply the change.
 keywords: [economic policy, rebalance, policy mode, tight, comfortable, cwi, economy health, effective date, scheduled]
 related:
   - user-guides/features/teacher/economy/economic-engine
@@ -19,7 +19,7 @@ The **Economic Policy** card sits on the Economic Engine page, below the CWI car
 
 Every pricing recommendation on the page — rent range, insurance premium range, fine range, store tiers, minimum weekly savings — is derived from your CWI *and* the active policy. Changing the policy changes all of them at once. It does not change any price by itself.
 
-The **Rebalance Preview** is the second half: it compares your live settings against the new policy and offers to update them for you.
+The **Rent Rebalance Preview** is the second half: it compares your live rent setting against the new policy and offers to update it for you. Other pricing domains remain on their own settings pages.
 
 ## Step-by-step instructions
 
@@ -45,7 +45,7 @@ After you save, the page reopens with the rebalance review already showing.
 
 You can also reach this at any time with **Review Recommended Rebalance**, next to the save button. The button only appears once payroll is configured.
 
-The **Rebalance Preview** table has four columns:
+The **Rent Rebalance Preview** table has four columns:
 
 | Column | What it shows |
 | --- | --- |
@@ -75,10 +75,10 @@ Select **Apply Selected Rebalance** to commit, or **Cancel** to leave everything
 > **Nothing is retroactive.** A policy change updates the recommendation profile and, if you rebalance, your forward-looking settings. It never rewrites past payroll, rent charges, or ledger entries.
 
 > [!CAUTION]
-> **A queued rebalance never takes effect.** Choosing **Next Payroll Run** records the change and shows an **Economy Update Scheduled** badge with an effective date, but nothing ever applies it — the badge stays, and your rent amount never moves. If you want the new rent to happen, choose **Apply Immediately**, or set the amount yourself on **Bills > Rent**. Treat the queue as a note-to-self, not a scheduled action.
+> **A queued rebalance takes effect at the scheduled boundary.** Choosing **Next Payroll Run** records the change and shows an **Economy Update Scheduled** badge with an effective date. The hourly operations job applies it once that boundary is due. If you need the new rent immediately, choose **Apply Immediately**.
 
 > [!WARNING]
-> **Applying immediately can split a cycle.** Rent is billed on a cycle. Changing the amount partway through one means students may be charged differently than the cycle started with. The page recommends queuing instead, but queuing does not work — so if the timing matters, wait until a cycle boundary and apply then.
+> **Applying immediately can split a cycle.** Rent is billed on a cycle. Changing the amount partway through one means students may be charged differently than the cycle started with. If the timing matters, choose **Next Payroll Run** and verify the scheduled effective date.
 
 > [!NOTE]
 > **Saving a new policy mode clears anything you had scheduled.** Pending rebalance changes from an earlier policy are cancelled, since they were calculated against a policy you no longer use. This is also the only way to clear the **Economy Update Scheduled** badge.
