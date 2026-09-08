@@ -110,11 +110,14 @@
             <a href="{{ verify_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary me-2">
                 <span class="material-symbols-outlined">verified_user</span> Office Verification <span class="visually-hidden">(opens in a new tab)</span>
             </a>
+            {% if verify_qr_data_uri %}
+            <img src="{{ verify_qr_data_uri }}" alt="QR code for Office Verification" width="96" height="96" class="align-middle me-2 border rounded">
+            {% endif %}
             {% endif %}
             <button type="button" class="btn btn-outline-secondary me-2"
                     onclick="rotateVerifyToken()"
-                    title="Regenerate Hall Pass QR (invalidates old link)">
-                <span class="material-symbols-outlined">qr_code</span> Regenerate QR
+                    title="{% if verify_url %}Regenerate{% else %}Generate{% endif %} Hall Pass verification link">
+                <span class="material-symbols-outlined">qr_code</span> {% if verify_url %}Regenerate QR{% else %}Generate QR{% endif %}
             </button>
         </div>
     </div>
@@ -236,7 +239,7 @@
                                         <strong>{{ req.student_name }}</strong> - {{ req.reason }}
                                         <small class="d-block text-muted">Issued: {{ req.decision_time | format_datetime }} | Period: {{ req.period }}</small>
                                     </div>
-                            <button type="button" class="btn btn-sm btn-primary" onclick="handlePassAction({{ req.id }}, 'leave')" {% if out_of_class %}disabled{% endif %}>
+                            <button type="button" class="btn btn-sm btn-primary" onclick="handlePassAction({{ req.id }}, 'leave')" {% if out_of_class|length >= out_limit %}disabled{% endif %}>
                                         <span class="material-symbols-outlined" style="font-size: 1rem;">logout</span> Left Class
                                     </button>
                                 </div>

@@ -222,6 +222,9 @@
                         <div class="page-header-actions">
                             {% if help_doc_path %}
                             {{ help.help_link(help_doc_path, text="Guide", tooltip="View guide") }}
+                            <a href="{{ docs_url_for('user-guides/diagnostics/student') }}" class="btn btn-link btn-sm" target="_blank" rel="noopener">
+                                Troubleshooting <span class="visually-hidden">(opens in a new tab)</span>
+                            </a>
                             {% endif %}
                         </div>
                     </div>

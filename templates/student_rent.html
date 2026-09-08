@@ -130,7 +130,7 @@
     </div>
     <div class="card-body student-theme">
         <div class="mb-3">
-            <p class="mb-1 text-muted"><strong>Monthly Rent:</strong></p>
+            <p class="mb-1 text-muted"><strong>{% if view.settings.frequency_type == 'daily' %}Daily Rent{% elif view.settings.frequency_type == 'weekly' %}Weekly Rent{% elif view.settings.frequency_type == 'custom' and view.settings.custom_frequency_value and view.settings.custom_frequency_unit %}Rent Every {{ view.settings.custom_frequency_value }} {{ view.settings.custom_frequency_unit }}{% else %}Monthly Rent{% endif %}:</strong></p>
             {% set expected_rent = view.settings.get('amount_expected') %}
             <div class="h3 text-primary mb-0">${{ "%.2f"|format(expected_rent if expected_rent else view.current_period.amount_due) }}</div>
         </div>

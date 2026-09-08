@@ -240,7 +240,7 @@
                 <td>{{ entitlement.store_item.name }}</td>
                 <td><small class="text-muted">{{ entitlement.purchased_at|fmt_timestamp if entitlement.purchased_at else 'N/A' }}</small></td>
                 <td>
-                  <small class="text-muted">-</small>
+                  <small class="text-muted">{{ entitlement.redemption_details or '-' }}</small>
                 </td>
                 <td>
                   <div class="d-flex gap-2">
@@ -346,8 +346,8 @@
                 </div>
               </div>
               <div class="text-end">
-                <span class="badge {{ 'bg-success' if item.is_active else 'bg-secondary' }}">{{ 'Active' if item.is_active else 'Inactive' }}</span>
-                {% if item.is_rent_linked or item.id in view.rent_managed_item_ids %}
+                <span class="badge {{ 'bg-success' if item.availability_state == 'IN_USE' else 'bg-secondary' }}">{{ 'Active' if item.availability_state == 'IN_USE' else 'Hidden' }}</span>
+                {% if item.product_lineage_uuid in view.rent_managed_item_ids %}
                   <span class="badge bg-info">Rent Perk</span>
                 {% endif %}
               </div>
@@ -357,10 +357,10 @@
                 {{ item.description|striptags|truncate(160) if item.description else 'No description provided.' }}
               </p>
 
-              {% if item.is_rent_linked or item.id in view.rent_managed_item_ids %}
+              {% if item.product_lineage_uuid in view.rent_managed_item_ids %}
               <div class="mb-2">
                 <span class="badge bg-info">Rent Perk</span>
-                <span class="text-muted small ms-1">Managed by rent settings</span>
+                <span class="text-muted small ms-1">Granted when a student pays rent, starting next cycle</span>
               </div>
               {% endif %}
 
@@ -382,14 +382,14 @@
               </div>
 
               <div class="text-muted small mb-3">
-                <div><strong>Inventory:</strong> {{ item.inventory if item.inventory is not none else 'Unlimited' }}</div>
+                <div><strong>Inventory:</strong> {{ item.inventory_total if item.inventory_total is not none else 'Unlimited' }}</div>
                 <div><strong>Limit per student:</strong> {{ item.limit_per_student if item.limit_per_student is not none else 'None' }}</div>
               </div>
 
               {% if item.item_type == 'collective' %}
               <div class="mb-3">
                 <div class="text-muted small mb-2"><strong>Collective Progress</strong></div>
-                {% set progress_rows = view.collective_progress_by_item.get(item.id, []) %}
+                {% set progress_rows = view.collective_progress_by_item.get(item.product_lineage_uuid, []) %}
                 {% if progress_rows %}
                   {% for row in progress_rows %}
                   <div class="mb-2">
@@ -429,21 +429,19 @@
             </div>
             <div class="card-footer bg-transparent border-0 pt-0">
               <div class="btn-group btn-group-sm" role="group">
-                <a href="{{ url_for('admin.edit_store_item', item_id=item.id) }}" class="btn btn-outline-primary" title="Edit">
+                {# Every control is keyed by the lineage, not by the version on
+                   sale: the teacher is acting on the product, and which row is
+                   current is the store's business. Rent-linked items are no
+                   longer exempt from withdrawal — rent does not own them. #}
+                <a href="{{ url_for('admin.edit_store_item', product_lineage_uuid=item.product_lineage_uuid) }}" class="btn btn-outline-primary" title="Edit">
                   <span class="material-symbols-outlined">edit</span>
                 </a>
-                {% if item.is_rent_linked or item.id in view.rent_managed_item_ids %}
-                    <button type="button" class="btn btn-outline-warning" disabled title="Managed by Rent Settings">
+                <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#deactivateItemModal" data-item-id="{{ item.product_lineage_uuid }}" data-item-name="{{ item.name }}" title="Withdraw">
                   <span class="material-symbols-outlined">visibility_off</span>
                 </button>
-                {% else %}
-                    <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#deactivateItemModal" data-item-id="{{ item.id }}" data-item-name="{{ item.name }}" title="Deactivate">
-                  <span class="material-symbols-outlined">visibility_off</span>
-                </button>
-                    <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteItemModal" data-item-id="{{ item.id }}" data-item-name="{{ item.name }}" title="Delete Permanently">
+                <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteItemModal" data-item-id="{{ item.product_lineage_uuid }}" data-item-name="{{ item.name }}" title="Delete Permanently">
                   <span class="material-symbols-outlined">delete</span>
                 </button>
-                {% endif %}
               </div>
             </div>
           </div>
@@ -557,6 +555,32 @@
                       {{ form.limit_per_student.label(class="form-label fw-bold") }}
                       {{ form.limit_per_student(class="form-control") }}
                       <small class="text-muted">Leave blank for no purchase limit</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Rent Link -->
+              <div class="card mb-3">
+                <div class="card-header bg-light">
+                  <h3 class="mb-0 h6"><span class="material-symbols-outlined me-2">key</span>Rent Link</h3>
+                </div>
+                <div class="card-body">
+                  <div class="form-check mb-3">
+                    {{ form.is_rent_linked(class="form-check-input", id="isRentLinkedCheck") }}
+                    {{ form.is_rent_linked.label(class="form-check-label fw-bold", **{'for': 'isRentLinkedCheck'}) }}
+                    <small class="d-block text-muted">A rent-linked item is handed to a student automatically when they pay their rent — they do not buy it.</small>
+                  </div>
+                  <div id="rentLinkedOptions" style="display: none;">
+                    <div class="row">
+                      <div class="col-md-6 mb-3">
+                        {{ form.rent_linked_quantity.label(class="form-label fw-bold") }}
+                        {{ form.rent_linked_quantity(class="form-control", placeholder="e.g., 1") }}
+                        <small class="text-muted">How many the student receives each time they pay rent.</small>
+                      </div>
+                    </div>
+                    <div class="alert alert-info mb-0">
+                      <small><span class="material-symbols-outlined me-2">schedule</span>Rent links take effect on the <strong>next</strong> rent cycle. Adding or removing one never changes a cycle already underway.</small>
                     </div>
                   </div>
                 </div>
@@ -906,7 +930,7 @@
     const deactivateForm = deactivateItemModal.querySelector('#deactivateItemForm');
 
     modalItemName.textContent = itemName;
-    deactivateForm.action = `/admin/store/delete/${itemId}`;
+    deactivateForm.action = `/admin/item/deactivate/${itemId}`;
   });
 
   // Delete modal handler
@@ -922,6 +946,18 @@
     modalItemName.textContent = itemName;
     deleteForm.action = `/admin/store/hard-delete/${itemId}`;
   });
+
+  // Toggle rent link options
+  const isRentLinkedCheck = document.getElementById('isRentLinkedCheck');
+  const rentLinkedOptions = document.getElementById('rentLinkedOptions');
+  if (isRentLinkedCheck && rentLinkedOptions) {
+    isRentLinkedCheck.addEventListener('change', function() {
+      rentLinkedOptions.style.display = this.checked ? 'block' : 'none';
+    });
+    if (isRentLinkedCheck.checked) {
+      rentLinkedOptions.style.display = 'block';
+    }
+  }
 
   // Toggle bundle options
   const isBundleCheck = document.getElementById('isBundleCheck');

@@ -24,10 +24,15 @@
             <div class="fw-semibold">${{ "%.2f"|format(cov.premium) }}
               <span class="text-muted fw-normal">/ {{ cov.charge_frequency|lower }} premium</span>
             </div>
+            {% if cov.waiting_period_days is not none and cov.waiting_period_days > 0 %}
+            <div class="text-muted small mt-1">Claims begin after {{ cov.waiting_period_days }} days.</div>
+            {% endif %}
             {% if cov.purchased_at %}
             <div class="text-muted small mt-1">Since {{ cov.purchased_at.strftime('%b %d, %Y') }}</div>
             {% endif %}
             <div class="d-flex gap-2 mt-3">
+              <a href="{{ url_for('student.view_policy', policy_uuid=cov.policy_uuid) }}"
+                 class="btn btn-outline-secondary btn-sm">View policy</a>
               <a href="{{ url_for('student.file_claim', policy_uuid=cov.policy_uuid) }}"
                  class="btn btn-outline-primary btn-sm">File a claim</a>
               <form method="POST" action="{{ url_for('student.cancel_insurance', policy_uuid=cov.policy_uuid) }}"
@@ -84,6 +89,8 @@
             {% else %}
             <form method="POST" action="{{ url_for('student.purchase_insurance', policy_uuid=policy.policy_uuid) }}" class="d-inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <label class="visually-hidden" for="insurance-passphrase-{{ policy.policy_uuid }}">Passphrase to buy {{ policy.title }}</label>
+              <input type="password" class="form-control form-control-sm mb-2" id="insurance-passphrase-{{ policy.policy_uuid }}" name="passphrase" autocomplete="current-password" placeholder="Passphrase" required />
               <button type="submit" class="btn btn-primary btn-sm" onclick="this.disabled=true;this.form.submit();">
                 Buy — ${{ "%.2f"|format(policy.premium) }}
               </button>
@@ -123,6 +130,9 @@
               {% if policy.claim_window_days is not none %}
               <li>File within {{ policy.claim_window_days }} days of an incident</li>
               {% endif %}
+              {% if policy.waiting_period_days is not none and policy.waiting_period_days > 0 %}
+              <li>Coverage waiting period: {{ policy.waiting_period_days }} days</li>
+              {% endif %}
             </ul>
             <div class="mt-auto">
               {% if policy.owned %}
@@ -130,6 +140,8 @@
               {% else %}
               <form method="POST" action="{{ url_for('student.purchase_insurance', policy_uuid=policy.policy_uuid) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <label class="visually-hidden" for="insurance-passphrase-{{ policy.policy_uuid }}">Passphrase to buy {{ policy.title }}</label>
+                <input type="password" class="form-control mb-2" id="insurance-passphrase-{{ policy.policy_uuid }}" name="passphrase" autocomplete="current-password" placeholder="Passphrase" required />
                 <button type="submit" class="btn btn-primary w-100"
                         onclick="this.disabled=true;this.form.submit();">
                   Buy — ${{ "%.2f"|format(policy.premium) }} now

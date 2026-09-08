@@ -153,17 +153,16 @@
                         <div class="mb-3">
                             <label for="status" class="form-label">Status</label>
                             <select class="form-select" id="status" name="status" required>
-                                <option value="new" {% if report.status == 'new' %}selected{% endif %}>New</option>
-                                <option value="reviewed" {% if report.status == 'reviewed' %}selected{% endif %}>Reviewed</option>
-                                <option value="closed" {% if report.status == 'closed' %}selected{% endif %}>Closed</option>
-                                <option value="spam" {% if report.status == 'spam' %}selected{% endif %}>Spam</option>
+                                <option value="OPEN" {% if report.status == 'OPEN' %}selected{% endif %}>Open</option>
+                                <option value="DEV_RESOLVED" {% if report.status == 'DEV_RESOLVED' %}selected{% endif %}>Resolved</option>
+                                <option value="CLOSED" {% if report.status == 'CLOSED' %}selected{% endif %}>Closed</option>
                             </select>
                         </div>
 
                         <div class="mb-3">
                             <label for="admin_notes" class="form-label">Admin Notes</label>
                             <textarea class="form-control" id="admin_notes" name="admin_notes" rows="4"
-                                      placeholder="Add notes about this report...">{{ report.admin_notes or '' }}</textarea>
+                                      placeholder="Add notes about this report...">{{ report.sysadmin_notes or '' }}</textarea>
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100">

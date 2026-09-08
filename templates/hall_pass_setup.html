@@ -374,11 +374,16 @@
 
             // Add to data
             const newPassType = {
-                name: name,
-                queue_limit: queueLimitValue,
-                simultaneous_limit: simultaneousLimitValue,
+                pass_name: name,
+                max_queue: queueLimitValue === null ? 0 : queueLimitValue,
+                consume_pass: true,
                 enabled: document.getElementById('masterToggle').checked
             };
+            // The API has one authoritative per-destination limit. The legacy
+            // simultaneous field is display-only and is not serialized.
+            newPassType.name = name;
+            newPassType.queue_limit = queueLimitValue;
+            newPassType.simultaneous_limit = simultaneousLimitValue;
             passTypesData.push(newPassType);
 
             // Render
@@ -572,7 +577,13 @@
 
             // Note: Total limits are displayed for teacher reference but are not enforced in the backend yet.
             // Pass types are saved with their individual limits. Global total enforcement is a future enhancement.
-            const passTypesToSave = passTypesData.map(pt => ({ ...pt }));
+            const passTypesToSave = passTypesData.map(pt => ({
+                pass_name: pt.pass_name || pt.name,
+                max_queue: Number.isInteger(pt.max_queue)
+                    ? pt.max_queue
+                    : (pt.queue_limit === null || pt.queue_limit === undefined ? 0 : pt.queue_limit),
+                consume_pass: pt.consume_pass !== false
+            }));
 
             const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             const hallPassEnabled = document.getElementById('masterToggle').checked;
@@ -585,7 +596,7 @@
                 },
                 body: JSON.stringify({
                     hall_pass_enabled: hallPassEnabled,
-                    pass_types: passTypesToSave
+                    pass_type_payload: passTypesToSave
                 })
             })
             .then(response => response.json())
@@ -617,7 +628,13 @@
                         data.hall_pass_enabled ? 'Currently enabled' : 'Currently disabled';
 
                     // Load pass types
-                    passTypesData = data.pass_types || [];
+                    passTypesData = (data.pass_type_payload || []).map(pt => ({
+                        ...pt,
+                        name: pt.pass_name,
+                        queue_limit: pt.max_queue,
+                        simultaneous_limit: pt.max_queue,
+                        enabled: true
+                    }));
 
                     // Render
                     renderPassTypes();

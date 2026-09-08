@@ -144,7 +144,7 @@
             <span class="material-symbols-outlined me-1">history</span>Attendance
         </button>
     </li>
-    {% if global_rent_enabled and student.is_rent_enabled %}
+    {% if student.is_rent_enabled %}
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="housing-tab" data-bs-toggle="tab" data-bs-target="#housing" type="button"
             role="tab" aria-controls="housing" aria-selected="false">
@@ -207,7 +207,7 @@
                                     {% endif %}
                                 </td>
                             </tr>
-                            {% if global_rent_enabled and student.is_rent_enabled %}
+                            {% if student.is_rent_enabled %}
                             <tr>
                                 <td class="fw-bold">Housing:</td>
                                 <td><span class="badge bg-secondary">Renter</span></td>
@@ -293,13 +293,6 @@
                                             <span class="font-monospace fs-5 user-select-all">{{ code }}</span>
                                         </div>
                                         {% endfor %}
-                                    </div>
-                                    <div class="col-12 mt-2">
-                                        <div class="small text-muted fst-italic">
-                                            <span class="material-symbols-outlined me-1">info</span>Student must also
-                                            enter their
-                                            <strong>Date of Birth</strong> as recorded in your roster.
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -387,7 +380,7 @@
                         </thead>
                         <tbody>
                             {% for tx in transactions %}
-                            <tr {% if tx.is_void %}class="table-secondary text-decoration-line-through" {% endif %}>
+                            <tr {% if tx.status.value == 'void' %}class="table-secondary text-decoration-line-through" {% endif %}>
                                 <td>
                                     {% if tx.timestamp %}
                                     {{ tx.timestamp|fmt_timestamp }}
@@ -404,14 +397,14 @@
                                 </td>
                                 <td>{{ tx.description or 'N/A' }}</td>
                                 <td>
-                                    {% if tx.is_void %}
+                                    {% if tx.status.value == 'void' %}
                                     <span class="badge bg-secondary">Voided</span>
                                     {% else %}
                                     <span class="badge bg-success">Active</span>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if not tx.is_void and tx.type != 'refund' %}
+                                    {% if tx.status.value != 'void' and tx.type != 'refund' %}
                                     <button type="button" class="btn btn-sm btn-outline-danger void-btn" data-id="{{ tx.id }}">
                                         <span class="material-symbols-outlined">cancel</span> Void
                                     </button>
@@ -561,7 +554,7 @@
     </div>
 
     <!-- RENT TAB (Only if rent enabled globally and for student) -->
-    {% if global_rent_enabled and student.is_rent_enabled %}
+    {% if student.is_rent_enabled %}
     <div class="tab-pane fade" id="housing" role="tabpanel" aria-labelledby="housing-tab">
         <div class="row">
             <!-- Rent Card -->
