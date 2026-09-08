@@ -1860,3 +1860,120 @@ class TestProductivityAdjudicationAtomicity:
                 class_id=classroom.class_id
             ).all()
             assert events == []
+
+
+def _make_non_monetary_policy(classroom, *, waiting_period_days: int) -> str:
+    """Create an immutable NON_MONETARY policy row; return its policy_uuid."""
+    row = insurance_defs.create_insurance_definition(
+        class_id=classroom.class_id,
+        actor_seat_id=classroom.teacher_seat_id,
+        definition={
+            "insurance_type": "NON_MONETARY",
+            "premium": "10.00",
+            "charge_frequency": "WEEKLY",
+            "claims_per_week_equivalent": "3",
+            "waiting_period_days": waiting_period_days,
+            "title": "Homework Pass Coverage",
+        },
+    )
+    return row.policy_uuid
+
+
+def _grant_non_monetary(classroom, student, entitlement_id, *, waiting_period_days, days_ago=0):
+    """GRANT a NON_MONETARY entitlement whose purchase happened ``days_ago`` days back."""
+    policy_uuid = _make_non_monetary_policy(
+        classroom, waiting_period_days=waiting_period_days
+    )
+    granted_event = EntitlementEvent(
+        event_id=str(uuid4()),
+        class_id=classroom.class_id,
+        entitlement_id=entitlement_id,
+        target_seat_id=student.seat.id,
+        actor_seat_id=student.seat.id,
+        product_id=None,
+        entitlement_type="INSURANCE",
+        acquisition_type="PURCHASE",
+        event_type="GRANTED",
+        payload={"policy_uuid": policy_uuid},
+        timestamp=datetime.now(timezone.utc) - timedelta(days=days_ago),
+    )
+    db.session.add(granted_event)
+    db.session.flush()
+    return granted_event
+
+
+class TestNonMonetaryWaitingPeriod:
+    """The NON_MONETARY waiting period delays when coverage becomes claimable."""
+
+    @staticmethod
+    def _student_context(classroom, student):
+        return CanonicalContext(
+            user_id=student.user.id,
+            class_id=classroom.class_id,
+            seat_id=student.seat.id,
+            actor_role="student",
+        )
+
+    def test_claim_inside_waiting_period_is_rejected(self, app):
+        """A claim filed before the wait elapses fails WAITING_PERIOD_NOT_ELAPSED."""
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+
+        with app.app_context():
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="waiting-period:inside"):
+                _grant_non_monetary(
+                    classroom, student, entitlement_id, waiting_period_days=7
+                )
+
+            result = submit_insurance_claim(
+                canonical_context=self._student_context(classroom, student),
+                entitlement_id=entitlement_id,
+                claim_subject={"reason": "filed minutes after purchase"},
+            )
+
+            assert result.success is False
+            assert result.error_code == "WAITING_PERIOD_NOT_ELAPSED"
+            assert db.session.query(InsuranceClaim).filter_by(
+                entitlement_id=entitlement_id
+            ).all() == []
+
+    def test_claim_after_waiting_period_is_accepted(self, app):
+        """Once the wait has elapsed the same claim is admitted."""
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+
+        with app.app_context():
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="waiting-period:elapsed"):
+                _grant_non_monetary(
+                    classroom, student, entitlement_id, waiting_period_days=3, days_ago=5
+                )
+
+            result = submit_insurance_claim(
+                canonical_context=self._student_context(classroom, student),
+                entitlement_id=entitlement_id,
+                claim_subject={"reason": "filed after the wait"},
+            )
+
+            assert result.success is True, result.error_message
+
+    def test_zero_waiting_period_is_immediately_claimable(self, app):
+        """A 0-day wait (Premium preset) leaves coverage effective at purchase."""
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+
+        with app.app_context():
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="waiting-period:zero"):
+                _grant_non_monetary(
+                    classroom, student, entitlement_id, waiting_period_days=0
+                )
+
+            result = submit_insurance_claim(
+                canonical_context=self._student_context(classroom, student),
+                entitlement_id=entitlement_id,
+                claim_subject={"reason": "no wait configured"},
+            )
+
+            assert result.success is True, result.error_message

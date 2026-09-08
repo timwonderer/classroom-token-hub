@@ -8,7 +8,9 @@ students cannot access those routes even via direct URL.
 import pytest
 
 from app.extensions import db
-from app.models import ClassFeature, StoreItem
+from app.models import ClassFeature, StoreProduct
+from app.services.store_service import IN_USE
+from tests.helpers.store_products import publish_store_product
 from app.feats.base import FEATContext
 from tests.helpers.class_domain import disable_class_feature, enable_class_feature
 from tests.helpers.classroom_initializer import initialize_as_student, initialize_as_teacher
@@ -195,29 +197,31 @@ def test_DOM_CLASS_001__admin_payroll_rejects_disabled_class_scope(client):
 
 
 def test_DOM_CLASS_001__admin_store_delete_rejects_disabled_class_scope(client):
+    """A disabled store closes the whole surface, deletion included.
+
+    The scope gate runs before the route resolves the product, so a class with
+    the store turned off cannot reach its own catalog even to destroy it.
+    """
     classroom_b = initialize_as_teacher("ap_csp_p3", client, client.application)
     disable_class_feature(class_id=classroom_b.class_id, feature='store')
     db.session.commit()
     with FEATContext("FEAT-SETTINGS-001", idempotency_key=f"feature_flag_enforcement:store_item:{classroom_b.class_id}"):
-        store_item = StoreItem(
-            user_id=classroom_b.teacher_user.id,
+        product = publish_store_product(
             class_id=classroom_b.class_id,
+            entitlement_type="IMMEDIATE_USE",
+            user_id=classroom_b.teacher_user.id,
             name="Pencil",
             description="Simple item",
-            price=1,
-            item_type='immediate',
-            is_active=True,
+            price="1.00",
         )
-        db.session.add(store_item)
-        db.session.flush()
     response = client.post(
-        f'/admin/store/delete/{store_item.id}',
+        f'/admin/store/hard-delete/{product.product_lineage_uuid}',
         data={'join_code': 'STD2'},
         follow_redirects=False,
     )
     assert response.status_code == 404
-    db.session.refresh(store_item)
-    assert store_item.is_active is True
+    survivor = db.session.query(StoreProduct).filter_by(policy_uuid=product.policy_uuid).one()
+    assert survivor.availability_state == IN_USE
 
 
 def test_DOM_CLASS_001__student_rent_rejects_disabled_class_scope(client):

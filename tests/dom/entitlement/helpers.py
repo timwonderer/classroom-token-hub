@@ -12,8 +12,8 @@ from decimal import Decimal
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.models import StoreItem
-from app.services.store_service import set_item_visibility
+from app.services.store_service import IN_USE, set_product_visibility
+from tests.helpers.store_products import publish_store_product
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import (
     initialize_as_student,
@@ -42,10 +42,15 @@ def enable_store_feature_for_class(class_id: str) -> None:
             db.session.info.pop("feat_orchestrator_commit", None)
 
 
-def set_entitlement_item_visibility(store_item_id: int, seat_ids: list[int]) -> None:
-    """Replace store-item visibility grants for one item."""
-    with FEATContext("FEAT-STOR-001", idempotency_key=f"entitlement:set-visibility:{store_item_id}"):
-        set_item_visibility(store_item_id, seat_ids)
+def set_entitlement_item_visibility(product_lineage_uuid: str, seat_ids: list[int]) -> None:
+    """Replace visibility grants for one product.
+
+    Visibility is keyed by lineage, not by version: hiding a product from a seat
+    is a statement about the product, and it would be absurd for an edit to
+    silently re-expose it.
+    """
+    with FEATContext("FEAT-STOR-001", idempotency_key=f"entitlement:set-visibility:{product_lineage_uuid}"):
+        set_product_visibility(product_lineage_uuid, seat_ids)
 
 
 def create_entitlement_store_item(
@@ -54,33 +59,33 @@ def create_entitlement_store_item(
     class_id: str,
     name: str,
     price: Decimal,
-    item_type: str = "delayed",
-    collective_goal_type: str | None = None,
-    collective_goal_target: int | None = None,
-    is_active: bool = True,
-    collective_goal_instance_code: str | None = None,
+    entitlement_type: str = "DELAYED_USE",
+    availability_state: str = IN_USE,
+    **definition,
 ):
-    """Create one entitlement store item under the FEAT mutation boundary."""
+    """Publish one live product version under the FEAT mutation boundary.
+
+    Returns the detached snapshot ``publish_store_product`` produces, which
+    carries both identifiers: ``policy_uuid`` (the version a purchase resolves
+    against) and ``product_lineage_uuid`` (the product entitlement history and
+    visibility key off).
+    """
     with FEATContext("FEAT-STOR-001", idempotency_key=f"entitlement:create-item:{class_id}:{name}"):
-        item = StoreItem(
-            user_id=teacher_id,
+        product = publish_store_product(
             class_id=class_id,
+            entitlement_type=entitlement_type,
+            user_id=teacher_id,
             name=name,
-            price=price,
-            item_type=item_type,
-            collective_goal_type=collective_goal_type,
-            collective_goal_target=collective_goal_target,
-            is_active=is_active,
-            collective_goal_instance_code=collective_goal_instance_code,
+            price=str(price),
+            availability_state=availability_state,
+            **definition,
         )
-        db.session.add(item)
-        db.session.flush()
         db.session.info["feat_orchestrator_commit"] = True
         try:
             db.session.commit()
         finally:
             db.session.info.pop("feat_orchestrator_commit", None)
-        return item
+        return product
 
 
 def purchase_entitlement_item(client, *, policy_uuid: str, passphrase: str, quantity: int = 1, client_purchase_id: str | None = None):

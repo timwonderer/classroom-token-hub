@@ -9,7 +9,7 @@ from app.services.ledger_settlement_service import settle_balances
 from app.services.ledger_command_service import create_idempotent_transaction
 from app.services.ledger_posting_service import create_pending_transaction
 from app.services.ledger_transfer_service import create_transfer_pair
-from app.services.ledger_correction_service import compensate_posted_transaction
+from app.services.ledger_correction_service import reverse_transaction
 from app.services.ledger_interest_service import apply_monthly_savings_interest
 from app.services.ledger_fee_service import apply_overdraft_fee_if_needed
 from tests.helpers.classroom_initializer import (
@@ -125,7 +125,7 @@ def compensate_ledger_posted_transaction(
     compensation_type: str = "refund",
     idempotency_key: str | None = None,
 ):
-    return compensate_posted_transaction(
+    return reverse_transaction(
         transaction,
         description=description,
         compensation_type=compensation_type,

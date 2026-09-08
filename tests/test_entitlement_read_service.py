@@ -8,10 +8,10 @@ from app.extensions import db
 from app.feats.base import FEATContext
 from app.models import EntitlementEvent
 from app.services.entitlement_read_service import get_hall_pass_balance
-from app.services.store_policy_resolver import StorePolicyResolver
 from app.feats.direct_entitlement_grant_feat import execute_direct_grant
 from app.services.context_resolver import CanonicalContext
 from tests.helpers.canonical_classroom import provision_classroom
+from tests.helpers.store_products import publish_store_product
 
 
 @pytest.fixture
@@ -19,16 +19,10 @@ def classroom(app):
     with app.app_context():
         classroom = provision_classroom("chemistry_p1")
         with FEATContext("FEAT-TEST-SETUP", idempotency_key="phase5-read-service:policy"):
-            policy = StorePolicyResolver.create_store_product(
+            policy = publish_store_product(
                 class_id=classroom.class_id,
-                payload={
-                    "product_id": 501,
-                    "is_purchasable": True,
-                    "supports_direct_grants": True,
-                    "price": "0.00",
-                    "entitlement_type": "HALL_PASS",
-                    "name": "Hall Pass",
-                },
+                entitlement_type="HALL_PASS",
+                name="Hall Pass",
                 created_by_seat_id=classroom.teacher_seat_id,
             )
         db.session.commit()

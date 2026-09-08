@@ -60,9 +60,9 @@ def test_column_exists_helper(test_db):
 
 
 def test_migration_1ef03001fb2a_idempotency(test_db):
-    """Test that migration 1ef03001fb2a can detect existing columns."""
+    """Test that the canonical store table exposes the migrated owner column."""
     inspector = inspect(db.engine)
-    columns = [col["name"] for col in inspector.get_columns("store_items")]
+    columns = [col["name"] for col in inspector.get_columns("store_products")]
     assert "user_id" in columns
     assert "teacher_id" not in columns
 

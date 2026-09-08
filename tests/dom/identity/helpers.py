@@ -27,13 +27,13 @@ def student_login_next(
     client: FlaskClient,
     *,
     username: str,
-    pin: str,
+    passphrase: str,
     next_path: str,
     follow_redirects: bool = False,
 ):
     return client.post(
         f"/student/login?next={next_path}",
-        data={"username": username, "pin": pin},
+        data={"username": username, "passphrase": passphrase},
         follow_redirects=follow_redirects,
     )
 
