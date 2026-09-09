@@ -54,7 +54,7 @@ and this project follows semantic versioning principles.
 
 - **Repaired the Alembic revision graph (2026-09-08)** — Assigned the hall-pass migration a unique revision ID, restored a single migration head, and updated the identity redirect test to use the canonical passphrase login contract.
 
-- **Formalized the student credential boundary (2026-09-08)** — Passphrases now authenticate login and irreversible expense actions; PINs protect non-monetary or reversible actions, including transfers between checking and savings. Runtime prompts and student guides were aligned with the `FEAT-IDEN-002` matrix.
+- **Formalized the student credential boundary (2026-09-08)** — Passphrases now authenticate login and irreversible expense actions; PINs protect non-monetary or reversible actions, including transfers between checking and savings. Runtime prompts and student guides were aligned with the `FEAT-IDEN-002` matrix, including the insurance guide, which still described buying as a single unauthenticated click.
 
 - **Completed Redemption Audit outcome filtering (2026-09-08)** — The store audit now derives its visible action from the retained request outcome and correctly filters `REQUEST`, `APPROVED`, and `REJECTED` history.
 
