@@ -1002,11 +1002,15 @@ def update_hall_pass_settings():
         return jsonify({"status": "error", "message": "Class context is required"}), 400
 
     data = request.get_json() or {}
+    if (not isinstance(data, dict) or set(data) != {"max_queue_limit"}
+            or type(data["max_queue_limit"]) is not int
+            or not 1 <= data["max_queue_limit"] <= 50):
+        return jsonify({"status": "error", "message": "Out Limit must be a whole number between 1 and 50."}), 400
     try:
         settings = feat_update_hall_pass_queue_settings(
             user_id=context.user_id if context else None,
             class_id=class_id,
-            max_queue_limit=data.get("max_queue_limit", 10),
+            max_queue_limit=data["max_queue_limit"],
             updated_at=utc_now(),
             correlation_id=f"corr_settings_queue_{uuid.uuid4().hex}",
             idempotency_key=f"feat:settings:hall-pass-queue:{context.user_id}:{class_id}:{uuid.uuid4().hex}",

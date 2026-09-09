@@ -10,6 +10,8 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 
+- **Hall Pass Out Limit saves and reloads the selected value (2026-09-08)** — The management page now uses `max_queue_limit` consistently with the settings API. Removed the unsupported granting switch, rejected missing or invalid save values instead of silently saving 10, and updated the teacher guide.
+
 - **Hall Pass Configure component cleanup (2026-09-08)** — Removed conditional page shells and duplicate dependencies from the configuration component, restored CTH section headers in the tab, and aligned accessible limit names and teacher guidance with approval checks. Payroll troubleshooting now directs teachers to Support for incorrect posted payments instead of editing immutable attendance history. Focused rendering checks are recorded separately from browser accessibility certification.
 
 - **Reversals now persist the canonical ledger type and refuse a second application (2026-09-08)** — A compensating transaction records `REVERSAL` in `type` per `FEAT-LED-002` §III.2.1, with the business reason moved to the new `ledger_transaction.compensation_subtype` column. `reverse_transaction` also runs the reversal-authorization guard before any ledger mutation and rejects reversing a transaction that already carries one, so `INV-LED-013` / `INV-OPS-005` hold for every caller rather than per-caller.

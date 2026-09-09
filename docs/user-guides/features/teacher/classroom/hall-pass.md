@@ -23,11 +23,12 @@ related:
 
 Above the tabs sits a compact settings row:
 
-- **Hall Pass Granting** — the queue switch. Off means new requests cannot be issued; enable Hall Pass itself from **Class Tools → Economy Features**.
 - **Out Limit** — how many students may be out at once (1–50).
 - **Configure** — opens the configuration tab within Hall Pass Management.
 
 Changes here save as you make them; a green **Saved!** badge confirms it.
+
+Enable or disable Hall Pass from **Class Tools → Economy Features**. The Out Limit control becomes available after the saved setting loads. If loading or saving fails, the page displays an error; reload to check the saved value before trying again.
 
 ### Working the four tabs
 
