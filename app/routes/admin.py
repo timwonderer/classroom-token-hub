@@ -4327,7 +4327,14 @@ def edit_student():
 @admin_required
 def delete_student():
     """Remove a student from this teacher and delete fully if no links remain."""
-    current_app.logger.info(f"Delete student route accessed. Method: {request.method}, Form data: {dict(request.form)}")
+    # Log which fields arrived, never their values: this form carries the CSRF
+    # token, and a whole-form dump puts a session-bound secret in an unencrypted
+    # log (.claude/rules/security.md, "NEVER commit secrets ... ALWAYS use CSRF").
+    current_app.logger.info(
+        "Delete student route accessed. method=%s form_keys=%s",
+        request.method,
+        sorted(request.form.keys()),
+    )
 
     # If GET request, show error and redirect (for debugging)
     if request.method == 'GET':
@@ -4366,9 +4373,13 @@ def delete_student():
         else:
             flash(f"Removed {student_name} from this class. Student still exists in other linked classes.", "success")
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        current_app.logger.error(f"Error deleting student {student_name}")
+        # Never log the identity profile name here. It is decrypted PII and
+        # application logs are unencrypted and routinely shipped off-host
+        # (INV-ARC-005; .claude/rules/security.md "Sensitive Data Exposure").
+        # The seat id locates the record without exposing the student.
+        current_app.logger.exception("Error deleting student seat_id=%s", seat_id)
         flash("Cannot delete student due to internal error", "error")
 
     return redirect(url_for('admin.students'))

@@ -10,7 +10,7 @@
 
 **Status: ❌ REJECTED (MANDATORY criteria failures — Branch is behind base branch)**
 
-A full domain reconstruction QA audit has been performed on the `obligatin-domain-rewire` branch at commit `a73d96db` using the checklist structure defined in [SOP-DEV-002a_DOMAIN_RECONSTRUCTION_QA_AUDIT.md](file:///Users/timothychang/Documents/GitHub/classroom-economy/docs/STANDARD_OPERATING_PROCEDURES/DEVOPS/SOP-DEV-002a_DOMAIN_RECONSTRUCTION_QA_AUDIT.md). 
+A full domain reconstruction QA audit has been performed on the `obligatin-domain-rewire` branch at commit `a73d96db` using the checklist structure defined in [SOP-DEV-002a_DOMAIN_RECONSTRUCTION_QA_AUDIT.md](file://docs/STANDARD_OPERATING_PROCEDURES/DEVOPS/SOP-DEV-002a_DOMAIN_RECONSTRUCTION_QA_AUDIT.md). 
 
 All code, schema definitions, multi-tenancy enforcement, and unit tests have been audited. The obligations domain has been successfully reconstructed in accordance with DOM-OBL-001. All 9 obligations unit tests pass successfully. 
 

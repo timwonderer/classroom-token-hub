@@ -48,7 +48,7 @@ flask db merge heads -m "Merge migration heads"
 
 # Test the merge
 flask db upgrade
-flask db downgrade
+flask db downgrade <revision>   # bare form aborts on a merge head
 flask db upgrade
 
 # Now you have a single head and can proceed
@@ -261,7 +261,15 @@ flask db upgrade
 ### Step 10: Test the Downgrade
 
 ```bash
-flask db downgrade
+# Pass the target revision explicitly. A bare `flask db downgrade` walks back
+# from the current head, and when that head is a merge point (two parents) it
+# cannot choose between them and aborts with:
+#
+#     ERROR [flask_migrate] Error: Ambiguous walk
+#
+# The head is a merge point today, so the bare form does not work. Get the
+# revision to step back to from `flask db history`.
+flask db downgrade <revision>
 ```
 
 **Check:**
@@ -464,7 +472,7 @@ If migrations are out of order:
 flask db migrate -m "Fix migration chain issue"
 # Review and test
 flask db upgrade
-flask db downgrade
+flask db downgrade <revision>   # bare form aborts on a merge head
 flask db upgrade
 pytest tests/
 ```
@@ -564,8 +572,13 @@ pytest tests/test_critical.py
 If something goes wrong:
 
 ```bash
-# Downgrade to previous version
-flask db downgrade
+# Downgrade to a named revision. Do NOT use a bare `flask db downgrade` here:
+# when the current head is a merge point it aborts with "Ambiguous walk" and
+# nothing is rolled back. Read the target off `flask db history` first, and
+# confirm it afterwards with `flask db current`.
+flask db history          # identify the revision to return to
+flask db downgrade <revision>
+flask db current          # verify the database landed where you intended
 
 # Or restore from backup
 psql classroom_economy < backup_YYYYMMDD_HHMMSS.sql
@@ -624,8 +637,8 @@ python scripts/lint_migrations.py migrations/versions/abc123*.py
 # Apply migrations
 flask db upgrade
 
-# Revert last migration
-flask db downgrade
+# Revert last migration (explicit target; bare form aborts on a merge head)
+flask db downgrade <revision>
 
 # Show current version
 flask db current
@@ -660,7 +673,7 @@ Every time you change database schema:
 9. ✅ Review generated migration file
 10. ✅ **RUN MIGRATION LINTER:** `python scripts/lint_migrations.py migrations/versions/abc*.py`
 11. ✅ Test upgrade: `flask db upgrade`
-12. ✅ Test downgrade: `flask db downgrade`
+12. ✅ Test downgrade: `flask db downgrade <revision>` (bare form aborts on a merge head)
 13. ✅ Re-upgrade: `flask db upgrade`
 14. ✅ **Verify single head:** `flask db heads` (still must show exactly 1)
 15. ✅ Run tests: `pytest tests/`

@@ -34,7 +34,7 @@ flask db heads          # Must show exactly 1 head
 flask db current        # Note current revision before generating
 flask db migrate -m "Add X to Y"
 flask db upgrade
-flask db downgrade      # Test rollback
+flask db downgrade <revision>   # Test rollback (bare form aborts: head is a merge point)
 flask db upgrade        # Re-apply
 
 # Start dev server

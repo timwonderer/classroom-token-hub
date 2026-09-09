@@ -8,7 +8,19 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Security
+
+- **Student PII no longer reaches the application log (2026-09-09)** — The failure path in `admin.delete_student` logged `identity_profile.full_name`, putting a decrypted student name into an unencrypted, off-host-shipped log in violation of `INV-ARC-005`. It now logs `seat_id` and uses `logger.exception`, so the traceback is kept and the student is not. The flash messages still name the student: those are shown to the authenticated teacher who owns the class, which is authorized display, not logging.
+
+- **CSRF token no longer reaches the application log (2026-09-09)** — The same route logged `dict(request.form)` wholesale on entry, which included the session-bound `csrf_token`. It now records the sorted field *names* only, keeping the diagnostic without the secret. Both leaks are covered by `tests/dom/identity/test_student_deletion_log_hygiene.py`, which asserts against real emitted log records and fails if either value returns.
+
+- **Removed a developer's local filesystem path from the public repository (2026-09-09)** — 129 occurrences of an absolute `/Users/<name>/...` path across five documents in `docs/` disclosed a maintainer's real name and local directory layout. Paths are now repository-relative, which also repairs the broken absolute markdown links in the archived route audits.
+
 ### Fixed
+
+- **Rollback instructions name an explicit revision (2026-09-09)** — The documented rollback and downgrade-test procedures called a bare `flask db downgrade`. The current migration head is a merge point with two parents, so that form aborts with `Ambiguous walk` and rolls nothing back. `.claude/rules/database-migrations.md` and the `CLAUDE.md` command reference now use `flask db downgrade <revision>` and say why. The CI schema gate already passed an explicit revision and was unaffected.
+
+- **Archived v1 attack-surface audit is marked as history (2026-09-09)** — `SEC-AUD-012` carried remediation shell that writes secrets into a `.env` file for a `deploy.yml` workflow that no longer exists, presented as normative guidance. It now opens with an archive banner stating it is v1 history, that its shell must not be run, and where the current secret-provisioning and security contracts live.
 
 - **Hall Pass setup has one UI surface (2026-09-08)** — Removed the obsolete standalone setup template, its admin route, and its endpoint mappings. Destinations are configured in Hall Pass Management's Configure tab; its setup API remains available.
 

@@ -11,6 +11,24 @@
 
 ---
 
+> ## ⚠️ ARCHIVED — v1 HISTORY, NOT AN INSTRUCTION
+>
+> This document audits the **v1** application and its `deploy.yml` workflow. Both are
+> gone. It lives under `docs/archive/`, which is superseded material — history only,
+> never authority (`.claude/rules/documentation.md`). The `Authority Level` in the
+> table above describes what this document was when written, not what it is now.
+>
+> **Do not run the shell in this document.** Its "Remediation Recommendations"
+> sections contain `.env`-writing and `chmod` snippets aimed at a deployment path
+> that no longer exists: v2 releases through `.github/workflows/release-v2.yml`,
+> which never writes an `.env` file. Secrets are provisioned out of band per
+> `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md`.
+>
+> For the current security contract read `.claude/rules/security.md` and
+> `docs/INVARIANT/ARCHITECTURE/INV-ARC-005_NO_PII_LEAKAGE_IN_EXECUTION_LAYER.md`.
+
+---
+
 ## Executive Summary
 
 This comprehensive security audit examined the entire attack surface of the Classroom Token Hub application, including CI/CD pipelines, application code, authentication mechanisms, data protection, and dependency management.

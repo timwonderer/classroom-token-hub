@@ -35,7 +35,7 @@
 
 ### `admin_recover.html`
 **Extends:** None (standalone HTML document)  
-**Route(s):** `admin.recover` - GET|POST `/admin/recover` - [app/routes/admin.py:3138](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:3138)
+**Route(s):** `admin.recover` - GET|POST `/admin/recover` - [app/routes/admin.py:3138](app/routes/admin.py:3138)
 
 **Variables from route:**
 
@@ -60,7 +60,7 @@
 
 ### `admin_recovery_saved.html`
 **Extends:** None (standalone HTML document)  
-**Route(s):** `admin.save_recovery_progress` - POST `/admin/save-recovery-progress` - [app/routes/admin.py:3517](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:3517)
+**Route(s):** `admin.save_recovery_progress` - POST `/admin/save-recovery-progress` - [app/routes/admin.py:3517](app/routes/admin.py:3517)
 
 **Variables from route:**
 
@@ -84,7 +84,7 @@
 
 ### `admin_recovery_status.html`
 **Extends:** None (standalone HTML document)  
-**Route(s):** `admin.recovery_status` - GET `/admin/recovery-status` - [app/routes/admin.py:3302](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:3302)
+**Route(s):** `admin.recovery_status` - GET `/admin/recovery-status` - [app/routes/admin.py:3302](app/routes/admin.py:3302)
 
 **Variables from route:**
 
@@ -120,7 +120,7 @@
 
 ### `admin_rent_settings.html`
 **Extends:** `layout_admin.html`  
-**Route(s):** `admin.rent_settings` - GET|POST `/admin/rent-settings` - [app/routes/admin.py:6498](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:6498)
+**Route(s):** `admin.rent_settings` - GET|POST `/admin/rent-settings` - [app/routes/admin.py:6498](app/routes/admin.py:6498)
 
 **Variables from route:**
 
@@ -181,7 +181,7 @@
 
 ### `admin_reset_credentials.html`
 **Extends:** None (standalone HTML document)  
-**Route(s):** `admin.reset_credentials` - GET|POST `/admin/reset-credentials` - [app/routes/admin.py:3341](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:3341)
+**Route(s):** `admin.reset_credentials` - GET|POST `/admin/reset-credentials` - [app/routes/admin.py:3341](app/routes/admin.py:3341)
 
 **Variables from route:**
 
@@ -218,7 +218,7 @@
 
 ### `admin_resume_credentials.html`
 **Extends:** None (standalone HTML document)  
-**Route(s):** `admin.resume_credentials` - GET|POST `/admin/resume-credentials` - [app/routes/admin.py:3565](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:3565)
+**Route(s):** `admin.resume_credentials` - GET|POST `/admin/resume-credentials` - [app/routes/admin.py:3565](app/routes/admin.py:3565)
 
 **Variables from route:** none required on render
 
@@ -236,7 +236,7 @@
 
 ### `admin_select_class_context.html`
 **Extends:** None (standalone HTML document)  
-**Route(s):** `admin.select_class_context` - GET|POST `/admin/select-class-context` - [app/routes/admin.py:2545](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:2545)
+**Route(s):** `admin.select_class_context` - GET|POST `/admin/select-class-context` - [app/routes/admin.py:2545](app/routes/admin.py:2545)
 
 **Variables from route:**
 
@@ -257,7 +257,7 @@
 
 ### `admin_settings.html`
 **Extends:** `layout_admin.html`  
-**Route(s):** `admin.settings` - GET|POST `/admin/settings` - [app/routes/admin.py:3611](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:3611)
+**Route(s):** `admin.settings` - GET|POST `/admin/settings` - [app/routes/admin.py:3611](app/routes/admin.py:3611)
 
 **Variables from route:**
 
@@ -285,7 +285,7 @@
 
 ### `admin_setup_recovery.html`
 **Extends:** None (standalone HTML document)  
-**Route(s):** `admin.setup_recovery` - GET|POST `/admin/setup-recovery` - [app/routes/admin.py:3601](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:3601)
+**Route(s):** `admin.setup_recovery` - GET|POST `/admin/setup-recovery` - [app/routes/admin.py:3601](app/routes/admin.py:3601)
 
 **Variables from route:** none
 
@@ -311,7 +311,7 @@
 
 ### `admin_signup.html`
 **Extends:** None (standalone HTML document)  
-**Route(s):** `admin.signup` - GET|POST `/admin/signup` - [app/routes/admin.py:2952](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:2952)
+**Route(s):** `admin.signup` - GET|POST `/admin/signup` - [app/routes/admin.py:2952](app/routes/admin.py:2952)
 
 **Variables from route:**
 
@@ -336,7 +336,7 @@
 
 ### `admin_signup_totp.html`
 **Extends:** None (standalone HTML document)  
-**Route(s):** `admin.signup` - GET|POST `/admin/signup` - [app/routes/admin.py:3031](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:3031), [app/routes/admin.py:3058](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:3058), [app/routes/admin.py:3087](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:3087)
+**Route(s):** `admin.signup` - GET|POST `/admin/signup` - [app/routes/admin.py:3031](app/routes/admin.py:3031), [app/routes/admin.py:3058](app/routes/admin.py:3058), [app/routes/admin.py:3087](app/routes/admin.py:3087)
 
 **Variables from route:**
 
@@ -363,7 +363,7 @@
 
 ### `admin_store.html`
 **Extends:** `layout_admin.html`  
-**Route(s):** `admin.store_management` - GET|POST `/admin/store` - [app/routes/admin.py:5275](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:5275), rendered at [app/routes/admin.py:5619](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:5619)
+**Route(s):** `admin.store_management` - GET|POST `/admin/store` - [app/routes/admin.py:5275](app/routes/admin.py:5275), rendered at [app/routes/admin.py:5619](app/routes/admin.py:5619)
 
 **Variables from route:**
 
@@ -412,7 +412,7 @@
 
 ### `admin_students.html`
 **Extends:** `layout_admin.html`  
-**Route(s):** `admin.students` - GET `/admin/students` - [app/routes/admin.py:3945](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:3945), rendered at [app/routes/admin.py:4114](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:4114)
+**Route(s):** `admin.students` - GET `/admin/students` - [app/routes/admin.py:3945](app/routes/admin.py:3945), rendered at [app/routes/admin.py:4114](app/routes/admin.py:4114)
 
 **Variables from route:**
 
@@ -454,7 +454,7 @@
 
 ### `admin_support_tickets.html`
 **Extends:** `layout_admin.html`  
-**Route(s):** `admin.help_support` - GET|POST `/admin/help-support` - [app/routes/admin.py:9571](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:9571), rendered at [app/routes/admin.py:9759](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:9759)
+**Route(s):** `admin.help_support` - GET|POST `/admin/help-support` - [app/routes/admin.py:9571](app/routes/admin.py:9571), rendered at [app/routes/admin.py:9759](app/routes/admin.py:9759)
 
 **Variables from route:**
 
@@ -488,7 +488,7 @@
 
 ### `admin_transactions.html`
 **Extends:** `layout_admin.html`  
-**Route(s):** `admin.transactions` - GET `/admin/transactions` - [app/routes/admin.py:6776](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:6776)
+**Route(s):** `admin.transactions` - GET `/admin/transactions` - [app/routes/admin.py:6776](app/routes/admin.py:6776)
 
 **Status:** route redirects to `admin.banking` and never renders this template.
 
@@ -506,7 +506,7 @@
 
 ### `admin_username_migration.html`
 **Extends:** `layout_admin.html`  
-**Route(s):** `admin.username_migration` - GET|POST `/admin/username-migration` - [app/routes/admin.py:2879](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:2879), rendered at [app/routes/admin.py:2944](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:2944)
+**Route(s):** `admin.username_migration` - GET|POST `/admin/username-migration` - [app/routes/admin.py:2879](app/routes/admin.py:2879), rendered at [app/routes/admin.py:2944](app/routes/admin.py:2944)
 
 **Variables from route:**
 
@@ -529,7 +529,7 @@
 
 ### `admin_view_issue.html`
 **Extends:** `layout_admin.html`  
-**Route(s):** `admin.view_issue` - GET `/admin/issues/<issue_ref>` - [app/routes/admin.py:11033](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:11033), rendered at [app/routes/admin.py:11052](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:11052)
+**Route(s):** `admin.view_issue` - GET `/admin/issues/<issue_ref>` - [app/routes/admin.py:11033](app/routes/admin.py:11033), rendered at [app/routes/admin.py:11052](app/routes/admin.py:11052)
 
 **Variables from route:**
 
@@ -567,7 +567,7 @@
 
 ### `admin_view_student_policy.html`
 **Extends:** `layout_admin.html`  
-**Route(s):** `admin.view_student_policy` - GET `/admin/insurance/student-policy/<enrollment_id>` - [app/routes/admin.py:6760](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:6760)
+**Route(s):** `admin.view_student_policy` - GET `/admin/insurance/student-policy/<enrollment_id>` - [app/routes/admin.py:6760](app/routes/admin.py:6760)
 
 **Status:** route aborts 404 before render; template is dead/orphaned.
 
@@ -589,7 +589,7 @@
 
 ### `student_detail.html`
 **Extends:** `layout_admin.html`  
-**Route(s):** `admin.student_detail_public` - GET `/admin/students/<actor_public_id>` - [app/routes/admin.py:4211](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:4211), rendered at [app/routes/admin.py:4394](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py:4394)
+**Route(s):** `admin.student_detail_public` - GET `/admin/students/<actor_public_id>` - [app/routes/admin.py:4211](app/routes/admin.py:4211), rendered at [app/routes/admin.py:4394](app/routes/admin.py:4394)
 
 **PROD status:** REWIRED_READ
 
