@@ -1,178 +1,7 @@
-{% if not embedded|default(false) %}<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Hall Pass Configuration</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
-
-    <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--background);
-            color: var(--text-primary);
-        }
-        .setup-container {
-            max-width: 1100px;
-            margin: 0 auto;
-            padding: 2rem 2.5rem 3rem;
-        }
-
-        /* Master toggle styling */
-        .master-toggle-container {
-            background: white;
-            border: 2px solid var(--border-color);
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .master-toggle-label {
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-        .master-toggle-status {
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-            margin-top: 0.25rem;
-        }
-
-        /* Pass type row styling */
-        .pass-type-row {
-            background: white;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
-        .pass-type-row.disabled {
-            opacity: 0.6;
-            background: var(--surface);
-        }
-        .pass-type-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 0.75rem;
-        }
-        .pass-type-name {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-        .pass-type-limits {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin-top: 0.5rem;
-        }
-        .limit-field {
-            display: flex;
-            flex-direction: column;
-        }
-        .limit-field label {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            margin-bottom: 0.25rem;
-        }
-        .limit-field input {
-            max-width: 150px;
-        }
-
-        /* Toggle switch styling */
-        .form-check-input {
-            width: 3rem;
-            height: 1.5rem;
-            cursor: pointer;
-        }
-        .form-check-input:disabled {
-            cursor: not-allowed;
-        }
-        /* Total fields styling */
-        .totals-container {
-            background: var(--surface);
-            border: 2px dashed var(--border-color);
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-top: 2rem;
-        }
-        .totals-header {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 1rem;
-        }
-        .total-field {
-            margin-bottom: 1rem;
-        }
-        .total-field label {
-            display: block;
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-            margin-bottom: 0.5rem;
-        }
-        .total-field input {
-            max-width: 200px;
-        }
-        .total-field input:disabled {
-            background: var(--border-color);
-            cursor: not-allowed;
-        }
-        .total-help-text {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            margin-top: 0.25rem;
-        }
-
-        /* Add pass type button */
-        .add-pass-type {
-            width: 100%;
-            border: 2px dashed var(--border-color);
-            background: white;
-            color: var(--text-secondary);
-            padding: 1rem;
-            border-radius: 8px;
-            transition: all 0.2s;
-            margin-bottom: 1rem;
-        }
-        .add-pass-type:hover {
-            border-color: var(--primary);
-            color: var(--primary);
-            background: var(--surface);
-        }
-
-        .info-text {
-            color: var(--text-secondary);
-            font-size: 0.875rem;
-        }
-
-        .cth-section-header { background: var(--primary); color: #fff; }
-        .cth-section-header h2 { color: inherit; }
-        @media (max-width: 768px) {
-            .setup-container { padding: 1.25rem 1rem 2rem; }
-            .setup-page-header { align-items: flex-start !important; flex-direction: column; gap: 1rem; }
-            .pass-type-limits { grid-template-columns: 1fr; }
-        }
-
-        /* Tooltip styling */
-        .tooltip-inner {
-            background-color: var(--text-primary);
-            font-size: 0.85rem;
-        }
-        .tooltip.bs-tooltip-top .tooltip-arrow::before {
-            border-top-color: var(--text-primary);
-        }
-    </style>
-</head>{% endif %}
 <style>
-/* Component styles are also required when this template is embedded in Hall Pass Management. */
+/* Styles belong to the configuration component in both supported surfaces. */
+.setup-container .cth-section-header { background: var(--primary); color: #fff; }
+.setup-container .cth-section-header h2 { color: inherit; }
 .setup-container { max-width: 1100px; margin: 0 auto; padding: 2rem 2.5rem 3rem; }
 .pass-type-row { background: white; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
 .pass-type-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .75rem; }
@@ -190,25 +19,7 @@
 .total-help-text { font-size: .8rem; color: var(--text-secondary); margin-top: .25rem; }
 @media (max-width: 768px) { .setup-container { padding: 1.25rem 1rem 2rem; } }
 </style>
-{% if not embedded|default(false) %}<body>
-    <main id="main-content" aria-labelledby="hall-pass-configuration-heading">{% endif %}
-    <div class="setup-container">
-        {% if not embedded|default(false) %}
-        <div class="setup-page-header d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <div class="eyebrow">Classroom Token Hub</div>
-                <h1 id="hall-pass-configuration-heading" class="mb-2">
-                    <span class="material-symbols-outlined align-middle" aria-hidden="true">settings</span>
-                    Hall Pass Configuration
-                </h1>
-                <p class="text-muted">Configure pass types, limits, and availability for your classroom.</p>
-            </div>
-            <a href="{{ url_for('admin.hall_pass') }}" class="btn btn-outline-secondary{% if embedded|default(false) %} d-none{% endif %}">
-                <span class="material-symbols-outlined align-middle">arrow_back</span>
-                Back to Hall Passes
-            </a>
-        </div>
-        {% endif %}
+<div class="setup-container">
 
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-header cth-section-header">
@@ -217,7 +28,7 @@
             <div class="card-body">
                 <ul class="mb-0">
                     <li><strong>Students Out At Once:</strong> Maximum number of students who may be out for this destination; 0 blocks the destination.</li>
-                    <li><strong>Total Students Out At Once:</strong> Display-only sum of the enabled destination limits.</li>
+                    <li><strong>Total Students Out At Once:</strong> Read-only sum of destination limits. Approvals are blocked when the number currently out reaches the smaller of this sum and the class-wide Out Limit above the tabs.</li>
                 </ul>
             </div>
         </div>
@@ -402,7 +213,7 @@
                             <label>Students Out At Once</label>
                             <input type="number"
                                    class="form-control"
-                                   aria-label="${passTypeName} queue limit"
+                                   aria-label="${passTypeName} students out at once"
                                    value="${Number.isInteger(pt.queue_limit) ? pt.queue_limit : 10}"
                                    placeholder="10"
                                    min="0"
@@ -524,10 +335,3 @@
             loadConfiguration();
         });
     </script>
-
-{% if not embedded|default(false) %}
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-{% endif %}
-{% if not embedded|default(false) %}    </main>
-</body>
-</html>{% endif %}

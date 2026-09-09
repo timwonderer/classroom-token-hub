@@ -27,7 +27,7 @@ The saved destinations and their queue limits are the options students see and t
 
 ### Reading the page
 
-**How It Works** at the top defines the five setup controls:
+**How It Works** explains the destination limit and its read-only total:
 
 | Control | What it is meant to do |
 | --- | --- |
@@ -65,7 +65,7 @@ Saving with an empty list is refused with *Please add at least one pass type.* S
 > Students see the enabled destinations in their **Choose Break Type** menu. A destination with no available capacity is unavailable until a place opens.
 
 > [!NOTE]
-> The saved **Students Out At Once** value is enforced per destination. The class-wide **Out Limit** is enforced across destinations. There is no separate simultaneous-limit field in the current runtime payload.
+> Approval checks count students currently out. A destination blocks further approvals when its **Students Out At Once** limit is reached. Across the class, approvals are blocked when the count reaches the smaller of **Out Limit** (above the tabs) and the sum of destination limits. For example, an Out Limit of 10 and destination limits totaling 6 block further approvals when 6 students are out. Approved students who have not left are not included in that count.
 
 > [!TIP]
 > Approvals are the control that actually works. Configure the destinations your class uses here, then use your judgement at the [Hall Pass](hall-pass.md) queue — nothing is silently letting students out.
