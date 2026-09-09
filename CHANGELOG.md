@@ -1539,7 +1539,7 @@ First stable release of Classroom Token Hub! All critical security issues resolv
 
 ### Project Status
 The project is ready for version 1.0 release. All critical blockers have been resolved:
-- ✅ **P0 Critical Data Leak:** Fixed and deployed (2025-11-29) - See [docs/security/CRITICAL_SAME_TEACHER_LEAK.md](docs/SECURITY/INCIDENTS/SEC-INC-013_Critical_Same_Teacher_Leak.md)
+- ✅ **P0 Critical Data Leak:** Fixed and deployed (2025-11-29) - See [SEC-INC-013 Critical Same-Teacher Leak](docs/archive/v1-docs/SECURITY/INCIDENTS/SEC-INC-013_Critical_Same_Teacher_Leak.md)
 - ✅ **P1 Deprecated Patterns:** All updated to Python 3.12+ and SQLAlchemy 2.0+ (2025-12-06)
 - 🔄 **Backfill:** Legacy transaction data being backfilled with interactive verification
 
