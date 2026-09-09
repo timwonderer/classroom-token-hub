@@ -24,6 +24,6 @@
     "uuid": ">=11.1.1",
     "minimatch": ">=9.0.4",
     "brace-expansion": ">=5.0.9",
-    "fast-uri": ">=3.1.5"
+    "fast-uri": ">=4.1.4"
   }
 }
