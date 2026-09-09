@@ -1690,7 +1690,7 @@ The project is ready for version 1.0 release. All critical blockers have been re
 This changelog tracks significant changes to the codebase. For:
 - **Current development tasks**: See [DEVELOPMENT.md](DEVELOPMENT.md)
 - **Planned features**: See [DEVELOPMENT.md](DEVELOPMENT.md) Roadmap section
-- **Technical details**: See [docs/technical-reference/architecture.md](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)
+- **Technical details**: See [docs/README.md](docs/README.md)
 
 ## Changelog Guidelines
 
