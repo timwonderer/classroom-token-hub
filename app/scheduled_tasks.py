@@ -235,7 +235,6 @@ def database_maintenance_job():
     Runs at 2 AM UTC to clean up orphaned entries and maintain data integrity.
     """
     # Import here to avoid circular imports
-    from app.models import StoreItem
     from app.extensions import db
 
     logger = logging.getLogger('scheduled_tasks')
@@ -575,6 +574,187 @@ def run_insurance_expiry_job():
     )
 
 
+def run_collective_goal_expiry_job():
+    """Sweep lapsed collective goals: EXPIRE the unmet ones and refund their buy-ins.
+
+    DOM-STORE-001 §5 requires a collective-goal entitlement to "record EXPIRED
+    when the goal is not reached by the deadline and coordinate a lawful refund."
+    The purchase-time gate already stops a lapsed goal from selling; this job is
+    the other half — without it, students who bought into a goal that never
+    happened keep an unexercisable entitlement and stay charged for it.
+
+    Only **unmet** goals are swept. A goal that reached its target before the
+    deadline stays GRANTED: the reward is owed and the teacher fulfils it by
+    hand, so expiring it would refund the students who actually won.
+
+    The work-list is the product table itself — live goal products whose
+    deadline has passed — so there is no per-entitlement enumeration. Each goal
+    runs under its OWN top-level FEAT-STOR-002 context (isolated failure), and
+    the command skips lineages that already terminated, so re-runs are safe.
+    """
+    from app.extensions import db
+    from app.feats.collective_goal_expiry_feat import expire_lapsed_collective_goal
+    from app.models import StoreProduct
+    from app.services import store_service
+    from app.services.identity_service import resolve_teacher_seat_for_class
+    from app.services.store import collective_goals
+    from app.utils.canonical_temporal_resolver import utc_now
+
+    logger = logging.getLogger('scheduled_tasks')
+    logger.info("Starting scheduled collective-goal expiry job")
+
+    now = utc_now()
+    try:
+        lapsed_products = (
+            StoreProduct.query
+            .filter(
+                StoreProduct.item_type == 'collective',
+                StoreProduct.availability_state == store_service.IN_USE,
+                StoreProduct.collective_goal_expires_at.isnot(None),
+                StoreProduct.collective_goal_expires_at <= now,
+            )
+            .order_by(StoreProduct.class_id.asc(), StoreProduct.product_lineage_uuid.asc())
+            .all()
+        )
+    except Exception:
+        db.session.rollback()
+        logger.exception("Collective-goal expiry job could not enumerate lapsed goals")
+        return
+
+    expired = 0
+    refunded = 0
+    skipped = 0
+    failed = 0
+    unresolved = 0
+    for product in lapsed_products:
+        class_id = product.class_id
+        lineage = product.product_lineage_uuid
+        try:
+            # Whether the goal was met is read through the shared authority, so
+            # this decision matches the progress bar both the student and the
+            # teacher were shown.
+            class_size = collective_goals.count_class_size(class_id)
+            target = collective_goals.resolve_goal_target(product, class_size)
+            participants = collective_goals.count_goal_participants(
+                class_id, [lineage]
+            ).get(lineage, 0)
+
+            if collective_goals.is_goal_met(participants, target):
+                # Met before the deadline — the reward stands, fulfilment is manual.
+                skipped += 1
+                continue
+
+            # The FEAT entry owns its own envelope, so this job must not open
+            # one — exactly one FEAT executes per invocation (INV-ARC-000
+            # §VIII.2), and nesting is refused.
+            result = expire_lapsed_collective_goal(
+                product=product,
+                class_id=class_id,
+                actor_seat_id=resolve_teacher_seat_for_class(class_id).id,
+                idempotency_key=f"goal-expiry:{class_id}:{lineage}",
+            )
+            expired += result.entitlements_expired
+            refunded += result.purchases_refunded
+            unresolved += len(result.unresolved_correlations)
+        except Exception:
+            failed += 1
+            db.session.rollback()
+            logger.exception(
+                "Collective-goal expiry failed for lineage %s in class %s",
+                lineage, class_id,
+            )
+            continue
+
+    logger.info(
+        "Collective-goal expiry job completed. Expired %s entitlement(s) across "
+        "%s refunded purchase(s); skipped %s met goal(s), %s unresolved "
+        "purchase(s) left for review, %s goal(s) failed",
+        expired, refunded, skipped, unresolved, failed,
+    )
+
+
+def run_economy_rebalance_activation_job():
+    """Activate due queued economy policy transitions for every teacher.
+
+    FEAT-CLASS-005 is HIGH blast radius, so its envelope requires an
+    idempotency_key. ``requires_feat_context`` reads that key from keyword
+    arguments only, and this job is invoked by the scheduler with none, so a
+    decorator-owned envelope refuses before the body runs. Each teacher
+    therefore gets its own context with a derived key, which also keeps one
+    teacher's failure from rolling back the activations already committed for
+    the teachers before it.
+    """
+    from app.extensions import db
+    from app.feats.base import FEATContext
+    from app.models import ClassEconomy
+    from app.utils.canonical_temporal_resolver import utc_now
+    from app.utils.economy_rebalance import activate_due_rebalances
+
+    logger = logging.getLogger('scheduled_tasks')
+    teacher_ids = [
+        row[0]
+        for row in db.session.query(ClassEconomy.teacher_user_id)
+        .filter(ClassEconomy.teacher_user_id.isnot(None))
+        .distinct()
+        .all()
+    ]
+    activated = 0
+    failed = 0
+    run_key = utc_now().strftime("%Y-%m-%dT%H")
+    for teacher_id in teacher_ids:
+        try:
+            with FEATContext(
+                "FEAT-CLASS-005",
+                idempotency_key=f"economy-rebalance-job:{teacher_id}:{run_key}",
+            ):
+                count, _labels = activate_due_rebalances(teacher_id)
+                activated += count
+        except Exception:
+            failed += 1
+            db.session.rollback()
+            logger.exception(
+                "Economy rebalance activation failed for teacher %s", teacher_id
+            )
+    logger.info(
+        "Economy rebalance activation completed; activated %s transition(s), "
+        "failed %s teacher(s)",
+        activated, failed,
+    )
+
+
+def run_savings_interest_job():
+    """Post the current savings-interest payout for eligible class seats."""
+    from app.extensions import db
+    from app.feats.base import FEATContext
+    from app.models import Seat
+    from app.services.ledger_interest_service import apply_monthly_savings_interest
+    from app.utils.canonical_temporal_resolver import utc_now
+
+    logger = logging.getLogger('scheduled_tasks')
+    class_ids = [row[0] for row in db.session.query(Seat.class_id).distinct().all()]
+    posted = 0
+    failed = 0
+    period_key = utc_now().strftime("%Y-%m")
+    for class_id in class_ids:
+        seats = Seat.query.filter(Seat.class_id == class_id).order_by(Seat.id.asc()).all()
+        try:
+            with FEATContext(
+                "FEAT-LED-001",
+                idempotency_key=f"savings-interest-job:{class_id}:{period_key}",
+            ):
+                for seat in seats:
+                    if apply_monthly_savings_interest(seat) is not None:
+                        posted += 1
+        except Exception:
+            failed += 1
+            db.session.rollback()
+            logger.exception("Savings-interest payout failed for class %s", class_id)
+    logger.info(
+        "Savings-interest job completed; posted %s payout(s), failed %s class(es)",
+        posted, failed,
+    )
+
+
 def init_scheduled_tasks(app):
     """
     Initialize and start scheduled tasks.
@@ -614,6 +794,19 @@ def init_scheduled_tasks(app):
     def run_insurance_expiry():
         with app.app_context():
             run_insurance_expiry_job()
+
+    # Wrapper that runs the collective-goal expiry sweep with Flask app context
+    def run_collective_goal_expiry():
+        with app.app_context():
+            run_collective_goal_expiry_job()
+
+    def run_economy_rebalance_activation():
+        with app.app_context():
+            run_economy_rebalance_activation_job()
+
+    def run_savings_interest():
+        with app.app_context():
+            run_savings_interest_job()
 
     if not scheduler.running:
         # Add the daily-limit enforcement job to run every hour
@@ -692,13 +885,50 @@ def init_scheduled_tasks(app):
             max_instances=1  # Prevent overlapping executions
         )
 
+        # Collective-goal expiry — hourly, because a goal deadline is a wall-clock
+        # instant the teacher chose rather than a daily boundary, and students can
+        # see the deadline pass. Skips goals already met and lineages already
+        # terminated, so an hourly cadence never double-expires or double-refunds.
+        scheduler.add_job(
+            func=run_collective_goal_expiry,
+            trigger='interval',
+            hours=1,
+            id='collective_goal_expiry',
+            name='Collective goal expiry and refund',
+            replace_existing=True,
+            max_instances=1  # Prevent overlapping executions
+        )
+
+        scheduler.add_job(
+            func=run_economy_rebalance_activation,
+            trigger='interval',
+            hours=1,
+            id='economy_rebalance_activation',
+            name='Activate due economy rebalances',
+            replace_existing=True,
+            max_instances=1,
+        )
+
+        scheduler.add_job(
+            func=run_savings_interest,
+            trigger='interval',
+            hours=1,
+            id='savings_interest_payout',
+            name='Savings interest payout',
+            replace_existing=True,
+            max_instances=1,
+        )
+
         scheduler.start()
         logger.info(
             "Scheduled tasks initialized: daily-limit enforcement (hourly), "
             "database maintenance (2 AM UTC), "
             "audit invariant check (3 AM UTC), "
             "rent reconciliation (hourly), "
-            "automatic payroll (hourly)"
+            "automatic payroll (hourly), "
+            "insurance boundary expiry (4 AM UTC), "
+            "collective goal expiry (hourly)"
+            ", savings interest payout (hourly)"
         )
     else:
         logger.info("Scheduler already running")

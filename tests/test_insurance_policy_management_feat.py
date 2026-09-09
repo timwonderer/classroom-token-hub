@@ -204,6 +204,45 @@ class TestEditImmutability:
                 InsurancePolicy, second.policy_uuid
             ).premium == Decimal("15.00")
 
+    def test_edit_retires_the_superseded_definition(self, app):
+        """An edit takes the old terms off the shelf; it does not sell both."""
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            first = _configure(classroom, _transaction_submission(premium="10.00"))
+            second = _configure(
+                classroom,
+                _transaction_submission(premium="15.00"),
+                supersedes_policy_uuid=first.policy_uuid,
+            )
+
+            assert first.availability_state == defs.RETIRED
+            assert first.retired_at is not None
+            assert first.premium == Decimal("10.00")  # terms still readable
+            assert second.availability_state == defs.IN_USE
+
+            selectable = defs.list_insurance_definitions(
+                class_id=classroom.class_id, availability_states=[defs.IN_USE]
+            )
+            assert [p.policy_uuid for p in selectable] == [second.policy_uuid]
+
+    def test_edit_of_unknown_policy_fails_closed(self, app):
+        """Superseding a uuid outside the class raises rather than minting a row."""
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            before = InsurancePolicy.query.filter_by(
+                class_id=classroom.class_id
+            ).count()
+            with pytest.raises(defs.InsuranceDefinitionNotFound):
+                _configure(
+                    classroom,
+                    _transaction_submission(),
+                    supersedes_policy_uuid=str(uuid4()),
+                )
+            db.session.rollback()
+            assert InsurancePolicy.query.filter_by(
+                class_id=classroom.class_id
+            ).count() == before
+
 
 # ---------------------------------------------------------------------------
 # Proof point 6: recommendation-range overrides remain allowed.

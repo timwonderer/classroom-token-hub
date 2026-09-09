@@ -23,8 +23,7 @@ from app.feats.assess_obligation_feat import execute_assess_obligation
 from app.feats.satisfy_obligation_feat import execute_satisfy_obligation_payment
 import app.feats.transaction_void_feat as transaction_void_module
 from app.services.ledger_correction_service import (
-    compensate_posted_transaction,
-    void_pending_transaction,
+    reverse_transaction,
 )
 from tests.helpers.ledger import provision_ledger_classroom
 
@@ -116,20 +115,14 @@ def test_DOM_OPS_001__obligation_tx_does_not_fall_through_to_compensation(client
         idempotency_key='void-guard:b:paytx',
     )
 
-    calls = {"compensate": 0, "void_pending": 0}
-    real_compensate = compensate_posted_transaction
-    real_void_pending = void_pending_transaction
+    calls = {"reverse": 0}
+    real_reverse = reverse_transaction
 
-    def _spy_compensate(*a, **k):
-        calls["compensate"] += 1
-        return real_compensate(*a, **k)
+    def _spy_reverse(*a, **k):
+        calls["reverse"] += 1
+        return real_reverse(*a, **k)
 
-    def _spy_void_pending(*a, **k):
-        calls["void_pending"] += 1
-        return real_void_pending(*a, **k)
-
-    monkeypatch.setattr(transaction_void_module, "compensate_posted_transaction", _spy_compensate)
-    monkeypatch.setattr(transaction_void_module, "void_pending_transaction", _spy_void_pending)
+    monkeypatch.setattr(transaction_void_module, "reverse_transaction", _spy_reverse)
 
     with pytest.raises(ObligationTransactionNotVoidable):
         execute_void_transaction(
@@ -138,8 +131,7 @@ def test_DOM_OPS_001__obligation_tx_does_not_fall_through_to_compensation(client
             idempotency_key='void-guard:b:idem',
         )
 
-    assert calls["compensate"] == 0, "obligation-related tx must not reach compensation"
-    assert calls["void_pending"] == 0, "obligation-related tx must not reach pending-void"
+    assert calls["reverse"] == 0, "obligation-related tx must not reach reversal"
 
 
 def test_DOM_OPS_001__rejection_makes_no_ledger_mutation(client, app):
@@ -166,7 +158,6 @@ def test_DOM_OPS_001__rejection_makes_no_ledger_mutation(client, app):
 
     assert Transaction.query.filter_by(class_id=seat.class_id).count() == tx_count_before
     db.session.refresh(tx)
-    assert tx.is_void is False
     assert tx.reversal_transaction_id is None
     assert tx.status != TransactionStatus.VOID
 
@@ -200,5 +191,13 @@ def test_DOM_OPS_001__non_obligation_transaction_still_voids_lawfully(client, ap
     )
 
     db.session.refresh(tx)
-    assert tx.is_void is True
-    assert tx.status == TransactionStatus.VOID
+    # The correction lands as a compensating transaction, not as a change to
+    # this row. A monetary transaction is never voided (INV-OPS-001), and a
+    # reversal may not represent the original as never having occurred
+    # (SPEC-OPS-001 §3.2) — so the original keeps its own status and the only
+    # thing added is the link forward.
+    assert tx.status == TransactionStatus.PENDING
+    assert tx.reversal_transaction_id is not None
+    reversal = db.session.get(Transaction, tx.reversal_transaction_id)
+    assert reversal.amount == Decimal('5.00')
+    assert reversal.original_transaction_id == tx.id

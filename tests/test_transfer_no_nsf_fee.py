@@ -31,8 +31,11 @@ def test_insufficient_checking_transfer_declines_without_nsf_fee(client, app):
             class_id=class_id, obligation_type="NSF_FEE"
         ).count()
 
-    # Satisfy the single-use transfer token and passphrase gates so the POST
-    # actually reaches the insufficient-funds branch under test.
+    # Satisfy the single-use transfer token and PIN gates so the POST actually
+    # reaches the insufficient-funds branch under test. A transfer takes the PIN
+    # (FEAT-IDEN-002 §Credential boundary); sending the passphrase failed the
+    # credential check, which redirects with the same 302 this asserts, so the
+    # branch under test was never reached.
     with client.session_transaction() as sess:
         sess["transfer_token"] = "test-token"
 
@@ -45,7 +48,7 @@ def test_insufficient_checking_transfer_declines_without_nsf_fee(client, app):
             "to_account": "savings",
             "amount": "10.00",
             "transfer_token": "test-token",
-            "passphrase": student.passphrase,
+            "pin": student.pin,
         },
         follow_redirects=False,
     )
@@ -103,7 +106,7 @@ def test_successful_transfer_moves_funds_under_feat_context(client, app):
             "to_account": "savings",
             "amount": "20.00",
             "transfer_token": "test-token",
-            "passphrase": student.passphrase,
+            "pin": student.pin,
         },
         follow_redirects=False,
     )

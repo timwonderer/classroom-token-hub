@@ -8,7 +8,101 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Reversals now persist the canonical ledger type and refuse a second application (2026-09-08)** — A compensating transaction records `REVERSAL` in `type` per `FEAT-LED-002` §III.2.1, with the business reason moved to the new `ledger_transaction.compensation_subtype` column. `reverse_transaction` also runs the reversal-authorization guard before any ledger mutation and rejects reversing a transaction that already carries one, so `INV-LED-013` / `INV-OPS-005` hold for every caller rather than per-caller.
+
+- **Voiding a purchase resolves its grants by provenance, not by parsing the description (2026-09-08)** — `_void_purchase` now finds the granted units through the transaction's `correlation_id`. Product names carry no uniqueness constraint, so the old name lookup could revoke a student's units of the wrong lineage; and the `(xN)` in the description counted purchases rather than granted units, leaving bundle purchases partially reversible.
+
+- **Insurance coverage is resolved by policy, so held coverage is visible again (2026-09-08)** — The policy page looked up entitlements with the policy uuid as `EntitlementEvent.product_id`, which holds a store product lineage. It matched no rows, so every holder of valid coverage was reported as uncovered and the claims table widened to every policy the seat held.
+
+- **Non-consuming hall-pass logs no longer claim an unconsumed grant (2026-09-08)** — `hall_pass_id` stays NULL where there is no entitlement lifecycle, instead of naming a grant that remains available for a later consuming approval and copying that grant's correlation onto the approval.
+
+- **A lapsed collective goal reaches its terminal state even with no open buy-ins (2026-09-08)** — Such a product stayed `IN_USE` and was re-evaluated on every hourly expiry run. Redemptions also no longer decrement goal progress: `CONSUMED` records that a met goal was honoured, not that a buy-in was withdrawn.
+
+- **Store inventory no longer over-sells after a revoked grant or perk (2026-09-08)** — The `REVOKED` leg of `units_sold` is now restricted to `PURCHASE` acquisitions, matching the `GRANTED` leg it subtracts from.
+
+- **A whole-class collective goal can be published (2026-09-08)** — Publication required a `collective_goal_target` for every collective item, while a whole-class goal derives its target from class size and leaves the field blank.
+
+- **Conditional store-item validators now run (2026-09-08)** — Rent-linked, bundle, and bulk-discount quantity checks moved out of per-field hooks, which `Optional()` short-circuited for exactly the blank values they existed to catch.
+
+- **Redemption requests can be re-submitted after a rejection (2026-09-08)** — The request correlation is derived from the attempt, so it no longer collides with the retained resolved row on `PendingAction.correlation_id`.
+
+- **Fixed a `NameError` in the redemption display-status API (2026-09-08)** — `PendingAction` was referenced but never imported in `app/routes/api.py`.
+
+- **Repaired the Redemption Audit query (2026-09-08)** — `Seat` was selected without a join, producing a cross join that duplicated every row and attached an arbitrary seat's identity to it. The teacher dashboard's pending-redemption list also now carries the class and `GRANTED` predicates its own count already used, so the two agree.
+
+- **The economy rebalance job can run (2026-09-08)** — `FEAT-CLASS-005` is HIGH blast radius and its decorator-owned envelope refused before the body ran; each teacher now gets its own context, keyed and error-bounded, so one failure no longer rolls back the activations before it.
+
+- **Sysadmin report updates commit (2026-09-08)** — A direct `db.session.commit()` inside the `FEAT-OPS-001` envelope tripped the atomicity guard and rolled the update back, and authorization now runs outside the FEAT context. The status selector also preserves workflow states it does not own instead of silently resetting them to Open.
+
+- **Hall-pass setup saves what the teacher typed (2026-09-08)** — Edits to the per-destination limit were discarded on save, the student destination modal read a payload key the API never sent, and a second limit field was offered that the runtime has no field for.
+
+- **A principal ledger debit requires a caller-supplied idempotency key (2026-09-08)** — The seat+class fallback repeated across debits, so the reservation boundary replayed or refused the second one.
+
+- **Support tickets are no longer duplicated by a retry (2026-09-08)** — The submission key is derived from the payload, as every other mutation in the module does, rather than from a fresh UUID.
+
+- **Students without a PIN get a usable message on transfer (2026-09-08)** — Recovery clears `pin_hash`, after which every PIN was reported simply as incorrect.
+
+- **The insurance marketplace renders (2026-09-08)** — The policy card reads `waiting_period_days`, which the view builder did not set, raising `UndefinedError` for the whole page.
+
 ### Changed
+
+- **Cancelling insurance verifies the passphrase (2026-09-08)** — `FEAT-IDEN-002` §Credential boundary lists cancellation alongside purchase; the route previously took a bare confirmation.
+
+- **`store_products.item_type` is a closed vocabulary (2026-09-08)** — Enforced at the publication seam and by a new check constraint. An unmapped value published cleanly and then failed every policy read for the whole class.
+
+- **Repaired the Alembic revision graph (2026-09-08)** — Assigned the hall-pass migration a unique revision ID, restored a single migration head, and updated the identity redirect test to use the canonical passphrase login contract.
+
+- **Formalized the student credential boundary (2026-09-08)** — Passphrases now authenticate login and irreversible expense actions; PINs protect non-monetary or reversible actions, including transfers between checking and savings. Runtime prompts and student guides were aligned with the `FEAT-IDEN-002` matrix, including the insurance guide, which still described buying as a single unauthenticated click.
+
+- **Completed Redemption Audit outcome filtering (2026-09-08)** — The store audit now derives its visible action from the retained request outcome and correctly filters `REQUEST`, `APPROVED`, and `REJECTED` history.
+
+- **Added the self-hosting documentation destination (2026-09-08)** — `docs/self-hosting/README.md` now gives operators a safe orientation to the canonical deployment, security, runtime-boundary, evidence, and recovery SOPs.
+
+- **Made the economic rebalance scope explicit (2026-09-08)** — The preview is now labeled **Rent Rebalance Preview**, the guide describes the working scheduled-activation path, and insurance, fees, and store pricing are explicitly directed to their own settings surfaces in accordance with `SPEC-ECON-003`.
+
+- **Moved sysadmin issue updates behind the Operations FEAT boundary (2026-09-08)** — Report status changes now use canonical issue history, persist Operations review notes, and commit atomically under `FEAT-OPS-001`.
+
+- **Retired hollow standalone sysadmin log pages (2026-09-08)** — `/sysadmin/error-logs`, `/sysadmin/network-activity`, and `/sysadmin/logs-testing` now redirect to the canonical combined-logs surface instead of rendering empty result sets.
+
+- **Aligned student PIN surfaces and removed dead admin navigation (2026-09-08)** — Credential setup now enforces and displays the canonical 4–6 digit `FEAT-IDEN-002` range, and the unreferenced v1 `admin_nav.html` was removed.
+
+- **Reorganized the user-guide coverage tracker’s open work (2026-09-08)** — Added a status table separating runtime defects, documentation/wiring work, tracker reconciliation, and required evidence so unresolved work is visible at a glance.
+
+- **Added regression coverage for store and rent-link invariants (2026-09-08)** — Tests now pin single-unit checkout rejection, verify that editing a versioned product preserves derived stock and collective-goal progress through the stable product lineage, and ensure adding a rent-linked benefit does not rewrite an open bill cycle.
+
+- **Removed stale guide claims from fixed surfaces (2026-09-08)** — The student dashboard no longer warns that hall-pass destinations fail, the teacher dashboard guide no longer instructs teachers to use a retired recovery banner, and Store Redemption Audit documentation now describes retained approval/rejection outcomes.
+
+- **Hall-pass setup guide now describes saved destinations (2026-09-08)** — Removed the old “every class uses five built-ins” text and documented that the persisted destination list drives the student menu and approval queue.
+
+- **Retired-runtime regression checks now target the canonical surfaces (2026-09-07)** — The migration idempotency test now inspects `store_products`, the versioned product table that replaced `store_items`, and stale empty analytics namespace artifacts were removed so the V1 retirement guard reflects the importable runtime.
+
+- **Student roster exports now resolve active insurance policy names (2026-09-07)** — The `Insurance Plan` column is derived from class-scoped `INSURANCE` entitlement history and policy definitions, excluding only expired or revoked coverage, instead of being hard-coded to `None`.
+
+- **Student detail now resolves active insurance status (2026-09-07)** — The teacher-facing detail page derives the current policy from class-scoped insurance entitlement history instead of always rendering an empty legacy placeholder.
+
+- **Payroll guides now describe the live scheduler (2026-09-07)** — The runtime has an automatic due-cycle job, so the guides no longer tell teachers that scheduled payroll never starts; they now distinguish scheduled execution from the manual **Run Payroll** action.
+
+- **Teacher dashboard approval queues now match their guide (2026-09-07)** — Pending insurance claims are counted and displayed from class-scoped `InsuranceClaim` rows, pending redemptions are sourced from `PendingAction` rather than all historical grants, and the dashboard guide no longer promises retired setup banners.
+
+- **Teacher insurance claim review now uses the v2 claim lifecycle (2026-09-07)** — Claim lookup is class-scoped and UUID-based, review data is derived from `InsuranceClaim.claim_basis`, and approve/reject actions call `resolve_insurance_claim` instead of deleted v1 helper functions.
+
+- **Several documented surface mismatches now match runtime (2026-09-07)** — Store redemption details are shown in the teacher queue, the issue-form counter reflects its 500-character validator, rent captions use the configured frequency, and Student Management help says **Delete**, matching the actual control.
+
+- **Saving payroll settings now arms automatic payroll (2026-09-08)** — The first saved policy initializes `next_payroll_date` from the configured first payday or save time; later immutable policy versions preserve the existing scheduled occurrence so edits do not disable or reschedule the active cursor.
+
+- **Removed the obsolete Date of Birth recovery instruction (2026-09-08)** — The student-detail setup card now reflects the live name-and-join-code recovery flow.
+
+- **Student-detail Rent tab now follows the student’s class-scoped rent flag (2026-09-08)** — It no longer depends on the deprecated hardcoded global-rent context flag.
+
+- **Hall-pass verification is now visibly usable on first setup (2026-09-08)** — The teacher page labels the first token action as **Generate QR**, renders the verification URL as an absolute link, and displays a QR image whenever a token exists.
+
+- **A grant invalidated by reversal is `REVOKED`, distinguished by cause rather than by state (2026-09-07)** — SPEC-OPS-001 §3.3 previously asked for two downstream states, `VOID` and `INVALIDATED_BY_REVERSAL`, kept semantically apart. The entitlement vocabulary has three terminal states — `CONSUMED`, `EXPIRED`, `REVOKED` — fixed by a partial unique index and a `String(20)` column, and no code ever wrote the fourth. §3.3 now settles it the other way: a capability withdrawn by reversal reports as `REVOKED`, the same state a directly authorized grant void writes.
+
+  That is the honest reading rather than the convenient one. The state answers what the student may now do, and the answer is identical in both cases — nothing. Splitting it would have made every consumer of entitlement status carry a distinction that changes no decision it makes, and would have needed a migration on the terminal index to say so. INV-OPS-002 keeps the requirement where it belongs: the *cause* must stay recoverable, so an invalidation propagated by a reversal names the transaction it followed from. `transaction_void_feat._void_purchase` records `reversal_propagated` and `reversed_transaction_id` in the event payload, replacing a `transaction_void` reason that named the act CTH no longer performs on money.
+
+- **SPEC-STORE-001 §V.A said bundling was forbidden on the types that support it (2026-09-07)** — The type-specific rules carried "Cannot be bundled or part of collective goal" under DELAYED_USE and HALL_PASS, which contradicted §III (where `bundle_quantity`'s only stated exclusion is the collective goal), §V.B.1, and §V.C.4 ("bundle_quantity: If set, must be > 1"). Read literally, `bundle_quantity` could never legally be set on anything and those three clauses were dead text. The document now states the rule once — **only DELAYED_USE and HALL_PASS may be bundled**, because a bundle grants multiple unexercised units and only those two types can hold them — which is what `store_service._BUNDLEABLE_ITEM_TYPES` has always enforced. IMMEDIATE_USE and PRIVILEGE remain excluded, COLLECTIVE_GOAL is excluded as its own category (bundling and bulk discounts describe an individual purchase and have no meaning against a shared pot), and INSURANCE is noted as not sold through the store at all — enrollment is purchased through the insurance interface under FEAT-CLASS-003.
 
 - **The branch rename is executed, and the v1 line now lives under one ref (2026-09-07)** — `main` is the default and only protected branch, `origin/HEAD` resolves to it, and `CTH_v2.0` is gone. Two things differ from the plan and are worth stating rather than discovering later. The v1 `main` became `main_legacy_v1.10.0` instead of `legacy_main`, and the separate `legacy_v1.10.0` branch was deleted; that is safe because the deleted tip (`1f7bfeb40`) is an ancestor of the surviving branch, verified rather than assumed, so **`main_legacy_v1.10.0` is the single ref carrying the v1 line** and every `v1.*` tag remains. `DEVELOPMENT.md` and `.claude/CLAUDE.md` are retargeted accordingly — they named a ref that no longer resolves, which is precisely the defect the rename existed to remove.
 
@@ -22,7 +116,67 @@ and this project follows semantic versioning principles.
 
   The method cost is recorded too: the three-dot diffstat read as though the branch deleted the deploy workflow, when `main` had already deleted it. Three-dot measures from the merge base, so on a stale branch it describes a tree that no longer exists. Two-dot returned 416 files of near-total reversion. Use two-dot to decide disposition; three-dot only to review.
 
+### Added
+
+- **A lapsed collective goal now expires its buy-ins and refunds them (2026-09-07)** — DOM-STORE-001 §5 requires a collective-goal entitlement to record `EXPIRED` "when the goal is not reached by the deadline and coordinate a lawful refund." Only the purchase-time half existed: past the deadline the item stopped selling, but everyone already inside the goal kept a `GRANTED` entitlement they could never exercise and stayed charged for it. `app/feats/collective_goal_expiry_feat.py` (FEAT-STOR-002) closes one lapsed goal in one class, and an hourly job sweeps for them.
+
+  Three properties are deliberate. **Only unmet goals are swept** — a goal reached before its deadline stays `GRANTED`, because that reward is real and expiring it would refund the students who actually won. **Money and entitlement move together**, inside one FEAT envelope, so no failure can leave a refunded student still holding the entitlement or an expired student out of pocket. And it **fails closed per purchase**: if the covering ledger transaction cannot be identified, that purchase group is skipped and reported rather than expired unrefunded — leaving an entitlement `GRANTED` is recoverable, taking a student's money and giving nothing back is not.
+
+  The refund is issued per `correlation_id` group, never per unit, because a bundle is n entitlement lifecycles under one charge and refunding per unit would return the price n times. The refund itself is a reversal — SPEC-OPS-001 §8.1 declines to make "refund" a third ledger primitive, and §8.2 permits the word as user-facing language for the reversal underneath.
+
+  Goal progress had two implementations that disagreed — the student store counted every `GRANTED` event while the teacher store also required `acquisition_type == "PURCHASE"`, so a teacher's direct grant moved one bar and not the other. That is cosmetic until a sweep reads it and the count decides who gets refunded. Both routes now read `app/services/store/collective_goals.py`, which counts buy-ins only and fails closed on an unresolvable target, since treating `target <= 0` as met would silently deny every refund on a misconfigured goal.
+
 ### Fixed
+
+- **Ledger corrections voided the money instead of reversing it (2026-09-07)** — SPEC-OPS-001 draws one line and states it twice: *"Money is reversed. Grants are voided"* (§II), and INV-OPS-001 — *"Monetary transactions MUST NOT be voided."* `app/services/ledger_correction_service.py` did both. `void_pending_transaction()` set `is_void`, `status` and `voided_at` on an unsettled charge, and `compensate_posted_transaction()` set `is_void` on the original alongside its compensating entry — which §3.2 forbids directly, since a reversal may not represent the original transaction as never having occurred.
+
+  The mislabelling had two consequences worth separating. **An unsettled charge could be corrected into a windfall.** Store purchases post lazily, so a charge is often still `PENDING` when it is corrected; `settle_balances` skips a voided pending row (`ledger_settlement_service.py:174`), so the debit never landed while the compensating credit did, and the student ended up the full price better off. `transaction_void_feat.py` did both at once for a pending purchase and hit this on the admin void path. **And the snapshot could not be rebuilt from history.** `_posted_history_cents` excludes `is_void` rows, so for every compensated transaction the rebuild dropped the original debit and kept the credit, disagreeing with the incrementally-maintained snapshot by the full amount — which INV-LED-006 requires to agree.
+
+  The module now offers one operation, `reverse_transaction()`, which appends the compensating entry and leaves the original standing apart from the link forward to its reversal. That link is also what enforces one-reversal-per-transaction (INV-LED-013, INV-OPS-005), so callers detecting "already refunded" now test `reversal_transaction_id`, not `is_void`. `void_pending_transaction()` is removed rather than deprecated, per INV-OPS-012. Both legs settle, both reads agree, and pending and posted charges take the same path — the branch that used to distinguish them was itself the artifact of voiding money.
+
+- **The store quoted rent-perk items at $0.00 and the server never honoured it (2026-09-07)** — A student holding an unconsumed `PERK` grant saw the item priced "Rent Perk price: $0.00", the quantity control locked to one unit, bulk discounts suppressed, and the hint "Rent perk active: this purchase is free." Nothing on the server implemented any of it: `_calculate_debit` has no waiver term, no purchase path consults `get_active_rent_grant` (it is imported into `app/routes/api.py` and never called), and `target_account` is written but never read. This was the exact shape of defect #31 — quote one price, charge another — and it went unnoticed only because purchases were not charging at all.
+
+  The waiver was not implemented, because there is nothing to implement. Under DOM-STORE-001 §A a `PERK` acquisition is an entitlement the student **already possesses**; it is redeemed from My Items, not re-bought at zero. So the display was corrected to say so: the card and modal show the real price, the perk badge reads "N free uses in My Items", and the quantity and bulk-discount controls behave as they do for any other item. `is_rent_covered` still displays $0.00 — that button is disabled, so the zero is a statement about coverage rather than a quote for a purchase that can be attempted.
+
+- **Store purchases never took the money (2026-09-07)** — `apply_resolved_ledger_plan` posted the overdraft-protection transfer and the NSF fee and then dropped the principal debit on the floor. Its docstring has claimed it "posts the debit / recovery / overdraft-fee transactions" since it was written, which is most of why the gap survived review: the contract was read instead of the body. The effect was that every store purchase granted its entitlements for free, and an underfunded student could still be charged an NSF fee for a debit that never landed — the one case where the ledger did write a row was the penalty.
+
+  The debit is now posted at the same seam, anchored on `class_id` + `seat_id` with the student as both target and actor, under an idempotency key suffixed `:debit` so it cannot collide with the fee's reservation. `IntendedLedgerPlan` gained a required `transaction_type`: Ledger is domain-blind (DOM-LED-001 §II) and cannot infer what kind of act a debit represents, and a default would have silently mistyped every future caller. Store purchases declare `purchase`, which is what `transaction_void_feat` keys on.
+
+  The purchase description changed from `Store purchase: <name>` to `Purchase: <name> (xN)`. That is not cosmetic — `_void_purchase` parses exactly that format to recover the item and quantity, so under the old wording a purchase could not be voided even once it started charging.
+
+- **The three store sale mechanics were configured, displayed, and then ignored at purchase time (2026-09-07)** — Defects #30/#31/#32 shared one shape: each setting was published and stored correctly, shown on the item card, and never consulted when the purchase executed. A bundle granted one unit while promising N. A bulk discount was quoted on the card and never applied to the debit, so the student consented to one price and was charged another. A collective goal's deadline was displayed and never enforced, so students kept paying into a goal that could no longer be reached.
+
+  Bundles now grant `bundle_quantity` independent entitlement lifecycles per purchase and are priced per bundle — not one entitlement with a counter, because DOM-STORE-001 forbids persisting a remaining-units balance. The bulk discount is recomputed on the authoritative side from Policy configuration and applies to the whole order at or above the threshold, rounded half-up to cents. A purchase against an expired collective goal is refused with `COLLECTIVE_GOAL_EXPIRED` before the ledger is touched. `tests/test_store_sale_mechanics.py` asserts each against the two surfaces the student feels — lifecycles created and amount debited — since the existing publication-validation suite only proves such items cannot be *misconfigured*.
+
+  Not fixed here: DOM-STORE-001:322 also requires a sweep that marks a lapsed goal EXPIRED and refunds lawfully. Only the purchase-time gate exists.
+
+- **The migration chain could not build a database from empty, because the baseline is built from today's ORM (2026-09-07)** — `0001_bootstrap` materializes current ORM metadata at revision 0, so deleting or reshaping a model retroactively changes what the *baseline* contained, and later historical migrations still reference the shape they were written against. Consolidating the store's two tables into one triggered both mirror images of this at once. `store_items` left the ORM, so `0009` failed creating a foreign key to a table that every already-migrated database has; and `store_products` / `store_item_visibility` arrived at revision 0 already carrying their final columns, so `0009` and `e13a59b6aa6b` found the tables present, skipped the creates, and then indexed columns that did not exist yet.
+
+  Fixed at two seams. Bootstrap gained a Section C that recreates retired baseline tables in the minimal shape the chain needs, and hands reshaped tables back to the migrations that own their history by dropping them — guarded on emptiness, raising rather than dropping if rows are present, which makes the "this only ever runs pre-migration" claim structural instead of assumed. `0009` gained one `column_exists` guard, matching the precedent already in that file. The underlying smell is not fixed and should not be forgotten: **a schema-affecting model deletion can break the migration chain without touching a migration file**, so the revision graph looks innocent while a fresh database fails.
+
+- **SPEC-STORE-001 §V product-configuration rules were enforced nowhere, and now run at the one seam that writes a product (2026-09-07)** — The rules lived in `StorePolicyConfigParser`, which validated a JSON policy payload. Nothing has produced such a payload since the catalog became a single typed table, so `grep` found exactly one reference to the class: its own definition. The teacher-facing form posted straight through to `publish_product` with only field-level WTForms checks, which meant a bundled immediate-use item, a collective goal with no deadline, a bulk discount of 150%, or a negative price were all publishable.
+
+  The rules now live in `store_service._validate_definition`, called by `publish_product`, and the dead parser is deleted rather than left beside them — two copies of a rule set with only one of them reachable is how they drift apart, and this is the drift already having happened. `InvalidDefinition` subclasses `StoreServiceError`, which the store route already catches, so a rejected definition surfaces to the teacher as a flash rather than a 500.
+
+  One rule is deliberately narrower than the spec text. SPEC-STORE-001 §V.A forbids bundling on every entitlement type; bundling is permitted here on `DELAYED_USE` and `HALL_PASS`, because those are the two types that can hold more than one unexercised unit, and a blanket ban would remove a mechanic the teacher-facing form offers. **This needs owner review** — either the spec is stale on the point or the toggle should not exist.
+
+- **Store product listings were ordered by a random UUID (2026-09-07)** — `build_policy_list_view` sorted on `product_id`, which read as creation order only by accident: it used to be a sequential integer. It is now a lineage UUID, so the teacher's catalog was arriving in arbitrary order. Sorted on `(created_at, name, policy_uuid)` — when the teacher published it, then alphabetically — with the UUID only breaking ties between versions published in the same instant.
+
+- **Rent no longer creates store items; the store declares which of its products rent grants (2026-09-07)** — This supersedes and reverts an entry that stood here earlier the same day, which described making a rent-created store item *partially* editable by locking the six fields Rent Settings wrote. That fix was correct about the symptom and wrong about the cause. The reason a teacher could not rename a rent perk was that two features both claimed to author the same row, and dividing the fields between them ratifies the double ownership rather than ending it — it also leaves the teacher reading a store item whose name is editable nowhere on the store page.
+
+  Ownership is inverted instead. Rent Settings has no itemization block and creates nothing; the store's add/edit form carries a `[This item is rent linked]` toggle with its quantity, and turning it on writes the product's lineage into the class's rent `satisfaction_benefits`. Every field on a rent-linked product is editable, because the store owns all of them. A rent-linked product takes effect on the **next** cycle, so adding or removing one never re-prices an assessment already issued. `TestRentLinkedItemEditing` and `tests/dom/class/test_rent_itemization_store_gate.py` are deleted with the premise they tested — the latter checked that a rent-created item stays unpurchasable while the store feature is off, which the store surface's own scope gate now covers more strongly, since with the store disabled the product cannot be created at all.
+
+- **Editing an insurance policy now retires the version it replaces, and grouped tiers are editable (2026-09-07)** — `configure_insurance_definition` takes `supersedes_policy_uuid` and retires the predecessor inside the same FEAT context. The old behavior left both versions IN_USE, so students saw a product twice and could buy either; for a grouped policy it was worse than cosmetic, because the original still held its `(class, group, rank)` slot and the edit was *rejected outright*. Both are the same defect. The retire runs **before** `_enforce_tier_group_rules`, so the predecessor vacates the rank as its replacement takes it — one fix, and grouped policies now edit exactly like ungrouped ones.
+
+  This is not new design. `DOM-POL-001` §VI.0 forbids self-referential version pointers, the model's own index comment already said "editing (mint new + retire old) is free," and FEAT-CLASS-003 §VIII.2 described the vacate-then-occupy sequence. Only the caller never performed the retire. RETIRED is the correct projection rather than HIDDEN because it means precisely "not selectable for new work, may remain readable while live dependencies drain" — which is what "old policyholders keep their terms to expiry" requires. Nothing about existing coverage changes: entitlements freeze `policy_uuid` at purchase (§VII), so the retired row remains their contract.
+
+  Validation runs before the retire, so a rejected submission never withdraws a live policy, and the whole sequence is one transaction.
+
+- **A hidden insurance policy can be put back on sale (2026-09-07)** — New `admin.reactivate_insurance_policy` route, surfaced on hidden rows in place of **Hide**. A definition row is immutable, so this is not a flip back to IN_USE: it marshals the hidden row's configuration into a new IN_USE `policy_uuid` and supersedes the hidden one. The teacher-visible result is the product back on the shelf on the terms it was hidden with. Previously hiding was a one-way door in practice — editing a hidden policy just produced another hidden policy — which made **Hide** strictly worse than useless for a teacher who wanted a seasonal product.
+
+- **The non-monetary waiting period is enforced at claim time (2026-09-07)** — `waiting_period_days` was configured, validated, persisted, seeded with real preset values (Basic defaults to seven days), and read by nothing. A student could file a claim minutes after buying a policy sold on the promise of a week's wait. `_enforce_non_monetary_submission` now gates submission on it, supplying the `NON_MONETARY` arm that `_submit_insurance_claim_impl` never had.
+
+  Semantics match the existing filing window rather than inventing a second convention: class-local **calendar** days, not N×24h, so a three-day wait bought at 3pm opens at the start of the third class day, not at 3pm on it. The wait is anchored on the entitlement's own `GRANTED` timestamp and read from the frozen policy contract, which gives tier switching the right behavior for free — an upgrade is a new grant, so its wait starts over, while the superseded coverage is untouched. Zero is honored as immediate coverage.
 
 - **Dependabot raises `npm` alerts it is not configured to fix (2026-09-07)** — All eleven open advisories resolve to one manifest, `docs-site/package-lock.json`, while `.github/dependabot.yml` declares only `pip` and `github-actions`, both at `/`. There is no `npm` entry and none for `/docs-site`, so no pull request can ever be opened against the file the alerts are about; the security tab and the update configuration describe disjoint sets. Scoped rather than escalated: nothing builds or deploys `docs-site/`, its `build/` and `node_modules/` are gitignored, and the application's only touch is reading `route-map.json`, a data file — so the advisories are real but carry no production exposure. Recorded as build-tooling hygiene with the configuration gap named, so the count is not rediscovered later and misread as a neglected backlog.
 
@@ -1385,7 +1539,7 @@ First stable release of Classroom Token Hub! All critical security issues resolv
 
 ### Project Status
 The project is ready for version 1.0 release. All critical blockers have been resolved:
-- ✅ **P0 Critical Data Leak:** Fixed and deployed (2025-11-29) - See [docs/security/CRITICAL_SAME_TEACHER_LEAK.md](docs/SECURITY/INCIDENTS/SEC-INC-013_Critical_Same_Teacher_Leak.md)
+- ✅ **P0 Critical Data Leak:** Fixed and deployed (2025-11-29) - See [SEC-INC-013 Critical Same-Teacher Leak](docs/archive/v1-docs/SECURITY/INCIDENTS/SEC-INC-013_Critical_Same_Teacher_Leak.md)
 - ✅ **P1 Deprecated Patterns:** All updated to Python 3.12+ and SQLAlchemy 2.0+ (2025-12-06)
 - 🔄 **Backfill:** Legacy transaction data being backfilled with interactive verification
 
@@ -1463,6 +1617,14 @@ The project is ready for version 1.0 release. All critical blockers have been re
 ### Security
 - Bypass token now stored only in environment and session flag; recommends rotation post-window
 
+## [2026-09-07] - Store and Ledger Corrections
+
+### Changed
+- Restrict bulk discounts and bundles to product types that can hold independent unredeemed units.
+- Reject quantity greater than one for immediate-use and privilege products.
+- Align FEAT-LED-002 with SPEC-OPS-001 so monetary corrections are reversals, never transaction voids.
+- Enforce the rent policy's late-purchase restriction in the authoritative store purchase FEAT.
+
 ## [2025-11-24] - Repository Housekeeping
 
 ### Added
@@ -1528,7 +1690,7 @@ The project is ready for version 1.0 release. All critical blockers have been re
 This changelog tracks significant changes to the codebase. For:
 - **Current development tasks**: See [DEVELOPMENT.md](DEVELOPMENT.md)
 - **Planned features**: See [DEVELOPMENT.md](DEVELOPMENT.md) Roadmap section
-- **Technical details**: See [docs/technical-reference/architecture.md](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)
+- **Technical details**: See [docs/README.md](docs/README.md)
 
 ## Changelog Guidelines
 
@@ -1541,3 +1703,27 @@ When adding entries:
 - For any PR touching templates, shared UI shells/components, template CSS, or template-driven JS, record accessibility issues found and accessibility fixes made
 
 **Last Updated:** 2026-01-09
+## 2026-09-08
+
+- Fixed queued economy rebalances never activating: the hourly scheduler now processes due transitions, and the admin route preserves the selected activation mode.
+- Added class Section to the admin class switcher so same-course sections remain distinguishable.
+- Corrected support-ticket status badges to use the canonical lifecycle values and readable labels.
+- Formatted public hall-pass verification timestamps using the configured display timezone.
+- Removed the unreachable student dashboard restroom-queue panel that had no runtime data source.
+- Honored per-destination Hall Pass `consume_pass` settings while retaining an auditable approval log.
+- Added the hourly savings-interest payout job using the canonical ledger interest command and month-scoped idempotency.
+- Made store pricing-tier labels derive from the active class economic-policy ranges.
+- Preserved store redemption approval/rejection outcomes in the existing pending-action lineage so Redemption Audit is a durable history rather than a live queue.
+- Persisted support-ticket titles and removed title-based submission deduplication.
+- Displayed insurance waiting periods on the student marketplace and active-coverage cards.
+- Applied advanced payroll time-increment rounding modes to billable attendance seconds; overtime remains pending a defined period contract.
+- Aligned the savings projection caption with the posted balance used by the projection engine.
+- Added server-side passphrase verification to student insurance purchases.
+- Aligned Hall Pass configuration read/write normalization with the canonical API payload schema.
+- Removed the unsupported payroll manual-payment template controls and no-op save path.
+- Removed phantom Payroll help content for the nonexistent Rewards & Fines tab and attendance-rule controls.
+- Documented the existing Hall Pass Out Limit enforcement and rent-late purchase gate as closed tracker defects.
+- Repaired the student insurance policy view to use canonical policy UUIDs and linked active coverage to it.
+- Reconciled the Store edit route and Insurance Management claims queue with their live templates and review paths.
+- Allowed non-consuming hall-pass approvals to record correlation-only audit logs without requiring an entitlement grant.
+- Added a direct Payroll History link to the detailed date-filtered history route.

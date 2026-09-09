@@ -271,8 +271,8 @@
                 <fieldset id="setup-fields" class="disabled-fields" disabled>
                     <div class="form-group">
                         <label class="form-label text-secondary" for="pin">PIN</label>
-                        {{ form.pin(class="form-control form-control-lg", id="pin", autocomplete="off", placeholder="e.g., 938291", inputmode="numeric") }}
-                        <small class="form-text">Use 4-8 digits that you will remember. You will sign in using this PIN.</small>
+                        {{ form.pin(class="form-control form-control-lg", id="pin", autocomplete="off", placeholder="4-6 digits", inputmode="numeric") }}
+                        <small class="form-text">Use 4-6 digits that you will remember. Daily login uses your passphrase; the PIN is for routine and reversible actions.</small>
                         {% for error in form.pin.errors %}
                         <div class="text-danger small mt-2">{{ error }}</div>
                         {% endfor %}
@@ -356,9 +356,9 @@
 
         function validateForm() {
             const pin = document.getElementById('pin').value;
-            if (!/^\d{4,8}$/.test(pin)) {
+            if (!/^\d{4,6}$/.test(pin)) {
                 const feedback = document.getElementById('pin-validation-feedback');
-                feedback.textContent = 'PIN must be between 4 and 8 digits.';
+                feedback.textContent = 'PIN must be between 4 and 6 digits.';
                 feedback.classList.remove('d-none');
                 window.scrollTo(0, 0);
                 document.getElementById('pin').focus();
@@ -368,6 +368,8 @@
         }
     </script>
     </main>
+{% set contextual_help_path = 'user-guides/features/student/account/pin-vs-passphrase' %}
+{% include 'components/contextual_help_link.html' %}
 </body>
 
 </html>

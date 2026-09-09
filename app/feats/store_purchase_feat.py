@@ -23,6 +23,7 @@ primitive. This FEAT accepts exact policy_uuid and executes without inference.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 import uuid
 
@@ -36,8 +37,14 @@ from app.feats.ledger_resolution_feat import (
 from app.models import Seat, EntitlementEvent, ClassEconomy
 from app.services.context_resolver import CanonicalContext
 from app.services.class_configuration_query_service import get_current_economic_engine
+from app.services.class_configuration_query_service import get_rent_settings
+from app.services.obligation_view_model import build_student_obligation_view
 from app.services.store_policy_resolver import StorePolicyResolver, PolicyNotFound, PolicyParseError, PolicyValidationError
-from app.utils.canonical_temporal_resolver import canonical_temporal_resolver, CLASS_LEVEL_EVALUATION
+from app.utils.canonical_temporal_resolver import (
+    canonical_temporal_resolver,
+    CLASS_LEVEL_EVALUATION,
+    ensure_utc,
+)
 
 
 class StorePurchaseError(Exception):
@@ -52,9 +59,33 @@ class StorePurchaseResult:
     correlation_id: str
     quantity_granted: int
     entitlement_ids: list[str] = field(default_factory=list)
-    product_id: Optional[int] = None
+    product_id: Optional[str] = None
     error_code: Optional[str] = None
     error_message: Optional[str] = None
+
+
+def _calculate_debit(policy_config, quantity: int) -> tuple[Decimal, bool]:
+    """Return (amount to charge, whether the bulk discount applied).
+
+    The discount triggers on the number of units the student buys, at or above
+    the configured threshold, and applies to the whole order rather than only
+    the units past the threshold — that is what the item card promises the
+    student ("Buy 5+ for 15% off"), and the quoted price and the charged price
+    have to agree.
+
+    Rounded to cents, half-up: the ledger stores 2-scale amounts, and banker's
+    rounding on a price would surprise a student reading the arithmetic.
+    """
+    gross = policy_config.price * quantity
+
+    threshold = policy_config.bulk_discount_quantity
+    percentage = policy_config.bulk_discount_percentage
+    if threshold is None or percentage is None or quantity < threshold:
+        return gross, False
+
+    multiplier = (Decimal('100') - Decimal(str(percentage))) / Decimal('100')
+    discounted = (gross * multiplier).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    return discounted, True
 
 
 def execute_store_purchase(
@@ -188,6 +219,34 @@ def _execute_store_purchase_impl(
             error_message=f"Policy UUID {policy_uuid} belongs to different class ({policy_config.class_id} vs {canonical_context.class_id})",
         )
 
+    # Rent policy owns the late-purchase consequence. Resolve lateness from the
+    # canonical obligation projection, and allow only products explicitly linked
+    # as rent satisfaction benefits when the policy says non-covered purchases
+    # are blocked. The check is server-side so a hidden/disabled UI control
+    # cannot bypass the class policy.
+    rent_settings = get_rent_settings(canonical_context.class_id)
+    if rent_settings and rent_settings.prevent_purchase_when_late:
+        rent_view = build_student_obligation_view(
+            canonical_context.seat_id,
+            canonical_context.class_id,
+            "RENT",
+        )
+        current_period = rent_view.current_period if rent_view else {}
+        is_late = bool(current_period.get("is_late") or current_period.get("is_past_due"))
+        linked_lineages = {
+            benefit.get("product_lineage_uuid")
+            for benefit in rent_settings.get_satisfaction_benefit_grants()
+            if benefit.get("product_lineage_uuid")
+        }
+        if is_late and policy_config.product_lineage_uuid not in linked_lineages:
+            return StorePurchaseResult(
+                success=False,
+                correlation_id="",
+                quantity_granted=0,
+                error_code="RENT_PAST_DUE_PURCHASE_BLOCKED",
+                error_message="Store purchases are blocked while rent is past due",
+            )
+
     # Validate is_purchasable (FEAT-STOR-001 specific constraint)
     if not policy_config.is_purchasable:
         return StorePurchaseResult(
@@ -213,6 +272,48 @@ def _execute_store_purchase_impl(
             error_message="Insurance is purchased via FEAT-OBL-004, not the store path",
         )
 
+    # Immediate-use and privilege products cannot hold multiple unexercised
+    # units.  Quantity greater than one is therefore not a larger purchase of
+    # the same product; it would manufacture inventory the product type cannot
+    # represent.  Bundles remain lawful only for types that hold independent
+    # unredeemed units (DELAYED_USE and HALL_PASS).
+    if policy_config.entitlement_type in {'IMMEDIATE_USE', 'PRIVILEGE'} and quantity != 1:
+        return StorePurchaseResult(
+            success=False,
+            correlation_id="",
+            quantity_granted=0,
+            error_code="QUANTITY_NOT_ALLOWED",
+            error_message="Immediate-use and privilege products may only be purchased one at a time",
+        )
+
+    # A collective goal closes at its deadline. Past it the goal can no longer
+    # be reached, so selling into it would take money for an outcome that cannot
+    # occur. The deadline was configured, published, and displayed but never
+    # consulted; this is where it binds.
+    if policy_config.collective_goal_expires_at is not None:
+        temporal_now = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=canonical_context,
+            primitive="current_time",
+        ).canonical_now_utc
+        if ensure_utc(policy_config.collective_goal_expires_at) <= ensure_utc(temporal_now):
+            return StorePurchaseResult(
+                success=False,
+                correlation_id="",
+                quantity_granted=0,
+                error_code="COLLECTIVE_GOAL_EXPIRED",
+                error_message="This collective goal has passed its deadline and is closed to new purchases",
+            )
+
+    # A bundle grants several units for one purchase. DOM-STORE-001 forbids
+    # persisting `bundle_remaining` or any other mutable balance (§lines 70,
+    # 137, 430), so a bundle is not one entitlement with a counter — it is N
+    # independent entitlement lifecycles, which is exactly what FEAT-STOR-001
+    # §VII.E already requires ("each purchased unit creates one entitlement
+    # lifecycle"). Buying is priced per bundle; granting is per unit.
+    units_per_purchase = policy_config.bundle_quantity or 1
+    units_to_grant = quantity * units_per_purchase
+
     # Validate per-student limit (if configured)
     if policy_config.limit_per_student is not None:
         # Count existing GRANTED entitlements for this seat and product
@@ -223,7 +324,11 @@ def _execute_store_purchase_impl(
             event_type='GRANTED',
         ).count()
 
-        if existing_count + quantity > policy_config.limit_per_student:
+        # The teacher configures a *purchase* limit, but grants are counted in
+        # units, so convert the limit into the same unit before comparing —
+        # otherwise a bundle of five would exhaust a limit of five in one buy.
+        granted_units_allowed = policy_config.limit_per_student * units_per_purchase
+        if existing_count + units_to_grant > granted_units_allowed:
             return StorePurchaseResult(
                 success=False,
                 correlation_id="",
@@ -239,12 +344,26 @@ def _execute_store_purchase_impl(
     # PHASE 2: Ledger Execution
     # =========================================================================
 
+    # FEAT-STOR-001 §VI.E: the charge is calculated from authoritative Policy
+    # configuration. The bulk discount was published to the student on the item
+    # card and then never applied to the debit — the student was quoted one
+    # price and charged another. Recompute it here, on the authoritative side,
+    # rather than trusting anything the client sent.
+    debit_amount, _discount_applied = _calculate_debit(policy_config, quantity)
+
     intended_plan = build_intended_ledger_plan(
         seat_id=canonical_context.seat_id,
         class_id=canonical_context.class_id,
         user_id=canonical_context.user_id,
-        debit_amount=policy_config.price * quantity,
-        description=f"Store purchase: {policy_config.name or policy_config.product_id}",
+        debit_amount=debit_amount,
+        # Human-facing only. The void path used to parse the item name and the
+        # (xN) back out of this string, which tied reversal correctness to
+        # wording and — because N counts purchases, not granted units — left
+        # bundles partially reversible. It now resolves the grants through this
+        # transaction's correlation_id instead, so the description is free to
+        # read however it reads best.
+        description=f"Purchase: {policy_config.name or policy_config.product_id} (x{quantity})",
+        transaction_type="purchase",
         source_account="checking",
         target_account="store_purchase",
     )
@@ -304,17 +423,31 @@ def _execute_store_purchase_impl(
 
     entitlement_ids = []
 
-    for unit_idx in range(quantity):
+    for _unit_idx in range(units_to_grant):
         entitlement_id = str(uuid.uuid4())
 
-        # Build event payload per DOM-STORE-001
-        # Contains type-specific facts about this purchase event (not policy rules)
+        # Build event payload per DOM-STORE-001 §VII.A.
+        #
+        # That section is restrictive about what may live here: the payload
+        # "SHALL contain only the type-specific authoritative facts necessary to
+        # interpret the event" and "SHALL NOT duplicate monetary truth, policy
+        # rules, or derived balances" — and entitlement_events "SHALL NOT contain
+        # quantity, remaining balance, mutable redemption status, or display
+        # metadata."
+        #
+        # So a bundle records nothing about its size here. Each unit is its own
+        # entitlement lifecycle (FEAT-STOR-001 §VII.E), and the count of units is
+        # recovered by counting rows sharing this correlation_id — a derived
+        # quantity, which is exactly why it must not be stored. Likewise the
+        # amount charged is the Ledger's truth, not the entitlement's; it is
+        # reachable through the same correlation_id.
+        #
+        # ``policy_uuid`` is the one thing that must be frozen: it is what lets a
+        # holder resolve the exact terms they bought under after the teacher
+        # supersedes the product.
         event_payload = {
-            "unit_index": unit_idx,
-            "quantity_total": quantity,
             "instant_use": instant_use,
-            "policy_uuid": policy_config.policy_uuid,  # For audit/historical reference
-            "price_per_unit": str(policy_config.price),
+            "policy_uuid": policy_config.policy_uuid,
         }
 
         event = EntitlementEvent(
@@ -368,7 +501,7 @@ def _execute_store_purchase_impl(
     return StorePurchaseResult(
         success=True,
         correlation_id=corr_id,
-        quantity_granted=quantity,
+        quantity_granted=units_to_grant,
         entitlement_ids=entitlement_ids,
         product_id=policy_config.product_id,  # From resolved policy
         error_code=None,

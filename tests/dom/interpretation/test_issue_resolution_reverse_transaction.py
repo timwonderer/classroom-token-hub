@@ -24,7 +24,9 @@ def test_DOM_SUP_001__issue_reverse_transaction_creates_reversal_for_posted_tx(c
     assert response.status_code == 302
 
     db.session.refresh(tx)
-    assert tx.is_void is True
+    # The original stays a standing historical fact. A reversal may not present
+    # it as never having occurred (SPEC-OPS-001 §3.2), and money is not voided
+    # at all (INV-OPS-001) — only the link forward to the reversal is added.
     assert tx.status == TransactionStatus.POSTED
     assert tx.reversal_transaction_id is not None
 
@@ -66,5 +68,4 @@ def test_DOM_SUP_001__issue_reverse_transaction_rejects_scope_mismatch(client, a
     assert f"/admin/issues/{issue_ref}" in response.location
 
     db.session.refresh(tx)
-    assert tx.is_void is False
     assert tx.reversal_transaction_id is None

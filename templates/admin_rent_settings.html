@@ -643,14 +643,19 @@
             </div>
           </div>
 
-          <!-- Rent Itemization -->
+          <!-- Rent Benefits (read-only) -->
+          {# Rent no longer creates or owns store items. A teacher marks an item
+             "rent linked" in the Store, which records the grant on this rent
+             policy's satisfaction benefits. Because rent is versioned and an
+             assessment freezes the policy version it was raised under, a link
+             added today can only take effect from the next cycle — which is why
+             this panel reads rather than edits. #}
           <div class="accordion-item">
             <h2 class="accordion-header" id="headingItemization">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                 data-bs-target="#collapseItemization" aria-expanded="false" aria-controls="collapseItemization">
-                <span class="material-symbols-outlined me-2">checklist</span><strong>Rent Itemization (Optional)</strong>
-                <span class="badge bg-info ms-2">{% if rent_items|length > 0 %}{{ rent_items|length }} items{% else
-                  %}Not configured{% endif %}</span>
+                <span class="material-symbols-outlined me-2">checklist</span><strong>Rent Benefits</strong>
+                <span class="badge bg-info ms-2">{% if rent_items|length > 0 %}{{ rent_items|length }} items{% else %}None{% endif %}</span>
               </button>
             </h2>
             <div id="collapseItemization" class="accordion-collapse collapse" aria-labelledby="headingItemization"
@@ -658,144 +663,38 @@
               <div class="accordion-body">
                 <div class="alert alert-info">
                   <span class="material-symbols-outlined me-2">info</span>
-                  <strong>What is Rent Itemization?</strong><br>
-                  Specify what rent pays for (e.g., "Desk", "Chair", "Locker"). Optionally, you can make these items
-                  available in the store as single-purchase alternatives. This creates an incentive for students to pay
-                  rent instead of buying à la carte.
+                  <strong>What students receive for paying rent.</strong><br>
+                  These are set in the Store: open an item and turn on
+                  <em>&ldquo;Students receive this item when they pay rent&rdquo;</em>. A change there
+                  applies from the <strong>next</strong> rent cycle, so a cycle already underway is
+                  never altered.
                 </div>
 
-                {% if not store_enabled %}
-                <div class="alert alert-warning" role="alert">
-                  <span class="material-symbols-outlined me-2" style="vertical-align: middle;">storefront</span>
-                  <strong>Store feature is turned off for this class.</strong> You can still configure rent items, but
-                  none will be added to the store — the "Available in Store" option is disabled and per-use items won't
-                  appear in the store — until you enable the Store feature in <em>Economy Features</em>.
+                {% if rent_items|length == 0 %}
+                <div class="text-center text-muted py-4">
+                  <span class="material-symbols-outlined fs-1">inbox</span>
+                  <p class="mb-0">Paying rent currently grants nothing beyond satisfying the charge.</p>
                 </div>
-                {% endif %}
-
-                <div id="rentItemsContainer">
-                  {% if rent_items|length == 0 %}
-                  <div class="text-center text-muted py-4" id="noItemsPlaceholder">
-                    <span class="material-symbols-outlined fs-1">inbox</span>
-                    <p class="mb-0">No rent items configured yet. Click "Add Item" to get started.</p>
-                  </div>
-                  {% else %}
+                {% else %}
+                <ul class="list-group">
                   {% for item in rent_items %}
-                  <div class="card mb-3 rent-item-card" data-item-index="{{ loop.index0 }}">
-                    <div class="card-body">
-                      <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h3 class="mb-0 h6"><span class="material-symbols-outlined me-2">drag_indicator</span>Item #{{ loop.index }}</h3>
-                        <button type="button" class="btn btn-sm btn-danger" onclick="removeRentItem(this)">
-                          <span class="material-symbols-outlined">delete</span> Remove
-                        </button>
-                      </div>
-
-                      <input type="hidden" name="rent_item_id_{{ loop.index0 }}" value="{{ item.id }}">
-
-                      <div class="row">
-                        <div class="col-md-6 mb-3">
-                          <label class="form-label fw-bold">Item Name <span class="text-danger">*</span></label>
-                          <input type="text" class="form-control" aria-label="Rent item name" name="rent_item_name_{{ loop.index0 }}"
-                            value="{{ item.name }}" placeholder="e.g., Desk, Chair, Locker" required>
-                        </div>
-
-                        <div class="col-md-6 mb-3">
-                          <label class="form-label fw-bold">Description (Optional)</label>
-                          <input type="text" class="form-control" aria-label="Rent item description" name="rent_item_description_{{ loop.index0 }}"
-                            value="{{ item.description or '' }}" placeholder="Optional description">
-                        </div>
-                      </div>
-
-                      <div class="row">
-                        <div class="col-md-12 mb-3">
-                          <label class="form-label fw-bold">
-                            Item Type
-                            <span class="ms-1 text-muted" data-bs-toggle="tooltip" data-bs-placement="top"
-                              data-bs-title="Privileges are ongoing, non-countable benefits (sit in teacher's chair, choose music). Per-use items are countable services or goods (print worksheet, borrow pencil, phone call home, late work pass).">
-                              <span class="material-symbols-outlined">info</span>
-                            </span>
-                          </label>
-                          <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check" name="rent_item_type_{{ loop.index0 }}" id="type_privilege_{{ loop.index0 }}" value="privilege" {% if not item.rent_item_type or item.rent_item_type == 'privilege' %}checked{% endif %} onchange="toggleItemType({{ loop.index0 }})">
-                            <label class="btn btn-outline-primary" for="type_privilege_{{ loop.index0 }}">
-                              <span class="material-symbols-outlined me-1">star</span> Privilege
-                            </label>
-
-                            <input type="radio" class="btn-check" name="rent_item_type_{{ loop.index0 }}" id="type_per_use_{{ loop.index0 }}" value="per_use" {% if item.rent_item_type == 'per_use' %}checked{% endif %} onchange="toggleItemType({{ loop.index0 }})">
-                            <label class="btn btn-outline-success" for="type_per_use_{{ loop.index0 }}">
-                              <span class="material-symbols-outlined me-1">inventory_2</span> Per-Use Item
-                            </label>
-
-                            <input type="radio" class="btn-check" name="rent_item_type_{{ loop.index0 }}" id="type_hall_pass_{{ loop.index0 }}" value="hall_pass" {% if item.rent_item_type == 'hall_pass' %}checked{% endif %} onchange="toggleItemType({{ loop.index0 }})">
-                            <label class="btn btn-outline-secondary" for="type_hall_pass_{{ loop.index0 }}">
-                              <span class="material-symbols-outlined me-1">confirmation_number</span> Hall Pass
-                            </label>
-                          </div>
-                          <small class="text-muted d-block mt-2" id="type_desc_{{ loop.index0 }}">
-                            {% if item.rent_item_type == 'per_use' %}Consumable item (e.g. Pencil, Snack). Always available in store.{% elif item.rent_item_type == 'hall_pass' %}Adds to student hall pass balance upon rent payment.{% else %}Standard rent benefit (e.g. Desk, Locker).{% endif %}
-                          </small>
-                        </div>
-                      </div>
-
-                      <div class="row" id="privilege_options_{{ loop.index0 }}" style="{% if item.rent_item_type and item.rent_item_type != 'privilege' %}display: none;{% endif %}">
-                        <div class="col-md-6 mb-3">
-                          <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox"
-                              name="rent_item_store_available_{{ loop.index0 }}" id="store_available_{{ loop.index0 }}"
-                              {% if item.is_available_in_store %}checked{% endif %}
-                              {% if not store_enabled %}disabled{% endif %}
-                              onchange="toggleStorePrice({{ loop.index0 }})">
-                            <label class="form-check-label fw-bold" for="store_available_{{ loop.index0 }}">
-                              Available in Store
-                            </label>
-                          </div>
-                          <small class="text-muted">{% if not store_enabled %}Enable the Store feature to offer this privilege for separate purchase.{% else %}Allow students to buy this privilege separately (expires next rent due date){% endif %}</small>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                          <div class="alert alert-info mb-0">
-                            <small><strong>Privilege duration:</strong> Always per-period (valid until next rent due date).</small>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div class="row" id="common_price_field_{{ loop.index0 }}" style="{% if (not item.rent_item_type or item.rent_item_type == 'privilege') and item.is_available_in_store %}{% elif item.rent_item_type == 'per_use' %}{% else %}display: none;{% endif %}">
-                        <div class="col-md-6 mb-3">
-                          <label class="form-label fw-bold">Store Price ($) <span class="text-danger">*</span></label>
-                          <input type="number" step="0.01" min="0" class="form-control"
-                            name="rent_item_store_price_{{ loop.index0 }}" aria-label="Rent item store price" value="{{ item.store_price or '' }}"
-                            placeholder="Price">
-                        </div>
-                        <div class="col-md-6 mb-3" id="use_limit_field_{{ loop.index0 }}" style="{% if item.rent_item_type != 'per_use' %}display: none;{% endif %}">
-                          <label class="form-label fw-bold">Free Uses Per Period</label>
-                          <input type="number" min="1" class="form-control" aria-label="Rent item use limit" name="rent_item_use_limit_{{ loop.index0 }}" value="{{ item.use_limit or '' }}" placeholder="Leave blank for unlimited">
-                          <small class="text-muted">Rent payers get this many free uses per period.</small>
-                        </div>
-                      </div>
-
-                      <div class="row" id="hall_pass_options_{{ loop.index0 }}" style="{% if item.rent_item_type != 'hall_pass' %}display: none;{% endif %}">
-                        <div class="col-md-6 mb-3">
-                          <label class="form-label fw-bold">Passes Granted <span class="text-danger">*</span></label>
-                          <input type="number" min="1" class="form-control" aria-label="Hall passes granted" name="rent_item_hall_pass_count_{{ loop.index0 }}" value="{{ item.hall_pass_count or 1 }}">
-                          <small class="text-muted">Number of hall passes added when rent is paid</small>
-                        </div>
-                      </div>
+                  <li class="list-group-item d-flex justify-content-between align-items-start">
+                    <div>
+                      <div class="fw-bold">{{ item.name }}</div>
+                      {% if item.description %}
+                      <div class="text-muted small">{{ item.description }}</div>
+                      {% endif %}
+                      <div class="text-muted small">{{ item.entitlement_type.replace('_', ' ')|title }}</div>
                     </div>
-                  </div>
+                    <span class="badge bg-primary rounded-pill align-self-center">&times;{{ item.quantity }}</span>
+                  </li>
                   {% endfor %}
-                  {% endif %}
-                </div>
-
-                <button type="button" class="btn btn-success mt-2" onclick="addRentItem()">
-                  <span class="material-symbols-outlined me-2">add_circle</span>Add Rent Item
-                </button>
-
-                {% if rent_items|length > 0 %}
-                <div class="alert alert-warning mt-3">
-                  <span class="material-symbols-outlined me-2">warning</span>
-                  <strong>Note:</strong> Items marked as "Available in Store" will be automatically added to your class
-                  store when you save. If you uncheck this option, the store item will be deactivated.
-                </div>
+                </ul>
                 {% endif %}
+
+                <a href="{{ url_for('admin.store_management') }}" class="btn btn-outline-primary mt-3">
+                  <span class="material-symbols-outlined me-2">storefront</span>Manage in Store
+                </a>
               </div>
             </div>
           </div>
@@ -1165,205 +1064,13 @@
   }
   }
 
-  // -------------------- RENT ITEMIZATION FUNCTIONS --------------------
-  let rentItemCounter = {{ rent_items| length }};
-  const STORE_ENABLED = {{ 'true' if store_enabled else 'false' }};
-
-  window.addRentItem = function () {
-    const container = document.getElementById('rentItemsContainer');
-    const placeholder = document.getElementById('noItemsPlaceholder');
-
-    // Hide placeholder if it exists
-    if (placeholder) {
-      placeholder.style.display = 'none';
-    }
-
-    const itemCard = document.createElement('div');
-    itemCard.className = 'card mb-3 rent-item-card';
-    itemCard.setAttribute('data-item-index', rentItemCounter);
-    itemCard.innerHTML = `
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h3 class="mb-0 h6"><span class="material-symbols-outlined me-2">drag_indicator</span>Item #${rentItemCounter + 1}</h3>
-          <button type="button" class="btn btn-sm btn-danger" onclick="removeRentItem(this)">
-            <span class="material-symbols-outlined">delete</span> Remove
-          </button>
-        </div>
-
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Item Name <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" aria-label="Rent item name" name="rent_item_name_${rentItemCounter}" placeholder="e.g., Desk, Chair, Locker" required>
-          </div>
-
-          <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Description (Optional)</label>
-            <input type="text" class="form-control" aria-label="Rent item description" name="rent_item_description_${rentItemCounter}" placeholder="Optional description">
-          </div>
-        </div>
-
-        <div class="row">
-          <div class="col-md-12 mb-3">
-            <label class="form-label fw-bold">
-              Item Type
-              <span class="ms-1 text-muted" data-bs-toggle="tooltip" data-bs-placement="top"
-                data-bs-title="Privileges are ongoing, non-countable benefits (sit in teacher's chair, choose music). Per-use items are countable services or goods (print worksheet, borrow pencil, phone call home, late work pass).">
-                <span class="material-symbols-outlined">info</span>
-              </span>
-            </label>
-            <div class="btn-group w-100" role="group">
-              <input type="radio" class="btn-check" name="rent_item_type_${rentItemCounter}" id="type_privilege_${rentItemCounter}" value="privilege" checked onchange="toggleItemType(${rentItemCounter})">
-              <label class="btn btn-outline-primary" for="type_privilege_${rentItemCounter}">
-                <span class="material-symbols-outlined me-1">star</span> Privilege
-              </label>
-
-              <input type="radio" class="btn-check" name="rent_item_type_${rentItemCounter}" id="type_per_use_${rentItemCounter}" value="per_use" onchange="toggleItemType(${rentItemCounter})">
-              <label class="btn btn-outline-success" for="type_per_use_${rentItemCounter}">
-                <span class="material-symbols-outlined me-1">inventory_2</span> Per-Use Item
-              </label>
-
-              <input type="radio" class="btn-check" name="rent_item_type_${rentItemCounter}" id="type_hall_pass_${rentItemCounter}" value="hall_pass" onchange="toggleItemType(${rentItemCounter})">
-              <label class="btn btn-outline-secondary" for="type_hall_pass_${rentItemCounter}">
-                <span class="material-symbols-outlined me-1">confirmation_number</span> Hall Pass
-              </label>
-            </div>
-            <small class="text-muted d-block mt-2" id="type_desc_${rentItemCounter}">
-              Standard rent benefit (e.g. Desk, Locker).
-            </small>
-          </div>
-        </div>
-
-        <div class="row" id="privilege_options_${rentItemCounter}">
-          <div class="col-md-6 mb-3">
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" name="rent_item_store_available_${rentItemCounter}" id="store_available_${rentItemCounter}" ${STORE_ENABLED ? '' : 'disabled'} onchange="toggleStorePrice(${rentItemCounter})">
-              <label class="form-check-label fw-bold" for="store_available_${rentItemCounter}">
-                Available in Store
-              </label>
-            </div>
-            <small class="text-muted">${STORE_ENABLED ? 'Allow students to buy this privilege separately (expires next rent due date)' : 'Enable the Store feature to offer this privilege for separate purchase.'}</small>
-          </div>
-          <div class="col-md-6 mb-3">
-            <div class="alert alert-info mb-0">
-              <small><strong>Privilege duration:</strong> Always per-period (valid until next rent due date).</small>
-            </div>
-          </div>
-        </div>
-
-        <div class="row" id="common_price_field_${rentItemCounter}" style="display: none;">
-          <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Store Price ($) <span class="text-danger">*</span></label>
-            <input type="number" step="0.01" min="0" class="form-control" aria-label="Rent item store price" name="rent_item_store_price_${rentItemCounter}" placeholder="Price">
-          </div>
-          <div class="col-md-6 mb-3" id="use_limit_field_${rentItemCounter}" style="display: none;">
-            <label class="form-label fw-bold">Free Uses Per Period</label>
-            <input type="number" min="1" class="form-control" aria-label="Rent item use limit" name="rent_item_use_limit_${rentItemCounter}" placeholder="Leave blank for unlimited">
-            <small class="text-muted">Rent payers get this many free uses per period.</small>
-          </div>
-        </div>
-
-        <div class="row" id="hall_pass_options_${rentItemCounter}" style="display: none;">
-          <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Passes Granted <span class="text-danger">*</span></label>
-            <input type="number" min="1" class="form-control" aria-label="Hall passes granted" name="rent_item_hall_pass_count_${rentItemCounter}" value="1">
-            <small class="text-muted">Number of hall passes added when rent is paid</small>
-          </div>
-        </div>
-      </div>
-    `;
-
-    container.appendChild(itemCard);
-    rentItemCounter++;
-
-    const newTooltips = itemCard.querySelectorAll('[data-bs-toggle="tooltip"]');
-    newTooltips.forEach(trigger => new bootstrap.Tooltip(trigger));
-
-    // Renumber all items
-    renumberRentItems();
-
-    // Update prevent purchase toggle label
-    updatePreventPurchaseLabel();
-  };
-
-  window.removeRentItem = function (button) {
-    const card = button.closest('.rent-item-card');
-    card.remove();
-
-    // Show placeholder if no items left
-    const container = document.getElementById('rentItemsContainer');
-    const cards = container.querySelectorAll('.rent-item-card');
-    if (cards.length === 0) {
-      const placeholder = document.getElementById('noItemsPlaceholder');
-      if (placeholder) {
-        placeholder.style.display = 'block';
-      }
-    }
-
-    // Renumber remaining items
-    renumberRentItems();
-
-    // Update prevent purchase toggle label
-    updatePreventPurchaseLabel();
-  };
-
-  window.toggleItemType = function (index) {
-    const typePrivilege = document.getElementById(`type_privilege_${index}`);
-    const typePerUse = document.getElementById(`type_per_use_${index}`);
-    const typeHallPass = document.getElementById(`type_hall_pass_${index}`);
-
-    const privilegeOptions = document.getElementById(`privilege_options_${index}`);
-    const commonPriceField = document.getElementById(`common_price_field_${index}`);
-    const useLimitField = document.getElementById(`use_limit_field_${index}`);
-    const hallPassOptions = document.getElementById(`hall_pass_options_${index}`);
-    const typeDesc = document.getElementById(`type_desc_${index}`);
-
-    // Hide all first
-    if(privilegeOptions) privilegeOptions.style.display = 'none';
-    if(commonPriceField) commonPriceField.style.display = 'none';
-    if(useLimitField) useLimitField.style.display = 'none';
-    if(hallPassOptions) hallPassOptions.style.display = 'none';
-
-    if (typePrivilege && typePrivilege.checked) {
-      if(privilegeOptions) privilegeOptions.style.display = 'flex';
-      if(typeDesc) typeDesc.textContent = "Standard rent benefit (e.g. Desk, Locker).";
-      toggleStorePrice(index);
-    } else if (typePerUse && typePerUse.checked) {
-      if(commonPriceField) commonPriceField.style.display = 'flex';
-      if(useLimitField) useLimitField.style.display = 'block';
-      if(typeDesc) typeDesc.textContent = "Consumable item (e.g. Pencil, Snack). Always available in store.";
-    } else if (typeHallPass && typeHallPass.checked) {
-      if(hallPassOptions) hallPassOptions.style.display = 'flex';
-      if(typeDesc) typeDesc.textContent = "Adds to student hall pass balance upon rent payment.";
-    }
-  };
-
-  window.toggleStorePrice = function (index) {
-    const checkbox = document.getElementById(`store_available_${index}`);
-    const commonPriceField = document.getElementById(`common_price_field_${index}`);
-    const typePrivilege = document.getElementById(`type_privilege_${index}`);
-
-    // Only relevant if type is Privilege
-    if (typePrivilege && typePrivilege.checked) {
-      if (checkbox && commonPriceField) {
-        commonPriceField.style.display = checkbox.checked ? 'flex' : 'none';
-      }
-    }
-  };
-
-  function renumberRentItems() {
-    const cards = document.querySelectorAll('.rent-item-card');
-    cards.forEach((card, index) => {
-      const header = card.querySelector('h6');
-      if (header) {
-        header.innerHTML = `<span class="material-symbols-outlined me-2">drag_indicator</span>Item #${index + 1}`;
-      }
-    });
-  }
+  // Rent benefits are edited in the Store, not here, so this page no longer
+  // builds item forms. The only thing left that depends on them is the label
+  // below, which is rendered from the server-side count.
+  const HAS_RENT_BENEFITS = {{ 'true' if rent_items|length > 0 else 'false' }};
 
   function updatePreventPurchaseLabel() {
-    const container = document.getElementById('rentItemsContainer');
-    const cards = container ? container.querySelectorAll('.rent-item-card') : [];
-    const hasItems = cards.length > 0;
+    const hasItems = HAS_RENT_BENEFITS;
 
     const labelText = document.getElementById('prevent_purchase_label_text');
     const description = document.getElementById('prevent_purchase_description');
@@ -1378,6 +1085,8 @@
       }
     }
   }
+
+  updatePreventPurchaseLabel();
 });
 </script>
 

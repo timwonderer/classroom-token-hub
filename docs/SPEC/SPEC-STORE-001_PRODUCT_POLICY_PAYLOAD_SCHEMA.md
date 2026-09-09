@@ -112,8 +112,8 @@ COLLECTIVE_GOAL   - Threshold/deadline purchase (group goal completion)
 | `tier` | string \| null | Organizational category | Values: "basic", "standard", "premium", "luxury" |
 | `bypass_cwi_warnings` | boolean | Override CWI balance warnings? | Default: false |
 | `is_long_term_goal` | boolean | Exclude from CWI balance checks? | Default: false |
-| `bundle_quantity` | int \| null | Items in bundle | If set, must be > 1; mutually exclusive with collective_goal |
-| `bulk_discount_quantity` | int \| null | Min quantity for discount | If set, must be > 1 |
+| `bundle_quantity` | int \| null | Items in bundle | If set, must be > 1; DELAYED_USE and HALL_PASS only; mutually exclusive with collective_goal |
+| `bulk_discount_quantity` | int \| null | Min quantity for discount | If set, must be > 1; only DELAYED_USE and HALL_PASS products may use bulk discounts |
 | `bulk_discount_percentage` | float \| null | Discount percentage | Range: 0-100; paired with bulk_discount_quantity |
 | `collective_goal_type` | string \| null | Goal threshold type | Values: "fixed" or "whole_class"; mutually exclusive with bundle fields |
 | `collective_goal_target` | int \| null | Required purchases for goal | If set, must be > 0; requires collective_goal_type and collective_goal_expires_at |
@@ -123,6 +123,14 @@ COLLECTIVE_GOAL   - Threshold/deadline purchase (group goal completion)
 
 ### A. Type-Specific Rules
 
+Bundling is the narrowest of these rules, so it is stated once rather than
+repeated per type: **only DELAYED_USE and HALL_PASS may be bundled.** A bundle
+grants `bundle_quantity` independent entitlement lifecycles from one charge, so
+it is only meaningful for a type that can hold more than one unexercised unit.
+IMMEDIATE_USE is exercised at the moment of sale and PRIVILEGE is a single
+standing state, so neither has units to hold; COLLECTIVE_GOAL is excluded for a
+different reason, given below.
+
 **IMMEDIATE_USE:**
 - `auto_expiry_days` MUST be null (or will be ignored)
 - `limit_per_student` optional
@@ -131,13 +139,17 @@ COLLECTIVE_GOAL   - Threshold/deadline purchase (group goal completion)
 **DELAYED_USE:**
 - `auto_expiry_days` optional but recommended (null = perpetual entitlement)
 - `limit_per_student` optional
-- Cannot be bundled or part of collective goal
+- MAY be bundled; a purchase of `quantity` writes `quantity × bundle_quantity`
+  `GRANTED` events, each its own lifecycle, all sharing the purchase's
+  `correlation_id`. The debit is per pack, not per unit.
+- Cannot be part of a collective goal
 
 **HALL_PASS:**
 - `supports_direct_grants` MUST be true
 - `auto_expiry_days` optional
 - `limit_per_student` optional
-- Cannot be bundled or part of collective goal
+- MAY be bundled, on the same terms as DELAYED_USE
+- Cannot be part of a collective goal
 
 **PRIVILEGE:**
 - `auto_expiry_days` MUST be null (expires by revocation only)
@@ -151,6 +163,9 @@ COLLECTIVE_GOAL   - Threshold/deadline purchase (group goal completion)
 - `auto_expiry_days` typically null (managed by Obligations bill cycles)
 - `limit_per_student` typically null or 1
 - Additional insurance-specific fields (see SPEC-OBL-001)
+- **Not sold through the store.** Enrollment is purchased through the insurance
+  interface under FEAT-CLASS-003, not through the store purchase command, so
+  the store's bundle and bulk-discount rules never reach it.
 
 **COLLECTIVE_GOAL:**
 - `collective_goal_type` MUST be set ("fixed" or "whole_class")
@@ -164,6 +179,9 @@ COLLECTIVE_GOAL   - Threshold/deadline purchase (group goal completion)
 1. **Bundle XOR Collective Goal**
    - If any of `bundle_quantity`, `bulk_discount_quantity`, `bulk_discount_percentage` is set, all collective_goal fields MUST be null
    - If any collective_goal field is set, all bundle fields MUST be null
+   - A goal is a shared pot with a deadline. Bundling and quantity discounts
+     describe one student's individual purchase, so they have no meaning
+     against it — a goal is its own category with its own rules.
 
 2. **Collective Goal Completeness**
    - If `collective_goal_type` is set, both `collective_goal_target` and `collective_goal_expires_at` MUST be set
@@ -177,6 +195,7 @@ COLLECTIVE_GOAL   - Threshold/deadline purchase (group goal completion)
 4. **bundle_quantity:** If set, must be > 1
 5. **bulk_discount_quantity:** If set, must be > 1
 6. **bulk_discount_percentage:** If set, must be in range [0, 100]
+7. **Bulk discounts:** If either bulk-discount field is set, `entitlement_type` MUST be `DELAYED_USE` or `HALL_PASS`. Immediate-use and privilege products cannot hold multiple unexercised units, and collective goals are shared pots rather than individual multi-unit purchases.
 7. **collective_goal_target:** If set, must be > 0
 8. **collective_goal_expires_at:** If set, must be a valid future datetime
 

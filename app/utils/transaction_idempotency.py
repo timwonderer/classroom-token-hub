@@ -8,6 +8,10 @@ from app.models import LedgerCommandReservation, Seat, Transaction, TransactionS
 
 
 IDEMPOTENT_TRANSACTION_TYPES = frozenset({
+    # The canonical compensating type (FEAT-LED-002 §III.2.1). The business
+    # reason a reversal was raised for is persisted in
+    # Transaction.compensation_subtype, not here.
+    "REVERSAL",
     "insurance_reimbursement",
     "insurance_premium",
     "purchase",

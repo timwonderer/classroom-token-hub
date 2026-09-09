@@ -103,8 +103,8 @@ def test_DOM_LED_001__posting_sequence_is_class_scoped_across_seats(client, app)
         assert len(sequences) >= 2
         assert sequences == sorted(set(sequences))
 
-def test_DOM_CLASS_001__void_pending_transaction_does_not_create_reversal(client, app):
-    """Test voiding a PENDING transaction (no reversal)."""
+def test_DOM_CLASS_001__pending_transaction_settles_without_void_filter(client, app):
+    """A pending monetary transaction is posted; it cannot disappear via voiding."""
     with FEATContext("FEAT-TEST-SETUP", idempotency_key="banking-core:test-void-pending"):
         classroom = initialize("chemistry_p1", app)
         economy = classroom.economy
@@ -126,11 +126,8 @@ def test_DOM_CLASS_001__void_pending_transaction_does_not_create_reversal(client
         db.session.add(tx)
         db.session.flush()
 
-        tx.is_void = True
-        db.session.flush()
-
         bal, _ = get_available_balances(seat_id, class_id)
-        assert bal == Decimal("0.00")
+        assert bal == Decimal("50.00")
 
         settle_balances(seat_id, class_id)
         db.session.flush()
@@ -140,12 +137,11 @@ def test_DOM_CLASS_001__void_pending_transaction_does_not_create_reversal(client
 
         db.session.expire_all()
         tx = db.session.get(Transaction, tx.id)
-        assert tx.status == TransactionStatus.VOID
-        assert tx.voided_at is not None
+        assert tx.status == TransactionStatus.POSTED
 
         cache = _snapshot(seat_id, class_id)
         if cache:
-            assert cache.posted_balance_cents == 0
+            assert cache.posted_balance_cents == 5000
 
 def test_DOM_CLASS_001__void_posted_transaction_creates_reversal(client, app):
     """Test voiding a POSTED transaction (creates reversal)."""
@@ -176,8 +172,6 @@ def test_DOM_CLASS_001__void_posted_transaction_creates_reversal(client, app):
         db.session.expire_all()
         tx = db.session.get(Transaction, tx.id)
         assert tx.status == TransactionStatus.POSTED
-
-        tx.is_void = True
 
         reversal = Transaction(
             user_id=student_user.id,

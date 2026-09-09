@@ -193,7 +193,7 @@
                         title="Coverage not active yet - still in waiting period">File New Claim (Waiting
                         Period)</button>
                     {% else %}
-                    <a href="{{ url_for('student.file_claim', policy_id=enrollment.policy.id) }}"
+                    <a href="{{ url_for('student.file_claim', policy_uuid=enrollment.policy.id) }}"
                         class="btn btn-primary">File New Claim</a>
                     {% endif %}
                 </div>
@@ -216,7 +216,7 @@
                         File a Claim (Waiting Period)
                     </button>
                     {% else %}
-                    <a href="{{ url_for('student.file_claim', policy_id=enrollment.policy.id) }}"
+                    <a href="{{ url_for('student.file_claim', policy_uuid=enrollment.policy.id) }}"
                         class="btn btn-primary">
                         File a Claim
                     </a>
@@ -245,8 +245,17 @@
                     {% endif %}
                 </p>
 
-                <form action="{{ url_for('student.cancel_insurance', enrollment_id=enrollment.id) }}" method="POST">
+                {# `enrollment.id` is the policy_uuid — the view builds `enrollment`
+                   from the policy itself, not from a row with a separate integer id.
+                   Cancelling is a passphrase action, the same as buying
+                   (FEAT-IDEN-002 §Credential boundary). #}
+                <form action="{{ url_for('student.cancel_insurance', policy_uuid=enrollment.id) }}" method="POST">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-2">
+                        <label for="cancelPassphrase" class="form-label">Enter your passphrase to confirm:</label>
+                        <input type="password" class="form-control" id="cancelPassphrase"
+                               name="passphrase" autocomplete="current-password" required>
+                    </div>
                     <button type="submit" class="btn btn-danger w-100"
                         onclick="return confirm('Are you sure you want to cancel this insurance policy?')">
                         Cancel This Policy

@@ -137,7 +137,11 @@ def upgrade():
 
     # Indexes for store_item_visibility
     if table_exists('store_item_visibility'):
-        if not index_exists('store_item_visibility', 'ix_store_item_visibility_store_item_id'):
+        # store_item_id is guarded because a later migration (b7c41e9a2f30)
+        # rekeys this table to product_lineage_uuid, and the baseline is built
+        # from today's ORM — so on a fresh chain the table already arrives in
+        # its post-rekey shape and this column is absent.
+        if column_exists('store_item_visibility', 'store_item_id') and not index_exists('store_item_visibility', 'ix_store_item_visibility_store_item_id'):
             op.create_index('ix_store_item_visibility_store_item_id', 'store_item_visibility', ['store_item_id'])
         if not index_exists('store_item_visibility', 'ix_store_item_visibility_seat_id'):
             op.create_index('ix_store_item_visibility_seat_id', 'store_item_visibility', ['seat_id'])

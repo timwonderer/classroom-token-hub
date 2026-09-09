@@ -75,9 +75,6 @@ With no history yet it reads *No recent transactions*.
 
 ## Important notes
 
-> [!WARNING]
-> **The hall pass destinations in Choose Break Type do not currently load.** The list stays on *Loading destinations...* or reports that none are available, no matter what your teacher has set up. **Done for the day** still works. If you need to leave the room, ask your teacher directly.
-
 > [!NOTE]
 > **Dismissing an announcement only dismisses it on that device.** The dismissal is remembered by the browser you are using, so the same announcement can reappear when you log in on a different computer. That is not your teacher re-posting it.
 

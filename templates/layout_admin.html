@@ -354,6 +354,9 @@
                     <span class="d-none d-md-inline-flex">
                         {{ help.help_link(help_doc_path, text="Guide", tooltip="View guide") }}
                     </span>
+                    <a href="{{ docs_url_for('user-guides/diagnostics/teacher') }}" class="btn btn-link btn-sm" target="_blank" rel="noopener">
+                        Troubleshooting <span class="visually-hidden">(opens in a new tab)</span>
+                    </a>
                 {% endif %}
                 {% block page_header_actions %}
                 {% endblock %}

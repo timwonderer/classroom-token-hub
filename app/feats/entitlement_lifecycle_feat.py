@@ -5,6 +5,7 @@ from typing import Any
 from app.extensions import db
 from app.feats.base import requires_feat_context
 from app.models import PendingAction
+from app.utils.canonical_temporal_resolver import utc_now
 
 
 @requires_feat_context("FEAT-STOR-002")
@@ -78,6 +79,9 @@ def execute_approve_redemption(
     from app.feats.prod import _record_hall_pass_log_impl as record_hall_pass_log_command
     from app.services.inventory_service import consume_entitlement
 
+    if (pending_action.payload or {}).get("outcome"):
+        raise ValueError("Redemption request has already been resolved")
+
     if store_item.item_type == 'hall_pass':
         record_hall_pass_log_command(
             ctx=ctx,
@@ -104,7 +108,11 @@ def execute_approve_redemption(
                 "details": (pending_action.payload or {}).get("details") or None,
             },
         )
-    db.session.delete(pending_action)
+    pending_action.payload = {
+        **(pending_action.payload or {}),
+        "outcome": "APPROVED",
+        "resolved_at": utc_now().isoformat(),
+    }
 
 
 @requires_feat_context("FEAT-STOR-002")
@@ -114,5 +122,12 @@ def execute_reject_redemption(
     correlation_id: str | None = None,
     idempotency_key: str | None = None,
 ) -> None:
-    """Execute rejection of a pending redemption (delete pending action without consumption)."""
-    db.session.delete(pending_action)
+    """Record rejection while retaining the request for the audit history."""
+
+    if (pending_action.payload or {}).get("outcome"):
+        raise ValueError("Redemption request has already been resolved")
+    pending_action.payload = {
+        **(pending_action.payload or {}),
+        "outcome": "REJECTED",
+        "resolved_at": utc_now().isoformat(),
+    }

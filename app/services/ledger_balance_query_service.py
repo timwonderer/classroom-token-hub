@@ -10,7 +10,7 @@ from app.models import LedgerBalanceSnapshot, Transaction, TransactionStatus, _q
 
 
 def _non_void_filter():
-    return Transaction.is_void.isnot(True)
+    return Transaction.status != TransactionStatus.VOID
 
 
 class LedgerProofResult(NamedTuple):
@@ -205,7 +205,6 @@ def verify_transfer(class_id: str, correlation_id: str) -> TransferProofResult:
     posting_ok = all(
         row.posting_sequence is not None
         and row.status == TransactionStatus.POSTED
-        and not row.is_void
         for row in rows
     )
     if not posting_ok and scope_ok and pair_ok and magnitude_ok and zero_sum:

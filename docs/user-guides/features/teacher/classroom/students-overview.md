@@ -100,8 +100,8 @@ Deleting several at once is deliberately harder. **Bulk Actions > Delete Student
 > [!NOTE]
 > **The roster is per-class.** Everything on this page belongs to the class selected in the sidebar. Adding a student here does not add them anywhere else.
 
-> [!WARNING]
-> **The exported Insurance Plan column always reads "None."** The export does not currently look up active policies. Every other column is accurate. This is a known defect.
+> [!NOTE]
+> **Insurance Plan is derived from active coverage.** The export shows the current policy title for each student with an active insurance entitlement; students without active coverage show “None.”
 
 > [!TIP]
 > Paste your whole class in one go on day one, then hand out the join code and let students claim at their own pace. The unclaimed-seat badge tells you who is still outstanding without your having to chase anyone.

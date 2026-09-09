@@ -15,8 +15,8 @@ from app.feats.base import FEATContext
 from app.models import EntitlementEvent
 from app.services.context_resolver import CanonicalContext
 from app.feats.direct_entitlement_grant_feat import execute_direct_grant
-from app.services.store_policy_resolver import StorePolicyResolver
 from tests.helpers.canonical_classroom import provision_classroom
+from tests.helpers.store_products import publish_store_product
 
 
 @pytest.fixture
@@ -37,16 +37,10 @@ def test_class_setup(app_with_context):
         student_user_id = classroom.students[0].user_id
 
         with FEATContext("FEAT-TEST-SETUP", idempotency_key="phase4-route-wiring:store-policy"):
-            policy = StorePolicyResolver.create_store_product(
+            policy = publish_store_product(
                 class_id=classroom.class_id,
-                payload={
-                    "product_id": 1,
-                    "is_purchasable": True,
-                    "supports_direct_grants": True,
-                    "price": "0.00",
-                    "entitlement_type": "HALL_PASS",
-                    "name": "Test Hall Pass",
-                },
+                entitlement_type="HALL_PASS",
+                name="Test Hall Pass",
                 created_by_seat_id=teacher_seat_id,
             )
         db.session.commit()
@@ -58,7 +52,8 @@ def test_class_setup(app_with_context):
             "student_user_id": student_user_id,
             "student_seat_id": student_seat_id,
             "policy_uuid": policy.policy_uuid,
-            "product_id": policy.product_id,
+            # Entitlement events record the product, not the version.
+            "product_id": policy.product_lineage_uuid,
         }
 
 

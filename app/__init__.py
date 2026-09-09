@@ -918,7 +918,12 @@ def create_app():
             available_classes = [
                 {
                     'class_id': class_row.class_id,
-                    'class_identifier': class_row.display_name or class_row.join_code,
+                    'class_identifier': (
+                        f"{class_row.display_name or class_row.join_code}"
+                        f" — {class_row.section.strip()}"
+                        if class_row.section and class_row.section.strip()
+                        else (class_row.display_name or class_row.join_code)
+                    ),
                     'is_current': class_row.class_id == context.class_id,
                 }
                 for class_row in get_all_classes_by_teacher(context.user_id)

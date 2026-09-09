@@ -25,7 +25,7 @@ import uuid
 
 from app.extensions import db
 from app.feats.base import requires_feat_context
-from app.models import Seat, EntitlementEvent, StoreProduct
+from app.models import Seat, EntitlementEvent
 from app.services.context_resolver import CanonicalContext
 from app.services.store_policy_resolver import (
     StorePolicyResolver,
@@ -86,7 +86,7 @@ class DirectGrantResult:
     correlation_id: str
     quantity_granted: int
     entitlement_ids: list[str] = field(default_factory=list)
-    product_id: Optional[int] = None
+    product_id: Optional[str] = None
     error_code: Optional[str] = None
     error_message: Optional[str] = None
 

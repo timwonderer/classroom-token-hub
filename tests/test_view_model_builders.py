@@ -10,7 +10,6 @@ from app.extensions import db
 from app.feats.base import FEATContext
 from app.models import EntitlementEvent, IdentityProfile
 from app.services.context_resolver import CanonicalContext
-from app.services.store_policy_resolver import StorePolicyResolver
 from app.services.view_model_builders import (
     build_entitlement_list_view,
     build_policy_list_view,
@@ -20,6 +19,7 @@ from app.services.view_model_builders import (
 from app.feats.store_purchase_feat import execute_store_purchase
 from app.feats.direct_entitlement_grant_feat import execute_direct_grant
 from tests.helpers.canonical_classroom import provision_classroom
+from tests.helpers.store_products import publish_store_product
 from tests.helpers.ledger import create_ledger_pending_transaction
 
 
@@ -28,29 +28,18 @@ def classroom(app):
     with app.app_context():
         classroom = provision_classroom("chemistry_p1")
         with FEATContext("FEAT-TEST-SETUP", idempotency_key="phase5-view-models:policy-purchase"):
-            purchase_policy = StorePolicyResolver.create_store_product(
+            purchase_policy = publish_store_product(
                 class_id=classroom.class_id,
-                payload={
-                    "product_id": 701,
-                    "is_purchasable": True,
-                    "supports_direct_grants": True,
-                    "price": "4.50",
-                    "entitlement_type": "DELAYED_USE",
-                    "name": "Notebook",
-                },
+                entitlement_type="DELAYED_USE",
+                name="Notebook",
+                price="4.50",
                 created_by_seat_id=classroom.teacher_seat_id,
             )
         with FEATContext("FEAT-TEST-SETUP", idempotency_key="phase5-view-models:policy-grant"):
-            grant_policy = StorePolicyResolver.create_store_product(
+            grant_policy = publish_store_product(
                 class_id=classroom.class_id,
-                payload={
-                    "product_id": 702,
-                    "is_purchasable": True,
-                    "supports_direct_grants": True,
-                    "price": "0.00",
-                    "entitlement_type": "HALL_PASS",
-                    "name": "Hall Pass",
-                },
+                entitlement_type="HALL_PASS",
+                name="Hall Pass",
                 created_by_seat_id=classroom.teacher_seat_id,
             )
         # Fund the purchasing student through the canonical ledger write path so the
@@ -71,7 +60,7 @@ def classroom(app):
                 type="payroll",
                 description="Test funding for store purchase",
             )
-        # Persist the canonical producer's output durably. create_store_product
+        # Persist the canonical producer's output durably. publish_product
         # only flushes inside the FEAT-TEST-SETUP transaction boundary; without a
         # real commit the StoreProduct rows are rolled back when this fixture's
         # app_context pops, leaving the read paths (which run in a fresh
@@ -157,11 +146,17 @@ def test_build_policy_list_view_returns_canonical_policies_in_presentation_order
             purchase_policy.policy_uuid,
             grant_policy.policy_uuid,
         ]
-        assert [view.product_id for view in views] == [701, 702]
+        # product_id is the lineage: the product, not the version on sale.
+        assert [view.product_id for view in views] == [
+            purchase_policy.product_lineage_uuid,
+            grant_policy.product_lineage_uuid,
+        ]
         assert [view.name for view in views] == ["Notebook", "Hall Pass"]
         assert all(view.class_id == classroom_obj.class_id for view in views)
         assert all(view.is_purchasable for view in views)
-        assert all(view.supports_direct_grants for view in views)
+        # Direct grantability is derived from the type rather than declared:
+        # HALL_PASS is the only catalog type a teacher may hand out without a sale.
+        assert [view.supports_direct_grants for view in views] == [False, True]
 
 
 def test_build_identity_profile_view_happy_path(app, classroom):

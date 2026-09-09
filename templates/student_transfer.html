@@ -131,14 +131,14 @@
                 <div class="mt-3 text-center">
                     <small class="text-muted">
                         {% if annual_interest_rate %}
-                        Projection based on current balance of <strong>${{ "%.2f"|format(savings_balance) }}</strong>
+                        Projection based on current posted balance of <strong>${{ "%.2f"|format(posted_savings_balance) }}</strong>
                         with
                         {{ "%.2f"|format(annual_interest_rate * 100) }}% annual {{ calculation_type }}
                         interest
                         {% if calculation_type == 'compound' %}(compounded {{ compound_frequency }}){% endif %}
                         {% else %}
                         Savings interest is not currently configured for this class, so your
-                        balance of <strong>${{ "%.2f"|format(savings_balance) }}</strong> is projected flat.
+                        posted balance of <strong>${{ "%.2f"|format(posted_savings_balance) }}</strong> is projected flat.
                         {% endif %}
                     </small>
                 </div>
@@ -302,7 +302,7 @@
                         </thead>
                         <tbody>
                             {% for tx in checking_transactions[:50] %}
-                            <tr {% if tx.is_void %}class="table-secondary text-decoration-line-through" {% endif %}>
+                            <tr {% if tx.status.value == 'void' %}class="table-secondary text-decoration-line-through" {% endif %}>
                                 <td>
                                     {% if tx.timestamp %}
                                     {{ tx.timestamp|fmt_timestamp }}
@@ -317,7 +317,7 @@
                                 </td>
                                 <td>{{ tx.description or 'N/A' }}</td>
                                 <td>
-                                    {% if tx.is_void %}
+                                    {% if tx.status.value == 'void' %}
                                     <span class="badge bg-secondary">Voided</span>
                                     {% else %}
                                     <span class="badge bg-success">Active</span>
@@ -363,7 +363,7 @@
                         </thead>
                         <tbody>
                             {% for tx in savings_transactions[:50] %}
-                            <tr {% if tx.is_void %}class="table-secondary text-decoration-line-through" {% endif %}>
+                            <tr {% if tx.status.value == 'void' %}class="table-secondary text-decoration-line-through" {% endif %}>
                                 <td>
                                     {% if tx.timestamp %}
                                     {{ tx.timestamp|fmt_timestamp }}
@@ -378,7 +378,7 @@
                                 </td>
                                 <td>{{ tx.description or 'N/A' }}</td>
                                 <td>
-                                    {% if tx.is_void %}
+                                    {% if tx.status.value == 'void' %}
                                     <span class="badge bg-secondary">Voided</span>
                                     {% else %}
                                     <span class="badge bg-success">Active</span>
@@ -409,7 +409,7 @@
     </div>
 </div>
 
-<!-- Passphrase Modal -->
+<!-- PIN Modal -->
 <div class="modal fade" id="passphraseModal" tabindex="-1" aria-labelledby="passphraseModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -428,8 +428,8 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label for="passphrase" class="form-label">Enter your passphrase to confirm:</label>
-                        <input type="password" class="form-control" name="passphrase" id="passphrase"
+                        <label for="passphrase" class="form-label">Enter your PIN to confirm:</label>
+                        <input type="password" class="form-control" name="pin" id="passphrase"
                             autocomplete="current-password" required autofocus>
                     </div>
                     <input type="hidden" name="from_account" id="modal_from_account">

@@ -70,7 +70,7 @@ def get_entitlement_balance(
     seat_id: int,
     class_id: str,
     entitlement_type: str,
-    product_id: Optional[int] = None,
+    product_id: Optional[str] = None,
     reference_time_utc: Optional[datetime] = None,
 ) -> int:
     """
@@ -178,7 +178,7 @@ def is_entitlement_exercisable(
 def get_entitlement_history(
     seat_id: int,
     class_id: str,
-    product_id: Optional[int] = None,
+    product_id: Optional[str] = None,
     limit: int = 100,
 ) -> list[dict]:
     """
@@ -223,7 +223,12 @@ def get_entitlement_history(
             "event_type": e.event_type,
             "acquisition_type": e.acquisition_type,
             "entitlement_type": e.entitlement_type,
+            # Product LINEAGE uuid — stable across teacher edits.
             "product_id": e.product_id,
+            # The exact product version this entitlement was created under, so
+            # a caller can render the terms actually bought rather than the
+            # current ones.
+            "policy_uuid": (e.payload or {}).get("policy_uuid"),
             "timestamp": e.timestamp.isoformat(),
             "correlation_id": e.correlation_id,
         }
@@ -599,7 +604,7 @@ def has_active_coverage_in_group(
 def get_active_entitlements(
     seat_id: int,
     class_id: str,
-    product_id: Optional[int] = None,
+    product_id: Optional[str] = None,
     entitlement_type: Optional[str] = None,
 ) -> list[EntitlementEvent]:
     """
