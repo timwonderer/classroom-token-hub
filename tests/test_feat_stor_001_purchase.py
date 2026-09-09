@@ -58,7 +58,7 @@ class TestStorePurchaseHappyPath:
     """Test ordinary purchase flow."""
 
     def test_purchase_creates_granted_events(self, app_with_class, test_class_and_seat):
-        """A single immediate-use purchase creates one grant."""
+        """A single delayed-use purchase creates one grant."""
         with app_with_class.app_context():
             class_id = test_class_and_seat["class_id"]
             student_seat_id = test_class_and_seat["student_seat_id"]

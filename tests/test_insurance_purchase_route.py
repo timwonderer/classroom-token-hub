@@ -22,6 +22,9 @@ from app.utils.transaction_idempotency import create_idempotent_transaction
 from tests.helpers.canonical_classroom import provision_classroom, login_student
 from tests.helpers.class_domain import enable_class_feature
 
+# tests/helpers/canonical_identities.py provisions every student with this.
+CANONICAL_STUDENT_PASSPHRASE = "testpass"
+
 
 def _teacher_ctx(classroom):
     return CanonicalContext(
@@ -76,7 +79,13 @@ def test_marketplace_lists_and_student_can_buy(app, client):
     assert b"Buy" in resp.data
 
     # Purchase drives FEAT-OBL-004.
-    resp = client.post(f"/student/insurance/purchase/{policy_uuid}")
+    # Buying insurance verifies the passphrase (FEAT-IDEN-002 §Credential
+    # boundary). Without it the route flashes and redirects without buying, so
+    # the coverage assertion below would fail for the wrong reason.
+    resp = client.post(
+        f"/student/insurance/purchase/{policy_uuid}",
+        data={"passphrase": CANONICAL_STUDENT_PASSPHRASE},
+    )
     assert resp.status_code == 302  # redirect back to the marketplace
 
     with app.app_context():
@@ -100,7 +109,11 @@ def test_purchase_insufficient_funds_flashes_and_writes_nothing(app, client):
         class_id = classroom.class_id
         login_student(client, student)
 
-    resp = client.post(f"/student/insurance/purchase/{policy_uuid}", follow_redirects=True)
+    resp = client.post(
+        f"/student/insurance/purchase/{policy_uuid}",
+        data={"passphrase": CANONICAL_STUDENT_PASSPHRASE},
+        follow_redirects=True,
+    )
     assert resp.status_code == 200
 
     with app.app_context():
@@ -255,15 +268,23 @@ def test_grouped_marketplace_shows_group_and_cancel_stops_renewal(app, client):
     assert b"Paycheck Protection" in resp.data
 
     # Buy the Basic tier.
-    assert client.post(f"/student/insurance/purchase/{basic}").status_code == 302
+    assert client.post(
+        f"/student/insurance/purchase/{basic}",
+        data={"passphrase": CANONICAL_STUDENT_PASSPHRASE},
+    ).status_code == 302
 
     # The group now shows as enrolled; the other tier is unavailable (one per group).
     resp = client.get("/student/insurance")
     assert b"Enrolled" in resp.data
     assert b"Unavailable" in resp.data
 
-    # Cancel via FEAT-OBL-005 — stop renewal (terminal bill cycle).
-    resp = client.post(f"/student/insurance/cancel/{basic}")
+    # Cancel via FEAT-OBL-005 — stop renewal (terminal bill cycle). The
+    # passphrase is required, as it is for buying (FEAT-IDEN-002 §Credential
+    # boundary).
+    resp = client.post(
+        f"/student/insurance/cancel/{basic}",
+        data={"passphrase": CANONICAL_STUDENT_PASSPHRASE},
+    )
     assert resp.status_code == 302
 
     with app.app_context():
@@ -283,5 +304,9 @@ def test_cancel_without_coverage_warns(app, client):
         student = classroom.students[0]
         login_student(client, student)
 
-    resp = client.post(f"/student/insurance/cancel/{policy_uuid}", follow_redirects=True)
+    resp = client.post(
+        f"/student/insurance/cancel/{policy_uuid}",
+        data={"passphrase": CANONICAL_STUDENT_PASSPHRASE},
+        follow_redirects=True,
+    )
     assert resp.status_code == 200  # redirected back with a warning flash

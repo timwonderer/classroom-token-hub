@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -13,7 +12,7 @@ from app.services.ledger_posting_service import create_pending_transaction
 # TODO (Phase 4): store_entitlement_service deleted; must query EntitlementEvent directly
 # from app.services.store_entitlement_service import list_entitlement_history
 from app.utils.seat_scope import seat_scoped_filter
-from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
+from app.utils.canonical_temporal_resolver import utc_now
 from app.utils.transaction_idempotency import build_transaction_idempotency_key, void_refund_key
 
 
@@ -50,17 +49,30 @@ def execute_void_transaction(
     correlation_id: str,
     idempotency_key: str,
     reason: str = "ADMIN_CORRECTION",
+    actor_seat_id: int | None = None,
 ) -> VoidTransactionResult:
     """Ledger-led FEAT for transaction void orchestration."""
-    return _execute_void_transaction_impl(tx, reason=reason)
+    return _execute_void_transaction_impl(tx, reason=reason, actor_seat_id=actor_seat_id)
 
 
 @requires_feat_context("FEAT-LED-002")
-def execute_void_transactions(transactions: list[Transaction], *, correlation_id: str, idempotency_key: str, reason: str = "ADMIN_CORRECTION") -> list[VoidTransactionResult]:
-    return [_execute_void_transaction_impl(tx, reason=reason) for tx in transactions]
+def execute_void_transactions(
+    transactions: list[Transaction],
+    *,
+    correlation_id: str,
+    idempotency_key: str,
+    reason: str = "ADMIN_CORRECTION",
+    actor_seat_id: int | None = None,
+) -> list[VoidTransactionResult]:
+    return [
+        _execute_void_transaction_impl(tx, reason=reason, actor_seat_id=actor_seat_id)
+        for tx in transactions
+    ]
 
 
-def _execute_void_transaction_impl(tx: Transaction, *, reason: str) -> VoidTransactionResult:
+def _execute_void_transaction_impl(
+    tx: Transaction, *, reason: str, actor_seat_id: int | None = None
+) -> VoidTransactionResult:
     # SPEC-OPS-001 §VII / INV-OPS-008: obligation-related monetary transactions are
     # neither voidable nor reversible. Reject at the canonical void/reversal boundary
     # BEFORE any compensating transaction can be created, so no ledger mutation occurs
@@ -92,6 +104,7 @@ def _execute_void_transaction_impl(tx: Transaction, *, reason: str) -> VoidTrans
         tx,
         idempotency_key=void_refund_key(tx.id),
         description=void_description,
+        actor_seat_id=actor_seat_id or tx.actor_seat_id,
     )
 
     return VoidTransactionResult(
@@ -101,23 +114,52 @@ def _execute_void_transaction_impl(tx: Transaction, *, reason: str) -> VoidTrans
 
 
 def _void_purchase(tx: Transaction) -> None:
-    purchase_match = re.match(
-        r'^Purchase:\s*(?P<name>.+?)(?:\s+\(x(?P<qty>\d+)\))?(?:\s+\[.*\])?$',
-        (tx.description or '').strip()
-    )
-    if not purchase_match:
-        raise ValueError("This purchase transaction cannot be voided automatically.")
+    """Revoke the grants this purchase produced, resolved by provenance.
 
-    item_name = (purchase_match.group('name') or '').strip()
-    quantity = int(purchase_match.group('qty') or 1)
+    The grants are found through ``correlation_id``, not by parsing the item
+    name out of the description. Two defects lived in that parse:
+
+    * ``store_products.name`` carries no uniqueness constraint, so two lineages
+      in one class can share a name. Ordering versions by ``created_at`` could
+      return a version of lineage B for a purchase made against lineage A, and
+      the void then either refused or revoked the student's units of the wrong
+      product while the ledger reversed the charge for the other one.
+    * The ``(xN)`` in the description counts *purchases*, while a bundle grants
+      ``N * bundle_quantity`` units. A single purchase of a five-unit bundle
+      wrote ``(x1)``, so the reversal refunded the whole charge and left four
+      units GRANTED — a partially reversible purchase, which SPEC-OPS-001 §3.5
+      does not permit.
+
+    Both fall away once the units are counted rather than parsed: the purchase
+    writes every grant under the transaction's own correlation, so that
+    correlation names exactly the units this charge paid for.
+    """
     if not tx.class_id:
         raise ValueError("Transaction is missing class scope (class_id) and cannot be voided safely.")
-    # Products are versioned (one row per edit), so a name can match several
-    # rows in the same lineage. Any version answers the questions asked here —
-    # item_type and lineage are lineage-stable — so take the newest.
+    if not tx.correlation_id:
+        raise ValueError("This purchase transaction cannot be voided automatically.")
+
+    matching_items = (
+        EntitlementEvent.query
+        .filter(
+            EntitlementEvent.correlation_id == tx.correlation_id,
+            EntitlementEvent.target_seat_id == tx.seat_id,
+            EntitlementEvent.class_id == tx.class_id,
+            EntitlementEvent.event_type == "GRANTED",
+            EntitlementEvent.acquisition_type == "PURCHASE",
+        )
+        .order_by(EntitlementEvent.timestamp.asc(), EntitlementEvent.event_id.asc())
+        .all()
+    )
+    if not matching_items:
+        raise ValueError("No matching student item was found for this purchase.")
+
+    # Every unit of one purchase shares a lineage. Any version of it answers the
+    # questions asked here, since item_type is lineage-stable, so take the newest.
+    lineage_uuid = matching_items[0].product_id
     store_item = (
         StoreProduct.query
-        .filter_by(class_id=tx.class_id, name=item_name)
+        .filter_by(class_id=tx.class_id, product_lineage_uuid=lineage_uuid)
         .order_by(StoreProduct.created_at.desc())
         .first()
     )
@@ -127,35 +169,10 @@ def _void_purchase(tx: Transaction) -> None:
         raise ImmediatePurchaseNotVoidable
     if store_item.item_type != 'delayed':
         raise ValueError("Only delayed-use item purchases are voidable.")
-    matching_items = (
-        EntitlementEvent.query
-        .filter(
-            EntitlementEvent.target_seat_id == tx.seat_id,
-            EntitlementEvent.class_id == tx.class_id,
-            EntitlementEvent.product_id == store_item.product_lineage_uuid,
-            EntitlementEvent.event_type == "GRANTED",
-        )
-        .order_by(EntitlementEvent.timestamp.asc())
-        .all()
-    )
-    if not matching_items:
-        raise ValueError("No matching student item was found for this purchase.")
-
-    tx_ts = ensure_utc(tx.timestamp) if tx.timestamp else utc_now()
-
-    def _distance(event):
-        if not event.timestamp:
-            return float('inf')
-        return abs((ensure_utc(event.timestamp) - tx_ts).total_seconds())
-
-    # Prefer the grants closest in time to the transaction being voided; break
-    # ties on event_id so the choice is deterministic across runs.
-    matching_items.sort(key=lambda ev: (_distance(ev), ev.event_id))
 
     # An entitlement that already reached a terminal state cannot be revoked —
     # the partial unique index permits one terminal event per lineage, so a
-    # second one would fail at the database anyway. Skip them here so a partly
-    # consumed purchase can still return its untouched units.
+    # second one would fail at the database anyway.
     terminal_ids = {
         row[0]
         for row in db.session.query(EntitlementEvent.entitlement_id)
@@ -169,14 +186,15 @@ def _void_purchase(tx: Transaction) -> None:
         .all()
     }
 
-    selected_items = []
-    for event in matching_items:
-        if event.entitlement_id in terminal_ids:
-            continue
-        selected_items.append(event)
-        if len(selected_items) >= quantity:
-            break
-    if len(selected_items) < quantity:
+    selected_items = [
+        event for event in matching_items if event.entitlement_id not in terminal_ids
+    ]
+
+    # A reversal is all-or-nothing (SPEC-OPS-001 §3.4): every grant deriving
+    # authority from this transaction must still be invalidatable, or the
+    # transaction is not reversible at all. Refunding in full while some units
+    # were already spent would hand back money for value the student consumed.
+    if len(selected_items) < len(matching_items):
         raise ValueError("Transaction cannot be voided because selected entitlements are already consumed.")
 
     # Terminate the entitlements. Without this the purchase's units stay

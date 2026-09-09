@@ -205,7 +205,6 @@ def verify_transfer(class_id: str, correlation_id: str) -> TransferProofResult:
     posting_ok = all(
         row.posting_sequence is not None
         and row.status == TransactionStatus.POSTED
-        and row.status != TransactionStatus.VOID
         for row in rows
     )
     if not posting_ok and scope_ok and pair_ok and magnitude_ok and zero_sum:

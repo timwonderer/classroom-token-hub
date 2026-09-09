@@ -467,17 +467,25 @@ def _record_hall_pass_log_impl(
         if not consume_event.entitlement_id:
             raise ValueError("Hall-pass entitlement consumption missing entitlement_id")
 
+    # A non-consuming destination has no entitlement lifecycle to reference, and
+    # HallPassLog.hall_pass_id is documented as the *consumed* pass. Naming an
+    # unconsumed grant there made two claims that are not true: the grant stayed
+    # available, so a later consuming approval could consume and record the same
+    # entitlement_id (the column is indexed but not unique, so two logs would
+    # carry it while only one consumed a pass), and the copied correlation_id was
+    # the grant's own, which identifies the purchase rather than this approval.
+    fallback_correlation_id = (
+        idempotency_key
+        or f"hall_pass_log:{ctx.class_id}:{requested_by_seat_id}:{now.isoformat()}"
+    )
     log = HallPassLog(
         requested_by_seat_id=requested_by_seat_id,
         approved_by_seat_id=approved_by_seat_id,
         class_id=ctx.class_id,
         timestamp=now,
-        hall_pass_id=(consume_event.entitlement_id if consume_event else getattr(hall_pass_grant, "entitlement_id", None)),
+        hall_pass_id=consume_event.entitlement_id if consume_event else None,
         correlation_id=(
-            consume_event.correlation_id
-            if consume_event
-            else (getattr(hall_pass_grant, "correlation_id", None) or idempotency_key
-                  or f"hall_pass_log:{ctx.class_id}:{requested_by_seat_id}:{now.isoformat()}")
+            consume_event.correlation_id if consume_event else fallback_correlation_id
         ),
         policy_uuid=policy_uuid,
         destination=destination,

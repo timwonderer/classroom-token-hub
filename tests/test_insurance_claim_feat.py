@@ -1958,6 +1958,33 @@ class TestNonMonetaryWaitingPeriod:
 
             assert result.success is True, result.error_message
 
+    def test_claim_exactly_on_the_boundary_is_accepted(self, app):
+        """The wait is inclusive: a claim on the day it elapses is admitted.
+
+        ``_enforce_non_monetary_submission`` compares
+        ``submitted_at >= effective_start``, so the boundary day belongs to the
+        covered side. Nothing else pins that down — the inside and elapsed cases
+        above sit two days either side of it — so an off-by-one here would pass
+        both of them.
+        """
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+
+        with app.app_context():
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="waiting-period:boundary"):
+                _grant_non_monetary(
+                    classroom, student, entitlement_id, waiting_period_days=3, days_ago=3
+                )
+
+            result = submit_insurance_claim(
+                canonical_context=self._student_context(classroom, student),
+                entitlement_id=entitlement_id,
+                claim_subject={"reason": "filed on the boundary"},
+            )
+
+            assert result.success is True, result.error_message
+
     def test_zero_waiting_period_is_immediately_claimable(self, app):
         """A 0-day wait (Premium preset) leaves coverage effective at purchase."""
         classroom = initialize("chemistry_p1", app)

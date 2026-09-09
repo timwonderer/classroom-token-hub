@@ -60,6 +60,7 @@ jobs:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
           PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          AUDIT_HMAC_KEY: ${{ secrets.AUDIT_HMAC_KEY }}
         run: |
           flask db upgrade
 
@@ -88,6 +89,7 @@ jobs:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
           PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          AUDIT_HMAC_KEY: ${{ secrets.AUDIT_HMAC_KEY }}
           ACCESSIBILITY_TEMPLATE_PATHS: ${{ steps.changed_templates.outputs.templates }}
         run: |
           echo "♿ Running template-scoped accessibility audit..."

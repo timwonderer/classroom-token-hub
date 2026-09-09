@@ -187,7 +187,6 @@ def get_inbound_ledger_rows(
             Transaction.timestamp < ensure_utc(window_end),
             Transaction.amount_cents > 0,
             Transaction.status == TransactionStatus.POSTED,
-            Transaction.status != TransactionStatus.VOID,
         )
         .all()
     )

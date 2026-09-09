@@ -256,7 +256,10 @@ def test_DOM_IDEN_006__add_individual_student_uses_selected_class_when_block_has
 def test_DOM_IDEN_001__students_page_does_not_render_hidden_block_input(client):
     from pathlib import Path
 
-    template_text = Path("/Users/timothychang/Documents/GitHub/classroom-economy/templates/admin_students.html").read_text()
+    # Resolved from this file, not from one developer's home directory — the
+    # absolute path here made the test unrunnable anywhere else.
+    repo_root = Path(__file__).resolve().parents[3]
+    template_text = (repo_root / "templates" / "admin_students.html").read_text(encoding="utf-8")
 
     assert 'name="block"' not in template_text
     assert 'id="block"' not in template_text

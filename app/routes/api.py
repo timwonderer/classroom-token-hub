@@ -29,6 +29,7 @@ from app.models import (
     StoreItemVisibility, User,
     _quantize_currency,
     ClassEconomy, Seat, IdentityProfile, PayrollEvent,
+    PendingAction,
 )
 from app.auth import (
     login_required,
@@ -452,13 +453,25 @@ def use_item():
             "details": details or None,
         }
 
+    # PendingAction.correlation_id is unique, and the key below becomes that
+    # correlation. A rejected request stays on file for the audit history while
+    # `_pending_action_for_entitlement` above only blocks on *unresolved* rows —
+    # so a student may legitimately re-request after a rejection, and a key
+    # derived from the entitlement alone would collide at flush. Keying on the
+    # attempt keeps each request distinct; a double submit within one attempt is
+    # already refused by the pending-action check above.
+    request_attempt = (
+        PendingAction.query
+        .filter(PendingAction.entitlement_id == entitlement.entitlement_id)
+        .count()
+    )
     from app.feats.entitlement_lifecycle_feat import execute_use_item_request
     execute_use_item_request(
         class_id=entitlement.class_id,
         seat_id=student.id,
         entitlement_id=entitlement.entitlement_id,
         action_payload=action_payload,
-        idempotency_key=f"feat:stor:use_req:{entitlement.entitlement_id}",
+        idempotency_key=f"feat:stor:use_req:{entitlement.entitlement_id}:{request_attempt}",
     )
     return jsonify({"status": "success", "message": f"You have requested to use {store_item.name}. Awaiting admin approval."})
 

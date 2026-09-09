@@ -227,14 +227,29 @@ def _list_insurance_claims(*, class_id: str, target_seat_id: int, entitlement_id
     return rows
 
 
-def _list_available_insurance_entitlements(*, target_seat_id: int, class_id: str, entitlement_item_id: int | None = None):
-    """Return active insurance entitlement events for a seat."""
-    return get_active_entitlements(
+def _list_available_insurance_entitlements(*, target_seat_id: int, class_id: str, policy_uuid: str | None = None):
+    """Return the seat's active INSURANCE entitlements, optionally for one policy.
+
+    An INSURANCE grant carries its governing policy in ``payload["policy_uuid"]``,
+    not in ``EntitlementEvent.product_id`` — that column holds a *store product
+    lineage* uuid, per its own column comment, and insurance is not sold through
+    the store catalog. Passing a policy uuid as ``product_id`` therefore matched
+    no rows at all, so this helper reported every holder of valid coverage as
+    uncovered. Every other insurance read in this module already resolves through
+    the payload (``_active_insurance_entitlement_id``, ``insurance_marketplace``,
+    and ``insurance_claim_feat._resolve_claim_policy``); this one now does too.
+    """
+    grants = get_active_entitlements(
         seat_id=target_seat_id,
         class_id=class_id,
-        product_id=entitlement_item_id,
         entitlement_type="INSURANCE",
     )
+    if policy_uuid is None:
+        return grants
+    return [
+        grant for grant in grants
+        if (grant.payload or {}).get("policy_uuid") == policy_uuid
+    ]
 from app.utils.display_name_session import (
     get_teacher_display_name_cache,
     upsert_teacher_display_name_cache,
@@ -642,7 +657,9 @@ def setup_pin_passphrase():
         session.pop('onboarding_seat_ref', None)
         session.pop('onboarding_user_ref', None)
         session.pop('generated_username', None)
-        flash("You're all set! Log in with your new username and PIN to get started.", "success")
+        # Sign-in takes the passphrase (FEAT-IDEN-002 §Credential boundary);
+        # the PIN is for transfers, attendance, and hall passes.
+        flash("You're all set! Log in with your new username and passphrase to get started.", "success")
         return redirect(url_for('student.setup_complete'))
     return render_template('student_pin_setup.html', username=username, form=form)
 
@@ -1279,6 +1296,19 @@ def transfer():
 
         pin = request.form.get("pin")
         user = get_current_user()
+        # User.pin_hash is nullable and recovery clears it. Without this branch,
+        # verify_password(pin, '') rejects every PIN such a student can type and
+        # the only feedback is "Incorrect PIN" — transfers become permanently
+        # unavailable with nothing pointing at the cause.
+        if user and not user.pin_hash:
+            message = (
+                "Your PIN has not been set yet. Set one from your account page, "
+                "then try the transfer again."
+            )
+            if is_json:
+                return jsonify(status="error", message=message), 400
+            flash(message, "transfer_error")
+            return redirect(url_for("student.transfer"))
         if not user or not verify_password(pin, user.pin_hash or ''):
             if is_json:
                 return jsonify(status="error", message="Incorrect PIN"), 400
@@ -1479,6 +1509,9 @@ def insurance_marketplace():
                 reimbursement_percentage=d.reimbursement_percentage,
                 payout_multiple=d.payout_multiple,
                 claim_window_days=d.claim_window_days,
+                # The card renders this; without it the whole marketplace page
+                # raised UndefinedError on a SimpleNamespace and returned 500.
+                waiting_period_days=d.waiting_period_days,
                 claims_per_week_equivalent=d.claims_per_week_equivalent,
                 claimable_dates_per_week_equivalent=d.claimable_dates_per_week_equivalent,
                 tier_name=d.tier_name,
@@ -1630,6 +1663,16 @@ def cancel_insurance(policy_uuid):
     context = resolve_canonical_context()
     if not context:
         flash("No class selected. Please select a class to continue.", "error")
+        return redirect(url_for('student.student_insurance'))
+
+    # FEAT-IDEN-002 §Credential boundary names "cancelling insurance" as a
+    # passphrase action, alongside purchasing it. The route previously took a
+    # bare confirmation, so the two halves of one decision were held to
+    # different standards.
+    passphrase = request.form.get('passphrase', '')
+    user = get_current_user()
+    if not user or not user.passphrase_hash or not verify_password(passphrase, user.passphrase_hash):
+        flash("Enter your passphrase to confirm the cancellation.", "error")
         return redirect(url_for('student.student_insurance'))
 
     result = execute_cancel_insurance(
@@ -1813,7 +1856,7 @@ def view_policy(policy_uuid):
     active_entitlements = _list_available_insurance_entitlements(
         target_seat_id=context.seat_id,
         class_id=context.class_id,
-        entitlement_item_id=policy_uuid,
+        policy_uuid=policy_uuid,
     )
     entitlement = active_entitlements[0] if active_entitlements else None
     if entitlement is None:

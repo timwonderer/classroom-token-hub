@@ -8,11 +8,53 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Reversals now persist the canonical ledger type and refuse a second application (2026-09-08)** — A compensating transaction records `REVERSAL` in `type` per `FEAT-LED-002` §III.2.1, with the business reason moved to the new `ledger_transaction.compensation_subtype` column. `reverse_transaction` also runs the reversal-authorization guard before any ledger mutation and rejects reversing a transaction that already carries one, so `INV-LED-013` / `INV-OPS-005` hold for every caller rather than per-caller.
+
+- **Voiding a purchase resolves its grants by provenance, not by parsing the description (2026-09-08)** — `_void_purchase` now finds the granted units through the transaction's `correlation_id`. Product names carry no uniqueness constraint, so the old name lookup could revoke a student's units of the wrong lineage; and the `(xN)` in the description counted purchases rather than granted units, leaving bundle purchases partially reversible.
+
+- **Insurance coverage is resolved by policy, so held coverage is visible again (2026-09-08)** — The policy page looked up entitlements with the policy uuid as `EntitlementEvent.product_id`, which holds a store product lineage. It matched no rows, so every holder of valid coverage was reported as uncovered and the claims table widened to every policy the seat held.
+
+- **Non-consuming hall-pass logs no longer claim an unconsumed grant (2026-09-08)** — `hall_pass_id` stays NULL where there is no entitlement lifecycle, instead of naming a grant that remains available for a later consuming approval and copying that grant's correlation onto the approval.
+
+- **A lapsed collective goal reaches its terminal state even with no open buy-ins (2026-09-08)** — Such a product stayed `IN_USE` and was re-evaluated on every hourly expiry run. Redemptions also no longer decrement goal progress: `CONSUMED` records that a met goal was honoured, not that a buy-in was withdrawn.
+
+- **Store inventory no longer over-sells after a revoked grant or perk (2026-09-08)** — The `REVOKED` leg of `units_sold` is now restricted to `PURCHASE` acquisitions, matching the `GRANTED` leg it subtracts from.
+
+- **A whole-class collective goal can be published (2026-09-08)** — Publication required a `collective_goal_target` for every collective item, while a whole-class goal derives its target from class size and leaves the field blank.
+
+- **Conditional store-item validators now run (2026-09-08)** — Rent-linked, bundle, and bulk-discount quantity checks moved out of per-field hooks, which `Optional()` short-circuited for exactly the blank values they existed to catch.
+
+- **Redemption requests can be re-submitted after a rejection (2026-09-08)** — The request correlation is derived from the attempt, so it no longer collides with the retained resolved row on `PendingAction.correlation_id`.
+
+- **Fixed a `NameError` in the redemption display-status API (2026-09-08)** — `PendingAction` was referenced but never imported in `app/routes/api.py`.
+
+- **Repaired the Redemption Audit query (2026-09-08)** — `Seat` was selected without a join, producing a cross join that duplicated every row and attached an arbitrary seat's identity to it. The teacher dashboard's pending-redemption list also now carries the class and `GRANTED` predicates its own count already used, so the two agree.
+
+- **The economy rebalance job can run (2026-09-08)** — `FEAT-CLASS-005` is HIGH blast radius and its decorator-owned envelope refused before the body ran; each teacher now gets its own context, keyed and error-bounded, so one failure no longer rolls back the activations before it.
+
+- **Sysadmin report updates commit (2026-09-08)** — A direct `db.session.commit()` inside the `FEAT-OPS-001` envelope tripped the atomicity guard and rolled the update back, and authorization now runs outside the FEAT context. The status selector also preserves workflow states it does not own instead of silently resetting them to Open.
+
+- **Hall-pass setup saves what the teacher typed (2026-09-08)** — Edits to the per-destination limit were discarded on save, the student destination modal read a payload key the API never sent, and a second limit field was offered that the runtime has no field for.
+
+- **A principal ledger debit requires a caller-supplied idempotency key (2026-09-08)** — The seat+class fallback repeated across debits, so the reservation boundary replayed or refused the second one.
+
+- **Support tickets are no longer duplicated by a retry (2026-09-08)** — The submission key is derived from the payload, as every other mutation in the module does, rather than from a fresh UUID.
+
+- **Students without a PIN get a usable message on transfer (2026-09-08)** — Recovery clears `pin_hash`, after which every PIN was reported simply as incorrect.
+
+- **The insurance marketplace renders (2026-09-08)** — The policy card reads `waiting_period_days`, which the view builder did not set, raising `UndefinedError` for the whole page.
+
 ### Changed
+
+- **Cancelling insurance verifies the passphrase (2026-09-08)** — `FEAT-IDEN-002` §Credential boundary lists cancellation alongside purchase; the route previously took a bare confirmation.
+
+- **`store_products.item_type` is a closed vocabulary (2026-09-08)** — Enforced at the publication seam and by a new check constraint. An unmapped value published cleanly and then failed every policy read for the whole class.
 
 - **Repaired the Alembic revision graph (2026-09-08)** — Assigned the hall-pass migration a unique revision ID, restored a single migration head, and updated the identity redirect test to use the canonical passphrase login contract.
 
-- **Formalized the student credential boundary (2026-09-08)** — Passphrases now authenticate login and irreversible expense actions; PINs protect non-monetary or reversible actions, including transfers between checking and savings. Runtime prompts and student guides were aligned with the `FEAT-IDEN-002` matrix.
+- **Formalized the student credential boundary (2026-09-08)** — Passphrases now authenticate login and irreversible expense actions; PINs protect non-monetary or reversible actions, including transfers between checking and savings. Runtime prompts and student guides were aligned with the `FEAT-IDEN-002` matrix, including the insurance guide, which still described buying as a single unauthenticated click.
 
 - **Completed Redemption Audit outcome filtering (2026-09-08)** — The store audit now derives its visible action from the retained request outcome and correctly filters `REQUEST`, `APPROVED`, and `REJECTED` history.
 
@@ -1497,7 +1539,7 @@ First stable release of Classroom Token Hub! All critical security issues resolv
 
 ### Project Status
 The project is ready for version 1.0 release. All critical blockers have been resolved:
-- ✅ **P0 Critical Data Leak:** Fixed and deployed (2025-11-29) - See [docs/security/CRITICAL_SAME_TEACHER_LEAK.md](docs/SECURITY/INCIDENTS/SEC-INC-013_Critical_Same_Teacher_Leak.md)
+- ✅ **P0 Critical Data Leak:** Fixed and deployed (2025-11-29) - See [SEC-INC-013 Critical Same-Teacher Leak](docs/archive/v1-docs/SECURITY/INCIDENTS/SEC-INC-013_Critical_Same_Teacher_Leak.md)
 - ✅ **P1 Deprecated Patterns:** All updated to Python 3.12+ and SQLAlchemy 2.0+ (2025-12-06)
 - 🔄 **Backfill:** Legacy transaction data being backfilled with interactive verification
 
@@ -1648,7 +1690,7 @@ The project is ready for version 1.0 release. All critical blockers have been re
 This changelog tracks significant changes to the codebase. For:
 - **Current development tasks**: See [DEVELOPMENT.md](DEVELOPMENT.md)
 - **Planned features**: See [DEVELOPMENT.md](DEVELOPMENT.md) Roadmap section
-- **Technical details**: See [docs/technical-reference/architecture.md](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)
+- **Technical details**: See [docs/README.md](docs/README.md)
 
 ## Changelog Guidelines
 

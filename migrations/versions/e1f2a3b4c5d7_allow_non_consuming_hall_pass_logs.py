@@ -25,4 +25,11 @@ def downgrade():
     inspector = sa.inspect(op.get_bind())
     columns = {column["name"]: column for column in inspector.get_columns("hall_pass_logs")}
     if columns.get("hall_pass_id", {}).get("nullable") is True:
+        # Rows written while the column was nullable are exactly the non-consuming
+        # approvals this revision exists to allow: a hall-pass log with no
+        # entitlement behind it. Restoring NOT NULL over them would fail, so the
+        # downgrade deletes them. They carry no entitlement lifecycle, so nothing
+        # downstream is orphaned by the delete — but the approvals themselves are
+        # lost, which is the cost of returning to the pre-revision contract.
+        op.execute(sa.text("DELETE FROM hall_pass_logs WHERE hall_pass_id IS NULL"))
         op.alter_column("hall_pass_logs", "hall_pass_id", existing_type=sa.String(length=100), nullable=False)

@@ -17,9 +17,14 @@ def create_pending_transaction(
     mechanism: str, user_id: int | None = None, amount, account_type: str,
     type: str, description: str, original_transaction_id: int | None = None,
     policy_id: int | None = None, idempotency_key: str | None = None,
-    command_reservation=None,
+    command_reservation=None, compensation_subtype: str | None = None,
 ) -> Transaction:
-    """Create one pending Ledger effect inside the caller-owned FEAT."""
+    """Create one pending Ledger effect inside the caller-owned FEAT.
+
+    ``compensation_subtype`` is set only by the reversal boundary: a compensating
+    row persists ``REVERSAL`` in ``type`` (FEAT-LED-002 §III.2.1) and the business
+    reason it was raised for here.
+    """
     if idempotency_key and command_reservation is not None:
         raise ValueError("Provide either idempotency_key or command_reservation, not both.")
     if idempotency_key:
@@ -29,6 +34,7 @@ def create_pending_transaction(
             mechanism=mechanism, user_id=user_id, amount=_quantize_currency(amount),
             account_type=account_type, type=type, description=description,
             original_transaction_id=original_transaction_id, policy_id=policy_id,
+            compensation_subtype=compensation_subtype,
         )
         return transaction
     if not class_id or not seat_id or not target_seat_id or not actor_seat_id:
@@ -55,6 +61,7 @@ def create_pending_transaction(
         account_type=account_type, status=TransactionStatus.PENDING,
         mechanism=mechanism, type=type, description=description,
         original_transaction_id=original_transaction_id, policy_id=policy_id,
+        compensation_subtype=compensation_subtype,
     )
     db.session.add(transaction)
     if command_reservation is not None:

@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional
 
+from app.extensions import db
 from app.models import Seat
 from app.services import store_service
 from app.services.store_policy_resolver import StorePolicyResolver
@@ -117,7 +118,7 @@ def publish_store_product(
 
 
 def db_seat(seat_id: int) -> Seat:
-    seat = Seat.query.get(seat_id)
+    seat = db.session.get(Seat, seat_id)
     if seat is None:
         raise LookupError(f"Seat {seat_id} does not exist")
     return seat

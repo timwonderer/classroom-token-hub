@@ -673,11 +673,21 @@ def run_collective_goal_expiry_job():
     )
 
 
-@requires_feat_context("FEAT-CLASS-005")
 def run_economy_rebalance_activation_job():
-    """Activate due queued economy policy transitions for every teacher."""
+    """Activate due queued economy policy transitions for every teacher.
+
+    FEAT-CLASS-005 is HIGH blast radius, so its envelope requires an
+    idempotency_key. ``requires_feat_context`` reads that key from keyword
+    arguments only, and this job is invoked by the scheduler with none, so a
+    decorator-owned envelope refuses before the body runs. Each teacher
+    therefore gets its own context with a derived key, which also keeps one
+    teacher's failure from rolling back the activations already committed for
+    the teachers before it.
+    """
     from app.extensions import db
+    from app.feats.base import FEATContext
     from app.models import ClassEconomy
+    from app.utils.canonical_temporal_resolver import utc_now
     from app.utils.economy_rebalance import activate_due_rebalances
 
     logger = logging.getLogger('scheduled_tasks')
@@ -689,10 +699,27 @@ def run_economy_rebalance_activation_job():
         .all()
     ]
     activated = 0
+    failed = 0
+    run_key = utc_now().strftime("%Y-%m-%dT%H")
     for teacher_id in teacher_ids:
-        count, _labels = activate_due_rebalances(teacher_id)
-        activated += count
-    logger.info("Economy rebalance activation completed; activated %s transition(s)", activated)
+        try:
+            with FEATContext(
+                "FEAT-CLASS-005",
+                idempotency_key=f"economy-rebalance-job:{teacher_id}:{run_key}",
+            ):
+                count, _labels = activate_due_rebalances(teacher_id)
+                activated += count
+        except Exception:
+            failed += 1
+            db.session.rollback()
+            logger.exception(
+                "Economy rebalance activation failed for teacher %s", teacher_id
+            )
+    logger.info(
+        "Economy rebalance activation completed; activated %s transition(s), "
+        "failed %s teacher(s)",
+        activated, failed,
+    )
 
 
 def run_savings_interest_job():

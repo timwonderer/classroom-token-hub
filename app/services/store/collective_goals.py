@@ -58,10 +58,19 @@ def count_goal_participants(
     participants. Distinct on ``target_seat_id`` because a collective goal is a
     headcount: buying twice does not make one student into two.
 
-    Only open ``GRANTED`` rows are counted. Once an unmet goal is expired, its
-    buy-ins receive terminal ``EXPIRED`` events and no longer contribute to a
-    live progress projection; the goal is therefore cleared rather than
-    displaying progress for a product that is no longer active.
+    Only buy-ins that still stand are counted, and the events that withdraw a
+    buy-in are ``EXPIRED`` and ``REVOKED``. Once an unmet goal is expired its
+    buy-ins receive terminal ``EXPIRED`` events and stop contributing, so the
+    goal clears rather than displaying progress for a product that is no longer
+    active; a reversal writes ``REVOKED`` and withdraws the buy-in the same way.
+
+    ``CONSUMED`` is deliberately not in that set. It does not withdraw anything —
+    it records that a student redeemed their share of a goal that was already
+    met. Counting it as a withdrawal made a met goal decay back to unmet as
+    students redeemed: 20 of 20 read as 12 of 20 once eight had claimed, and
+    ``is_goal_met`` returned False again. The expiry sweep decides refunds from
+    this count, so a delivered goal could later read as lapsed and refund
+    buy-ins that had already been honoured.
     """
     lineages = [uuid for uuid in lineage_uuids if uuid]
     if not lineages or not class_id:
@@ -73,7 +82,7 @@ def count_goal_participants(
         .filter(
             terminal_event.class_id == class_id,
             terminal_event.entitlement_id == EntitlementEvent.entitlement_id,
-            terminal_event.event_type.in_(("CONSUMED", "EXPIRED", "REVOKED")),
+            terminal_event.event_type.in_(("EXPIRED", "REVOKED")),
         )
         .correlate(EntitlementEvent)
     )

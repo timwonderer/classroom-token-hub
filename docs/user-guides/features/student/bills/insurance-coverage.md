@@ -17,7 +17,7 @@ related:
 
 Insurance trades a small, repeating payment for protection against a large one-off loss. You pay a **premium** every billing period whether or not anything goes wrong; in exchange, when something does go wrong you can file a claim and get part of the money back.
 
-Two things about it are worth knowing before you spend anything. Buying is a **single click with no confirmation**, and cancelling **does not refund you**.
+Two things about it are worth knowing before you spend anything. Buying and cancelling both ask for your **passphrase**, and cancelling **does not refund you**.
 
 ## Step-by-step instructions
 
@@ -57,7 +57,7 @@ Some policies are not in a group at all and appear as standalone cards further d
 
 ### Buying
 
-Press **Buy — $X**. There is no passphrase prompt, no PIN, and no "are you sure" — the purchase happens on that one click.
+Type your **passphrase** into the box on the policy row, then press **Buy — $X**. Insurance is a money decision, so it is held to the same standard as a store purchase: the premium only leaves your account after the passphrase is verified. Your PIN does not work here.
 
 If it works you get *Insurance purchased — first premium of $X paid.* The first premium comes out of **checking** immediately, and coverage starts the moment the purchase lands.
 
@@ -65,6 +65,7 @@ If it does not work, the message says why:
 
 | Message | What it means |
 | --- | --- |
+| *Enter your passphrase to confirm the insurance purchase.* | The box was empty or the passphrase did not match. Nothing was charged. |
 | *You don't have enough in checking to pay the first premium.* | Move money from savings, or wait for payday. |
 | *You already hold a plan in this tier group. Cancel it first to switch tiers.* | One tier per group. |
 | *You already hold active coverage for this policy.* | Nothing to do. |
@@ -72,7 +73,7 @@ If it does not work, the message says why:
 
 ### Cancelling
 
-**Cancel coverage** sits on the card in **Your coverage**, next to **File a claim**. It asks you to confirm:
+**Cancel coverage** sits on the card in **Your coverage**, next to **File a claim**. It asks for your **passphrase** and then to confirm:
 
 > Cancel this coverage? It will stop renewing — your benefits continue until the end of the current period.
 
@@ -82,7 +83,7 @@ That sentence is the whole feature. Cancelling means **stop charging me next per
 - Your coverage stays live, and you can still file claims against it, until the current period runs out.
 - Only then does it drop off **Your coverage**.
 
-You get *Coverage cancelled — it won't renew.* If you had already cancelled, it says *This coverage is already set to not renew.*
+You get *Coverage cancelled — it won't renew.* If you had already cancelled, it says *This coverage is already set to not renew.* If the passphrase is missing or wrong you get *Enter your passphrase to confirm the cancellation.* and nothing changes.
 
 ### Switching tiers
 
@@ -91,7 +92,7 @@ There is no upgrade button. To move from **Basic** to **Premium** in the same gr
 ## Important notes
 
 > [!WARNING]
-> **Buying is the least protected way to spend money in the app.** A $5 store item makes you type your passphrase. A recurring insurance premium takes one click and no confirmation, and the button charges you again every period until you cancel. Read the premium and the frequency on the row before you press it.
+> **A premium is a recurring charge, not a one-off.** The passphrase protects the purchase the same way it protects a store item, but it only protects the *first* one — after that the policy charges you again every period until you cancel. Read the premium and the frequency on the row before you buy.
 
 > [!IMPORTANT]
 > **Cancelling gets you nothing back.** There is no refund, no partial credit, and no early exit. If you buy a weekly policy and cancel an hour later, you have paid for that week. The only thing cancelling saves you is next week's charge.

@@ -246,7 +246,7 @@ class TestVersionedProductDerivations:
                     definition={
                         "name": "Editable Goal Revised",
                         "price": Decimal("12.00"),
-                        "item_type": "collective_goal",
+                        "item_type": "collective",
                         "inventory_total": 4,
                         "collective_goal_type": "fixed",
                         "collective_goal_target": 10,
@@ -287,15 +287,16 @@ class TestPurchaseReversalInventory:
                 .first()
             )
             assert purchase is not None
-            with FEATContext(
-                "FEAT-LED-002",
+            # execute_void_transaction opens its own FEAT-LED-002 envelope.
+            # Wrapping it in another non-scaffold context is forbidden nesting,
+            # and the void writes ledger records under purchase.correlation_id,
+            # which the FEAT-LED-002 before_flush check compares against the
+            # active correlation.
+            execute_void_transaction(
+                purchase,
+                correlation_id=purchase.correlation_id,
                 idempotency_key=f"sale-mechanics:void:{purchase.id}",
-            ):
-                execute_void_transaction(
-                    purchase,
-                    correlation_id=f"void:{purchase.id}",
-                    idempotency_key=f"sale-mechanics:void:{purchase.id}",
-                )
+            )
             db.session.commit()
 
             live_product = StoreProduct.query.filter_by(

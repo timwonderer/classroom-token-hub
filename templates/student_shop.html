@@ -137,7 +137,7 @@
                                     data-item-price="{{ item.price_amount }}"
                                     data-item-regular-price="{{ item.regular_price_amount }}"
                                     data-policy-uuid="{{ item.policy_uuid or '' }}"
-                                    data-has-rent-free-purchase="{{ 'true' if item.has_any_rent_free_purchase else 'false' }}"
+                                    data-rent-perk-message="{{ item.display_rent_perk_message or '' }}"
                                     data-item-type="{{ item.item_type }}"
                                     data-is-bundle="{{ 'true' if item.is_bundle else 'false' }}"
                                     data-bundle-quantity="{{ item.bundle_quantity if item.is_bundle else 0 }}"
@@ -393,7 +393,11 @@
             itemType: button.getAttribute('data-item-type'),
             basePrice: parseFloat(button.getAttribute('data-item-price')),
             regularPrice: parseFloat(button.getAttribute('data-item-regular-price')),
-            hasRentFreePurchase: button.getAttribute('data-has-rent-free-purchase') === 'true',
+            // The availability-gated message, matching the badge on the card.
+            // `has_any_rent_free_purchase` was the wrong predicate here: it stays
+            // true after the last free unit is consumed, so the modal and the
+            // quantity hint went on promising free uses the student no longer had.
+            rentPerkMessage: button.getAttribute('data-rent-perk-message') || '',
             isBundle: button.getAttribute('data-is-bundle') === 'true',
             bundleQuantity: parseInt(button.getAttribute('data-bundle-quantity')) || 0,
             bulkDiscountEnabled: button.getAttribute('data-bulk-discount-enabled') === 'true',
@@ -415,7 +419,7 @@
         document.getElementById('modalInventory').value = currentItemData.inventory;
         const rentPerkModalNote = document.getElementById('rentPerkModalNote');
         rentPerkModalNote.style.display =
-            currentItemData.hasRentFreePurchase ? 'inline' : 'none';
+            currentItemData.rentPerkMessage ? 'inline' : 'none';
 
         // Show bundle info
         if (currentItemData.isBundle) {
@@ -543,8 +547,8 @@
 
         // Update quantity hint
         let hint = '';
-        if (currentItemData.hasRentFreePurchase) {
-            hint = 'You have free uses waiting in My Items — this buys more.';
+        if (currentItemData.rentPerkMessage) {
+            hint = `${currentItemData.rentPerkMessage} — this buys more.`;
         }
         if (currentItemData.isBundle) {
             const totalItems = quantity * currentItemData.bundleQuantity;
