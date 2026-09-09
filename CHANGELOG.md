@@ -10,6 +10,8 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 
+- **Hall Pass setup has one UI surface (2026-09-08)** — Removed the obsolete standalone setup template, its admin route, and its endpoint mappings. Destinations are configured in Hall Pass Management's Configure tab; its setup API remains available.
+
 - **Hall Pass Out Limit saves and reloads the selected value (2026-09-08)** — The management page now uses `max_queue_limit` consistently with the settings API. Removed the unsupported granting switch, rejected missing or invalid save values instead of silently saving 10, and updated the teacher guide.
 
 - **Hall Pass Configure component cleanup (2026-09-08)** — Removed conditional page shells and duplicate dependencies from the configuration component, restored CTH section headers in the tab, and aligned accessible limit names and teacher guidance with approval checks. Payroll troubleshooting now directs teachers to Support for incorrect posted payments instead of editing immutable attendance history. Focused rendering checks are recorded separately from browser accessibility certification.

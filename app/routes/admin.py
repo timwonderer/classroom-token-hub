@@ -326,7 +326,6 @@ ADMIN_FEATURE_ENDPOINTS = {
     "admin.rent_settings": "rent",
     "admin.insurance_management": "insurance",
     "admin.hall_pass": "hall_pass",
-    "admin.hall_pass_setup": "hall_pass",
 }
 
 FEATURE_LABELS = {
@@ -6772,24 +6771,6 @@ def hall_pass():
         feature_options=feature_options,
         selected_feature_scope=selected_scope,
         current_join_code=selected_join_code,
-    )
-
-
-@admin_bp.route('/hall-pass/setup')
-@admin_required
-def hall_pass_setup():
-    """Configure hall pass types, queue limits, and simultaneous limits."""
-    ctx = g.canonical_context
-    user_id = ctx.user_id
-    selected_scope = require_admin_feature_scope(
-        'hall_pass',
-        canonical_context=g.canonical_context,
-    )
-    return render_template(
-        'hall_pass_setup.html',
-        current_join_code=selected_scope['join_code'],
-        feature_options=get_admin_feature_join_code_options('hall_pass', canonical_context=g.canonical_context),
-        selected_feature_scope=selected_scope,
     )
 
 
