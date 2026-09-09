@@ -2610,13 +2610,25 @@ def dashboard():
     # a SQL join on it would fan out to every version the teacher has ever
     # saved. ``resolve_entitlement_product`` picks the single version the
     # entitlement was actually created under.
+    # Same join and predicates as pending_redemptions_count above. Without the
+    # class_id term the join crosses the isolation boundary, and without the
+    # GRANTED term an entitlement that also holds a CONSUMED or REVOKED event
+    # produces one joined row per event — the same pending redemption rendered
+    # several times, and a count that disagrees with the list it labels.
     pending_redemptions = (
         db.session.query(PendingAction, EntitlementEvent)
-        .join(EntitlementEvent, EntitlementEvent.entitlement_id == PendingAction.entitlement_id)
+        .join(
+            EntitlementEvent,
+            sa.and_(
+                EntitlementEvent.entitlement_id == PendingAction.entitlement_id,
+                EntitlementEvent.class_id == PendingAction.class_id,
+            ),
+        )
         .filter(
             PendingAction.class_id == active_class_id,
             PendingAction.authoritative_feat == "FEAT-STOR-002",
             PendingAction.payload["outcome"].as_string().is_(None),
+            EntitlementEvent.event_type == "GRANTED",
         )
         .order_by(PendingAction.submitted_at.desc())
         .limit(10)
@@ -5098,6 +5110,10 @@ def store_management():
 
     parsed_audit_action = audit_action.upper() if audit_action else None
 
+    # Seat is selected here and must therefore be joined. Without the ON clause
+    # SQLAlchemy emits a cross join, so every pending action was paired with
+    # every seat in the database — the duplicated rows the tab was known for,
+    # each carrying an arbitrary seat's id and class.
     live_query = (
         db.session.query(
             PendingAction.pending_action_id.label("id"),
@@ -5109,6 +5125,13 @@ def store_management():
             PendingAction.payload.label("notes"),
             PendingAction.submitted_at.label("timestamp"),
             sa.literal("LIVE").label("source"),
+        )
+        .join(
+            Seat,
+            sa.and_(
+                Seat.id == PendingAction.seat_id,
+                Seat.class_id == PendingAction.class_id,
+            ),
         )
         .filter(
             PendingAction.class_id == selected_scope['class_id'],
@@ -5141,15 +5164,34 @@ def store_management():
             flash("Invalid audit end date format. Please use YYYY-MM-DD.", "warning")
 
     live_rows = live_query.order_by(PendingAction.submitted_at.desc()).limit(5000).all()
+
+    # Up to 5000 rows reach this point, and both the name filter below and the
+    # serialization loop further down need the same display name per row. Load
+    # the distinct seats (and their profiles) once and index them, rather than
+    # issuing two db.session.get() calls per row.
+    display_names_by_seat_id = {}
+    seat_ids = {row.seat_id for row in live_rows if row.seat_id is not None}
+    if seat_ids:
+        seats = (
+            Seat.query
+            .options(joinedload(Seat.identity_profile))
+            .filter(Seat.id.in_(seat_ids))
+            .all()
+        )
+        display_names_by_seat_id = {
+            seat.id: (seat.identity_profile.full_name if seat.identity_profile else "Unknown")
+            for seat in seats
+        }
+
+    def _audit_display_name(row):
+        return display_names_by_seat_id.get(row.seat_id, "Unknown")
+
     if audit_student:
         audit_student_lower = audit_student.lower()
-        filtered_rows = []
-        for row in live_rows:
-            seat = db.session.get(Seat, row.seat_id)
-            profile = seat.identity_profile if seat else None
-            if audit_student_lower in (profile.full_name if profile else "Unknown").lower():
-                filtered_rows.append(row)
-        live_rows = filtered_rows
+        live_rows = [
+            row for row in live_rows
+            if audit_student_lower in _audit_display_name(row).lower()
+        ]
     live_keys = {
         (row.id, row.action.value if hasattr(row.action, 'value') else row.action)
         for row in live_rows
@@ -5158,11 +5200,9 @@ def store_management():
 
     live_serialized = []
     for row in live_rows:
-        seat = db.session.get(Seat, row.seat_id)
-        profile = seat.identity_profile if seat else None
         live_serialized.append({
             'student_item_id': row.entitlement_id,
-            'student_display_name': profile.full_name if profile else "Unknown",
+            'student_display_name': _audit_display_name(row),
             'class_display_label': selected_scope.get('join_code') or selected_scope.get('block') or "Unknown",
             'action': (
                 (row.outcome.value if hasattr(row.outcome, 'value') else row.outcome)
@@ -5540,13 +5580,6 @@ def rent_settings():
 
     class_id = class_row.class_id
 
-    # Rent items can only be surfaced in the store when the store feature is
-    # enabled for this class. This gates both the UI affordances and the
-    # backend: with store off, no rent item (privilege or per-use) is added to
-    # the store regardless of what the form submits.
-    _store_scope = resolve_feature_class_for_class(class_id, 'store')
-    store_enabled = bool(_store_scope and _store_scope.get("enabled"))
-
     payroll_settings = PayrollSettings.query.filter_by(
         class_id=class_id,
         availability_state='IN_USE',
@@ -5804,7 +5837,6 @@ def rent_settings():
 
     return render_template('admin_rent_settings.html',
                           settings=settings,
-                          store_enabled=store_enabled,
                           obligation_summary=obligation_summary,
                           outstanding_by_student=outstanding_by_student,
                           waiver_history=waiver_history,
@@ -9349,8 +9381,29 @@ def help_support():
         )
         scoped_description = f"{metadata_header}\n\n{description}"
 
+        # Derive the key from the submitted payload, as every other mutation in
+        # this module does. A random key would make each POST a distinct command,
+        # so a double submit or a browser retry would open two identical tickets.
+        payload_hash = hashlib.sha256(
+            json.dumps(
+                {
+                    "scope": ticket_class_public_id,
+                    "category": issue_category,
+                    "title": title,
+                    "description": description,
+                    "expected_behavior": expected_behavior,
+                    "page_url": page_url,
+                },
+                sort_keys=True,
+                default=str,
+            ).encode("utf-8")
+        ).hexdigest()[:16]
+
         try:
-            with FEATContext("FEAT-SUP-001", idempotency_key=f"admin_help_support:{user_id}:{uuid.uuid4().hex}"):
+            with FEATContext(
+                "FEAT-SUP-001",
+                idempotency_key=f"admin_help_support:{user_id}:{payload_hash}",
+            ):
                 category = IssueCategory.query.filter_by(
                     name=category_to_report_type[issue_category],
                 ).first()
@@ -10721,6 +10774,11 @@ def resolve_issue(issue_ref):
 
     # Resolve teacher's public identity for external-facing support records
     teacher_public_id = resolve_public_id_for_user(user_id, class_id) if class_id else None
+    # The acting seat, for the reversal authorization guard (FEAT-LED-002
+    # §III.1.2). The route's own checks below answer narrower questions — that
+    # the issue is in this class, that the transaction belongs to the submitting
+    # seat — and cannot stand in for the ledger boundary's own guard.
+    acting_seat = _get_teacher_seat_for_class(class_id) if class_id else None
 
     issue_id = _resolve_issue_id_from_ref(issue_ref)
     if issue_id is None:
@@ -10797,6 +10855,7 @@ def resolve_issue(issue_ref):
                 idempotency_key=build_transaction_idempotency_key(
                     "issue", "reversal", issue.id, transaction.id
                 ),
+                actor_seat_id=acting_seat.id if acting_seat else None,
             )
 
             issue.teacher_resolution = 'Transaction Reversed'
@@ -10838,6 +10897,7 @@ def resolve_issue(issue_ref):
                 idempotency_key=build_transaction_idempotency_key(
                     "issue", "compensation", issue.id, transaction.id
                 ),
+                actor_seat_id=acting_seat.id if acting_seat else None,
             )
 
             issue.teacher_resolution = 'Compensating Transaction Posted'

@@ -16,6 +16,13 @@ from tests.helpers.class_domain import disable_class_feature, enable_class_featu
 from tests.helpers.classroom_initializer import initialize_as_student, initialize_as_teacher
 from tests.helpers.ledger import create_ledger_idempotent_transaction
 
+from decimal import Decimal
+
+from app.services.ledger_balance_query_service import get_available_balances
+
+# tests/helpers/canonical_identities.py provisions every student with this PIN.
+CANONICAL_STUDENT_PIN = "1234"
+
 pytestmark = [pytest.mark.critical, pytest.mark.regression]
 
 
@@ -84,25 +91,61 @@ def setup_student_with_enabled_banking(client):
 
 
 def test_DOM_CLASS_001__transfer_allowed_when_banking_enabled(client, setup_student_with_enabled_banking):
-    """Test that transfer routes are not blocked by the feature flag when enabled."""
+    """Test that transfer routes are not blocked by the feature flag when enabled.
+
+    The handler reads `pin`, per the FEAT-IDEN-002 credential boundary. This test
+    used to submit `passphrase` and accept either redirect target, so it passed
+    whether the transfer succeeded or was rejected — it proved only that the
+    feature flag did not abort the request.
+    """
     data = setup_student_with_enabled_banking
-    with client.session_transaction() as sess:
-        sess['transfer_token'] = 'test-token-allowed'
 
     response = client.get('/student/transfer', follow_redirects=False)
     assert response.status_code == 200
     assert b'Transfer Details' in response.data or b'Finances' in response.data
 
+    # The GET mints the single-use transfer token, so it has to be read back
+    # from the session rather than planted beforehand — a planted value is
+    # overwritten by the GET and the POST is then refused as a replay.
+    with client.session_transaction() as sess:
+        transfer_token = sess['transfer_token']
+
     response = client.post('/student/transfer', data={
         'from_account': 'checking',
         'to_account': 'savings',
         'amount': '50.00',
-        'passphrase': 'carol_pass',
-        'transfer_token': 'test-token-allowed'
-    }, follow_redirects=False)
+        'pin': CANONICAL_STUDENT_PIN,
+        'transfer_token': transfer_token,
+    }, follow_redirects=True)
 
-    assert response.status_code == 302
-    assert '/student/dashboard' in response.location or '/student/transfer' in response.location
+    assert response.status_code == 200
+    assert b'Incorrect PIN' not in response.data
+    checking, savings = get_available_balances(data['seat_id'], data['class_id'])
+    assert checking == Decimal('50.00')
+    assert savings == Decimal('50.00')
+
+
+def test_DOM_CLASS_001__transfer_rejected_with_wrong_pin(client, setup_student_with_enabled_banking):
+    """An incorrect PIN must leave both balances untouched."""
+    data = setup_student_with_enabled_banking
+
+    assert client.get('/student/transfer').status_code == 200
+    with client.session_transaction() as sess:
+        transfer_token = sess['transfer_token']
+
+    response = client.post('/student/transfer', data={
+        'from_account': 'checking',
+        'to_account': 'savings',
+        'amount': '50.00',
+        'pin': '9999',
+        'transfer_token': transfer_token,
+    }, follow_redirects=True)
+
+    assert response.status_code == 200
+    assert b'Incorrect PIN' in response.data
+    checking, savings = get_available_balances(data['seat_id'], data['class_id'])
+    assert checking == Decimal('100.00')
+    assert savings == Decimal('0.00')
 
 
 def test_DOM_CLASS_001__payroll_allowed_when_payroll_enabled(client, setup_student_with_enabled_banking):

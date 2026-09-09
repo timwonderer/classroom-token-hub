@@ -144,8 +144,6 @@ def expire_lapsed_collective_goal(
     result = GoalExpiryResult(product_lineage_uuid=lineage_uuid, class_id=class_id)
 
     open_grants = _load_open_goal_entitlements(class_id, lineage_uuid)
-    if not open_grants:
-        return result
 
     # A bundle is many entitlements under one charge, so refunds are issued per
     # purchase (correlation), not per entitlement.
@@ -153,17 +151,17 @@ def expire_lapsed_collective_goal(
     for grant in open_grants:
         by_correlation.setdefault(grant.correlation_id or "", []).append(grant)
 
-    for correlation_id, grants in by_correlation.items():
-        covering_tx = _find_covering_transaction(grants[0]) if correlation_id else None
+    for purchase_correlation_id, grants in by_correlation.items():
+        covering_tx = _find_covering_transaction(grants[0]) if purchase_correlation_id else None
         if covering_tx is None:
             # Fail closed. Expiring without refunding would silently keep money
             # for a goal that never happened.
-            result.unresolved_correlations.append(correlation_id or "<missing>")
+            result.unresolved_correlations.append(purchase_correlation_id or "<missing>")
             logger.error(
                 "Collective goal %s in class %s: could not resolve the purchase "
                 "transaction for correlation %r; %d entitlement(s) left untouched "
                 "for manual review rather than expired unrefunded.",
-                lineage_uuid, class_id, correlation_id or "<missing>", len(grants),
+                lineage_uuid, class_id, purchase_correlation_id or "<missing>", len(grants),
             )
             continue
 
@@ -174,10 +172,11 @@ def expire_lapsed_collective_goal(
         # a refund, which §8.2 permits as user-facing language for a reversal.
         reverse_transaction(
             covering_tx,
-            idempotency_key=f"goal-expiry-refund:{class_id}:{correlation_id}",
+            idempotency_key=f"goal-expiry-refund:{class_id}:{purchase_correlation_id}",
             description=(
                 f"Refund: collective goal not reached - {product.name}"
             )[:255],
+            actor_seat_id=actor_seat_id,
         )
         result.purchases_refunded += 1
 
@@ -190,7 +189,7 @@ def expire_lapsed_collective_goal(
                 product_id=grant.product_id,
                 entitlement_type=grant.entitlement_type,
                 acquisition_type=grant.acquisition_type,
-                correlation_id=correlation_id,
+                correlation_id=purchase_correlation_id,
                 payload={
                     "reason": reason,
                     "source": "collective_goal_expiry",
@@ -205,6 +204,13 @@ def expire_lapsed_collective_goal(
     # A fully resolved unmet goal is terminal at the product level as well:
     # it must stop appearing as sellable, and its now-terminal buy-ins no
     # longer contribute to the live progress projection.
+    #
+    # This runs even when there were no open buy-ins to expire. A lapsed goal
+    # nobody bought into — or one whose grants a teacher already terminated by
+    # hand — has nothing to refund but is just as finished, and the early return
+    # that used to sit above left it IN_USE. run_collective_goal_expiry_job
+    # selects on IN_USE plus a passed deadline, so such a product was
+    # re-enumerated and re-evaluated on every hourly run, forever.
     if not result.unresolved_correlations:
         product.availability_state = "RETIRED"
         product.retired_at = utc_now()

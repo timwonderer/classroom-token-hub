@@ -4,10 +4,51 @@ Test migration idempotency to ensure migrations can be run multiple times safely
 These tests run against the shared Postgres test database rather than SQLite.
 """
 
+import importlib.util
+from pathlib import Path
+
 import pytest
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from flask_migrate import upgrade as alembic_upgrade
 from sqlalchemy import inspect, text
 
 from app import db
+
+MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations" / "versions"
+
+
+def _load_revision_module(revision_prefix):
+    """Import one migration module by the revision id its filename starts with."""
+    matches = sorted(MIGRATIONS_DIR.glob(f"{revision_prefix}*.py"))
+    assert matches, f"No migration file found for revision {revision_prefix}"
+    assert len(matches) == 1, f"Ambiguous revision prefix {revision_prefix}: {matches}"
+    spec = importlib.util.spec_from_file_location(
+        f"_migration_{revision_prefix}", matches[0]
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.revision == revision_prefix, (
+        f"{matches[0].name} declares revision {module.revision!r}, which does not "
+        f"match its filename prefix {revision_prefix!r}"
+    )
+    return module
+
+
+def _reapply(revision_prefix):
+    """Run one revision's ``upgrade()`` against a schema that already has it.
+
+    This is the deployment failure mode the idempotency helpers exist for: a
+    migration re-run over a database where its changes are already present. It
+    binds a real Alembic operations context so ``op.*`` inside the migration
+    executes against the live connection, rather than simulating the migration
+    with a throwaway table.
+    """
+    module = _load_revision_module(revision_prefix)
+    with db.engine.begin() as conn:
+        context = MigrationContext.configure(conn)
+        with Operations.context(context):
+            module.upgrade()
 
 
 def _reset_schema():
@@ -39,6 +80,37 @@ def test_db(app):
         yield db
 
 
+@pytest.fixture
+def migrated_db(app):
+    """Build the schema by running the migration chain, not from ORM metadata.
+
+    ``db.create_all()`` builds whatever the models currently declare, which says
+    nothing about whether the migrations that are supposed to produce that shape
+    actually do. These tests need the migrated schema, so they apply the chain.
+    """
+    with app.app_context():
+        db.session.remove()
+        with db.engine.begin() as conn:
+            conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+            conn.execute(text("CREATE SCHEMA public"))
+            enum_rows = conn.execute(
+                text(
+                    """
+                    SELECT t.typname
+                    FROM pg_type AS t
+                    JOIN pg_namespace AS n ON n.oid = t.typnamespace
+                    WHERE t.typtype = 'e' AND n.nspname = 'public'
+                    """
+                )
+            )
+            for row in enum_rows:
+                conn.execute(text(f'DROP TYPE IF EXISTS "{row.typname}" CASCADE'))
+        db.engine.dispose()
+        alembic_upgrade()
+        yield db
+        db.session.remove()
+
+
 def test_column_exists_helper(test_db):
     """Test the column existence detection logic used in migrations."""
     with db.engine.begin() as conn:
@@ -59,34 +131,60 @@ def test_column_exists_helper(test_db):
     assert "nonexistent_column" not in columns
 
 
-def test_migration_1ef03001fb2a_idempotency(test_db):
-    """Test that the canonical store table exposes the migrated owner column."""
+def test_store_products_consolidation_is_idempotent(migrated_db):
+    """The canonical store migration survives a second application.
+
+    The migration chain runs first, then ``b7c41e9a2f30.upgrade()`` runs again
+    over the schema it just produced. This used to be exercised against a
+    throwaway ``test_store_items`` table, so the test passed whether or not the
+    real migration was idempotent — or even whether it produced ``store_products``
+    at all.
+    """
     inspector = inspect(db.engine)
+    assert "store_products" in inspector.get_table_names()
+    assert "store_items" not in inspector.get_table_names()
     columns = [col["name"] for col in inspector.get_columns("store_products")]
     assert "user_id" in columns
     assert "teacher_id" not in columns
+    assert "product_lineage_uuid" in columns
 
-    with db.engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS test_store_items (
-                    id INTEGER PRIMARY KEY,
-                    name VARCHAR(100)
+    _reapply("b7c41e9a2f30")
+
+    inspector = inspect(db.engine)
+    assert "store_products" in inspector.get_table_names()
+    columns_after = [col["name"] for col in inspector.get_columns("store_products")]
+    assert sorted(columns_after) == sorted(columns)
+
+
+def test_item_type_vocabulary_migration_is_idempotent(migrated_db):
+    """The item_type check constraint is added once and re-applies cleanly."""
+    def _constraint_present():
+        with db.engine.begin() as conn:
+            return conn.execute(
+                text(
+                    "SELECT 1 FROM information_schema.table_constraints "
+                    "WHERE table_name = 'store_products' "
+                    "AND constraint_name = 'ck_store_products_item_type'"
                 )
-                """
-            )
-        )
-    inspector = inspect(db.engine)
-    columns_before = [col["name"] for col in inspector.get_columns("test_store_items")]
-    assert "teacher_id" not in columns_before
+            ).first() is not None
 
-    with db.engine.begin() as conn:
-        conn.execute(text("ALTER TABLE test_store_items ADD COLUMN user_id INTEGER"))
+    assert _constraint_present()
+    _reapply("f1a2c3d4e5b6")
+    assert _constraint_present()
+
+
+def test_compensation_subtype_migration_is_idempotent(migrated_db):
+    """The reversal subtype column is added once and re-applies cleanly."""
+    inspector = inspect(db.engine)
+    columns = [col["name"] for col in inspector.get_columns("ledger_transaction")]
+    assert "compensation_subtype" in columns
+
+    _reapply("a3b4c5d6e7f8")
 
     inspector = inspect(db.engine)
-    columns_after = [col["name"] for col in inspector.get_columns("test_store_items")]
-    assert "user_id" in columns_after
+    assert sorted(
+        col["name"] for col in inspector.get_columns("ledger_transaction")
+    ) == sorted(columns)
 
 
 def test_migration_w2x3y4z5a6b7_idempotency(test_db):

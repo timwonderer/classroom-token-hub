@@ -43,7 +43,15 @@ from app.models import (
     ClassEconomy,
     EntitlementEvent,
 )
+from app.services.store_policy_resolver import StorePolicyResolver
 from app.utils.canonical_temporal_resolver import utc_now
+
+# The resolver owns the teacher-facing → domain vocabulary map, and every read
+# path projects a row through it. An item_type outside that map therefore
+# publishes cleanly and then fails every later read for the whole class
+# (list_store_policies, build_policy_list_view). Publication is the only seam
+# that writes item_type, so the set is enforced here.
+CANONICAL_ITEM_TYPES = frozenset(StorePolicyResolver._ITEM_TYPE_TO_ENTITLEMENT_TYPE)
 
 
 # Canonical availability projection states (DOM-POL-001 §IX).
@@ -123,6 +131,11 @@ def _validate_definition(definition: dict) -> None:
     rule the next call site forgets.
     """
     item_type = definition.get('item_type')
+    if item_type not in CANONICAL_ITEM_TYPES:
+        raise InvalidDefinition(
+            f"item_type {item_type!r} is not a catalog type; expected one of "
+            + ", ".join(sorted(CANONICAL_ITEM_TYPES))
+        )
     is_collective = item_type == 'collective'
 
     price = definition.get('price')
@@ -174,11 +187,22 @@ def _validate_definition(definition: dict) -> None:
             raise InvalidDefinition("bulk_discount_percentage must be within (0, 100]")
 
     if is_collective:
-        if not definition.get('collective_goal_type'):
+        goal_type = definition.get('collective_goal_type')
+        if not goal_type:
             raise InvalidDefinition("a collective goal must declare collective_goal_type")
         target = definition.get('collective_goal_target')
-        if not target or target <= 0:
-            raise InvalidDefinition("a collective goal must have a target above zero")
+        # Only the 'fixed' type carries a teacher-supplied target. A whole_class
+        # goal derives its target from class size in
+        # ``store.collective_goals.resolve_goal_target``, and the teacher leaves
+        # the field blank — requiring it here refused every whole-class goal at
+        # publication.
+        if goal_type == 'fixed':
+            if not target or target <= 0:
+                raise InvalidDefinition(
+                    "a fixed collective goal must have a target above zero"
+                )
+        elif target is not None and target <= 0:
+            raise InvalidDefinition("collective_goal_target must be above zero if set")
         if not definition.get('collective_goal_expires_at'):
             raise InvalidDefinition("a collective goal must have a deadline")
         # Bundle and bulk settings are refused above, with the rest of the types
@@ -397,6 +421,11 @@ def units_sold(class_id: str, product_lineage_uuid: str) -> int:
             EntitlementEvent.class_id == class_id,
             EntitlementEvent.product_id == product_lineage_uuid,
             EntitlementEvent.event_type == "REVOKED",
+            # Symmetric with the GRANTED leg. A REVOKED row copies the grant's
+            # acquisition_type, so without this an inventory-free teacher GRANT
+            # or rent PERK, when revoked, would subtract from a total it never
+            # added to and hand the catalog back a unit that was never sold.
+            EntitlementEvent.acquisition_type == "PURCHASE",
         )
         .count()
     )
@@ -423,10 +452,10 @@ def units_sold_by_lineage(class_id: str, lineages: Iterable[str]) -> dict[str, i
             EntitlementEvent.class_id == class_id,
             EntitlementEvent.product_id.in_(lineage_list),
             EntitlementEvent.event_type.in_(("GRANTED", "REVOKED")),
-            db.or_(
-                EntitlementEvent.event_type == "REVOKED",
-                EntitlementEvent.acquisition_type == "PURCHASE",
-            ),
+            # Both legs are purchase-only, as in units_sold(); the previous
+            # db.or_ exempted REVOKED from the acquisition filter, so a revoked
+            # grant or perk decremented a purchase tally.
+            EntitlementEvent.acquisition_type == "PURCHASE",
         )
         .group_by(EntitlementEvent.product_id, EntitlementEvent.event_type)
         .all()

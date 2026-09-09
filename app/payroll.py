@@ -117,8 +117,8 @@ def calculate_payroll_breakdown(class_id, seat_ids, last_payroll_time):
     # --- 1. Determine class scope and fetch class-scoped payroll anchors ---
     allowed_class_ids = [class_id]
     scoped_seat_ids = [s.id for s in seats]
-    pay_rates = _get_batch_pay_rates(allowed_class_ids)
     payroll_settings = _get_batch_payroll_settings(allowed_class_ids)
+    pay_rates = _pay_rates_from_settings(payroll_settings)
     student_last_payrolls = _get_batch_last_payroll_times(
         scoped_seat_ids,
         allowed_class_ids=allowed_class_ids,
@@ -198,15 +198,32 @@ def _get_batch_pay_rates(class_ids):
         .order_by(PayrollSettings.updated_at.asc(), PayrollSettings.id.asc())
         .all()
     )
-    rates = {}
-    for s in settings:
-        if s.pay_rate and s.class_id:
-            rates[s.class_id] = s.pay_rate / Decimal('60')
-
-    return rates
+    return _pay_rates_from_settings(_settings_by_class(settings))
 
 
-def _get_batch_payroll_settings(class_ids):
+def _settings_by_class(settings) -> dict:
+    """Index loaded settings rows by class."""
+    return {setting.class_id: setting for setting in settings if setting.class_id}
+
+
+def _pay_rates_from_settings(settings_by_class: dict) -> dict:
+    """Per-minute pay rate for each class that declares one."""
+    return {
+        class_id: setting.pay_rate / Decimal('60')
+        for class_id, setting in settings_by_class.items()
+        if setting.pay_rate
+    }
+
+
+def _get_batch_payroll_settings(class_ids) -> dict:
+    """Active payroll settings per class, indexed by ``class_id``.
+
+    The single loader for both the settings and the pay rates derived from them.
+    They used to be two functions issuing an identical query — same filter, same
+    ordering, same rows — and ``calculate_payroll_breakdown`` called both, so a
+    payroll run made two round trips for one row set and the two orderings could
+    drift apart in a later edit.
+    """
     if not class_ids:
         return {}
     settings = (
@@ -218,7 +235,7 @@ def _get_batch_payroll_settings(class_ids):
         .order_by(PayrollSettings.updated_at.asc(), PayrollSettings.id.asc())
         .all()
     )
-    return {setting.class_id: setting for setting in settings}
+    return _settings_by_class(settings)
 
 
 

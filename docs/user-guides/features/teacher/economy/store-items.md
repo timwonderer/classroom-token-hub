@@ -69,7 +69,7 @@ Tick **Enable Bulk Discount**, then set **Minimum Quantity for Discount** and **
 
 This is distinct from a bundle: a bundle changes what one purchase contains, a bulk discount changes the price when a student buys several. At or above the threshold the discount applies to the whole order, not only to the units past it. See [Bundles, Bulk Discounts, and Collective Goals](store-bundles-goals.md).
 
-Bulk discounts are for **Delayed Use** and **Hall Pass** items only. Immediate-use and privilege items are single-unit purchases; collective goals represent a shared class pot.
+Bulk discounts are available on **Delayed Use** and **Hall Pass** items only. Those types can hold several independent, unredeemed units. **Immediate Use** items are single-unit purchases, and a **Collective Goal** is a shared class pot rather than a student's multi-unit order.
 
 #### Collective Goal Settings
 

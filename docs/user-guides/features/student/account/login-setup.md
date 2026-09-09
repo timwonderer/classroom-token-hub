@@ -38,7 +38,7 @@ The app builds your username by putting two of its own words around yours and ad
 Your finished username appears at the top of this page. **This is the only time it is ever shown.** Write it down.
 
 1. Tick **I have written down my username and I know it won't be shown to me again.** The submit button stays disabled until you do.
-2. Set a **PIN** — 4 to 8 digits. This is what you type to sign in.
+2. Set a **PIN** — 4 to 6 digits. This is what you type for clock actions, transfers between your own accounts, and hall passes.
 3. Set a **Passphrase** — at least four words, with symbols and numbers. Aim for easy to remember, hard to guess. This is your recovery credential, and it is also how you verify your teacher's identity if they ever lose their own account.
 4. Submit.
 
@@ -46,7 +46,7 @@ A confirmation screen greets you by name. Select **Thanks, Let's Go!** to reach 
 
 ### Logging in every day
 
-Enter your **Username** and **PIN** on the student sign-in page. That is all.
+Enter your **Username** and **Passphrase** on the student sign-in page. That is all.
 
 ## Important notes
 

@@ -223,6 +223,16 @@ def upgrade():
         op.drop_table('store_products')
         print("❌ Dropped legacy JSON-payload store_products")
     if table_exists('store_items'):
+        # entitlement_grants.entitlement_item_id references store_items.id
+        # (revision 1761e2187234, an ancestor of this one). PostgreSQL refuses
+        # DROP TABLE while a dependent foreign key stands, so the constraint is
+        # released first. The column itself is left alone: the grants table is
+        # not this revision's to reshape, and the lineage-keyed replacement for
+        # that reference lives on entitlement_events.product_id, retyped above.
+        if table_exists('entitlement_grants'):
+            for fk in get_foreign_keys_by_column('entitlement_grants', 'entitlement_item_id'):
+                op.drop_constraint(fk['name'], 'entitlement_grants', type_='foreignkey')
+                print("❌ Dropped entitlement_grants FK to store_items")
         op.drop_table('store_items')
         print("❌ Dropped legacy store_items catalog")
 
@@ -275,6 +285,14 @@ def upgrade():
                 "availability_state IN ('IN_USE','HIDDEN','RETIRED')",
                 name='ck_store_products_availability_state',
             ),
+            # Closed catalog vocabulary. Every read projects item_type through
+            # StorePolicyResolver._ITEM_TYPE_TO_ENTITLEMENT_TYPE, and an unmapped
+            # value fails the policy list for the whole class rather than for the
+            # one row that carries it.
+            sa.CheckConstraint(
+                "item_type IN ('immediate','delayed','collective','hall_pass','privilege')",
+                name='ck_store_products_item_type',
+            ),
         )
         print("✅ Created store_products in versioned policy shape")
 
@@ -313,6 +331,11 @@ def upgrade():
             ['product_lineage_uuid'],
             unique=True,
             postgresql_where=sa.text("availability_state = 'IN_USE'"),
+            # Mirrors StoreProduct.__table_args__. Without the SQLite variant the
+            # index is created unconditionally there, and supersession — which
+            # mints a second version carrying the same lineage — raises
+            # IntegrityError even when the previous version is RETIRED.
+            sqlite_where=sa.text("availability_state = 'IN_USE'"),
         )
         print("✅ One-live-version-per-lineage constraint in place")
 

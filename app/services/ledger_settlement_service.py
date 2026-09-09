@@ -119,7 +119,6 @@ def _posted_history_cents(class_id: str, seat_id: int, account_type: str) -> int
         Transaction.seat_id == seat_id,
         Transaction.account_type == account_type,
         Transaction.status == TransactionStatus.POSTED,
-        Transaction.status != TransactionStatus.VOID,
     ).scalar()
     return int(total or 0)
 

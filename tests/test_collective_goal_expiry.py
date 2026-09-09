@@ -212,7 +212,11 @@ class TestUnmetGoalIsExpiredAndRefunded:
             assert purchase.status == TransactionStatus.POSTED
             assert purchase.reversal_transaction_id is not None
             reversal = db.session.get(Transaction, purchase.reversal_transaction_id)
-            assert reversal.type == "refund"
+            # FEAT-LED-002 §III.2.1: the ledger type is REVERSAL. The business
+            # reason it was raised for is recorded separately, so a rebuild from
+            # history reads one vocabulary for every compensating row.
+            assert reversal.type == "REVERSAL"
+            assert reversal.compensation_subtype == "refund"
             assert reversal.amount == -purchase.amount
 
     def test_every_participant_is_refunded_not_just_the_first(self, app, classroom):

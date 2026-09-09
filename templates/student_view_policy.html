@@ -245,8 +245,17 @@
                     {% endif %}
                 </p>
 
+                {# `enrollment.id` is the policy_uuid — the view builds `enrollment`
+                   from the policy itself, not from a row with a separate integer id.
+                   Cancelling is a passphrase action, the same as buying
+                   (FEAT-IDEN-002 §Credential boundary). #}
                 <form action="{{ url_for('student.cancel_insurance', policy_uuid=enrollment.id) }}" method="POST">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-2">
+                        <label for="cancelPassphrase" class="form-label">Enter your passphrase to confirm:</label>
+                        <input type="password" class="form-control" id="cancelPassphrase"
+                               name="passphrase" autocomplete="current-password" required>
+                    </div>
                     <button type="submit" class="btn btn-danger w-100"
                         onclick="return confirm('Are you sure you want to cancel this insurance policy?')">
                         Cancel This Policy

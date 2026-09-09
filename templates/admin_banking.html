@@ -299,7 +299,7 @@
             <tbody>
               {% if transactions %}
               {% for tx in transactions %}
-              <tr class="{% if tx.status.value == 'void' %}table-secondary text-muted{% endif %}">
+              <tr class="{% if tx.is_void %}table-secondary text-muted{% endif %}">
                 <td>
                   {% if tx.timestamp %}{{ tx.timestamp|fmt_timestamp }}{% else %}N/A{% endif %}
                 </td>
@@ -316,11 +316,11 @@
                 </td>
                 <td class="{% if tx.amount > 0 %}text-success{% else %}text-danger{% endif %} fw-bold text-end">
                   ${{ "%.2f"|format(tx.amount) }}
-                  {% if tx.status.value == 'void' %}<span class="badge bg-secondary ms-1">VOID</span>{% endif %}
+                  {% if tx.is_void %}<span class="badge bg-secondary ms-1">VOID</span>{% endif %}
                 </td>
                 <td>{{ tx.description or '—' }}</td>
                 <td>
-                  {% if tx.status.value != 'void' %}
+                  {% if not tx.is_void %}
                   <button type="button" class="btn btn-sm btn-outline-danger" onclick="voidTransaction({{ tx.id }})"
                     title="Void transaction">
                     <span class="material-symbols-outlined">cancel</span>

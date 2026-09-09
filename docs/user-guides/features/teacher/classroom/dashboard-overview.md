@@ -50,7 +50,7 @@ Each tab shows five at a time. Past that you get *Showing 5 of N pending [type]*
 
 ### Setup banners
 
-The legacy recovery and insurance-migration banners are not rendered on the v2 dashboard. Account recovery and insurance configuration are reached from their dedicated settings pages.
+The legacy recovery and insurance-migration banners are not rendered on the v2 dashboard. Account recovery is worked from a student's own page — the **Overview** and **Edit Student** tabs of [Student Detail](student-detail.md) — and insurance configuration from [Insurance Policies](../bills/insurance-policies.md).
 
 ## Important notes
 

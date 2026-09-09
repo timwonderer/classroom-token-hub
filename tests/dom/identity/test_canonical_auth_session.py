@@ -57,10 +57,10 @@ def test_DOM_IDEN_006__teacher_login_uses_keyed_feat_context(client, monkeypatch
 
 
 
-def test_DOM_IDEN_006__student_login_verifies_user_pin_and_resolves_through_claimed_seat(client, monkeypatch):
+def test_DOM_IDEN_006__student_login_verifies_passphrase_and_resolves_through_claimed_seat(client, monkeypatch):
     monkeypatch.setattr("app.routes.student.verify_turnstile_token", lambda *_args, **_kwargs: True)
     classroom, student = initialize_as_student("chemistry_p1", client, client.application)
-    response = student_login(client, username=student.username, pin=student.pin)
+    response = student_login(client, username=student.username, passphrase=student.passphrase)
     assert response.status_code == 302
 
 
@@ -71,7 +71,7 @@ def test_DOM_IDEN_006__student_login_missing_last_active_class_shows_selector(cl
     with FEATContext("FEAT-IDEN-001", idempotency_key="test:clear-last-active-class:selector"):
         student.user.last_active_class_id = None
         db.session.flush()
-    response = student_login(client, username=student.username, pin=student.pin)
+    response = student_login(client, username=student.username, passphrase=student.passphrase)
 
     assert response.status_code == 302
     assert "/student/select-class-context" in response.headers["Location"]

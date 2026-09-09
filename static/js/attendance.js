@@ -224,7 +224,9 @@ function openBreakChoiceModal() {
     .then(r => r.json())
     .then(data => {
       if (data.status === 'success') {
-        renderBreakDestinations(data.pass_types || []);
+        // The endpoint returns pass_type_payload; this read `data.pass_types`,
+        // which the API has never sent, so the destination list rendered empty.
+        renderBreakDestinations(data.pass_type_payload || []);
       } else {
         renderBreakDestinationError(data.message || 'Unable to load hall-pass destinations.');
       }

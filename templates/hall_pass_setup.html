@@ -224,18 +224,12 @@
                 <!-- Total Limits Section -->
                 <div class="totals-container">
                     <div class="totals-header">Total Limits</div>
-                    <p class="info-text mb-3">These fields are only editable when any pass type has unlimited limits. They set an absolute cap across all pass types.</p>
+                    <p class="info-text mb-3">Derived from the per-destination limits above. There is one limit per destination: it caps how many students may be out to that destination at once, and the sum caps how many may be out class-wide.</p>
 
                     <div class="total-field">
-                        <label for="totalQueueLimit">Total Queue Limit (Approved & Waiting)</label>
+                        <label for="totalQueueLimit">Total Students Out At Once</label>
                         <input type="number" class="form-control" id="totalQueueLimit" min="0" disabled>
                         <div class="total-help-text" id="queueLimitHelp">Calculated from individual pass type limits</div>
-                    </div>
-
-                    <div class="total-field">
-                        <label for="totalSimultaneousLimit">Total Simultaneous Out Limit</label>
-                        <input type="number" class="form-control" id="totalSimultaneousLimit" min="0" disabled>
-                        <div class="total-help-text" id="simultaneousLimitHelp">Calculated from individual pass type limits</div>
                     </div>
                 </div>
 
@@ -271,12 +265,8 @@
                         <input type="text" class="form-control" id="newPassTypeName" placeholder="e.g., Library">
                     </div>
                     <div class="mb-3">
-                        <label for="newQueueLimit" class="form-label">Queue Limit <span class="info-text">(optional)</span></label>
-                        <input type="number" class="form-control" id="newQueueLimit" placeholder="Unlimited" min="0">
-                    </div>
-                    <div class="mb-3">
-                        <label for="newSimultaneousLimit" class="form-label">Simultaneous Limit <span class="info-text">(optional)</span></label>
-                        <input type="number" class="form-control" id="newSimultaneousLimit" placeholder="Unlimited" min="0">
+                        <label for="newQueueLimit" class="form-label">Students Out At Once <span class="info-text">(0 blocks this destination)</span></label>
+                        <input type="number" class="form-control" id="newQueueLimit" placeholder="10" min="0">
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -288,6 +278,11 @@
     </div>
 
     <script>
+        // Matches HallPassSettings.get_default_pass_types(). The API requires an
+        // integer >= 0 for every pass type and has no "unlimited" value, so a
+        // blank input falls back to this rather than to 0 (which blocks the
+        // destination entirely).
+        const DEFAULT_PASS_TYPE_LIMIT = 10;
         let passTypesData = [];
         let addPassTypeModalInstance = null;
 
@@ -327,7 +322,6 @@
             // Clear form
             document.getElementById('newPassTypeName').value = '';
             document.getElementById('newQueueLimit').value = '';
-            document.getElementById('newSimultaneousLimit').value = '';
 
             // Show modal
             if (!addPassTypeModalInstance) {
@@ -339,7 +333,6 @@
         function addPassType() {
             const name = document.getElementById('newPassTypeName').value.trim();
             const queueLimit = document.getElementById('newQueueLimit').value.trim();
-            const simultaneousLimit = document.getElementById('newSimultaneousLimit').value.trim();
 
             if (!name) {
                 showFeedback('Please enter a pass type name', true);
@@ -353,38 +346,26 @@
                 return;
             }
 
-            // Validate limits
-            let queueLimitValue = null;
+            // Validate the limit. `max_queue` is the only per-destination number
+            // the API accepts, and 0 is a real value there — it blocks the
+            // destination — so a blank field defaults to the built-in 10 rather
+            // than silently becoming 0. There is no "unlimited" representation.
+            let queueLimitValue = DEFAULT_PASS_TYPE_LIMIT;
             if (queueLimit !== '') {
                 queueLimitValue = parseInt(queueLimit, 10);
                 if (isNaN(queueLimitValue) || queueLimitValue < 0) {
-                    showFeedback('Queue limit must be a non-negative number', true);
+                    showFeedback('The limit must be a non-negative whole number', true);
                     return;
                 }
             }
 
-            let simultaneousLimitValue = null;
-            if (simultaneousLimit !== '') {
-                simultaneousLimitValue = parseInt(simultaneousLimit, 10);
-                if (isNaN(simultaneousLimitValue) || simultaneousLimitValue < 0) {
-                    showFeedback('Simultaneous limit must be a non-negative number', true);
-                    return;
-                }
-            }
-
-            // Add to data
-            const newPassType = {
+            passTypesData.push({
                 pass_name: name,
-                max_queue: queueLimitValue === null ? 0 : queueLimitValue,
+                name: name,
+                max_queue: queueLimitValue,
                 consume_pass: true,
                 enabled: document.getElementById('masterToggle').checked
-            };
-            // The API has one authoritative per-destination limit. The legacy
-            // simultaneous field is display-only and is not serialized.
-            newPassType.name = name;
-            newPassType.queue_limit = queueLimitValue;
-            newPassType.simultaneous_limit = simultaneousLimitValue;
-            passTypesData.push(newPassType);
+            });
 
             // Render
             renderPassTypes();
@@ -451,24 +432,13 @@
                     </div>
                     <div class="pass-type-limits">
                         <div class="limit-field">
-                            <label>Queue Limit</label>
+                            <label>Students Out At Once</label>
                             <input type="number"
                                    class="form-control"
-                                   aria-label="${passTypeName} queue limit"
-                                   value="${pt.queue_limit !== null ? pt.queue_limit : ''}"
-                                   placeholder="Unlimited"
+                                   aria-label="${passTypeName} limit on students out at once"
+                                   value="${Number.isInteger(pt.max_queue) ? pt.max_queue : DEFAULT_PASS_TYPE_LIMIT}"
                                    min="0"
-                                   onchange="updatePassTypeLimit(${index}, 'queue_limit', this.value)">
-                        </div>
-                        <div class="limit-field">
-                            <label>Simultaneous Limit</label>
-                            <input type="number"
-                                   class="form-control"
-                                   aria-label="${passTypeName} simultaneous limit"
-                                   value="${pt.simultaneous_limit !== null ? pt.simultaneous_limit : ''}"
-                                   placeholder="Unlimited"
-                                   min="0"
-                                   onchange="updatePassTypeLimit(${index}, 'simultaneous_limit', this.value)">
+                                   onchange="updatePassTypeLimit(${index}, this.value)">
                         </div>
                     </div>
                 </div>
@@ -495,66 +465,33 @@
             updateTotalFields();
         }
 
-        function updatePassTypeLimit(index, field, value) {
-            passTypesData[index][field] = value.trim() ? parseInt(value) : null;
+        function updatePassTypeLimit(index, value) {
+            // Writes max_queue, the one field the API accepts. The edit used to
+            // land on a separate `queue_limit` property that saveConfiguration
+            // never read, so every change made here was discarded on save.
+            const parsed = value.trim() === '' ? DEFAULT_PASS_TYPE_LIMIT : parseInt(value, 10);
+            passTypesData[index].max_queue =
+                Number.isInteger(parsed) && parsed >= 0 ? parsed : DEFAULT_PASS_TYPE_LIMIT;
             updateTotalFields();
         }
 
         function updateTotalFields() {
+            // Mirrors what the runtime computes in app/feats/prod.py: the
+            // class-wide cap is the sum of the per-destination limits (bounded by
+            // the settings row's own ceiling), and each destination's limit is
+            // also its own simultaneous cap. There is one number, so the page
+            // shows one number.
             const totalQueueInput = document.getElementById('totalQueueLimit');
-            const totalSimultaneousInput = document.getElementById('totalSimultaneousLimit');
             const queueHelp = document.getElementById('queueLimitHelp');
-            const simultaneousHelp = document.getElementById('simultaneousLimitHelp');
 
-            // Calculate sums of non-null limits for enabled pass types
-            let queueSum = 0;
-            let simultaneousSum = 0;
-            let hasUnlimitedQueue = false;
-            let hasUnlimitedSimultaneous = false;
+            const queueSum = passTypesData.reduce(
+                (sum, pt) => sum + (pt.enabled && Number.isInteger(pt.max_queue) ? pt.max_queue : 0),
+                0
+            );
 
-            passTypesData.forEach(pt => {
-                if (pt.enabled) {
-                    if (pt.queue_limit === null) {
-                        hasUnlimitedQueue = true;
-                    } else {
-                        queueSum += pt.queue_limit;
-                    }
-
-                    if (pt.simultaneous_limit === null) {
-                        hasUnlimitedSimultaneous = true;
-                    } else {
-                        simultaneousSum += pt.simultaneous_limit;
-                    }
-                }
-            });
-
-            // Queue limit field
-            if (hasUnlimitedQueue) {
-                totalQueueInput.disabled = false;
-                totalQueueInput.min = queueSum;
-                if (totalQueueInput.value === '' || parseInt(totalQueueInput.value) < queueSum) {
-                    totalQueueInput.value = Math.max(queueSum, 10);
-                }
-                queueHelp.textContent = `Must be at least ${queueSum} (sum of non-unlimited pass types)`;
-            } else {
-                totalQueueInput.disabled = true;
-                totalQueueInput.value = queueSum;
-                queueHelp.textContent = 'Calculated from individual pass type limits';
-            }
-
-            // Simultaneous limit field
-            if (hasUnlimitedSimultaneous) {
-                totalSimultaneousInput.disabled = false;
-                totalSimultaneousInput.min = simultaneousSum;
-                if (totalSimultaneousInput.value === '' || parseInt(totalSimultaneousInput.value) < simultaneousSum) {
-                    totalSimultaneousInput.value = Math.max(simultaneousSum, 5);
-                }
-                simultaneousHelp.textContent = `Must be at least ${simultaneousSum} (sum of non-unlimited pass types)`;
-            } else {
-                totalSimultaneousInput.disabled = true;
-                totalSimultaneousInput.value = simultaneousSum;
-                simultaneousHelp.textContent = 'Calculated from individual pass type limits';
-            }
+            totalQueueInput.disabled = true;
+            totalQueueInput.value = queueSum;
+            queueHelp.textContent = 'Calculated from individual pass type limits';
         }
 
         function showFeedback(message, isError = false) {
@@ -575,13 +512,14 @@
                 return;
             }
 
-            // Note: Total limits are displayed for teacher reference but are not enforced in the backend yet.
-            // Pass types are saved with their individual limits. Global total enforcement is a future enhancement.
+            // max_queue is the current value of the visible input; the previous
+            // `Number.isInteger(pt.max_queue) ? pt.max_queue : ...` guard was
+            // always true for a loaded or newly added pass type, so every edit
+            // was silently dropped on save. The API accepts exactly these three
+            // keys and rejects the payload outright if any other appears.
             const passTypesToSave = passTypesData.map(pt => ({
                 pass_name: pt.pass_name || pt.name,
-                max_queue: Number.isInteger(pt.max_queue)
-                    ? pt.max_queue
-                    : (pt.queue_limit === null || pt.queue_limit === undefined ? 0 : pt.queue_limit),
+                max_queue: Number.isInteger(pt.max_queue) ? pt.max_queue : DEFAULT_PASS_TYPE_LIMIT,
                 consume_pass: pt.consume_pass !== false
             }));
 
@@ -631,8 +569,6 @@
                     passTypesData = (data.pass_type_payload || []).map(pt => ({
                         ...pt,
                         name: pt.pass_name,
-                        queue_limit: pt.max_queue,
-                        simultaneous_limit: pt.max_queue,
                         enabled: true
                     }));
 

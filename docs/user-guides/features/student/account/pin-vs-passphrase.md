@@ -58,7 +58,7 @@ The pattern worth remembering: **non-monetary or reversible actions use the PIN;
 ## Important notes
 
 > [!WARNING]
-> **Buying insurance asks for your passphrase.** The **Buy — $X** form commits you to a recurring premium only after the passphrase is verified. Cancelling remains confirmation-only because it stops renewal rather than taking a new payment.
+> **Buying and cancelling insurance both ask for your passphrase.** The **Buy — $X** form commits you to a recurring premium only after the passphrase is verified, and **Cancel coverage** asks for it too — stopping renewal is a decision about money, so it is held to the same standard as starting one.
 
 > [!IMPORTANT]
 > **Never tell anyone your passphrase, including someone claiming to be your teacher.** Your teacher never needs it. The one time they ask you to *use* it — verifying a recovery request — you type it into your own screen yourself and hand over a code instead. See [Verify a Teacher Recovery Request](verify-teacher-recovery.md).

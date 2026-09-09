@@ -284,12 +284,21 @@ def apply_resolved_ledger_plan(
     # and actor: this is a self-initiated economic act, unlike the fee below.
     debit_amount = resolved_plan.intended_plan.debit_amount
     if debit_amount > Decimal("0.00"):
+        # A caller-supplied key is required, not merely preferred. The old
+        # seat+class fallback repeats for every debit that seat ever makes, so
+        # the reservation boundary sees the second one as a replay of the first:
+        # create_reserved_effects returns the existing transaction when the
+        # fingerprint still matches (the debit is silently skipped) and raises
+        # ValueError when it does not (the debit is refused). Either way the
+        # money the caller asked to move does not move.
+        if not idempotency_key:
+            raise ValueError(
+                "A principal debit requires a caller-supplied idempotency_key; "
+                "a key derived from seat and class alone repeats across debits."
+            )
         # Distinct from the fee's key: one resolved plan can post both, and they
         # are separate effects that must not collide in the reservation table.
-        debit_idempotency_key = (
-            f"{idempotency_key}:debit" if idempotency_key
-            else f"ledger-debit:{seat.id}:{resolved_plan.intended_plan.class_id}"
-        )
+        debit_idempotency_key = f"{idempotency_key}:debit"
         create_pending_transaction_idempotent(
             idempotency_key=debit_idempotency_key,
             seat_id=seat.id,

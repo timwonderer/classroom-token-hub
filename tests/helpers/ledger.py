@@ -124,12 +124,14 @@ def compensate_ledger_posted_transaction(
     description: str,
     compensation_type: str = "refund",
     idempotency_key: str | None = None,
+    actor_seat_id: int | None = None,
 ):
     return reverse_transaction(
         transaction,
         description=description,
         compensation_type=compensation_type,
         idempotency_key=idempotency_key,
+        actor_seat_id=actor_seat_id,
     )
 
 

@@ -500,6 +500,11 @@ class Transaction(db.Model):
     reversal_transaction_id = db.Column(db.Integer, nullable=True, index=True)
     policy_id = db.Column(db.Integer, nullable=True, index=True)
     type = db.Column(db.String(50))  # optional field to describe the transaction type
+    # A compensating transaction persists 'REVERSAL' in `type`, never the reason
+    # it was raised for (FEAT-LED-002 §III.2.1). The reason still matters to
+    # Operations — an issue reversal and an issue compensating entry are answered
+    # differently — so it lives here rather than displacing the ledger vocabulary.
+    compensation_subtype = db.Column(db.String(50), nullable=True, index=True)
     # All times stored as UTC
     date_funds_available = db.Column(db.DateTime(timezone=True), default=utc_now)
 
@@ -1048,13 +1053,27 @@ class StoreProduct(db.Model):
         primaryjoin='foreign(StoreItemVisibility.product_lineage_uuid) == StoreProduct.product_lineage_uuid',
         back_populates='store_product',
         lazy='dynamic',
-        viewonly=False,
+        # Read-only. The primaryjoin marks product_lineage_uuid as the foreign
+        # side, so a writable relationship would let a caller de-associate a row
+        # by NULLing a non-nullable column, failing the flush. Every visibility
+        # writer (set_blocks below, the admin routes) uses explicit deletes and
+        # inserts, so nothing needs to write through the relationship.
+        viewonly=True,
     )
 
     __table_args__ = (
         db.CheckConstraint(
             "availability_state IN ('IN_USE','HIDDEN','RETIRED')",
             name='ck_store_products_availability_state',
+        ),
+        # The catalog vocabulary is closed: every read path projects item_type
+        # through StorePolicyResolver._ITEM_TYPE_TO_ENTITLEMENT_TYPE, and an
+        # unmapped value raises PolicyValidationError for the whole class rather
+        # than for the one bad row. store_service._validate_definition refuses it
+        # at the write seam; this is the same rule where it cannot be bypassed.
+        db.CheckConstraint(
+            "item_type IN ('immediate','delayed','collective','hall_pass','privilege')",
+            name='ck_store_products_item_type',
         ),
         # At most one sellable version per product. This is the constraint that
         # makes "edit = supersede" safe: minting a new IN_USE version without
@@ -1064,6 +1083,11 @@ class StoreProduct(db.Model):
             'product_lineage_uuid',
             unique=True,
             postgresql_where=db.text("availability_state = 'IN_USE'"),
+            # Without the SQLite dialect variant this index is created
+            # unconditionally there, so superseding a product — which mints a
+            # second version carrying the same lineage — raises IntegrityError
+            # even though the previous version is RETIRED.
+            sqlite_where=db.text("availability_state = 'IN_USE'"),
         ),
         db.Index('ix_store_products_class_availability', 'class_id', 'availability_state'),
         db.Index('ix_store_products_class_created', 'class_id', 'created_at'),
@@ -1416,7 +1440,11 @@ class RentSettings(db.Model):
         """Return the validated, normalized list of PERK grants awarded on rent satisfaction.
 
         None (unset) normalizes to an empty list. Each entry is a
-        ``{"entitlement_type": str, "quantity": int}`` dict.
+        ``{"entitlement_type": str, "quantity": int}`` dict, optionally carrying
+        ``"product_lineage_uuid"`` when the grant names a specific store product
+        rather than a bare entitlement type. ``validate_satisfaction_benefits``
+        preserves that key, and the student item card reads it to resolve the
+        product the perk hands over.
         """
         return validate_satisfaction_benefits(self.satisfaction_benefits)
 

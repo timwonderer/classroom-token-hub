@@ -21,6 +21,12 @@ from tests.helpers.ledger import (
 
 def test_DOM_LED_001__idempotent_transaction_types_are_explicit():
     expected = frozenset({
+        # The canonical compensating type (FEAT-LED-002 §III.2.1). A reversal
+        # persists this in `type`; the business reason it was raised for lives in
+        # Transaction.compensation_subtype, so `issue_reversal`,
+        # `issue_compensation` and `refund` stay listed for the rows written
+        # before that split.
+        "REVERSAL",
         "insurance_reimbursement",
         "insurance_premium",
         "purchase",

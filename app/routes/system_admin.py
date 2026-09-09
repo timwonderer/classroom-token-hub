@@ -938,8 +938,8 @@ def view_user_report(report_ref):
 
 
 @sysadmin_bp.route('/user-reports/<report_ref>/update', methods=['POST'])
-@requires_feat_context("FEAT-OPS-001")
 @system_admin_required
+@requires_feat_context("FEAT-OPS-001")
 def update_user_report(report_ref):
     """Update an Operations-owned issue through the canonical FEAT boundary."""
     report_id = _resolve_report_id_from_ref(report_ref)
@@ -953,10 +953,24 @@ def update_user_report(report_ref):
     new_status = request.form.get('status')
     admin_notes = request.form.get('admin_notes', '').strip()
     
-    # Validate status
+    # Validate status. These three are the states this form owns; the Issue
+    # lifecycle also has TEACHER_REVIEW, ESCALATED_TO_DEV and
+    # TEACHER_FINAL_REVIEW, which move through the escalated-issue workflow.
     valid_statuses = [Issue.STATUS_OPEN, Issue.STATUS_DEV_RESOLVED, Issue.STATUS_CLOSED]
     if new_status not in valid_statuses:
         flash("Invalid status selected.", "error")
+        return redirect(url_for('sysadmin.view_user_report', report_ref=make_opaque_ref('report', report.id)))
+
+    # A report already in one of the workflow states must not be dragged out of
+    # it by this form. The browser sends the selector's first option when nothing
+    # is selected, so without this guard an escalated report silently became OPEN
+    # on any notes-only save.
+    if report.status not in valid_statuses and new_status != report.status:
+        flash(
+            "This report is in a workflow state that this page does not resolve. "
+            "Use the escalated-issue workflow to change its status.",
+            "error",
+        )
         return redirect(url_for('sysadmin.view_user_report', report_ref=make_opaque_ref('report', report.id)))
     
     try:
@@ -970,7 +984,8 @@ def update_user_report(report_ref):
         report.sysadmin_notes = admin_notes or None
         report.sysadmin_reviewed_at = utc_now()
         report.sysadmin_id = g.canonical_context.user_id
-        db.session.commit()
+        # FEATContext.__exit__ owns the commit (INV-ARC FEAT atomicity). A direct
+        # commit here trips enforce_feat_context_on_commit and rolls the update back.
         flash(f"Report #{report_id} updated successfully.", "success")
     except Exception as e:
         db.session.rollback()
@@ -1315,8 +1330,8 @@ def start_review_escalated_issue(issue_ref):
 
 
 @sysadmin_bp.route('/issues/<issue_ref>/resolve', methods=['POST'])
-@requires_feat_context("FEAT-OPS-001")
 @system_admin_required
+@requires_feat_context("FEAT-OPS-001")
 def resolve_escalated_issue(issue_ref):
     """Mark technical fix complete, optionally issue bug bounty, then return to teacher-admin final review."""
     issue_id = _resolve_issue_id_from_ref(issue_ref)

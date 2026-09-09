@@ -45,7 +45,7 @@ Below that, **Savings Balance Projection (12 Months)** charts where your savings
 2. Choose a **From Account** and a **To Account** — each is Checking or Savings.
 3. Enter an **Amount**. The minimum is $0.01.
 4. Choose **Continue to Confirmation**.
-5. In **Confirm Transfer**, enter your passphrase at *Enter your passphrase to confirm:* and choose **Confirm Transfer**.
+5. In **Confirm Transfer**, enter your PIN at *Enter your PIN to confirm:* and choose **Confirm Transfer**.
 
 Beneath the form, a tip spells out what your savings actually earns — the annual rate, whether it is simple or compound, how often it compounds, and roughly what you can expect per payout.
 

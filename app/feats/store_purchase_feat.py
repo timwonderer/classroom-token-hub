@@ -356,10 +356,12 @@ def _execute_store_purchase_impl(
         class_id=canonical_context.class_id,
         user_id=canonical_context.user_id,
         debit_amount=debit_amount,
-        # "Purchase: <name> (xN)" is not cosmetic — it is the format
-        # ``transaction_void_feat._void_purchase`` parses to find the item and
-        # the quantity it must return. A differently worded description makes a
-        # purchase unvoidable.
+        # Human-facing only. The void path used to parse the item name and the
+        # (xN) back out of this string, which tied reversal correctness to
+        # wording and — because N counts purchases, not granted units — left
+        # bundles partially reversible. It now resolves the grants through this
+        # transaction's correlation_id instead, so the description is free to
+        # read however it reads best.
         description=f"Purchase: {policy_config.name or policy_config.product_id} (x{quantity})",
         transaction_type="purchase",
         source_account="checking",

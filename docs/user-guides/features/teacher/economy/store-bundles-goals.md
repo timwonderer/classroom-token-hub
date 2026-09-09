@@ -57,7 +57,7 @@ Two details worth knowing before you set a percentage:
 The price is recalculated from your saved item settings at the moment of purchase, not from anything the student's browser sends, so a student cannot manufacture a discount by editing the page.
 
 > [!NOTE]
-> Bulk discounts are available on **Delayed Use** and **Hall Pass** items only. Those types can hold several independent, unredeemed units. Immediate-use and privilege items are single-unit purchases, and a collective goal is a shared class pot rather than a student's multi-unit order.
+> Bulk discounts are available on **Delayed Use** and **Hall Pass** items only. Those types can hold several independent, unredeemed units. **Immediate Use** items are single-unit purchases, and a **Collective Goal** is a shared class pot rather than a student's multi-unit order.
 
 ### Collective goals
 

@@ -427,28 +427,53 @@ class TestVersionSupersession:
             assert listed == {v2_uuid}
 
     def test_deleting_one_version_leaves_the_other_resolvable(self, app, test_class, teacher_seat):
-        """Versions are independent rows; removing one is not a lineage-wide event."""
+        """Versions of ONE lineage are independent rows; removing one is not a lineage-wide event.
+
+        The two products must share a lineage for this to mean anything. Two
+        bare ``publish_store_product`` calls mint a fresh lineage each, so the
+        test would only have shown that deleting one product leaves a different
+        product alone. Superseding also respects
+        ``uq_store_products_one_live_per_lineage``, which forbids two IN_USE
+        rows in one lineage.
+        """
         with app.app_context():
             with FEATContext("FEAT-TEST-SETUP", idempotency_key="store-supersede:delete-publish"):
-                kept = publish_store_product(
+                v1 = publish_store_product(
                     class_id=test_class["class_id"],
                     entitlement_type="DELAYED_USE",
-                    price="60.00",
-                    created_by_seat_id=teacher_seat["seat_id"],
-                )
-                doomed = publish_store_product(
-                    class_id=test_class["class_id"],
-                    entitlement_type="DELAYED_USE",
+                    name="Notebook",
                     price="50.00",
                     created_by_seat_id=teacher_seat["seat_id"],
                 )
 
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="store-supersede:delete-supersede"):
+                current = db.session.query(StoreProduct).filter_by(
+                    policy_uuid=v1.policy_uuid
+                ).one()
+                v2_row = store_service.supersede_product(
+                    current=current,
+                    definition={
+                        "name": "Notebook",
+                        "price": "60.00",
+                        "item_type": "delayed",
+                    },
+                    actor_seat_id=teacher_seat["seat_id"],
+                )
+                v2_uuid = v2_row.policy_uuid
+                v2_lineage = v2_row.product_lineage_uuid
+
+            assert v2_lineage == v1.product_lineage_uuid
+
+            # Delete the retired version, keeping the live one.
             with FEATContext("FEAT-TEST-SETUP", idempotency_key="store-supersede:delete-cleanup"):
-                row = db.session.query(StoreProduct).filter_by(policy_uuid=doomed.policy_uuid).one()
+                row = db.session.query(StoreProduct).filter_by(policy_uuid=v1.policy_uuid).one()
+                assert row.availability_state != store_service.IN_USE
                 db.session.delete(row)
                 db.session.flush()
 
             with pytest.raises(PolicyNotFound):
-                StorePolicyResolver.resolve_store_item(doomed.policy_uuid)
+                StorePolicyResolver.resolve_store_item(v1.policy_uuid)
 
-            assert StorePolicyResolver.resolve_store_item(kept.policy_uuid).price == Decimal("60.00")
+            surviving = StorePolicyResolver.resolve_store_item(v2_uuid)
+            assert surviving.price == Decimal("60.00")
+            assert surviving.product_id == v2_lineage

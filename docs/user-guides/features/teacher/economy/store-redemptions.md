@@ -3,7 +3,7 @@ title: Store Redemptions
 category: features
 subcategory: teacher-economy
 roles: [teacher]
-description: Work the pending redemption queue, read purchase statuses, and know why the Redemption Audit tab cannot answer what happened.
+description: Work the pending redemption queue, read purchase statuses, and search the Redemption Audit trail for what happened.
 keywords: [store, redemptions, approve, refund, purchase history, audit log, entitlement status]
 related:
   - user-guides/features/teacher/economy/store-items
@@ -15,7 +15,7 @@ related:
 
 ## Overview
 
-Buying and receiving are two separate events for **Delayed Use** items. The student pays when they buy; they receive when you approve. Three of the five tabs on **Economy > Store** cover the gap between those moments: **Overview** holds the live queue, **Purchase History** is the full record, and **Redemption Audit** presents itself as a searchable trail but is not one.
+Buying and receiving are two separate events for **Delayed Use** items. The student pays when they buy; they receive when you approve. Three of the five tabs on **Economy > Store** cover the gap between those moments: **Overview** holds the live queue, **Purchase History** is the full record of purchases, and **Redemption Audit** is the searchable trail of requests and what you decided about them.
 
 ## Step-by-step instructions
 
@@ -61,20 +61,18 @@ The **Purchase History** tab is the complete record: **All Purchases**, showing 
 
 ### Redemption Audit
 
-The **Redemption Audit** tab looks like a searchable history of requests and their outcomes. It is not one, and it will not answer the question its name implies.
+The **Redemption Audit** tab is the searchable history of redemption requests and what happened to them.
 
 The controls are a filter bar — **Student**, **Class**, **Action** (**Request**, **Approved**, **Rejected**, **All actions**), and **From** / **To** dates — over a paginated table of Student, Class, Date, Action, and Notes, with **Apply Filters** and **Clear**. Empty it reads *No audit records found.*
 
-What sits behind it is the **unresolved** request queue — the same requests waiting on the Overview tab. A request's row is discarded the moment you approve or reject it, so an outcome is never recorded here. That makes the **Approved** and **Rejected** filter options unmatchable by construction, and it means an empty table tells you only that nothing is currently waiting.
+A request stays on file after you resolve it. **Request** finds the ones still waiting, and **Approved** and **Rejected** find the ones you have already decided, so an empty table means nothing matched the filters you set — not that nothing has ever happened.
 
-The rest of the tab is unfinished in ways worth knowing before you spend time on it:
+Two limits are worth knowing before you spend time here:
 
-- The **Action** column shows the same internal code on every row rather than naming the action.
-- Typing anything into **Student** and applying the filter produces an error page.
-- **Class** cannot widen the search — the tab only ever shows the class you have selected, whatever the dropdown says.
-- **Notes** shows the request's raw stored data rather than readable text, and rows may appear duplicated.
+- **Class** cannot widen the search. The tab only ever shows the class you have selected, whatever the dropdown says.
+- **Notes** shows the request's raw stored data rather than readable prose.
 
-**Use Purchase History instead.** It is the tab that actually holds the record.
+For the purchase behind a request — what was paid, and when — use **Purchase History**.
 
 ## Important notes
 

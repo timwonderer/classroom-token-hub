@@ -97,8 +97,14 @@ def test_rent_link_toggle_updates_benefit_without_rewriting_the_existing_policy(
             cycle_boundary_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
             next_assessment_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
         )
-        db.session.add(open_cycle)
-        db.session.flush()
+        # Fixture setup is still a mutation, so it needs an envelope of its own:
+        # the flush guard refuses any DML outside a FEAT context.
+        with FEATContext(
+            "FEAT-TEST-SETUP",
+            idempotency_key=f"admin_store_edit_route:open-cycle:{classroom.class_id}",
+        ):
+            db.session.add(open_cycle)
+            db.session.flush()
         form = SimpleNamespace(
             is_rent_linked=SimpleNamespace(data=True),
             item_type=SimpleNamespace(data="delayed"),

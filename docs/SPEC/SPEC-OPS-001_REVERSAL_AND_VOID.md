@@ -21,9 +21,11 @@ The canonical distinction is:
 Money is reversed. Grants are voided. Obligation-related facts permit neither.
 
 ## II. Authority Level
+
 Normative. This document specifies the canonical definition of `reverse` and `void` for transactions. Any capability that allows the undoing of any action must conform to this document.
 
 ### Dependencies
+
 - FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md
 - DOM-STORE-001_STORE_AND_ENTITLEMENTS_DOMAIN.md
 - DOM-LED-001_LEDGER_DOMAIN.md
