@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|SEC-AUD-012| 1.1 | 2026-03-08 | 1.0 |Normative|
+|SEC-AUD-012| 1.1 | 2026-03-08 | 1.0 |Archived - non-normative|
 
 **Date:** 2025-12-22
 **Auditor:** Claude Code Security Analysis
@@ -15,8 +15,7 @@
 >
 > This document audits the **v1** application and its `deploy.yml` workflow. Both are
 > gone. It lives under `docs/archive/`, which is superseded material — history only,
-> never authority (`.claude/rules/documentation.md`). The `Authority Level` in the
-> table above describes what this document was when written, not what it is now.
+> never authority (`.claude/rules/documentation.md`).
 >
 > **Do not run the shell in this document.** Its "Remediation Recommendations"
 > sections contain `.env`-writing and `chmod` snippets aimed at a deployment path

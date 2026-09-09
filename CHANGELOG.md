@@ -20,6 +20,8 @@ and this project follows semantic versioning principles.
 
 - **Rollback instructions name an explicit revision (2026-09-09)** — The documented rollback and downgrade-test procedures called a bare `flask db downgrade`. The current migration head is a merge point with two parents, so that form aborts with `Ambiguous walk` and rolls nothing back. `.claude/rules/database-migrations.md` and the `CLAUDE.md` command reference now use `flask db downgrade <revision>` and say why. The CI schema gate already passed an explicit revision and was unaffected.
 
+- **Archived documents no longer claim authority (2026-09-09)** — 46 documents under `docs/archive/` declared `Authority Level: Normative` (44) or `Foundational` (2), contradicting `.claude/rules/documentation.md`, which states that archived material is "history only, never authority". Their `Authority Level` now reads `Archived - non-normative`, and each carries a one-line notice pointing at the current `INV` / `DOM` / `SOP` trees. Live documents were not touched, nor were body-table rows that cite a still-current document's authority.
+
 - **Archived v1 attack-surface audit is marked as history (2026-09-09)** — `SEC-AUD-012` carried remediation shell that writes secrets into a `.env` file for a `deploy.yml` workflow that no longer exists, presented as normative guidance. It now opens with an archive banner stating it is v1 history, that its shell must not be run, and where the current secret-provisioning and security contracts live.
 
 - **Hall Pass setup has one UI surface (2026-09-08)** — Removed the obsolete standalone setup template, its admin route, and its endpoint mappings. Destinations are configured in Hall Pass Management's Configure tab; its setup API remains available.
