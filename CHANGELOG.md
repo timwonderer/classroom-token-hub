@@ -10,6 +10,12 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 
+- **Hall Pass setup has one UI surface (2026-09-08)** — Removed the obsolete standalone setup template, its admin route, and its endpoint mappings. Destinations are configured in Hall Pass Management's Configure tab; its setup API remains available.
+
+- **Hall Pass Out Limit saves and reloads the selected value (2026-09-08)** — The management page now uses `max_queue_limit` consistently with the settings API. Removed the unsupported granting switch, rejected missing or invalid save values instead of silently saving 10, and updated the teacher guide.
+
+- **Hall Pass Configure component cleanup (2026-09-08)** — Removed conditional page shells and duplicate dependencies from the configuration component, restored CTH section headers in the tab, and aligned accessible limit names and teacher guidance with approval checks. Payroll troubleshooting now directs teachers to Support for incorrect posted payments instead of editing immutable attendance history. Focused rendering checks are recorded separately from browser accessibility certification.
+
 - **Reversals now persist the canonical ledger type and refuse a second application (2026-09-08)** — A compensating transaction records `REVERSAL` in `type` per `FEAT-LED-002` §III.2.1, with the business reason moved to the new `ledger_transaction.compensation_subtype` column. `reverse_transaction` also runs the reversal-authorization guard before any ledger mutation and rejects reversing a transaction that already carries one, so `INV-LED-013` / `INV-OPS-005` hold for every caller rather than per-caller.
 
 - **Voiding a purchase resolves its grants by provenance, not by parsing the description (2026-09-08)** — `_void_purchase` now finds the granted units through the transaction's `correlation_id`. Product names carry no uniqueness constraint, so the old name lookup could revoke a student's units of the wrong lineage; and the `(xN)` in the description counted purchases rather than granted units, leaving bundle purchases partially reversible.

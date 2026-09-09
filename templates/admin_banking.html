@@ -3,7 +3,7 @@
 {% set current_page = "banking" %}
 {% block title %}Banking Management{% endblock %}
 {% block page_icon %}account_balance{% endblock %}
-{% block page_header_actions %}
+{% block contextual_help_trigger %}
 <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
   data-bs-target="#bankingGuide" aria-controls="bankingGuide">
   <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
@@ -17,6 +17,7 @@
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
   </div>
   <div class="offcanvas-body">
+    {{ help.offcanvas_resource_links(help_doc_path, 'user-guides/diagnostics/teacher/transactions-banking') }}
     <p>Check class balances, review transactions, and manage savings interest.</p>
     <div class="accordion mt-4 mb-4" id="bankingGuideAccordion">
       <div class="accordion-item">

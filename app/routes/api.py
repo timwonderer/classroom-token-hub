@@ -244,9 +244,9 @@ def _resolve_class_display_label(class_id, fallback_block=None):
     return fallback_block or "Unknown Class"
 
 
-def _get_hall_pass_settings_scope(class_id):
+def _get_hall_pass_settings_scope(user_id, class_id):
     """Resolve canonical class scope for hall pass settings."""
-    return resolve_class_scope(None, class_id=class_id)
+    return resolve_class_scope(user_id, class_id=class_id)
 
 
 def _admin_has_class_scope(canonical_context, class_id):
@@ -1002,11 +1002,15 @@ def update_hall_pass_settings():
         return jsonify({"status": "error", "message": "Class context is required"}), 400
 
     data = request.get_json() or {}
+    if (not isinstance(data, dict) or set(data) != {"max_queue_limit"}
+            or type(data["max_queue_limit"]) is not int
+            or not 1 <= data["max_queue_limit"] <= 50):
+        return jsonify({"status": "error", "message": "Out Limit must be a whole number between 1 and 50."}), 400
     try:
         settings = feat_update_hall_pass_queue_settings(
             user_id=context.user_id if context else None,
             class_id=class_id,
-            max_queue_limit=data.get("max_queue_limit", 10),
+            max_queue_limit=data["max_queue_limit"],
             updated_at=utc_now(),
             correlation_id=f"corr_settings_queue_{uuid.uuid4().hex}",
             idempotency_key=f"feat:settings:hall-pass-queue:{context.user_id}:{class_id}:{uuid.uuid4().hex}",
@@ -1181,7 +1185,7 @@ def get_hall_pass_setup():
     if not current_class_id:
         return jsonify({"status": "error", "message": "Active class context is required"}), 400
 
-    scope = _get_hall_pass_settings_scope(current_class_id)
+    scope = _get_hall_pass_settings_scope(context.user_id, current_class_id)
     if not scope:
         return jsonify({"status": "error", "message": "Class scope not found"}), 404
 
@@ -1247,7 +1251,7 @@ def save_hall_pass_setup():
             return jsonify({"status": "error", "message": "Invalid pass type limits"}), 400
 
     try:
-        scope = _get_hall_pass_settings_scope(current_class_id)
+        scope = _get_hall_pass_settings_scope(context.user_id, current_class_id)
         if not scope:
             return jsonify({"status": "error", "message": "Class scope not found"}), 404
         feature_scope = resolve_feature_class_for_class(scope["class_id"], 'hall_pass')

@@ -119,10 +119,16 @@
                         <span class="material-symbols-outlined">credit_score</span> Work &amp; Pay
                     </a>
                     {% endif %}
-                    {% if feature_settings.rent_enabled or feature_settings.insurance_enabled %}
-                    <a href="{% if feature_settings.rent_enabled %}{{ url_for('student.rent') }}{% else %}{{ url_for('student.student_insurance') }}{% endif %}"
-                        class="{% if request.endpoint in ['student.rent', 'student.student_insurance'] %}active{% endif %}" {% if request.endpoint in ['student.rent', 'student.student_insurance'] %}aria-current="page"{% endif %}>
-                        <span class="material-symbols-outlined">receipt_long</span> Bills
+                    {% if feature_settings.rent_enabled %}
+                    <a href="{{ url_for('student.rent') }}"
+                        class="{% if request.endpoint == 'student.rent' %}active{% endif %}" {% if request.endpoint == 'student.rent' %}aria-current="page"{% endif %}>
+                        <span class="material-symbols-outlined">receipt_long</span> Rent
+                    </a>
+                    {% endif %}
+                    {% if feature_settings.insurance_enabled %}
+                    <a href="{{ url_for('student.student_insurance') }}"
+                        class="{% if request.endpoint in ['student.student_insurance', 'student.view_policy', 'student.file_claim'] %}active{% endif %}" {% if request.endpoint in ['student.student_insurance', 'student.view_policy', 'student.file_claim'] %}aria-current="page"{% endif %}>
+                        <span class="material-symbols-outlined">shield</span> Insurance
                     </a>
                     {% endif %}
                     <a href="{{ url_for('student.help_support') }}"
@@ -187,6 +193,8 @@
                     'student.payroll': 'user-guides/features/student/work/attendance-history',
                     'student.rent': 'user-guides/features/student/bills/rent-payments',
                     'student.student_insurance': 'user-guides/features/student/bills/insurance-coverage',
+                    'student.purchase_insurance': 'user-guides/features/student/bills/insurance-coverage',
+                    'student.cancel_insurance': 'user-guides/features/student/bills/insurance-coverage',
                     'student.view_policy': 'user-guides/features/student/bills/insurance-coverage',
                     'student.file_claim': 'user-guides/features/student/bills/insurance-claims',
                     'student.help_support': 'user-guides/features/student/support/help-center',
@@ -197,13 +205,34 @@
                     'student.create_username': 'user-guides/features/student/account/login-setup',
                     'student.setup_pin_passphrase': 'user-guides/features/student/account/pin-vs-passphrase',
                     'student.setup_complete': 'user-guides/features/student/account/login-setup',
-                    'student.verify_recovery': 'user-guides/features/student/account/verify-teacher-recovery'
+                    'student.verify_recovery': 'user-guides/features/student/account/verify-teacher-recovery',
+                    'student.report_transaction_issue': 'user-guides/features/student/support/report-issues',
+                    'student.report_attendance_session_issue': 'user-guides/features/student/support/report-issues'
                     } %}
                     {% set help_doc_key = current_page or request.endpoint %}
                     {% set help_doc_path = help_doc_map.get(help_doc_key) %}
                     {% if not help_doc_path and request.endpoint %}
                     {% set help_doc_path = help_doc_map.get(request.endpoint) %}
                     {% endif %}
+                    {% set help_diagnostic_map = {
+                    'student.dashboard': 'user-guides/diagnostics/student/dashboard',
+                    'student.transfer': 'user-guides/diagnostics/student/money',
+                    'student.shop': 'user-guides/diagnostics/student/store',
+                    'student.payroll': 'user-guides/diagnostics/student/attendance',
+                    'student.rent': 'user-guides/diagnostics/student/rent-insurance',
+                    'student.student_insurance': 'user-guides/diagnostics/student/rent-insurance',
+                    'student.purchase_insurance': 'user-guides/diagnostics/student/rent-insurance',
+                    'student.cancel_insurance': 'user-guides/diagnostics/student/rent-insurance',
+                    'student.help_support': 'user-guides/diagnostics/student/support',
+                    'student.add_class': 'user-guides/diagnostics/student/classes',
+                    'student.claim_account': 'user-guides/diagnostics/student/classes',
+                    'student.create_username': 'user-guides/diagnostics/student/login',
+                    'student.setup_pin_passphrase': 'user-guides/diagnostics/student/login',
+                    'student.report_transaction_issue': 'user-guides/diagnostics/student/money',
+                    'student.report_attendance_session_issue': 'user-guides/diagnostics/student/attendance'
+                    } %}
+                    {% set help_diagnostic_path = help_diagnostic_map.get(help_doc_key) or help_diagnostic_map.get(request.endpoint) or 'user-guides/diagnostics/student' %}
+                    {% set help_doc_path = help_doc_path or 'user-guides/features/student/support/help-center' %}
                     {% set resolved_page_icon = (self.page_icon() | trim) or 'school' %}
                     <div class="page-header">
                         <div>
@@ -220,12 +249,77 @@
                             {% endif %}
                         </div>
                         <div class="page-header-actions">
-                            {% if help_doc_path %}
-                            {{ help.help_link(help_doc_path, text="Guide", tooltip="View guide") }}
-                            <a href="{{ docs_url_for('user-guides/diagnostics/student') }}" class="btn btn-link btn-sm" target="_blank" rel="noopener">
-                                Troubleshooting <span class="visually-hidden">(opens in a new tab)</span>
-                            </a>
+                            <button type="button" class="btn btn-outline-primary btn-sm d-flex align-items-center gap-2"
+                                data-bs-toggle="offcanvas" data-bs-target="#studentContextualHelp"
+                                aria-controls="studentContextualHelp">
+                                <span class="material-symbols-outlined" aria-hidden="true">help</span>
+                                Need Help?
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="offcanvas offcanvas-end" tabindex="-1" id="studentContextualHelp"
+                        aria-labelledby="studentContextualHelpLabel">
+                        <div class="offcanvas-header">
+                            <h2 class="offcanvas-title h4" id="studentContextualHelpLabel">Quick Start: {{ resolved_page_title }}</h2>
+                            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+                        </div>
+                        <div class="offcanvas-body">
+                            <p class="text-muted">Use the guide for this page, or open troubleshooting when something does not work as expected.</p>
+                            {% if help_doc_key == 'student.dashboard' or request.endpoint == 'student.dashboard' %}
+                            <div class="accordion mt-4 mb-4" id="studentDashboardHelpAccordion">
+                                <div class="accordion-item">
+                                    <h3 class="accordion-header" id="studentDashboardAttendanceHeading">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                            data-bs-target="#studentDashboardAttendance" aria-expanded="false"
+                                            aria-controls="studentDashboardAttendance"><span class="material-symbols-outlined me-2" aria-hidden="true">schedule</span>Attendance and work time</button>
+                                    </h3>
+                                    <div id="studentDashboardAttendance" class="accordion-collapse collapse"
+                                        aria-labelledby="studentDashboardAttendanceHeading">
+                                        <div class="accordion-body">The Attendance card shows whether you are working and how long you have worked today. Choose <strong>Start Work</strong> to begin. <strong>Break</strong> becomes available only after you start work.</div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h3 class="accordion-header" id="studentDashboardBalancesHeading">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                            data-bs-target="#studentDashboardBalances" aria-expanded="false"
+                                            aria-controls="studentDashboardBalances"><span class="material-symbols-outlined me-2" aria-hidden="true">account_balance_wallet</span>Checking and savings</button>
+                                    </h3>
+                                    <div id="studentDashboardBalances" class="accordion-collapse collapse"
+                                        aria-labelledby="studentDashboardBalancesHeading">
+                                        <div class="accordion-body"><strong>Checking Account</strong> shows money available for spending. <strong>Savings Account</strong> shows saved money and projected interest. Use <strong>Transfer</strong> or <strong>Add to Savings</strong> to move money between accounts.</div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h3 class="accordion-header" id="studentDashboardActivityHeading">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                            data-bs-target="#studentDashboardActivity" aria-expanded="false"
+                                            aria-controls="studentDashboardActivity"><span class="material-symbols-outlined me-2" aria-hidden="true">receipt_long</span>Recent activity</button>
+                                    </h3>
+                                    <div id="studentDashboardActivity" class="accordion-collapse collapse"
+                                        aria-labelledby="studentDashboardActivityHeading">
+                                        <div class="accordion-body">Recent Activity is a short list of transactions. Open <strong>Accounts</strong> for the fuller history. Use <strong>Report an issue with this transaction</strong> when a row is incorrect.</div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h3 class="accordion-header" id="studentDashboardAlertsHeading">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                            data-bs-target="#studentDashboardAlerts" aria-expanded="false"
+                                            aria-controls="studentDashboardAlerts"><span class="material-symbols-outlined me-2" aria-hidden="true">notifications</span>Alerts and missing information</button>
+                                    </h3>
+                                    <div id="studentDashboardAlerts" class="accordion-collapse collapse"
+                                        aria-labelledby="studentDashboardAlertsHeading">
+                                        <div class="accordion-body">Alerts appear only when there is something to report. If a balance or class looks wrong, confirm the selected class in <strong>Switch Class</strong> and reload the page.</div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-info d-flex align-items-start gap-2 mt-4 mb-4" role="note">
+                                <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                                <span>Use the page guide for step-by-step instructions. If something is missing or does not work, open <strong>Troubleshooting</strong> below and follow the checks for this page.</span>
+                            </div>
                             {% endif %}
+                            {{ help.offcanvas_resource_links(help_doc_path, help_diagnostic_path) }}
                         </div>
                     </div>
 

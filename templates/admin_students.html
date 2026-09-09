@@ -22,7 +22,7 @@
 <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
 {% endblock %}
 
-{% block page_header_actions %}
+{% block contextual_help_trigger %}
 <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
   data-bs-target="#studentManagementGuide" aria-controls="studentManagementGuide">
   <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
@@ -40,6 +40,7 @@
   </div>
 
   <div class="offcanvas-body mt-0">
+    {{ help.offcanvas_resource_links(help_doc_path, 'user-guides/diagnostics/teacher/students') }}
         <div>
             <div class="accordion mb-4" id="helpAccordion">
 

@@ -1,0 +1,337 @@
+<style>
+/* Configuration styles for the Hall Pass Management tab. */
+.setup-container .cth-section-header { background: var(--primary); color: #fff; }
+.setup-container .cth-section-header h2 { color: inherit; }
+.setup-container { max-width: 1100px; margin: 0 auto; padding: 2rem 2.5rem 3rem; }
+.pass-type-row { background: white; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+.pass-type-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .75rem; }
+.pass-type-name { font-size: 1.1rem; font-weight: 600; color: var(--text-primary); }
+.pass-type-limits { display: grid; grid-template-columns: 1fr; gap: 1rem; margin-top: .5rem; }
+.limit-field { display: flex; flex-direction: column; }
+.limit-field label { font-size: .85rem; color: var(--text-secondary); margin-bottom: .25rem; }
+.limit-field input { max-width: 200px; }
+.totals-container { background: var(--surface); border: 2px dashed var(--border-color); border-radius: 12px; padding: 1.5rem; margin-top: 2rem; }
+.totals-header { font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 1rem; }
+.total-field { margin-bottom: 1rem; }
+.total-field label { display: block; font-size: .9rem; color: var(--text-secondary); margin-bottom: .5rem; }
+.total-field input { max-width: 200px; }
+.total-field input:disabled { background: var(--border-color); cursor: not-allowed; }
+.total-help-text { font-size: .8rem; color: var(--text-secondary); margin-top: .25rem; }
+@media (max-width: 768px) { .setup-container { padding: 1.25rem 1rem 2rem; } }
+</style>
+<div class="setup-container">
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header cth-section-header">
+                <h2 class="h5 mb-0">How It Works</h2>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0">
+                    <li><strong>Students Out At Once:</strong> Maximum number of students who may be out for this destination; 0 blocks the destination.</li>
+                    <li><strong>Total Students Out At Once:</strong> Read-only sum of destination limits. Approvals are blocked when the number currently out reaches the smaller of this sum and the class-wide Out Limit above the tabs.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-header cth-section-header d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0">Pass Types</h2>
+                <button type="button" class="btn btn-sm btn-primary" onclick="openAddPassTypeModal()">
+                    <span class="material-symbols-outlined align-middle" style="font-size: 1rem;">add</span>
+                    Add New Pass Type
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="passTypesContainer">
+                    <!-- Pass type rows will be dynamically added here -->
+                </div>
+
+                <!-- Total Limits Section -->
+                <div class="totals-container">
+                    <div class="totals-header">Total Limits</div>
+                    <p class="info-text mb-3">These fields are calculated from the individual destination limits and cannot be edited here.</p>
+
+                    <div class="total-field">
+                        <label for="totalQueueLimit">Total Students Out At Once</label>
+                        <input type="number" class="form-control" id="totalQueueLimit" min="0" disabled>
+                        <div class="total-help-text" id="queueLimitHelp">Calculated from individual pass type limits</div>
+                    </div>
+
+                </div>
+
+                <hr class="my-4">
+
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-primary" onclick="saveConfiguration()">
+                        <span class="material-symbols-outlined align-middle">save</span>
+                        Save Configuration
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="loadConfiguration()">
+                        <span class="material-symbols-outlined align-middle">refresh</span>
+                        Reset to Saved
+                    </button>
+                </div>
+
+                <div id="feedbackMessage" class="mt-3" role="status" aria-live="polite" aria-atomic="true" tabindex="-1" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Pass Type Modal -->
+    <div class="modal fade" id="addPassTypeModal" tabindex="-1" aria-labelledby="addPassTypeModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addPassTypeModalLabel">Add New Pass Type</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="newPassTypeName" class="form-label">Pass Type Name</label>
+                        <input type="text" class="form-control" id="newPassTypeName" placeholder="e.g., Library">
+                    </div>
+                    <div class="mb-3">
+                        <label for="newQueueLimit" class="form-label">Students Out At Once</label>
+                        <input type="number" class="form-control" id="newQueueLimit" placeholder="10" min="0">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="addPassType()">Add Pass Type</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let passTypesData = [];
+        let addPassTypeModalInstance = null;
+
+        // Initialize Bootstrap tooltips
+        function initTooltips() {
+            const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+            [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
+        }
+
+        function openAddPassTypeModal() {
+            // Clear form
+            document.getElementById('newPassTypeName').value = '';
+            document.getElementById('newQueueLimit').value = '';
+
+            // Show modal
+            if (!addPassTypeModalInstance) {
+                addPassTypeModalInstance = new bootstrap.Modal(document.getElementById('addPassTypeModal'));
+            }
+            addPassTypeModalInstance.show();
+        }
+
+        function addPassType() {
+            const name = document.getElementById('newPassTypeName').value.trim();
+            const queueLimit = document.getElementById('newQueueLimit').value.trim();
+
+            if (!name) {
+                showFeedback('Please enter a pass type name', true);
+                return;
+            }
+
+            // Check for duplicates
+            const existing = passTypesData.find(pt => pt.name.toLowerCase() === name.toLowerCase());
+            if (existing) {
+                showFeedback('A pass type with this name already exists', true);
+                return;
+            }
+
+            // Validate limits
+            const queueLimitValue = queueLimit === '' ? 10 : parseInt(queueLimit, 10);
+            if (isNaN(queueLimitValue) || queueLimitValue < 0) {
+                showFeedback('Students Out At Once must be a non-negative number', true);
+                return;
+            }
+
+            // Add to data
+            const newPassType = {
+                pass_name: name,
+                max_queue: queueLimitValue,
+                consume_pass: true
+            };
+            newPassType.name = name;
+            newPassType.queue_limit = queueLimitValue;
+            passTypesData.push(newPassType);
+
+            // Render
+            renderPassTypes();
+
+            // Close modal
+            addPassTypeModalInstance.hide();
+
+            // Show feedback
+            showFeedback('Pass type added. Don\'t forget to save!', false);
+        }
+
+        function removePassType(index) {
+            // For delete operations, confirm() is acceptable UX
+            if (confirm('Are you sure you want to remove this pass type?')) {
+                passTypesData.splice(index, 1);
+                renderPassTypes();
+                showFeedback('Pass type removed. Don\'t forget to save!', false);
+            }
+        }
+
+        function renderPassTypes() {
+            const container = document.getElementById('passTypesContainer');
+            if (passTypesData.length === 0) {
+                container.innerHTML = '<p class="text-muted text-center py-4">No pass types configured. Add one to get started.</p>';
+                updateTotalFields();
+                return;
+            }
+
+            // HTML escape function to prevent XSS
+            const escapeHtml = (text) => {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            };
+
+            const html = passTypesData.map((pt, index) => {
+                const rowClass = '';
+
+                // Escape pass type name to prevent XSS
+                const passTypeName = escapeHtml(pt.name || '');
+
+                return `
+                <div class="pass-type-row ${rowClass}" data-index="${index}">
+                    <div class="pass-type-header">
+                        <div class="pass-type-name">${passTypeName}</div>
+                        <div class="d-flex align-items-center gap-3">
+                            <button type="button" class="btn btn-danger btn-sm" onclick="removePassType(${index})" aria-label="Remove this hall pass type">
+                                <span class="material-symbols-outlined" style="font-size: 1rem;">delete</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="pass-type-limits">
+                        <div class="limit-field">
+                            <label>Students Out At Once</label>
+                            <input type="number"
+                                   class="form-control"
+                                   aria-label="${passTypeName} students out at once"
+                                   value="${Number.isInteger(pt.queue_limit) ? pt.queue_limit : 10}"
+                                   placeholder="10"
+                                   min="0"
+                                   onchange="updatePassTypeLimit(${index}, this.value)">
+                        </div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+
+            container.innerHTML = html;
+
+            // Re-initialize tooltips
+            initTooltips();
+
+            // Update total fields
+            updateTotalFields();
+        }
+
+        function updatePassTypeLimit(index, value) {
+            passTypesData[index].queue_limit = value.trim() ? parseInt(value, 10) : 10;
+            updateTotalFields();
+        }
+
+        function updateTotalFields() {
+            const totalQueueInput = document.getElementById('totalQueueLimit');
+            const queueHelp = document.getElementById('queueLimitHelp');
+            const queueSum = passTypesData.reduce((sum, pt) => sum + (Number.isInteger(pt.queue_limit) ? pt.queue_limit : 10), 0);
+            totalQueueInput.disabled = true;
+            totalQueueInput.value = queueSum;
+            queueHelp.textContent = 'Calculated from individual destination limits';
+        }
+
+        function showFeedback(message, isError = false) {
+            const feedback = document.getElementById('feedbackMessage');
+            feedback.className = `alert ${isError ? 'alert-danger' : 'alert-success'} mt-3`;
+            feedback.textContent = message;
+            feedback.style.display = 'block';
+            feedback.focus();
+
+            setTimeout(() => {
+                feedback.style.display = 'none';
+            }, 5000);
+        }
+
+        function saveConfiguration() {
+            if (passTypesData.length === 0) {
+                showFeedback('Please add at least one pass type.', true);
+                return;
+            }
+
+            const passTypesToSave = passTypesData.map(pt => ({
+                pass_name: pt.pass_name || pt.name,
+                max_queue: Number.isInteger(pt.queue_limit) ? pt.queue_limit : (Number.isInteger(pt.max_queue) ? pt.max_queue : 10),
+                consume_pass: pt.consume_pass !== false
+            }));
+
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            fetch('/api/hall-pass/setup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    hall_pass_enabled: true,
+                    pass_type_payload: passTypesToSave
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showFeedback('Configuration saved successfully!');
+                    // Reload to get fresh data
+                    loadConfiguration();
+                } else {
+                    showFeedback(data.message || 'Failed to save configuration.', true);
+                }
+            })
+            .catch(error => {
+                console.error('Error saving configuration:', error);
+                showFeedback('An error occurred while saving.', true);
+            });
+        }
+
+        function loadConfiguration() {
+            const url = '/api/hall-pass/setup';
+            fetch(url)
+            .then(async response => {
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.message || 'Unable to load hall pass configuration.');
+                }
+                return data;
+            })
+            .then(data => {
+                if (data.status === 'success') {
+                    // Load pass types
+                    passTypesData = (data.pass_type_payload || []).map(pt => ({
+                        ...pt,
+                        name: pt.pass_name,
+                        queue_limit: Number.isInteger(pt.max_queue) && pt.max_queue >= 0 ? pt.max_queue : 10
+                    }));
+
+                    // Render
+                    renderPassTypes();
+                } else {
+                    showFeedback('Failed to load configuration.', true);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading configuration:', error);
+                showFeedback(error.message || 'An error occurred while loading.', true);
+            });
+        }
+
+        // Load configuration on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadConfiguration();
+        });
+    </script>

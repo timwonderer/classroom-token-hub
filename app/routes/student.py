@@ -488,10 +488,17 @@ def get_feature_settings_for_student():
 
     scoped_features = get_class_feature_settings_for_class(class_id)
     if scoped_features:
-        return scoped_features["features"]
+        features = dict(scoped_features["features"])
+        # A Rent link is reachable only when the class has both the feature flag
+        # and the required rent configuration. Keep navigation truthful when a
+        # teacher has enabled the flag but has not configured rent yet.
+        features["rent_enabled"] = bool(features.get("rent_enabled") and get_rent_settings_for_context(context))
+        return features
 
     # Return system defaults
-    return ClassFeature.defaults_dict()
+    features = ClassFeature.defaults_dict()
+    features["rent_enabled"] = bool(features.get("rent_enabled") and get_rent_settings_for_context(context))
+    return features
 
 
 def is_feature_enabled(feature_name):
@@ -1474,6 +1481,8 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
 @login_required
 def insurance_marketplace():
     """Insurance marketplace - browse and manage policies."""
+    if not is_feature_enabled('insurance'):
+        abort(404)
     from app.services.insurance_policy_service import normalize_insurance_type
     context = resolve_canonical_context()
     if not context:

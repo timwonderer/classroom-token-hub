@@ -364,15 +364,14 @@ def test_student_store_tabs_expose_selection_and_panel_relationships():
         assert tab.get("aria-selected") in {"true", "false"}
 
 
-def test_hall_pass_setup_dynamic_limits_and_toggle_are_named():
+def test_hall_pass_configuration_dynamic_limits_are_named():
     """Every dynamically rendered control carries the destination in its name.
 
     There is one limit per destination, not two: the separate simultaneous-limit
     box was removed because the runtime payload has no field for it.
     """
-    script = (REPO_ROOT / "templates" / "hall_pass_setup.html").read_text(encoding="utf-8")
-    assert 'aria-label="Enable ${passTypeName} hall pass type"' in script
-    assert 'aria-label="${passTypeName} limit on students out at once"' in script
+    script = (REPO_ROOT / "templates" / "components" / "hall_pass_configuration.html").read_text(encoding="utf-8")
+    assert 'aria-label="${passTypeName} students out at once"' in script
 
 
 def test_template_modals_have_explicit_title_relationships():

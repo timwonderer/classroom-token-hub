@@ -3,7 +3,7 @@
 {% block page_title %}Economic Engine{% endblock %}
 {% block page_icon %}display_settings{% endblock %}
 {% set current_page = "economic_engine" %}
-{% block page_header_actions %}
+{% block contextual_help_trigger %}
   <button class="btn btn-primary d-flex align-items-center gap-2 mb-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#economyHealthGuide" aria-controls="economyHealthGuide">
     <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
   </button>
@@ -15,6 +15,7 @@
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
   </div>
   <div class="offcanvas-body">
+    {{ help.offcanvas_resource_links(help_doc_path, 'user-guides/diagnostics/teacher/analytics') }}
     <p>Use this dashboard to balance payroll, rent, insurance, banking, and store pricing around your CWI.</p>
     <div class="accordion mt-4 mb-4" id="economyHealthGuideAccordion">
       <div class="accordion-item">

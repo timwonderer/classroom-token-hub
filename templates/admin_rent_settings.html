@@ -3,7 +3,7 @@
 {% set current_page = "rent" %}
 {% block title %}Rent Management{% endblock %}
 {% block page_icon %}home{% endblock %}
-{% block page_header_actions %}
+{% block contextual_help_trigger %}
 <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
   data-bs-target="#rentGuide" aria-controls="rentGuide">
   <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
@@ -34,7 +34,8 @@
     <h2 class="offcanvas-title h5" id="rentGuideLabel">How to: Rent Management</h2>
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
   </div>
-  <div class="offcanvas-body">
+<div class="offcanvas-body">
+  {{ help.offcanvas_resource_links(help_doc_path, 'user-guides/diagnostics/teacher/rent-insurance') }}
     <p>Set rent rules, review payment status, and manage waivers for the current class.</p>
     <div class="accordion mt-4 mb-4" id="rentGuideAccordion">
       <div class="accordion-item">

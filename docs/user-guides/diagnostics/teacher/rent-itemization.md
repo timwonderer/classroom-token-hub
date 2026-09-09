@@ -11,7 +11,7 @@ roles: [teacher]
 **Quick diagnostic guide for rent itemization issues.**
 
 **Version:** 1.7.0+
-**Route:** `/admin/settings/rent`
+**Route:** `/admin/rent-settings`
 
 ---
 

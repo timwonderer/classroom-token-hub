@@ -4,7 +4,7 @@ category: features
 subcategory: teacher-classroom
 roles: [teacher]
 description: How to configure hall-pass destinations and their limits.
-keywords: [hall pass setup, pass types, queue limit, destinations, bathroom, master toggle, configuration]
+keywords: [hall pass setup, pass types, queue limit, destinations, bathroom, configuration]
 related:
   - user-guides/features/teacher/classroom/hall-pass
   - user-guides/diagnostics/teacher/hall-pass
@@ -15,7 +15,7 @@ related:
 
 ## Overview
 
-**Hall Passes → Configure** opens **Hall Pass Configuration**, where you would set your destinations and their limits.
+**Classroom → Hall Pass → Configure** opens the **Hall Pass Configuration** tab, where you set your destinations and their limits.
 
 Use this page to configure the destinations and limits students can request in your class.
 
@@ -27,30 +27,28 @@ The saved destinations and their queue limits are the options students see and t
 
 ### Reading the page
 
-**How It Works** at the top defines the four controls:
+**How It Works** explains the destination limit and its read-only total:
 
 | Control | What it is meant to do |
 | --- | --- |
-| **Master Toggle** | Turn the whole hall pass system on or off |
-| **Pass Type Toggle** | Turn one destination on or off |
-| **Students Out At Once** | Most students out at once for that destination. `0` closes the destination |
-| **Total Students Out At Once** | The sum of the per-destination limits, calculated for you |
+| **Students Out At Once** | Maximum number of students who may be out for that destination. A value of `0` blocks the destination. |
+| **Total Students Out At Once** | Read-only sum of the destination limits; it is a planning summary, not a separate setting. |
 
-Below that, the **Hall Pass System** switch reads *Currently enabled* or *Currently disabled*. Switching it off greys out every destination row and locks its toggle; hovering a locked toggle explains *You must enable hall pass first*.
+Enable or disable the Hall Pass feature from **Class Tools → Economy Features**. The **Configure** tab only controls destinations and their limits.
 
 ### The Pass Types card
 
-The card lists your destinations, each with a name, an on/off switch, a red delete button, and its limit field.
+The card lists your destinations, each with a name, a red delete button, and its **Students Out At Once** limit.
 
 The list opens with the saved destinations for the active class. If none have been configured, it starts with the built-in defaults.
 
-**Add New Pass Type** opens a modal asking for a **Pass Type Name** and a **Students Out At Once** limit. Leaving the limit blank uses the built-in default of 10; there is no "unlimited" setting, and `0` closes the destination rather than opening it. The modal rejects a blank name, a duplicate name, and any negative number.
+**Add New Pass Type** opens a modal asking for a **Pass Type Name** and a **Students Out At Once** limit. If the limit is left blank, it defaults to `10`. The modal rejects a blank name, a duplicate name, and any negative number.
 
 Adding or removing a destination changes only what is on screen; the page reminds you with *Pass type added. Don't forget to save!*
 
 ### Total Limits
 
-The **Total Students Out At Once** box below the list is always read-only and calculated for you, reading *Calculated from individual pass type limits*. It adds up the limits of your enabled destinations, which is exactly the class-wide cap the app enforces.
+The **Total Limits** box below the list is greyed out and calculated for you. It reads *Calculated from individual destination limits* and adds the per-destination limits.
 
 ### Saving
 
@@ -67,7 +65,7 @@ Saving with an empty list is refused with *Please add at least one pass type.* S
 > Students see the enabled destinations in their **Choose Break Type** menu. A destination with no available capacity is unavailable until a place opens.
 
 > [!NOTE]
-> **One number does both jobs.** A destination's limit caps how many students may be out to *that* destination at once, and the sum of the enabled destinations' limits caps how many may be out class-wide. The page used to offer a separate **Simultaneous Limit** box, which the runtime had no field for; it has been removed rather than left accepting values that changed nothing.
+> Approval checks count students currently out. A destination blocks further approvals when its **Students Out At Once** limit is reached. Across the class, approvals are blocked when the count reaches the smaller of **Out Limit** (above the tabs) and the sum of destination limits. For example, an Out Limit of 10 and destination limits totaling 6 block further approvals when 6 students are out. Approved students who have not left are not included in that count.
 
 > [!TIP]
 > Approvals are the control that actually works. Configure the destinations your class uses here, then use your judgement at the [Hall Pass](hall-pass.md) queue — nothing is silently letting students out.

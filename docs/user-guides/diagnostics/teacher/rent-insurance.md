@@ -21,7 +21,7 @@ Diagnostic guide for resolving errors related to rent billing, late penalties, a
 
 ### Causes & Solutions
 **Cause 1: Rent feature disabled**
-- **Check:** Verify Rent is enabled in Feature Settings for the class period.
+- **Check:** Verify Rent is enabled in **Class Tools → Economy Features** for the class period.
 - **Fix:** Enable the feature.
 
 **Cause 2: Rent cycle has not started**
