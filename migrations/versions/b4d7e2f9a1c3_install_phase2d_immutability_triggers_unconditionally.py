@@ -56,16 +56,26 @@ def table_exists(table_name):
     return table_name in inspector.get_table_names()
 
 
-def trigger_exists(trigger_name):
-    """Check if a trigger exists, by name, in the current database."""
+def trigger_exists(table_name, trigger_name):
+    """Check whether a trigger exists ON THIS TABLE.
+
+    Scoped by table on purpose. Postgres enforces trigger-name uniqueness per
+    relation, not per database (pg_trigger has a UNIQUE index on
+    (tgrelid, tgname)), so matching on name alone would report a same-named
+    trigger on any other table as this one and skip installing the protection
+    here -- silently leaving the protected table mutable, which is the exact
+    failure this migration exists to prevent.
+    """
     conn = op.get_bind()
     try:
         result = conn.execute(
             text(
-                "SELECT 1 FROM information_schema.triggers "
-                "WHERE trigger_name = :trigger_name"
+                "SELECT 1 FROM pg_trigger "
+                "WHERE tgrelid = to_regclass(:table_name) "
+                "AND tgname = :trigger_name "
+                "AND NOT tgisinternal"
             ),
-            {"trigger_name": trigger_name},
+            {"table_name": table_name, "trigger_name": trigger_name},
         ).fetchone()
         return result is not None
     except Exception:
@@ -73,16 +83,25 @@ def trigger_exists(trigger_name):
 
 
 def function_exists(function_name):
-    """Check if a plpgsql function exists in the current database."""
+    """Check whether the zero-argument trigger function of this name exists.
+
+    Matched by exact identity rather than by name. `pg_proc.proname` is not
+    unique -- it repeats across schemas and across overloads -- so a name-only
+    match could treat an unrelated function as this one and skip creation,
+    after which `CREATE TRIGGER ... EXECUTE FUNCTION name()` would fail. The
+    return type is checked too, since only a `trigger`-returning function can
+    back a trigger. `to_regprocedure` resolves through search_path and yields
+    NULL when nothing matches.
+    """
     conn = op.get_bind()
     try:
         result = conn.execute(
             text(
                 "SELECT 1 FROM pg_proc p "
-                "JOIN pg_namespace n ON n.oid = p.pronamespace "
-                "WHERE p.proname = :function_name"
+                "WHERE p.oid = to_regprocedure(:signature) "
+                "AND p.prorettype = 'trigger'::regtype"
             ),
-            {"function_name": function_name},
+            {"signature": f"{function_name}()"},
         ).fetchone()
         return result is not None
     except Exception:
@@ -145,7 +164,7 @@ def upgrade():
             print(f"⚠️  {table_name} not found; skipping trigger creation")
             continue
 
-        if not trigger_exists(update_trigger):
+        if not trigger_exists(table_name, update_trigger):
             conn.execute(text(
                 f"CREATE TRIGGER {update_trigger} "
                 f"BEFORE UPDATE ON {table_name} "
@@ -155,7 +174,7 @@ def upgrade():
         else:
             print(f"ℹ️  TRIGGER {update_trigger} already exists, skipping...")
 
-        if not trigger_exists(delete_trigger):
+        if not trigger_exists(table_name, delete_trigger):
             conn.execute(text(
                 f"CREATE TRIGGER {delete_trigger} "
                 f"BEFORE DELETE ON {table_name} "
