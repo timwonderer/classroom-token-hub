@@ -44,10 +44,10 @@ You set both when you first claim your account. See [Log In and First-Time Setup
 | Verifying your teacher's recovery request | **Passphrase** |
 | Requesting a hall pass | Neither |
 | Paying a rent bill | **Passphrase** |
-| Buying insurance | Neither — no confirmation |
-| Cancelling insurance | Confirmation only |
+| Buying insurance | **Passphrase** |
+| Cancelling insurance | **Passphrase** |
 
-The pattern worth remembering: **non-monetary or reversible actions use the PIN; account authentication and irreversible expense actions use the passphrase.** Insurance is the exception: buying needs neither credential nor confirmation, while cancelling only asks you to confirm. Hall-pass use is the exception among entitlements and uses the PIN.
+The pattern worth remembering: **non-monetary or reversible actions use the PIN; account authentication and irreversible expense actions use the passphrase.** Hall-pass use is the exception among entitlements and uses the PIN.
 
 ### If one of them stops working
 
@@ -58,7 +58,7 @@ The pattern worth remembering: **non-monetary or reversible actions use the PIN;
 ## Important notes
 
 > [!WARNING]
-> **Buying insurance takes one click and asks for nothing.** The **Buy — $X** button commits you to a recurring premium immediately, with no passphrase and no confirmation. **Cancel coverage** asks for confirmation only because it stops renewal rather than taking a new payment. Read the policy before buying — see [Insurance Coverage](../bills/insurance-coverage.md).
+> **Buying and cancelling insurance both ask for your passphrase.** The **Buy — $X** form commits you to a recurring premium only after the passphrase is verified, and **Cancel coverage** asks for it too — stopping renewal is a decision about money, so it is held to the same standard as starting one.
 
 > [!IMPORTANT]
 > **Never tell anyone your passphrase, including someone claiming to be your teacher.** Your teacher never needs it. The one time they ask you to *use* it — verifying a recovery request — you type it into your own screen yourself and hand over a code instead. See [Verify a Teacher Recovery Request](verify-teacher-recovery.md).
