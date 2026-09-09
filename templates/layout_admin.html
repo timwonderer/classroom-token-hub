@@ -349,7 +349,7 @@
                 'feature_settings': 'user-guides/diagnostics/teacher/onboarding',
                 'interpretation': 'user-guides/diagnostics/teacher/analytics'
                 } %}
-                {% set help_diagnostic_path = help_diagnostic_map.get(help_doc_key) or help_diagnostic_map.get(request.endpoint) or 'user-guides/diagnostics/teacher/login' %}
+                {% set help_diagnostic_path = help_diagnostic_map.get(help_doc_key) or help_diagnostic_map.get(request.endpoint) or 'user-guides/diagnostics/teacher' %}
         {% set custom_full_guide = custom_full_guide|default(false) %}
         <div class="page-header">
             <div class="mb-0">

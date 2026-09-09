@@ -20,9 +20,9 @@ Diagnostic guide for resolving payroll calculation errors and attendance trackin
 - Students receive incorrect amounts when payroll is run.
 
 ### Causes & Solutions
-**Cause 1: Payroll feature is disabled**
-- **Check:** Payroll is always on; instead verify the student is in the intended class and that payroll settings and attendance records are configured.
-- **Fix:** Enable the Payroll feature.
+**Cause 1: Class, payroll, or attendance settings are incorrect**
+- **Check:** Payroll is always on. Verify the student is in the intended class, then check payroll settings and attendance records for the affected period.
+- **Fix:** Correct the class assignment, pay settings, or attendance events and run payroll again.
 
 **Cause 2: No attendance activity**
 - **Check:** Look at the attendance log for the period. Are there complete tap events?
