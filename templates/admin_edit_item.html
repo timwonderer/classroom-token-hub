@@ -27,7 +27,7 @@
         <h5 class="mb-0"><span class="material-symbols-outlined me-2">edit</span>Edit: {{ item.name }}</h5>
     </div>
     <div class="card-body">
-        <form method="POST" action="{{ url_for('admin.edit_store_item', item_id=item.id) }}">
+        <form method="POST" action="{{ url_for('admin.edit_store_item', product_lineage_uuid=item.product_lineage_uuid) }}">
             {{ form.hidden_tag() }}
 
             <!-- Basic Information -->
@@ -155,6 +155,32 @@
                 </div>
             </div>
 
+            <!-- Rent Link -->
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><span class="material-symbols-outlined me-2">key</span>Rent Link</h6>
+                </div>
+                <div class="card-body">
+                    <div class="form-check mb-3">
+                        {{ form.is_rent_linked(class="form-check-input", id="isRentLinkedCheck") }}
+                        {{ form.is_rent_linked.label(class="form-check-label fw-bold", **{'for': 'isRentLinkedCheck'}) }}
+                        <small class="d-block text-muted">A rent-linked item is handed to a student automatically when they pay their rent — they do not buy it.</small>
+                    </div>
+                    <div id="rentLinkedOptions" style="display: {% if form.is_rent_linked.data %}block{% else %}none{% endif %};">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form.rent_linked_quantity.label(class="form-label fw-bold") }}
+                                {{ form.rent_linked_quantity(class="form-control", placeholder="e.g., 1") }}
+                                <small class="text-muted">How many the student receives each time they pay rent.</small>
+                            </div>
+                        </div>
+                        <div class="alert alert-info mb-0">
+                            <small><span class="material-symbols-outlined me-2">schedule</span>Rent links take effect on the <strong>next</strong> rent cycle. Adding or removing one never changes a cycle already underway.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Accordion for Bundle, Discount, and Advanced Settings -->
             <div class="accordion mb-3" id="itemSettingsAccordion">
 
@@ -264,6 +290,15 @@
 <script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Toggle rent link options
+    const isRentLinkedCheck = document.getElementById('isRentLinkedCheck');
+    const rentLinkedOptions = document.getElementById('rentLinkedOptions');
+    if (isRentLinkedCheck && rentLinkedOptions) {
+        isRentLinkedCheck.addEventListener('change', function() {
+            rentLinkedOptions.style.display = this.checked ? 'block' : 'none';
+        });
+    }
+
     // Toggle bundle options and badge
     const isBundleCheck = document.getElementById('isBundleCheck');
     const bundleOptions = document.getElementById('bundleOptions');

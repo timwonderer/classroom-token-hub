@@ -98,7 +98,7 @@
                                 {{ entry.class_label or 'Unknown Class' }} • Scope Join Code: {{ entry.scope_join_code or 'Unknown' }}
                                     </div>
                                 </div>
-                                <span class="badge {% if report.status == 'new' %}bg-primary{% elif report.status == 'reviewed' %}bg-info{% elif report.status == 'closed' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">{{ report.status|title }}</span>
+                                <span class="badge {% if report.status == 'OPEN' %}bg-primary{% elif report.status in ['TEACHER_REVIEW', 'TEACHER_FINAL_REVIEW'] %}bg-info{% elif report.status == 'CLOSED' %}bg-secondary{% elif report.status in ['ESCALATED_TO_DEV', 'DEV_RESOLVED'] %}bg-warning text-dark{% else %}bg-light text-dark{% endif %}">{{ report.status|replace('_', ' ')|title }}</span>
                             </div>
                             <div class="small text-muted mt-1">
                                 Submitted {{ report.submitted_at|fmt_timestamp }}

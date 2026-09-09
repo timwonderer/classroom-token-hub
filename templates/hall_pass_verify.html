@@ -57,7 +57,7 @@
 
                     {% if result.time_out %}
                     <dt class="col-5 text-muted small">Time Out</dt>
-                    <dd class="col-7">{{ result.time_out }}</dd>
+                    <dd class="col-7">{{ result.time_out|fmt_timestamp }}</dd>
                     {% endif %}
 
                     <dt class="col-5 text-muted small">Status</dt>
@@ -69,7 +69,7 @@
                         </span>
                         {% elif result.status == 'returned' %}
                         <span class="badge bg-success">
-                            Returned{% if result.return_time %} at {{ result.return_time }}{% endif %}
+                            Returned{% if result.return_time %} at {{ result.return_time|fmt_timestamp }}{% endif %}
                         </span>
                         {% elif result.status == 'approved' %}
                         <span class="badge bg-info text-dark">Approved (not yet out)</span>

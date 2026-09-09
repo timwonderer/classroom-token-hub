@@ -22,10 +22,7 @@ The review screen gathers everything you need to make that call in one place: wh
 
 ### How a claim reaches you
 
-Students file from their own insurance page against a policy they hold. You do not create claims.
-
-> [!WARNING]
-> **There is currently no claims queue in the teacher UI.** The **Insurance Management** page lists your policies only — it has no tabs and no list of filed claims. Reaching the review screen requires a direct link to a specific claim. Until that is fixed, ask students to tell you when they have filed. This is a known product defect, not a setting you have missed.
+Students file from their own insurance page against a policy they hold. You do not create claims. Filed claims appear in the **Filed claims** list on **Insurance Management**; select one to open its review screen.
 
 ### Reading the review screen
 

@@ -30,7 +30,7 @@ from app.models import (
     # Legacy tap models are unauthorized; use attendance_sessions (DOM-PROD-001).
     FeatureSettings, RentSettings,
     HallPassSettings, ClassEconomy, User, UserRole,
-    PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory, IssueResolutionAction
+    PayrollSettings, Announcement, Issue, IssueStatusHistory, IssueResolutionAction
 )
 from app.auth import (
     establish_sysadmin_session,
@@ -65,7 +65,7 @@ from app.services.admin_identity_service import (
     list_admin_credentials,
     touch_admin_credentials_last_used,
 )
-from app.utils.issue_helpers import record_resolution_action
+from app.utils.issue_helpers import record_resolution_action, update_issue_status
 
 # Create blueprint
 sysadmin_bp = Blueprint('sysadmin', __name__, url_prefix='/sysadmin')
@@ -643,83 +643,22 @@ def logs():
 @sysadmin_bp.route('/error-logs')
 @system_admin_required
 def error_logs():
-    """
-    View error logs from the database.
-    Shows all errors captured by the error logging system with pagination and filtering.
-    """
-    page = request.args.get('page', 1, type=int)
-    per_page = 50
-
-    # Get error type filter if provided
-    error_type_filter = request.args.get('error_type', '')
-
-    error_logs_data = []
-    pagination = None
-    error_types = []
-
-    return render_template(
-        "system_admin_error_logs.html",
-        error_logs=error_logs_data,
-        pagination=pagination,
-        error_types=error_types,
-        current_error_type=error_type_filter,
-        current_page="sysadmin_error_logs"
-    )
+    """Redirect the retired standalone page to the canonical log surface."""
+    return redirect(url_for("sysadmin.combined_logs", tab="errors"))
 
 
 @sysadmin_bp.route('/logs-testing')
 @system_admin_required
 def logs_testing():
-    """
-    Combined page for viewing error logs and testing error pages.
-    Shows recent errors and provides links to test error handlers.
-    """
-    # Get recent error logs
-    recent_errors = []
-
-    # Get system logs URL
-    logs_url = url_for("sysadmin.logs")
-
-    return render_template(
-        "system_admin_logs_testing.html",
-        recent_errors=recent_errors,
-        logs_url=logs_url,
-        current_page="sysadmin_logs_testing"
-    )
+    """Redirect the retired standalone page to the canonical log surface."""
+    return redirect(url_for("sysadmin.combined_logs", tab="errors"))
 
 
 @sysadmin_bp.route('/network-activity')
 @system_admin_required
 def network_activity():
-    """
-    View network activity log showing all HTTP requests and responses.
-    Displays data from error logs, grouped by IP address and request path.
-    """
-    page = request.args.get('page', 1, type=int)
-    per_page = 50
-
-    # Get IP filter if provided
-    ip_filter = request.args.get('ip', '')
-
-    # Query error logs as proxy for network activity
-    network_logs = []
-    pagination = None
-    ip_addresses = []
-    total_requests = 0
-    unique_ips = 0
-    error_type_stats = []
-
-    return render_template(
-        "system_admin_network_activity.html",
-        network_logs=network_logs,
-        pagination=pagination,
-        ip_addresses=ip_addresses,
-        current_ip=ip_filter,
-        total_requests=total_requests,
-        unique_ips=unique_ips,
-        error_type_stats=error_type_stats,
-        current_page="network_activity"
-    )
+    """Redirect the retired standalone page to the canonical log surface."""
+    return redirect(url_for("sysadmin.combined_logs", tab="network"))
 
 
 # -------------------- ERROR TESTING ROUTES --------------------
@@ -1000,8 +939,9 @@ def view_user_report(report_ref):
 
 @sysadmin_bp.route('/user-reports/<report_ref>/update', methods=['POST'])
 @system_admin_required
+@requires_feat_context("FEAT-OPS-001")
 def update_user_report(report_ref):
-    """Update the status and notes of a user report."""
+    """Update an Operations-owned issue through the canonical FEAT boundary."""
     report_id = _resolve_report_id_from_ref(report_ref)
     if report_id is None:
         raise NotFound("Report not found")
@@ -1013,19 +953,39 @@ def update_user_report(report_ref):
     new_status = request.form.get('status')
     admin_notes = request.form.get('admin_notes', '').strip()
     
-    # Validate status
-    valid_statuses = ['new', 'reviewed', 'closed', 'spam']
+    # Validate status. These three are the states this form owns; the Issue
+    # lifecycle also has TEACHER_REVIEW, ESCALATED_TO_DEV and
+    # TEACHER_FINAL_REVIEW, which move through the escalated-issue workflow.
+    valid_statuses = [Issue.STATUS_OPEN, Issue.STATUS_DEV_RESOLVED, Issue.STATUS_CLOSED]
     if new_status not in valid_statuses:
         flash("Invalid status selected.", "error")
         return redirect(url_for('sysadmin.view_user_report', report_ref=make_opaque_ref('report', report.id)))
-    
-    # Update report
-    report.status = new_status
-    report.admin_notes = admin_notes if admin_notes else None
-    report.reviewed_at = utc_now()
-    report.reviewed_by_sysadmin_id = g.canonical_context.user_id
+
+    # A report already in one of the workflow states must not be dragged out of
+    # it by this form. The browser sends the selector's first option when nothing
+    # is selected, so without this guard an escalated report silently became OPEN
+    # on any notes-only save.
+    if report.status not in valid_statuses and new_status != report.status:
+        flash(
+            "This report is in a workflow state that this page does not resolve. "
+            "Use the escalated-issue workflow to change its status.",
+            "error",
+        )
+        return redirect(url_for('sysadmin.view_user_report', report_ref=make_opaque_ref('report', report.id)))
     
     try:
+        update_issue_status(
+            report,
+            new_status,
+            changed_by_type='sysadmin',
+            changed_by_public_id=None,
+            notes=admin_notes or None,
+        )
+        report.sysadmin_notes = admin_notes or None
+        report.sysadmin_reviewed_at = utc_now()
+        report.sysadmin_id = g.canonical_context.user_id
+        # FEATContext.__exit__ owns the commit (INV-ARC FEAT atomicity). A direct
+        # commit here trips enforce_feat_context_on_commit and rolls the update back.
         flash(f"Report #{report_id} updated successfully.", "success")
     except Exception as e:
         db.session.rollback()
@@ -1370,8 +1330,8 @@ def start_review_escalated_issue(issue_ref):
 
 
 @sysadmin_bp.route('/issues/<issue_ref>/resolve', methods=['POST'])
-@requires_feat_context("FEAT-OPS-001")
 @system_admin_required
+@requires_feat_context("FEAT-OPS-001")
 def resolve_escalated_issue(issue_ref):
     """Mark technical fix complete, optionally issue bug bounty, then return to teacher-admin final review."""
     issue_id = _resolve_issue_id_from_ref(issue_ref)

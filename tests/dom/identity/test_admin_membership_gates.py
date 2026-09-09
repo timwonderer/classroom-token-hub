@@ -11,7 +11,7 @@ from app.models import (
     IssueCategory,
     PayrollSettings,
     Seat,
-    StoreItem,
+    StoreProduct,
     User,
 )
 from app.services.class_configuration_query_service import get_payroll_settings
@@ -256,7 +256,10 @@ def test_DOM_IDEN_006__add_individual_student_uses_selected_class_when_block_has
 def test_DOM_IDEN_001__students_page_does_not_render_hidden_block_input(client):
     from pathlib import Path
 
-    template_text = Path("/Users/timothychang/Documents/GitHub/classroom-economy/templates/admin_students.html").read_text()
+    # Resolved from this file, not from one developer's home directory — the
+    # absolute path here made the test unrunnable anywhere else.
+    repo_root = Path(__file__).resolve().parents[3]
+    template_text = (repo_root / "templates" / "admin_students.html").read_text(encoding="utf-8")
 
     assert 'name="block"' not in template_text
     assert 'id="block"' not in template_text
@@ -270,12 +273,12 @@ def test_DOM_IDEN_006__store_create_requires_current_class_context(client):
     with client.session_transaction() as sess:
         set_canonical_context(sess, user_id=admin.id, class_id=class_row.class_id, seat_id=teacher_seat.id, role="admin")
 
-    initial_store_item_count = db.session.query(StoreItem).count()
+    initial_store_item_count = db.session.query(StoreProduct).count()
     with FEATContext("FEAT-IDEN-001", idempotency_key="admin-membership:store-guard:post"):
         response = admin_create_store_item(client)
 
     assert response.status_code == 404
-    assert db.session.query(StoreItem).count() == initial_store_item_count
+    assert db.session.query(StoreProduct).count() == initial_store_item_count
 
 
 def test_DOM_IDEN_006__payroll_settings_requires_current_class_context(client):

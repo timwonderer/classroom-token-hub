@@ -383,6 +383,7 @@ def configure_insurance_definition(
     canonical_context,
     actor_seat_id: Optional[int] = None,
     availability_state: str = defs.IN_USE,
+    supersedes_policy_uuid: Optional[str] = None,
     correlation_id: Optional[str] = None,
     idempotency_key: Optional[str] = None,
 ) -> InsurancePolicy:
@@ -390,7 +391,14 @@ def configure_insurance_definition(
 
     Both "new" and "edit" flow through here: each lawful call produces a *new*
     immutable ``policy_uuid`` row (DOM-POL-001). A prior definition is never
-    mutated. Validation is hard-legality only — recommendation-range overrides
+    mutated.
+
+    An edit passes ``supersedes_policy_uuid``: the predecessor is retired in the
+    same context, so it leaves the shelf as the replacement arrives and a grouped
+    tier's rank is free for its own replacement (FEAT-CLASS-003 §VIII.2).
+    Retirement is an availability projection only — seats already covered under
+    the superseded terms keep them until their coverage period ends, because
+    entitlements freeze ``policy_uuid`` at purchase (DOM-POL-001 §VII). Validation is hard-legality only — recommendation-range overrides
     are permitted; hard-bound / per-type-structure violations raise
     :class:`InsuranceContractViolation` BEFORE the POL write.
 
@@ -411,6 +419,15 @@ def configure_insurance_definition(
         actor_seat_id = canonical_context.seat_id
 
     definition = _validate_and_build_definition(submission)
+
+    # Retire before the group guard runs: the predecessor must vacate its IN_USE
+    # rank so the replacement can occupy it. Class-scoped and fail-closed.
+    if supersedes_policy_uuid is not None:
+        defs.retire_insurance_definition(
+            policy_uuid=supersedes_policy_uuid,
+            class_id=class_id,
+        )
+
     _enforce_tier_group_rules(class_id, definition)
 
     return defs.create_insurance_definition(

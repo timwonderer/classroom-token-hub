@@ -188,9 +188,9 @@
                 </div>
 
                 <div class="mb-4">
-                    <label class="form-label text-secondary" for="studentPin">PIN</label>
-                    {{ form.pin(class="form-control form-control-lg pin-input", placeholder="••••", inputmode="numeric",
-                    pattern="[0-9]*", autocomplete="current-password", id="studentPin") }}
+                    <label class="form-label text-secondary" for="studentPassphrase">Passphrase</label>
+                    {{ form.passphrase(class="form-control form-control-lg", placeholder="Enter your passphrase",
+                    autocomplete="current-password", id="studentPassphrase") }}
                 </div>
 
                 {% if turnstile_site_key %}

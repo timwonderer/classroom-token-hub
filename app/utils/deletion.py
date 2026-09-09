@@ -10,7 +10,7 @@ from app.models import (
     AttendanceSession, HallPassLog, StorePurchase, RedemptionEvent,
     Entitlement, EntitlementConsumption,
     PayrollEvent,
-    Issue, IssueResolutionAction, Announcement, StoreItem, StoreItemVisibility,
+    Issue, IssueResolutionAction, Announcement, StoreProduct, StoreItemVisibility,
     # RedemptionAuditLog removed — redemption_audit_logs unauthorized; use redemption_events (DOM-STORE-001)
     # StoreItemBlock removed — store_item_blocks unauthorized; use store_item_visibility (DOM-STORE-001)
 )
@@ -127,26 +127,25 @@ def collapse_universe(class_id: str, reason: str, actor_membership_id: Optional[
         StoreItemVisibility.query.filter(
             StoreItemVisibility.seat_id.in_(select(seat_ids_subq))
         ).delete(synchronize_session=False)
-        # Delete StoreItems that now have NO remaining visibility entries for this class
-        deletable_store_items = (
-            db.session.query(StoreItem.id)
-            .outerjoin(StoreItemVisibility, StoreItem.id == StoreItemVisibility.store_item_id)
-            .filter(
-                StoreItem.class_id == class_id,
-                StoreItemVisibility.store_item_id.is_(None),
-            )
-            .subquery()
-        )
-        class_item_entitlement_ids = select(Entitlement.entitlement_id).filter(
-            Entitlement.entitlement_item_id.in_(select(deletable_store_items))
+        # Delete every product version belonging to this class.
+        #
+        # This used to delete only products left with no visibility rows, which
+        # was a roundabout way of asking a question the schema already answers:
+        # ``store_products.class_id`` is the isolation boundary, so a product in
+        # this class cannot be referenced from any other one. Products with
+        # class-wide visibility (no rows at all) were also silently spared by
+        # that filter and leaked past the class deletion.
+        product_lineages = select(StoreProduct.product_lineage_uuid).filter(
+            StoreProduct.class_id == class_id
         ).subquery()
-        EntitlementConsumption.query.filter(
-            EntitlementConsumption.entitlement_id.in_(select(class_item_entitlement_ids))
+        # Any residual visibility rows for this class's lineages, including
+        # those pointing at seats in no longer existing classes.
+        StoreItemVisibility.query.filter(
+            StoreItemVisibility.product_lineage_uuid.in_(select(product_lineages))
         ).delete(synchronize_session=False)
-        Entitlement.query.filter(
-            Entitlement.entitlement_item_id.in_(select(deletable_store_items))
+        StoreProduct.query.filter(
+            StoreProduct.class_id == class_id
         ).delete(synchronize_session=False)
-        StoreItem.query.filter(StoreItem.id.in_(select(deletable_store_items))).delete(synchronize_session=False)
 
         # 5. Delete Seats for this class (also handled by FK cascade on ClassEconomy deletion)
         Seat.query.filter_by(class_id=class_id).delete(synchronize_session=False)

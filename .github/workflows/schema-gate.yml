@@ -210,6 +210,7 @@ jobs:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
           PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          AUDIT_HMAC_KEY: ${{ secrets.AUDIT_HMAC_KEY }}
         run: |
           echo "🔄 Starting Migration Rehearsal..."
 
@@ -257,6 +258,7 @@ jobs:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
           PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          AUDIT_HMAC_KEY: ${{ secrets.AUDIT_HMAC_KEY }}
         run: |
           echo "🔥 Running Smoke Tests on Critical Workflows..."
           pytest -v -m "critical or regression"

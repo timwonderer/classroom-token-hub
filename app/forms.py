@@ -54,36 +54,75 @@ class StoreItemForm(FlaskForm):
     # Redemption settings (for delayed-use items)
     redemption_prompt = TextAreaField('Redemption Prompt (optional, for delayed-use items)', validators=[Optional()])
 
+    # Rent linkage. The store owns this, not Rent Settings: the teacher decides
+    # here whether paying rent hands the student this item, and how many. The
+    # flag is stored on the rent policy rather than on the product, which is
+    # what makes a change apply from the next cycle onward — see
+    # RentSettings.validate_satisfaction_benefits.
+    is_rent_linked = BooleanField('Students receive this item when they pay rent', default=False)
+    rent_linked_quantity = IntegerField('Quantity granted per rent payment', validators=[Optional()])
+
     submit = SubmitField('Save Item')
 
-    def validate_bundle_quantity(self, field):
-        """Validate bundle quantity when bundle is enabled."""
-        if self.is_bundle.data and (not field.data or field.data <= 0):
-            raise ValidationError('Bundle quantity is required and must be greater than 0 when creating a bundled item.')
+    # Conditional requirements live in validate(), not in per-field
+    # `validate_<name>` hooks. WTForms appends those hooks to the end of the
+    # field's own validator chain, and every field below carries `Optional()`,
+    # which raises StopValidation for a blank field. A hook on such a field
+    # therefore never runs precisely in the case it exists to catch — a blank
+    # quantity submitted while the feature that requires it is enabled.
+    def validate(self, extra_validators=None):
+        """Run the declared validators, then the cross-field requirements."""
+        valid = super().validate(extra_validators=extra_validators)
 
-    def validate_bulk_discount_quantity(self, field):
-        """Validate bulk discount quantity when bulk discount is enabled."""
-        if self.bulk_discount_enabled.data and (not field.data or field.data <= 0):
-            raise ValidationError('Minimum quantity is required and must be greater than 0 when bulk discount is enabled.')
+        def require_positive(field, message):
+            nonlocal valid
+            if not field.data or field.data <= 0:
+                field.errors = list(field.errors) + [message]
+                valid = False
 
-    def validate_bulk_discount_percentage(self, field):
-        """Validate bulk discount percentage when bulk discount is enabled."""
+        if self.is_rent_linked.data:
+            require_positive(
+                self.rent_linked_quantity,
+                'Quantity is required and must be greater than 0 for a rent-linked item.',
+            )
+
+        if self.is_bundle.data:
+            require_positive(
+                self.bundle_quantity,
+                'Bundle quantity is required and must be greater than 0 when creating a bundled item.',
+            )
+
         if self.bulk_discount_enabled.data:
-            if not field.data or field.data <= 0:
-                raise ValidationError('Discount percentage is required and must be greater than 0 when bulk discount is enabled.')
-            if field.data > 100:
-                raise ValidationError('Discount percentage cannot exceed 100%.')
+            require_positive(
+                self.bulk_discount_quantity,
+                'Minimum quantity is required and must be greater than 0 when bulk discount is enabled.',
+            )
+            require_positive(
+                self.bulk_discount_percentage,
+                'Discount percentage is required and must be greater than 0 when bulk discount is enabled.',
+            )
+            if self.bulk_discount_percentage.data and self.bulk_discount_percentage.data > 100:
+                self.bulk_discount_percentage.errors = list(
+                    self.bulk_discount_percentage.errors
+                ) + ['Discount percentage cannot exceed 100%.']
+                valid = False
 
-    def validate_collective_goal_type(self, field):
-        """Validate collective goal type is set when item type is collective."""
-        if self.item_type.data == 'collective' and not field.data:
-            raise ValidationError('Collective goal type is required when item type is Collective Goal.')
+        if self.item_type.data == 'collective':
+            if not self.collective_goal_type.data:
+                self.collective_goal_type.errors = list(
+                    self.collective_goal_type.errors
+                ) + ['Collective goal type is required when item type is Collective Goal.']
+                valid = False
+            elif self.collective_goal_type.data == 'fixed':
+                # Only the fixed goal type carries an explicit target; a
+                # whole_class target is derived from class size (DOM-STOR).
+                require_positive(
+                    self.collective_goal_target,
+                    'Target number of purchases is required and must be greater than 0 '
+                    'when using Fixed collective goal type.',
+                )
 
-    def validate_collective_goal_target(self, field):
-        """Validate collective goal target when type is fixed."""
-        if self.item_type.data == 'collective' and self.collective_goal_type.data == 'fixed':
-            if not field.data or field.data <= 0:
-                raise ValidationError('Target number of purchases is required and must be greater than 0 when using Fixed collective goal type.')
+        return valid
 
 
 class AdminSignupForm(FlaskForm):
@@ -143,7 +182,7 @@ class StudentPinPassphraseForm(FlaskForm):
 
 class StudentLoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
-    pin = PasswordField('PIN', validators=[DataRequired()])
+    passphrase = PasswordField('Passphrase', validators=[DataRequired()])
     turnstile_token = HiddenField('cf-turnstile-response')
     submit = SubmitField('Login')
 

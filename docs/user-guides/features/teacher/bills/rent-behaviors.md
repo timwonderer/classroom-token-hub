@@ -53,7 +53,7 @@ Bill preview and incremental payment are the two that change student behaviour m
 > **A recurring penalty does not stop on its own.** It keeps applying every N days until the rent is paid or waived. If a student has fallen far enough behind that the penalty is outrunning their income, [waiving the assessment](rent-waivers.md) is the only way to break the cycle.
 
 > [!WARNING]
-> **Prevent Purchase When Late does not currently block anything.** The switch saves, and the **Settings** tab shows its badge, but no purchase path checks it — a student who is behind on rent can still buy freely. Do not rely on it as a consequence. Until it is fixed, enforce this by talking to the student.
+> **Prevent Purchase When Late is enforced at checkout.** Once the grace boundary has passed, the server refuses purchases outside the products linked to rent satisfaction benefits. A student sees an explanatory error and can still use any eligible rent-covered benefit configured for the class.
 
 > [!NOTE]
 > **A student is not "late" until grace ends.** Lateness is measured from the end of the grace period, not from the due date, so a three-day grace means nothing keyed on lateness fires until day four.

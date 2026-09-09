@@ -40,23 +40,14 @@
                         {% elif item.is_rent_perk_item %}
                         <div class="mb-2">
                             <span class="badge bg-info"><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">card_membership</span> Rent Perk</span>
-                            {% if item.has_any_rent_free_purchase %}
-                            {% if item.rent_free_units_available == -1 %}
-                            <span class="badge bg-success">Unlimited free uses</span>
-                            {% elif item.has_legacy_rent_free_purchase %}
-                            <span class="badge bg-success">Free with paid rent</span>
-                            {% else %}
-                            <span class="badge bg-success">{{ item.rent_free_units_available }} free use{{ 's' if item.rent_free_units_available != 1 else '' }} remaining</span>
-                            {% endif %}
+                            {% if item.display_rent_perk_message %}
+                            <span class="badge bg-success">{{ item.display_rent_perk_message }}</span>
                             {% endif %}
                         </div>
                         {% endif %}
                         <div class="mb-2">
                             {% if item.is_rent_covered %}
                             <span class="badge bg-success fs-6">Included in Rent</span>
-                            {% elif item.has_any_rent_free_purchase %}
-                            <span class="badge bg-success fs-6">Rent Perk price: $0.00</span>
-                            <span class="badge bg-light text-dark border">Regular: {{ item.display_regular_price }}</span>
                             {% else %}
                             <span class="badge bg-primary fs-6">{{ item.display_price }}</span>
                             {% endif %}
@@ -142,12 +133,11 @@
                             <button type="button" class="btn btn-primary w-100"
                                     data-bs-toggle="modal"
                                     data-bs-target="#buyItemModal"
-                                    data-policy-uuid="{{ policy_uuid_by_item_id.get(item.id, '') }}"
                                     data-item-name="{{ item.name }}"
                                     data-item-price="{{ item.price_amount }}"
                                     data-item-regular-price="{{ item.regular_price_amount }}"
                                     data-policy-uuid="{{ item.policy_uuid or '' }}"
-                                    data-has-rent-free-purchase="{{ 'true' if item.has_any_rent_free_purchase else 'false' }}"
+                                    data-rent-perk-message="{{ item.display_rent_perk_message or '' }}"
                                     data-item-type="{{ item.item_type }}"
                                     data-is-bundle="{{ 'true' if item.is_bundle else 'false' }}"
                                     data-bundle-quantity="{{ item.bundle_quantity if item.is_bundle else 0 }}"
@@ -274,8 +264,8 @@
                     <strong>Item:</strong> <span id="modalItemName"></span><br>
                     <strong>Unit Price:</strong> $<span id="modalItemPrice"></span><br>
                     <span id="rentPerkModalNote" style="display: none;">
-                        <strong>Rent Perk:</strong> This purchase is $0 while free uses remain this rent period.<br>
-                        <strong>Regular Price:</strong> $<span id="modalRegularPrice"></span><br>
+                        <strong>Rent Perk:</strong> You already hold free uses of this item — redeem them from
+                        <em>My Items</em> at no cost. Buying here is an additional purchase at the price above.<br>
                     </span>
                     <span id="modalBundleInfo" style="display: none;">
                         <strong>Bundle:</strong> <span id="modalBundleQuantity"></span> items per bundle<br>
@@ -403,7 +393,11 @@
             itemType: button.getAttribute('data-item-type'),
             basePrice: parseFloat(button.getAttribute('data-item-price')),
             regularPrice: parseFloat(button.getAttribute('data-item-regular-price')),
-            hasRentFreePurchase: button.getAttribute('data-has-rent-free-purchase') === 'true',
+            // The availability-gated message, matching the badge on the card.
+            // `has_any_rent_free_purchase` was the wrong predicate here: it stays
+            // true after the last free unit is consumed, so the modal and the
+            // quantity hint went on promising free uses the student no longer had.
+            rentPerkMessage: button.getAttribute('data-rent-perk-message') || '',
             isBundle: button.getAttribute('data-is-bundle') === 'true',
             bundleQuantity: parseInt(button.getAttribute('data-bundle-quantity')) || 0,
             bulkDiscountEnabled: button.getAttribute('data-bulk-discount-enabled') === 'true',
@@ -424,13 +418,8 @@
         document.getElementById('modalBasePrice').value = currentItemData.basePrice;
         document.getElementById('modalInventory').value = currentItemData.inventory;
         const rentPerkModalNote = document.getElementById('rentPerkModalNote');
-        const modalRegularPrice = document.getElementById('modalRegularPrice');
-        if (currentItemData.hasRentFreePurchase) {
-            rentPerkModalNote.style.display = 'inline';
-            modalRegularPrice.textContent = currentItemData.regularPrice.toFixed(2);
-        } else {
-            rentPerkModalNote.style.display = 'none';
-        }
+        rentPerkModalNote.style.display =
+            currentItemData.rentPerkMessage ? 'inline' : 'none';
 
         // Show bundle info
         if (currentItemData.isBundle) {
@@ -493,22 +482,13 @@
         } else {
             quantityInput.removeAttribute('max');
         }
-        if (currentItemData.hasRentFreePurchase) {
-            quantityInput.value = 1;
-            quantityInput.max = 1;
-            quantityInput.readOnly = true;
-            decreaseQtyBtn.disabled = true;
-            increaseQtyBtn.disabled = true;
-        } else {
-            quantityInput.readOnly = false;
-            decreaseQtyBtn.disabled = false;
-            increaseQtyBtn.disabled = false;
-        }
-
-        // Reset quantity
-        if (!currentItemData.hasRentFreePurchase) {
-            quantityInput.value = 1;
-        }
+        // Quantity is unconstrained by rent perks. Holding a free use does not
+        // change what a purchase is or costs, so it must not lock the control
+        // to a single unit as though one $0 unit were on offer.
+        quantityInput.readOnly = false;
+        decreaseQtyBtn.disabled = false;
+        increaseQtyBtn.disabled = false;
+        quantityInput.value = 1;
         updateTotalPrice();
     });
 
@@ -541,9 +521,10 @@
         let unitPrice = currentItemData.basePrice;
         let hasDiscount = false;
 
-        // Apply bulk discount if applicable
-        if (!currentItemData.hasRentFreePurchase &&
-            currentItemData.bulkDiscountEnabled &&
+        // Apply bulk discount if applicable. This mirrors _calculate_debit in
+        // store_purchase_feat: whole-order, at or above the threshold. The
+        // server recomputes it, so this is a quote, not the authority.
+        if (currentItemData.bulkDiscountEnabled &&
             quantity >= currentItemData.bulkDiscountQuantity) {
             const discountMultiplier = 1 - (currentItemData.bulkDiscountPercentage / 100);
             unitPrice = currentItemData.basePrice * discountMultiplier;
@@ -566,15 +547,15 @@
 
         // Update quantity hint
         let hint = '';
-        if (currentItemData.hasRentFreePurchase) {
-            hint = 'Rent perk active: this purchase is free.';
+        if (currentItemData.rentPerkMessage) {
+            hint = `${currentItemData.rentPerkMessage} — this buys more.`;
         }
         if (currentItemData.isBundle) {
             const totalItems = quantity * currentItemData.bundleQuantity;
             hint += hint ? ' • ' : '';
             hint += `You will get ${totalItems} total uses (${quantity} bundle${quantity > 1 ? 's' : ''})`;
         }
-        if (!currentItemData.hasRentFreePurchase && currentItemData.bulkDiscountEnabled) {
+        if (currentItemData.bulkDiscountEnabled) {
             if (quantity >= currentItemData.bulkDiscountQuantity) {
                 hint += hint ? ' • ' : '';
                 hint += `Bulk discount applied!`;

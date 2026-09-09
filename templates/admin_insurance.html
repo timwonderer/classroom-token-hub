@@ -27,6 +27,27 @@
     </div>
   </div>
 
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-warning-subtle py-3">
+      <h5 class="mb-0 fw-bold">Filed claims</h5>
+    </div>
+    <div class="list-group list-group-flush">
+      {% for claim in claims %}
+      <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+         href="{{ url_for('admin.process_claim', claim_id=claim.claim_id) }}">
+        <span>
+          <strong>Claim #{{ claim.claim_id }}</strong>
+          <span class="badge bg-light text-dark border ms-2">Insurance claim</span>
+          <small class="d-block text-muted">Submitted {% if claim.submitted_at %}{{ claim.submitted_at|fmt_timestamp }}{% else %}N/A{% endif %}</small>
+        </span>
+        <span class="badge bg-secondary">{{ claim.status }}</span>
+      </a>
+      {% else %}
+      <div class="list-group-item text-muted">No claims have been filed for this class.</div>
+      {% endfor %}
+    </div>
+  </div>
+
   <div class="card shadow">
     <div class="card-header bg-primary text-white py-3">
       <h5 class="mb-0 fw-bold text-white">
@@ -54,10 +75,17 @@
           <span class="badge bg-dark">{{ policy.availability_state }}</span>
           {% endif %}
           {% if policy.availability_state != 'RETIRED' %}
+          {% if policy.availability_state == 'HIDDEN' %}
+          <form method="POST" action="{{ url_for('admin.reactivate_insurance_policy', policy_uuid=policy.policy_uuid) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <button type="submit" class="btn btn-sm btn-outline-success" title="Offer these same terms again">Put back on sale</button>
+          </form>
+          {% else %}
           <form method="POST" action="{{ url_for('admin.deactivate_insurance_policy', policy_uuid=policy.policy_uuid) }}" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <button type="submit" class="btn btn-sm btn-outline-secondary" title="Hide from new enrollment">Hide</button>
           </form>
+          {% endif %}
           <form method="POST" action="{{ url_for('admin.delete_insurance_policy', policy_uuid=policy.policy_uuid) }}" class="d-inline"
                 onsubmit="return confirm('Retire this policy? It will be permanently unavailable for new enrollment.');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />

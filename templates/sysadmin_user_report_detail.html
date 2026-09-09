@@ -152,18 +152,34 @@
 
                         <div class="mb-3">
                             <label for="status" class="form-label">Status</label>
+                            {# Every status this page can display appears here. When
+                               the report sits in a lifecycle state this form does not
+                               own (escalation, teacher review), that state is shown
+                               selected but disabled: without it the selector had no
+                               selected option and submitting the form silently moved
+                               the report to the first one, overwriting a valid state.
+                               The server refuses those transitions as well. #}
                             <select class="form-select" id="status" name="status" required>
-                                <option value="new" {% if report.status == 'new' %}selected{% endif %}>New</option>
-                                <option value="reviewed" {% if report.status == 'reviewed' %}selected{% endif %}>Reviewed</option>
-                                <option value="closed" {% if report.status == 'closed' %}selected{% endif %}>Closed</option>
-                                <option value="spam" {% if report.status == 'spam' %}selected{% endif %}>Spam</option>
+                                <option value="OPEN" {% if report.status == 'OPEN' %}selected{% endif %}>Open</option>
+                                <option value="DEV_RESOLVED" {% if report.status == 'DEV_RESOLVED' %}selected{% endif %}>Resolved</option>
+                                <option value="CLOSED" {% if report.status == 'CLOSED' %}selected{% endif %}>Closed</option>
+                                {% if report.status == 'TEACHER_REVIEW' %}
+                                <option value="TEACHER_REVIEW" selected disabled>With the teacher for review</option>
+                                {% elif report.status == 'ESCALATED_TO_DEV' %}
+                                <option value="ESCALATED_TO_DEV" selected disabled>Escalated to development</option>
+                                {% elif report.status == 'TEACHER_FINAL_REVIEW' %}
+                                <option value="TEACHER_FINAL_REVIEW" selected disabled>With the teacher for final review</option>
+                                {% endif %}
                             </select>
+                            {% if report.status in ['TEACHER_REVIEW', 'ESCALATED_TO_DEV', 'TEACHER_FINAL_REVIEW'] %}
+                            <div class="form-text">This report is in a workflow state this page does not resolve. Use the escalated-issue workflow to move it forward; notes can still be saved here.</div>
+                            {% endif %}
                         </div>
 
                         <div class="mb-3">
                             <label for="admin_notes" class="form-label">Admin Notes</label>
                             <textarea class="form-control" id="admin_notes" name="admin_notes" rows="4"
-                                      placeholder="Add notes about this report...">{{ report.admin_notes or '' }}</textarea>
+                                      placeholder="Add notes about this report...">{{ report.sysadmin_notes or '' }}</textarea>
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100">

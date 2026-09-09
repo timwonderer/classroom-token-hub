@@ -119,7 +119,6 @@ def _posted_history_cents(class_id: str, seat_id: int, account_type: str) -> int
         Transaction.seat_id == seat_id,
         Transaction.account_type == account_type,
         Transaction.status == TransactionStatus.POSTED,
-        Transaction.is_void.isnot(True),
     ).scalar()
     return int(total or 0)
 
@@ -171,10 +170,6 @@ def settle_balances(seat_id: int, class_id: str) -> None:
     now = utc_now()
     for tx in pending:
         account_type = _normalize_account_type(tx.account_type, tx.id)
-        if tx.is_void:
-            tx.status = TransactionStatus.VOID
-            tx.voided_at = tx.voided_at or now
-            continue
         next_sequence = int(next_sequence) + 1
         tx.status = TransactionStatus.POSTED
         tx.posted_at = tx.posted_at or now

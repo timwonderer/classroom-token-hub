@@ -106,6 +106,7 @@ from app.payroll import get_daily_limit_seconds, get_pay_rate_for_class
 
 _TRANSACTION_INSURANCE_TYPE = "TRANSACTION"
 _PRODUCTIVITY_INSURANCE_TYPE = "PRODUCTIVITY"
+_NON_MONETARY_INSURANCE_TYPE = "NON_MONETARY"
 
 
 @dataclass
@@ -243,6 +244,67 @@ def _sum_approved_payouts(class_id: str, entitlement_id: str) -> Decimal:
         if claim.result_amount is not None:
             total += claim.result_amount
     return _quantize_currency(total)
+
+
+def _coverage_effective_start_utc(
+    canonical_context: CanonicalContext,
+    coverage_start_utc: datetime,
+    waiting_period_days: int,
+) -> tuple[date, datetime]:
+    """Class-local effective date and the UTC instant at its start.
+
+    The date is ``purchase_date + N``.
+
+    Calendar-day semantics, matching the filing window (NOT N×24h): a policy bought
+    at 3pm with a 3-day wait becomes claimable at the start of the third class-local
+    day after purchase, not at 3pm on that day. ``N = 0`` returns the start of the
+    purchase date, which is at or before the grant, so coverage is immediate.
+    """
+    start_date = _class_local_date(canonical_context, coverage_start_utc)
+    effective_date = start_date + timedelta(days=int(waiting_period_days))
+    boundaries = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=canonical_context,
+        primitive="evaluation_day_boundaries",
+        evaluation_date=effective_date,
+    )
+    return effective_date, boundaries.boundary_start_utc
+
+
+def _enforce_non_monetary_submission(
+    *,
+    canonical_context: CanonicalContext,
+    policy_terms,
+    granted_event: EntitlementEvent,
+    submitted_at: datetime,
+) -> Optional["InsuranceClaimSubmissionResult"]:
+    """Gate a NON_MONETARY claim at submission on the configured waiting period.
+
+    The wait runs from this entitlement's own GRANTED timestamp, so a tier
+    upgrade/downgrade — which grants a new entitlement — restarts it, while the
+    superseded coverage is unaffected. The period is read from the frozen
+    policy_terms contract, never the live definition.
+    """
+    waiting_period_days = policy_terms.waiting_period_days
+    if not waiting_period_days:
+        return None
+
+    effective_date, effective_start = _coverage_effective_start_utc(
+        canonical_context,
+        ensure_utc(granted_event.timestamp),
+        waiting_period_days,
+    )
+    if submitted_at >= effective_start:
+        return None
+
+    return InsuranceClaimSubmissionResult(
+        success=False,
+        error_code="WAITING_PERIOD_NOT_ELAPSED",
+        error_message=(
+            f"Coverage begins after a {int(waiting_period_days)}-day waiting period "
+            f"(on {effective_date.isoformat()})"
+        ),
+    )
 
 
 def _enforce_transaction_submission(
@@ -1011,6 +1073,17 @@ def _submit_insurance_claim_impl(
             # surfaced to the student now (and the teacher at review) but is NOT
             # persisted as eligibility truth.
             eligibility_flags.update(advisory_flags)
+        elif policy_terms.insurance_type == _NON_MONETARY_INSURANCE_TYPE:
+            # NON_MONETARY: no monetary basis to meter, but the configured waiting
+            # period delays when coverage becomes claimable.
+            enforcement = _enforce_non_monetary_submission(
+                canonical_context=canonical_context,
+                policy_terms=policy_terms,
+                granted_event=granted_event,
+                submitted_at=now,
+            )
+            if enforcement is not None:
+                return enforcement
 
         # 7. Create (or idempotently return) the SUBMITTED claim. The entitlement is
         #    NOT consumed — it stays GRANTED so further claims may be filed.

@@ -49,6 +49,8 @@ def grant_hall_passes(
     trigger_id: str | None = None,
     correlation_id: str | None = None,
     acquisition_type: str = "GRANT",
+    product_lineage_uuid: str | None = None,
+    policy_uuid: str | None = None,
 ) -> int:
     """Grant hall passes by appending one EntitlementEvent per pass.
 
@@ -62,6 +64,12 @@ def grant_hall_passes(
         trigger_id: Optional trigger identifier for payload lineage.
         correlation_id: Cross-domain lineage ID. Generated if not provided.
         acquisition_type: GRANT (teacher direct), PURCHASE, or PERK (rent).
+        product_lineage_uuid: Store product the passes came from, when the
+            grant originates from a catalog item. DOM-STORE-001 §VII.A wants a
+            product on every entitlement; a bare teacher-issued pass has none,
+            so this stays optional.
+        policy_uuid: The exact product version, frozen into the payload so the
+            terms can be recovered after the teacher edits the product.
     """
     _VALID_ACQUISITION_TYPES = ("GRANT", "PURCHASE", "PERK")
     if acquisition_type not in _VALID_ACQUISITION_TYPES:
@@ -81,7 +89,7 @@ def grant_hall_passes(
             target_seat_id=seat.id,
             actor_seat_id=resolved_actor,
             entitlement_id=entitlement_id,
-            product_id=None,
+            product_id=product_lineage_uuid,
             entitlement_type="HALL_PASS",
             acquisition_type=acquisition_type,
             event_type="GRANTED",
@@ -89,12 +97,87 @@ def grant_hall_passes(
             payload={
                 "source": "grant_hall_passes",
                 "trigger_id": f"{trigger_id}:{index + 1}" if trigger_id else entitlement_id,
+                **({"policy_uuid": policy_uuid} if policy_uuid else {}),
             },
             timestamp=now,
         )
         db.session.add(event)
     db.session.flush()
     return get_hall_pass_balance(seat.id, seat.class_id)
+
+
+_STORE_GRANT_ENTITLEMENT_TYPES = ("IMMEDIATE_USE", "DELAYED_USE", "PRIVILEGE")
+
+
+def grant_store_entitlements(
+    seat: Seat,
+    quantity: int,
+    *,
+    entitlement_type: str,
+    product_lineage_uuid: str,
+    policy_uuid: str,
+    actor_seat_id: int | None = None,
+    trigger_id: str | None = None,
+    correlation_id: str | None = None,
+    acquisition_type: str = "GRANT",
+) -> list[str]:
+    """Grant non-hall-pass store entitlements without a purchase.
+
+    Used when a student receives a catalog item for a reason other than buying
+    it — today, satisfying rent. Per FEAT-STOR-001 §VII.E each unit is its own
+    entitlement lifecycle, so ``quantity`` units produce ``quantity`` rows
+    sharing one ``correlation_id``; the count is then derivable and is
+    deliberately not stored (DOM-STORE-001 §VII.A).
+
+    Hall passes keep their own function because their balance is derived by a
+    dedicated reader.
+
+    Returns the entitlement ids created.
+    """
+    if entitlement_type not in _STORE_GRANT_ENTITLEMENT_TYPES:
+        raise ValueError(
+            f"entitlement_type must be one of {_STORE_GRANT_ENTITLEMENT_TYPES}"
+        )
+    if acquisition_type not in ("GRANT", "PURCHASE", "PERK"):
+        raise ValueError("acquisition_type must be one of ('GRANT', 'PURCHASE', 'PERK')")
+    if not product_lineage_uuid:
+        raise ValueError("product_lineage_uuid is required for store entitlements")
+
+    grant_quantity = int(quantity)
+    if grant_quantity <= 0:
+        raise ValueError("Entitlement grant quantity must be positive")
+
+    now = _current_utc()
+    grant_correlation_id = correlation_id or generate_correlation_id()
+    resolved_actor = actor_seat_id if actor_seat_id is not None else seat.id
+
+    entitlement_ids = []
+    for index in range(grant_quantity):
+        entitlement_id = _generate_entitlement_id()
+        entitlement_ids.append(entitlement_id)
+        db.session.add(
+            EntitlementEvent(
+                class_id=seat.class_id,
+                target_seat_id=seat.id,
+                actor_seat_id=resolved_actor,
+                entitlement_id=entitlement_id,
+                product_id=product_lineage_uuid,
+                entitlement_type=entitlement_type,
+                acquisition_type=acquisition_type,
+                event_type="GRANTED",
+                correlation_id=grant_correlation_id,
+                payload={
+                    "source": "grant_store_entitlements",
+                    "policy_uuid": policy_uuid,
+                    "trigger_id": (
+                        f"{trigger_id}:{index + 1}" if trigger_id else entitlement_id
+                    ),
+                },
+                timestamp=now,
+            )
+        )
+    db.session.flush()
+    return entitlement_ids
 
 
 def grant_insurance_entitlement(
@@ -107,8 +190,8 @@ def grant_insurance_entitlement(
     """Grant one INSURANCE coverage entitlement (acquisition_type=PURCHASE).
 
     The immutable insurance definition is referenced by ``policy_uuid`` carried in
-    the event payload — ``EntitlementEvent.product_id`` is an int and is not used
-    for insurance. Policy terms are retrieved later by resolving that
+    the event payload — ``EntitlementEvent.product_id`` names a *store* product
+    lineage and is not used for insurance. Policy terms are retrieved later by resolving that
     ``policy_uuid`` (the row is immutable), never snapshotted into the payload
     (DOM-STORE-001 §VII.A forbids duplicating policy rules).
 
@@ -259,6 +342,11 @@ def consume_hall_pass(
     db.session.add(event)
     db.session.flush()
     return event, get_hall_pass_balance(seat_id, class_id)
+
+
+def get_available_hall_pass_grant(seat_id: int, class_id: str) -> EntitlementEvent | None:
+    """Return one available hall-pass grant without consuming it."""
+    return _available_hall_pass_grant(seat_id, class_id)
 
 
 def consume_entitlement(

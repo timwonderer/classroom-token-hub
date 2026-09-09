@@ -35,8 +35,8 @@ Settings are stored for the class you currently have selected. If you teach seve
 > [!IMPORTANT]
 > Payroll calculations rely on "Start Work" and "Break" or "Done" taps from the Attendance Log. You must confirm that attendance taps are enabled and being used correctly for each class period for payroll to calculate.
 
-> [!WARNING]
-> **Press Run Payroll yourself.** Despite what the in-page guide says about auto-run, payroll does not currently start on its own — see [Payroll Advanced Mode](payroll-advanced-mode.md) for the detail. The **Next Payroll** date on this page is a calculated reminder, not a scheduled job.
+> [!NOTE]
+> **Payroll can run automatically when a due schedule is configured.** The scheduled job completes due class cycles using the same workflow as **Run Payroll**. You can still run a cycle manually when needed; the **Next Payroll** date is the scheduled occurrence.
 
 > [!NOTE]
 > Rate and schedule changes affect future runs only. Payments already made are never recalculated.

@@ -9,7 +9,7 @@ from app.utils.canonical_temporal_resolver import ensure_utc
 
 
 def _non_void_filter():
-    return Transaction.is_void.isnot(True)
+    return Transaction.status != TransactionStatus.VOID
 
 
 # --- Ledger provenance classifier (SPEC-ITR-001 §6.3) ----------------------
@@ -49,7 +49,7 @@ def _student_originated_filter():
     return db.and_(
         Transaction.mechanism == LedgerMechanism.SELF,
         Transaction.original_transaction_id.is_(None),
-        Transaction.is_void.isnot(True),
+        Transaction.status != TransactionStatus.VOID,
         db.or_(
             Transaction.feat_code.is_(None),
             Transaction.feat_code.notin_(SYSTEM_ORIGINATED_FEAT_CODES),
@@ -187,7 +187,6 @@ def get_inbound_ledger_rows(
             Transaction.timestamp < ensure_utc(window_end),
             Transaction.amount_cents > 0,
             Transaction.status == TransactionStatus.POSTED,
-            Transaction.is_void.isnot(True),
         )
         .all()
     )

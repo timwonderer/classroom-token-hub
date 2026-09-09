@@ -81,3 +81,59 @@ def test_admin_duplicate_rank_in_group_rejected_via_route(app, client):
     with app.app_context():
         rows = InsurancePolicy.query.filter_by(class_id=class_id).all()
         assert len(rows) == 1  # the duplicate was not created
+
+
+def _create_policy(client, title="Attendance Insurance"):
+    return client.post("/admin/insurance/new", data={
+        "insurance_type": "TRANSACTION", "premium": "5.00", "charge_frequency": "WEEKLY",
+        "reimbursement_percentage": "80", "payout_multiple": "3",
+        "claims_per_week_equivalent": "1", "claim_window_days": "7",
+        "title": title,
+    }, follow_redirects=False)
+
+
+def test_admin_reactivates_hidden_policy_via_route(app, client):
+    """Reactivation re-offers the hidden terms as a new IN_USE row and supersedes it."""
+    with app.app_context():
+        classroom = provision_classroom("chemistry_p1")
+        enable_class_feature(class_id=classroom.class_id, feature="insurance")
+        class_id = classroom.class_id
+        login_teacher(client, classroom)
+
+    _create_policy(client)
+    with app.app_context():
+        original = InsurancePolicy.query.filter_by(class_id=class_id).one()
+        original_uuid = original.policy_uuid
+
+    assert client.post(f"/admin/insurance/deactivate/{original_uuid}").status_code == 302
+    resp = client.post(f"/admin/insurance/reactivate/{original_uuid}")
+    assert resp.status_code == 302
+
+    with app.app_context():
+        hidden = InsurancePolicy.query.filter_by(policy_uuid=original_uuid).one()
+        assert hidden.availability_state == "RETIRED"
+
+        live = InsurancePolicy.query.filter_by(
+            class_id=class_id, availability_state="IN_USE"
+        ).one()
+        assert live.policy_uuid != original_uuid
+        assert live.title == "Attendance Insurance"
+        assert live.premium == hidden.premium
+        assert live.reimbursement_percentage == hidden.reimbursement_percentage
+
+
+def test_admin_cannot_reactivate_a_policy_that_is_on_sale(app, client):
+    """Reactivation only applies to a hidden row; an IN_USE one 404s (no duplicate)."""
+    with app.app_context():
+        classroom = provision_classroom("chemistry_p1")
+        enable_class_feature(class_id=classroom.class_id, feature="insurance")
+        class_id = classroom.class_id
+        login_teacher(client, classroom)
+
+    _create_policy(client)
+    with app.app_context():
+        policy_uuid = InsurancePolicy.query.filter_by(class_id=class_id).one().policy_uuid
+
+    assert client.post(f"/admin/insurance/reactivate/{policy_uuid}").status_code == 404
+    with app.app_context():
+        assert InsurancePolicy.query.filter_by(class_id=class_id).count() == 1
