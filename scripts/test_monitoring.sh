@@ -63,11 +63,15 @@ if [ "$HTTP_CODE" = "200" ]; then
     echo "$BODY" | head -c 200
     echo "..."
 
-    # Check if JSON contains expected fields
-    if echo "$BODY" | grep -q '"signals"'; then
+    # Validate the response contract, not just the presence of a field name.
+    if echo "$BODY" | jq -e '
+        (.signals | type == "array") and
+        all(.signals[]; type == "object" and (.key | type == "string"))
+    ' >/dev/null; then
         echo -e "${GREEN}✓${NC} Response contains expected JSON structure"
     else
-        echo -e "${YELLOW}⚠${NC} Warning: Response may not have expected structure"
+        echo -e "${RED}✗ FAILED${NC} - Response must contain a signals array with string key values"
+        exit 1
     fi
 else
     echo -e "${RED}✗ FAILED${NC} - Expected 200, got $HTTP_CODE"
