@@ -118,7 +118,7 @@ from app.services.recovery_service import (
 from app.services.classroom_setup import create_student_user_for_seat
 from app.feats.base import requires_feat_context, FEATContext
 from app.feats.rent_payment_feat import execute_rent_payment, execute_rent_bill_payment
-from app.feats.transfer_feat import execute_account_transfer
+from app.feats.transfer_feat import InsufficientFunds, execute_account_transfer
 from app.feats.store_purchase_feat import execute_store_purchase
 from app.feats.insurance_claim_feat import submit_insurance_claim
 from app.payroll import get_pay_rate_for_class
@@ -1377,6 +1377,16 @@ def transfer():
                 current_app.logger.info(
                     f"Transfer {amount} from {from_account} to {to_account} for seat {seat_id}"
                 )
+            except InsufficientFunds as e:
+                # The checks above ran before the seat row was locked, so a
+                # concurrent transfer can have spent the balance in between. The
+                # FEAT re-checks under the lock and this is that verdict.
+                db.session.rollback()
+                message = str(e)
+                if is_json:
+                    return jsonify(status="error", message=message), 400
+                flash(message, "transfer_error")
+                return redirect(url_for("student.transfer"))
             except SQLAlchemyError as e:
                 db.session.rollback()
                 current_app.logger.error(
