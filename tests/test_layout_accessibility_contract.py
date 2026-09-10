@@ -1,7 +1,9 @@
 """Regression checks for the shared navigation accessibility contract."""
 
+import re
 from pathlib import Path
 
+import pytest
 from bs4 import BeautifulSoup
 
 
@@ -181,21 +183,62 @@ def test_templates_and_client_scripts_do_not_use_blocking_alerts():
             assert "alert(" not in source, f"Blocking alert remains in {path}"
 
 
-def test_admin_dropdown_triggers_describe_their_controlled_links():
-    soup = _template("layout_admin.html")
-    for trigger in soup.select("button[aria-controls]"):
+# A trigger's expanded state is either a literal, or a Jinja conditional that
+# renders to one. Matching the shape rather than an enumerated list of specific
+# expressions means adding a nav section does not silently need a test edit —
+# the previous hardcoded set covered only the admin layout's five accordions.
+_EXPANDED_EXPR = re.compile(r"^\{\{\s*'(?:true|false)'\s+if\s+.+\s+else\s+'(?:true|false)'\s*\}\}$")
+
+LAYOUTS_WITH_TRIGGERS = ("layout_admin.html", "layout_student.html")
+
+
+def _describes_expanded_state(value):
+    return value in {"true", "false"} or bool(value and _EXPANDED_EXPR.match(value))
+
+
+@pytest.mark.parametrize("layout", LAYOUTS_WITH_TRIGGERS)
+def test_dropdown_triggers_describe_their_controlled_links(layout):
+    """Every aria-controls trigger names a real target and reports its state.
+
+    A control that owns a disclosure must say whether it is open (WCAG 4.1.2).
+    The admin "Need Help?" offcanvas trigger shipped without `aria-expanded`
+    for the life of the v2 layout, and the student layout carried the identical
+    defect where no test looked at all.
+    """
+    soup = _template(layout)
+    triggers = soup.select("button[aria-controls]")
+    assert triggers, f"{layout} declares no aria-controls triggers"
+    for trigger in triggers:
         controlled_id = trigger["aria-controls"]
-        controlled = soup.find(id=controlled_id)
-        assert controlled is not None, f"Missing controlled element: {controlled_id}"
-        assert trigger.get("aria-expanded") in {
-            "true",
-            "false",
-            "{{ 'true' if classroom_open else 'false' }}",
-            "{{ 'true' if economy_open else 'false' }}",
-            "{{ 'true' if bills_open else 'false' }}",
-            "{{ 'true' if class_tools_open else 'false' }}",
-            "{{ 'true' if settings_open else 'false' }}",
-        }
+        assert soup.find(id=controlled_id) is not None, (
+            f"{layout}: missing controlled element {controlled_id}"
+        )
+        value = trigger.get("aria-expanded")
+        label = " ".join(trigger.get_text(strip=True).split())[:40]
+        assert _describes_expanded_state(value), (
+            f"{layout}: trigger for {controlled_id} (“{label}”) has "
+            f"aria-expanded={value!r}; expected 'true'/'false' or a Jinja "
+            f"conditional rendering one"
+        )
+
+
+@pytest.mark.parametrize("layout", LAYOUTS_WITH_TRIGGERS)
+def test_offcanvas_triggers_have_their_state_kept_in_sync(layout):
+    """A static `aria-expanded` that never updates is still a lie.
+
+    Bootstrap manages the panel but does not touch `aria-expanded` on the
+    trigger, so the attribute has to be driven by `offcanvas-aria.js`. This
+    asserts the layout loads it; the attribute check above cannot tell a
+    maintained value from a frozen one.
+    """
+    soup = _template(layout)
+    if not soup.select('[data-bs-toggle="offcanvas"][aria-controls]'):
+        pytest.skip(f"{layout} has no offcanvas triggers")
+    sources = " ".join(s.get("src", "") for s in soup.find_all("script"))
+    assert "offcanvas-aria.js" in sources, (
+        f"{layout} has offcanvas triggers but never loads offcanvas-aria.js, "
+        f"so their aria-expanded would stay frozen at its initial value"
+    )
 
 
 def test_admin_dashboard_exposes_current_location_to_assistive_technology():

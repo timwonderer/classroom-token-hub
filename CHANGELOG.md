@@ -18,6 +18,13 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 
+- **The "Need Help?" button now reports whether its panel is open (2026-09-10)** — The contextual-help trigger in both the admin and student layouts declared `aria-controls` for a real offcanvas panel but carried no `aria-expanded`, so a screen-reader user was never told the panel had opened (WCAG 4.1.2, `INV-ARC-020`). This was the single failing test in the full 2062-test suite; because `constitutional-ci.yml` is diff-scoped and `schema-gate.yml` runs only `-m "critical or regression"`, nothing ran it unless those templates changed, and `main` sat red while CI reported green. `layout_admin.html` is extended by 28 templates and `layout_student.html` by the student portal, so the defect reached nearly every authenticated page.
+
+  Both triggers now ship `aria-expanded="false"`, and the new `static/js/offcanvas-aria.js` keeps the attribute in step with the panel — Bootstrap manages the panel but does not touch the trigger, so a static attribute alone would have been a frozen value rather than a fix. The module binds every `[data-bs-toggle="offcanvas"][aria-controls]` trigger, so future offcanvas surfaces are covered without further edits. Verified in a real browser against Bootstrap 5.3.3: the state tracks open, close-button, and Escape.
+
+  `tests/test_layout_accessibility_contract.py` now runs against both layouts instead of the admin one alone, matches the expanded-state value by shape rather than an enumerated list of Jinja expressions, and asserts that any layout carrying offcanvas triggers also loads the sync module.
+
+
 - **Rollback instructions name an explicit revision (2026-09-09)** — The documented rollback and downgrade-test procedures called a bare `flask db downgrade`. The current migration head is a merge point with two parents, so that form aborts with `Ambiguous walk` and rolls nothing back. `.claude/rules/database-migrations.md` and the `CLAUDE.md` command reference now use `flask db downgrade <revision>` and say why. The CI schema gate already passed an explicit revision and was unaffected.
 
 - **Archived documents no longer claim authority (2026-09-09)** — 46 documents under `docs/archive/` declared `Authority Level: Normative` (44) or `Foundational` (2), contradicting `.claude/rules/documentation.md`, which states that archived material is "history only, never authority". Their `Authority Level` now reads `Archived - non-normative`, and each carries a one-line notice pointing at the current `INV` / `DOM` / `SOP` trees. Live documents were not touched, nor were body-table rows that cite a still-current document's authority.

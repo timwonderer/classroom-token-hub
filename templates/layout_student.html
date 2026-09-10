@@ -251,7 +251,7 @@
                         <div class="page-header-actions">
                             <button type="button" class="btn btn-outline-primary btn-sm d-flex align-items-center gap-2"
                                 data-bs-toggle="offcanvas" data-bs-target="#studentContextualHelp"
-                                aria-controls="studentContextualHelp">
+                                aria-controls="studentContextualHelp" aria-expanded="false">
                                 <span class="material-symbols-outlined" aria-hidden="true">help</span>
                                 Need Help?
                             </button>
@@ -468,6 +468,7 @@
     </script>
     <!-- Mobile Sidebar Toggle Script -->
     <script src="{{ static_url('js/mobile-sidebar-toggle.js') }}"></script>
+    <script src="{{ static_url('js/offcanvas-aria.js') }}"></script>
     {% block extra_scripts %}{% endblock %}
 </body>
 

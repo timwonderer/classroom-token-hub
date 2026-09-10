@@ -362,7 +362,8 @@
                 {% if help_doc_path %}
                     {% block contextual_help_trigger %}
                     <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
-                        data-bs-target="#adminContextualHelp" aria-controls="adminContextualHelp">
+                        data-bs-target="#adminContextualHelp" aria-controls="adminContextualHelp"
+                        aria-expanded="false">
                         <span class="material-symbols-outlined" aria-hidden="true">help</span> Need Help?
                     </button>
                     {% endblock %}
@@ -416,6 +417,7 @@
     <script src="{{ static_url('js/app-core.js') }}"></script>
     <script src="{{ static_url('js/sortable-table.js') }}"></script>
     <script src="{{ static_url('js/mobile-sidebar-toggle.js') }}"></script>
+    <script src="{{ static_url('js/offcanvas-aria.js') }}"></script>
     <script>
         function renderClassScopedTimes() {
             document.querySelectorAll('.class-scoped-time').forEach((timeElement) => {
