@@ -124,14 +124,26 @@ Per SPEC-TEST-001, tests provision a whole classroom rather than assembling rows
 
 Constitutional authority flows: `INV-CORE → INV-ARC → DOM → FEAT`
 
+Normative documents live **only** under these roots:
+
 - `docs/INVARIANT/CORE/` — foundational invariants (highest authority)
 - `docs/INVARIANT/ARCHITECTURE/` — architectural invariants (INV-ARC-019 governs identity)
 - `docs/DOMAIN/` — domain authority specs (DOM-IDEN-001 governs identity/class binding)
 - `docs/FEATURE-EXECUTION/` — FEAT contracts (execution-level, subordinate to above)
-- `docs/TRACKING/` — migration status and audit tracking
-- `.claude/rules/` — detailed development rules (testing, migrations, security, multi-tenancy, docs)
+- `docs/SPEC/` — technical contracts (SPEC-*)
+- `docs/STANDARD_OPERATING_PROCEDURES/` — SOPs (SOP-*)
 
-When specs and implementation disagree, the constitutional docs (`INV-*`, `DOM-*`) define the target state. Implementation is often in a transitional bridge state.
+When specs and implementation disagree, the constitutional docs (`INV-*`, `DOM-*`) define the target state.
+
+### Nothing under `.claude/` is authoritative
+
+This file and every file under `.claude/rules/` are **operational guidance for agents, not normative documents**. They summarize; they do not govern. The same applies to `docs/TRACKING/`, `docs/MAP/`, `docs/PRINCIPLES/`, `docs/REFERENCE/`, `CHANGELOG.md`, and agent memory — all descriptive, none binding.
+
+Consequences:
+
+- Never cite a `.claude/` file as justification for a design decision. Cite the INV/DOM/FEAT/SPEC/SOP document instead.
+- Where `.claude/` text conflicts with a normative document, the normative document wins and **the `.claude/` text is the thing that gets corrected**.
+- Before acting on a correctness-sensitive claim found here, read the governing normative document. This file drifts; those do not.
 
 ## Identity Migration: Complete
 

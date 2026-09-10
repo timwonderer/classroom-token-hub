@@ -1,5 +1,7 @@
 # Multi-Tenancy Scoping Rules
 
+> **Not authoritative.** This file is operational guidance for agents. Normative authority lives only under `docs/INVARIANT/`, `docs/DOMAIN/`, `docs/FEATURE-EXECUTION/`, `docs/SPEC/`, and `docs/STANDARD_OPERATING_PROCEDURES/`. Where this file conflicts with one of those, the normative document wins and this file is what gets corrected.
+
 **CRITICAL:** This project had a P0 same-teacher multi-period data leak. Every read and
 write touching seat-owned data must be scoped by `class_id`.
 

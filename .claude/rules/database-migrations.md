@@ -1,5 +1,7 @@
 # Database Migration Rules
 
+> **Not authoritative.** This file is operational guidance for agents. Normative authority lives only under `docs/INVARIANT/`, `docs/DOMAIN/`, `docs/FEATURE-EXECUTION/`, `docs/SPEC/`, and `docs/STANDARD_OPERATING_PROCEDURES/`. Where this file conflicts with one of those, the normative document wins and this file is what gets corrected.
+
 **CRITICAL:** This project uses Alembic for database migrations. Following these rules prevents data loss, schema conflicts, and deployment failures.
 
 ---
