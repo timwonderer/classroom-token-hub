@@ -152,7 +152,7 @@
                         <div>
                             <strong>Student #{{ loop.index }}</strong>
                             {% if code.code_hash %}
-                                <span class="badge badge-success ms-2"><span class="material-symbols-outlined me-1">check_circle</span>Verified</span>
+                                <span class="badge badge-success ms-2"><span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Verified</span>
                                 <small class="d-block text-muted">Verified {{ code.verified_at.strftime('%B %d at %I:%M %p') if code.verified_at else 'recently' }}</small>
                             {% else %}
                                 <span class="badge badge-secondary ms-2">Pending</span>
@@ -167,7 +167,7 @@
             <div class="mt-4">
                 {% if all_verified %}
                 <div class="alert alert-success">
-                    <h5 class="alert-heading"><span class="material-symbols-outlined me-1">check_circle</span>All Students Verified!</h5>
+                    <h5 class="alert-heading"><span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>All Students Verified!</h5>
                     <p class="mb-0">You can now proceed to reset your credentials using the recovery codes your students gave you.</p>
                 </div>
                 <a href="{{ url_for('admin.reset_credentials') }}" class="btn btn-primary w-100">
@@ -175,7 +175,7 @@
                 </a>
                 {% else %}
                 <div class="alert alert-warning">
-                    <h5 class="alert-heading"><span class="material-symbols-outlined me-1">hourglass_top</span>Waiting for Student Verification</h5>
+                    <h5 class="alert-heading"><span class="material-symbols-outlined me-1" aria-hidden="true">hourglass_top</span>Waiting for Student Verification</h5>
                     <p class="mb-0">Please wait for all your students to verify their identity. This page will automatically update when they do.</p>
                     <small class="d-block mt-2">You can refresh this page to check the latest status.</small>
                 </div>

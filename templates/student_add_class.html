@@ -10,13 +10,13 @@
         <div class="card shadow-sm">
             <div class="card-header bg-primary text-white">
                 <h4 class="mb-0">
-                    <span class="material-symbols-outlined align-middle">group_add</span>
+                    <span class="material-symbols-outlined align-middle" aria-hidden="true">group_add</span>
                     Add a New Class
                 </h4>
             </div>
             <div class="card-body">
                 <div class="alert alert-info">
-                    <span class="material-symbols-outlined align-middle">info</span>
+                    <span class="material-symbols-outlined align-middle" aria-hidden="true">info</span>
                     <strong>Join another class:</strong> If your teacher has added you to their roster and provided a join code, you can add their class to your account here.
                 </div>
 
@@ -37,7 +37,7 @@
 
                     <div class="mb-3">
                         <label for="join_code" class="form-label">
-                            <span class="material-symbols-outlined align-middle" style="font-size: 1.2rem;">key</span>
+                            <span class="material-symbols-outlined align-middle" style="font-size: 1.2rem;" aria-hidden="true">key</span>
                             Join Code
                         </label>
                         {{ form.join_code(class="form-control form-control-lg", placeholder="Example: ABC123", autocomplete="off") }}
@@ -51,7 +51,7 @@
 
                     <div class="mb-3">
                         <label for="first_name" class="form-label">
-                            <span class="material-symbols-outlined align-middle" style="font-size: 1.2rem;">person</span>
+                            <span class="material-symbols-outlined align-middle" style="font-size: 1.2rem;" aria-hidden="true">person</span>
                             First Name
                         </label>
                         {{ form.first_name(class="form-control", placeholder="Example: Jamie", autocomplete="off") }}
@@ -65,7 +65,7 @@
 
                     <div class="mb-3">
                         <label for="last_name" class="form-label">
-                            <span class="material-symbols-outlined align-middle" style="font-size: 1.2rem;">badge</span>
+                            <span class="material-symbols-outlined align-middle" style="font-size: 1.2rem;" aria-hidden="true">badge</span>
                             Last Name
                         </label>
                         {{ form.last_name(class="form-control", placeholder="Example: Smith", autocomplete="off") }}
@@ -79,7 +79,7 @@
 
                     <div class="mb-3">
                         <label for="dedupe_code" class="form-label">
-                            <span class="material-symbols-outlined align-middle" style="font-size: 1.2rem;">fingerprint</span>
+                            <span class="material-symbols-outlined align-middle" style="font-size: 1.2rem;" aria-hidden="true">fingerprint</span>
                             Deduplication Code <span class="text-muted fw-normal">(optional)</span>
                         </label>
                         {{ form.dedupe_code(class="form-control", placeholder="Example: A1B2", autocomplete="off") }}
@@ -93,11 +93,11 @@
 
                     <div class="d-grid gap-2">
                         <button type="submit" class="btn btn-primary btn-lg">
-                            <span class="material-symbols-outlined align-middle">add_circle</span>
+                            <span class="material-symbols-outlined align-middle" aria-hidden="true">add_circle</span>
                             Add Class
                         </button>
                         <a href="{{ url_for('student.dashboard') }}" class="btn btn-outline-secondary">
-                            <span class="material-symbols-outlined align-middle">arrow_back</span>
+                            <span class="material-symbols-outlined align-middle" aria-hidden="true">arrow_back</span>
                             Back to Dashboard
                         </a>
                     </div>
@@ -109,7 +109,7 @@
         <div class="card mt-3 shadow-sm">
             <div class="card-header">
                 <h5 class="mb-0">
-                    <span class="material-symbols-outlined align-middle">help</span>
+                    <span class="material-symbols-outlined align-middle" aria-hidden="true">help</span>
                     Need Help?
                 </h5>
             </div>

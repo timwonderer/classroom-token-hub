@@ -16,7 +16,7 @@
               <h3 class="mb-0 fw-bold" style="color: var(--brand-primary);">{{ total_requests }}</h3>
             </div>
             <div>
-              <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-primary); opacity: 0.3;">cloud</span>
+              <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-primary); opacity: 0.3;" aria-hidden="true">cloud</span>
             </div>
           </div>
         </div>
@@ -32,7 +32,7 @@
               <h3 class="mb-0 fw-bold" style="color: var(--brand-teal);">{{ unique_ips }}</h3>
             </div>
             <div>
-              <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-teal); opacity: 0.3;">router</span>
+              <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-teal); opacity: 0.3;" aria-hidden="true">router</span>
             </div>
           </div>
         </div>
@@ -48,7 +48,7 @@
               <h3 class="mb-0 fw-bold" style="color: var(--brand-gold);">{{ error_type_stats|length }}</h3>
             </div>
             <div>
-              <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-gold); opacity: 0.3;">category</span>
+              <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-gold); opacity: 0.3;" aria-hidden="true">category</span>
             </div>
           </div>
         </div>
@@ -61,7 +61,7 @@
     <div class="col-md-6">
       <div class="card">
         <div class="card-header">
-          <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">filter_alt</span> Filter by IP Address</h5>
+          <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;" aria-hidden="true">filter_alt</span> Filter by IP Address</h5>
         </div>
         <div class="card-body">
           <form method="GET" action="{{ url_for('sysadmin.network_activity') }}" class="mb-0">
@@ -85,7 +85,7 @@
     <div class="col-md-6">
       <div class="card">
         <div class="card-header">
-          <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">analytics</span> Error Type Distribution</h5>
+          <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;" aria-hidden="true">analytics</span> Error Type Distribution</h5>
         </div>
         <div class="card-body">
           <div class="list-group list-group-flush" style="max-height: 200px; overflow-y: auto;">
@@ -108,7 +108,7 @@
     <div class="card-header">
       <div class="d-flex justify-content-between align-items-center">
         <h5 class="mb-0">
-          <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">network_check</span>
+          <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;" aria-hidden="true">network_check</span>
           {% if current_ip %}
             Network Activity for {{ current_ip }}
           {% else %}
@@ -184,7 +184,7 @@
                     <div class="modal-content">
                       <div class="modal-header bg-primary text-white">
                         <h5 class="modal-title" id="activityModalLabel{{ log.id }}">
-                          <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">info</span>
+                          <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;" aria-hidden="true">info</span>
                           Request Details #{{ log.id }}
                         </h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -272,7 +272,7 @@
 
       {% else %}
         <div class="p-5 text-center text-muted">
-          <span class="material-symbols-outlined d-block" style="font-size: 64px; opacity: 0.3;">wifi_off</span>
+          <span class="material-symbols-outlined d-block" style="font-size: 64px; opacity: 0.3;" aria-hidden="true">wifi_off</span>
           <h4>No network activity logged yet</h4>
           <p>Network requests will appear here as they occur.</p>
         </div>

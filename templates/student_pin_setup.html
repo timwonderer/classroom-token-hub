@@ -235,7 +235,7 @@
             </div>
 
             <div class="username-badge">
-                <span class="material-symbols-outlined">person_check</span>
+                <span class="material-symbols-outlined" aria-hidden="true">person_check</span>
                 <div class="username-badge-content">
                     <strong>{{ username }}</strong>
                     <small>This is your unique username. Write it down before continuing.</small>
@@ -246,7 +246,7 @@
             {% if messages %}
             <div class="alert alert-danger border-0 shadow-sm mb-4" role="alert">
                 <div class="d-flex">
-                    <span class="material-symbols-outlined fs-5 me-2">error</span>
+                    <span class="material-symbols-outlined fs-5 me-2" aria-hidden="true">error</span>
                     <div>
                         {% for message in messages %}
                         <div>{{ message }}</div>

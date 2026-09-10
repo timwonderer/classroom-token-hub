@@ -24,7 +24,7 @@
 
 <div class="card shadow mb-4">
     <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><span class="material-symbols-outlined me-2">edit</span>Edit: {{ item.name }}</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">edit</span>Edit: {{ item.name }}</h5>
     </div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('admin.edit_store_item', product_lineage_uuid=item.product_lineage_uuid) }}">
@@ -124,7 +124,7 @@
             <!-- Collective Goal Settings (shown only when item type is 'collective') -->
             <div class="card mb-3" id="collectiveGoalCard" style="display: {% if item.item_type == 'collective' %}block{% else %}none{% endif %};">
                 <div class="card-header bg-light">
-                    <h6 class="mb-0"><span class="material-symbols-outlined me-2">group</span>Collective Goal Settings</h6>
+                    <h6 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">group</span>Collective Goal Settings</h6>
                 </div>
                 <div class="card-body">
                     <div class="alert alert-info">
@@ -144,7 +144,7 @@
                     </div>
                     <div id="editWholeClassInfo" style="display: {% if item.collective_goal_type == 'whole_class' %}block{% else %}none{% endif %};">
                         <div class="alert alert-warning">
-                            <small><span class="material-symbols-outlined me-2">info</span><strong>Whole Class Mode:</strong> Every student in the class must purchase (1 per person). The target dynamically updates based on class size.</small>
+                            <small><span class="material-symbols-outlined me-2" aria-hidden="true">info</span><strong>Whole Class Mode:</strong> Every student in the class must purchase (1 per person). The target dynamically updates based on class size.</small>
                         </div>
                     </div>
                     <div class="mb-3">
@@ -158,7 +158,7 @@
             <!-- Rent Link -->
             <div class="card mb-3">
                 <div class="card-header bg-light">
-                    <h6 class="mb-0"><span class="material-symbols-outlined me-2">key</span>Rent Link</h6>
+                    <h6 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">key</span>Rent Link</h6>
                 </div>
                 <div class="card-body">
                     <div class="form-check mb-3">
@@ -175,7 +175,7 @@
                             </div>
                         </div>
                         <div class="alert alert-info mb-0">
-                            <small><span class="material-symbols-outlined me-2">schedule</span>Rent links take effect on the <strong>next</strong> rent cycle. Adding or removing one never changes a cycle already underway.</small>
+                            <small><span class="material-symbols-outlined me-2" aria-hidden="true">schedule</span>Rent links take effect on the <strong>next</strong> rent cycle. Adding or removing one never changes a cycle already underway.</small>
                         </div>
                     </div>
                 </div>
@@ -188,7 +188,7 @@
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="headingBundle">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBundle" aria-expanded="false" aria-controls="collapseBundle">
-                            <span class="material-symbols-outlined me-2">inventory_2</span><strong>Bundle Settings</strong>
+                            <span class="material-symbols-outlined me-2" aria-hidden="true">inventory_2</span><strong>Bundle Settings</strong>
                             <span class="badge bg-success ms-2 bundle-badge" style="display:none;">Active</span>
                         </button>
                     </h2>
@@ -216,7 +216,7 @@
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="headingBulkDiscount">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBulkDiscount" aria-expanded="false" aria-controls="collapseBulkDiscount">
-                            <span class="material-symbols-outlined me-2">percent</span><strong>Bulk Discount Settings</strong>
+                            <span class="material-symbols-outlined me-2" aria-hidden="true">percent</span><strong>Bulk Discount Settings</strong>
                             <span class="badge bg-success ms-2 bulk-discount-badge" style="display:none;">Active</span>
                         </button>
                     </h2>
@@ -249,7 +249,7 @@
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="headingAdvanced">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAdvanced" aria-expanded="false" aria-controls="collapseAdvanced">
-                            <span class="material-symbols-outlined me-2">settings</span><strong>Advanced Settings</strong>
+                            <span class="material-symbols-outlined me-2" aria-hidden="true">settings</span><strong>Advanced Settings</strong>
                         </button>
                     </h2>
                     <div id="collapseAdvanced" class="accordion-collapse collapse" aria-labelledby="headingAdvanced" data-bs-parent="#itemSettingsAccordion">
@@ -279,7 +279,7 @@
 
             <div class="d-flex justify-content-between">
                 <a href="{{ url_for('admin.store_management') }}" class="btn btn-secondary">
-                    <span class="material-symbols-outlined me-2">arrow_back</span>Back to Store
+                    <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_back</span>Back to Store
                 </a>
                 {{ form.submit(class="btn btn-primary btn-lg") }}
             </div>

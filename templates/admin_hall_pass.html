@@ -6,7 +6,7 @@
 {% block page_icon %}confirmation_number{% endblock %}
 {% block contextual_help_trigger %}
   <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#hallPassGuide" aria-controls="hallPassGuide" aria-expanded="false">
-    <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
+    <span class="material-symbols-outlined" aria-hidden="true">quick_reference_all</span> <span>Need Help?</span>
   </button>
 {% endblock %}
 
@@ -23,7 +23,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header" id="hallPassGuideHeadingQueue">
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideQueue" aria-expanded="false" aria-controls="hallPassGuideQueue">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">settings</span>
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">settings</span>
                         <strong>Hall Pass Limits</strong>
                     </button>
                 </h2>
@@ -40,7 +40,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header" id="hallPassGuideHeadingSettingsBreakdown">
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideSettingsBreakdown" aria-expanded="false" aria-controls="hallPassGuideSettingsBreakdown">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tune</span>
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">tune</span>
                         <strong>Settings Breakdown</strong>
                     </button>
                 </h2>
@@ -61,7 +61,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header" id="hallPassGuideHeadingApprove">
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideApprove" aria-expanded="false" aria-controls="hallPassGuideApprove">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">check_circle</span>
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">check_circle</span>
                         <strong>Issue and Track Passes</strong>
                     </button>
                 </h2>
@@ -74,7 +74,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header" id="hallPassGuideHeadingTrack">
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideTrack" aria-expanded="false" aria-controls="hallPassGuideTrack">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">logout</span>
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">logout</span>
                         <strong>Track Students Out</strong>
                     </button>
                 </h2>
@@ -90,7 +90,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header" id="hallPassGuideHeadingDisplays">
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideDisplays" aria-expanded="false" aria-controls="hallPassGuideDisplays">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tv</span>
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">tv</span>
                         <strong>Hall Pass Verification</strong>
                     </button>
                 </h2>
@@ -110,7 +110,7 @@
         <div>
             {% if verify_url %}
             <a href="{{ verify_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary me-2">
-                <span class="material-symbols-outlined">verified_user</span> Hall Pass Verification (Public) <span class="visually-hidden">(opens in a new tab)</span>
+                <span class="material-symbols-outlined" aria-hidden="true">verified_user</span> Hall Pass Verification (Public) <span class="visually-hidden">(opens in a new tab)</span>
             </a>
             {% if verify_qr_data_uri %}
             <img src="{{ verify_qr_data_uri }}" alt="QR code for Office Verification" width="96" height="96" class="align-middle me-2 border rounded">
@@ -119,7 +119,7 @@
             <button type="button" class="btn btn-outline-secondary me-2"
                     onclick="rotateVerifyToken()"
                     title="{% if verify_url %}Regenerate{% else %}Generate{% endif %} Hall Pass verification link">
-                <span class="material-symbols-outlined">qr_code</span> {% if verify_url %}Regenerate Verification Link{% else %}Generate QR{% endif %}
+                <span class="material-symbols-outlined" aria-hidden="true">qr_code</span> {% if verify_url %}Regenerate Verification Link{% else %}Generate QR{% endif %}
             </button>
         </div>
     </div>
@@ -129,7 +129,7 @@
         <div class="card-body py-3">
             <div class="row align-items-center g-3">
                 <div class="col-auto">
-                    <span class="material-symbols-outlined text-primary" style="font-size: 1.5rem;">settings</span>
+                    <span class="material-symbols-outlined text-primary" style="font-size: 1.5rem;" aria-hidden="true">settings</span>
                 </div>
                 <div class="col-md-3">
                     <div class="d-flex align-items-center">
@@ -151,7 +151,7 @@
             <ul class="nav nav-tabs card-header-tabs" id="hallPassTabs" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active d-flex align-items-center" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab" aria-controls="pending" aria-selected="true">
-                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;">schedule</span>
+                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;" aria-hidden="true">schedule</span>
                         <span class="fw-bold">Pending</span>
                         {% if pending_requests %}
                             <span class="badge bg-warning text-dark ms-2">{{ pending_requests|length }}</span>
@@ -160,7 +160,7 @@
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link d-flex align-items-center" id="approved-tab" data-bs-toggle="tab" data-bs-target="#approved" type="button" role="tab" aria-controls="approved" aria-selected="false">
-                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;">check_circle</span>
+                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;" aria-hidden="true">check_circle</span>
                         <span class="fw-bold">Issued</span>
                         {% if issued_passes %}
                             <span class="badge bg-info ms-2">{{ issued_passes|length }}</span>
@@ -169,7 +169,7 @@
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link d-flex align-items-center" id="out-tab" data-bs-toggle="tab" data-bs-target="#out" type="button" role="tab" aria-controls="out" aria-selected="false">
-                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;">logout</span>
+                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;" aria-hidden="true">logout</span>
                         <span class="fw-bold">Out</span>
                         {% if out_of_class %}
                             <span class="badge bg-success ms-2">{{ out_of_class|length }}</span>
@@ -178,13 +178,13 @@
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link d-flex align-items-center" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">
-                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;">history</span>
+                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;" aria-hidden="true">history</span>
                         <span class="fw-bold">History</span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link d-flex align-items-center" id="configure-tab" data-bs-toggle="tab" data-bs-target="#configure" type="button" role="tab" aria-controls="configure" aria-selected="false">
-                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;">tune</span>
+                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;" aria-hidden="true">tune</span>
                         <span class="fw-bold">Configure</span>
                     </button>
                 </li>
@@ -204,10 +204,10 @@
                                     </div>
                                     <div class="btn-group btn-group-sm" role="group" aria-label="Hall pass request actions">
                                     <button type="button" class="btn btn-success" onclick="handlePendingPassAction('{{ req.id }}', 'approve')">
-                                            <span class="material-symbols-outlined" style="font-size: 1rem;">check</span> Approve
+                                            <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">check</span> Approve
                                         </button>
                                     <button type="button" class="btn btn-outline-danger" onclick="handlePendingPassAction('{{ req.id }}', 'reject')">
-                                            <span class="material-symbols-outlined" style="font-size: 1rem;">close</span> Reject
+                                            <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">close</span> Reject
                                         </button>
                                     </div>
                                 </div>
@@ -215,7 +215,7 @@
                         </div>
                     {% else %}
                         <div class="text-center py-5 text-muted">
-                            <span class="material-symbols-outlined d-block mb-2" style="font-size: 3rem; opacity: 0.3;">inbox</span>
+                            <span class="material-symbols-outlined d-block mb-2" style="font-size: 3rem; opacity: 0.3;" aria-hidden="true">inbox</span>
                             <p class="mb-0">No pending requests</p>
                         </div>
                     {% endif %}
@@ -232,14 +232,14 @@
                                         <small class="d-block text-muted">Issued: {{ req.decision_time | fmt_timestamp }} | Period: {{ req.period }}</small>
                                     </div>
                             <button type="button" class="btn btn-sm btn-primary" onclick="handlePassAction({{ req.id }}, 'leave')" {% if out_of_class|length >= out_limit %}disabled{% endif %}>
-                                        <span class="material-symbols-outlined" style="font-size: 1rem;">logout</span> Left Class
+                                        <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">logout</span> Left Class
                                     </button>
                                 </div>
                             {% endfor %}
                         </div>
                     {% else %}
                         <div class="text-center py-5 text-muted">
-                            <span class="material-symbols-outlined d-block mb-2" style="font-size: 3rem; opacity: 0.3;">check_circle</span>
+                            <span class="material-symbols-outlined d-block mb-2" style="font-size: 3rem; opacity: 0.3;" aria-hidden="true">check_circle</span>
                             <p class="mb-0">No issued passes are waiting</p>
                         </div>
                     {% endif %}
@@ -256,14 +256,14 @@
                                         <small class="d-block text-muted">Left: {{ req.left_time | fmt_timestamp }} | Period: {{ req.period }}</small>
                                     </div>
                             <button type="button" class="btn btn-sm btn-secondary" onclick="handlePassAction({{ req.id }}, 'return')">
-                                        <span class="material-symbols-outlined" style="font-size: 1rem;">login</span> Returned
+                                        <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">login</span> Returned
                                     </button>
                                 </div>
                             {% endfor %}
                         </div>
                     {% else %}
                         <div class="text-center py-5 text-muted">
-                            <span class="material-symbols-outlined d-block mb-2" style="font-size: 3rem; opacity: 0.3;">person_off</span>
+                            <span class="material-symbols-outlined d-block mb-2" style="font-size: 3rem; opacity: 0.3;" aria-hidden="true">person_off</span>
                             <p class="mb-0">No one is currently out</p>
                         </div>
                     {% endif %}
@@ -294,7 +294,7 @@
                         </div>
                         <div class="col-md-2 d-flex align-items-end">
                             <button type="button" class="btn btn-sm btn-primary w-100" onclick="loadHistory()">
-                                <span class="material-symbols-outlined" style="font-size: 1rem;">filter_alt</span> Apply
+                                <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">filter_alt</span> Apply
                             </button>
                         </div>
                     </div>
@@ -316,7 +316,7 @@
                             <tbody id="historyTableBody">
                                 <tr>
                                     <td colspan="6" class="text-center py-4 text-muted">
-                                        <span class="material-symbols-outlined d-block mb-2" style="font-size: 2rem; opacity: 0.3;">filter_alt</span>
+                                        <span class="material-symbols-outlined d-block mb-2" style="font-size: 2rem; opacity: 0.3;" aria-hidden="true">filter_alt</span>
                                         Select filters and click Apply to view history
                                     </td>
                                 </tr>
@@ -534,7 +534,7 @@ function renderHistoryTable(records) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="6" class="text-center py-4 text-muted">
-                    <span class="material-symbols-outlined d-block mb-2" style="font-size: 2rem; opacity: 0.3;">search_off</span>
+                    <span class="material-symbols-outlined d-block mb-2" style="font-size: 2rem; opacity: 0.3;" aria-hidden="true">search_off</span>
                     No records found matching the selected filters
                 </td>
             </tr>
@@ -650,7 +650,7 @@ function showHistoryError(message) {
     tbody.innerHTML = `
         <tr>
             <td colspan="7" class="text-center py-4 text-danger">
-                <span class="material-symbols-outlined d-block mb-2" style="font-size: 2rem;">error</span>
+                <span class="material-symbols-outlined d-block mb-2" style="font-size: 2rem;" aria-hidden="true">error</span>
                 ${message}
             </td>
         </tr>

@@ -31,15 +31,15 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <a href="{{ url_for('admin.students') }}" class="btn btn-outline-secondary mb-2">
-            <span class="material-symbols-outlined me-1">arrow_back</span> Back to Students
+            <span class="material-symbols-outlined me-1" aria-hidden="true">arrow_back</span> Back to Students
         </a>
         <h2 class="mb-0">
-            <span class="material-symbols-outlined me-2">account_circle</span>{{ identity_view.full_name }}
+            <span class="material-symbols-outlined me-2" aria-hidden="true">account_circle</span>{{ identity_view.full_name }}
         </h2>
     </div>
     <div>
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#editBasicInfoModal">
-            <span class="material-symbols-outlined me-1">edit</span> Edit Student
+            <span class="material-symbols-outlined me-1" aria-hidden="true">edit</span> Edit Student
         </button>
     </div>
 </div>
@@ -93,14 +93,14 @@
 {% if rent_privileges and rent_privileges|length > 0 %}
 <div class="alert alert-light border mb-4">
     <h6 class="mb-3">
-        <span class="material-symbols-outlined me-2">military_tech</span>Active Rent Privileges
+        <span class="material-symbols-outlined me-2" aria-hidden="true">military_tech</span>Active Rent Privileges
         <small class="text-muted">(Per Rent Period Items)</small>
     </h6>
     <div class="d-flex flex-wrap gap-2">
         {% for privilege in rent_privileges %}
         <span class="badge bg-{% if privilege.source == 'rent' %}success{% else %}info{% endif %} px-3 py-2"
             style="font-size: 0.9rem;" {% if privilege.description %}title="{{ privilege.description }}" {% endif %}>
-            <span class="material-symbols-outlined me-1">{% if privilege.source == 'rent' %}check_circle{% else
+            <span class="material-symbols-outlined me-1" aria-hidden="true">{% if privilege.source == 'rent' %}check_circle{% else
                 %}shopping_cart_checkout{% endif %}</span>
             {{ privilege.name }}
             {% if privilege.source == 'purchased' %}
@@ -110,7 +110,7 @@
         {% endfor %}
     </div>
     <small class="text-muted d-block mt-2">
-        <span class="material-symbols-outlined me-1">info</span>
+        <span class="material-symbols-outlined me-1" aria-hidden="true">info</span>
         <strong class="text-success">Green badges</strong> = Covered by rent payment |
         <strong class="text-info">Blue badges</strong> = Purchased individually (valid until next rent due)
     </small>
@@ -122,46 +122,46 @@
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button"
             role="tab" aria-controls="overview" aria-selected="true">
-            <span class="material-symbols-outlined me-1">info</span>Overview
+            <span class="material-symbols-outlined me-1" aria-hidden="true">info</span>Overview
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="transactions-tab" data-bs-toggle="tab" data-bs-target="#transactions" type="button"
             role="tab" aria-controls="transactions" aria-selected="false">
-            <span class="material-symbols-outlined me-1">receipt_long</span>Transactions
+            <span class="material-symbols-outlined me-1" aria-hidden="true">receipt_long</span>Transactions
             <span class="badge bg-secondary">{{ transactions|length }}</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="items-tab" data-bs-toggle="tab" data-bs-target="#items" type="button" role="tab" aria-controls="items" aria-selected="false">
-            <span class="material-symbols-outlined me-1">shopping_bag</span>Items
+            <span class="material-symbols-outlined me-1" aria-hidden="true">shopping_bag</span>Items
             <span class="badge bg-secondary">{{ entitlements|length }}</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="attendance-tab" data-bs-toggle="tab" data-bs-target="#attendance" type="button"
             role="tab" aria-controls="attendance" aria-selected="false">
-            <span class="material-symbols-outlined me-1">history</span>Attendance
+            <span class="material-symbols-outlined me-1" aria-hidden="true">history</span>Attendance
         </button>
     </li>
     {% if student.is_rent_enabled %}
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="housing-tab" data-bs-toggle="tab" data-bs-target="#housing" type="button"
             role="tab" aria-controls="housing" aria-selected="false">
-            <span class="material-symbols-outlined me-1">home</span>Rent
+            <span class="material-symbols-outlined me-1" aria-hidden="true">home</span>Rent
         </button>
     </li>
     {% endif %}
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="payroll-tab" data-bs-toggle="tab" data-bs-target="#payroll" type="button"
             role="tab" aria-controls="payroll" aria-selected="false">
-            <span class="material-symbols-outlined me-1">payments</span>Payroll
+            <span class="material-symbols-outlined me-1" aria-hidden="true">payments</span>Payroll
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button"
             role="tab" aria-controls="settings" aria-selected="false">
-            <span class="material-symbols-outlined me-1">settings</span>Settings
+            <span class="material-symbols-outlined me-1" aria-hidden="true">settings</span>Settings
         </button>
     </li>
 </ul>
@@ -174,7 +174,7 @@
             <div class="col-lg-6 mb-4">
                 <div class="card shadow h-100">
                     <div class="card-header bg-info text-white">
-                        <h5 class="mb-0"><span class="material-symbols-outlined me-2">person</span>Student Information
+                        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">person</span>Student Information
                         </h5>
                     </div>
                     <div class="card-body">
@@ -235,7 +235,7 @@
                         {% if reset_code_is_active %}
                         <div class="alert alert-danger mt-3 border-danger shadow-sm">
                             <h6 class="alert-heading fw-bold">
-                                <span class="material-symbols-outlined me-2">shield</span>Account Recovery In Progress
+                                <span class="material-symbols-outlined me-2" aria-hidden="true">shield</span>Account Recovery In Progress
                             </h6>
                             <p class="mb-2 small">Give this information to the student to recover their account:</p>
                             <div class="bg-white p-3 rounded border border-danger text-dark">
@@ -256,7 +256,7 @@
                                     </div>
                                     <div class="col-12 mt-2">
                                         <div class="small text-muted fst-italic">
-                                            <span class="material-symbols-outlined me-1">schedule</span>Code expires at
+                                            <span class="material-symbols-outlined me-1" aria-hidden="true">schedule</span>Code expires at
                                             <span class="utc-timestamp"
                                                 data-utc="{{ reset_code_expires_at.isoformat() if reset_code_expires_at else '' }}">
                                                 {{ reset_code_expires_at.strftime('%I:%M %p') if
@@ -275,7 +275,7 @@
                         {% if not student_has_completed_setup %}
                         <div class="alert alert-warning mt-3 border-warning shadow-sm">
                             <h6 class="alert-heading fw-bold">
-                                <span class="material-symbols-outlined me-2">warning</span>Account Recovery / Setup
+                                <span class="material-symbols-outlined me-2" aria-hidden="true">warning</span>Account Recovery / Setup
                             </h6>
                             <p class="mb-2 small">Give this information to the student to claim their account:</p>
                             <div class="bg-white p-3 rounded border border-warning text-dark">
@@ -306,7 +306,7 @@
             <div class="col-lg-6 mb-4">
                 <div class="card shadow h-100">
                     <div class="card-header bg-secondary text-white">
-                        <h5 class="mb-0"><span class="material-symbols-outlined me-2">history</span>Recent Attendance
+                        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Recent Attendance
                         </h5>
                     </div>
                     <div class="card-body">
@@ -356,7 +356,7 @@
     <div class="tab-pane fade" id="transactions" role="tabpanel" aria-labelledby="transactions-tab">
         <div class="card shadow">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><span class="material-symbols-outlined me-2">receipt_long</span>Transaction History
+                <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">receipt_long</span>Transaction History
                 </h5>
                 <div>
                     <span class="badge bg-light text-dark me-2">{{ transactions|length }} total</span>
@@ -406,7 +406,7 @@
                                 <td>
                                     {% if tx.status.value != 'void' and tx.type != 'refund' %}
                                     <button type="button" class="btn btn-sm btn-outline-danger void-btn" data-id="{{ tx.id }}">
-                                        <span class="material-symbols-outlined">cancel</span> Void
+                                        <span class="material-symbols-outlined" aria-hidden="true">cancel</span> Void
                                     </button>
                                     {% endif %}
                                 </td>
@@ -417,7 +417,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-info mb-0">
-                    <span class="material-symbols-outlined me-2">info</span>No transactions found for this student.
+                    <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>No transactions found for this student.
                 </div>
                 {% endif %}
             </div>
@@ -428,7 +428,7 @@
     <div class="tab-pane fade" id="items" role="tabpanel" aria-labelledby="items-tab">
         <div class="card shadow">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><span class="material-symbols-outlined me-2">shopping_bag</span>Purchased Items</h5>
+                <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">shopping_bag</span>Purchased Items</h5>
             </div>
             <div class="card-body">
                 {% if entitlements %}
@@ -487,7 +487,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-info mb-0">
-                    <span class="material-symbols-outlined me-2">info</span>This student has not purchased any items
+                    <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>This student has not purchased any items
                     yet.
                 </div>
                 {% endif %}
@@ -499,7 +499,7 @@
     <div class="tab-pane fade" id="attendance" role="tabpanel" aria-labelledby="attendance-tab">
         <div class="card shadow">
             <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0"><span class="material-symbols-outlined me-2">history</span>Attendance History</h5>
+                <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Attendance History</h5>
             </div>
             <div class="card-body">
                 {% set sorted_attendance_events = attendance_events|sort(attribute='timestamp', reverse=True) %}
@@ -545,7 +545,7 @@
                 {% endif %}
                 {% else %}
                 <div class="alert alert-info mb-0">
-                    <span class="material-symbols-outlined me-2">info</span>No attendance records found for this
+                    <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>No attendance records found for this
                     student.
                 </div>
                 {% endif %}
@@ -561,7 +561,7 @@
             <div class="col-lg-12 mb-4">
                 <div class="card shadow h-100">
                     <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><span class="material-symbols-outlined me-2">home</span>Rent Information</h5>
+                        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">home</span>Rent Information</h5>
                     </div>
                     <div class="card-body">
                 <table class="table table-borderless">
@@ -609,7 +609,7 @@
     <div class="tab-pane fade" id="payroll" role="tabpanel" aria-labelledby="payroll-tab">
         <div class="card shadow">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><span class="material-symbols-outlined me-2">payments</span>Earnings & Payroll</h5>
+                <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">payments</span>Earnings & Payroll</h5>
             </div>
             <div class="card-body">
                 <div class="row mb-4">
@@ -666,7 +666,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-info mb-0">
-                    <span class="material-symbols-outlined me-2">info</span>No earnings recorded yet.
+                    <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>No earnings recorded yet.
                 </div>
                 {% endif %}
             </div>
@@ -680,7 +680,7 @@
             <div class="col-lg-8 mb-4">
                 <div class="card shadow">
                     <div class="card-header bg-warning text-dark">
-                        <h5 class="mb-0"><span class="material-symbols-outlined me-2">confirmation_number</span>Hall
+                        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">confirmation_number</span>Hall
                             Pass Management</h5>
                     </div>
                     <div class="card-body">
@@ -702,12 +702,12 @@
                             </div>
                             <div class="col-md-4">
                                 <button type="submit" class="btn btn-warning btn-lg w-100">
-                                    <span class="material-symbols-outlined me-1">check_circle</span>Apply
+                                    <span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Apply
                                 </button>
                             </div>
                         </form>
                         <div class="alert alert-info mt-3 mb-0">
-                            <small><span class="material-symbols-outlined me-2">info</span>Hall passes are entitlement events. Add creates new grant events; remove appends reversals against unconsumed grant correlations.</small>
+                            <small><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>Hall passes are entitlement events. Add creates new grant events; remove appends reversals against unconsumed grant correlations.</small>
                         </div>
                     </div>
                 </div>
@@ -724,7 +724,7 @@
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title" id="editBasicInfoModalLabel">
-                        <span class="material-symbols-outlined me-2">edit</span>Edit Student Information
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">edit</span>Edit Student Information
                     </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
                         aria-label="Close"></button>
@@ -737,7 +737,7 @@
                     <div class="card border-primary mb-3">
                         <div class="card-header bg-primary-subtle">
                             <h6 class="mb-0 text-primary"><span
-                                    class="material-symbols-outlined me-2">person</span>Basic Information</h6>
+                                    class="material-symbols-outlined me-2" aria-hidden="true">person</span>Basic Information</h6>
                         </div>
                         <div class="card-body">
                             <div class="row">
@@ -766,7 +766,7 @@
                     <!-- Account Recovery -->
                     <div class="card border-warning mb-3">
                         <div class="card-header bg-warning-subtle">
-                            <h6 class="mb-0 text-warning"><span class="material-symbols-outlined me-2">key</span>Account
+                            <h6 class="mb-0 text-warning"><span class="material-symbols-outlined me-2" aria-hidden="true">key</span>Account
                                 Recovery</h6>
                         </div>
                         <div class="card-body">
@@ -784,7 +784,7 @@
                                 </div>
                             </div>
                             <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" style="display:none;">
-                                <small><span class="material-symbols-outlined me-2">warning</span>A reset code will be
+                                <small><span class="material-symbols-outlined me-2" aria-hidden="true">warning</span>A reset code will be
                                     generated.
                                     Give it to the student along with their join code. They will click
                                     <strong>"I can't log into my account"</strong> on the login page to begin
@@ -794,7 +794,7 @@
                     </div>
 
                     <div class="alert alert-info mb-0">
-                        <small><span class="material-symbols-outlined me-2">info</span><strong>Note:</strong> Changing
+                        <small><span class="material-symbols-outlined me-2" aria-hidden="true">info</span><strong>Note:</strong> Changing
                             the name will
                             update what the student needs to enter during the account claim process.</small>
                     </div>

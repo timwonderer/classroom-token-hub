@@ -38,17 +38,17 @@
                     <div class="mb-3">
                         {% if session.get('student_id') %}
                         <a href="{{ url_for('student.dashboard') }}" class="btn btn-sm btn-primary w-100">
-                            <span class="material-symbols-outlined icon-align">arrow_back</span>
+                            <span class="material-symbols-outlined icon-align" aria-hidden="true">arrow_back</span>
                             Back to Dashboard
                         </a>
                         {% elif session.get('user_id') and not session.get('student_id') and not session.get('is_system_admin') %}
                         <a href="{{ url_for('admin.dashboard') }}" class="btn btn-sm btn-primary w-100">
-                            <span class="material-symbols-outlined icon-align">arrow_back</span>
+                            <span class="material-symbols-outlined icon-align" aria-hidden="true">arrow_back</span>
                             Back to Dashboard
                         </a>
                         {% elif session.get('is_system_admin') and session.get('sysadmin_id') %}
                         <a href="{{ url_for('sysadmin.dashboard') }}" class="btn btn-sm btn-primary w-100">
-                            <span class="material-symbols-outlined icon-align">arrow_back</span>
+                            <span class="material-symbols-outlined icon-align" aria-hidden="true">arrow_back</span>
                             Back to Dashboard
                         </a>
                         {% endif %}
@@ -58,7 +58,7 @@
                     <div class="mb-3">
                         <a href="{{ url_for('docs.index') }}"
                         class="btn btn-sm {% if session.get('student_id') or session.get('user_id') or session.get('is_system_admin') %}btn-outline-secondary{% else %}btn-primary{% endif %} w-100">
-                            <span class="material-symbols-outlined icon-align">home</span>
+                            <span class="material-symbols-outlined icon-align" aria-hidden="true">home</span>
                             Docs Home
                         </a>
                     </div>
@@ -68,8 +68,8 @@
                         <div class="input-group input-group-sm">
                             <input type="search" name="q" class="form-control" placeholder="Search..."
                                 aria-label="Search">
-                            <button class="btn btn-outline-secondary" type="submit">
-                                <span class="material-symbols-outlined icon-small">search</span>
+                            <button class="btn btn-outline-secondary" type="submit" aria-label="Search docs">
+                                <span class="material-symbols-outlined icon-small" aria-hidden="true">search</span>
                             </button>
                         </div>
                     </form>
@@ -84,11 +84,11 @@
                         <div class="btn-group w-100" role="group">
                             <a href="{{ url_for('docs.set_audience', aud='user', next=request.path) }}"
                                 class="btn btn-sm {% if audience == 'user' %}btn-primary active fw-bold{% else %}btn-outline-secondary{% endif %}">
-                                <span class="material-symbols-outlined icon-small">group</span> User
+                                <span class="material-symbols-outlined icon-small" aria-hidden="true">group</span> User
                             </a>
                             <a href="{{ url_for('docs.set_audience', aud='devops', next=request.path) }}"
                                 class="btn btn-sm {% if audience == 'devops' %}btn-primary active fw-bold{% else %}btn-outline-secondary{% endif %}">
-                                <span class="material-symbols-outlined icon-small">terminal</span> Tech
+                                <span class="material-symbols-outlined icon-small" aria-hidden="true">terminal</span> Tech
                             </a>
                         </div>
                     </div>
@@ -104,7 +104,7 @@
                                     class="accordion-button {% if not doc_path.startswith('user-guides/diagnostics') %}collapsed{% endif %}"
                                     type="button" data-bs-toggle="collapse" data-bs-target="#diagnosticsCollapse"
                                     aria-controls="diagnosticsCollapse" aria-expanded="{% if doc_path.startswith('user-guides/diagnostics') %}true{% else %}false{% endif %}">
-                                    <span class="material-symbols-outlined me-2">quick_reference</span>
+                                    <span class="material-symbols-outlined me-2" aria-hidden="true">quick_reference</span>
                                     Diagnostics
                                 </button>
                             </h2>
@@ -116,7 +116,7 @@
                                             <a class="nav-link {% if doc_path.startswith('user-guides/diagnostics/student') %}active{% endif %}"
                                                 href="{{ url_for('docs.view_doc', doc_path='user-guides/diagnostics/student') }}">
                                                 <span class="material-symbols-outlined me-2"
-                                                    style="font-size: 1rem;">school</span>
+                                                    style="font-size: 1rem;" aria-hidden="true">school</span>
                                                 For Students
                                             </a>
                                         </li>
@@ -124,7 +124,7 @@
                                             <a class="nav-link {% if doc_path.startswith('user-guides/diagnostics/teacher') %}active{% endif %}"
                                                 href="{{ url_for('docs.view_doc', doc_path='user-guides/diagnostics/teacher') }}">
                                                 <span class="material-symbols-outlined me-2"
-                                                    style="font-size: 1rem;">person</span>
+                                                    style="font-size: 1rem;" aria-hidden="true">person</span>
                                                 For Teachers
                                             </a>
                                         </li>
@@ -140,7 +140,7 @@
                                     class="accordion-button {% if not (doc_path.startswith('user-guides/features') or doc_path == 'user-guides/economy_guide') %}collapsed{% endif %}"
                                     type="button" data-bs-toggle="collapse" data-bs-target="#featuresCollapse"
                                     aria-controls="featuresCollapse" aria-expanded="{% if doc_path.startswith('user-guides/features') or doc_path == 'user-guides/economy_guide' %}true{% else %}false{% endif %}">
-                                    <span class="material-symbols-outlined me-2">auto_awesome</span>
+                                    <span class="material-symbols-outlined me-2" aria-hidden="true">auto_awesome</span>
                                     Feature Guides
                                 </button>
                             </h2>
@@ -152,7 +152,7 @@
                                             <a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/payroll-run' %}active{% endif %}"
                                                 href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/payroll-run') }}">
                                                 <span class="material-symbols-outlined me-2"
-                                                    style="font-size: 1rem;">receipt_long</span>
+                                                    style="font-size: 1rem;" aria-hidden="true">receipt_long</span>
                                                 Payroll
                                             </a>
                                         </li>
@@ -160,7 +160,7 @@
                                             <a class="nav-link {% if doc_path == 'user-guides/features/teacher/economy/store-items' %}active{% endif %}"
                                                 href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/store-items') }}">
                                                 <span class="material-symbols-outlined me-2"
-                                                    style="font-size: 1rem;">store</span>
+                                                    style="font-size: 1rem;" aria-hidden="true">store</span>
                                                 Store & Items
                                             </a>
                                         </li>
@@ -168,7 +168,7 @@
                                             <a class="nav-link {% if doc_path == 'user-guides/features/student/banking/accounts-transfers' %}active{% endif %}"
                                                 href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/banking/accounts-transfers') }}">
                                                 <span class="material-symbols-outlined me-2"
-                                                    style="font-size: 1rem;">account_balance</span>
+                                                    style="font-size: 1rem;" aria-hidden="true">account_balance</span>
                                                 Banking & Transfers
                                             </a>
                                         </li>
@@ -176,7 +176,7 @@
                                             <a class="nav-link {% if doc_path == 'user-guides/economy_guide' %}active{% endif %}"
                                                 href="{{ url_for('docs.view_doc', doc_path='user-guides/economy_guide') }}">
                                                 <span class="material-symbols-outlined me-2"
-                                                    style="font-size: 1rem;">emoji_objects</span>
+                                                    style="font-size: 1rem;" aria-hidden="true">emoji_objects</span>
                                                 Economy Design
                                             </a>
                                         </li>
@@ -192,7 +192,7 @@
                                     class="accordion-button {% if not doc_path.startswith('user-guides/legal') %}collapsed{% endif %}"
                                     type="button" data-bs-toggle="collapse" data-bs-target="#legalCollapse"
                                     aria-controls="legalCollapse" aria-expanded="{% if doc_path.startswith('user-guides/legal') %}true{% else %}false{% endif %}">
-                                    <span class="material-symbols-outlined me-2">gavel</span>
+                                    <span class="material-symbols-outlined me-2" aria-hidden="true">gavel</span>
                                     Legal &amp; Licensing
                                 </button>
                             </h2>
@@ -204,7 +204,7 @@
                                             <a class="nav-link {% if doc_path == 'user-guides/legal/index' %}active{% endif %}"
                                                 href="{{ url_for('docs.view_doc', doc_path='user-guides/legal/index') }}">
                                                 <span class="material-symbols-outlined me-2"
-                                                    style="font-size: 1rem;">list</span>
+                                                    style="font-size: 1rem;" aria-hidden="true">list</span>
                                                 All Legal Documents
                                             </a>
                                         </li>
@@ -212,7 +212,7 @@
                                             <a class="nav-link {% if doc_path == 'user-guides/legal/license' %}active{% endif %}"
                                                 href="{{ url_for('docs.view_doc', doc_path='user-guides/legal/license') }}">
                                                 <span class="material-symbols-outlined me-2"
-                                                    style="font-size: 1rem;">description</span>
+                                                    style="font-size: 1rem;" aria-hidden="true">description</span>
                                                 License
                                             </a>
                                         </li>
@@ -220,7 +220,7 @@
                                             <a class="nav-link {% if doc_path == 'user-guides/legal/commercial' %}active{% endif %}"
                                                 href="{{ url_for('docs.view_doc', doc_path='user-guides/legal/commercial') }}">
                                                 <span class="material-symbols-outlined me-2"
-                                                    style="font-size: 1rem;">paid</span>
+                                                    style="font-size: 1rem;" aria-hidden="true">paid</span>
                                                 Commercial Use Policy
                                             </a>
                                         </li>
@@ -228,7 +228,7 @@
                                             <a class="nav-link {% if doc_path == 'user-guides/legal/attribution' %}active{% endif %}"
                                                 href="{{ url_for('docs.view_doc', doc_path='user-guides/legal/attribution') }}">
                                                 <span class="material-symbols-outlined me-2"
-                                                    style="font-size: 1rem;">fact_check</span>
+                                                    style="font-size: 1rem;" aria-hidden="true">fact_check</span>
                                                 Attribution
                                             </a>
                                         </li>
@@ -236,7 +236,7 @@
                                             <a class="nav-link {% if doc_path == 'user-guides/legal/third-party-notices' %}active{% endif %}"
                                                 href="{{ url_for('docs.view_doc', doc_path='user-guides/legal/third-party-notices') }}">
                                                 <span class="material-symbols-outlined me-2"
-                                                    style="font-size: 1rem;">receipt_long</span>
+                                                    style="font-size: 1rem;" aria-hidden="true">receipt_long</span>
                                                 Third-Party Notices
                                             </a>
                                         </li>
@@ -254,7 +254,7 @@
                                     class="accordion-button {% if not (doc_path.startswith('INVARIANT/') or doc_path.startswith('DOMAIN/') or doc_path.startswith('SPEC/') or doc_path.startswith('FEATURE-EXECUTION/')) %}collapsed{% endif %}"
                                     type="button" data-bs-toggle="collapse" data-bs-target="#technicalCollapse"
                                     aria-controls="technicalCollapse" aria-expanded="{% if doc_path.startswith('INVARIANT/') or doc_path.startswith('DOMAIN/') or doc_path.startswith('SPEC/') or doc_path.startswith('FEATURE-EXECUTION/') %}true{% else %}false{% endif %}">
-                                    <span class="material-symbols-outlined me-2">code</span>
+                                    <span class="material-symbols-outlined me-2" aria-hidden="true">code</span>
                                     Technical Reference
                                 </button>
                             </h2>
@@ -298,7 +298,7 @@
                                     class="accordion-button {% if not (doc_path in ['PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History', 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook', 'STANDARD_OPERATING_PROCEDURES/SOP-DOC-002_DOCUMENTATION_INDEX'] or doc_path.startswith('STANDARD_OPERATING_PROCEDURES/')) %}collapsed{% endif %}"
                                     type="button" data-bs-toggle="collapse" data-bs-target="#projectCollapse"
                                     aria-controls="projectCollapse" aria-expanded="{% if doc_path in ['PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History', 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook', 'STANDARD_OPERATING_PROCEDURES/SOP-DOC-002_DOCUMENTATION_INDEX'] or doc_path.startswith('STANDARD_OPERATING_PROCEDURES/') %}true{% else %}false{% endif %}">
-                                    <span class="material-symbols-outlined me-2">folder</span>
+                                    <span class="material-symbols-outlined me-2" aria-hidden="true">folder</span>
                                     Reference & Project
                                 </button>
                             </h2>
@@ -348,7 +348,7 @@
                     <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse"
                         data-bs-target="#docsSidebar" aria-expanded="false" aria-controls="docsSidebar"
                         aria-label="Toggle documentation sidebar">
-                        <span class="material-symbols-outlined icon-align">menu</span>
+                        <span class="material-symbols-outlined icon-align" aria-hidden="true">menu</span>
                         Menu
                     </button>
                 </div>
@@ -381,7 +381,7 @@
                     <button class="btn btn-outline-primary w-100" type="button" data-bs-toggle="collapse"
                         data-bs-target="#mobileTOC" aria-expanded="false" aria-controls="mobileTOC"
                         aria-label="Toggle table of contents">
-                        <span class="material-symbols-outlined icon-align">list</span>
+                        <span class="material-symbols-outlined icon-align" aria-hidden="true">list</span>
                         Navigation (Table of Contents)
                     </button>
                     <div class="collapse mt-2" id="mobileTOC">
@@ -405,11 +405,11 @@
                                 <span
                                     class="badge {% if role == 'teacher' %}bg-danger{% elif role == 'student' %}bg-primary{% elif role == 'developer' %}bg-secondary{% endif %} me-1">
                                     {% if role == 'teacher' %}
-                                    <span class="material-symbols-outlined icon-badge">person</span> Teacher
+                                    <span class="material-symbols-outlined icon-badge" aria-hidden="true">person</span> Teacher
                                     {% elif role == 'student' %}
-                                    <span class="material-symbols-outlined icon-badge">school</span> Student
+                                    <span class="material-symbols-outlined icon-badge" aria-hidden="true">school</span> Student
                                     {% elif role == 'developer' %}
-                                    <span class="material-symbols-outlined icon-badge">code</span> Developer
+                                    <span class="material-symbols-outlined icon-badge" aria-hidden="true">code</span> Developer
                                     {% endif %}
                                 </span>
                                 {% endfor %}
@@ -425,7 +425,7 @@
                             {% if related and related|length > 0 %}
                             <div class="related-articles mt-5 pt-4 border-top">
                                 <h4 class="mb-3">
-                                    <span class="material-symbols-outlined icon-align">bookmark</span>
+                                    <span class="material-symbols-outlined icon-align" aria-hidden="true">bookmark</span>
                                     Related Articles
                                 </h4>
                                 <div class="row g-3">
@@ -459,7 +459,7 @@
                                 </div>
                                 <div class="text-end mt-4">
                                     <a href="#docs-content-top" class="btn btn-primary">
-                                        <span class="material-symbols-outlined icon-align">arrow_upward</span>
+                                        <span class="material-symbols-outlined icon-align" aria-hidden="true">arrow_upward</span>
                                         Back to Top
                                     </a>
                                 </div>

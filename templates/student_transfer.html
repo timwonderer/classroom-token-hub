@@ -10,19 +10,19 @@
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="accounts-tab" data-bs-toggle="tab" data-bs-target="#accounts" type="button"
             role="tab" aria-controls="accounts" aria-selected="true">
-            <span class="material-symbols-outlined">account_balance</span> Accounts
+            <span class="material-symbols-outlined" aria-hidden="true">account_balance</span> Accounts
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="transfer-tab" data-bs-toggle="tab" data-bs-target="#transfer" type="button"
             role="tab" aria-controls="transfer" aria-selected="false">
-            <span class="material-symbols-outlined">swap_horiz</span> Transfer
+            <span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span> Transfer
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="transactions-tab" data-bs-toggle="tab" data-bs-target="#transactions" type="button"
             role="tab" aria-controls="transactions" aria-selected="false">
-            <span class="material-symbols-outlined">receipt_long</span> Transactions
+            <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span> Transactions
         </button>
     </li>
 </ul>
@@ -37,7 +37,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h2 class="h6 mb-0 d-flex align-items-center gap-2">
-                            <span class="material-symbols-outlined">account_balance</span> Account Balances
+                            <span class="material-symbols-outlined" aria-hidden="true">account_balance</span> Account Balances
                         </h2>
                     </div>
                     <div class="card-body">
@@ -45,7 +45,7 @@
                             <div class="col-md-6">
                                 <div class="text-center p-4 bg-primary-subtle rounded">
                                     <span class="material-symbols-outlined text-primary"
-                                        style="font-size: 2.5rem;">account_balance_wallet</span>
+                                        style="font-size: 2.5rem;" aria-hidden="true">account_balance_wallet</span>
                                     <h3 class="h6 text-primary mt-2 mb-1">Checking</h3>
                                     <div class="h3 text-primary mb-0">${{ "%.2f"|format(checking_balance) }}</div>
                                 </div>
@@ -53,7 +53,7 @@
                             <div class="col-md-6">
                                 <div class="text-center p-4 bg-info-subtle rounded">
                                     <span class="material-symbols-outlined text-primary"
-                                        style="font-size: 2.5rem;">savings</span>
+                                        style="font-size: 2.5rem;" aria-hidden="true">savings</span>
                                     <h3 class="h6 text-primary mt-2 mb-1">Savings</h3>
                                     <div class="h3 text-primary mb-0">${{ "%.2f"|format(savings_balance) }}</div>
                                 </div>
@@ -73,7 +73,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h2 class="h6 mb-0 d-flex align-items-center gap-2">
-                            <span class="material-symbols-outlined">analytics</span> Statistics
+                            <span class="material-symbols-outlined" aria-hidden="true">analytics</span> Statistics
                         </h2>
                     </div>
                     <div class="card-body">
@@ -111,7 +111,7 @@
         <div class="card mb-4">
             <div class="card-header">
                 <h2 class="h6 mb-0 d-flex align-items-center gap-2">
-                    <span class="material-symbols-outlined">trending_up</span> Savings Balance Projection (12 Months)
+                    <span class="material-symbols-outlined" aria-hidden="true">trending_up</span> Savings Balance Projection (12 Months)
                 </h2>
             </div>
             <div class="card-body">
@@ -149,25 +149,25 @@
         <div class="card">
             <div class="card-header">
                 <h2 class="h6 mb-0 d-flex align-items-center gap-2">
-                    <span class="material-symbols-outlined">bolt</span> Quick Actions
+                    <span class="material-symbols-outlined" aria-hidden="true">bolt</span> Quick Actions
                 </h2>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-4 mb-3">
                         <button type="button" class="btn btn-primary w-100" onclick="document.getElementById('transfer-tab').click()">
-                            <span class="material-symbols-outlined">swap_horiz</span> Transfer Funds
+                            <span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span> Transfer Funds
                         </button>
                     </div>
                     <div class="col-md-4 mb-3">
                         <button class="btn btn-outline-primary w-100"
                             type="button" onclick="document.getElementById('transactions-tab').click()">
-                            <span class="material-symbols-outlined">receipt_long</span> View Transactions
+                            <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span> View Transactions
                         </button>
                     </div>
                     <div class="col-md-4 mb-3">
                         <a href="{{ url_for('student.dashboard') }}" class="btn btn-outline-secondary w-100">
-                            <span class="material-symbols-outlined">dashboard</span> Back to Dashboard
+                            <span class="material-symbols-outlined" aria-hidden="true">dashboard</span> Back to Dashboard
                         </a>
                     </div>
                 </div>
@@ -182,7 +182,7 @@
                 <div class="card mb-4">
                     <div class="card-header">
                         <h2 class="h6 mb-0 d-flex align-items-center gap-2">
-                            <span class="material-symbols-outlined">account_balance</span> Current Balances
+                            <span class="material-symbols-outlined" aria-hidden="true">account_balance</span> Current Balances
                         </h2>
                     </div>
                     <div class="card-body">
@@ -206,7 +206,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h2 class="h6 mb-0 d-flex align-items-center gap-2">
-                            <span class="material-symbols-outlined">swap_horiz</span> Transfer Details
+                            <span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span> Transfer Details
                         </h2>
                     </div>
                     <div class="card-body">
@@ -237,14 +237,14 @@
                             </div>
 
                             <button type="submit" class="btn btn-primary w-100">
-                                <span class="material-symbols-outlined">check_circle</span> Continue to Confirmation
+                                <span class="material-symbols-outlined" aria-hidden="true">check_circle</span> Continue to Confirmation
                             </button>
                         </form>
                     </div>
                 </div>
 
                 <div class="alert alert-info mt-3">
-                    <span class="material-symbols-outlined">info</span> <strong>Tip:</strong>
+                    <span class="material-symbols-outlined" aria-hidden="true">info</span> <strong>Tip:</strong>
                     {% if annual_interest_rate %}
                     Your savings account earns
                     {{ '%.2f'|format(annual_interest_rate * 100) }}% annual {{ calculation_type }} interest
@@ -268,7 +268,7 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="checking-history-tab" data-bs-toggle="tab"
                     data-bs-target="#checking-history" type="button" role="tab" aria-controls="checking-history" aria-selected="true">
-                    <span class="material-symbols-outlined">account_balance_wallet</span> Checking
+                    <span class="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span> Checking
                     <span class="badge bg-secondary">{% if checking_transactions %}{{ checking_transactions|length }}{%
                         else %}0{% endif %}</span>
                 </button>
@@ -276,7 +276,7 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="savings-history-tab" data-bs-toggle="tab" data-bs-target="#savings-history"
                     type="button" role="tab" aria-controls="savings-history" aria-selected="false">
-                    <span class="material-symbols-outlined">savings</span> Savings
+                    <span class="material-symbols-outlined" aria-hidden="true">savings</span> Savings
                     <span class="badge bg-secondary">{% if savings_transactions %}{{ savings_transactions|length }}{%
                         else %}0{% endif %}</span>
                 </button>
@@ -327,7 +327,7 @@
                                     <a href="{{ url_for('student.report_transaction_issue', transaction_id=tx.id) }}"
                                         class="btn btn-sm btn-link text-muted p-0"
                                         title="Report an issue with this transaction" data-bs-toggle="tooltip">
-                                        <span class="material-symbols-outlined fs-6">help</span>
+                                        <span class="material-symbols-outlined fs-6" aria-hidden="true">help</span>
                                     </a>
                                 </td>
                             </tr>
@@ -340,7 +340,7 @@
                 {% endif %}
                 {% else %}
                 <div class="alert alert-info">
-                    <span class="material-symbols-outlined">info</span> No checking transactions yet.
+                    <span class="material-symbols-outlined" aria-hidden="true">info</span> No checking transactions yet.
                 </div>
                 {% endif %}
             </div>
@@ -388,7 +388,7 @@
                                     <a href="{{ url_for('student.report_transaction_issue', transaction_id=tx.id) }}"
                                         class="btn btn-sm btn-link text-muted p-0"
                                         title="Report an issue with this transaction" data-bs-toggle="tooltip">
-                                        <span class="material-symbols-outlined fs-6">help</span>
+                                        <span class="material-symbols-outlined fs-6" aria-hidden="true">help</span>
                                     </a>
                                 </td>
                             </tr>
@@ -401,7 +401,7 @@
                 {% endif %}
                 {% else %}
                 <div class="alert alert-info">
-                    <span class="material-symbols-outlined">info</span> No savings transactions yet.
+                    <span class="material-symbols-outlined" aria-hidden="true">info</span> No savings transactions yet.
                 </div>
                 {% endif %}
             </div>

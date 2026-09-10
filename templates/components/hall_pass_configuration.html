@@ -37,7 +37,7 @@
             <div class="card-header cth-section-header d-flex justify-content-between align-items-center">
                 <h2 class="h5 mb-0">Pass Types</h2>
                 <button type="button" class="btn btn-sm btn-primary" onclick="openAddPassTypeModal()">
-                    <span class="material-symbols-outlined align-middle" style="font-size: 1rem;">add</span>
+                    <span class="material-symbols-outlined align-middle" style="font-size: 1rem;" aria-hidden="true">add</span>
                     Add New Pass Type
                 </button>
             </div>
@@ -63,11 +63,11 @@
 
                 <div class="d-flex gap-2">
                     <button type="button" class="btn btn-primary" onclick="saveConfiguration()">
-                        <span class="material-symbols-outlined align-middle">save</span>
+                        <span class="material-symbols-outlined align-middle" aria-hidden="true">save</span>
                         Save Configuration
                     </button>
                     <button type="button" class="btn btn-outline-secondary" onclick="loadConfiguration()">
-                        <span class="material-symbols-outlined align-middle">refresh</span>
+                        <span class="material-symbols-outlined align-middle" aria-hidden="true">refresh</span>
                         Reset to Saved
                     </button>
                 </div>
@@ -204,7 +204,7 @@
                         <div class="pass-type-name">${passTypeName}</div>
                         <div class="d-flex align-items-center gap-3">
                             <button type="button" class="btn btn-danger btn-sm" onclick="removePassType(${index})" aria-label="Remove this hall pass type">
-                                <span class="material-symbols-outlined" style="font-size: 1rem;">delete</span>
+                                <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">delete</span>
                             </button>
                         </div>
                     </div>

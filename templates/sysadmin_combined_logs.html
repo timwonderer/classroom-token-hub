@@ -11,7 +11,7 @@
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
                 <div class="sysadmin-stat-icon bg-danger-subtle">
-                    <span class="material-symbols-outlined text-danger">error</span>
+                    <span class="material-symbols-outlined text-danger" aria-hidden="true">error</span>
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ total_errors }}</div>
@@ -22,7 +22,7 @@
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
                 <div class="sysadmin-stat-icon bg-primary-subtle">
-                    <span class="material-symbols-outlined text-primary">cloud</span>
+                    <span class="material-symbols-outlined text-primary" aria-hidden="true">cloud</span>
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ total_requests }}</div>
@@ -33,7 +33,7 @@
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
                 <div class="sysadmin-stat-icon bg-info-subtle">
-                    <span class="material-symbols-outlined text-info">router</span>
+                    <span class="material-symbols-outlined text-info" aria-hidden="true">router</span>
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ unique_ips }}</div>
@@ -44,7 +44,7 @@
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
                 <div class="sysadmin-stat-icon bg-warning-subtle">
-                    <span class="material-symbols-outlined text-warning">category</span>
+                    <span class="material-symbols-outlined text-warning" aria-hidden="true">category</span>
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ error_types|length }}</div>
@@ -59,7 +59,7 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'errors' or not active_tab %}active{% endif %}" id="errors-tab"
                 data-bs-toggle="tab" data-bs-target="#errors-pane" type="button" role="tab" aria-controls="errors-pane" aria-selected="{% if active_tab == 'errors' or not active_tab %}true{% else %}false{% endif %}">
-                <span class="material-symbols-outlined align-middle me-1" style="font-size:16px;">error</span>
+                <span class="material-symbols-outlined align-middle me-1" style="font-size:16px;" aria-hidden="true">error</span>
                 Error Logs
                 {% if total_errors > 0 %}
                 <span class="badge bg-danger ms-1">{{ total_errors }}</span>
@@ -70,7 +70,7 @@
             <button class="nav-link {% if active_tab == 'network' %}active{% endif %}" id="network-tab"
                 data-bs-toggle="tab" data-bs-target="#network-pane" type="button" role="tab"
                 aria-controls="network-pane" aria-selected="{% if active_tab == 'network' %}true{% else %}false{% endif %}">
-                <span class="material-symbols-outlined align-middle me-1" style="font-size:16px;">network_check</span>
+                <span class="material-symbols-outlined align-middle me-1" style="font-size:16px;" aria-hidden="true">network_check</span>
                 Network Activity
             </button>
         </li>
@@ -175,7 +175,7 @@
                         <div class="modal-header bg-danger text-white">
                             <h5 class="modal-title" id="errModalLabel{{ log.id }}">
                                 <span class="material-symbols-outlined align-middle me-1"
-                                    style="font-size:18px;">error</span>
+                                    style="font-size:18px;" aria-hidden="true">error</span>
                                 Error #{{ log.id }} — {{ log.error_type }}
                             </h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close error details"></button>
@@ -256,7 +256,7 @@
             {% else %}
             <div class="p-5 text-center text-muted">
                 <span class="material-symbols-outlined d-block mb-2 text-success"
-                    style="font-size:56px;">check_circle</span>
+                    style="font-size:56px;" aria-hidden="true">check_circle</span>
                 <h5>No errors logged{% if current_error_type %} for this filter{% endif %}</h5>
                 <p class="mb-0">{% if current_error_type %}Try clearing the filter.{% else %}System is healthy.{% endif
                     %}</p>
@@ -372,7 +372,7 @@
                         <div class="modal-header bg-primary text-white">
                             <h5 class="modal-title" id="netModalLabel{{ log.id }}">
                                 <span class="material-symbols-outlined align-middle me-1"
-                                    style="font-size:18px;">info</span>
+                                    style="font-size:18px;" aria-hidden="true">info</span>
                                 Request #{{ log.id }}
                             </h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close request details"></button>
@@ -442,7 +442,7 @@
 
             {% else %}
             <div class="p-5 text-center text-muted">
-                <span class="material-symbols-outlined d-block mb-2" style="font-size:56px;opacity:0.3;">wifi_off</span>
+                <span class="material-symbols-outlined d-block mb-2" style="font-size:56px;opacity:0.3;" aria-hidden="true">wifi_off</span>
                 <h5>No network activity logged{% if current_ip %} for this IP{% endif %}</h5>
                 <p class="mb-0">{% if current_ip %}Try clearing the filter.{% else %}Network requests will appear here
                     as they occur.{% endif %}</p>

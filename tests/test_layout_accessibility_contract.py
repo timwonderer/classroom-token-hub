@@ -93,6 +93,83 @@ def test_authenticated_layouts_hide_decorative_material_symbols_from_accessibili
         assert "setAttribute('aria-hidden', 'true')" in html
 
 
+def _open_span_tags(source: str):
+    """Yield every `<span ...>` open tag, tolerating `>` inside Jinja expressions.
+
+    A `<span[^>]*>` regex splits `class="{{ 'a' if x > y else 'b' }}"` in the
+    wrong place, and BeautifulSoup cannot reach the icons that live inside
+    `innerHTML` strings in `<script>` blocks. Both are real in this corpus.
+    """
+    index = 0
+    while True:
+        index = source.find("<span", index)
+        if index == -1:
+            return
+        if index + 5 < len(source) and (
+            source[index + 5].isalnum() or source[index + 5] in "-_"
+        ):
+            index += 5
+            continue
+        cursor = index + 5
+        quote = None
+        while cursor < len(source):
+            char = source[cursor]
+            if quote:
+                if char == quote:
+                    quote = None
+            elif char in "\"'":
+                quote = char
+            elif char == "{" and cursor + 1 < len(source) and source[cursor + 1] in "{%":
+                closing = "}}" if source[cursor + 1] == "{" else "%}"
+                end = source.find(closing, cursor)
+                if end == -1:
+                    break
+                cursor = end + 1
+            elif char == ">":
+                yield source[index:cursor]
+                break
+            cursor += 1
+        index = cursor + 1
+
+
+def test_material_symbol_icons_are_hidden_from_the_accessibility_tree():
+    """Ligature icon fonts read their glyph name aloud unless hidden.
+
+    Without `aria-hidden`, a screen reader announces the literal ligature —
+    "quick_reference_all" — as page content. The layouts carry a runtime
+    JavaScript sweep as well, but that only helps pages that inherit a layout
+    and only after scripts run, so the markup has to be correct on its own.
+    """
+    offenders = []
+    for page in sorted((REPO_ROOT / "templates").rglob("*.html")):
+        source = page.read_text(encoding="utf-8")
+        if "material-symbols-outlined" not in source:
+            continue
+        for tag in _open_span_tags(source):
+            if "material-symbols-outlined" not in tag or "aria-hidden" in tag:
+                continue
+            offenders.append(f"{page.relative_to(REPO_ROOT)}: {tag[:80]}")
+    assert not offenders, "Decorative icons exposed to assistive technology:\n" + "\n".join(
+        offenders
+    )
+
+
+def test_icon_only_controls_carry_their_own_accessible_name():
+    """Hiding an icon that is a control's only content leaves it unnamed.
+
+    Bootstrap's `data-bs-title` renders a tooltip; it is not an accessible
+    name. These two controls were the whole set when the icons were hidden.
+    """
+    dashboard = _template("admin_dashboard.html")
+    greeting_link = dashboard.select_one("a[data-bs-title]")
+    assert greeting_link is not None
+    assert greeting_link.get("aria-label")
+
+    docs_search = _template("docs/view.html").select_one('button[type="submit"]')
+    assert docs_search is not None
+    assert docs_search.get("aria-label")
+
+
 def test_sortable_tables_have_keyboard_and_sort_state_support():
     js = (REPO_ROOT / "static" / "js" / "sortable-table.js").read_text(encoding="utf-8")
     assert "header.tabIndex = 0" in js

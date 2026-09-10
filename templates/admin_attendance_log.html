@@ -5,7 +5,7 @@
 {% block contextual_help_trigger %}
 <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
     data-bs-target="#attendanceGuide" aria-controls="attendanceGuide" aria-expanded="false">
-    <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
+    <span class="material-symbols-outlined" aria-hidden="true">quick_reference_all</span> <span>Need Help?</span>
 </button>
 {% endblock %}
 {% block content %}
@@ -25,7 +25,7 @@
                         data-bs-toggle="collapse" data-bs-target="#attendanceGuideControls" aria-expanded="false"
                         aria-controls="attendanceGuideControls">
                         <span class="material-symbols-outlined me-2"
-                            style="font-size:25pt; vertical-align:middle;">toggle_on</span>
+                            style="font-size:25pt; vertical-align:middle;" aria-hidden="true">toggle_on</span>
                         <strong>Attendance Controls</strong>
                     </button>
                 </h2>
@@ -46,7 +46,7 @@
                         data-bs-toggle="collapse" data-bs-target="#attendanceGuideFilters" aria-expanded="false"
                         aria-controls="attendanceGuideFilters">
                         <span class="material-symbols-outlined me-2"
-                            style="font-size:25pt; vertical-align:middle;">filter_alt</span>
+                            style="font-size:25pt; vertical-align:middle;" aria-hidden="true">filter_alt</span>
                         <strong>Filter Attendance History</strong>
                     </button>
                 </h2>
@@ -64,7 +64,7 @@
                         data-bs-toggle="collapse" data-bs-target="#attendanceGuideReview" aria-expanded="false"
                         aria-controls="attendanceGuideReview">
                         <span class="material-symbols-outlined me-2"
-                            style="font-size:25pt; vertical-align:middle;">history</span>
+                            style="font-size:25pt; vertical-align:middle;" aria-hidden="true">history</span>
                         <strong>Review Records</strong>
                     </button>
                 </h2>
@@ -89,13 +89,13 @@
         <div class="row align-items-center g-3">
             <div class="col-auto">
                 <span class="material-symbols-outlined"
-                    style="font-size: 2rem; color: var(--brand-primary);">summarize</span>
+                    style="font-size: 2rem; color: var(--brand-primary);" aria-hidden="true">summarize</span>
             </div>
             <div class="col">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <div class="d-flex align-items-center">
-                            <span class="material-symbols-outlined me-2 text-primary">event</span>
+                            <span class="material-symbols-outlined me-2 text-primary" aria-hidden="true">event</span>
                             <div>
                                 <div class="small text-muted">Total Records</div>
                                 <div class="fw-bold" id="totalRecords">0</div>
@@ -104,7 +104,7 @@
                     </div>
                     <div class="col-md-3">
                         <div class="d-flex align-items-center">
-                            <span class="material-symbols-outlined me-2 text-success">login</span>
+                            <span class="material-symbols-outlined me-2 text-success" aria-hidden="true">login</span>
                             <div>
                                 <div class="small text-muted">Start Work</div>
                                 <div class="fw-bold text-success" id="tapInCount">0</div>
@@ -113,7 +113,7 @@
                     </div>
                     <div class="col-md-3">
                         <div class="d-flex align-items-center">
-                            <span class="material-symbols-outlined me-2 text-danger">logout</span>
+                            <span class="material-symbols-outlined me-2 text-danger" aria-hidden="true">logout</span>
                             <div>
                                 <div class="small text-muted">Break</div>
                                 <div class="fw-bold text-danger" id="tapOutCount">0</div>
@@ -122,7 +122,7 @@
                     </div>
                     <div class="col-md-3">
                         <div class="d-flex align-items-center">
-                            <span class="material-symbols-outlined me-2 text-info">schedule</span>
+                            <span class="material-symbols-outlined me-2 text-info" aria-hidden="true">schedule</span>
                             <div>
                                 <div class="small text-muted">Showing</div>
                                 <div class="fw-bold" id="showingRange">—</div>
@@ -141,7 +141,7 @@
             <div class="card-header bg-white py-3">
                 <div class="d-flex justify-content-between align-items-center">
                     <h5 class="mb-0 fw-bold">
-                        <span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;">history</span>
+                        <span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">history</span>
                         Attendance History
                     </h5>
                 </div>
@@ -169,11 +169,11 @@
                     <div class="col-12 d-flex align-items-center gap-2">
                         <button type="button" class="btn btn-sm btn-primary" onclick="loadAttendanceHistory()">
                             <span class="material-symbols-outlined"
-                                style="font-size: 1rem; vertical-align: text-bottom;">filter_alt</span>
+                                style="font-size: 1rem; vertical-align: text-bottom;" aria-hidden="true">filter_alt</span>
                             Apply
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetFilters()" title="Reset filters">
-                            <span class="material-symbols-outlined" style="font-size: 1rem;">refresh</span>
+                            <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">refresh</span>
                         </button>
                     </div>
                 </div>
@@ -211,7 +211,7 @@
 
                     <div id="emptyState" class="text-center py-5 text-muted d-none">
                         <span class="material-symbols-outlined d-block mb-2"
-                            style="font-size: 3rem; opacity: 0.3;">search_off</span>
+                            style="font-size: 3rem; opacity: 0.3;" aria-hidden="true">search_off</span>
                         <p class="mb-0">No attendance records found</p>
                         <small>Try adjusting your filters</small>
                     </div>
@@ -257,9 +257,9 @@
     function getStatusBadge(status) {
         const escapedStatus = escapeHtml(status);
         if (status === 'active') {
-            return '<span class="badge bg-success"><span class="material-symbols-outlined" style="font-size: 0.875rem; vertical-align: text-bottom;">login</span> Start Work</span>';
+            return '<span class="badge bg-success"><span class="material-symbols-outlined" style="font-size: 0.875rem; vertical-align: text-bottom;" aria-hidden="true">login</span> Start Work</span>';
         } else if (status === 'inactive') {
-            return '<span class="badge bg-danger"><span class="material-symbols-outlined" style="font-size: 0.875rem; vertical-align: text-bottom;">logout</span> Break</span>';
+            return '<span class="badge bg-danger"><span class="material-symbols-outlined" style="font-size: 0.875rem; vertical-align: text-bottom;" aria-hidden="true">logout</span> Break</span>';
         }
         return '<span class="badge bg-secondary">' + escapedStatus + '</span>';
     }

@@ -190,7 +190,7 @@
 
                 {% if enrollment.policy.no_repurchase_after_cancel %}
                     <p class="small text-danger mb-0">
-                        <strong><span class="material-symbols-outlined me-1">warning</span>Repurchase Restriction:</strong> {{ enrollment.policy.repurchase_wait_days }} day waiting period if cancelled
+                        <strong><span class="material-symbols-outlined me-1" aria-hidden="true">warning</span>Repurchase Restriction:</strong> {{ enrollment.policy.repurchase_wait_days }} day waiting period if cancelled
                     </p>
                 {% endif %}
             </div>

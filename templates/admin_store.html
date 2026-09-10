@@ -10,7 +10,7 @@
 
 {% block contextual_help_trigger %}
   <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#storeGuide" aria-controls="storeGuide" aria-expanded="false">
-    <span class="material-symbols-outlined">quick_reference_all</span> <span>Quick Tips</span>
+    <span class="material-symbols-outlined" aria-hidden="true">quick_reference_all</span> <span>Quick Tips</span>
   </button>
 {% endblock %}
 
@@ -45,7 +45,7 @@
       <div class="accordion-item">
         <h2 class="accordion-header" id="storeGuideHeadingBasic">
           <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#storeGuideBasic" aria-expanded="false" aria-controls="storeGuideBasic">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">inventory_2</span>
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">inventory_2</span>
             <strong>Basic Setup</strong>
           </button>
         </h2>
@@ -70,7 +70,7 @@
       <div class="accordion-item">
         <h2 class="accordion-header" id="storeGuideHeadingAdvanced">
           <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#storeGuideAdvanced" aria-expanded="false" aria-controls="storeGuideAdvanced">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tune</span>
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">tune</span>
             <strong>Advanced Options</strong>
           </button>
         </h2>
@@ -92,7 +92,7 @@
       <div class="accordion-item">
         <h2 class="accordion-header" id="storeGuideHeadingRedemptions">
           <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#storeGuideRedemptions" aria-expanded="false" aria-controls="storeGuideRedemptions">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">hourglass_bottom</span>
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">hourglass_bottom</span>
             <strong>Pending Redemptions</strong>
           </button>
         </h2>
@@ -105,7 +105,7 @@
       <div class="accordion-item">
         <h2 class="accordion-header" id="storeGuideHeadingHistory">
           <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#storeGuideHistory" aria-expanded="false" aria-controls="storeGuideHistory">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">history</span>
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">history</span>
             <strong>Purchase History</strong>
           </button>
         </h2>
@@ -124,27 +124,27 @@
 <ul class="nav nav-tabs mb-4" id="storeTabs" role="tablist">
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab" aria-controls="overview" aria-selected="true">
-      <span class="material-symbols-outlined me-1">grid_view</span>Overview
+      <span class="material-symbols-outlined me-1" aria-hidden="true">grid_view</span>Overview
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="manage-tab" data-bs-toggle="tab" data-bs-target="#manage" type="button" role="tab" aria-controls="manage" aria-selected="false">
-      <span class="material-symbols-outlined me-1">inventory_2</span>Manage Items
+      <span class="material-symbols-outlined me-1" aria-hidden="true">inventory_2</span>Manage Items
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="add-tab" data-bs-toggle="tab" data-bs-target="#add-item" type="button" role="tab" aria-controls="add-item" aria-selected="false">
-      <span class="material-symbols-outlined me-1">add_circle</span>Add New Item
+      <span class="material-symbols-outlined me-1" aria-hidden="true">add_circle</span>Add New Item
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">
-      <span class="material-symbols-outlined me-1">history</span>Purchase History
+      <span class="material-symbols-outlined me-1" aria-hidden="true">history</span>Purchase History
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="audit-tab" data-bs-toggle="tab" data-bs-target="#audit" type="button" role="tab" aria-controls="audit" aria-selected="false">
-      <span class="material-symbols-outlined me-1">article</span>Redemption Audit
+      <span class="material-symbols-outlined me-1" aria-hidden="true">article</span>Redemption Audit
     </button>
   </li>
 </ul>
@@ -157,7 +157,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white">
-            <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2">trending_up</span>Store Statistics</h2>
+            <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2" aria-hidden="true">trending_up</span>Store Statistics</h2>
           </div>
           <div class="card-body">
             <div class="row text-center">
@@ -182,15 +182,15 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow">
           <div class="card-header bg-success text-white">
-            <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2">bolt</span>Quick Actions</h2>
+            <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2" aria-hidden="true">bolt</span>Quick Actions</h2>
           </div>
           <div class="card-body">
             <div class="d-grid gap-2">
               <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('add-tab').click()">
-                <span class="material-symbols-outlined me-2">add_circle</span>Add New Item
+                <span class="material-symbols-outlined me-2" aria-hidden="true">add_circle</span>Add New Item
               </button>
               <button type="button" class="btn btn-outline-info" onclick="document.getElementById('history-tab').click()">
-                <span class="material-symbols-outlined me-2">history</span>View Purchase History
+                <span class="material-symbols-outlined me-2" aria-hidden="true">history</span>View Purchase History
               </button>
             </div>
           </div>
@@ -201,7 +201,7 @@
     <!-- Pending Redemption Requests -->
     <div class="card shadow mb-4">
       <div class="card-header bg-warning text-dark">
-        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2">hourglass_top</span>Pending Redemption Requests</h2>
+        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2" aria-hidden="true">hourglass_top</span>Pending Redemption Requests</h2>
       </div>
       <div class="card-body">
         {% if view.pending_redemptions %}
@@ -231,10 +231,10 @@
                     <button type="button" class="btn btn-sm btn-outline-danger reject-redemption-btn"
                       data-entitlement-id="{{ entitlement.id }}"
                       title="Refund and remove" aria-label="Refund and remove">
-                      <span class="material-symbols-outlined">cancel</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
                     </button>
                     <button type="button" class="btn btn-sm btn-success approve-redemption-btn" data-entitlement-id="{{ entitlement.id }}">
-                      <span class="material-symbols-outlined me-1">check_circle</span>Approve
+                      <span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Approve
                     </button>
                   </div>
                 </td>
@@ -248,7 +248,7 @@
         </div>
         {% else %}
         <div class="text-center text-muted py-3">
-          <span class="material-symbols-outlined" style="font-size: 2rem;">check_circle</span>
+          <span class="material-symbols-outlined" style="font-size: 2rem;" aria-hidden="true">check_circle</span>
           <p class="mb-0">No pending redemption requests</p>
         </div>
         {% endif %}
@@ -258,7 +258,7 @@
     <!-- Recent Purchases -->
     <div class="card shadow">
       <div class="card-header bg-info text-white">
-        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2">history</span>Recent Purchases</h2>
+        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Recent Purchases</h2>
       </div>
       <div class="card-body">
         {% if view.recent_purchases %}
@@ -307,7 +307,7 @@
         </div>
         {% else %}
         <div class="text-center text-muted py-3">
-          <span class="material-symbols-outlined" style="font-size: 2rem;">remove_shopping_cart</span>
+          <span class="material-symbols-outlined" style="font-size: 2rem;" aria-hidden="true">remove_shopping_cart</span>
           <p class="mb-0">No purchases yet</p>
         </div>
         {% endif %}
@@ -391,7 +391,7 @@
                 {% endif %}
                 {% if item.collective_goal_expires_at %}
                 <div class="small text-muted mt-1">
-                  <span class="material-symbols-outlined" style="font-size: 13px; vertical-align: middle;">schedule</span>
+                  <span class="material-symbols-outlined" style="font-size: 13px; vertical-align: middle;" aria-hidden="true">schedule</span>
                   <strong>Deadline:</strong> {{ item.collective_goal_expires_at.strftime('%b %d, %Y') }}
                 </div>
                 {% endif %}
@@ -418,13 +418,13 @@
                    current is the store's business. Rent-linked items are no
                    longer exempt from withdrawal — rent does not own them. #}
                 <a href="{{ url_for('admin.edit_store_item', product_lineage_uuid=item.product_lineage_uuid) }}" class="btn btn-outline-primary" title="Edit">
-                  <span class="material-symbols-outlined">edit</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                 </a>
                 <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#deactivateItemModal" data-item-id="{{ item.product_lineage_uuid }}" data-item-name="{{ item.name }}" title="Withdraw">
-                  <span class="material-symbols-outlined">visibility_off</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">visibility_off</span>
                 </button>
                 <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteItemModal" data-item-id="{{ item.product_lineage_uuid }}" data-item-name="{{ item.name }}" title="Delete Permanently">
-                  <span class="material-symbols-outlined">delete</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                 </button>
               </div>
             </div>
@@ -434,7 +434,7 @@
       {% else %}
         <div class="col">
           <div class="alert alert-info mb-0">
-            <span class="material-symbols-outlined me-2">info</span>No store items yet. Use the Add New Item tab to get started.
+            <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>No store items yet. Use the Add New Item tab to get started.
           </div>
         </div>
       {% endif %}
@@ -447,7 +447,7 @@
       <div class="col-lg-12 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white">
-            <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2">add_circle</span>Add New Item</h2>
+            <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2" aria-hidden="true">add_circle</span>Add New Item</h2>
           </div>
           <div class="card-body">
             <form method="POST" action="{{ url_for('admin.store_management') }}">
@@ -547,7 +547,7 @@
               <!-- Rent Link -->
               <div class="card mb-3">
                 <div class="card-header bg-light">
-                  <h3 class="mb-0 h6"><span class="material-symbols-outlined me-2">key</span>Rent Link</h3>
+                  <h3 class="mb-0 h6"><span class="material-symbols-outlined me-2" aria-hidden="true">key</span>Rent Link</h3>
                 </div>
                 <div class="card-body">
                   <div class="form-check mb-3">
@@ -564,7 +564,7 @@
                       </div>
                     </div>
                     <div class="alert alert-info mb-0">
-                      <small><span class="material-symbols-outlined me-2">schedule</span>Rent links take effect on the <strong>next</strong> rent cycle. Adding or removing one never changes a cycle already underway.</small>
+                      <small><span class="material-symbols-outlined me-2" aria-hidden="true">schedule</span>Rent links take effect on the <strong>next</strong> rent cycle. Adding or removing one never changes a cycle already underway.</small>
                     </div>
                   </div>
                 </div>
@@ -573,7 +573,7 @@
               <!-- Bundle Settings -->
               <div class="card mb-3">
                 <div class="card-header bg-light">
-                  <h3 class="mb-0 h6"><span class="material-symbols-outlined me-2">inventory_2</span>Bundle Settings</h3>
+                  <h3 class="mb-0 h6"><span class="material-symbols-outlined me-2" aria-hidden="true">inventory_2</span>Bundle Settings</h3>
                 </div>
                 <div class="card-body">
                   <div class="form-check mb-3">
@@ -596,7 +596,7 @@
               <!-- Bulk Discount Settings -->
               <div class="card mb-3">
                 <div class="card-header bg-light">
-                  <h3 class="mb-0 h6"><span class="material-symbols-outlined me-2">percent</span>Bulk Discount Settings</h3>
+                  <h3 class="mb-0 h6"><span class="material-symbols-outlined me-2" aria-hidden="true">percent</span>Bulk Discount Settings</h3>
                 </div>
                 <div class="card-body">
                   <div class="form-check mb-3">
@@ -624,7 +624,7 @@
               <!-- Collective Goal Settings -->
               <div class="card mb-3" id="collectiveGoalCard" style="display: none;">
                 <div class="card-header bg-light">
-                  <h3 class="mb-0 h6"><span class="material-symbols-outlined me-2">group</span>Collective Goal Settings</h3>
+                  <h3 class="mb-0 h6"><span class="material-symbols-outlined me-2" aria-hidden="true">group</span>Collective Goal Settings</h3>
                 </div>
                 <div class="card-body">
                   <div class="alert alert-info">
@@ -644,7 +644,7 @@
                   </div>
                   <div id="wholeClassInfo" style="display: none;">
                     <div class="alert alert-warning">
-                      <small><span class="material-symbols-outlined me-2">info</span><strong>Whole Class Mode:</strong> Every student in the class must purchase (1 per person). The target dynamically updates based on class size.</small>
+                      <small><span class="material-symbols-outlined me-2" aria-hidden="true">info</span><strong>Whole Class Mode:</strong> Every student in the class must purchase (1 per person). The target dynamically updates based on class size.</small>
                     </div>
                   </div>
                   <div class="mb-3">
@@ -695,7 +695,7 @@
   <div class="tab-pane fade" id="history" role="tabpanel" aria-labelledby="history-tab">
     <div class="card shadow">
       <div class="card-header bg-info text-white">
-        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2">receipt_long</span>All Purchases</h2>
+        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2" aria-hidden="true">receipt_long</span>All Purchases</h2>
       </div>
       <div class="card-body">
         <div class="table-responsive">
@@ -745,7 +745,7 @@
   <div class="tab-pane fade" id="audit" role="tabpanel" aria-labelledby="audit-tab">
     <div class="card shadow">
       <div class="card-header bg-secondary text-white">
-        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2">article</span>Redemption Audit Log</h2>
+        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2" aria-hidden="true">article</span>Redemption Audit Log</h2>
       </div>
       <div class="card-body">
         <form method="GET" action="{{ url_for('admin.store_management') }}" class="mb-4">
@@ -782,7 +782,7 @@
             </div>
           </div>
           <div class="mt-3">
-            <button type="submit" class="btn btn-primary btn-sm"><span class="material-symbols-outlined me-1">filter_alt</span>Apply Filters</button>
+            <button type="submit" class="btn btn-primary btn-sm"><span class="material-symbols-outlined me-1" aria-hidden="true">filter_alt</span>Apply Filters</button>
             <a href="{{ url_for('admin.store_management') }}#audit" class="btn btn-outline-secondary btn-sm">Clear</a>
             <span class="ms-3 text-muted">Showing {{ view.audit_rows|length }} of {{ view.audit_total|default(0) }} row(s)</span>
           </div>
@@ -886,7 +886,7 @@
       </div>
       <div class="modal-body">
         <div class="alert alert-danger">
-          <span class="material-symbols-outlined me-2">warning</span><strong>Warning!</strong> This action cannot be undone.
+          <span class="material-symbols-outlined me-2" aria-hidden="true">warning</span><strong>Warning!</strong> This action cannot be undone.
         </div>
         <p>Are you sure you want to permanently delete <strong id="modalDeleteItemName"></strong>?</p>
         <p class="text-muted small">This will completely remove the item from the database and delete related purchase records. Transaction history will remain in the ledger.</p>
@@ -1107,7 +1107,7 @@
       // Disable button and show loading state
       button.disabled = true;
       const originalHtml = button.innerHTML;
-      button.innerHTML = '<span class=\"material-symbols-outlined\">hourglass_top</span> Processing...';
+      button.innerHTML = '<span class=\"material-symbols-outlined\" aria-hidden="true">hourglass_top</span> Processing...';
 
       fetch('/api/approve-redemption', {
         method: 'POST',

@@ -6,7 +6,7 @@
 {% block contextual_help_trigger %}
 <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
   data-bs-target="#payrollGuide" aria-controls="payrollGuide" aria-expanded="false">
-  <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
+  <span class="material-symbols-outlined" aria-hidden="true">quick_reference_all</span> <span>Need Help?</span>
 </button>
 {% endblock %}
 
@@ -30,7 +30,7 @@
           <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
             data-bs-target="#payrollGuideRun" aria-expanded="false" aria-controls="payrollGuideRun">
             <span class="material-symbols-outlined me-2"
-              style="font-size:25pt; vertical-align:middle;">play_circle</span>
+              style="font-size:25pt; vertical-align:middle;" aria-hidden="true">play_circle</span>
             <strong>Run Payroll</strong>
           </button>
         </h2>
@@ -51,7 +51,7 @@
         <h2 class="accordion-header" id="payrollGuideHeadingSettings">
           <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
             data-bs-target="#payrollGuideSettings" aria-expanded="false" aria-controls="payrollGuideSettings">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">settings</span>
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">settings</span>
             <strong>Payroll Settings</strong>
           </button>
         </h2>
@@ -71,14 +71,14 @@
           <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
             data-bs-target="#payrollGuideSettingsBreakdown" aria-expanded="false"
             aria-controls="payrollGuideSettingsBreakdown">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tune</span>
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">tune</span>
             <strong>Settings Breakdown</strong>
           </button>
         </h2>
         <div id="payrollGuideSettingsBreakdown" class="accordion-collapse collapse mt-2"
           aria-labelledby="payrollGuideHeadingSettingsBreakdown" data-bs-parent="#payrollGuideAccordion">
           <div class="accordion-body">
-            <p class="mb-2"><strong><span class="material-symbols-outlined me-1">settings</span>Basic Settings:</strong></p>
+            <p class="mb-2"><strong><span class="material-symbols-outlined me-1" aria-hidden="true">settings</span>Basic Settings:</strong></p>
             <ul class="mb-3">
               <li><strong>Pay rate:</strong> How much students earn per time unit
                 <ul class="small mt-1">
@@ -96,7 +96,7 @@
               </li>
             </ul>
 
-            <p class="mb-2"><strong><span class="material-symbols-outlined me-1">calendar_view_week</span>Schedule Settings:</strong></p>
+            <p class="mb-2"><strong><span class="material-symbols-outlined me-1" aria-hidden="true">calendar_view_week</span>Schedule Settings:</strong></p>
             <ul class="mb-3">
               <li><strong>Pay schedule:</strong> When payroll runs automatically
                 <ul class="small mt-1">
@@ -110,18 +110,18 @@
               <li><strong>Schedule example:</strong> Weekly on Fridays, or bi-weekly every other Friday.</li>
             </ul>
 
-            <p class="mb-2"><strong><span class="material-symbols-outlined me-1">tune</span>Advanced Settings:</strong></p>
+            <p class="mb-2"><strong><span class="material-symbols-outlined me-1" aria-hidden="true">tune</span>Advanced Settings:</strong></p>
             <ul class="mb-3">
               <li><strong>Attendance:</strong> Worked time comes from the canonical attendance sessions recorded for each student.</li>
             </ul>
 
             <div class="alert alert-warning mt-3 mb-3">
-              <strong><span class="material-symbols-outlined me-1">warning</span>Side effects:</strong> Rate or schedule
+              <strong><span class="material-symbols-outlined me-1" aria-hidden="true">warning</span>Side effects:</strong> Rate or schedule
               changes only affect future payroll runs. Past payments remain unchanged.
             </div>
 
             <div class="alert alert-info mb-0">
-              <strong><span class="material-symbols-outlined me-1">lightbulb</span>Recommended Start:</strong> $10/hour, weekly schedule, 5
+              <strong><span class="material-symbols-outlined me-1" aria-hidden="true">lightbulb</span>Recommended Start:</strong> $10/hour, weekly schedule, 5
               expected hours/week. This creates a $50 weekly CWI that is easy for students to work with.
             </div>
           </div>
@@ -131,7 +131,7 @@
         <h2 class="accordion-header" id="payrollGuideHeadingManual">
           <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
             data-bs-target="#payrollGuideManual" aria-expanded="false" aria-controls="payrollGuideManual">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">payments</span>
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">payments</span>
             <strong>Manual Payments</strong>
           </button>
         </h2>
@@ -146,7 +146,7 @@
         <h2 class="accordion-header" id="payrollGuideHeadingHistory">
           <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
             data-bs-target="#payrollGuideHistory" aria-expanded="false" aria-controls="payrollGuideHistory">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">history</span>
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">history</span>
             <strong>Payroll History</strong>
           </button>
         </h2>
@@ -164,12 +164,12 @@
       <div class="d-grid gap-2">
         <a href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/economy/payroll-run') }}"
           class="btn btn-primary" target="_blank" rel="noopener">
-          <span class="material-symbols-outlined" style="vertical-align: middle;">menu_book</span>
+          <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">menu_book</span>
           Read Full Payroll Guide <span class="visually-hidden">(opens in a new tab)</span>
         </a>
       </div>
       <p class="text-muted small mt-3 mb-0 text-center">
-        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1rem;">info</span>
+        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1rem;" aria-hidden="true">info</span>
         Guides open in a new tab
       </p>
     </div>
@@ -187,23 +187,23 @@
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button"
       role="tab" aria-controls="overview" aria-selected="true">
-      <span class="material-symbols-outlined me-1">grid_view</span>Overview
+      <span class="material-symbols-outlined me-1" aria-hidden="true">grid_view</span>Overview
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">
-      <span class="material-symbols-outlined me-1">history</span>History
+      <span class="material-symbols-outlined me-1" aria-hidden="true">history</span>History
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab" aria-controls="settings" aria-selected="false">
-      <span class="material-symbols-outlined me-1">settings</span>Settings
+      <span class="material-symbols-outlined me-1" aria-hidden="true">settings</span>Settings
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="manual-payment-tab" data-bs-toggle="tab" data-bs-target="#manual-payment" type="button"
       role="tab" aria-controls="manual-payment" aria-selected="false">
-      <span class="material-symbols-outlined me-1">payments</span>Manual Payments
+      <span class="material-symbols-outlined me-1" aria-hidden="true">payments</span>Manual Payments
     </button>
   </li>
 </ul>
@@ -213,7 +213,7 @@
   <div class="tab-pane fade show active" id="overview" role="tabpanel" aria-labelledby="overview-tab">
     <div class="card shadow mb-4">
       <div class="card-header bg-success text-white">
-        <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white">trending_up</span>Quick Stats</h5>
+        <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">trending_up</span>Quick Stats</h5>
       </div>
       <div class="card-body">
         <div class="row text-center">
@@ -247,14 +247,14 @@
         </div>
         <hr>
         <button type="button" id="runPayrollBtn" class="btn btn-primary w-100">
-          <span class="material-symbols-outlined me-2">play_circle</span>Run Payroll Now
+          <span class="material-symbols-outlined me-2" aria-hidden="true">play_circle</span>Run Payroll Now
         </button>
       </div>
     </div>
     <!-- Recent Payroll Activity -->
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0"><span class="material-symbols-outlined me-2">format_list_bulleted</span>Recent Payroll Activity</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">format_list_bulleted</span>Recent Payroll Activity</h5>
       </div>
       <div class="card-body">
         {% if recent_payrolls %}
@@ -304,7 +304,7 @@
   <div class="tab-pane fade" id="history" role="tabpanel" aria-labelledby="history-tab">
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0"><span class="material-symbols-outlined me-2">history</span>Payroll History</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Payroll History</h5>
       </div>
       <div class="card-body">
         <!-- History Table -->
@@ -364,7 +364,7 @@
         </div>
         <div class="mt-3 text-end">
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('admin.payroll_history') }}">
-            <span class="material-symbols-outlined me-1" style="font-size: 1rem; vertical-align: text-bottom;">filter_alt</span>
+            <span class="material-symbols-outlined me-1" style="font-size: 1rem; vertical-align: text-bottom;" aria-hidden="true">filter_alt</span>
             Detailed history and date filters
           </a>
         </div>
@@ -379,10 +379,10 @@
       {% if show_setup_banner %}
       <div class="col-12 mb-3">
         <div class="alert alert-warning alert-dismissible fade show" role="alert">
-          <h5 class="alert-heading"><span class="material-symbols-outlined me-2">warning</span>No Payroll Settings</h5>
+          <h5 class="alert-heading"><span class="material-symbols-outlined me-2" aria-hidden="true">warning</span>No Payroll Settings</h5>
           <p class="mb-2">No Payroll Setting has been created yet. Do you want to use preset amounts?</p>
           <button type="button" class="btn btn-sm btn-warning" id="usePresetBtn">
-            <span class="material-symbols-outlined me-1">check_circle</span>Yes, Use Preset Values
+            <span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Yes, Use Preset Values
           </button>
           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
@@ -390,7 +390,7 @@
       {% elif block_settings %}
       <div class="col-12 mb-3">
         <div class="alert alert-info alert-dismissible fade show" role="alert">
-          <span class="material-symbols-outlined me-2">info</span>
+          <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>
           Payroll settings have been set on <strong>{{ display_settings_created_at_list[0] if display_settings_created_at_list and display_settings_created_at_list[0] else 'unknown date' }}</strong>. Any changes here will override the previous
           settings.
           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -402,7 +402,7 @@
       <div class="col-lg-8 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white">settings</span>Payroll Settings</h5>
+            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">settings</span>Payroll Settings</h5>
             <!-- Mode Toggle -->
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" id="settingsModeToggle" role="switch" {% if
@@ -414,7 +414,7 @@
             <!-- Current Settings Display -->
             {% if block_settings %}
             <div class="alert alert-secondary mb-3">
-              <h6 class="fw-bold mb-2"><span class="material-symbols-outlined me-2">info</span>Current Settings:</h6>
+              <h6 class="fw-bold mb-2"><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>Current Settings:</h6>
               {% if default_setting %}
               <div class="mb-2">
                 <strong>Global Default:</strong>
@@ -440,7 +440,7 @@
               <div id="simpleModeFields" {% if default_setting and default_setting.settings_mode=='advanced'
                 %}style="display:none;" {% endif %}>
                 <div class="alert alert-info">
-                  <span class="material-symbols-outlined me-2">info</span>
+                  <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>
                   <strong>Simple Mode:</strong> Easy-to-use settings for basic payroll configuration.
                 </div>
 
@@ -519,7 +519,7 @@
               <div id="advancedModeFields" {% if default_setting and default_setting.settings_mode=='advanced'
                 %}style="display:block;" {% else %}style="display:none;" {% endif %}>
                 <div class="alert alert-warning">
-                  <span class="material-symbols-outlined me-2">warning</span>
+                  <span class="material-symbols-outlined me-2" aria-hidden="true">warning</span>
                   <strong>Advanced Mode:</strong> Full control over payroll calculations with detailed options.
                 </div>
 
@@ -626,7 +626,7 @@
                       </select>
                     </div>
                   </div>
-                  <small class="text-muted text-warning"><span class="material-symbols-outlined">warning</span> This overrides
+                  <small class="text-muted text-warning"><span class="material-symbols-outlined" aria-hidden="true">warning</span> This overrides
                     overtime calculations</small>
                 </div>
 
@@ -688,14 +688,14 @@
 
               <!-- Validation Errors Display -->
               <div id="validationErrors" class="alert alert-danger" style="display:none;">
-                <strong><span class="material-symbols-outlined me-2">error</span>Conflicting Settings:</strong>
+                <strong><span class="material-symbols-outlined me-2" aria-hidden="true">error</span>Conflicting Settings:</strong>
                 <ul id="validationErrorList" class="mb-0"></ul>
               </div>
 
               <!-- Save Button -->
               <div class="text-end">
                 <button type="submit" class="btn btn-primary btn-lg">
-                  <span class="material-symbols-outlined me-2">save</span>Save Settings
+                  <span class="material-symbols-outlined me-2" aria-hidden="true">save</span>Save Settings
                 </button>
               </div>
             </form>
@@ -707,7 +707,7 @@
       <div class="col-lg-4 mb-4">
         <div class="card shadow border-success">
           <div class="card-header bg-success text-white">
-            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white">calculate</span>Pay Simulator</h5>
+            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">calculate</span>Pay Simulator</h5>
           </div>
           <div class="card-body">
             <p class="text-muted small">Estimate student earnings based on your current settings.</p>
@@ -724,7 +724,7 @@
             </div>
 
             <button type="button" class="btn btn-success w-100 mb-3" id="calculatePayBtn">
-              <span class="material-symbols-outlined me-2">calculate</span>Calculate
+              <span class="material-symbols-outlined me-2" aria-hidden="true">calculate</span>Calculate
             </button>
 
             <!-- Results -->
@@ -751,7 +751,7 @@
 
             <!-- Settings Summary (Plain English) -->
             <div class="mt-4 pt-3 border-top" id="settingsSummary">
-              <h6 class="fw-bold mb-2"><span class="material-symbols-outlined me-2">description</span>Current Settings:</h6>
+              <h6 class="fw-bold mb-2"><span class="material-symbols-outlined me-2" aria-hidden="true">description</span>Current Settings:</h6>
               <div id="settingsSummaryText" class="small text-muted">
                 <p class="mb-0"><em>Configure your payroll settings above to see a summary here.</em></p>
               </div>
@@ -770,7 +770,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow h-100">
           <div class="card-header bg-primary text-white">
-            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white">group</span>Select Students</h5>
+            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">group</span>Select Students</h5>
           </div>
           <div class="card-body">
             <!-- Student Table -->
@@ -812,7 +812,7 @@
             </div>
 
             <div class="alert alert-info mt-3 mb-0">
-              <span class="material-symbols-outlined me-2">info</span>
+              <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>
               <strong>Selected:</strong> <span id="selectedCount">0</span> student(s)
             </div>
           </div>
@@ -823,7 +823,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow h-100">
           <div class="card-header bg-success text-white">
-            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white">payments</span>Payment Details</h5>
+            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">payments</span>Payment Details</h5>
           </div>
           <div class="card-body">
             <form id="manualPaymentForm">
@@ -839,7 +839,7 @@
               <div class="mb-3">
                 <label class="form-label fw-bold">Action:</label>
                 <div class="alert alert-success d-flex align-items-center mb-0">
-                  <span class="material-symbols-outlined me-2">add_circle</span>
+                  <span class="material-symbols-outlined me-2" aria-hidden="true">add_circle</span>
                   Manual Credit
                 </div>
                 <input type="hidden" name="payment_type" value="deposit">

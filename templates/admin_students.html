@@ -25,7 +25,7 @@
 {% block contextual_help_trigger %}
 <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
   data-bs-target="#studentManagementGuide" aria-controls="studentManagementGuide" aria-expanded="false">
-  <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
+  <span class="material-symbols-outlined" aria-hidden="true">quick_reference_all</span> <span>Need Help?</span>
 </button>
 {% endblock %}
 
@@ -50,7 +50,7 @@
             <button class="accordion-button collapsed bg-primary text-white" type="button" data-bs-toggle="collapse"
               data-bs-target="#collapseAdd" aria-expanded="false" aria-controls="collapseAdd">
               <span class="material-symbols-outlined me-2 text-white"
-                style="font-size:25pt; vertical-align:middle;">person_add</span>
+                style="font-size:25pt; vertical-align:middle;" aria-hidden="true">person_add</span>
               <strong>How to add students</strong>
             </button>
           </h2>
@@ -66,7 +66,7 @@
               </ul>
              <div class="card shadow-sm mb-4">
               <div class="card-header bg-warning text-dark py-3">
-                <h6 class="mb-0 fw-semibold text-dark"><span class="material-symbols-outlined me-2 text-white" style="vertical-align: text-bottom;">warning</span>Avoid Sensitive Information</h6>
+                <h6 class="mb-0 fw-semibold text-dark"><span class="material-symbols-outlined me-2 text-white" style="vertical-align: text-bottom;" aria-hidden="true">warning</span>Avoid Sensitive Information</h6>
               </div>
                 <div class="card-body">
                   Although all personal information is stored encrypted, we do not recommend storing any private or sensitive information in the notes field.
@@ -81,7 +81,7 @@
             <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
               data-bs-target="#collapseClaim" aria-expanded="false" aria-controls="collapseClaim">
               <span class="material-symbols-outlined me-2"
-                style="font-size:25pt; vertical-align:middle;">person_check</span>
+                style="font-size:25pt; vertical-align:middle;" aria-hidden="true">person_check</span>
               <strong>How students claim their account</strong>
             </button>
           </h2>
@@ -108,13 +108,13 @@
               </ol>
 
               <div class="alert alert-danger mb-3">
-                <strong><span class="material-symbols-outlined me-1">warning</span>Critical:</strong> The username is shown
+                <strong><span class="material-symbols-outlined me-1" aria-hidden="true">warning</span>Critical:</strong> The username is shown
                 <strong>only once</strong> during setup. Students must record it. If forgotten, you'll need to reset
                 their account.
               </div>
 
               <div class="alert alert-info mb-0">
-                <strong><span class="material-symbols-outlined me-1">lightbulb</span>Teacher Tip:</strong> Have students complete account
+                <strong><span class="material-symbols-outlined me-1" aria-hidden="true">lightbulb</span>Teacher Tip:</strong> Have students complete account
                 setup in class so you can help if they have issues. Although not recommended for security reasons,
                 consider keeping a secure record of usernames for your class so you can assist with forgotten usernames.
               </div>
@@ -126,7 +126,7 @@
             <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
               data-bs-target="#collapseEditClaim" aria-expanded="false" aria-controls="collapseEditClaim">
               <span class="material-symbols-outlined me-2"
-                style="font-size:25pt; vertical-align:middle;">person_text</span>
+                style="font-size:25pt; vertical-align:middle;" aria-hidden="true">person_text</span>
               <strong>How to update student info</strong>
             </button>
           </h2>
@@ -144,7 +144,7 @@
               </ol>
 
               <div class="alert alert-info mb-0">
-                <strong><span class="material-symbols-outlined me-1">info</span>Important:</strong> If you change their name, the
+                <strong><span class="material-symbols-outlined me-1" aria-hidden="true">info</span>Important:</strong> If you change their name, the
                 student will need the updated first and last name when they claim or recover their account.
               </div>
             </div>
@@ -156,7 +156,7 @@
             <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
               data-bs-target="#collapseReset" aria-expanded="false" aria-controls="collapseReset">
               <span class="material-symbols-outlined me-2"
-                style="font-size:25pt; vertical-align:middle;">restart_alt</span>
+                style="font-size:25pt; vertical-align:middle;" aria-hidden="true">restart_alt</span>
               <strong>How to reset student login</strong>
             </button>
           </h2>
@@ -180,7 +180,7 @@
             <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
               data-bs-target="#collapseRemove" aria-expanded="false" aria-controls="collapseRemove">
               <span class="material-symbols-outlined me-2"
-                style="font-size:25pt; vertical-align:middle;">person_remove</span>
+                style="font-size:25pt; vertical-align:middle;" aria-hidden="true">person_remove</span>
               <strong>How to remove students</strong>
             </button>
           </h2>
@@ -200,7 +200,7 @@
             <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
               data-bs-target="#collapseExport" aria-expanded="false" aria-controls="collapseExport">
               <span class="material-symbols-outlined me-2"
-                style="font-size:25pt; vertical-align:middle;">download</span>
+                style="font-size:25pt; vertical-align:middle;" aria-hidden="true">download</span>
               <strong>How to export class roster</strong>
             </button>
           </h2>
@@ -227,13 +227,13 @@
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="roster-tab" data-bs-toggle="tab" data-bs-target="#roster" type="button"
       role="tab" aria-controls="roster" aria-selected="true">
-      <span class="material-symbols-outlined me-1" style="vertical-align: middle;">groups</span>Class Roster
+      <span class="material-symbols-outlined me-1" style="vertical-align: middle;" aria-hidden="true">groups</span>Class Roster
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="bulk-upload-tab" data-bs-toggle="tab" data-bs-target="#bulk-upload" type="button"
       role="tab" aria-controls="bulk-upload" aria-selected="false">
-      <span class="material-symbols-outlined me-1" style="vertical-align: middle;">group_add</span>Add Students
+      <span class="material-symbols-outlined me-1" style="vertical-align: middle;" aria-hidden="true">group_add</span>Add Students
     </button>
   </li>
 </ul>
@@ -243,11 +243,11 @@
   <div class="tab-pane fade show active" id="roster" role="tabpanel" aria-labelledby="roster-tab">
     <div class="card shadow">
       <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <h2 class="mb-0 fs-3"><span class="material-symbols-outlined me-2 align-middle fs-1">groups</span>Class Roster
+        <h2 class="mb-0 fs-3"><span class="material-symbols-outlined me-2 align-middle fs-1" aria-hidden="true">groups</span>Class Roster
         </h2>
         <div>
           <a href="{{ url_for('admin.export_students') }}" class="btn btn-light btn-sm me-2">
-            <span class="material-symbols-outlined me-1" style="vertical-align: middle;">download</span> Export All
+            <span class="material-symbols-outlined me-1" style="vertical-align: middle;" aria-hidden="true">download</span> Export All
           </a>
         </div>
       </div>
@@ -261,7 +261,7 @@
               <div class="card-header bg-success-subtle">
                 <div class="d-flex justify-content-between align-items-center">
                   <h3 class="mb-0 text-success h6 fs-4">
-                    <span class="material-symbols-outlined me-2 align-middle">key</span>
+                    <span class="material-symbols-outlined me-2 align-middle" aria-hidden="true">key</span>
                     Join Code for {{ class_display_label }}
                   </h3>
                   {% if unclaimed_seats|length > 0 %}
@@ -287,7 +287,7 @@
                           style="letter-spacing: 0.2em; background-color: white;">
                         <button class="btn btn-outline-success btn-lg join-code-copy-btn" type="button"
                           data-class-id="{{ current_class_id }}" data-join-code="{{ current_class_join_code }}">
-                          <span class="material-symbols-outlined" style="vertical-align: middle;">content_copy</span>
+                          <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">content_copy</span>
                           Copy
                         </button>
                       </div>
@@ -295,7 +295,7 @@
                   </div>
                   <div class="col-md-4">
                     <div class="alert alert-info mb-0 small">
-                      <span class="material-symbols-outlined me-1 align-middle fs-6">info</span>
+                      <span class="material-symbols-outlined me-1 align-middle fs-6" aria-hidden="true">info</span>
                       <strong>Student Instructions:</strong>
                       <ol class="mb-0 mt-1 ps-3">
                         <li>Go to student sign-in page</li>
@@ -314,7 +314,7 @@
             <div class="card border-warning mb-3">
               <div class="card-header bg-warning-subtle d-flex justify-content-between align-items-center">
                 <h3 class="mb-0 text-dark h6 fs-4">
-                  <span class="material-symbols-outlined me-2 align-middle">pending</span>
+                  <span class="material-symbols-outlined me-2 align-middle" aria-hidden="true">pending</span>
                   Unclaimed Seats ({{ unclaimed_seats|length }})
                 </h3>
               </div>
@@ -372,7 +372,7 @@
             <div class="card border-success mb-3">
               <div class="card-header bg-success-subtle">
                 <h3 class="mb-0 text-success h6 fs-4">
-                  <span class="material-symbols-outlined me-2 align-middle">check_circle</span>
+                  <span class="material-symbols-outlined me-2 align-middle" aria-hidden="true">check_circle</span>
                   Active Students ({{ claimed_students|length }})
                 </h3>
               </div>
@@ -387,17 +387,17 @@
                       <div class="dropdown">
                         <button class="btn btn-primary btn-sm dropdown-toggle" type="button"
                           id="bulkActionsDropdown-current-class" data-bs-toggle="dropdown" aria-expanded="false">
-                          <span class="material-symbols-outlined align-middle fs-6">more_vert</span> Bulk Actions
+                          <span class="material-symbols-outlined align-middle fs-6" aria-hidden="true">more_vert</span> Bulk Actions
                         </button>
                         <ul class="dropdown-menu" aria-labelledby="bulkActionsDropdown-current-class">
                           <li>
                             <button class="dropdown-item" type="button" onclick="bulkTapIn();">
-                              <span class="material-symbols-outlined align-middle fs-6 me-1">login</span> Start Work
+                              <span class="material-symbols-outlined align-middle fs-6 me-1" aria-hidden="true">login</span> Start Work
                             </button>
                           </li>
                           <li>
                             <button class="dropdown-item" type="button" onclick="bulkTapOut();">
-                              <span class="material-symbols-outlined align-middle fs-6 me-1">logout</span> Break
+                              <span class="material-symbols-outlined align-middle fs-6 me-1" aria-hidden="true">logout</span> Break
                             </button>
                           </li>
                           <li>
@@ -406,7 +406,7 @@
                           <li>
                             <button class="dropdown-item" type="button"
                               onclick="bulkUpdateHallPass();">
-                              <span class="material-symbols-outlined align-middle fs-6 me-1">confirmation_number</span>
+                              <span class="material-symbols-outlined align-middle fs-6 me-1" aria-hidden="true">confirmation_number</span>
                               Adjust Hall-Pass Entitlements
                             </button>
                           </li>
@@ -416,14 +416,14 @@
                           <li>
                             <button class="dropdown-item text-danger" type="button"
                               onclick="bulkDeleteStudents();">
-                              <span class="material-symbols-outlined align-middle fs-6 me-1">delete</span> Delete
+                              <span class="material-symbols-outlined align-middle fs-6 me-1" aria-hidden="true">delete</span> Delete
                               Students
                             </button>
                           </li>
                         </ul>
                       </div>
                       <button type="button" class="btn btn-warning btn-sm" onclick="clearSelection()">
-                        <span class="material-symbols-outlined align-middle fs-6">cancel</span> Clear
+                        <span class="material-symbols-outlined align-middle fs-6" aria-hidden="true">cancel</span> Clear
                       </button>
                     </div>
                   </div>
@@ -515,7 +515,7 @@
             </div>
             {% else %}
             <div class="alert alert-info">
-              <span class="material-symbols-outlined me-2" style="vertical-align: middle;">info</span>No students have
+              <span class="material-symbols-outlined me-2" style="vertical-align: middle;" aria-hidden="true">info</span>No students have
               claimed accounts in {{ class_display_label }} yet.
             </div>
             {% endif %}
@@ -530,7 +530,7 @@
     <div class="card shadow">
       <div class="card-header bg-success text-white">
         <h2 class="mb-0 h5">
-          <span class="material-symbols-outlined me-2" style="vertical-align: middle;">group_add</span>Add Students
+          <span class="material-symbols-outlined me-2" style="vertical-align: middle;" aria-hidden="true">group_add</span>Add Students
         </h2>
       </div>
       <div class="card-body">
@@ -542,7 +542,7 @@
 
         <div id="duplicate-warning" class="card border-warning d-none mb-3">
           <div class="card-header bg-warning-subtle d-flex align-items-center">
-            <span class="material-symbols-outlined me-2 align-middle">warning</span>
+            <span class="material-symbols-outlined me-2 align-middle" aria-hidden="true">warning</span>
             <h3 class="mb-0 text-dark h6 fs-4">More than one student has the same name</h3>
           </div>
           <div class="card-body">
@@ -582,7 +582,7 @@
 
         <div class="d-flex justify-content-between align-items-center mt-3">
           <button type="button" class="btn btn-outline-secondary btn-sm" id="add-row-btn">
-            <span class="material-symbols-outlined me-1" style="vertical-align: middle; font-size: 18px;">add</span>Add Row
+            <span class="material-symbols-outlined me-1" style="vertical-align: middle; font-size: 18px;" aria-hidden="true">add</span>Add Row
           </button>
           <span class="text-muted small" id="row-count">0 students staged</span>
         </div>
@@ -592,7 +592,7 @@
         <div class="d-flex justify-content-end gap-2">
           <button type="button" class="btn btn-outline-secondary" id="clear-grid-btn">Clear All</button>
           <button type="button" class="btn btn-primary btn-lg" id="submit-students-btn" disabled>
-            <span class="material-symbols-outlined me-1" style="vertical-align: middle;">group_add</span>
+            <span class="material-symbols-outlined me-1" style="vertical-align: middle;" aria-hidden="true">group_add</span>
             Add Students
           </button>
         </div>
@@ -837,7 +837,7 @@
       })
       .finally(() => {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="vertical-align: middle;">group_add</span>Add Students';
+        submitBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="vertical-align: middle;" aria-hidden="true">group_add</span>Add Students';
       });
     });
 
@@ -855,7 +855,7 @@
       <div class="modal-content">
         <div class="modal-header bg-primary text-white">
           <h2 class="modal-title text-white h5" id="editStudentModalLabel">
-            <span class="material-symbols-outlined me-2">edit</span>Edit Student
+            <span class="material-symbols-outlined me-2" aria-hidden="true">edit</span>Edit Student
           </h2>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
@@ -897,13 +897,13 @@
           </div>
           <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" style="display:none;">
             <small><span class="material-symbols-outlined me-2"
-                style="vertical-align: middle;">warning</span>Student will need to re-claim their account using
+                style="vertical-align: middle;" aria-hidden="true">warning</span>Student will need to re-claim their account using
                 their join code, first name, and last name.</small>
           </div>
 
           <div class="alert alert-info mt-3 mb-0">
             <small><span class="material-symbols-outlined me-2"
-                style="vertical-align: middle;">info</span><strong>Note:</strong> Changing the name will update what the
+                style="vertical-align: middle;" aria-hidden="true">info</span><strong>Note:</strong> Changing the name will update what the
               student needs to enter during the account claim process.</small>
           </div>
         </div>
@@ -924,7 +924,7 @@
       <div class="modal-content">
         <div class="modal-header bg-danger text-white">
           <h2 class="modal-title h5" id="deleteStudentModalLabel">
-            <span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>Delete Student
+            <span class="material-symbols-outlined me-2" style="vertical-align: middle;" aria-hidden="true">warning</span>Delete Student
           </h2>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
@@ -933,7 +933,7 @@
           <input type="hidden" id="delete_student_id" name="seat_id">
 
           <div class="alert alert-danger">
-            <h3 class="h6"><span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>Warning</h3>
+            <h3 class="h6"><span class="material-symbols-outlined me-2" style="vertical-align: middle;" aria-hidden="true">warning</span>Warning</h3>
             <p>You are about to delete <strong id="delete_student_name"></strong>.</p>
             <p class="mb-0">This action will permanently delete:</p>
             <ul class="mb-0">
@@ -1013,7 +1013,7 @@
     navigator.clipboard.writeText(code).then(function () {
       // Show success feedback
       const originalHTML = btn.innerHTML;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="vertical-align: middle;">check</span> Copied!';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">check</span> Copied!';
       btn.classList.remove('btn-outline-success');
       btn.classList.add('btn-success');
 

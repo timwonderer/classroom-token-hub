@@ -5,7 +5,7 @@
 {% set current_page = "economic_engine" %}
 {% block contextual_help_trigger %}
   <button class="btn btn-primary d-flex align-items-center gap-2 mb-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#economyHealthGuide" aria-controls="economyHealthGuide" aria-expanded="false">
-    <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
+    <span class="material-symbols-outlined" aria-hidden="true">quick_reference_all</span> <span>Need Help?</span>
   </button>
 {% endblock %}
 {% block content %}
@@ -21,7 +21,7 @@
       <div class="accordion-item">
         <h2 class="accordion-header" id="economyHealthGuideHeadingCwi">
           <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideCwi" aria-expanded="false" aria-controls="economyHealthGuideCwi">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">monitor_heart</span>
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">monitor_heart</span>
             <strong>Understand Your CWI</strong>
           </button>
         </h2>
@@ -40,11 +40,11 @@
             </ul>
 
             <div class="alert alert-success mb-3">
-              <strong><span class="material-symbols-outlined me-1">payments</span>Why CWI Matters:</strong> Use the active policy's pricing recommendations and alert thresholds to balance your economy; rent and store guidance varies by policy.
+              <strong><span class="material-symbols-outlined me-1" aria-hidden="true">payments</span>Why CWI Matters:</strong> Use the active policy's pricing recommendations and alert thresholds to balance your economy; rent and store guidance varies by policy.
             </div>
 
             <div class="alert alert-info mb-0">
-              <strong><span class="material-symbols-outlined me-1">settings</span>Setup:</strong> If payroll is not configured yet, set it up first to unlock CWI calculations.
+              <strong><span class="material-symbols-outlined me-1" aria-hidden="true">settings</span>Setup:</strong> If payroll is not configured yet, set it up first to unlock CWI calculations.
             </div>
           </div>
         </div>
@@ -52,7 +52,7 @@
       <div class="accordion-item">
         <h2 class="accordion-header" id="economyHealthGuideHeadingHours">
           <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideHours" aria-expanded="false" aria-controls="economyHealthGuideHours">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">schedule</span>
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">schedule</span>
             <strong>Update Expected Hours</strong>
           </button>
         </h2>
@@ -65,7 +65,7 @@
       <div class="accordion-item">
         <h2 class="accordion-header" id="economyHealthGuideHeadingSettingsBreakdown">
           <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideSettingsBreakdown" aria-expanded="false" aria-controls="economyHealthGuideSettingsBreakdown">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tune</span>
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">tune</span>
             <strong>Settings Breakdown</strong>
           </button>
         </h2>
@@ -85,7 +85,7 @@
       <div class="accordion-item">
         <h2 class="accordion-header" id="economyHealthGuideHeadingBalance">
           <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideBalance" aria-expanded="false" aria-controls="economyHealthGuideBalance">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">balance</span>
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">balance</span>
             <strong>Balance Snapshot</strong>
           </button>
         </h2>
@@ -113,7 +113,7 @@
 
   {% if not payroll_settings %}
   <div class="alert alert-warning d-flex align-items-start gap-2">
-    <span class="material-symbols-outlined">warning</span>
+    <span class="material-symbols-outlined" aria-hidden="true">warning</span>
     <div>
       <strong>Set up payroll to calculate CWI.</strong>
       <div class="small">We need a pay rate and expected hours per week to compute the Classroom Wage Index. Head to <a href="{{ payroll_link }}" class="alert-link">Payroll Management</a> to configure it.</div>
@@ -126,7 +126,7 @@
       <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
         <div>
           <h5 class="mb-1 d-inline-flex align-items-center gap-2">
-            <span class="material-symbols-outlined">tune</span>
+            <span class="material-symbols-outlined" aria-hidden="true">tune</span>
             <span>Economic Policy</span>
             {% if policy_summary.overall_status == 'aligned' %}
             <span class="badge bg-success">Pricing Aligned</span>
@@ -266,7 +266,7 @@
         <div class="card-body">
           <div class="d-flex align-items-center gap-2 mb-2">
             <h5 class="mb-0 d-inline-flex align-items-center gap-2">
-              <span class="material-symbols-outlined">trending_up</span>
+              <span class="material-symbols-outlined" aria-hidden="true">trending_up</span>
               <span>Classroom Wage Index  (CWI)</span>
             </h5>
             {% if cwi_calc %}
@@ -343,7 +343,7 @@
         <div class="card-body">
           <div class="d-flex align-items-center gap-2 mb-2">
             <h5 class="mb-0 d-inline-flex align-items-center gap-2">
-              <span class="material-symbols-outlined">price_change</span>
+              <span class="material-symbols-outlined" aria-hidden="true">price_change</span>
               <span>Economic Balance</span>
             </h5>
             {% if analysis and actionable_warning_count == 0 and banking_summary.level == 'success' %}
@@ -412,7 +412,7 @@
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
         <div class="card-header d-inline-flex align-items-center gap-2">
-          <h6 class="mb-0 d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined">savings</span>Banking & Interest</h6>
+          <h6 class="mb-0 d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined" aria-hidden="true">savings</span>Banking & Interest</h6>
           {% if banking_summary.level == 'success' %}
             <span class="badge bg-success">Balanced</span>
           {% else %}
@@ -430,7 +430,7 @@
     </div>
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
-        <h6 class="card-header d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined">lightbulb</span><span>Current Recommended Settings</span></h6>
+        <h6 class="card-header d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined" aria-hidden="true">lightbulb</span><span>Current Recommended Settings</span></h6>
         <div class="card-body">
           {% if recommendations %}
           <ul class="mb-2">
@@ -458,7 +458,7 @@
 
   <div class="card shadow-sm">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <div class="d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined">tooltip_2</span><span>Additional Information</span></div>
+      <div class="d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined" aria-hidden="true">tooltip_2</span><span>Additional Information</span></div>
       <small class="text-muted">Sorted by severity</small>
     </div>
     <div class="card-body">

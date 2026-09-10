@@ -11,7 +11,7 @@
         <div class="card shadow">
             <div class="card-header bg-primary text-white">
                 <h4 class="mb-0">
-                    <span class="material-symbols-outlined" style="vertical-align: middle;">edit_document</span>
+                    <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">edit_document</span>
                     {{ action }} Announcement
                 </h4>
             </div>
@@ -21,14 +21,14 @@
 
                     {% if action == 'Create' %}
                     <div class="alert alert-info mb-3">
-                        <span class="material-symbols-outlined me-2">info</span>
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>
                         This announcement will post to the class currently selected in the sidebar:
                         <strong>{{ active_class_label }}</strong>.
                     </div>
                     {{ form.class_id }}
                     {% elif action == 'Edit' and teacher_block %}
                     <div class="alert alert-info mb-3">
-                        <span class="material-symbols-outlined me-2">info</span>
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>
                         <strong>Class Period:</strong> {{ teacher_block.class_label }}
                         <br><small>To post to a different class, switch class in the sidebar and create a new announcement.</small>
                     </div>
@@ -93,7 +93,7 @@
 
                     <div class="d-flex justify-content-between">
                         <a href="{{ url_for('admin.announcements') }}" class="btn btn-secondary">
-                            <span class="material-symbols-outlined me-1">cancel</span>Cancel
+                            <span class="material-symbols-outlined me-1" aria-hidden="true">cancel</span>Cancel
                         </a>
                         {{ form.submit(class="btn btn-primary") }}
                     </div>
@@ -104,11 +104,11 @@
         {% if action == 'Edit' and announcement %}
         <div class="card shadow mt-3">
             <div class="card-header bg-light">
-                <h5 class="mb-0"><span class="material-symbols-outlined me-2">info</span>Preview</h5>
+                <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>Preview</h5>
             </div>
             <div class="card-body">
                 <div class="alert {{ announcement.priority_class }} mb-0">
-                    <strong><span class="material-symbols-outlined me-2 align-middle">{{ announcement.priority_icon }}</span>{{ announcement.title }}</strong>
+                    <strong><span class="material-symbols-outlined me-2 align-middle" aria-hidden="true">{{ announcement.priority_icon }}</span>{{ announcement.title }}</strong>
                     <p class="mb-0 mt-2">{{ announcement.message }}</p>
                 </div>
             </div>

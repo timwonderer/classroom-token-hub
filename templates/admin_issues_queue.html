@@ -3,7 +3,7 @@
 {% block page_title %}Student Issues{% endblock %}
 {% block contextual_help_trigger %}
     <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#issuesGuide" aria-controls="issuesGuide" aria-expanded="false">
-        <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
+        <span class="material-symbols-outlined" aria-hidden="true">quick_reference_all</span> <span>Need Help?</span>
     </button>
 {% endblock %}
 
@@ -20,7 +20,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header" id="issuesGuideHeadingReview">
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#issuesGuideReview" aria-expanded="false" aria-controls="issuesGuideReview">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">contact_support</span>
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">contact_support</span>
                         <strong>Review Tickets</strong>
                     </button>
                 </h2>
@@ -33,7 +33,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header" id="issuesGuideHeadingResolve">
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#issuesGuideResolve" aria-expanded="false" aria-controls="issuesGuideResolve">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">check_circle</span>
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">check_circle</span>
                         <strong>Resolve an Issue</strong>
                     </button>
                 </h2>
@@ -49,7 +49,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header" id="issuesGuideHeadingEscalate">
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#issuesGuideEscalate" aria-expanded="false" aria-controls="issuesGuideEscalate">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">arrow_upward</span>
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">arrow_upward</span>
                         <strong>Escalate to Developers</strong>
                     </button>
                 </h2>
@@ -65,7 +65,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header" id="issuesGuideHeadingStatus">
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#issuesGuideStatus" aria-expanded="false" aria-controls="issuesGuideStatus">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">badge</span>
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">badge</span>
                         <strong>Status Badges</strong>
                     </button>
                 </h2>
@@ -86,7 +86,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header" id="issuesGuideHeadingPrivacy">
                     <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#issuesGuidePrivacy" aria-expanded="false" aria-controls="issuesGuidePrivacy">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">privacy_tip</span>
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">privacy_tip</span>
                         <strong>Privacy Notes</strong>
                     </button>
                 </h2>
@@ -116,7 +116,7 @@
                             <h6 class="text-muted mb-1">Pending Review</h6>
                             <h3 class="mb-0">{{ pending_issues|length }}</h3>
                         </div>
-                        <span class="material-symbols-outlined fs-1 text-warning">history</span>
+                        <span class="material-symbols-outlined fs-1 text-warning" aria-hidden="true">history</span>
                     </div>
                 </div>
             </div>
@@ -129,7 +129,7 @@
                             <h6 class="text-muted mb-1">Final Review</h6>
                             <h3 class="mb-0">{{ resolved_issues|length }}</h3>
                         </div>
-                        <span class="material-symbols-outlined fs-1 text-success">check_circle</span>
+                        <span class="material-symbols-outlined fs-1 text-success" aria-hidden="true">check_circle</span>
                     </div>
                 </div>
             </div>
@@ -142,7 +142,7 @@
                             <h6 class="text-muted mb-1">Escalated</h6>
                             <h3 class="mb-0">{{ escalated_issues|length }}</h3>
                         </div>
-                        <span class="material-symbols-outlined fs-1 text-info">arrow_circle_up</span>
+                        <span class="material-symbols-outlined fs-1 text-info" aria-hidden="true">arrow_circle_up</span>
                     </div>
                 </div>
             </div>
@@ -153,7 +153,7 @@
     <ul class="nav nav-tabs mb-4" id="issuesTabs" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab" aria-controls="pending" aria-selected="true">
-                <span class="material-symbols-outlined me-2">history</span>Pending Review
+                <span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Pending Review
                 {% if pending_issues|length > 0 %}
                 <span class="badge bg-warning text-dark ms-2">{{ pending_issues|length }}</span>
                 {% endif %}
@@ -161,12 +161,12 @@
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="resolved-tab" data-bs-toggle="tab" data-bs-target="#resolved" type="button" role="tab" aria-controls="resolved" aria-selected="false">
-                <span class="material-symbols-outlined me-2">fact_check</span>Teacher Final Review
+                <span class="material-symbols-outlined me-2" aria-hidden="true">fact_check</span>Teacher Final Review
             </button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="escalated-tab" data-bs-toggle="tab" data-bs-target="#escalated" type="button" role="tab" aria-controls="escalated" aria-selected="false">
-                <span class="material-symbols-outlined me-2">arrow_circle_up</span>Escalated to Developer
+                <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_circle_up</span>Escalated to Developer
             </button>
         </li>
     </ul>
@@ -182,13 +182,13 @@
                             <div class="flex-grow-1">
                                 <div class="d-flex align-items-center mb-2">
                                     <h6 class="mb-0 me-2">
-                                        <span class="material-symbols-outlined me-1">person</span>
+                                        <span class="material-symbols-outlined me-1" aria-hidden="true">person</span>
                                         {{ issue.student_display_name }}
                                     </h6>
                                     <span class="badge bg-secondary">{{ issue.category.name }}</span>
                                     {% if issue.related_transaction_id %}
                                     <span class="badge bg-info ms-2">
-                                        <span class="material-symbols-outlined me-1">receipt_long</span>Transaction #{{ issue.related_transaction_id }}
+                                        <span class="material-symbols-outlined me-1" aria-hidden="true">receipt_long</span>Transaction #{{ issue.related_transaction_id }}
                                     </span>
                                     {% endif %}
                                 </div>
@@ -196,10 +196,10 @@
                                     {{ issue.student_explanation[:200] }}{% if issue.student_explanation|length > 200 %}...{% endif %}
                                 </p>
                                 <small class="text-muted">
-                                    <span class="material-symbols-outlined me-1">schedule</span>
+                                    <span class="material-symbols-outlined me-1" aria-hidden="true">schedule</span>
                                     Submitted {{ issue.submitted_at|fmt_timestamp }}
                                     {% if issue.class_label %}
-                                    | <span class="material-symbols-outlined me-1">door_front</span>{{ issue.class_label }}
+                                    | <span class="material-symbols-outlined me-1" aria-hidden="true">door_front</span>{{ issue.class_label }}
                                     {% endif %}
                                 </small>
                             </div>
@@ -215,7 +215,7 @@
             {% else %}
                 <div class="card">
                     <div class="card-body text-center py-5">
-                        <span class="material-symbols-outlined fs-1 text-success mb-3">check_circle</span>
+                        <span class="material-symbols-outlined fs-1 text-success mb-3" aria-hidden="true">check_circle</span>
                         <h5 class="text-muted">No pending issues</h5>
                         <p class="text-muted mb-0">All caught up! There are no issues waiting for your review.</p>
                     </div>
@@ -233,7 +233,7 @@
                             <div class="flex-grow-1">
                                 <div class="d-flex align-items-center mb-2">
                                     <h6 class="mb-0 me-2">
-                                        <span class="material-symbols-outlined me-1">person</span>
+                                        <span class="material-symbols-outlined me-1" aria-hidden="true">person</span>
                                         {{ issue.student_display_name }}
                                     </h6>
                                     <span class="badge bg-secondary">{{ issue.category.name }}</span>
@@ -247,7 +247,7 @@
                                     {{ issue.student_explanation[:200] }}{% if issue.student_explanation|length > 200 %}...{% endif %}
                                 </p>
                                 <small class="text-muted">
-                                    <span class="material-symbols-outlined me-1">fact_check</span>
+                                    <span class="material-symbols-outlined me-1" aria-hidden="true">fact_check</span>
                                     Updated {{ issue.updated_at|fmt_timestamp }}
                                 </small>
                             </div>
@@ -265,7 +265,7 @@
             {% else %}
                 <div class="card">
                     <div class="card-body text-center py-5">
-                        <span class="material-symbols-outlined fs-1 text-muted mb-3">inbox</span>
+                        <span class="material-symbols-outlined fs-1 text-muted mb-3" aria-hidden="true">inbox</span>
                         <h5 class="text-muted">No tickets awaiting final review</h5>
                         <p class="text-muted mb-0">Tickets waiting for your final review will appear here.</p>
                     </div>
@@ -283,7 +283,7 @@
                             <div class="flex-grow-1">
                                 <div class="d-flex align-items-center mb-2">
                                     <h6 class="mb-0 me-2">
-                                        <span class="material-symbols-outlined me-1">person</span>
+                                        <span class="material-symbols-outlined me-1" aria-hidden="true">person</span>
                                         {{ issue.student_display_name }}
                                     </h6>
                                     <span class="badge bg-secondary">{{ issue.category.name }}</span>
@@ -292,7 +292,7 @@
                                     <strong>Escalation Reason:</strong> {{ issue.escalation_reason }}
                                 </p>
                                 <small class="text-muted">
-                                    <span class="material-symbols-outlined me-1">arrow_circle_up</span>
+                                    <span class="material-symbols-outlined me-1" aria-hidden="true">arrow_circle_up</span>
                                     Escalated {{ issue.escalated_at|fmt_timestamp }}
                                 </small>
                             </div>
@@ -311,7 +311,7 @@
             {% else %}
                 <div class="card">
                     <div class="card-body text-center py-5">
-                        <span class="material-symbols-outlined fs-1 text-muted mb-3">inbox</span>
+                        <span class="material-symbols-outlined fs-1 text-muted mb-3" aria-hidden="true">inbox</span>
                         <h5 class="text-muted">No escalated issues</h5>
                         <p class="text-muted mb-0">Issues you escalate to developers will appear here.</p>
                     </div>

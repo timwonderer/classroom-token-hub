@@ -11,7 +11,7 @@
         <div class="col-6 col-lg-3">
             <div class="sysadmin-stat-card h-100">
                 <div class="sysadmin-stat-icon bg-primary-subtle">
-                    <span class="material-symbols-outlined text-primary">badge</span>
+                    <span class="material-symbols-outlined text-primary" aria-hidden="true">badge</span>
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ total_admins }}</div>
@@ -23,7 +23,7 @@
         <div class="col-6 col-lg-3">
             <div class="sysadmin-stat-card h-100">
                 <div class="sysadmin-stat-icon bg-success-subtle">
-                    <span class="material-symbols-outlined text-success">groups</span>
+                    <span class="material-symbols-outlined text-success" aria-hidden="true">groups</span>
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ total_students }}</div>
@@ -35,7 +35,7 @@
         <div class="col-6 col-lg-3">
             <div class="sysadmin-stat-card h-100">
                 <div class="sysadmin-stat-icon bg-danger-subtle">
-                    <span class="material-symbols-outlined text-danger">support_agent</span>
+                    <span class="material-symbols-outlined text-danger" aria-hidden="true">support_agent</span>
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ open_tickets }}</div>
@@ -52,19 +52,19 @@
         <div class="row g-3">
             <div class="col-6 col-md-4 col-lg-2">
                 <a href="{{ url_for('sysadmin.support_tickets') }}" class="sysadmin-quick-action">
-                    <span class="material-symbols-outlined text-danger">support_agent</span>
+                    <span class="material-symbols-outlined text-danger" aria-hidden="true">support_agent</span>
                     <span>Support Tickets</span>
                 </a>
             </div>
             <div class="col-6 col-md-4 col-lg-2">
                 <a href="{{ url_for('sysadmin.combined_logs') }}" class="sysadmin-quick-action">
-                    <span class="material-symbols-outlined text-secondary">description</span>
+                    <span class="material-symbols-outlined text-secondary" aria-hidden="true">description</span>
                     <span>View Logs</span>
                 </a>
             </div>
             <div class="col-6 col-md-4 col-lg-2">
                 <a href="/sysadmin/grafana" target="_blank" rel="noopener noreferrer" class="sysadmin-quick-action">
-                    <span class="material-symbols-outlined text-success">monitoring</span>
+                    <span class="material-symbols-outlined text-success" aria-hidden="true">monitoring</span>
                     <span>Grafana</span><span class="visually-hidden"> (opens in a new tab)</span>
                 </a>
             </div>
@@ -77,7 +77,7 @@
         <div class="col-12">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-3">
-                    <span class="material-symbols-outlined text-danger" style="font-size:20px;">error</span>
+                    <span class="material-symbols-outlined text-danger" style="font-size:20px;" aria-hidden="true">error</span>
                     <h6 class="mb-0 fw-semibold">Recent Errors</h6>
                     <a href="{{ url_for('sysadmin.combined_logs') }}" class="btn btn-sm btn-outline-secondary ms-auto"
                         style="font-size:0.75rem;">View All</a>
@@ -116,7 +116,7 @@
                     {% else %}
                     <div class="p-4 text-center text-muted">
                         <span class="material-symbols-outlined d-block mb-2 text-success"
-                            style="font-size:40px;">check_circle</span>
+                            style="font-size:40px;" aria-hidden="true">check_circle</span>
                         No recent errors — system is healthy
                     </div>
                     {% endif %}
@@ -129,7 +129,7 @@
     <div class="card border-0 shadow-sm">
         <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-3">
             <span class="material-symbols-outlined"
-                style="font-size:20px; color: var(--sysadmin-accent);">admin_panel_settings</span>
+                style="font-size:20px; color: var(--sysadmin-accent);" aria-hidden="true">admin_panel_settings</span>
             <h6 class="mb-0 fw-semibold">System Administrators</h6>
             <span class="badge bg-secondary ms-auto">{{ system_admin_count }}</span>
         </div>
@@ -152,7 +152,7 @@
                                     <div class="rounded-circle d-flex align-items-center justify-content-center"
                                         style="width:32px;height:32px;flex-shrink:0;background:color-mix(in srgb, var(--secondary) 15%, transparent);">
                                         <span class="material-symbols-outlined"
-                                            style="font-size:16px;color:var(--sysadmin-accent);">shield_person</span>
+                                            style="font-size:16px;color:var(--sysadmin-accent);" aria-hidden="true">shield_person</span>
                                     </div>
                                     <span class="fw-semibold" style="font-size:0.9rem;">{{ admin.display_username }}</span>
                                 </div>
