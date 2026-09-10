@@ -3,6 +3,34 @@
 {% set current_page = "rent" %}
 {% block title %}Rent{% endblock %}
 {% block page_icon %}home{% endblock %}
+
+{% block contextual_help_body %}
+{{ help.panel_lead("What you owe for this rent period, when it is due, and what happens if it goes unpaid.") }}
+
+{% call help.topic('rent-bill', 'receipt_long', 'One bill, not several') %}
+<p>Rent for a period and any late fees it produced are a single bill. The card shows the summed total and itemizes it underneath, so you can see which part is rent and which part is a fee.</p>
+<p class="mb-0">Paying settles the whole bill in one payment — rent first, then the fees. You do not pay them separately.</p>
+{% endcall %}
+
+{% call help.topic('rent-due', 'event', 'Due date, then grace period') %}
+<p>Rent is due on the date shown. After that you still have a grace period, listed at the bottom of the page, to pay without a penalty.</p>
+<p class="mb-0">The bill is only late once the grace period ends. That is when a late fee is added — not on the due date itself.</p>
+{% endcall %}
+
+{% call help.topic('rent-late', 'gavel', 'A late fee does not go away') %}
+<p class="mb-0">A late fee is its own charge, recorded against the bill it came from. It stays on your record after it is paid, which is why the Late Fee History list shows settled fees as well as outstanding ones. Paying the bill clears the balance; it does not erase the history.</p>
+{% endcall %}
+
+{% call help.topic('rent-funds', 'account_balance', 'Rent is paid from checking') %}
+<p>The Pay button only appears when your checking balance covers the full bill. Savings is not drawn on automatically — if the money you need is in savings, move it over on the Transfer page first.</p>
+<p class="mb-0">If you are short, the page tells you the exact amount you still need.</p>
+{% endcall %}
+
+{% call help.topic('rent-class', 'swap_horiz', 'Bills are per class') %}
+<p class="mb-0">Each class runs its own economy, so rent, due dates, and grace periods are set separately in each one. This page shows the class you are currently viewing. Use <strong>Switch Classes</strong> in the left menu to see another one.</p>
+{% endcall %}
+{% endblock %}
+
 {% block extra_styles %}
 <style>
     .bills-tabs .nav-link {

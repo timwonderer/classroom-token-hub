@@ -693,12 +693,40 @@ _LEDGER_WRITE_ONCE_FIELDS = frozenset({
 
 _LEDGER_GUARDED_FIELDS = tuple(sorted(_LEDGER_IMMUTABLE_FIELDS | _LEDGER_WRITE_ONCE_FIELDS))
 
+# `status` cannot sit in either set above: settlement genuinely does rewrite it.
+# But it is a one-way street, not a free column. `ledger_settlement_service` is
+# the only post-insert writer and it only ever moves PENDING to POSTED, and
+# INV-LED-003 requires a void to arrive as a new linked row rather than as an
+# edit to the original — so POSTED -> PENDING, anything -> VOID, and a revived
+# VOID are all rewrites of a settled fact wearing a lifecycle costume.
+_LEDGER_LAWFUL_STATUS_TRANSITIONS = frozenset({
+    (TransactionStatus.PENDING.name, TransactionStatus.POSTED.name),
+})
+
 
 def _ledger_comparable(value):
     """Flatten a value to something comparable across ORM and driver types."""
     if isinstance(value, enum.Enum):
         return value.value
     return value
+
+
+def _ledger_status_name(value):
+    """Normalize a status to the label PostgreSQL actually stores.
+
+    `status` is a native enum declared as `db.Enum(TransactionStatus)` with no
+    `values_callable`, so SQLAlchemy persists the member **name** — the labels in
+    `transactionstatus` are `PENDING` / `POSTED` / `VOID`, not the lowercase
+    `.value` strings. `_ledger_comparable` returns `.value`, which is right for
+    `mechanism` (whose labels *are* its values) and wrong here: comparing
+    `'posted'` to a stored `'POSTED'` would make every update look like a status
+    change and reject the settlement path outright.
+    """
+    if isinstance(value, TransactionStatus):
+        return value.name
+    if value is None:
+        return None
+    return str(value).upper()
 
 
 @sa.event.listens_for(Transaction, "before_update")
@@ -713,9 +741,10 @@ def _guard_ledger_immutability(_mapper, connection, target):
     is expired, so a genuine rewrite presents no prior value at all. The row
     itself is unambiguous in both cases.
 
-    `status` and `feat_code` are deliberately unguarded: settlement moves PENDING
-    to POSTED, and `_enforce_transaction_integrity` restamps `feat_code` with the
-    FEAT performing the lawful update. Everything else on a persisted row is
+    `status` is guarded by transition rather than by equality — settlement moves
+    PENDING to POSTED and nothing else may move it at all. `feat_code` is the one
+    genuinely unguarded column: `_enforce_transaction_integrity` restamps it with
+    the FEAT performing the lawful update. Everything else on a persisted row is
     history.
     """
     if target.id is None:
@@ -723,13 +752,24 @@ def _guard_ledger_immutability(_mapper, connection, target):
 
     stored = connection.execute(
         sa.text(
-            f"SELECT {', '.join(_LEDGER_GUARDED_FIELDS)} "
+            f"SELECT status, {', '.join(_LEDGER_GUARDED_FIELDS)} "
             "FROM ledger_transaction WHERE id = :id"
         ),
         {"id": target.id},
     ).mappings().first()
     if stored is None:
         return
+
+    previous_status = _ledger_status_name(stored['status'])
+    next_status = _ledger_status_name(getattr(target, 'status', None))
+    if next_status != previous_status and (
+        (previous_status, next_status) not in _LEDGER_LAWFUL_STATUS_TRANSITIONS
+    ):
+        raise ValueError(
+            f"ledger_transaction status may not move {previous_status} -> {next_status}. "
+            "Settlement advances PENDING to POSTED; every other change of standing "
+            "is recorded as a new linked transaction."
+        )
 
     violations = []
     for field in _LEDGER_GUARDED_FIELDS:

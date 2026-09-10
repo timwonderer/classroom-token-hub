@@ -123,7 +123,10 @@ def downgrade():
     if not column_exists('payroll_settings', 'bonus_rate'):
         op.add_column(
             'payroll_settings',
-            sa.Column('bonus_rate', sa.Float(), nullable=True, server_default='0.0'),
+            # No server_default: the original column (i6j7k8l9m0n1) had none, and a
+            # downgrade that restores a different column than it removed is not a
+            # rollback.
+            sa.Column('bonus_rate', sa.Float(), nullable=True),
         )
         print("Restored payroll_settings.bonus_rate")
     else:

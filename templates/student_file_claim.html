@@ -7,14 +7,36 @@
 {% block contextual_help_body %}
 {{ help.panel_lead("Ask your policy to pay out for something that already happened to you.") }}
 
-{% call help.topic('claim-dates', 'event', 'Dates and hours are the claim') %}
-<p>Enter the day the loss happened and how much time it cost you. Your teacher checks those dates against your attendance record, so guessing makes the claim weaker, not stronger.</p>
-<p class="mb-0">The date also decides whether the claim is inside the policy's deadline and after its waiting period. A date outside either one is refused on the terms, however genuine it is.</p>
+{# The form is one of two shapes, and the guidance has to follow it. A
+   transaction claim points at a ledger row and has no date or hours fields at
+   all, so describing them here would send a student looking for inputs that
+   are not on their screen. #}
+{% if is_transaction_type %}
+{% call help.topic('claim-transaction', 'receipt_long', 'Pick the transaction you are claiming') %}
+<p>This claim attaches to a payment you already made. Choose it from the list rather than describing it — the transaction is what your teacher checks, and it fixes the amount the claim is measured against.</p>
+<p class="mb-0">If the payment you expected is not in the list, it is not eligible under this policy. Ask your teacher before filing against something else.</p>
 {% endcall %}
 
 {% call help.topic('claim-write', 'edit_note', 'Say what happened') %}
-<p class="mb-0">Write what happened and why the time was lost — plainly, in your own words. "Lost time" gives your teacher nothing to decide on. Specifics are what turn a claim into an approval.</p>
+<p class="mb-0">Write what happened and why this transaction should be covered — plainly, in your own words. "It was unfair" gives your teacher nothing to decide on. Specifics are what turn a claim into an approval.</p>
 {% endcall %}
+
+{% elif is_productivity_type %}
+{% call help.topic('claim-dates', 'event', 'Dates and hours are the claim') %}
+<p>Enter the day the loss happened and how much time it cost you. Your teacher checks those dates against your attendance record, so guessing makes the claim weaker, not stronger.</p>
+<p class="mb-0">Claiming more than one day? Use <strong>Add another day</strong> — each day is its own line, not a total lumped together.</p>
+{% endcall %}
+
+{% call help.topic('claim-write', 'edit_note', 'Say what happened') %}
+<p class="mb-0">Each day gets its own account of the lost time, plainly, in your own words. "Lost time" gives your teacher nothing to decide on. Specifics are what turn a claim into an approval.</p>
+{% endcall %}
+{% endif %}
+
+{% if policy.claim_window_days is not none %}
+{% call help.topic('claim-window', 'schedule', 'There is a deadline') %}
+<p class="mb-0">This policy must be claimed within <strong>{{ policy.claim_window_days }} days</strong> of the incident. Past that, the claim is refused on the terms however genuine it is — so file it while it is fresh rather than waiting to see whether it resolves on its own.</p>
+{% endcall %}
+{% endif %}
 
 {% call help.topic('claim-amount', 'payments', 'What you can be paid') %}
 <p class="mb-0">A claim can be approved for less than you asked. The policy's maximum per claim, and how many claims you have already used this period, both cap the payout — check those on your policy page before you assume the amount is a judgement about you.</p>

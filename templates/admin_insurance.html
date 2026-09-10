@@ -54,7 +54,10 @@
 
   <div class="card shadow-sm mb-4">
     <div class="card-header bg-primary py-3">
-      <h5 class="mb-0 fw-bold"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">other_admission</span>Pending Claims</h5>
+      {# `list_insurance_claims` returns every claim in the class regardless of
+         status, so this list is not "pending" — the heading says what the query
+         actually asks for. #}
+      <h5 class="mb-0 fw-bold"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">other_admission</span>Filed claims</h5>
     </div>
     <div class="list-group list-group-flush">
       {% for claim in claims %}

@@ -116,11 +116,19 @@ def test_student_help_links_resolve(client, app, url):
 
 
 def _templates_extending(layout: str) -> list[Path]:
-    """Every template that renders inside the given portal chrome."""
+    """Every template that renders inside the given portal chrome.
+
+    Both quote styles are matched deliberately. Jinja accepts either, so a
+    single-quoted `extends` is an ordinary template — but a guard that only
+    looked for the double-quoted form would silently stop covering it, which is
+    exactly how `student_rent.html` shipped without a help panel while this test
+    reported the student portal clean.
+    """
+    needles = (f'extends "{layout}"', f"extends '{layout}'")
     return sorted(
         path
         for path in (REPO_ROOT / "templates").glob("*.html")
-        if f'extends "{layout}"' in path.read_text(encoding="utf-8")
+        if any(needle in path.read_text(encoding="utf-8") for needle in needles)
     )
 
 
