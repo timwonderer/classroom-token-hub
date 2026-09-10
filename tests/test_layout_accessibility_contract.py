@@ -187,38 +187,72 @@ def test_templates_and_client_scripts_do_not_use_blocking_alerts():
 # renders to one. Matching the shape rather than an enumerated list of specific
 # expressions means adding a nav section does not silently need a test edit —
 # the previous hardcoded set covered only the admin layout's five accordions.
-_EXPANDED_EXPR = re.compile(r"^\{\{\s*'(?:true|false)'\s+if\s+.+\s+else\s+'(?:true|false)'\s*\}\}$")
+_EXPANDED_EXPR = re.compile(
+    r"^\{\{\s*'(?:true|false)'\s+if\s+.+\s+else\s+'(?:true|false)'\s*\}\}$"
+    r"|^\{%\s*if\s+.+?%\}\s*(?:true|false)\s*\{%\s*else\s*%\}\s*(?:true|false)\s*\{%\s*endif\s*%\}$"
+)
 
 LAYOUTS_WITH_TRIGGERS = ("layout_admin.html", "layout_student.html")
+
+TEMPLATES_WITH_TRIGGERS = sorted(
+    path.relative_to(REPO_ROOT / "templates").as_posix()
+    for path in (REPO_ROOT / "templates").rglob("*.html")
+    if "aria-controls" in path.read_text(encoding="utf-8")
+)
 
 
 def _describes_expanded_state(value):
     return value in {"true", "false"} or bool(value and _EXPANDED_EXPR.match(value))
 
 
-@pytest.mark.parametrize("layout", LAYOUTS_WITH_TRIGGERS)
-def test_dropdown_triggers_describe_their_controlled_links(layout):
-    """Every aria-controls trigger names a real target and reports its state.
+@pytest.mark.parametrize("template", TEMPLATES_WITH_TRIGGERS)
+def test_disclosure_triggers_describe_their_controlled_state(template):
+    """Every disclosure trigger reports whether its target is open (WCAG 4.1.2).
 
-    A control that owns a disclosure must say whether it is open (WCAG 4.1.2).
-    The admin "Need Help?" offcanvas trigger shipped without `aria-expanded`
-    for the life of the v2 layout, and the student layout carried the identical
-    defect where no test looked at all.
+    Scoped to the whole template corpus, not to the two layouts. Fixing the
+    admin layout's "Need Help?" trigger left the same defect standing in ten
+    per-page copies of it, because no test looked past the shell.
+
+    Tabs are excluded: an ARIA tab reports selection through `aria-selected`,
+    and adding `aria-expanded` to one would be wrong, not merely redundant.
+    Target existence is asserted only when the target is declared in the same
+    file — a page trigger may legitimately control a panel defined in its
+    parent layout.
     """
-    soup = _template(layout)
-    triggers = soup.select("button[aria-controls]")
-    assert triggers, f"{layout} declares no aria-controls triggers"
+    soup = _template(template)
+    triggers = [
+        trigger
+        for trigger in soup.select("button[aria-controls], a[aria-controls]")
+        if trigger.get("role") != "tab"
+    ]
+    if not triggers:
+        pytest.skip(f"{template} has no non-tab aria-controls triggers")
     for trigger in triggers:
         controlled_id = trigger["aria-controls"]
-        assert soup.find(id=controlled_id) is not None, (
-            f"{layout}: missing controlled element {controlled_id}"
-        )
         value = trigger.get("aria-expanded")
         label = " ".join(trigger.get_text(strip=True).split())[:40]
         assert _describes_expanded_state(value), (
-            f"{layout}: trigger for {controlled_id} (“{label}”) has "
+            f"{template}: trigger for {controlled_id} (“{label}”) has "
             f"aria-expanded={value!r}; expected 'true'/'false' or a Jinja "
             f"conditional rendering one"
+        )
+
+
+@pytest.mark.parametrize("template", TEMPLATES_WITH_TRIGGERS)
+def test_disclosure_triggers_target_elements_that_exist(template):
+    """A trigger pointing at an id declared nowhere in this file or the layouts."""
+    soup = _template(template)
+    known_ids = {element["id"] for element in soup.find_all(id=True)}
+    for layout in LAYOUTS_WITH_TRIGGERS:
+        known_ids |= {element["id"] for element in _template(layout).find_all(id=True)}
+
+    for trigger in soup.select("[aria-controls]"):
+        controlled_id = trigger["aria-controls"]
+        if "{" in controlled_id:
+            continue  # Jinja-computed target; resolvable only at render time.
+        assert controlled_id in known_ids, (
+            f"{template}: aria-controls names {controlled_id!r}, which is "
+            f"declared neither here nor in a portal layout"
         )
 
 
