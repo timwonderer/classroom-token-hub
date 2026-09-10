@@ -205,6 +205,19 @@ def print_issue(issue: Dict, prefix: str):
     print(f"      Fix: {issue['fix']}")
 
 
+def load_baseline(path: Path) -> set:
+    """Read accepted-noncompliance basenames, one per line, '#' comments allowed."""
+    if not path.exists():
+        print(f"❌ Baseline file not found: {path}")
+        sys.exit(2)
+    entries = set()
+    for line in path.read_text(encoding='utf-8').splitlines():
+        line = line.split('#', 1)[0].strip()
+        if line:
+            entries.add(line)
+    return entries
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Lint database migrations for idempotency and safety',
@@ -236,8 +249,20 @@ For more information, see:
         action='store_true',
         help='Show summary report at the end'
     )
+    parser.add_argument(
+        '--baseline',
+        metavar='PATH',
+        help=(
+            'File listing migration basenames whose non-compliance is already '
+            'accepted (SOP-DB-009 VI). Listed files may fail without failing '
+            'the run; a listed file that now passes fails the run so the '
+            'baseline can only shrink.'
+        )
+    )
 
     args = parser.parse_args()
+
+    baseline = load_baseline(Path(args.baseline)) if args.baseline else set()
 
     # Determine which files to lint
     if args.files:
@@ -262,6 +287,8 @@ For more information, see:
     total_warnings = 0
     files_with_errors = []
     files_with_warnings = []
+    baselined_failures = []
+    stale_baseline = []
 
     for migration_file in migrations:
         if not migration_file.exists():
@@ -271,11 +298,19 @@ For more information, see:
         errors, warnings = lint_migration(migration_file, args.verbose)
 
         if errors:
+            if migration_file.name in baseline:
+                baselined_failures.append(migration_file.name)
+                if args.verbose:
+                    print(f"\n🔒 {migration_file.name} (accepted by baseline)")
+                continue
             files_with_errors.append(migration_file.name)
             print(f"\n❌ {migration_file.name}")
             for error in errors:
                 print_issue(error, "ERROR:")
                 total_errors += 1
+
+        elif migration_file.name in baseline:
+            stale_baseline.append(migration_file.name)
 
         elif warnings:
             files_with_warnings.append(migration_file.name)
@@ -292,6 +327,8 @@ For more information, see:
     print(f"   Files with warnings: {len(files_with_warnings)}")
     print(f"   Total errors: {total_errors}")
     print(f"   Total warnings: {total_warnings}")
+    if baseline:
+        print(f"   Accepted by baseline: {len(baselined_failures)}")
 
     # Print report if requested
     if args.report or total_errors > 0:
@@ -313,6 +350,16 @@ For more information, see:
                 print(f"      - {filename}")
             if len(files_with_warnings) > 10:
                 print(f"      ... and {len(files_with_warnings) - 10} more")
+
+    # A baselined file that now passes must leave the baseline, or the accepted
+    # set stops describing reality and quietly re-opens room for regressions.
+    if stale_baseline:
+        print(f"\n{'='*70}")
+        print(f"❌ {len(stale_baseline)} baseline entries now pass and must be removed:")
+        for filename in stale_baseline:
+            print(f"      - {filename}")
+        print("\n   The baseline only shrinks. Delete these lines from it.")
+        sys.exit(1)
 
     # Exit with appropriate code
     if total_errors > 0:

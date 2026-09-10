@@ -13,16 +13,20 @@ on:
     branches: [ main ]
     paths:
       - 'migrations/versions/**'
+      - 'migrations/lint_baseline.txt'
       - 'app/models.py'
       - 'app/models/**'
       - 'scripts/validate-migrations.py'
+      - 'scripts/lint_migrations.py'
   pull_request:
     branches: [ '**' ]
     paths:
       - 'migrations/versions/**'
+      - 'migrations/lint_baseline.txt'
       - 'app/models.py'
       - 'app/models/**'
       - 'scripts/validate-migrations.py'
+      - 'scripts/lint_migrations.py'
 
   # Also allow manual trigger
   workflow_dispatch:
@@ -64,6 +68,16 @@ jobs:
         run: |
           echo "🔍 Running comprehensive migration validation..."
           python scripts/validate-migrations.py
+
+      # SOP-DB-011 has required the linter since 2026-02-04, but nothing ran it,
+      # so migrations dated 2026-09 landed non-idempotent. The whole corpus is
+      # linted against a frozen baseline of the debt SOP-DB-009 VI already
+      # accepts: history may fail, new work may not, and the baseline can only
+      # shrink. Editing merged migrations to clear it is forbidden by policy.
+      - name: Lint migrations for idempotency
+        run: |
+          echo "🔍 Linting migrations against the frozen baseline..."
+          python scripts/lint_migrations.py --baseline migrations/lint_baseline.txt
 
       - name: Comment on PR (if check fails)
         if: failure() && github.event_name == 'pull_request'

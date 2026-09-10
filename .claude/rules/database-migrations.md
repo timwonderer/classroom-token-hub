@@ -238,8 +238,15 @@ def upgrade():
 **⚠️ NEW REQUIREMENT:** Validate migration before committing.
 
 ```bash
+# Your migration alone
 python scripts/lint_migrations.py migrations/versions/abc123def456_*.py
+
+# What CI runs: whole corpus against the frozen baseline
+python scripts/lint_migrations.py --baseline migrations/lint_baseline.txt
 ```
+
+`migrations/lint_baseline.txt` freezes the pre-gate debt SOP-DB-009 VI accepts.
+It is not a place to put your migration — it only shrinks.
 
 This checks for:
 - Missing idempotency helpers
