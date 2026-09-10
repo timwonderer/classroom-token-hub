@@ -54,18 +54,8 @@ class InsuranceClaimPolicyError(Exception):
     """
 
 
-def _resolve_claim_policy(entitlement_id, *, class_id, seat_id):
-    """Resolve the immutable insurance policy that governs a claimed entitlement.
-
-    The GRANTED insurance entitlement carries the `policy_uuid` of the exact
-    immutable definition purchased; that row is the sole claim-time authority for
-    coverage terms, ceilings, reimbursement, and claim limits. Terms are NEVER
-    read from the entitlement payload (no snapshot) — the entitlement proves
-    acquisition, the policy provides the terms (INV-ARC-009).
-
-    Fails closed: a missing grant, a missing `policy_uuid`, or a policy that does
-    not exist in this class (wrong-class resolution returns None) raises.
-    """
+def _resolve_claim_grant(entitlement_id, *, class_id, seat_id):
+    """Resolve the GRANTED event that proves acquisition of a claimed entitlement."""
     grant = (
         EntitlementEvent.query
         .filter_by(
@@ -81,6 +71,22 @@ def _resolve_claim_policy(entitlement_id, *, class_id, seat_id):
         raise InsuranceClaimPolicyError(
             f"No INSURANCE grant for entitlement {entitlement_id} in class {class_id}"
         )
+    return grant
+
+
+def _resolve_claim_policy(entitlement_id, *, class_id, seat_id):
+    """Resolve the immutable insurance policy that governs a claimed entitlement.
+
+    The GRANTED insurance entitlement carries the `policy_uuid` of the exact
+    immutable definition purchased; that row is the sole claim-time authority for
+    coverage terms, ceilings, reimbursement, and claim limits. Terms are NEVER
+    read from the entitlement payload (no snapshot) — the entitlement proves
+    acquisition, the policy provides the terms (INV-ARC-009).
+
+    Fails closed: a missing grant, a missing `policy_uuid`, or a policy that does
+    not exist in this class (wrong-class resolution returns None) raises.
+    """
+    grant = _resolve_claim_grant(entitlement_id, class_id=class_id, seat_id=seat_id)
     policy_uuid = (grant.payload or {}).get("policy_uuid")
     if not policy_uuid:
         raise InsuranceClaimPolicyError(
@@ -269,6 +275,108 @@ def _coverage_effective_start_utc(
         evaluation_date=effective_date,
     )
     return effective_date, boundaries.boundary_start_utc
+
+
+@dataclass(frozen=True)
+class ClaimContractView:
+    """Read-only projection of the terms a claim is actually adjudicated against.
+
+    Every field is derived from the same immutable policy row and coverage
+    arithmetic the submission gates use, so a review screen cannot display a
+    number the enforcement path would contradict. Fields are ``None`` where the
+    product type has no such term (PRODUCTIVITY and NON_MONETARY have no filing
+    window; NON_MONETARY has no monetary payout capacity).
+    """
+
+    policy: object
+    coverage_start_utc: datetime
+    coverage_effective_date: date
+    allowance_unit: str
+    period_allowance: Optional[int]
+    period_consumed: Optional[int]
+    claim_window_days: Optional[int]
+    maximum_policy_payout: Optional[Decimal]
+    remaining_period_cap: Optional[Decimal]
+
+
+def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> ClaimContractView:
+    """Project the contract governing ``claim`` for read-only review surfaces.
+
+    Resolution runs through the GRANTED entitlement event, which is the only
+    lawful path to the policy — the claim's ``claim_basis`` holds submitted facts
+    only and never policy terms. Raises ``InsuranceClaimPolicyError`` when the
+    lineage cannot be resolved, so a review screen fails visibly rather than
+    rendering invented terms.
+    """
+    class_id = claim.class_id
+    seat_id = claim.target_seat_id
+    grant = _resolve_claim_grant(claim.entitlement_id, class_id=class_id, seat_id=seat_id)
+    policy = _resolve_claim_policy(claim.entitlement_id, class_id=class_id, seat_id=seat_id)
+
+    coverage_start_utc = ensure_utc(grant.timestamp)
+    effective_date, _ = _coverage_effective_start_utc(
+        canonical_context, coverage_start_utc, policy.waiting_period_days or 0
+    )
+    week_equiv = _coverage_week_equivalent(
+        policy_terms=policy,
+        coverage_start_utc=coverage_start_utc,
+        canonical_context=canonical_context,
+    )
+    maximum_payout = _maximum_policy_payout(policy)
+
+    if policy.insurance_type == _TRANSACTION_INSURANCE_TYPE:
+        allowance_unit = "claim"
+        per_week = policy.claims_per_week_equivalent or Decimal("0")
+        period_allowance = int(math.ceil(per_week * week_equiv))
+        period_consumed = len(
+            insurance_claim_service.list_claims_for_entitlement(
+                class_id=class_id,
+                entitlement_id=claim.entitlement_id,
+                target_seat_id=seat_id,
+            )
+        )
+        claim_window_days = policy.claim_window_days
+        remaining = maximum_payout - _sum_approved_payouts(class_id, claim.entitlement_id)
+    elif policy.insurance_type == _PRODUCTIVITY_INSURANCE_TYPE:
+        allowance_unit = "date"
+        per_week = policy.claimable_dates_per_week_equivalent or Decimal("0")
+        period_allowance = int(math.ceil(per_week * week_equiv))
+        period_consumed = len(
+            {
+                row.claim_date
+                for row in insurance_claim_service.list_productivity_dates_for_entitlement(
+                    class_id=class_id, entitlement_id=claim.entitlement_id
+                )
+            }
+        )
+        claim_window_days = None
+        remaining = maximum_payout - insurance_claim_service.sum_recognized_payout_for_entitlement(
+            class_id=class_id, entitlement_id=claim.entitlement_id
+        )
+    else:
+        return ClaimContractView(
+            policy=policy,
+            coverage_start_utc=coverage_start_utc,
+            coverage_effective_date=effective_date,
+            allowance_unit="claim",
+            period_allowance=None,
+            period_consumed=None,
+            claim_window_days=None,
+            maximum_policy_payout=None,
+            remaining_period_cap=None,
+        )
+
+    return ClaimContractView(
+        policy=policy,
+        coverage_start_utc=coverage_start_utc,
+        coverage_effective_date=effective_date,
+        allowance_unit=allowance_unit,
+        period_allowance=period_allowance,
+        period_consumed=period_consumed,
+        claim_window_days=claim_window_days,
+        maximum_policy_payout=maximum_payout,
+        remaining_period_cap=_quantize_currency(max(remaining, Decimal("0.00"))),
+    )
 
 
 def _enforce_non_monetary_submission(

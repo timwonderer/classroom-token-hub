@@ -127,7 +127,12 @@ from app.feats.class_configuration import (
     InsuranceContractViolation,
 )
 # TODO (Phase 4): insurance_claim_feat deleted; use FEAT-STOR-003 instead
-from app.feats.insurance_claim_feat import resolve_insurance_claim
+from app.feats.insurance_claim_feat import (
+    InsuranceClaimPolicyError,
+    describe_claim_contract,
+    resolve_insurance_claim,
+)
+from app.services import insurance_claim_service
 # TODO (Phase 4): store_entitlement_service deleted
 # from app.services.store_entitlement_service import get_insurance_claim, get_last_entitlement_end_for_policy_version, derive_display_status
 from app.services.classroom_setup import (
@@ -6377,82 +6382,6 @@ def delete_insurance_policy(policy_uuid):
     return redirect(url_for('admin.insurance_management'))
 
 
-@admin_required
-def view_student_policy(enrollment_id):
-    """View student's policy enrollment details and claims history."""
-    class_id = g.canonical_context.class_id
-    student = SimpleNamespace(full_name="", public_id="")
-    claims = list_insurance_claims(class_id=class_id)
-    placeholder_policy = SimpleNamespace(
-        id=enrollment_id,
-        title="Insurance",
-        description="",
-        premium=Decimal("0.00"),
-        charge_frequency="monthly",
-        waiting_period_days=0,
-        autopay=False,
-        auto_cancel_nonpay_days=0,
-        claim_type="TRANSACTION",
-        no_repurchase_after_cancel=False,
-        repurchase_wait_days=0,
-    )
-    enrollment = SimpleNamespace(
-        id=enrollment_id,
-        contract_title="Insurance",
-        contract_description="",
-        policy=placeholder_policy,
-        status="active",
-        purchase_date=utc_now(),
-        coverage_start_date=None,
-        payment_current=True,
-        days_unpaid=0,
-        next_payment_due=None,
-        contract_claim_time_limit_days=0,
-        contract_max_claim_amount=None,
-        contract_max_claims_count=None,
-        contract_max_claims_period="period",
-    )
-    def _claim_display_row(claim):
-        raw_incident = (claim.claimed_dates or [None])[0] if getattr(claim, "claimed_dates", None) else None
-        if isinstance(raw_incident, str):
-            try:
-                incident_dt = datetime.fromisoformat(raw_incident)
-            except ValueError:
-                incident_dt = claim.submitted_at
-        elif raw_incident is not None:
-            incident_dt = raw_incident
-        else:
-            incident_dt = claim.submitted_at
-        return SimpleNamespace(
-            id=claim.id,
-            claim_id=claim.claim_id,
-            policy=SimpleNamespace(title=getattr(getattr(claim.entitlement, "store_item", None), "name", "Insurance")),
-            status=getattr(claim.status, "value", claim.status),
-            approved_amount=getattr(claim, "approved_amount", None),
-            claim_amount=getattr(claim, "claim_amount", None),
-            rejection_reason=getattr(claim, "rejection_reason", None),
-            description=getattr(claim, "description", ""),
-            teacher_notes=getattr(claim, "teacher_notes", None),
-            incident_date=incident_dt,
-            filed_date=claim.submitted_at,
-        )
-    if claims:
-        first_claim = claims[0]
-        entitlement_item = getattr(getattr(first_claim, "entitlement", None), "store_item", None)
-        if entitlement_item is not None:
-            placeholder_policy.title = getattr(entitlement_item, "name", placeholder_policy.title)
-            placeholder_policy.description = getattr(entitlement_item, "description", placeholder_policy.description)
-    return render_template(
-        'admin_view_student_policy.html',
-        current_page='insurance',
-        student=student,
-        enrollment=enrollment,
-        policy=placeholder_policy,
-        claims=[_claim_display_row(claim) for claim in claims],
-        seat=SimpleNamespace(public_id=""),
-    )
-
-
 @admin_bp.route('/insurance/claim/<claim_id>', methods=['GET', 'POST'])
 @admin_required
 def process_claim(claim_id):
@@ -6463,15 +6392,18 @@ def process_claim(claim_id):
     form = AdminClaimProcessForm()
     if request.method == 'GET':
         form.status.data = getattr(claim.status, "value", claim.status)
-    claims = list_insurance_claims(class_id=g.canonical_context.class_id)
     claim_basis = claim.claim_basis or {}
-    policy_uuid = claim_basis.get('policy_uuid')
-    policy = (
-        InsurancePolicy.query.filter_by(
-            class_id=claim.class_id,
-            policy_uuid=policy_uuid,
-        ).first()
-        if policy_uuid else None
+    try:
+        contract = describe_claim_contract(claim, canonical_context=g.canonical_context)
+    except InsuranceClaimPolicyError:
+        # Fail visibly: an unresolvable policy lineage means there are no terms to
+        # review, and inventing them is how a teacher approves a payout blind.
+        abort(404)
+    policy = contract.policy
+    claims = insurance_claim_service.list_claims_for_entitlement(
+        class_id=claim.class_id,
+        entitlement_id=claim.entitlement_id,
+        target_seat_id=claim.target_seat_id,
     )
     student_profile = IdentityProfile.query.filter_by(seat_id=claim.target_seat_id).first()
     incident_dates = claim_basis.get('claimed_dates') or []
@@ -6486,23 +6418,6 @@ def process_claim(claim_id):
             parsed_incident_dates.append(raw_date)
     if not parsed_incident_dates:
         parsed_incident_dates = [claim.submitted_at]
-    placeholder_policy = SimpleNamespace(
-        title=policy.title if policy and policy.title else "Insurance",
-        description=policy.description if policy and policy.description else "",
-        premium=Decimal("0.00"),
-        charge_frequency="monthly",
-        waiting_period_days=0,
-        autopay=False,
-        auto_cancel_nonpay_days=0,
-        claim_type=claim_basis.get('claim_type', 'TRANSACTION'),
-        no_repurchase_after_cancel=False,
-        repurchase_wait_days=0,
-    )
-    enrollment = SimpleNamespace(
-        coverage_start_date=None,
-        payment_current=True,
-        days_unpaid=0,
-    )
     claim_view = SimpleNamespace(
         id=claim.claim_id,
         claim_id=claim.claim_id,
@@ -6554,24 +6469,25 @@ def process_claim(claim_id):
         'admin_process_claim.html',
         current_page='insurance',
         claim=claim_view,
-        claim_type='TRANSACTION',
-        contract_title=placeholder_policy.title,
-        contract_description=placeholder_policy.description,
-        contract_claim_time_limit_days=0,
-        contract_max_claim_amount=None,
-        remaining_period_cap=None,
-        contract_max_claims_count=None,
-        contract_max_claims_period='period',
-        contract_max_payout_per_period=None,
-        validation_errors=[],
+        claim_type=policy.insurance_type,
+        contract_title=policy.title,
+        contract_description=policy.description or '',
+        contract_reimbursement_percentage=policy.reimbursement_percentage,
+        contract_claim_window_days=contract.claim_window_days,
+        contract_waiting_period_days=policy.waiting_period_days or 0,
+        coverage_start=contract.coverage_start_utc,
+        coverage_effective_date=contract.coverage_effective_date,
+        contract_allowance_unit=contract.allowance_unit,
+        contract_period_allowance=contract.period_allowance,
+        contract_period_consumed=contract.period_consumed,
+        contract_max_payout_per_period=contract.maximum_policy_payout,
+        remaining_period_cap=contract.remaining_period_cap,
         claims_stats=SimpleNamespace(
             pending=sum(1 for c in claims if getattr(c.status, "value", c.status) == "SUBMITTED"),
             approved=sum(1 for c in claims if getattr(c.status, "value", c.status) == "APPROVED"),
             rejected=sum(1 for c in claims if getattr(c.status, "value", c.status) == "REJECTED"),
-            paid=0,
         ),
-        enrollment=enrollment,
-        policy=placeholder_policy,
+        policy=policy,
         form=form,
     )
 
