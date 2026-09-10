@@ -4,6 +4,26 @@
 {% block title %}Verify Teacher Recovery{% endblock %}
 {% block page_icon %}verified_user{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Your teacher is locked out and is asking the class to vouch that the account is theirs.") }}
+
+{% call help.topic('vrec-why', 'groups', 'Why you are being asked') %}
+<p class="mb-0">Teacher accounts are not recovered with a birthdate or a security question. They are recovered through the class, because you are the people who can actually tell whether the person asking is your teacher. Your confirmation is one part of that.</p>
+{% endcall %}
+
+{% call help.topic('vrec-pass', 'lock', 'Your passphrase proves it is you') %}
+<p class="mb-0">You enter <strong>your own</strong> passphrase so the system knows the confirmation came from you and not from someone using your device. It is never shown to your teacher and it does not give them access to your account.</p>
+{% endcall %}
+
+{% call help.topic('vrec-code', 'pin', 'The recovery code') %}
+<p class="mb-0">After you confirm, you are shown a recovery code to give your teacher. Hand it over in person, in class. Do not post it, message it, or read it out to anyone who is not standing in front of you.</p>
+{% endcall %}
+
+{% call help.topic('vrec-stop', 'report', 'When not to do this') %}
+<p class="mb-0">Only confirm if your real teacher actually asked you to, in class. If the request arrived by message, from someone you cannot see, or from a person claiming to be your teacher, stop and tell an adult at school. Refusing costs your teacher a small delay; being tricked hands over a whole class.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-lg-8">

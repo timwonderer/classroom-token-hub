@@ -2282,7 +2282,6 @@ class PayrollSettings(db.Model):
 
     # Optional: different rates for different scenarios
     overtime_multiplier = db.Column(db.Float, default=1.0)
-    bonus_rate = db.Column(db.Float, default=0.0)
 
     # Enhanced settings for simple/advanced modes
     settings_mode = db.Column(db.String(20), nullable=False, default='simple')  # 'simple' or 'advanced'
@@ -2318,7 +2317,7 @@ class PayrollSettings(db.Model):
     # the definition a teacher submits.
     _FROZEN_POLICY_FIELDS = (
         'block', 'pay_rate', 'payroll_frequency_days', 'overtime_multiplier',
-        'bonus_rate', 'settings_mode', 'daily_limit_hours', 'time_unit',
+        'settings_mode', 'daily_limit_hours', 'time_unit',
         'overtime_enabled', 'overtime_threshold', 'overtime_threshold_unit',
         'overtime_threshold_period', 'max_time_per_day', 'max_time_per_day_unit',
         'pay_schedule_type', 'pay_schedule_custom_value', 'pay_schedule_custom_unit',

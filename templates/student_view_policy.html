@@ -4,6 +4,26 @@
 {% block title %}{{ enrollment.contract_title }}{% endblock %}
 {% block page_icon %}policy{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("The exact terms you bought on this policy, and every claim you have made against it.") }}
+
+{% call help.topic('spol-frozen', 'lock_clock', 'These are your terms') %}
+<p class="mb-0">What you see here is the version of the policy as it was when you bought it. If your teacher has changed the policy since, this page still shows what you are actually owed — so this is the page to check before filing, not the marketplace listing.</p>
+{% endcall %}
+
+{% call help.topic('spol-limits', 'data_usage', 'Claim limits and payment terms') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Claim limits</strong> tell you how much of your allowance is already used. This is the usual reason a fair-looking claim gets capped or refused.</li>
+    <li class="mb-2"><strong>Claim deadline</strong> is counted from when the incident happened, not from when you noticed. File early.</li>
+    <li class="mb-0"><strong>Payment terms</strong> show the premium and how often it is charged — check here first if insurance seems to be draining your account.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('spol-claims', 'assignment_turned_in', 'Your claim history') %}
+<p class="mb-0">Each claim shows its status and, once decided, the amount approved. An approved amount smaller than what you asked for usually means a limit above was reached, not that you were disbelieved.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <p class="text-muted mb-4">Policy details and history.</p>
 

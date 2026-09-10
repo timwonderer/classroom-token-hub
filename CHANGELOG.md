@@ -16,7 +16,29 @@ and this project follows semantic versioning principles.
 
 - **Removed a developer's local filesystem path from the public repository (2026-09-09)** — 129 occurrences of an absolute `/Users/<name>/...` path across five documents in `docs/` disclosed a maintainer's real name and local directory layout. Paths are now repository-relative, which also repairs the broken absolute markdown links in the archived route audits.
 
+### Removed
+
+- **`bonus_rate` deleted from payroll settings (2026-09-10)** — A v1 artifact that never became a feature: a Float column on `PayrollSettings`, a form field labelled "Bonus Rate ($ per minute)" on `PayrollSettingsForm`, and membership in `_FROZEN_POLICY_FIELDS`. Nothing else. No template rendered it, no route, service or FEAT read it, no test asserted it, and no document under `docs/INVARIANT/`, `docs/DOMAIN/`, `docs/FEATURE-EXECUTION/`, `docs/SPEC/` or `docs/STANDARD_OPERATING_PROCEDURES/` has ever required it. A teacher could type a number into it and the number went nowhere.
+
+  That is worse than an unfinished feature. `payroll_settings` is an append-only versioned policy table (`DOM-POL-001` §VI.1), so every row is a contract the teacher is told they submitted — and a frozen field that silently means nothing puts a fictional term inside an immutable contract.
+
+  Dropping a column from an immutable-policy table destroys what historical rows asserted, so this was checked against real data first: every existing row held `0.0`, the column default, so no policy version loses a term it actually carried. Migration `a4f2b7c91d38`; upgrade/downgrade/re-upgrade verified. Because `_SUBMITTABLE_FIELDS` in `payroll_settings_service` is derived from `_FROZEN_POLICY_FIELDS`, a caller still passing `bonus_rate` now raises rather than silently writing a column that no longer exists.
+
+- **Prohibited version pointer dropped from `payroll_settings` (2026-09-10)** — `payroll_settings.policy_version_id`, its index and its foreign key into `policy_versions` are an alternative version pointer on a Policies repository table. `DOM-POL-001` §VI.0 prohibits that construct by name — "whether a self-referential FK on a Policies table or an external version-tracking table" — and says explicitly that `policy_versions` / `policy_transitions` record economic-policy evolution and are not a domain-policy versioning mechanism.
+
+  The column arrived 2026-07-19 (`c3d4e5f8a9b`), when payroll settings still tracked lineage by pointing at `policy_versions`. The 2026-09-04 append-only conversion (`3bb29ef4e874`) made `policy_uuid` the version and dropped `is_active` for exactly this reason — its own docstring calls two current-policy projections "exactly the alternative version pointer DOM-POL-001 §VI.0 prohibits" — but walked past the second pointer. `rent_settings` and `hall_pass_settings`, converted in the same migration, carry no such column; `payroll_settings` was the outlier.
+
+  Nothing could break: `PayrollSettings` never declared the column, so no route, service, FEAT, test or template ever read or wrote it, and all six rows held `NULL`. Migration `b7d3e2064c15`; upgrade/downgrade/re-upgrade verified, FK discovered by column rather than by hardcoded name. `payroll_event.policy_version_id` is deliberately untouched — `PayrollEvent` is an operational fact in Productivity, not a Policies row, and freezing lineage on a historical fact is the contract (`FEAT-PROD-003` fails closed without it).
+
 ### Fixed
+
+- **Ten student pages had a help panel that said nothing (2026-09-10)** — The teacher shell got this treatment first; the student shell was left with the contract and none of the content. Ten of the eleven templates extending `layout_student.html` overrode no `contextual_help_body` and opened to the placeholder sentence.
+
+  The student case was the worse of the two. `layout_admin.html` renders its "Need Help?" trigger only when a doc path resolves, so a teacher page with nothing to say showed no button at all. `layout_student.html` renders the trigger unconditionally and forces a fallback `help_doc_path`, so every one of those pages offered help and then answered with a placeholder — spending a student's trust on a dead end, for the audience least able to route around it.
+
+  Panels are now written for finances, payroll, store, insurance marketplace, policy detail, claim filing, issue reporting, help & support, adding a class, and teacher-recovery verification. The recovery panel is deliberately blunt about social engineering: a student who is asked out of band to confirm a "teacher" recovery is being attacked, and the panel says to stop and tell an adult. `tests/test_docs_help_links.py::test_every_student_page_explains_itself` now fails if a student template is added without one.
+
+- **`/health/status` documented probes it never ran (2026-09-10)** — The docstring claimed the endpoint checked the "Seat table", the "Administrator table" and the "Hall passes table". It checks none of them, and `administrators` has not existed since the v2 identity migration. The endpoint executes exactly one probe, `SELECT 1`, and reports every other signal as `UNKNOWN` / `CHECK_NOT_REGISTERED`. The docstring now says that, and names it as the contract rather than a gap: a capability stays UNKNOWN until a lawful read-only probe is registered, so the endpoint cannot imply health it has not observed (`INV-ARC-017`).
 
 - **Nineteen teacher pages had a help panel that said nothing (2026-09-10)** — `layout_admin.html` renders a shared contextual-help offcanvas, but only the ten pages that declared an offcanvas of their own carried real guidance. Every other teacher page opened to a single generic sentence and two resource links: a panel that answered no question the teacher could have had while looking at it.
 

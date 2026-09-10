@@ -78,17 +78,21 @@ def health_check():
 def health_status():
     """Return bounded capability and platform signals for status publication.
 
-    Checks:
-    - Database connectivity
-    - Seat table accessibility
-    - Administrator table accessibility
-    - Hall passes table accessibility (if accessible)
+    Exactly one check is executed: `SELECT 1`, reported as the `database`
+    platform signal (PASS/KNOWN or FAIL/UNAVAILABLE).
 
-    Returns JSON with component status for detailed monitoring.
-    Individual table checks that fail are logged but don't fail the entire check.
-    This endpoint intentionally does not expose table counts, tenant data, raw
-    errors, or internal diagnostics. Capability checks remain UNKNOWN until a
-    lawful read-only probe is registered for that capability.
+    Every other signal — the `login`, `attendance`, `payroll`, `roster` and
+    `classroom_economy` capabilities, and the `background_jobs`,
+    `external_integrations`, `monitoring_freshness` and
+    `invariant_verification` platform signals — is emitted as
+    UNKNOWN/UNAVAILABLE with `CHECK_NOT_REGISTERED`. That is the contract, not
+    a gap: a capability reports UNKNOWN until a lawful read-only probe is
+    registered for it, so the endpoint can never imply health it has not
+    observed (INV-ARC-017: executed evidence is not the same as inferred
+    coverage).
+
+    This endpoint intentionally exposes no table counts, tenant data, raw
+    errors, or internal diagnostics.
     """
     observed_at = datetime.now(timezone.utc).isoformat()
     signals = []

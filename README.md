@@ -2,12 +2,12 @@
 
 A classroom management platform that uses a simulated token economy to drive student engagement and participation. Built with Flask + SQLAlchemy + PostgreSQL, designed for multi-tenant deployment across multiple schools and class periods.
 
-**Version:** 2.0 (Launch preparation) — **Branch:** `claude/ci-onto-landed`
+**Version:** 2.0 (Pre-Launch Live Server Test) — **Branch:** `main`
 **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
 
 > [!NOTE]
 >
-> This branch is the v2 integration and launch-preparation line. The public GitHub Pages artifact currently uses a `launching soon` holding page; the v2 landing pages are kept on the separate `launch/v2-landing-pages` branch until launch. The application and the static marketing site are separate hosts, and the application is not exposed through a Flask `/gh/` mirror.
+> This branch is the v2 deployment branch. The public GitHub Pages artifact currently uses a `launching soon` holding page; the v2 landing pages are kept on the separate `launch/v2-landing-pages` branch until launch. The application and the static marketing site are separate hosts, and the application is not exposed through a Flask `/gh/` mirror.
 
 ---
 
@@ -42,7 +42,7 @@ A classroom management platform that uses a simulated token economy to drive stu
 
 - **Multi-Tenant** — Full class-period isolation; students share identity across teachers
 - **Progressive Web App** — Installable on mobile; offline fallback included
-- **Accessibility** — WCAG 2.1 AA design, keyboard nav, ARIA labels, screen readers
+- **Accessibility** — Built against WCAG 2.1 AA: keyboard navigation, ARIA state on disclosure controls, screen-reader labelling. Automated auditing runs per pull request on changed templates; full-corpus conformance has not been independently certified
 - **Security** — PII encryption at rest, TOTP 2FA, CSRF protection, centralized scrypt password hashing, Cloudflare Turnstile, post-claim PII deletion
 - **Observability and status** — OpenTelemetry instrumentation (Flask, SQLAlchemy) with OTLP export, plus bounded `/health/status` signals that do not expose tenant data or raw exceptions
 - **Rate Limiting** — Flask-Limiter with Cloudflare IP detection; disabled in dev
@@ -61,9 +61,11 @@ A classroom management platform that uses a simulated token economy to drive stu
 
 ### Prerequisites
 
-- Python 3.10+
-- PostgreSQL 12+
+- Python 3.10+ (CI runs 3.10 and 3.11)
+- PostgreSQL 12+ (developed and tested against 16)
 - Virtual environment (recommended)
+
+Tests run against a real PostgreSQL database named by `TEST_DATABASE_URL`. There is no SQLite path.
 
 ### Setup
 
@@ -105,6 +107,8 @@ pytest tests/dom/operation/test_health.py -v
 pytest tests/test_status_contracts.py tests/test_status_projection.py -v
 
 # Full suite (requires TEST_DATABASE_URL set; run separately for release certification)
+# Takes roughly 80 minutes: conftest.py drops and rebuilds the schema by running
+# the real migration chain, so triggers and constraints are live in every test.
 TEST_DATABASE_URL=postgresql://... pytest
 
 # Specific domain
@@ -117,13 +121,24 @@ pytest --cov=app tests/
 ### Database Migrations
 
 ```bash
-flask db heads           # Must show exactly 1 head
+flask db heads                  # Must show exactly 1 head
 flask db migrate -m "Description"
-flask db upgrade         # Apply
-flask db downgrade       # Rollback
+flask db upgrade                # Apply
+flask db history                # Find the revision to return to
+flask db downgrade <revision>   # Roll back to that revision
 ```
 
-All migrations must include idempotency helpers. See [.claude/rules/database-migrations.md](.claude/rules/database-migrations.md).
+> [!WARNING]
+>
+> Always pass an explicit revision to `flask db downgrade`. The bare form walks back from the current head, and because that head is a merge point with two parents it cannot choose between them — it aborts with `ERROR [flask_migrate] Error: Ambiguous walk` and rolls nothing back. Read the target off `flask db history` first and confirm with `flask db current` afterward.
+
+All migrations must include idempotency helpers and pass the linter before commit:
+
+```bash
+python scripts/lint_migrations.py --baseline migrations/lint_baseline.txt
+```
+
+`migrations/lint_baseline.txt` freezes pre-gate debt and only ever shrinks — a new migration does not belong in it. The normative specification is [SOP-DB-011](docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-011_Migration_Specifications.md); [.claude/rules/database-migrations.md](.claude/rules/database-migrations.md) is a non-authoritative working summary of it.
 
 ---
 
@@ -135,9 +150,13 @@ The v2 runtime is governed by the documented authority chain rather than by rout
 INV-CORE → INV-ARC → DOM-* → FEAT-*
 ```
 
-The branch includes the v2 bounded domains, canonical FEAT mutation boundaries, class-scoped tenancy, canonical Ledger persistence and monetary resolution, Interpretation reporting, constitutional CI evidence selection, and production documentation/link checks. These are implementation and evidence updates, not a declaration that every launch gate is green. In particular, authenticated rendered journeys and any evidence marked `NOT_EVALUATED`, `BLOCKED`, or otherwise unresolved in the tracking documents remain launch work.
+The repository includes the v2 bounded domains, canonical FEAT mutation boundaries, class-scoped tenancy, canonical Ledger persistence and monetary resolution, Interpretation reporting, constitutional CI evidence selection, and production documentation/link checks. These are implementation and evidence updates, not a declaration that every launch gate is green. In particular, authenticated rendered journeys and any evidence marked `NOT_EVALUATED`, `BLOCKED`, or otherwise unresolved in the tracking documents remain launch work.
 
-Before launch, use the [v2 production transition runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md), [tracking index](docs/TRACKING/), and [changelog](CHANGELOG.md) as the current source for release evidence. Do not infer application availability from the GitHub Pages holding page: verify application maintenance mode, login routes, deployment health, and the exact release SHA independently.
+Known unproven surfaces, stated plainly rather than left to inference: daylight-saving and midnight-boundary transitions have not been exercised live; full-corpus template accessibility, keyboard, focus and contrast behavior needs a real browser; concurrent settlement, payroll batch runs and scheduled jobs have not been tested under load; and the production host itself has only been rehearsed against a local PostgreSQL cluster. Executed evidence is not the same as inferred coverage (`INV-ARC-017`).
+
+Before launch, use the [v2 production transition runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md), the [production readiness tracker](docs/TRACKING/PRODUCTION_READINESS_2026-09.md), and the [changelog](CHANGELOG.md) as the current source for release evidence. Do not infer application availability from the GitHub Pages holding page: verify application maintenance mode, login routes, deployment health, and the exact release SHA independently.
+
+---
 
 ## Architecture
 
@@ -153,24 +172,43 @@ All queries must be scoped by `class_id`, never by `teacher_id` alone.
 
 ## Documentation
 
+Documentation is ordered by authority, and the order is load-bearing. When two documents disagree, the higher one wins and the lower one is what gets corrected.
+
+**Normative — these govern:**
+
 | Document | Purpose |
 | ---------- | --------- |
-| **[.claude/CLAUDE.md](.claude/CLAUDE.md)** | AI assistant guidelines |
-| **[.claude/rules/](.claude/rules/)** | Development rules (multi-tenancy, migrations, testing, security) |
 | **[docs/INVARIANT/](docs/INVARIANT/)** | Core runtime invariants and architectural rules |
 | **[docs/DOMAIN/](docs/DOMAIN/)** | Per-domain authority specs |
 | **[docs/FEATURE-EXECUTION/](docs/FEATURE-EXECUTION/)** | FEAT mutation contracts |
-| **[docs/TRACKING/](docs/TRACKING/)** | Domain progress and audit status |
+| **[docs/SPEC/](docs/SPEC/)** | Technical contracts |
+| **[docs/STANDARD_OPERATING_PROCEDURES/](docs/STANDARD_OPERATING_PROCEDURES/)** | Operational procedures |
+
+**Descriptive — these summarize, and may drift:**
+
+| Document | Purpose |
+| ---------- | --------- |
+| **[docs/TRACKING/](docs/TRACKING/)** | Release readiness and audit status |
+| **[docs/PRINCIPLES/](docs/PRINCIPLES/)** | Why a given design was chosen |
 | **[DEVELOPMENT.md](DEVELOPMENT.md)** | Roadmap and current priorities |
 | **[CHANGELOG.md](CHANGELOG.md)** | Version history |
+| **[.claude/CLAUDE.md](.claude/CLAUDE.md)** and **[.claude/rules/](.claude/rules/)** | Working guidance for AI coding agents |
+
+Nothing under `.claude/` is authoritative. It is orientation for agents, not a specification, and it must never be cited to justify a design decision — cite the INV/DOM/FEAT/SPEC/SOP document instead.
 
 ---
 
 ## Deployment
 
 ```bash
-# Health check
-curl http://localhost:5000/health  # Returns 200 if DB is reachable
+# Liveness — 200 "ok" if the database answers SELECT 1, 500 otherwise
+curl http://localhost:5000/health
+
+# Bounded status signals for public publication. Every capability reports
+# UNKNOWN until a lawful read-only probe is registered for it, so the endpoint
+# cannot imply health it has not observed. It exposes no tenant data, table
+# counts, or raw exceptions.
+curl http://localhost:5000/health/status
 
 # Application production
 gunicorn wsgi:app --workers 4 --bind 0.0.0.0:8000
@@ -207,7 +245,7 @@ See [LICENSE](LICENSE) for complete terms. [Third-party notices](docs/user-guide
 
 ## Support
 
-- **Questions about architecture?** Read [.claude/CLAUDE.md](.claude/CLAUDE.md) and the relevant domain spec
+- **Questions about architecture?** Read the relevant [domain spec](docs/DOMAIN/), then the [invariants](docs/INVARIANT/) it answers to
 - **Found a bug?** Open an issue
 - **Ready to contribute?** See [CONTRIBUTING.md](CONTRIBUTING.md)
 - **Contact:** [dev@classroomtokenhub.com](mailto:dev@classroomtokenhub.com)

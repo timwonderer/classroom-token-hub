@@ -4,6 +4,28 @@
 {% block title %}Finances{% endblock %}
 {% block page_icon %}account_balance_wallet{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Your two accounts, moving money between them, and the record of everything that has happened to your balance.") }}
+
+{% call help.topic('fin-accounts', 'account_balance', 'Checking and savings') %}
+<p>Money you are paid lands in <strong>Checking</strong>. That is the account rent, bills and purchases are taken from, so it is the one that needs to have enough in it.</p>
+<p class="mb-0"><strong>Savings</strong> earns interest and nothing is automatically taken out of it. The Statistics panel shows the monthly rate and what your current balance would earn at it.</p>
+{% endcall %}
+
+{% call help.topic('fin-transfer', 'swap_horiz', 'Moving money between them') %}
+<p>The <strong>Transfer</strong> tab moves your own money between your own two accounts. It is not a way to pay another student.</p>
+<p class="mb-0">A transfer does not change how much you have in total — only where it sits. Moving everything into savings to earn interest is a real strategy, but if checking is empty when rent is charged you will be short.</p>
+{% endcall %}
+
+{% call help.topic('fin-projection', 'trending_up', 'The projection is an estimate') %}
+<p class="mb-0">The 12-month savings chart assumes your balance sits untouched at today's interest rate. Every deposit, purchase or rate change makes it wrong. Read it as a comparison between choices, not a promise about a number.</p>
+{% endcall %}
+
+{% call help.topic('fin-transactions', 'receipt_long', 'Checking the record') %}
+<p class="mb-0">The <strong>Transactions</strong> tab lists every change to your balance with a description. If one looks wrong, open it and report the problem rather than assuming it will correct itself — your teacher reviews what you send.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <!-- Tabs -->
 <ul class="nav nav-tabs mb-4" id="financesTabs" role="tablist">

@@ -2,6 +2,29 @@
 
 {% block page_icon %}help_outline{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Look up how something works, report a problem, and see what you have already reported.") }}
+
+{% call help.topic('help-first', 'menu_book', 'Try the guides first') %}
+<p class="mb-0">Most questions here are about how the class economy works rather than something being broken — how interest is worked out, why rent was charged, what a waiting period means. The guides answer those immediately, without waiting on your teacher.</p>
+{% endcall %}
+
+{% call help.topic('help-which', 'call_split', 'Which kind of problem is it?') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>A record on your account is wrong</strong> — a payment, an attendance event, a charge. Report it as an issue so your teacher can check it against the class record.</li>
+    <li class="mb-0"><strong>The app itself is misbehaving</strong> — a page will not load, a button does nothing. Report that here. Your teacher can pass it on if it needs the developers.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('help-write', 'edit_note', 'Getting a useful answer') %}
+<p class="mb-0">Say what you did, what you expected, and what happened instead. "It's broken" gives nobody anything to check. If it happened on a particular page, name the page.</p>
+{% endcall %}
+
+{% call help.topic('help-track', 'format_list_bulleted', 'Following what you sent') %}
+<p class="mb-0">Your reports stay listed with their status, so you do not need to send the same thing twice. Duplicates make the queue slower for everyone, including you.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
 

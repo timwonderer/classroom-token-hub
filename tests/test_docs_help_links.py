@@ -115,13 +115,18 @@ def test_student_help_links_resolve(client, app, url):
     _assert_help_links_resolve(client, url)
 
 
-def _admin_templates() -> list[Path]:
-    """Every template that renders inside the teacher chrome."""
+def _templates_extending(layout: str) -> list[Path]:
+    """Every template that renders inside the given portal chrome."""
     return sorted(
         path
         for path in (REPO_ROOT / "templates").glob("*.html")
-        if 'extends "layout_admin.html"' in path.read_text(encoding="utf-8")
+        if f'extends "{layout}"' in path.read_text(encoding="utf-8")
     )
+
+
+def _admin_templates() -> list[Path]:
+    """Every template that renders inside the teacher chrome."""
+    return _templates_extending("layout_admin.html")
 
 
 def test_every_admin_page_explains_itself():
@@ -143,5 +148,30 @@ def test_every_admin_page_explains_itself():
     ]
     assert not blank, (
         "these teacher pages render the generic fallback help panel: "
+        + ", ".join(blank)
+    )
+
+
+def test_every_student_page_explains_itself():
+    """No student page may fall through to the generic help panel.
+
+    The same contract as the teacher shell, and the student side needs it more
+    rather than less. `layout_admin.html` only renders its "Need Help?" trigger
+    when a doc path resolved, so a teacher page with nothing to say showed no
+    button. `layout_student.html` renders the trigger unconditionally and
+    forces a fallback `help_doc_path`, so a student page with no
+    `contextual_help_body` still offers help and then answers with a
+    placeholder sentence.
+
+    That is worse than no button: it spends a student's trust on a dead end,
+    and the students are the audience least able to route around it.
+    """
+    blank = [
+        path.name
+        for path in _templates_extending("layout_student.html")
+        if "contextual_help_body" not in path.read_text(encoding="utf-8")
+    ]
+    assert not blank, (
+        "these student pages render the generic fallback help panel: "
         + ", ".join(blank)
     )

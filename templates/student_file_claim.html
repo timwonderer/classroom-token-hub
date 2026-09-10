@@ -4,6 +4,27 @@
 {% block title %}File a claim{% endblock %}
 {% block page_icon %}description{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Ask your policy to pay out for something that already happened to you.") }}
+
+{% call help.topic('claim-dates', 'event', 'Dates and hours are the claim') %}
+<p>Enter the day the loss happened and how much time it cost you. Your teacher checks those dates against your attendance record, so guessing makes the claim weaker, not stronger.</p>
+<p class="mb-0">The date also decides whether the claim is inside the policy's deadline and after its waiting period. A date outside either one is refused on the terms, however genuine it is.</p>
+{% endcall %}
+
+{% call help.topic('claim-write', 'edit_note', 'Say what happened') %}
+<p class="mb-0">Write what happened and why the time was lost — plainly, in your own words. "Lost time" gives your teacher nothing to decide on. Specifics are what turn a claim into an approval.</p>
+{% endcall %}
+
+{% call help.topic('claim-amount', 'payments', 'What you can be paid') %}
+<p class="mb-0">A claim can be approved for less than you asked. The policy's maximum per claim, and how many claims you have already used this period, both cap the payout — check those on your policy page before you assume the amount is a judgement about you.</p>
+{% endcall %}
+
+{% call help.topic('claim-after', 'hourglass_top', 'After you submit') %}
+<p class="mb-0">The claim goes to your teacher and waits for a decision. Submit once and let it sit — filing the same incident again does not speed it up, and duplicate claims can count against your limit.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid" style="max-width: 720px;">
 
