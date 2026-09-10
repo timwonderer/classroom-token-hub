@@ -49,263 +49,155 @@
 
 ```
 tests/
-├── conftest.py                 # Pytest fixtures and configuration
-├── test_admin_routes.py        # Admin/teacher route tests
-├── test_student_routes.py      # Student route tests
-├── test_api_routes.py          # API endpoint tests
-├── test_auth.py                # Authentication tests
-├── test_payroll.py             # Payroll logic tests
-├── test_models.py              # Model tests
-├── test_teacher_recovery.py    # Account recovery tests
-├── test_multi_tenancy.py       # Multi-tenancy scoping tests
-└── ... (55 test files total)
+├── conftest.py                 # rebuilds the schema by running the real migration chain
+├── helpers/                    # SPEC-TEST-001 classroom provisioning (see below)
+├── dom/                        # per-domain invariant tests, mirrors docs/DOMAIN
+├── test_*.py                   # feature and regression tests
+└── ...
 ```
+
+Tests run against a **real Postgres** database named by `TEST_DATABASE_URL`. There is
+no SQLite path. `conftest.py` drops and recreates `public` and then runs `upgrade()`, so
+migrations — including triggers and constraints — are live in every test.
 
 ### Test Naming Convention
 
 ```python
 # Format: test_<feature>_<scenario>
 def test_student_login_success(client, app):
-    """Test successful student login with valid credentials."""
+    """Successful student login with valid credentials."""
 
 def test_student_login_invalid_password(client, app):
-    """Test student login fails with wrong password."""
-
-def test_student_login_missing_username(client, app):
-    """Test student login fails with missing username."""
+    """Student login fails with a wrong passphrase."""
 ```
 
-**Pattern:**
-- Start with `test_`
-- Use descriptive names
-- One test per scenario
-- Include docstring explaining what's tested
+When a test exists to hold a named constitutional rule, put the rule id in the name so
+a failure says which law broke:
+
+```python
+def test_INV_ARC_016__audit_events_cannot_be_updated(app, audit_row):
+def test_J1__transfer_takes_an_exclusive_lock_on_the_seat_row(client, app):
+```
+
+---
+
+## Provisioning a Classroom
+
+**Do not hand-assemble rows.** Per SPEC-TEST-001, a test starts from a provisioned
+classroom, which builds a consistent `User` + `Seat` + `ClassEconomy` +
+`IdentityProfile` graph and asserts its own invariants.
+
+```python
+from tests.helpers.classroom_initializer import initialize_as_student
+
+classroom, student = initialize_as_student("chemistry_p1", client, app)
+class_id = classroom.class_id
+seat_id = student.seat.id
+user_id = student.user.id
+```
+
+| Helper | Use |
+|--------|-----|
+| `classroom_initializer.initialize(key, app)` | classroom only, nobody logged in |
+| `classroom_initializer.initialize_as_teacher(key, client, app)` | teacher session established |
+| `classroom_initializer.initialize_as_student(key, client, app)` | student session established |
+| `canonical_session.set_canonical_context(...)` | set session context directly, no HTTP login |
+| `ledger.create_ledger_idempotent_transaction(...)` | seed money |
+| `ledger.create_ledger_transfer_pair(...)` / `settle_ledger_balances(...)` | ledger state |
+| `class_domain.enable_class_feature(class_id=..., feature=...)` | turn on a feature; bypasses the CWI enablement gate |
 
 ---
 
 ## Common Test Patterns
 
-### Pattern 1: Route Testing
+### Pattern 1: Route testing
 
 ```python
 def test_student_dashboard_displays_balance(client, app):
-    """Test student dashboard shows current balance."""
-    # Setup: Create teacher, student, and join code
+    classroom, student = initialize_as_student("chemistry_p1", client, app)
+
     with app.app_context():
-        teacher = Admin(username="teacher1", ...)
-        db.session.add(teacher)
-        db.session.flush()
-
-        join_code = "ABC123"
-        block = TeacherBlock(teacher_id=teacher.id, join_code=join_code)
-        db.session.add(block)
-
-        student = create_student_for_join_code(join_code=join_code, teacher=teacher)
-        db.session.add(student)
+        create_ledger_idempotent_transaction(
+            idempotency_key=f"seed:{student.seat.id}",
+            seat_id=student.seat.id,
+            class_id=classroom.class_id,
+            user_id=student.user.id,
+            amount=Decimal("100.00"),
+            account_type="checking",
+            type="payroll",
+            description="Test funding",
+        )
         db.session.commit()
 
-        # Login
-        client.post('/student/login', data={
-            'username': 'student1',
-            'passphrase': 'test123'
-        })
-
-        # Execute: Access dashboard
-        response = client.get('/student/dashboard')
-
-        # Assert: Balance is displayed
-        assert response.status_code == 200
-        assert b'100.0' in response.data or b'$100' in response.data
+    response = client.get("/student/dashboard")
+    assert response.status_code == 200
+    assert b"100.00" in response.data
 ```
 
-### Pattern 2: Model Testing
+### Pattern 2: Mutation testing
+
+State changes go through a FEAT, so drive the FEAT, not `db.session.add`:
 
 ```python
-def test_student_model_creates_successfully(app):
-    """Test Student model creates with required fields."""
-    with app.app_context():
-        student = Student(
-            username="test_student",
-            first_name="Test",
-            last_initial="S",
-            teacher_id=1,
-            passphrase_hash="hashed_password"
-        )
-        db.session.add(student)
-        db.session.commit()
-
-        # Verify student was created
-        retrieved = Student.query.filter_by(username="test_student").first()
-        assert retrieved is not None
-        assert retrieved.first_name == "Test"
-        assert retrieved.last_initial == "S"
+with FEATContext("FEAT-LED-000", idempotency_key=f"t:{seat_id}"):
+    execute_account_transfer(
+        seat_id=seat_id, class_id=class_id, user_id=user_id,
+        amount=Decimal("5.00"), from_account="checking", to_account="savings",
+    )
 ```
 
-### Pattern 3: Multi-Tenancy Scoping
+### Pattern 3: Multi-tenancy scoping
+
+Two classes, one query, assert the other class is invisible:
 
 ```python
-def test_transaction_query_scoped_by_join_code(client, app):
-    """Test transactions are properly scoped by join_code."""
+def test_transactions_scoped_by_class(client, app):
+    first, alice = initialize_as_student("chemistry_p1", client, app)
+    second, bob = initialize_as_student("chemistry_p2", client, app)
+
     with app.app_context():
-        # Setup: Create two class periods
-        teacher = Admin(username="teacher1", ...)
-        db.session.add(teacher)
-        db.session.flush()
-
-        # Period 1
-        block1 = TeacherBlock(teacher_id=teacher.id, join_code="PERIOD1")
-        db.session.add(block1)
-
-        student1 = Student(username="student1", teacher_id=teacher.id, ...)
-        db.session.add(student1)
-
-        transaction1 = Transaction(
-            student_id=student1.id,
-            join_code="PERIOD1",
-            amount=50.0,
-            description="Period 1 transaction"
-        )
-        db.session.add(transaction1)
-
-        # Period 2
-        block2 = TeacherBlock(teacher_id=teacher.id, join_code="PERIOD2")
-        db.session.add(block2)
-
-        student2 = Student(username="student2", teacher_id=teacher.id, ...)
-        db.session.add(student2)
-
-        transaction2 = Transaction(
-            student_id=student2.id,
-            join_code="PERIOD2",
-            amount=75.0,
-            description="Period 2 transaction"
-        )
-        db.session.add(transaction2)
-
-        db.session.commit()
-
-        # Execute: Query transactions for PERIOD1 only
-        period1_transactions = Transaction.query.filter_by(
-            join_code="PERIOD1"
-        ).all()
-
-        # Assert: Only PERIOD1 transaction returned
-        assert len(period1_transactions) == 1
-        assert period1_transactions[0].join_code == "PERIOD1"
-        assert period1_transactions[0].amount == 50.0
+        rows = Transaction.query.filter_by(class_id=first.class_id).all()
+        assert all(r.class_id == first.class_id for r in rows)
+        assert bob.seat.id not in {r.seat_id for r in rows}
 ```
 
-### Pattern 4: Permission Testing
+Never assert scoping by `join_code` or by teacher ownership — see
+`.claude/rules/multi-tenancy.md`.
+
+### Pattern 4: Permission testing
 
 ```python
 def test_student_cannot_access_admin_dashboard(client, app):
-    """Test student cannot access teacher dashboard."""
-    with app.app_context():
-        # Setup: Create and login as student
-        student = Student(username="student1", ...)
-        db.session.add(student)
-        db.session.commit()
-
-        client.post('/student/login', data={
-            'username': 'student1',
-            'passphrase': 'test123'
-        })
-
-        # Execute: Try to access admin dashboard
-        response = client.get('/admin/dashboard')
-
-        # Assert: Redirected or forbidden
-        assert response.status_code in [302, 403]
+    initialize_as_student("chemistry_p1", client, app)
+    response = client.get("/admin/dashboard")
+    assert response.status_code in (302, 403)
 ```
 
-### Pattern 5: Error Handling
+### Pattern 5: Error handling
 
 ```python
-def test_transfer_fails_with_insufficient_funds(client, app):
-    """Test student transfer fails when balance is too low."""
+def test_transfer_rejects_over_balance(client, app):
+    classroom, student = initialize_as_student("chemistry_p1", client, app)
     with app.app_context():
-        # Setup: Student with $50 balance
-        student = create_student_with_balance(50.0)
-
-        # Login as student
-        login_as_student(client, student)
-
-        # Execute: Try to transfer $100 (more than balance)
-        response = client.post('/student/transfer', data={
-            'recipient_username': 'other_student',
-            'amount': 100.0
-        })
-
-        # Assert: Transfer fails with error message
-        assert response.status_code == 200  # Stays on page
-        assert b'Insufficient funds' in response.data or b'not enough' in response.data
+        with pytest.raises(InsufficientFunds):
+            with FEATContext("FEAT-LED-000", idempotency_key="over"):
+                execute_account_transfer(
+                    seat_id=student.seat.id, class_id=classroom.class_id,
+                    user_id=student.user.id, amount=Decimal("999.00"),
+                    from_account="checking", to_account="savings",
+                )
+        db.session.rollback()
 ```
+
+### Pattern 6: Asserting a property, not a coincidence
+
+A passing test is not evidence until you have watched it fail. Before trusting a
+regression test, remove the fix and confirm the test goes red. Locking is the classic
+trap: a foreign key already takes `FOR KEY SHARE` on the parent row, so "something
+locked it" is true with or without an explicit `with_for_update()`.
 
 ---
 
-## Pytest Fixtures
-
-### Using Fixtures
-
-Fixtures are reusable test components defined in `conftest.py`:
-
-```python
-def test_with_fixtures(client, app, sample_teacher, sample_student):
-    """Test using pre-defined fixtures."""
-    # client: Flask test client
-    # app: Flask app instance with context
-    # sample_teacher: Pre-created teacher
-    # sample_student: Pre-created student
-
-    with app.app_context():
-        # Your test code here
-        pass
-```
-
-### Common Fixtures
-
-```python
-# In conftest.py
-
-@pytest.fixture
-def app():
-    """Create and configure test app."""
-    app = create_app('testing')
-    with app.app_context():
-        db.create_all()
-        yield app
-        db.session.remove()
-        db.drop_all()
-
-@pytest.fixture
-def client(app):
-    """Create test client."""
-    return app.test_client()
-
-@pytest.fixture
-def sample_teacher(app):
-    """Create a sample teacher."""
-    with app.app_context():
-        teacher = Admin(username="test_teacher", ...)
-        db.session.add(teacher)
-        db.session.commit()
-        return teacher
-
-@pytest.fixture
-def sample_student(app, sample_teacher):
-    """Create a sample student."""
-    with app.app_context():
-        student = Student(
-            username="test_student",
-            teacher_id=sample_teacher.id,
-            ...
-        )
-        db.session.add(student)
-        db.session.commit()
-        return student
-```
-
----
 
 ## Running Tests
 
@@ -447,117 +339,72 @@ def test_new_feature_handles_errors(client, app):
 
 ## Common Testing Mistakes
 
-### ❌ MISTAKE 1: Not testing multi-tenancy
+### MISTAKE 1: Not testing class isolation
 
 ```python
-# BAD: Doesn't test cross-period data isolation
-def test_get_students(client, app):
-    students = Student.query.all()
-    assert len(students) > 0
+# BAD — proves nothing about isolation
+def test_get_seats(client, app):
+    assert Seat.query.count() > 0
 ```
 
 ```python
-# GOOD: Tests join_code scoping
-def test_get_students_scoped_by_join_code(client, app):
-    # Create students in different periods
-    student_period1 = create_student(join_code="PERIOD1")
-    student_period2 = create_student(join_code="PERIOD2")
+# GOOD — two classes exist, and only one is visible
+def test_seats_scoped_by_class(client, app):
+    first, _ = initialize_as_student("chemistry_p1", client, app)
+    second, bob = initialize_as_student("chemistry_p2", client, app)
 
-    # Query for PERIOD1 only
-    students = Student.query.join(StudentBlock).filter(
-        StudentBlock.join_code == "PERIOD1"
-    ).all()
-
-    # Assert only PERIOD1 student returned
-    assert len(students) == 1
-    assert students[0].id == student_period1.id
+    seats = Seat.query.filter_by(class_id=first.class_id, role="student").all()
+    assert bob.seat.id not in {s.id for s in seats}
 ```
 
-### ❌ MISTAKE 2: Testing multiple things in one test
+### MISTAKE 2: Hand-assembling identity rows
 
 ```python
-# BAD: Tests login, dashboard, and transfer in one test
-def test_student_workflow(client, app):
-    # Login
-    response = client.post('/student/login', ...)
-    assert response.status_code == 302
-
-    # Check dashboard
-    response = client.get('/student/dashboard')
-    assert b'Balance' in response.data
-
-    # Make transfer
-    response = client.post('/student/transfer', ...)
-    assert response.status_code == 200
+# BAD — bypasses the invariants the initializer exists to hold
+seat = Seat(user_id=user.id, class_id=class_id)
+db.session.add(seat)
 ```
 
 ```python
-# GOOD: Separate tests for each scenario
-def test_student_login_success(client, app):
-    response = client.post('/student/login', ...)
-    assert response.status_code == 302
-
-def test_student_dashboard_displays_balance(client, app):
-    login_as_student(client)
-    response = client.get('/student/dashboard')
-    assert b'Balance' in response.data
-
-def test_student_transfer_success(client, app):
-    login_as_student(client)
-    response = client.post('/student/transfer', ...)
-    assert response.status_code == 200
+# GOOD
+classroom, student = initialize_as_student("chemistry_p1", client, app)
 ```
 
-### ❌ MISTAKE 3: Not cleaning up database
+### MISTAKE 3: Writing domain state directly
 
 ```python
-# BAD: Doesn't clean up, affects other tests
-def test_create_student(app):
-    student = Student(username="test")
-    db.session.add(student)
-    db.session.commit()
-    # Missing cleanup
+# BAD — routes and tests alike must not post to the ledger by hand
+db.session.add(Transaction(seat_id=seat_id, class_id=class_id, amount=50))
+db.session.commit()
 ```
 
 ```python
-# GOOD: Uses app fixture which handles cleanup
-def test_create_student(app):
-    with app.app_context():
-        student = Student(username="test")
-        db.session.add(student)
-        db.session.commit()
-        # Fixture automatically cleans up after test
+# GOOD — go through the FEAT or the ledger helper
+create_ledger_idempotent_transaction(idempotency_key=..., seat_id=..., class_id=..., ...)
 ```
 
-### ❌ MISTAKE 4: Vague assertions
+### MISTAKE 4: Testing several things in one test
+
+Split login, dashboard render, and transfer into three tests. When a compound test
+fails, the failure names the workflow, not the defect.
+
+### MISTAKE 5: Vague assertions
 
 ```python
-# BAD: Not specific enough
-def test_transfer(client, app):
-    response = client.post('/student/transfer', ...)
-    assert response.status_code == 200
+# BAD
+assert response.status_code == 200
 ```
 
 ```python
-# GOOD: Specific assertions
-def test_transfer_updates_balances(client, app):
-    sender = create_student_with_balance(100.0)
-    recipient = create_student_with_balance(50.0)
-
-    login_as_student(client, sender)
-    response = client.post('/student/transfer', data={
-        'recipient_username': recipient.username,
-        'amount': 25.0
-    })
-
-    # Verify transfer succeeded
-    assert response.status_code == 200
-    assert b'Transfer successful' in response.data
-
-    # Verify balances updated in the active class scope
-    assert sender.get_checking_balance(join_code=join_code, teacher_id=teacher.id) == 75.0
-    assert recipient.get_checking_balance(join_code=join_code, teacher_id=teacher.id) == 75.0
+# GOOD — assert the balance actually moved
+assert get_available_balance(seat_id, class_id, "checking") == Decimal("75.00")
+assert get_available_balance(seat_id, class_id, "savings") == Decimal("25.00")
 ```
+
+### MISTAKE 6: Trusting a green test you never saw fail
+
+Especially for concurrency, locking, and trigger tests, where the database often
+supplies incidental protection that makes a broken implementation look correct.
 
 ---
 
@@ -617,7 +464,10 @@ pytest -s
 
 ---
 
-**Last Updated:** 2025-12-13
-**Test Count:** 55 files
-**Framework:** pytest with Flask test client
+**Last Updated:** 2026-09-09
+**Framework:** pytest with Flask test client, against real PostgreSQL
 **Coverage Tool:** pytest-cov
+
+The full suite takes over an hour. Run the narrowest selection that proves your change
+(`pytest tests/test_x.py -q`, `pytest -k pattern`) while iterating; reserve the full
+run for the end of a body of work.

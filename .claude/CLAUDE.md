@@ -99,10 +99,14 @@ Every query involving student/seat data MUST be scoped by `class_id`. `join_code
 
 ### Test Helpers
 
-- `tests/helpers/v2_fixtures.py` — `make_admin()`, `make_sysadmin()` with proper credential hashing
-- `tests/helpers/class_scope.py` — `create_class_scope()` builds canonical User+Seat+ClassEconomy+IdentityProfile fixtures; `make_student_seat()` and `make_student_with_seat()` for student test data
-- `tests/helpers/context_factory.py` — canonical context mocking
-- `tests/helpers/admin_context.py` — admin session setup
+Per SPEC-TEST-001, tests provision a whole classroom rather than assembling rows by hand.
+
+- `tests/helpers/classroom_initializer.py` — `initialize(key, app)`, `initialize_as_teacher(...)`, `initialize_as_student(...)`. The canonical entry point; asserts DB invariants and canonical context on the way out
+- `tests/helpers/canonical_classroom.py` — `provision_classroom()`, `login_teacher()`, `login_student()`; `ProvisionedClassroom` / `ProvisionedStudent` dataclasses
+- `tests/helpers/canonical_session.py` — `set_canonical_context()` for direct session setup
+- `tests/helpers/ledger.py` — `create_ledger_idempotent_transaction()`, `create_ledger_transfer_pair()`, `settle_ledger_balances()`, and other ledger seeding
+- `tests/helpers/class_domain.py` — `enable_class_feature()` (bypasses the CWI enablement gate), settings updates, tap in/out
+- Domain-specific: `attendance_domain.py`, `banking_domain.py`, `store_products.py`, `support_domain.py`
 
 ## Critical Rules
 
