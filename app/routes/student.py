@@ -1381,8 +1381,16 @@ def transfer():
                 # The checks above ran before the seat row was locked, so a
                 # concurrent transfer can have spent the balance in between. The
                 # FEAT re-checks under the lock and this is that verdict.
+                #
+                # The wording is composed here from the exception's structured
+                # `from_account`, never from `str(e)`. Rendering an exception's
+                # own text into a response is the shape of a stack-trace leak
+                # even when the current message happens to be a safe constant:
+                # it makes every future edit to that exception a change to what
+                # students see. This keeps the two identical in wording to the
+                # pre-lock branches above and independent of the raise site.
                 db.session.rollback()
-                message = str(e)
+                message = f"Insufficient {e.from_account} funds."
                 if is_json:
                     return jsonify(status="error", message=message), 400
                 flash(message, "transfer_error")
