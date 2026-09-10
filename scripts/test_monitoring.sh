@@ -15,6 +15,17 @@ NC='\033[0m' # No Color
 
 # Configuration
 BASE_URL="${1:-http://localhost:5000}"
+CF_ACCESS_CLIENT_ID="${CF_ACCESS_CLIENT_ID:-}"
+CF_ACCESS_CLIENT_SECRET="${CF_ACCESS_CLIENT_SECRET:-}"
+
+AUTH_HEADERS=()
+if [ -n "$CF_ACCESS_CLIENT_ID" ] || [ -n "$CF_ACCESS_CLIENT_SECRET" ]; then
+    if [ -z "$CF_ACCESS_CLIENT_ID" ] || [ -z "$CF_ACCESS_CLIENT_SECRET" ]; then
+        echo -e "${RED}✗ FAILED${NC} - CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET must be provided together"
+        exit 1
+    fi
+    AUTH_HEADERS=(-H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}")
+fi
 
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}   UptimeRobot Monitoring Test${NC}"
@@ -26,7 +37,7 @@ echo ""
 # Test 1: Basic health check
 echo -e "${BLUE}Test 1: Basic Health Check (/health)${NC}"
 echo "Testing: ${BASE_URL}/health"
-RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/health")
+RESPONSE=$(curl -s -w "\n%{http_code}" "${AUTH_HEADERS[@]}" "${BASE_URL}/health")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 BODY=$(echo "$RESPONSE" | head -n-1)
 
@@ -42,7 +53,7 @@ echo ""
 # Test 2: bounded status signals
 echo -e "${BLUE}Test 2: Status Signals (/health/status)${NC}"
 echo "Testing: ${BASE_URL}/health/status"
-RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/health/status")
+RESPONSE=$(curl -s -w "\n%{http_code}" "${AUTH_HEADERS[@]}" "${BASE_URL}/health/status")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 BODY=$(echo "$RESPONSE" | head -n-1)
 
@@ -52,11 +63,15 @@ if [ "$HTTP_CODE" = "200" ]; then
     echo "$BODY" | head -c 200
     echo "..."
 
-    # Check if JSON contains expected fields
-    if echo "$BODY" | grep -q '"status"' && echo "$BODY" | grep -q '"checks"'; then
+    # Validate the response contract, not just the presence of a field name.
+    if echo "$BODY" | jq -e '
+        (.signals | type == "array") and
+        all(.signals[]; type == "object" and (.key | type == "string"))
+    ' >/dev/null; then
         echo -e "${GREEN}✓${NC} Response contains expected JSON structure"
     else
-        echo -e "${YELLOW}⚠${NC} Warning: Response may not have expected structure"
+        echo -e "${RED}✗ FAILED${NC} - Response must contain a signals array with string key values"
+        exit 1
     fi
 else
     echo -e "${RED}✗ FAILED${NC} - Expected 200, got $HTTP_CODE"
@@ -65,27 +80,31 @@ else
 fi
 echo ""
 
-# Test 3: Verify public accessibility (no auth required)
-echo -e "${BLUE}Test 3: Public Accessibility${NC}"
-echo "Verifying endpoints don't require authentication..."
+# Test 3: Verify access policy behavior
+echo -e "${BLUE}Test 3: Access Policy${NC}"
+if [ -n "$CF_ACCESS_CLIENT_ID" ]; then
+    echo "Verifying service-token access to the Cloudflare-gated endpoints..."
+else
+    echo "Verifying direct access to the endpoints..."
+fi
 
 # Test with explicit no-credentials
-RESPONSE=$(curl -s -w "\n%{http_code}" -H "Cookie: " "${BASE_URL}/health")
+RESPONSE=$(curl -s -w "\n%{http_code}" -H "Cookie: " "${AUTH_HEADERS[@]}" "${BASE_URL}/health")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 
 if [ "$HTTP_CODE" = "200" ]; then
-    echo -e "${GREEN}✓ PASSED${NC} - /health is publicly accessible (no auth required)"
+    echo -e "${GREEN}✓ PASSED${NC} - /health accepted the configured access path"
 else
     echo -e "${RED}✗ FAILED${NC} - /health endpoint may require authentication"
     exit 1
 fi
 
 # Test /health/status with explicit no-credentials
-RESPONSE=$(curl -s -w "\n%{http_code}" -H "Cookie: " "${BASE_URL}/health/status")
+RESPONSE=$(curl -s -w "\n%{http_code}" -H "Cookie: " "${AUTH_HEADERS[@]}" "${BASE_URL}/health/status")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 
 if [ "$HTTP_CODE" = "200" ]; then
-    echo -e "${GREEN}✓ PASSED${NC} - /health/status is publicly accessible (no auth required)"
+    echo -e "${GREEN}✓ PASSED${NC} - /health/status accepted the configured access path"
 else
     echo -e "${RED}✗ FAILED${NC} - /health/status endpoint may require authentication"
     exit 1
