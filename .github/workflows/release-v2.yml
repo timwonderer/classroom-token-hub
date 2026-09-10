@@ -91,6 +91,9 @@ jobs:
             git fetch --no-tags origin "$RELEASE_REVISION"
             git reset --hard "$RELEASE_REVISION"
             source venv/bin/activate
+            # Before migrations: a revision that bumps a pin may also ship a
+            # migration that imports the new version.
+            pip install --requirement requirements.txt
             flask db upgrade
             sudo systemctl restart classroom-economy
             sudo systemctl is-active --quiet classroom-economy
