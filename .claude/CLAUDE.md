@@ -61,7 +61,7 @@ ClassEconomy (classes)    — isolation boundary; class_id (UUID) is canonical, 
 
 **CanonicalContext** (`app/services/context_resolver.py`): Frozen dataclass with `user_id`, `class_id`, `seat_id`, `actor_role`. Accessing `join_code`, `teacher_id`, `student_id`, or `block` on it raises `AttributeError` by design.
 
-**Legacy tables still in runtime:** `Admin` (teachers table), `Student` (students table), `TeacherBlock`, `StudentTeacher`, `ClassMembership`. These are bridge-period artifacts. The `Student` table is NOT part of the canonical identity model — `INV-IDEN-001` states "No separate students or teachers tables." Do not introduce new dependencies on these tables.
+**The v1 identity layer is gone.** `Student`, `Admin`, `TeacherBlock`, `StudentTeacher`, `ClassMembership`, `StudentBlock`, and `BalanceCache` exist neither as models nor as tables. Teacher authority lives on `User.user_role` plus `ClassEconomy.teacher_user_id`; sysadmin authority is `User.user_role == SYSADMIN`. Surviving mentions of "student"/"teacher" in the codebase are domain vocabulary (form labels, descriptions, log strings), not table references. Do not reintroduce these models.
 
 ### Mutation Model (FEAT Layer)
 
@@ -92,7 +92,7 @@ Every query involving student/seat data MUST be scoped by `class_id`. `join_code
 ### Key Services
 
 - `app/services/context_resolver.py` — `resolve_canonical_context()`, the sole legal way to get identity in routes
-- `app/services/ledger_service.py` — balance reads (seat+class scoped)
+- `app/services/ledger_balance_query_service.py` — balance reads, `get_available_balance(seat_id, class_id, account_type)`
 - `app/services/identity_service.py` — identity resolution helpers
 - `app/auth.py` — decorators (`admin_required`, `login_required`), session utilities
 - `app/feats/base.py` — `feat_shell` decorator, `FEATContext` manager
@@ -129,20 +129,19 @@ Constitutional authority flows: `INV-CORE → INV-ARC → DOM → FEAT`
 
 When specs and implementation disagree, the constitutional docs (`INV-*`, `DOM-*`) define the target state. Implementation is often in a transitional bridge state.
 
-## Active Migration Context
+## Identity Migration: Complete
 
-The codebase is mid-migration from v1 (legacy `Student`/`Admin` tables as identity authority) to v2 (`User`/`Seat` as canonical identity). Key implications:
+The v1→v2 identity migration has landed. `User`/`Seat`/`IdentityProfile`/`ClassEconomy` are the whole identity model:
 
-- Many routes still resolve `Student` objects and use `student_id` — this is legacy bridge code, not the target architecture
-- Credentials are currently duplicated on both `Student` and `User` during the bridge period
-- `ClassMembership` is deprecated; `ClassEconomy` is the canonical teacher-to-class linkage
-- The claim flow (`student.py:claim_account`) currently creates `Student` records — this violates INV-IDEN-001/INV-IDEN-010 and is under active remediation
-- `block`/`period` is display metadata only, never a scoping key
+- Credentials live on `users` only (`passphrase_hash`, `pin_hash`) — INV-ARC-019 §VI
+- `ClassEconomy.teacher_user_id` is the canonical teacher-to-class linkage
+- The claim flow binds a `User` to an existing `Seat`; it creates no separate student record
+- `block`/`section`/`period` is display metadata only, never a scoping key. `Seat.block` is a read-through property onto `ClassEconomy.section` kept for legacy admin rendering
 
 ## Common Mistakes
 
-- **`Seat.user_id` ≠ `Student.id`**: `Seat.user_id` points to `User.id`. Querying `Seat.filter_by(user_id=student.id)` is always wrong.
-- **Teacher ownership ≠ class scope**: `teacher_id` alone returns data across all class periods. Always add `class_id`.
-- **Using `join_code` for domain queries**: Domain models have both `class_id` and `join_code` columns. Use `class_id` for filtering; `join_code` is only for ClassEconomy lookups.
+- **`Seat.user_id` is a `User.id`**: it is not any kind of student id. A variable named `student` in this codebase is a `Seat`.
+- **Teacher ownership ≠ class scope**: `ClassEconomy.teacher_user_id` alone returns data across all of that teacher's class periods. Always add `class_id`.
+- **Using `join_code` for domain queries**: only `classes.join_code` is authoritative, and only at ingress. Filter domain tables by `class_id`.
 - **Bypassing FEAT layer**: Adding `db.session.commit()` directly in a route handler. Wrap in a FEAT instead.
 - **GET handlers with writes**: Reconciliation, interest posting, or lazy expiration in GET handlers violates INV-ARC-007.
