@@ -2,86 +2,33 @@
 {% set page_title = "Attendance Log" %}
 {% block title %}Attendance Log{% endblock %}
 {% block page_icon %}fact_check{% endblock %}
-{% block contextual_help_trigger %}
-<button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
-    data-bs-target="#attendanceGuide" aria-controls="attendanceGuide" aria-expanded="false">
-    <span class="material-symbols-outlined" aria-hidden="true">quick_reference_all</span> <span>Need Help?</span>
-</button>
+{% block contextual_help_body %}
+{{ help.panel_lead("Use this page to control attendance taps and review student attendance records.") }}
+
+{% call help.topic('att-controls', 'toggle_on', 'Attendance Controls') %}
+<p>Use the attendance controls for the current class to enable or pause new attendance activity.</p>
+<div class="alert alert-info mb-0">
+    <strong>Tip:</strong> Pausing attendance prevents new activity but does not change existing
+    records.
+</div>
+{% endcall %}
+
+{% call help.topic('att-filters', 'filter_alt', 'Filter Attendance History') %}
+<p class="mb-0">Use the filters to narrow by event type and date range, then click Apply
+    Filters.</p>
+{% endcall %}
+
+{% call help.topic('att-review', 'history', 'Review Records') %}
+<p>Review the table for start/end times, totals, and notes. Use the pagination to move through
+    results.</p>
+<div class="alert alert-warning mb-0">
+    <strong>Missing data?</strong> Clear filters or expand the date range if no records appear.
+</div>
+{% endcall %}
 {% endblock %}
+
 {% block content %}
 
-<div class="offcanvas offcanvas-end" tabindex="-1" id="attendanceGuide" aria-labelledby="attendanceGuideLabel">
-    <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="attendanceGuideLabel">How to: Attendance Log</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-    </div>
-    <div class="offcanvas-body">
-        {{ help.offcanvas_resource_links(help_doc_path, 'user-guides/diagnostics/teacher/attendance-payroll') }}
-        <p>Use this page to control attendance taps and review student attendance records.</p>
-        <div class="accordion mt-4 mb-4" id="attendanceGuideAccordion">
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="attendanceGuideHeadingControls">
-                    <button class="accordion-button collapsed bg-secondary text-muted" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#attendanceGuideControls" aria-expanded="false"
-                        aria-controls="attendanceGuideControls">
-                        <span class="material-symbols-outlined me-2"
-                            style="font-size:25pt; vertical-align:middle;" aria-hidden="true">toggle_on</span>
-                        <strong>Attendance Controls</strong>
-                    </button>
-                </h2>
-                <div id="attendanceGuideControls" class="accordion-collapse collapse mt-2"
-                    aria-labelledby="attendanceGuideHeadingControls" data-bs-parent="#attendanceGuideAccordion">
-                    <div class="accordion-body">
-                        <p>Use the attendance controls for the current class to enable or pause new attendance activity.</p>
-                        <div class="alert alert-info mb-0">
-                            <strong>Tip:</strong> Pausing attendance prevents new activity but does not change existing
-                            records.
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="attendanceGuideHeadingFilters">
-                    <button class="accordion-button collapsed bg-secondary text-muted" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#attendanceGuideFilters" aria-expanded="false"
-                        aria-controls="attendanceGuideFilters">
-                        <span class="material-symbols-outlined me-2"
-                            style="font-size:25pt; vertical-align:middle;" aria-hidden="true">filter_alt</span>
-                        <strong>Filter Attendance History</strong>
-                    </button>
-                </h2>
-                <div id="attendanceGuideFilters" class="accordion-collapse collapse mt-2"
-                    aria-labelledby="attendanceGuideHeadingFilters" data-bs-parent="#attendanceGuideAccordion">
-                    <div class="accordion-body">
-                        <p>Use the filters to narrow by event type and date range, then click Apply
-                            Filters.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="attendanceGuideHeadingReview">
-                    <button class="accordion-button collapsed bg-secondary text-muted" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#attendanceGuideReview" aria-expanded="false"
-                        aria-controls="attendanceGuideReview">
-                        <span class="material-symbols-outlined me-2"
-                            style="font-size:25pt; vertical-align:middle;" aria-hidden="true">history</span>
-                        <strong>Review Records</strong>
-                    </button>
-                </h2>
-                <div id="attendanceGuideReview" class="accordion-collapse collapse mt-2"
-                    aria-labelledby="attendanceGuideHeadingReview" data-bs-parent="#attendanceGuideAccordion">
-                    <div class="accordion-body">
-                        <p>Review the table for start/end times, totals, and notes. Use the pagination to move through
-                            results.</p>
-                        <div class="alert alert-warning mb-0">
-                            <strong>Missing data?</strong> Clear filters or expand the date range if no records appear.
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Stats Summary Card -->
 <div class="card shadow mb-4">

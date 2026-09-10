@@ -113,3 +113,35 @@ def test_teacher_help_links_resolve(client, app, url):
 def test_student_help_links_resolve(client, app, url):
     initialize_as_student("chemistry_p1", client, app)
     _assert_help_links_resolve(client, url)
+
+
+def _admin_templates() -> list[Path]:
+    """Every template that renders inside the teacher chrome."""
+    return sorted(
+        path
+        for path in (REPO_ROOT / "templates").glob("*.html")
+        if 'extends "layout_admin.html"' in path.read_text(encoding="utf-8")
+    )
+
+
+def test_every_admin_page_explains_itself():
+    """No teacher page may fall through to the generic help panel.
+
+    `layout_admin.html` ships a one-sentence fallback body so a page without
+    guidance still renders something. That fallback is a placeholder, not
+    content: it tells the teacher nothing about the page they are looking at.
+    A page earns its help panel one of two ways — by overriding
+    `contextual_help_body` to fill the shared offcanvas, or by overriding
+    `contextual_help_trigger` to open a panel of its own. Doing neither is the
+    blank-panel defect this test exists to prevent from reappearing.
+    """
+    blank = [
+        path.name
+        for path in _admin_templates()
+        if "contextual_help_body" not in path.read_text(encoding="utf-8")
+        and "contextual_help_trigger" not in path.read_text(encoding="utf-8")
+    ]
+    assert not blank, (
+        "these teacher pages render the generic fallback help panel: "
+        + ", ".join(blank)
+    )

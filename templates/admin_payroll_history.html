@@ -1,6 +1,23 @@
 {% extends "layout_admin.html" %}
 {% set page_title = "Detailed Payroll History" %}
 {% block title %}Detailed Payroll History{% endblock %}
+
+{% block contextual_help_body %}
+{{ help.panel_lead("Every payroll payment that has actually landed, one row per student per run. This is the record you check when someone says they were not paid.") }}
+
+{% call help.topic('payhist-read', 'search', 'Finding and reading a row') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Filter by date range</strong> to isolate a single pay period. Leave the dates empty to see everything.</li>
+    <li class="mb-2"><strong>A missing row means no payment was made</strong> — not that the amount was wrong. Absence and a zero amount are different problems with different causes.</li>
+    <li class="mb-2"><strong>Notes carry the reason</strong> a run produced the amount it did. Read them before assuming a rate is misconfigured.</li>
+    <li class="mb-0"><strong>Click a student's name</strong> to open their full account if you need the surrounding transactions.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('payhist-fix', 'build', 'Changing or correcting a payment') %}
+<p class="mb-0 text-muted">This page is read-only. To change what future runs pay, use Payroll settings; to correct a past payment, post an adjusting transaction.</p>
+{% endcall %}
+{% endblock %}
 {% block content %}
 <div class="container-fluid py-3">
     <div class="card shadow-sm border-0 mb-4">

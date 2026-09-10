@@ -3,6 +3,27 @@
 {% set current_page = "dashboard" %}
 {% block title %}Student Dashboard{% endblock %}
 {% block page_icon %}dashboard{% endblock %}
+
+{% block contextual_help_body %}
+{{ help.panel_lead("Your dashboard is the short version of your account: whether you are on the clock, what you have, and what has happened lately.") }}
+
+{% call help.topic('dash-attendance', 'schedule', 'Attendance and work time') %}
+<p class="mb-0">The Attendance card shows whether you are working and how long you have worked today. Choose <strong>Start Work</strong> to begin. <strong>Break</strong> becomes available only after you start work.</p>
+{% endcall %}
+
+{% call help.topic('dash-balances', 'account_balance_wallet', 'Checking and savings') %}
+<p class="mb-0"><strong>Checking Account</strong> shows money available for spending. <strong>Savings Account</strong> shows saved money and projected interest. Use <strong>Transfer</strong> or <strong>Add to Savings</strong> to move money between accounts.</p>
+{% endcall %}
+
+{% call help.topic('dash-activity', 'receipt_long', 'Recent activity') %}
+<p class="mb-0">Recent Activity is a short list of transactions. Open <strong>Accounts</strong> for the fuller history. Use <strong>Report an issue with this transaction</strong> when a row is incorrect.</p>
+{% endcall %}
+
+{% call help.topic('dash-alerts', 'notifications', 'Alerts and missing information') %}
+<p class="mb-0">Alerts appear only when there is something to report. If a balance or class looks wrong, confirm the selected class in <strong>Switch Class</strong> and reload the page.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 
 <!-- Personalized Time-Based Greeting -->

@@ -3,6 +3,29 @@
 {% set current_page = "insurance" %}
 {% block title %}Process Claim{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("This is where you decide a single claim. Everything above the form is evidence; the form at the bottom is the decision.") }}
+
+{% call help.topic('claim-decide', 'gavel', 'Deciding the claim') %}
+<ol class="ps-3 mb-0">
+    <li class="mb-2"><strong>Read the claim against the policy that was purchased</strong>, shown in <em>Policy Information</em> — not against the policy as it reads today. A purchase freezes its terms.</li>
+    <li class="mb-2"><strong>Check the claims history</strong> for this student. Repeat claims are usually the interesting signal.</li>
+    <li class="mb-0"><strong>Set the status</strong>, then submit.</li>
+</ol>
+{% endcall %}
+
+{% call help.topic('claim-writing', 'edit_note', 'What the student sees, and what stays with you') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Rejection reason is required when you reject.</strong> The student sees it, so write the reason you would be willing to defend out loud.</li>
+    <li class="mb-0"><strong>Teacher notes are yours.</strong> Use them for the reasoning you do not want to publish.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('claim-payout', 'calculate', 'Who sets the payout') %}
+<p class="mb-0"><strong>You do not.</strong> Approved amounts are calculated from the linked transaction, then capped by the policy's per-claim and per-period limits.</p>
+{% endcall %}
+{% endblock %}
+
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
 <style>

@@ -79,8 +79,8 @@
         <p style="font-size:15pt">Welcome to <strong>Classroom Token Hub</strong></p>
         <a href="{{ url_for('student.dashboard') }}" class="btn btn-primary">Thanks, Let's Go!</a>
     </div>
-    </main>
-{% set contextual_help_path = 'user-guides/features/student/account/login-setup' %}
+    {% set contextual_help_path = 'user-guides/features/student/account/login-setup' %}
 {% include 'components/contextual_help_link.html' %}
+</main>
 </body>
 </html>

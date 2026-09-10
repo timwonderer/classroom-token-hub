@@ -2,6 +2,23 @@
 
 {% block page_title %}Setup Account Recovery{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("How you get back into your account if you lose access to it.") }}
+
+{% call help.topic('rec-method', 'groups', 'Recovery is student-assisted') %}
+<p>Rather than collecting a birthdate or a personal question, Classroom Token Hub verifies you through your own class — the people who can actually vouch that the account is yours.</p>
+<p class="mb-0"><strong>Nothing personal is collected</strong> to enable it. That is the design, not a gap in it.</p>
+{% endcall %}
+
+{% call help.topic('rec-scope', 'check_circle', 'What confirming here does') %}
+<ul class="ps-3">
+    <li class="mb-2"><strong>Recovery is scoped to a class,</strong> so it works while you have at least one class with students in it.</li>
+    <li class="mb-0"><strong>Confirming here acknowledges the method.</strong> There is no code to write down and nothing to store somewhere safe.</li>
+</ul>
+<p class="mb-0 text-muted">Registering a passkey is the other half of not being locked out: recovery is the fallback, a passkey is the everyday way in.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-12 col-md-8 col-lg-6">

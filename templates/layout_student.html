@@ -265,60 +265,16 @@
                             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
                         </div>
                         <div class="offcanvas-body">
-                            <p class="text-muted">Use the guide for this page, or open troubleshooting when something does not work as expected.</p>
-                            {% if help_doc_key == 'student.dashboard' or request.endpoint == 'student.dashboard' %}
-                            <div class="accordion mt-4 mb-4" id="studentDashboardHelpAccordion">
-                                <div class="accordion-item">
-                                    <h3 class="accordion-header" id="studentDashboardAttendanceHeading">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                            data-bs-target="#studentDashboardAttendance" aria-expanded="false"
-                                            aria-controls="studentDashboardAttendance"><span class="material-symbols-outlined me-2" aria-hidden="true">schedule</span>Attendance and work time</button>
-                                    </h3>
-                                    <div id="studentDashboardAttendance" class="accordion-collapse collapse"
-                                        aria-labelledby="studentDashboardAttendanceHeading">
-                                        <div class="accordion-body">The Attendance card shows whether you are working and how long you have worked today. Choose <strong>Start Work</strong> to begin. <strong>Break</strong> becomes available only after you start work.</div>
-                                    </div>
-                                </div>
-                                <div class="accordion-item">
-                                    <h3 class="accordion-header" id="studentDashboardBalancesHeading">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                            data-bs-target="#studentDashboardBalances" aria-expanded="false"
-                                            aria-controls="studentDashboardBalances"><span class="material-symbols-outlined me-2" aria-hidden="true">account_balance_wallet</span>Checking and savings</button>
-                                    </h3>
-                                    <div id="studentDashboardBalances" class="accordion-collapse collapse"
-                                        aria-labelledby="studentDashboardBalancesHeading">
-                                        <div class="accordion-body"><strong>Checking Account</strong> shows money available for spending. <strong>Savings Account</strong> shows saved money and projected interest. Use <strong>Transfer</strong> or <strong>Add to Savings</strong> to move money between accounts.</div>
-                                    </div>
-                                </div>
-                                <div class="accordion-item">
-                                    <h3 class="accordion-header" id="studentDashboardActivityHeading">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                            data-bs-target="#studentDashboardActivity" aria-expanded="false"
-                                            aria-controls="studentDashboardActivity"><span class="material-symbols-outlined me-2" aria-hidden="true">receipt_long</span>Recent activity</button>
-                                    </h3>
-                                    <div id="studentDashboardActivity" class="accordion-collapse collapse"
-                                        aria-labelledby="studentDashboardActivityHeading">
-                                        <div class="accordion-body">Recent Activity is a short list of transactions. Open <strong>Accounts</strong> for the fuller history. Use <strong>Report an issue with this transaction</strong> when a row is incorrect.</div>
-                                    </div>
-                                </div>
-                                <div class="accordion-item">
-                                    <h3 class="accordion-header" id="studentDashboardAlertsHeading">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                            data-bs-target="#studentDashboardAlerts" aria-expanded="false"
-                                            aria-controls="studentDashboardAlerts"><span class="material-symbols-outlined me-2" aria-hidden="true">notifications</span>Alerts and missing information</button>
-                                    </h3>
-                                    <div id="studentDashboardAlerts" class="accordion-collapse collapse"
-                                        aria-labelledby="studentDashboardAlertsHeading">
-                                        <div class="accordion-body">Alerts appear only when there is something to report. If a balance or class looks wrong, confirm the selected class in <strong>Switch Class</strong> and reload the page.</div>
-                                    </div>
-                                </div>
+                            {# Same structure as the teacher shell: an always-visible
+                               lead sentence, then collapsed topics. Pages override
+                               this block with help.panel_lead() and help.topic().
+                               The topic headers take their colour from var(--primary),
+                               which body.student-shell resolves to steward blue. #}
+                            <div class="accordion accordion-flush help-topics" id="helpTopics">
+                            {% block contextual_help_body %}
+                            {{ help.panel_lead("Use the guide for this page, or open troubleshooting when something does not work as expected.") }}
+                            {% endblock %}
                             </div>
-                            {% else %}
-                            <div class="alert alert-info d-flex align-items-start gap-2 mt-4 mb-4" role="note">
-                                <span class="material-symbols-outlined" aria-hidden="true">info</span>
-                                <span>Use the page guide for step-by-step instructions. If something is missing or does not work, open <strong>Troubleshooting</strong> below and follow the checks for this page.</span>
-                            </div>
-                            {% endif %}
                             {{ help.offcanvas_resource_links(help_doc_path, help_diagnostic_path) }}
                         </div>
                     </div>

@@ -3,6 +3,26 @@
 {% set page_subtitle = "Manage your passkeys" %}
 {% set current_page = "passkey_settings" %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Passkeys let you sign in with your device instead of typing a credential. They cannot be phished, because there is no secret to hand over.") }}
+
+{% call help.topic('pk-register', 'add_circle', 'Register a passkey') %}
+<ol class="ps-3 mb-0">
+    <li class="mb-2"><strong>Register New Passkey</strong>, then follow your device's prompt — Touch ID, Face ID, Windows Hello, or a hardware key.</li>
+    <li class="mb-2"><strong>Name it something you will recognize</strong> later, like "work laptop". Deciding which passkey to remove is impossible if they are all unnamed.</li>
+    <li class="mb-0"><strong>Register a second one</strong> on a different device. One passkey on one device means a lost device is a lockout.</li>
+</ol>
+{% endcall %}
+
+{% call help.topic('pk-storage', 'lock', 'What is stored, and what removing does') %}
+<ul class="ps-3">
+    <li class="mb-2"><strong>The passkey never leaves your device.</strong> Classroom Token Hub stores only the public half, which cannot be used to sign in as you.</li>
+    <li class="mb-0"><strong>Removing a passkey here does not remove it from your device</strong> — clear it in your device or password manager settings as well.</li>
+</ul>
+<p class="mb-0 text-muted">Set up account recovery too. If every passkey becomes unavailable, recovery is the only way back in.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div id="passkey-feedback" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>

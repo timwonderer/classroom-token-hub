@@ -9008,15 +9008,6 @@ def account_delete():
     # Presentation only (INV-CORE-000 §III.4): lawful Identity display read.
     confirmation_phrase = _account_delete_confirmation_phrase(g.canonical_context)
 
-    # Presentation only: lawful Class display read for the active class, used to
-    # render the class-destruction surface. The class deleted by
-    # ``admin.delete_join_code`` is resolved server-side from the canonical
-    # context, never from anything rendered here.
-    active_class_id = (getattr(g.canonical_context, "class_id", None) or "").strip() or None
-    active_class_row = (
-        verify_teacher_owns_class(active_class_id, user_id) if active_class_id else None
-    )
-
     if request.method == 'POST':
         request_type = request.form.get('request_type')  # account only
 
@@ -9070,13 +9061,36 @@ def account_delete():
         'admin_account_delete.html',
         current_page="account_delete",
         confirmation_phrase=confirmation_phrase,
-        class_confirmation_phrase=(
-            _class_delete_confirmation_phrase(active_class_row) if active_class_row else None
-        ),
-        class_display_label=(
-            _class_display_label(active_class_row) if active_class_row else None
-        ),
-        class_join_code=get_display_join_code(active_class_id) if active_class_row else None,
+    )
+
+
+@admin_bp.route('/class-delete', methods=['GET'])
+@admin_required
+def class_delete():
+    """Class-scoped destruction surface for the active class.
+
+    Deleting a class is an operation on one tenant, so it belongs with the
+    other active-class tools rather than beside account deletion, which acts
+    on the global user principal. The destruction itself is still performed by
+    ``admin.delete_join_code``, which resolves its target from the canonical
+    context alone — nothing rendered here selects what gets destroyed.
+    """
+    user_id = g.canonical_context.user_id
+    active_class_id = (getattr(g.canonical_context, "class_id", None) or "").strip() or None
+    active_class_row = (
+        verify_teacher_owns_class(active_class_id, user_id) if active_class_id else None
+    )
+    if not active_class_row:
+        flash('Select a class before deleting one.', 'error')
+        return redirect(url_for('admin.dashboard'))
+
+    # Presentation only (INV-CORE-000 §III.4): lawful Class display reads.
+    return render_template(
+        'admin_class_delete.html',
+        current_page="class_delete",
+        class_confirmation_phrase=_class_delete_confirmation_phrase(active_class_row),
+        class_display_label=_class_display_label(active_class_row),
+        class_join_code=get_display_join_code(active_class_id),
     )
 
 

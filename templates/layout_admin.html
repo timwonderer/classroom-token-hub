@@ -109,7 +109,7 @@
             {% set economy_open = current_page in ['economic_engine', 'payroll', 'store', 'banking', 'interpretation'] %}
             {% set bills_open = current_page in ['rent', 'insurance'] %}
             {% set settings_open = current_page in ['settings', 'passkey_settings', 'account_delete'] %}
-            {% set class_tools_open = current_page in ['customizations', 'feature_settings'] %}
+            {% set class_tools_open = current_page in ['customizations', 'feature_settings', 'class_delete'] %}
 
             <!-- Dropdown Navigation -->
             <div class="d-flex flex-column gap-2 mt-2">
@@ -201,6 +201,9 @@
                         </a>
                         <a href="{{ url_for('admin.feature_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'feature_settings' %}active{% endif %}" {% if current_page == 'feature_settings' %}aria-current="page"{% endif %}>
                             <span class="material-symbols-outlined" aria-hidden="true">tune</span> Economy Features
+                        </a>
+                        <a href="{{ url_for('admin.class_delete') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'class_delete' %}active{% endif %}" {% if current_page == 'class_delete' %}aria-current="page"{% endif %}>
+                            <span class="material-symbols-outlined" aria-hidden="true">delete_sweep</span> Delete Class
                         </a>
                     </div>
                 </div>
@@ -328,6 +331,7 @@
                 'admin.passkey_settings': 'user-guides/features/teacher/settings/passkey',
                 'admin.help_support': 'user-guides/features/teacher/settings/support-tickets',
                 'admin.account_delete': 'user-guides/features/teacher/settings/account-deletion',
+                'admin.class_delete': 'user-guides/features/teacher/classroom/class-setup',
                 'admin.setup_recovery': 'user-guides/features/teacher/settings/account-recovery',
                 'admin.recover': 'user-guides/features/teacher/settings/account-recovery',
                 'admin.reset_credentials': 'user-guides/features/teacher/settings/account-recovery',
@@ -343,6 +347,19 @@
                 'dashboard': 'user-guides/diagnostics/teacher/analytics',
                 'payroll_history': 'user-guides/diagnostics/teacher/attendance-payroll',
                 'insurance': 'user-guides/diagnostics/teacher/rent-insurance',
+                'economic_engine': 'user-guides/diagnostics/teacher/analytics',
+                'banking': 'user-guides/diagnostics/teacher/transactions-banking',
+                'admin.attendance_log': 'user-guides/diagnostics/teacher/attendance-payroll',
+                'announcements': 'user-guides/diagnostics/teacher/announcements-issues',
+                'admin.issues_queue': 'user-guides/diagnostics/teacher/announcements-issues',
+                'payroll': 'user-guides/diagnostics/teacher/attendance-payroll',
+                'rent': 'user-guides/diagnostics/teacher/rent-insurance',
+                'hall_pass': 'user-guides/diagnostics/teacher/hall-pass',
+                'store': 'user-guides/diagnostics/teacher/store',
+                'students': 'user-guides/diagnostics/teacher/students',
+                'admin.students': 'user-guides/diagnostics/teacher/students',
+                'admin.store_management': 'user-guides/diagnostics/teacher/store',
+                'admin.hall_pass': 'user-guides/diagnostics/teacher/hall-pass',
                 'settings': 'user-guides/diagnostics/teacher/onboarding',
                 'customizations': 'user-guides/diagnostics/teacher/onboarding',
                 'feature_settings': 'user-guides/diagnostics/teacher/onboarding',
@@ -381,7 +398,18 @@
                 <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
             </div>
             <div class="offcanvas-body">
-                <p class="text-muted">Use the guide for this page, or open troubleshooting when something does not work as expected.</p>
+                {# Pages override this to explain themselves, using
+                   help.panel_lead() for the always-visible sentence and
+                   help.topic() for each collapsed section. The accordion
+                   container lives here so every panel shares one structure
+                   instead of each page inventing its own. The fallback is the
+                   generic sentence, which is all a page without its own
+                   guidance can honestly say. #}
+                <div class="accordion accordion-flush help-topics" id="helpTopics">
+                {% block contextual_help_body %}
+                {{ help.panel_lead("Use the guide for this page, or open troubleshooting when something does not work as expected.") }}
+                {% endblock %}
+                </div>
                 {{ help.offcanvas_resource_links(help_doc_path, help_diagnostic_path) }}
             </div>
         </div>

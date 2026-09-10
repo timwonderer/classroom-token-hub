@@ -1,108 +1,48 @@
 {% extends "layout_admin.html" %}
-{% import "macros/help.html" as help %}
 {% set page_title = "Hall Pass Management" %}
 {% block title %}Hall Pass Management{% endblock %}
 
 {% block page_icon %}confirmation_number{% endblock %}
-{% block contextual_help_trigger %}
-  <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#hallPassGuide" aria-controls="hallPassGuide" aria-expanded="false">
-    <span class="material-symbols-outlined" aria-hidden="true">quick_reference_all</span> <span>Need Help?</span>
-  </button>
+{% block contextual_help_body %}
+{{ help.panel_lead("Set hall-pass limits, review requests, and see who is out of class.") }}
+
+{% call help.topic('hp-limits', 'settings', 'Hall Pass Limits') %}
+<p>Turn granting on or off and set how many students may be out at once.</p>
+<div class="alert alert-info mb-0">
+    <strong>Tip:</strong> When granting is disabled, no new hall passes may be issued.
+</div>
+{% endcall %}
+
+{% call help.topic('hp-settings', 'tune', 'Settings Breakdown') %}
+<ul class="mb-0">
+    <li><strong>Granting toggle:</strong> enables or disables new hall-pass issuance.</li>
+    <li><strong>Out-of-class limit:</strong> caps how many students can be out at the same time.</li>
+    <li><strong>Terminal:</strong> student-facing kiosk to request passes.</li>
+    <li><strong>Verification display:</strong> screen showing currently issued and active passes.</li>
+</ul>
+<div class="alert alert-warning mt-3 mb-0">
+    <strong>Side effects:</strong> Lowering the limit can block new approvals until slots open.
+</div>
+{% endcall %}
+
+{% call help.topic('hp-issue', 'check_circle', 'Issue and Track Passes') %}
+<p class="mb-0">Issued passes appear in the Issued tab until the student leaves class.</p>
+{% endcall %}
+
+{% call help.topic('hp-track', 'logout', 'Track Students Out') %}
+<p>Use the Issued and Out tabs to track who is waiting and who has left the room.</p>
+<div class="alert alert-warning mb-0">
+    <strong>Reminder:</strong> Mark students as returned to keep active pass state accurate.
+</div>
+{% endcall %}
+
+{% call help.topic('hp-verify', 'tv', 'Hall Pass Verification') %}
+<p class="mb-0">Use Hall Pass Verification page for staff pass checks. Students request and check out/check in directly in their dashboard. This page is public and does not require sign in to access. You may replace the link at any time.</p>
+{% endcall %}
 {% endblock %}
 
-{% block content %}
-<div class="offcanvas offcanvas-end" tabindex="-1" id="hallPassGuide" aria-labelledby="hallPassGuideLabel">
-    <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="hallPassGuideLabel">How to: Hall Pass Management</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-    </div>
-  <div class="offcanvas-body">
-    {{ help.offcanvas_resource_links('user-guides/features/teacher/classroom/hall-pass', 'user-guides/diagnostics/teacher/hall-pass') }}
-        <p>Set hall-pass limits, review requests, and see who is out of class.</p>
-        <div class="accordion mt-4 mb-4" id="hallPassGuideAccordion">
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="hallPassGuideHeadingQueue">
-                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideQueue" aria-expanded="false" aria-controls="hallPassGuideQueue">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">settings</span>
-                        <strong>Hall Pass Limits</strong>
-                    </button>
-                </h2>
-                <div id="hallPassGuideQueue" class="accordion-collapse collapse mt-2" aria-labelledby="hallPassGuideHeadingQueue" data-bs-parent="#hallPassGuideAccordion">
-                    <div class="accordion-body">
-                        <p>Turn granting on or off and set how many students may be out at once.</p>
-                        <div class="alert alert-info mb-0">
-                            <strong>Tip:</strong> When granting is disabled, no new hall passes may be issued.
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="hallPassGuideHeadingSettingsBreakdown">
-                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideSettingsBreakdown" aria-expanded="false" aria-controls="hallPassGuideSettingsBreakdown">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">tune</span>
-                        <strong>Settings Breakdown</strong>
-                    </button>
-                </h2>
-                <div id="hallPassGuideSettingsBreakdown" class="accordion-collapse collapse mt-2" aria-labelledby="hallPassGuideHeadingSettingsBreakdown" data-bs-parent="#hallPassGuideAccordion">
-                    <div class="accordion-body">
-                        <ul class="mb-0">
-                            <li><strong>Granting toggle:</strong> enables or disables new hall-pass issuance.</li>
-                            <li><strong>Out-of-class limit:</strong> caps how many students can be out at the same time.</li>
-                            <li><strong>Terminal:</strong> student-facing kiosk to request passes.</li>
-                            <li><strong>Verification display:</strong> screen showing currently issued and active passes.</li>
-                        </ul>
-                        <div class="alert alert-warning mt-3 mb-0">
-                            <strong>Side effects:</strong> Lowering the limit can block new approvals until slots open.
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="hallPassGuideHeadingApprove">
-                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideApprove" aria-expanded="false" aria-controls="hallPassGuideApprove">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">check_circle</span>
-                        <strong>Issue and Track Passes</strong>
-                    </button>
-                </h2>
-                <div id="hallPassGuideApprove" class="accordion-collapse collapse mt-2" aria-labelledby="hallPassGuideHeadingApprove" data-bs-parent="#hallPassGuideAccordion">
-                    <div class="accordion-body">
-                        <p>Issued passes appear in the Issued tab until the student leaves class.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="hallPassGuideHeadingTrack">
-                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideTrack" aria-expanded="false" aria-controls="hallPassGuideTrack">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">logout</span>
-                        <strong>Track Students Out</strong>
-                    </button>
-                </h2>
-                <div id="hallPassGuideTrack" class="accordion-collapse collapse mt-2" aria-labelledby="hallPassGuideHeadingTrack" data-bs-parent="#hallPassGuideAccordion">
-                    <div class="accordion-body">
-                        <p>Use the Issued and Out tabs to track who is waiting and who has left the room.</p>
-                        <div class="alert alert-warning mb-0">
-                            <strong>Reminder:</strong> Mark students as returned to keep active pass state accurate.
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="hallPassGuideHeadingDisplays">
-                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideDisplays" aria-expanded="false" aria-controls="hallPassGuideDisplays">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">tv</span>
-                        <strong>Hall Pass Verification</strong>
-                    </button>
-                </h2>
-                <div id="hallPassGuideDisplays" class="accordion-collapse collapse mt-2" aria-labelledby="hallPassGuideHeadingDisplays" data-bs-parent="#hallPassGuideAccordion">
-                    <div class="accordion-body">
-                        <p>Use Hall Pass Verification page for staff pass checks. Students request and check out/check in directly in their dashboard. This page is public and does not require sign in to access. You may replace the link at any time.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+{% block content %}
 
 <div class="container-fluid">
     <div id="hall-pass-feedback" class="alert d-none" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1"></div>

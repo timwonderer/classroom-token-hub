@@ -3,6 +3,29 @@
 {% block title %}Help & Support{% endblock %}
 {% block page_title %}Help & Support{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Report a problem to the Classroom Token Hub team and track what you have already reported.") }}
+
+{% call help.topic('sup-who', 'person_raised_hand', 'Who files, and against what') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>This form is for teacher problems.</strong> A student's issue has to start with the student — they open it, and you elevate it from the Student Issues queue. You cannot file on their behalf from here.</li>
+    <li class="mb-0"><strong>Scope it correctly.</strong> Pick your active class if the problem is with that class, or "My account" if it follows you everywhere. Only the class you have open is offered; switch classes first if you meant a different one.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('sup-write', 'edit_note', 'Writing a report worth reading') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Say what you expected.</strong> "It's broken" is a report; "I expected X and got Y" is a diagnosis. The second field is where most of the useful information lives.</li>
+    <li class="mb-0"><strong>Include the page URL</strong> if you know where it happened. It removes a round trip.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('sup-privacy', 'shield_person', 'Privacy and ticket status') %}
+<p><strong>Leave student names out.</strong> You are identified by the IDs shown under the scope selector, which is all support needs — no student information travels with the ticket.</p>
+<p class="mb-0 text-muted">My Tickets shows status. <em>Teacher review</em> means it is back with you; <em>escalated</em> means it has reached the developers.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="row g-4">

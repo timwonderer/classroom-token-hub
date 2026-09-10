@@ -2,6 +2,28 @@
 
 {% block page_title %}Issue Details for #{{ issue.id }}{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("One student's report, everything attached to it, and the decision it is waiting on. A ticket moves forward only when you act here.") }}
+
+{% call help.topic('issue-work', 'checklist', 'Working the ticket') %}
+<ol class="ps-3 mb-0">
+    <li class="mb-2"><strong>Read the student's account first,</strong> then the related transaction if one is attached. The snapshot shows the record as it stood when they filed, not as it stands now.</li>
+    <li class="mb-2"><strong>Pick a resolution action.</strong> <em>Compensating transaction</em> posts a correcting entry and only appears when a transaction is attached. <em>Manual adjustment</em> records that you handled it elsewhere. <em>Deny</em> closes it against the student and asks you why.</li>
+    <li class="mb-0"><strong>Then close it.</strong> Resolving moves the ticket to final review; the closure summary is what makes it done.</li>
+</ol>
+{% endcall %}
+
+{% call help.topic('issue-escalate', 'arrow_upward', 'When to escalate') %}
+<p><strong>Escalate only when the tools here cannot fix it</strong> — a suspected bug, or numbers that do not reconcile. A disagreement about whether a fine was fair is yours to settle, not the developers'.</p>
+<p class="mb-0"><strong>Escalation shares an opaque reference, not your class name.</strong> The checkbox is there if the developer genuinely needs the name; leaving it unchecked is the normal case.</p>
+{% endcall %}
+
+{% call help.topic('issue-record', 'history', 'Notes and the status record') %}
+<p><strong>Notes are internal.</strong> The denial reason is the part the student is owed, so write that one for them.</p>
+<p class="mb-0 text-muted">Status History at the bottom is the record of who moved this ticket and when. Nothing is deleted from it.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <!-- Back Button -->

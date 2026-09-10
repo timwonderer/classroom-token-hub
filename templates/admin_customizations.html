@@ -4,6 +4,28 @@
 {% set current_page = "customizations" %}
 {% block page_icon %}style{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Names and labels — how you and this class are presented. None of it changes how the economy behaves.") }}
+
+{% call help.topic('cust-names', 'badge', 'Display names') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Your display name</strong> is what students see instead of an account name. Set it to whatever you are called in the room.</li>
+    <li class="mb-0"><strong>Class display name and section</strong> label this class for you and your students. They are decoration: the system identifies a class by its own ID, so renaming is always safe and never moves anyone's records.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('cust-scope', 'swap_horiz', 'Which class you are editing') %}
+<p class="mb-0"><strong>This page edits the class you currently have open.</strong> Switch classes first if you meant a different one.</p>
+{% endcall %}
+
+{% call help.topic('cust-ids', 'fingerprint', 'IDs and the Getting Started widget') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Teacher ID and Class ID are for support.</strong> Quote them in a ticket — they identify you without exposing student information.</li>
+    <li class="mb-0"><strong>Getting Started widget</strong> can be brought back here if you dismissed it and want the setup checklist again.</li>
+</ul>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="row">
     <div class="col-lg-8 offset-lg-2">

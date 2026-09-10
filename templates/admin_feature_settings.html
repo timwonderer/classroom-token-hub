@@ -4,6 +4,26 @@
 {% set current_page = "feature_settings" %}
 {% block page_icon %}tune{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Decides which parts of the economy exist for this class. A feature that is off is invisible to students and its settings pages are closed.") }}
+
+{% call help.topic('feat-groups', 'category', 'The three groups on this page') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Core features have no toggle.</strong> Payroll defines the economy and banking holds it — without them there is nothing for the other features to price against.</li>
+    <li class="mb-2"><strong>Features</strong> can be turned on and off freely. Use them to introduce one idea at a time rather than opening everything at once.</li>
+    <li class="mb-0"><strong>Pricing features</strong> — insurance, rent, store — stay locked until payroll and the economic engine are configured. They price against student income, so they cannot be sensibly enabled before income exists.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('feat-saving', 'save', 'Saving and turning things off') %}
+<ul class="ps-3">
+    <li class="mb-2"><strong>Changes save as you toggle.</strong> There is no Save button; watch the status line for confirmation.</li>
+    <li class="mb-0"><strong>Turning a feature off does not erase its data.</strong> Balances, purchases, and history are preserved and reappear if you turn it back on.</li>
+</ul>
+<p class="mb-0 text-muted">This applies to the class you currently have open, not to every class you teach.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="card shadow mb-4">
   <div class="card-header bg-info text-white">

@@ -3,6 +3,29 @@
 {% block title %}{{ identity_view.full_name }} - Detail{% endblock %}
 {% block page_icon %}person{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Everything one student has done in this class, in one place: balances, transactions, purchases, attendance, rent, payroll, and hall passes. This is where you go when a number needs explaining.") }}
+
+{% call help.topic('sdet-ledger', 'receipt_long', 'Transaction history and voiding') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Transaction History is the evidence.</strong> Balances are a total; the ledger is the reason. When a student disputes an amount, start here and work backwards.</li>
+    <li class="mb-0"><strong>Voiding reverses an entry without erasing it.</strong> The original stays visible, marked void, and a reversing entry is posted. Use it for something you posted in error — not to settle a disagreement about whether a charge was fair.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('sdet-identity', 'badge', 'Editing the name and teacher notes') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Edit Student Information changes the name they claim with.</strong> If the account is not yet claimed, the student must type the new name to claim it. Changing it after they have claimed it is cosmetic.</li>
+    <li class="mb-0"><strong>Teacher Notes are display-only</strong> and visible to you, not the student. Nothing in the economy reads them.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('sdet-reset', 'lock_reset', 'Resetting a student account') %}
+<p><strong>Reset Account issues a ten-minute code.</strong> Hand it to the student along with the join code; they start recovery from the login page. Their data is untouched — only the way in changes.</p>
+<p class="mb-0 text-muted">This page shows this class only. A student enrolled in another class of yours has a separate record there, with separate money.</p>
+{% endcall %}
+{% endblock %}
+
 {% block extra_styles %}
 <style>
     .stat-value {

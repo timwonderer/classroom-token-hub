@@ -4,6 +4,26 @@
 {% block title %}{{ action }} Announcement{% endblock %}
 {% block page_icon %}text_ad{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Announcements appear on the dashboard of every student in one class. They are the class-wide channel — anything meant for one student belongs in that student's record instead.") }}
+
+{% call help.topic('ann-class', 'groups', 'Which class this posts to') %}
+<p class="mb-0"><strong>The class is the one you have open,</strong> shown in the banner above the form. You cannot post to a different class from here; switch classes first and start a new announcement.</p>
+{% endcall %}
+
+{% call help.topic('ann-priority', 'priority_high', 'Priority is styling, not delivery') %}
+<p class="mb-0">Low, Normal, High, and Urgent change how the message looks on the dashboard. Nothing is sent, and nothing escalates. Reserve Urgent for the rare thing, or it stops meaning anything.</p>
+{% endcall %}
+
+{% call help.topic('ann-lifecycle', 'schedule', 'Expiry and taking one down') %}
+<ul class="ps-3">
+    <li class="mb-2"><strong>An expiry date is a cleanup you do not have to remember.</strong> Once it passes, the announcement hides itself. Leave it blank and the message stays up until you take it down.</li>
+    <li class="mb-0"><strong>Unchecking Active hides it without deleting it</strong> — useful for something you post every term and want back later.</li>
+</ul>
+<p class="mb-0 text-muted">Editing an existing announcement shows a live preview below the form, styled exactly as students will see it.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 
 <div class="row justify-content-center">

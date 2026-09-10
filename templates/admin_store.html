@@ -1,5 +1,4 @@
 {% extends "layout_admin.html" %}
-{% import "macros/help.html" as help %}
 {% set page_title = "Store Management" %}
 {% block title %}Store Management{% endblock %}
 {% block page_icon %}storefront{% endblock %}
@@ -8,11 +7,47 @@
 {{ view.class_labels_by_block.get(block|upper, block|upper) }}
 {%- endmacro %}
 
-{% block contextual_help_trigger %}
-  <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#storeGuide" aria-controls="storeGuide" aria-expanded="false">
-    <span class="material-symbols-outlined" aria-hidden="true">quick_reference_all</span> <span>Quick Tips</span>
-  </button>
+{% block contextual_help_body %}
+{{ help.panel_lead("Add items, review redemption requests, and check purchase history for the current class.") }}
+
+{% call help.topic('store-basic', 'inventory_2', 'Basic Setup') %}
+<p>Open <strong>Add New Item</strong> to create an item, set its price, and make it available.</p>
+<ul class="mb-3">
+  <li><strong>Name/description:</strong> What students see in the store.</li>
+  <li><strong>Price &amp; tier:</strong> Sets cost and grouping for your pricing structure.</li>
+  <li><strong>Item type:</strong> Immediate vs delayed redemption.</li>
+  <li><strong>Active:</strong> Inactive items are hidden from students.</li>
+  <li><strong>Availability:</strong> Decide when students can see and buy the item.</li>
+  <li><strong>Inventory:</strong> Caps total redemptions available.</li>
+  <li><strong>Limit per student:</strong> Restricts how many times each student can redeem.</li>
+</ul>
+<div class="alert alert-info mb-0">
+  <strong>Tip:</strong> Keep prices aligned to your CWI so rewards feel achievable.
+</div>
+{% endcall %}
+
+{% call help.topic('store-advanced', 'tune', 'Advanced Options') %}
+<ul class="mb-3">
+  <li><strong>Bundles:</strong> Set quantity per purchase for multi-use items.</li>
+  <li><strong>Bulk discount:</strong> Lower price when students buy in larger quantities.</li>
+  <li><strong>Collective goal:</strong> Require class-wide progress before redemption.</li>
+  <li><strong>Auto delist/expiry:</strong> Remove items after a date or number of days.</li>
+  <li><strong>Redemption prompt:</strong> Collect details from students at checkout.</li>
+</ul>
+<div class="alert alert-info mb-0">
+  <strong>Side effects:</strong> Deactivating or delisting items hides them immediately; inventory limits can block redemptions once exhausted.
+</div>
+{% endcall %}
+
+{% call help.topic('store-redemptions', 'hourglass_bottom', 'Pending Redemptions') %}
+<p class="mb-0">Review redemption details and approve or deny requests from the overview panel.</p>
+{% endcall %}
+
+{% call help.topic('store-history', 'history', 'Purchase History') %}
+<p class="mb-0">Use the Purchase History tab to see what students have redeemed and when.</p>
+{% endcall %}
 {% endblock %}
+
 
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
@@ -33,92 +68,6 @@
 
 {% block content %}
 
-<div class="offcanvas offcanvas-end" tabindex="-1" id="storeGuide" aria-labelledby="storeGuideLabel">
-  <div class="offcanvas-header">
-    <h2 class="offcanvas-title h5" id="storeGuideLabel">How to: Store Management</h2>
-    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-  </div>
-  <div class="offcanvas-body">
-    {{ help.offcanvas_resource_links('user-guides/features/teacher/economy/store-items', 'user-guides/diagnostics/teacher/store') }}
-    <p>Add items, review redemption requests, and check purchase history for the current class.</p>
-    <div class="accordion mt-4 mb-4" id="storeGuideAccordion">
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="storeGuideHeadingBasic">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#storeGuideBasic" aria-expanded="false" aria-controls="storeGuideBasic">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">inventory_2</span>
-            <strong>Basic Setup</strong>
-          </button>
-        </h2>
-        <div id="storeGuideBasic" class="accordion-collapse collapse mt-2" aria-labelledby="storeGuideHeadingBasic" data-bs-parent="#storeGuideAccordion">
-          <div class="accordion-body">
-            <p>Open <strong>Add New Item</strong> to create an item, set its price, and make it available.</p>
-            <ul class="mb-3">
-              <li><strong>Name/description:</strong> What students see in the store.</li>
-              <li><strong>Price &amp; tier:</strong> Sets cost and grouping for your pricing structure.</li>
-              <li><strong>Item type:</strong> Immediate vs delayed redemption.</li>
-              <li><strong>Active:</strong> Inactive items are hidden from students.</li>
-              <li><strong>Availability:</strong> Decide when students can see and buy the item.</li>
-              <li><strong>Inventory:</strong> Caps total redemptions available.</li>
-              <li><strong>Limit per student:</strong> Restricts how many times each student can redeem.</li>
-            </ul>
-            <div class="alert alert-info mb-0">
-              <strong>Tip:</strong> Keep prices aligned to your CWI so rewards feel achievable.
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="storeGuideHeadingAdvanced">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#storeGuideAdvanced" aria-expanded="false" aria-controls="storeGuideAdvanced">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">tune</span>
-            <strong>Advanced Options</strong>
-          </button>
-        </h2>
-        <div id="storeGuideAdvanced" class="accordion-collapse collapse mt-2" aria-labelledby="storeGuideHeadingAdvanced" data-bs-parent="#storeGuideAccordion">
-          <div class="accordion-body">
-            <ul class="mb-3">
-              <li><strong>Bundles:</strong> Set quantity per purchase for multi-use items.</li>
-              <li><strong>Bulk discount:</strong> Lower price when students buy in larger quantities.</li>
-              <li><strong>Collective goal:</strong> Require class-wide progress before redemption.</li>
-              <li><strong>Auto delist/expiry:</strong> Remove items after a date or number of days.</li>
-              <li><strong>Redemption prompt:</strong> Collect details from students at checkout.</li>
-            </ul>
-            <div class="alert alert-info mb-0">
-              <strong>Side effects:</strong> Deactivating or delisting items hides them immediately; inventory limits can block redemptions once exhausted.
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="storeGuideHeadingRedemptions">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#storeGuideRedemptions" aria-expanded="false" aria-controls="storeGuideRedemptions">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">hourglass_bottom</span>
-            <strong>Pending Redemptions</strong>
-          </button>
-        </h2>
-        <div id="storeGuideRedemptions" class="accordion-collapse collapse mt-2" aria-labelledby="storeGuideHeadingRedemptions" data-bs-parent="#storeGuideAccordion">
-          <div class="accordion-body">
-            <p>Review redemption details and approve or deny requests from the overview panel.</p>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="storeGuideHeadingHistory">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#storeGuideHistory" aria-expanded="false" aria-controls="storeGuideHistory">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">history</span>
-            <strong>Purchase History</strong>
-          </button>
-        </h2>
-        <div id="storeGuideHistory" class="accordion-collapse collapse mt-2" aria-labelledby="storeGuideHeadingHistory" data-bs-parent="#storeGuideAccordion">
-          <div class="accordion-body">
-            <p>Use the Purchase History tab to see what students have redeemed and when.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</div>
 
 <!-- Nav Tabs -->
 <ul class="nav nav-tabs mb-4" id="storeTabs" role="tablist">

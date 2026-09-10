@@ -3,6 +3,32 @@
 {% block title %}Edit: {{ item.name }}{% endblock %}
 {% block page_icon %}edit{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Everything students see about this item, plus the rules governing who can buy it and how often.") }}
+
+{% call help.topic('item-basics', 'sell', 'Price, availability, and limits') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Price is an economic decision, not a label.</strong> The form checks your price against what the class actually earns and warns when an item is priced out of reach. Overriding that warning is a deliberate act.</li>
+    <li class="mb-2"><strong>Inactive hides the item</strong> from students without deleting it or disturbing past purchases. This is the safe way to pull something.</li>
+    <li class="mb-0"><strong>Inventory and per-student limits</strong> are separate scarcities: total units available versus how many any one student may own.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('item-optional', 'tune', 'The optional sections change what the item is') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Collective goal</strong> — the class buys toward a shared target instead of individuals owning a thing.</li>
+    <li class="mb-2"><strong>Rent link</strong> — owning this item satisfies part of a student's rent obligation. Set the quantity it covers.</li>
+    <li class="mb-2"><strong>Bundle</strong> — one purchase delivers several units.</li>
+    <li class="mb-2"><strong>Bulk discount</strong> — a lower unit price above a quantity threshold.</li>
+    <li class="mb-0"><strong>Auto-delist date</strong> — the item removes itself from the store on that date, so limited offers do not depend on you remembering.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('item-edits', 'history', 'What an edit affects') %}
+<p class="mb-0 text-muted">Edits apply to future purchases. Items students already own are unaffected.</p>
+{% endcall %}
+{% endblock %}
+
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
 <script src="{{ static_url('js/economy-balance.js') }}"></script>

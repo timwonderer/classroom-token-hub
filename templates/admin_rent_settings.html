@@ -3,12 +3,51 @@
 {% set current_page = "rent" %}
 {% block title %}Rent Management{% endblock %}
 {% block page_icon %}home{% endblock %}
-{% block contextual_help_trigger %}
-<button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
-  data-bs-target="#rentGuide" aria-controls="rentGuide" aria-expanded="false">
-  <span class="material-symbols-outlined" aria-hidden="true">quick_reference_all</span> <span>Need Help?</span>
-</button>
+{% block contextual_help_body %}
+{{ help.panel_lead("Set rent rules, review payment status, and manage waivers for the current class.") }}
+
+{% call help.topic('rent-enable', 'toggle_on', 'Enable / Disable Rent') %}
+<p>Rent is enabled from <strong>Feature Settings</strong>. This page manages the rent rules after rent is enabled.</p>
+<div class="alert alert-warning mb-0">
+  <strong>To turn rent off:</strong> go to Feature Settings and disable the Rent feature. Students will immediately stop seeing rent or rent notifications.
+</div>
+{% endcall %}
+
+{% call help.topic('rent-settings', 'tune', 'Settings Breakdown') %}
+<ul class="mb-0">
+  <li><strong>Active class context:</strong> configure rent independently for the currently selected class
+    period (e.g., enable for Period 1, disable for Period 2).</li>
+  <li><strong>Rent amount:</strong> the base charge students owe each rent period.</li>
+  <li><strong>Frequency:</strong> daily, weekly, monthly, or custom intervals; controls how often rent
+    posts.</li>
+  <li><strong>First due date / due day:</strong> sets the first billing date or the day of month rent is
+    due.</li>
+  <li><strong>Grace period:</strong> days after the due date before late penalties apply.</li>
+  <li><strong>Late penalty:</strong> amount charged when rent is late; can apply once or recur.</li>
+  <li><strong>Recurring penalty frequency:</strong> how often the late fee repeats (when recurring is
+    enabled).</li>
+  <li><strong>Bill preview:</strong> shows upcoming rent to students a set number of days early.</li>
+  <li><strong>Incremental payments:</strong> allows partial payments instead of a single full payment.</li>
+  <li><strong>Block purchases when late:</strong> prevents store purchases if rent is overdue.</li>
+</ul>
+<div class="alert alert-info mt-3 mb-0">
+  <strong>Side effects:</strong> Changing frequency or due dates can shift when students are billed next.
+</div>
+{% endcall %}
+
+{% call help.topic('rent-overview', 'insights', 'Review Overview') %}
+<p class="mb-0">Check paid vs. unpaid totals to understand how rent is impacting the class.</p>
+{% endcall %}
+
+{% call help.topic('rent-waivers', 'event_busy', 'Manage Waivers') %}
+<p class="mb-0">Add waivers for special cases or missed periods in the Waivers tab.</p>
+{% endcall %}
+
+{% call help.topic('rent-balance', 'balance', 'Balance Against CWI') %}
+<p class="mb-0">Use Economy Health to check whether rent aligns to student earnings.</p>
+{% endcall %}
 {% endblock %}
+
 
 {% block extra_styles %}
 <style>
@@ -29,115 +68,6 @@
 
 {% block content %}
 
-<div class="offcanvas offcanvas-end" tabindex="-1" id="rentGuide" aria-labelledby="rentGuideLabel">
-  <div class="offcanvas-header">
-    <h2 class="offcanvas-title h5" id="rentGuideLabel">How to: Rent Management</h2>
-    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-  </div>
-<div class="offcanvas-body">
-  {{ help.offcanvas_resource_links(help_doc_path, 'user-guides/diagnostics/teacher/rent-insurance') }}
-    <p>Set rent rules, review payment status, and manage waivers for the current class.</p>
-    <div class="accordion mt-4 mb-4" id="rentGuideAccordion">
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="rentGuideHeadingEnable">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#rentGuideEnable" aria-expanded="false" aria-controls="rentGuideEnable">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">toggle_on</span>
-            <strong>Enable / Disable Rent</strong>
-          </button>
-        </h2>
-        <div id="rentGuideEnable" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingEnable"
-          data-bs-parent="#rentGuideAccordion">
-          <div class="accordion-body">
-            <p>Rent is enabled from <strong>Feature Settings</strong>. This page manages the rent rules after rent is enabled.</p>
-            <div class="alert alert-warning mb-0">
-              <strong>To turn rent off:</strong> go to Feature Settings and disable the Rent feature. Students will immediately stop seeing rent or rent notifications.
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="rentGuideHeadingSettings">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#rentGuideSettings" aria-expanded="false" aria-controls="rentGuideSettings">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">tune</span>
-            <strong>Settings Breakdown</strong>
-          </button>
-        </h2>
-        <div id="rentGuideSettings" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingSettings"
-          data-bs-parent="#rentGuideAccordion">
-          <div class="accordion-body">
-            <ul class="mb-0">
-              <li><strong>Active class context:</strong> configure rent independently for the currently selected class
-                period (e.g., enable for Period 1, disable for Period 2).</li>
-              <li><strong>Rent amount:</strong> the base charge students owe each rent period.</li>
-              <li><strong>Frequency:</strong> daily, weekly, monthly, or custom intervals; controls how often rent
-                posts.</li>
-              <li><strong>First due date / due day:</strong> sets the first billing date or the day of month rent is
-                due.</li>
-              <li><strong>Grace period:</strong> days after the due date before late penalties apply.</li>
-              <li><strong>Late penalty:</strong> amount charged when rent is late; can apply once or recur.</li>
-              <li><strong>Recurring penalty frequency:</strong> how often the late fee repeats (when recurring is
-                enabled).</li>
-              <li><strong>Bill preview:</strong> shows upcoming rent to students a set number of days early.</li>
-              <li><strong>Incremental payments:</strong> allows partial payments instead of a single full payment.</li>
-              <li><strong>Block purchases when late:</strong> prevents store purchases if rent is overdue.</li>
-            </ul>
-            <div class="alert alert-info mt-3 mb-0">
-              <strong>Side effects:</strong> Changing frequency or due dates can shift when students are billed next.
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="rentGuideHeadingOverview">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#rentGuideOverview" aria-expanded="false" aria-controls="rentGuideOverview">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">insights</span>
-            <strong>Review Overview</strong>
-          </button>
-        </h2>
-        <div id="rentGuideOverview" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingOverview"
-          data-bs-parent="#rentGuideAccordion">
-          <div class="accordion-body">
-            <p>Check paid vs. unpaid totals to understand how rent is impacting the class.</p>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="rentGuideHeadingWaivers">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#rentGuideWaivers" aria-expanded="false" aria-controls="rentGuideWaivers">
-            <span class="material-symbols-outlined me-2"
-              style="font-size:25pt; vertical-align:middle;" aria-hidden="true">event_busy</span>
-            <strong>Manage Waivers</strong>
-          </button>
-        </h2>
-        <div id="rentGuideWaivers" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingWaivers"
-          data-bs-parent="#rentGuideAccordion">
-          <div class="accordion-body">
-            <p>Add waivers for special cases or missed periods in the Waivers tab.</p>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="rentGuideHeadingBalance">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#rentGuideBalance" aria-expanded="false" aria-controls="rentGuideBalance">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">balance</span>
-            <strong>Balance Against CWI</strong>
-          </button>
-        </h2>
-        <div id="rentGuideBalance" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingBalance"
-          data-bs-parent="#rentGuideAccordion">
-          <div class="accordion-body">
-            <p>Use Economy Health to check whether rent aligns to student earnings.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 mt-0 gap-3">
     <div class="d-flex align-items-center gap-2">
       <p class="text-muted mb-0 mt-0">Configure recurring class rent to create consistent and deterministic economic pressure that encourages the habits of looking-ahead and planning ahead. Set up optional perks and rewards to help build good financial habits.</p>

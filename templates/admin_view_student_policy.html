@@ -3,6 +3,25 @@
 
 {% block title %}Student Policy Details{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("This is one student's coverage, shown as they bought it. Read-only — nothing here changes a policy.") }}
+
+{% call help.topic('spol-terms', 'lock_clock', 'The terms shown are the purchased terms') %}
+<p class="mb-0">If you have edited the policy since, this page still shows what this student is actually owed. That is the version to judge their claims against.</p>
+{% endcall %}
+
+{% call help.topic('spol-limits', 'data_usage', 'Claim limits and payment terms') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Claim limits</strong> tell you how much of their allowance is already spent — the usual reason a legitimate-looking claim gets capped or refused.</li>
+    <li class="mb-0"><strong>Payment terms</strong> show the premium and how often it is charged, which is where to look when a student says insurance is draining their account.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('spol-act', 'open_in_new', 'To act, leave this page') %}
+<p class="mb-0">Open a claim to decide it, or go to the student's detail page for their wider account.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <h1>{{ student.full_name }} - {{ enrollment.contract_title }}</h1>

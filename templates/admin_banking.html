@@ -3,88 +3,40 @@
 {% set current_page = "banking" %}
 {% block title %}Banking Management{% endblock %}
 {% block page_icon %}account_balance{% endblock %}
-{% block contextual_help_trigger %}
-<button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
-  data-bs-target="#bankingGuide" aria-controls="bankingGuide" aria-expanded="false">
-  <span class="material-symbols-outlined" aria-hidden="true">quick_reference_all</span> <span>Need Help?</span>
-</button>
+{% block contextual_help_body %}
+{{ help.panel_lead("Check class balances, review transactions, and manage savings interest.") }}
+
+{% call help.topic('bank-overview', 'grid_view', 'Overview Stats') %}
+<p class="mb-2"><strong>What you'll see:</strong></p>
+<ul class="mb-3">
+  <li><strong>Total Checking</strong> — All money available for immediate spending</li>
+  <li><strong>Total Savings</strong> — Money set aside earning interest</li>
+  <li><strong>Total Deposits</strong> — Combined checking + savings across all students</li>
+  <li><strong>Students w/ Savings</strong> — How many students are actively saving</li>
+</ul>
+<div class="alert alert-info mb-0">
+  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">lightbulb</span>Teaching Tip:</strong> Encourage at least 30% of students
+  to use savings accounts. This teaches delayed gratification and financial planning!
+</div>
+{% endcall %}
+
+{% call help.topic('bank-transactions', 'receipt_long', 'Transactions') %}
+<p>Open <strong>Transactions</strong> to review deposits, withdrawals, transfers, and fees.</p>
+<ul class="mb-0">
+  <li>Filter by student, account type, or date to investigate a specific concern.</li>
+  <li>Common entries include payroll deposits, rent charges, store purchases, and savings transfers.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('bank-settings', 'settings', 'Savings Interest') %}
+<p>Open <strong>Settings</strong> to set the savings rate and payout frequency.</p>
+<p class="mb-0">Rate changes affect future payouts only and will not re-calculate past interest. Each save
+  creates a new economic-engine version, preserving your class's economy history.</p>
+{% endcall %}
 {% endblock %}
+
 {% block content %}
 
-<div class="offcanvas offcanvas-end" tabindex="-1" id="bankingGuide" aria-labelledby="bankingGuideLabel">
-  <div class="offcanvas-header">
-    <h5 class="offcanvas-title" id="bankingGuideLabel">How to: Banking Management</h5>
-    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-  </div>
-  <div class="offcanvas-body">
-    {{ help.offcanvas_resource_links(help_doc_path, 'user-guides/diagnostics/teacher/transactions-banking') }}
-    <p>Check class balances, review transactions, and manage savings interest.</p>
-    <div class="accordion mt-4 mb-4" id="bankingGuideAccordion">
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="bankingGuideHeadingOverview">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#bankingGuideOverview" aria-expanded="false" aria-controls="bankingGuideOverview">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">grid_view</span>
-            <strong>Overview Stats</strong>
-          </button>
-        </h2>
-        <div id="bankingGuideOverview" class="accordion-collapse collapse mt-2"
-          aria-labelledby="bankingGuideHeadingOverview" data-bs-parent="#bankingGuideAccordion">
-          <div class="accordion-body">
-            <p class="mb-2"><strong>What you'll see:</strong></p>
-            <ul class="mb-3">
-              <li><strong>Total Checking</strong> — All money available for immediate spending</li>
-              <li><strong>Total Savings</strong> — Money set aside earning interest</li>
-              <li><strong>Total Deposits</strong> — Combined checking + savings across all students</li>
-              <li><strong>Students w/ Savings</strong> — How many students are actively saving</li>
-            </ul>
-            <div class="alert alert-info mb-0">
-              <strong><span class="material-symbols-outlined me-1" aria-hidden="true">lightbulb</span>Teaching Tip:</strong> Encourage at least 30% of students
-              to use savings accounts. This teaches delayed gratification and financial planning!
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="bankingGuideHeadingTransactions">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#bankingGuideTransactions" aria-expanded="false" aria-controls="bankingGuideTransactions">
-            <span class="material-symbols-outlined me-2"
-              style="font-size:25pt; vertical-align:middle;" aria-hidden="true">receipt_long</span>
-            <strong>Transactions</strong>
-          </button>
-        </h2>
-        <div id="bankingGuideTransactions" class="accordion-collapse collapse mt-2"
-          aria-labelledby="bankingGuideHeadingTransactions" data-bs-parent="#bankingGuideAccordion">
-          <div class="accordion-body">
-            <p>Open <strong>Transactions</strong> to review deposits, withdrawals, transfers, and fees.</p>
-            <ul class="mb-0">
-              <li>Filter by student, account type, or date to investigate a specific concern.</li>
-              <li>Common entries include payroll deposits, rent charges, store purchases, and savings transfers.</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="bankingGuideHeadingSettings">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#bankingGuideSettings" aria-expanded="false" aria-controls="bankingGuideSettings">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">settings</span>
-            <strong>Savings Interest</strong>
-          </button>
-        </h2>
-        <div id="bankingGuideSettings" class="accordion-collapse collapse mt-2"
-          aria-labelledby="bankingGuideHeadingSettings" data-bs-parent="#bankingGuideAccordion">
-          <div class="accordion-body">
-            <p>Open <strong>Settings</strong> to set the savings rate and payout frequency.</p>
-            <p class="mb-0">Rate changes affect future payouts only and will not re-calculate past interest. Each save
-              creates a new economic-engine version, preserving your class's economy history.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- Nav Tabs -->
 <ul class="nav nav-tabs mb-4" id="bankingTabs" role="tablist">

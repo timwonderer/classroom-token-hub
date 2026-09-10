@@ -2,6 +2,26 @@
 
 {% block page_title %}Teacher Dashboard{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("The state of the class you currently have open — what is waiting on you, what just happened, and who is here. Every number on this page is scoped to that one class.") }}
+
+{% call help.topic('dash-pending', 'pending_actions', 'Pending Actions') %}
+<p class="mb-0"><strong>This is the only part that needs you.</strong> Redemptions, insurance claims, and hall passes sit there until a person decides. Nothing in that queue times out on its own.</p>
+{% endcall %}
+
+{% call help.topic('dash-numbers', 'query_stats', 'Reading the numbers') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Total Economy Value is the sum of student balances,</strong> not money you have budgeted. It grows every payroll and shrinks with rent and purchases — a rising number is normal, not a warning.</li>
+    <li class="mb-0"><strong>Recent Transactions is a window, not the ledger.</strong> For anything you need to explain or reverse, open the student's record or the full transaction list.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('dash-banners', 'campaign', 'Banners and class scope') %}
+<p><strong>Banners at the top are one-time prompts.</strong> The recovery-setup warning matters most: without it, losing your passkey means losing the account.</p>
+<p class="mb-0 text-muted">Teaching more than one class? These figures change entirely when you switch classes. Check the class shown in the sidebar before reading anything here as a total.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <!-- Personalized Greeting -->
 <div class="mb-4 text-center">
@@ -137,44 +157,44 @@
     <div class="row g-3">
         <div class="col-6 col-md-3">
             <a href="{{ url_for('admin.attendance_log') }}"
-                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
+                class="quick-action">
                 <span class="material-symbols-outlined fs-3 text-primary" aria-hidden="true">fact_check</span>
-                <span class="fw-medium">Attendance</span>
+                <span class="quick-action-label">Attendance</span>
             </a>
         </div>
         <div class="col-6 col-md-3">
             <a href="{{ url_for('admin.payroll') }}"
-                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
+                class="quick-action">
                 <span class="material-symbols-outlined fs-3 text-success" aria-hidden="true">payments</span>
-                <span class="fw-medium">Run Payroll</span>
+                <span class="quick-action-label">Run Payroll</span>
             </a>
         </div>
         <div class="col-6 col-md-3">
             <a href="{{ url_for('admin.store_management') }}"
-                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
+                class="quick-action">
                 <span class="material-symbols-outlined fs-3 text-warning" aria-hidden="true">storefront</span>
-                <span class="fw-medium">Store</span>
+                <span class="quick-action-label">Store</span>
             </a>
         </div>
         <div class="col-6 col-md-3">
             <a href="{{ url_for('admin.students') }}"
-                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
+                class="quick-action">
                 <span class="material-symbols-outlined fs-3 text-info" aria-hidden="true">group_add</span>
-                <span class="fw-medium">Manage Students</span>
+                <span class="quick-action-label">Manage Students</span>
             </a>
         </div>
         <div class="col-6 col-md-3">
             <a href="{{ url_for('admin.insurance_management') }}"
-                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
+                class="quick-action">
                 <span class="material-symbols-outlined fs-3 text-success" aria-hidden="true">shield</span>
-                <span class="fw-medium">Insurance</span>
+                <span class="quick-action-label">Insurance</span>
             </a>
         </div>
         <div class="col-6 col-md-3">
             <a href="{{ url_for('admin.hall_pass') }}"
-                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
+                class="quick-action">
                 <span class="material-symbols-outlined fs-3 text-info" aria-hidden="true">door_open</span>
-                <span class="fw-medium">Hall Passes</span>
+                <span class="quick-action-label">Hall Passes</span>
             </a>
         </div>
     </div>
