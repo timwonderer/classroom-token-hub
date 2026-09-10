@@ -22,6 +22,8 @@ from datetime import timedelta
 from decimal import Decimal
 from uuid import uuid4
 
+import sqlalchemy as sa
+
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.models import EntitlementEvent
@@ -105,8 +107,14 @@ def _seed_loss(classroom, student, *, idem, amount, at=None):
         actor_seat_id=student.seat.id,
     )
     if at is not None:
-        txn.timestamp = at
-        db.session.flush()
+        # Backdating a posted row is exactly what INV-LED-002 forbids, and the
+        # ORM guard rejects it. This is fixture time travel, not a ledger write,
+        # so it goes around the mapper rather than pretending to be lawful.
+        db.session.execute(
+            sa.text("UPDATE ledger_transaction SET timestamp = :at WHERE id = :id"),
+            {"at": at, "id": txn.id},
+        )
+        db.session.expire(txn)
     return txn
 
 

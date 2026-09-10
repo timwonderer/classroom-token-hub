@@ -665,6 +665,87 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
     # 4. Identity synchronization (pure assignment only)
     # seat_id is the runtime anchor; student_id is only used for seat lookup.
 
+
+# The monetary and identity facts a posted row asserts. INV-LED-002 forbids
+# later lifecycle patching of these, and INV-LED-003 requires corrections to
+# arrive as new linked rows rather than edits — so a reversal that rewrote
+# `amount` in place would erase the very history the ledger exists to keep.
+_LEDGER_IMMUTABLE_FIELDS = frozenset({
+    'seat_id', 'target_seat_id', 'actor_seat_id', 'user_id', 'class_id',
+    'join_code', 'mechanism', 'amount', 'amount_cents', 'timestamp',
+    'account_type', 'effective_at', 'date_funds_available', 'description',
+    'correlation_id', 'original_transaction_id',
+    'policy_id', 'type', 'compensation_subtype', 'command_reservation_id',
+})
+
+# Fields the lawful post-insert paths populate exactly once: settlement assigns
+# `posting_sequence`/`posted_at` (INV-LED-007), correction links
+# `reversal_transaction_id` (INV-LED-013), `create_reserved_effects` stamps
+# `idempotency_key` on its effects once the reservation is held, and the audit
+# emitter stamps lineage after the row has an id. NULL -> value is the
+# assignment; value -> value' is a rewrite of a settled fact and is rejected on
+# the same grounds as the set above.
+_LEDGER_WRITE_ONCE_FIELDS = frozenset({
+    'posting_sequence', 'posted_at', 'reversal_transaction_id',
+    'idempotency_key', 'lineage_event_id', 'lineage_token', 'lineage_version',
+})
+
+
+_LEDGER_GUARDED_FIELDS = tuple(sorted(_LEDGER_IMMUTABLE_FIELDS | _LEDGER_WRITE_ONCE_FIELDS))
+
+
+def _ledger_comparable(value):
+    """Flatten a value to something comparable across ORM and driver types."""
+    if isinstance(value, enum.Enum):
+        return value.value
+    return value
+
+
+@sa.event.listens_for(Transaction, "before_update")
+def _guard_ledger_immutability(_mapper, connection, target):
+    """Reject in-place edits to settled ledger facts (INV-LED-002).
+
+    The comparison is against the stored row rather than SQLAlchemy attribute
+    history, because history cannot distinguish the two UPDATEs that matter here.
+    `Transaction.target_seat` and `actor_seat` are ``post_update`` relationships,
+    so every INSERT is immediately followed by an UPDATE whose history still
+    presents the freshly-set columns as changes — and after a commit the instance
+    is expired, so a genuine rewrite presents no prior value at all. The row
+    itself is unambiguous in both cases.
+
+    `status` and `feat_code` are deliberately unguarded: settlement moves PENDING
+    to POSTED, and `_enforce_transaction_integrity` restamps `feat_code` with the
+    FEAT performing the lawful update. Everything else on a persisted row is
+    history.
+    """
+    if target.id is None:
+        return
+
+    stored = connection.execute(
+        sa.text(
+            f"SELECT {', '.join(_LEDGER_GUARDED_FIELDS)} "
+            "FROM ledger_transaction WHERE id = :id"
+        ),
+        {"id": target.id},
+    ).mappings().first()
+    if stored is None:
+        return
+
+    violations = []
+    for field in _LEDGER_GUARDED_FIELDS:
+        previous = stored[field]
+        if field in _LEDGER_WRITE_ONCE_FIELDS and previous is None:
+            continue
+        if _ledger_comparable(getattr(target, field, None)) != _ledger_comparable(previous):
+            violations.append(field)
+
+    if violations:
+        raise ValueError(
+            f"ledger_transaction fields are immutable: {sorted(violations)}. "
+            "Record a linked correcting transaction instead of editing this row."
+        )
+
+
 def _resolve_seat_id(connection, student_id, *, class_id=None):
     """Lookup seat ID for a student in a class universe."""
     if not student_id or not class_id:
