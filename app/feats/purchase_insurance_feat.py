@@ -144,7 +144,15 @@ def execute_purchase_insurance(
             entitlement_id=prior_grant.entitlement_id,
         )
 
-    seat = Seat.query.filter_by(id=seat_id, class_id=class_id).first()
+    # The seat row serializes this seat's money (INV-LED-015). Taking it before
+    # the affordability read holds it through the premium debit, so concurrent
+    # purchases, debits, or a settlement for this seat cannot all pass the same
+    # balance check.
+    seat = (
+        Seat.query.filter_by(id=seat_id, class_id=class_id)
+        .with_for_update()
+        .first()
+    )
     if seat is None:
         return InsurancePurchaseResult(
             success=False, correlation_id=correlation_id,

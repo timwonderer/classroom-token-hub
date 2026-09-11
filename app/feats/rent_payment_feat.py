@@ -183,7 +183,15 @@ def pay_rent(
             fully_paid=True,
         )
 
-    seat = Seat.query.filter_by(id=seat_id, class_id=class_id).first()
+    # The seat row serializes this seat's money (INV-LED-015). Taking it here,
+    # before the affordability read below, holds it through the debit write, so
+    # a concurrent debit or settlement for the same seat waits for this payment
+    # instead of authorizing against the same pre-payment balance.
+    seat = (
+        Seat.query.filter_by(id=seat_id, class_id=class_id)
+        .with_for_update()
+        .first()
+    )
     if seat is None:
         return RentPaymentResult(
             success=False, correlation_id=correlation_id,
