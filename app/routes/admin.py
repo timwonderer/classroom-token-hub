@@ -85,7 +85,7 @@ from app.utils.join_code import generate_join_code, get_display_join_code
 from app.utils.economy_balance import EconomyBalanceChecker
 from app.utils.economy_policy import (
     POLICY_MODES,
-    convert_weekly_amount_to_frequency,
+    frequency_label,
     get_active_policy_mode_for_class,
     get_class_feature_settings_for_class,
     get_class_feature_settings,
@@ -144,6 +144,7 @@ from app.services.classroom_setup import (
 )
 from app.services.payroll_settings_service import upsert_payroll_settings
 from app.services import store_service
+from app.services.entitlement_read_service import derive_display_status
 from app.services.store import collective_goals
 from app.services.store_service import (
     publish_product,
@@ -2127,17 +2128,6 @@ def _format_money(value):
     return f"${Decimal(str(value)):.2f}"
 
 
-def _format_frequency_label(frequency, custom_frequency_value=None, custom_frequency_unit=None):
-    frequency = (frequency or '').lower()
-    if frequency == 'custom':
-        unit = (custom_frequency_unit or 'days').lower()
-        count = custom_frequency_value or 1
-        return f"every {count} {unit}"
-    if frequency:
-        return frequency
-    return "configured cadence"
-
-
 def _warning_to_alignment(level_value):
     if level_value == 'critical':
         return 'significantly_off'
@@ -2293,22 +2283,30 @@ def _extract_pending_rebalance_effective_at(policy_summary: dict) -> datetime | 
 
 def _build_rebalance_preview(canonical_context, class_id, checker, cwi, rent_settings, insurance_policies):
     preview_items = []
-    recommendations = get_price_recommendation_context(checker.policy_mode, cwi) or {}
 
     if rent_settings:
-        recommended_amount = convert_weekly_amount_to_frequency(
-            Decimal(str(recommendations['rent_weekly']['recommended'])),
+        custom_frequency_unit = getattr(rent_settings, 'custom_frequency_unit', None)
+        # The same band the rent page quotes and the balance warning judges
+        # against. Scaling the already-rounded weekly figure here proposed a
+        # rebalance target a cent off the one the page recommends (INV-ARC-022).
+        recommended_amount = checker.rent_band(
+            cwi,
+            rent_settings.frequency_type,
+            rent_settings.custom_frequency_value,
+            custom_frequency_unit,
+        )['recommended']
+        cadence = frequency_label(
             rent_settings.frequency_type,
             custom_frequency_value=rent_settings.custom_frequency_value,
-            custom_frequency_unit=getattr(rent_settings, 'custom_frequency_unit', None),
+            custom_frequency_unit=custom_frequency_unit,
         )
         current_amount = Decimal(str(rent_settings.rent_amount or 0))
         if current_amount != recommended_amount:
             preview_items.append({
                 'key': 'rent',
                 'label': 'Rent',
-                'current': f"{_format_money(current_amount)} / {_format_frequency_label(rent_settings.frequency_type, rent_settings.custom_frequency_value, getattr(rent_settings, 'custom_frequency_unit', None))}",
-                'recommended': f"{_format_money(recommended_amount)} / {_format_frequency_label(rent_settings.frequency_type, rent_settings.custom_frequency_value, getattr(rent_settings, 'custom_frequency_unit', None))}",
+                'current': f"{_format_money(current_amount)} {cadence}",
+                'recommended': f"{_format_money(recommended_amount)} {cadence}",
                 'apply_by_default': True,
                 'change': {
                     'type': 'rent',
@@ -10182,6 +10180,13 @@ def api_economy_validate(feature):
             'is_valid': len([w for w in warnings if w.get('level') == 'critical']) == 0,
             'warnings': warnings,
             'recommendations': recommendations,
+            # The cadence wording the band is quoted in, so the page prints the
+            # server's phrasing of the server's band rather than its own.
+            'period_label': frequency_label(
+                validation_kwargs['frequency_type'],
+                custom_frequency_value=validation_kwargs['custom_frequency_value'],
+                custom_frequency_unit=validation_kwargs['custom_frequency_unit'],
+            ) if feature == 'rent' else None,
             'cwi': cwi,
             'ratio': ratio if feature != 'insurance' else None,
             'cwi_breakdown': {

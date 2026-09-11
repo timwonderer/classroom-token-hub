@@ -938,17 +938,38 @@
         expectedWeeklyHours: {{ (expected_weekly_hours if expected_weekly_hours is defined and expected_weekly_hours is not none else 5.0) | float }},
         // The CWI helper box above already shows range + recommended
         // proactively; suppress the JS Recommendations echo so the same
-        // numbers don't appear twice (and to avoid the rounding-drift
-        // between the two calculation paths).
+        // numbers don't appear twice.
         suppressRecommendationsEcho: true,
     });
 
   // Display CWI info if payroll is configured (class-scoped via canonical context on server).
-  // Cache the analysis so frequency changes can re-render without a network round-trip.
+  // The analysis supplies the policy context; the band itself is asked for per
+  // cadence, because the cadence-scaled band is the server's to compute.
   let cachedCWIAnalysis = null;
+
+  const currentFrequency = () => {
+    const freq = (document.getElementById('frequency_type') || {}).value || 'monthly';
+    const valueEl = document.getElementById('custom_frequency_value');
+    const unitEl = document.getElementById('custom_frequency_unit');
+    const value = valueEl ? parseFloat(valueEl.value) : NaN;
+    return {
+      frequency: freq,
+      customValue: Number.isFinite(value) ? value : null,
+      customUnit: unitEl ? (unitEl.value || null) : null,
+    };
+  };
+
+  const renderCWIInfo = () => {
+    if (!cachedCWIAnalysis) return;
+    const { frequency, customValue, customUnit } = currentFrequency();
+    economyChecker.fetchRentBand(frequency, customValue, customUnit)
+      .then(band => economyChecker.displayCWIInfo(cachedCWIAnalysis, '#cwi-info', band))
+      .catch(err => console.warn('Rent band unavailable.', err));
+  };
+
   economyChecker.analyzeEconomy().then(analysis => {
     cachedCWIAnalysis = analysis;
-    economyChecker.displayCWIInfo(analysis, '#cwi-info');
+    renderCWIInfo();
   }).catch(err => {
     console.warn('CWI analysis unavailable; rent guidance will remain unavailable.', err);
     const info = document.querySelector('#cwi-info');
@@ -967,11 +988,7 @@
   cwiFrequencyWatchers.forEach(({ id, event }) => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.addEventListener(event, function () {
-      if (cachedCWIAnalysis) {
-        economyChecker.displayCWIInfo(cachedCWIAnalysis, '#cwi-info');
-      }
-    });
+    el.addEventListener(event, renderCWIInfo);
   });
 
   // Re-validate rent when frequency changes

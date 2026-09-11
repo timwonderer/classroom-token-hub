@@ -13,7 +13,9 @@ FREQUENCY_WEEK_MULTIPLIERS = {
     "daily": Decimal("0.142857142857"),
     "weekly": Decimal("1.0"),
     "biweekly": Decimal("2.0"),
-    "monthly": Decimal("4.348214285714"),
+    # Bound to the constant rather than re-stated: a second spelling of the
+    # month length makes two price bands out of one policy ratio (INV-ARC-022).
+    "monthly": AVERAGE_WEEKS_PER_MONTH,
     "semester": Decimal("18.0"),
     "yearly": Decimal("52.0"),
 }
@@ -98,29 +100,71 @@ def _quantize_money(value: Decimal) -> Decimal:
     return Decimal(str(value)).quantize(Decimal("0.01"))
 
 
-def convert_weekly_amount_to_frequency(
-    value: Optional[Decimal],
+def weeks_per_period(
     frequency: Optional[str],
     *,
     custom_frequency_value: Optional[int] = None,
     custom_frequency_unit: Optional[str] = None,
-) -> Optional[Decimal]:
-    if value is None:
-        return None
+) -> Decimal:
+    """How many weeks one period of ``frequency`` spans.
 
-    amount = Decimal(str(value))
+    Every weekly policy ratio reaches a teacher-visible amount through this one
+    conversion, so a band shown on a settings page and the band the balance
+    warning judges against cannot pick up different rounding on the way.
+    """
     normalized_frequency = (frequency or "weekly").strip().lower()
     if normalized_frequency == "custom":
         unit = (custom_frequency_unit or "days").strip().lower()
         count = Decimal(str(custom_frequency_value or 1))
         if unit == "weeks":
-            return _quantize_money(amount * count)
+            return count
         if unit == "months":
-            return _quantize_money(amount * AVERAGE_WEEKS_PER_MONTH * count)
-        return _quantize_money(amount / (Decimal("7") / count))
+            return AVERAGE_WEEKS_PER_MONTH * count
+        return count / Decimal("7")
 
-    multiplier = FREQUENCY_WEEK_MULTIPLIERS.get(normalized_frequency, FREQUENCY_WEEK_MULTIPLIERS["weekly"])
-    return _quantize_money(amount * multiplier)
+    return FREQUENCY_WEEK_MULTIPLIERS.get(normalized_frequency, FREQUENCY_WEEK_MULTIPLIERS["weekly"])
+
+
+def frequency_label(
+    frequency: Optional[str],
+    *,
+    custom_frequency_value: Optional[int] = None,
+    custom_frequency_unit: Optional[str] = None,
+) -> str:
+    """The human phrasing of a billing cadence, e.g. ``per 2 weeks``."""
+    normalized_frequency = (frequency or "weekly").strip().lower()
+    if normalized_frequency == "custom":
+        count = int(custom_frequency_value or 1)
+        unit = (custom_frequency_unit or "days").strip().lower()
+        unit = unit.rstrip("s") if count == 1 else (unit if unit.endswith("s") else f"{unit}s")
+        return f"per {count} {unit}"
+
+    return {
+        "daily": "per day",
+        "weekly": "per week",
+        "biweekly": "per 2 weeks",
+        "monthly": "per month",
+        "semester": "per semester",
+        "yearly": "per year",
+    }.get(normalized_frequency, normalized_frequency)
+
+
+def scale_band(
+    cwi: Optional[Decimal],
+    ratios: Dict[str, Any],
+    weeks: Decimal = Decimal("1"),
+) -> Dict[str, Decimal]:
+    """Turn weekly CWI ratios into per-period money, rounding exactly once.
+
+    Rounding the weekly figure and then scaling it produces a different band
+    than scaling and then rounding, which is how the Economic Engine card and
+    the rent page came to disagree by a cent or two.
+    """
+    cwi_decimal = _quantize_money(Decimal(str(cwi or 0)))
+    return {
+        key: _quantize_money(cwi_decimal * Decimal(str(ratio)) * weeks)
+        for key, ratio in ratios.items()
+    }
 
 
 def get_price_recommendation_context(mode: Optional[str], cwi: Optional[Decimal]) -> Optional[Dict[str, Any]]:
@@ -134,13 +178,16 @@ def get_price_recommendation_context(mode: Optional[str], cwi: Optional[Decimal]
     ratios = profile.get("ratios", {})
     cwi_decimal = _quantize_money(Decimal(str(cwi)))
 
-    def band(key: str, fallback_min: float, fallback_max: float, fallback_recommended: float) -> Dict[str, Decimal]:
+    def weekly_ratios(key: str, fallback_min: float, fallback_max: float, fallback_recommended: float) -> Dict[str, float]:
         values = ratios.get(key, {})
         return {
-            "min": _quantize_money(cwi_decimal * Decimal(str(values.get("min", fallback_min)))),
-            "max": _quantize_money(cwi_decimal * Decimal(str(values.get("max", fallback_max)))),
-            "recommended": _quantize_money(cwi_decimal * Decimal(str(values.get("recommended", fallback_recommended)))),
+            "min": values.get("min", fallback_min),
+            "max": values.get("max", fallback_max),
+            "recommended": values.get("recommended", fallback_recommended),
         }
+
+    def band(key: str, fallback_min: float, fallback_max: float, fallback_recommended: float) -> Dict[str, Decimal]:
+        return scale_band(cwi_decimal, weekly_ratios(key, fallback_min, fallback_max, fallback_recommended))
 
     def multiplier_band(key: str, fallback_min: float, fallback_max: float, fallback_recommended: float) -> Dict[str, float]:
         values = ratios.get(key, {})
@@ -173,7 +220,9 @@ def get_price_recommendation_context(mode: Optional[str], cwi: Optional[Decimal]
     # product- and tier-aware. This legacy builder retains only the
     # rent/utilities/fines/store/savings surfaces still pending their own
     # Engine migration.
-    rent_weekly = band("rent_weekly", 0.60, 0.75, 0.675)
+    rent_ratios = weekly_ratios("rent_weekly", 0.60, 0.75, 0.675)
+    rent_weekly = scale_band(cwi_decimal, rent_ratios)
+    rent_monthly = scale_band(cwi_decimal, rent_ratios, AVERAGE_WEEKS_PER_MONTH)
     utilities_weekly = band("utilities_weekly", 0.05, 0.10, 0.075)
     fine_weekly = band("fine_weekly", 0.05, 0.15, 0.10)
     savings = ratios.get("savings_weekly", {"min": 0.10, "target": 0.10})
@@ -183,10 +232,10 @@ def get_price_recommendation_context(mode: Optional[str], cwi: Optional[Decimal]
         "policy_label": profile["label"],
         "cwi": float(cwi_decimal),
         "rent_weekly": {key: float(value) for key, value in rent_weekly.items()},
-        "rent": {
-            key: float(_quantize_money(value * AVERAGE_WEEKS_PER_MONTH))
-            for key, value in rent_weekly.items()
-        },
+        "rent": {key: float(value) for key, value in rent_monthly.items()},
+        # The policy ratios themselves, so a "% of CWI" line is read rather than
+        # reverse-engineered from an already-rounded dollar band.
+        "rent_ratios": {key: float(value) for key, value in rent_ratios.items()},
         "utilities": {key: float(value) for key, value in utilities_weekly.items()},
         "fine": {key: float(value) for key, value in fine_weekly.items()},
         "store_tiers": store_tiers(),

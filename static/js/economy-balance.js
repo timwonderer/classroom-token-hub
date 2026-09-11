@@ -410,82 +410,40 @@ class EconomyBalanceChecker {
     }
 
     /**
+     * Fetch the rent band for a cadence, as the server derives it.
+     */
+    async fetchRentBand(frequencyType, customFrequencyValue = null, customFrequencyUnit = null) {
+        const data = await this.validate('rent', 0, frequencyType, {
+            frequency_type: frequencyType,
+            custom_frequency_value: customFrequencyValue,
+            custom_frequency_unit: customFrequencyUnit,
+        });
+        const band = data.recommendations || {};
+        return { ...band, period_label: data.period_label };
+    }
+
+    /**
      * Display CWI info in a designated container
      */
-    displayCWIInfo(cwiData, containerId = '#cwi-info') {
+    displayCWIInfo(cwiData, containerId = '#cwi-info', serverBand = null) {
         const container = document.querySelector(containerId);
         if (!container) return;
 
         const fmt = (v) => (typeof v === 'number' ? `$${v.toFixed(2)}` : '—');
         const rec = cwiData.recommendations || {};
-        const rentMonthly = rec.rent || {};
-        const rentWeekly = rec.rent_weekly || {};
 
-        // Frequency-aware selection: derive the correct band for whatever
-        // rent-frequency the teacher has picked. The payload only carries
-        // weekly and monthly buckets; other frequencies are converted
-        // proportionally from weekly (the smaller unit — avoids
-        // compounding month-length approximation).
-        const freqEl = document.getElementById('frequency_type');
-        const freq = (freqEl && freqEl.value) || 'monthly';
-        const customValueEl = document.getElementById('custom_frequency_value');
-        const customUnitEl = document.getElementById('custom_frequency_unit');
-        const customValue = customValueEl ? parseFloat(customValueEl.value) : NaN;
-        const customUnit = customUnitEl ? customUnitEl.value : '';
+        // The band and its cadence wording come from the server, which derives
+        // both from the class's policy ratios and rounds once (INV-ARC-022).
+        // Scaling a rounded weekly band here produced a second, disagreeing
+        // recommendation for every non-weekly cadence.
+        const rentBand = serverBand || rec.rent_weekly || {};
+        const periodLabel = (serverBand && serverBand.period_label) || 'per week';
 
-        const scale = (band, factor) => (band && band.min != null ? {
-            min: band.min * factor,
-            max: band.max * factor,
-            recommended: band.recommended * factor,
-        } : {});
-
-        let rentBand = rentMonthly;
-        let periodLabel = 'per month';
-        let showNote = false;
-
-        if (freq === 'weekly') {
-            rentBand = rentWeekly;
-            periodLabel = 'per week';
-        } else if (freq === 'daily') {
-            rentBand = scale(rentWeekly, 1 / 7);
-            periodLabel = 'per day';
-        } else if (freq === 'biweekly') {
-            rentBand = scale(rentWeekly, 2);
-            periodLabel = 'every 2 weeks';
-        } else if (freq === 'custom') {
-            // Custom = <value> <unit>. Convert from weekly for days/weeks,
-            // from monthly for months (natural unit alignment).
-            if (Number.isFinite(customValue) && customValue > 0) {
-                if (customUnit === 'days') {
-                    rentBand = scale(rentWeekly, customValue / 7);
-                    periodLabel = `every ${customValue} day${customValue === 1 ? '' : 's'}`;
-                } else if (customUnit === 'weeks') {
-                    rentBand = scale(rentWeekly, customValue);
-                    periodLabel = `every ${customValue} week${customValue === 1 ? '' : 's'}`;
-                } else if (customUnit === 'months') {
-                    rentBand = scale(rentMonthly, customValue);
-                    periodLabel = `every ${customValue} month${customValue === 1 ? '' : 's'}`;
-                } else {
-                    // Unit not set yet — show monthly with a hint.
-                    showNote = true;
-                }
-            } else {
-                showNote = true;
-            }
-        }
-        // (else: monthly — the default.)
-
-        // Percent-of-CWI derivation for the calculation-details line.
-        // rent bands are computed as cwi × ratio; the ratio is not exposed
-        // in the payload, so recover it here from the weekly band (weekly
-        // is the base unit — closest to CWI itself which is a weekly value).
         const cwiValue = typeof cwiData.cwi === 'number' ? cwiData.cwi : null;
-        const pctLow = (cwiValue && rentWeekly.min != null)
-            ? ((rentWeekly.min / cwiValue) * 100).toFixed(0)
-            : null;
-        const pctHigh = (cwiValue && rentWeekly.max != null)
-            ? ((rentWeekly.max / cwiValue) * 100).toFixed(0)
-            : null;
+        const rentRatios = rec.rent_ratios || {};
+        const pct = (ratio) => (typeof ratio === 'number' ? (ratio * 100).toFixed(0) : null);
+        const pctLow = pct(rentRatios.min);
+        const pctHigh = pct(rentRatios.max);
 
         // Top-level card visual: dark-green header (bg-primary, role-scoped),
         // white body with the recommendation prose + collapsed calculation
@@ -501,11 +459,7 @@ class EconomyBalanceChecker {
 
         // Primary sentence: range recommendation.
         if (rentBand.min != null && rentBand.max != null) {
-            html += `<p class="mb-2">Based on your current economic settings, we recommend setting <strong>rent</strong> between <strong>${fmt(rentBand.min)}</strong> and <strong>${fmt(rentBand.max)}</strong> ${periodLabel}`;
-            if (showNote) {
-                html += ` <span class="text-muted small">(shown as monthly — set your custom frequency to refine)</span>`;
-            }
-            html += '.</p>';
+            html += `<p class="mb-2">Based on your current economic settings, we recommend setting <strong>rent</strong> between <strong>${fmt(rentBand.min)}</strong> and <strong>${fmt(rentBand.max)}</strong> ${periodLabel}.</p>`;
         } else {
             html += '<p class="mb-2 text-muted">Recommendation unavailable — insufficient data.</p>';
         }

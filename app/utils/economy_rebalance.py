@@ -470,7 +470,10 @@ def activate_due_rebalances(user_id, *, class_id=None, reference_time=None):
                 activation_mode = transition.activation_mode or REBALANCE_ACTIVATION_NEXT_PAYROLL
                 effective_at = _parse_dt(change.get("effective_at"))
                 is_due = False
-                if activation_mode == REBALANCE_ACTIVATION_NEXT_PAYROLL and effective_at is None:
+                # A deferred transition whose effective date could not be
+                # computed has no later moment to wait for, so it activates on
+                # the next sweep rather than sitting pending forever.
+                if activation_mode != REBALANCE_ACTIVATION_IMMEDIATE and effective_at is None:
                     is_due = True
                 elif effective_at is not None and effective_at <= reference_time:
                     is_due = True
