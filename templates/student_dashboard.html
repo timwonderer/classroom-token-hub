@@ -24,12 +24,24 @@
 {% endcall %}
 {% endblock %}
 
+{% block extra_styles %}
+<style>
+    /* Page-local stacking for the attendance toast layer. */
+    #toast-container { z-index: 1050; }
+
+    .attendance-status-neutral {
+        background-color: var(--neutral-600);
+        color: var(--text-inverse);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 
 <!-- Personalized Time-Based Greeting -->
 <div class="mb-4">
     <h2 class="h3 fw-bold text-primary mb-0 text-center" id="dashboard-greeting">
-        <span id="greeting-text" style="font-weight:300">Good day</span>, {{ student_layout_view.student_display_first_name }}!
+        <span id="greeting-text" class="fw-light">Good day</span>, {{ student_layout_view.student_display_first_name }}!
     </h2>
 </div>
 
@@ -51,10 +63,10 @@
     })();
 </script>
 <!-- Toast Container for Notifications -->
-<div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1050;"></div>
+<div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3"></div>
 
 <!-- Server State for JS -->
-<div id="serverState" style="display:none;">{{ attendance_state_json|safe }}</div>
+<div id="serverState" hidden>{{ attendance_state_json|safe }}</div>
 
 <!-- Account Recovery Request -->
 {% if pending_recovery_code %}
@@ -75,8 +87,7 @@
                     <span class="material-symbols-outlined fs-6 align-bottom me-1" aria-hidden="true">verified_user</span>
                     Help Verify Identity
                 </a>
-                <form method="POST" action="{{ url_for('student.dismiss_recovery', code_id=pending_recovery_code.id) }}"
-                    style="display: inline;">
+                <form method="POST" action="{{ url_for('student.dismiss_recovery', code_id=pending_recovery_code.id) }}" class="d-inline">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-secondary btn-sm">Dismiss for now</button>
                 </form>
@@ -206,7 +217,7 @@
             <div class="d-flex justify-content-between align-items-center mb-3 bg-light rounded p-3">
                 <div>
                     <div class="small text-muted text-uppercase fw-bold mb-1">Current Class</div>
-                    <span class="attendance-status badge" style="background-color: #6c757d; color: #ffffff;">Inactive</span>
+                    <span class="attendance-status badge attendance-status-neutral">Inactive</span>
                 </div>
                 <div class="text-end">
                     <small class="text-muted d-block mb-1">Time Today</small>
@@ -215,7 +226,7 @@
             </div>
 
             <!-- Hall Pass Info Display (Inline) -->
-            <div id="hallPassInfo" style="display:none;" class="mb-3"></div>
+            <div id="hallPassInfo" class="mb-3" hidden></div>
 
             <div class="d-grid gap-2 d-flex flex-wrap">
                 <button type="button" id="startWork" class="btn btn-success flex-grow-1 attendance-action-btn py-2 fw-bold"
@@ -228,7 +239,7 @@
                 </button>
             </div>
             <!-- Hidden pay cell for JS compatibility -->
-            <span class="attendance-pay" style="display:none;">0.00</span>
+            <span class="attendance-pay" hidden>0.00</span>
         </div>
     </div>
 </div>
@@ -314,7 +325,7 @@
                 {% else %}
                 <div class="display-6 fw-bold text-muted mb-2">$0.00</div>
                 {% if savings_annual_rate %}
-                <div class="alert alert-warning border-warning py-2 px-3 mb-3 small d-flex align-items-start" style="color: #5f3d00;">
+                <div class="alert alert-warning border-warning py-2 px-3 mb-3 small d-flex align-items-start">
                     <span class="material-symbols-outlined fs-6 me-2" aria-hidden="true">info</span>
                     <span>You're missing out on interest! Transfer money from Checking to Savings to start
                         earning.</span>

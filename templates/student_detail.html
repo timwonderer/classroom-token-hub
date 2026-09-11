@@ -26,16 +26,16 @@
 {% endcall %}
 {% endblock %}
 
-{% block extra_styles %}
+{% block extra_head %}
 <style>
     .stat-value {
-        font-size: 2rem;
-        font-weight: bold;
+        font-size: var(--text-3xl);
+        font-weight: var(--weight-bold);
     }
 
     .stat-label {
         color: var(--text-secondary);
-        font-size: 0.875rem;
+        font-size: var(--text-sm);
         text-transform: uppercase;
     }
 
@@ -121,8 +121,7 @@
     </h6>
     <div class="d-flex flex-wrap gap-2">
         {% for privilege in rent_privileges %}
-        <span class="badge bg-{% if privilege.source == 'rent' %}success{% else %}info{% endif %} px-3 py-2"
-            style="font-size: 0.9rem;" {% if privilege.description %}title="{{ privilege.description }}" {% endif %}>
+        <span class="badge bg-{% if privilege.source == 'rent' %}success{% else %}info{% endif %} px-3 py-2 type-sm" {% if privilege.description %}title="{{ privilege.description }}" {% endif %}>
             <span class="material-symbols-outlined me-1" aria-hidden="true">{% if privilege.source == 'rent' %}check_circle{% else
                 %}shopping_cart_checkout{% endif %}</span>
             {{ privilege.name }}
@@ -806,7 +805,7 @@
                                     <label class="form-check-label" for="edit_reset_login">Reset</label>
                                 </div>
                             </div>
-                            <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" style="display:none;">
+                            <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" hidden>
                                 <small><span class="material-symbols-outlined me-2" aria-hidden="true">warning</span>A reset code will be
                                     generated.
                                     Give it to the student along with their join code. They will click
@@ -840,7 +839,7 @@
     const resetLoginWarning = document.getElementById('reset_login_warning');
     if (resetLoginCheckbox && resetLoginWarning) {
         resetLoginCheckbox.addEventListener('change', function () {
-            resetLoginWarning.style.display = this.checked ? 'block' : 'none';
+            resetLoginWarning.hidden = !this.checked;
         });
     }
 </script>

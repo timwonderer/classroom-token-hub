@@ -10,14 +10,27 @@
   }
 
   .quick-action-btn {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-sm);
   }
 
   .hold-delete-btn:disabled {
     cursor: not-allowed;
-    opacity: 0.65;
+    opacity: var(--alpha-strong);
   }
+
+  .join-code-display {
+    letter-spacing: var(--tracking-wider);
+    background-color: var(--surface);
+  }
+
+  .col-select { width: 40px; }
+  .col-actions { width: 200px; }
+  .col-w-30 { width: 30%; }
+  .col-w-10 { width: 10%; }
+
+  /* Script drives the width from here. */
+  #timed-delete-countdown-bar { width: 0%; }
 </style>
 <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
 {% endblock %}
@@ -35,7 +48,7 @@
 </ul>
 <div class="card shadow-sm mb-0">
   <div class="card-header bg-warning text-dark py-3">
-    <h6 class="mb-0 fw-semibold text-dark"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">warning</span>Avoid Sensitive Information</h6>
+    <h6 class="mb-0 fw-semibold text-dark"><span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">warning</span>Avoid Sensitive Information</h6>
   </div>
   <div class="card-body">
     Although all personal information is stored encrypted, we do not recommend storing any private or sensitive information in the notes field.
@@ -132,13 +145,13 @@
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="roster-tab" data-bs-toggle="tab" data-bs-target="#roster" type="button"
       role="tab" aria-controls="roster" aria-selected="true">
-      <span class="material-symbols-outlined me-1" style="vertical-align: middle;" aria-hidden="true">groups</span>Class Roster
+      <span class="material-symbols-outlined me-1 icon-middle" aria-hidden="true">groups</span>Class Roster
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="bulk-upload-tab" data-bs-toggle="tab" data-bs-target="#bulk-upload" type="button"
       role="tab" aria-controls="bulk-upload" aria-selected="false">
-      <span class="material-symbols-outlined me-1" style="vertical-align: middle;" aria-hidden="true">group_add</span>Add Students
+      <span class="material-symbols-outlined me-1 icon-middle" aria-hidden="true">group_add</span>Add Students
     </button>
   </li>
 </ul>
@@ -152,7 +165,7 @@
         </h2>
         <div>
           <a href="{{ url_for('admin.export_students') }}" class="btn btn-light btn-sm me-2">
-            <span class="material-symbols-outlined me-1" style="vertical-align: middle;" aria-hidden="true">download</span> Export All
+            <span class="material-symbols-outlined me-1 icon-middle" aria-hidden="true">download</span> Export All
           </a>
         </div>
       </div>
@@ -187,12 +200,12 @@
                     <div class="d-flex align-items-center gap-2">
                       <div class="input-group">
                         <label for="join-code-current-class" class="visually-hidden">Join code for {{ class_display_label }}</label>
-                        <input type="text" class="form-control form-control-lg font-monospace text-center fw-bold fs-3"
+                        <input type="text" class="form-control form-control-lg font-monospace text-center fw-bold fs-3 join-code-display"
                           id="join-code-current-class" value="{{ current_class_join_code }}" readonly
-                          style="letter-spacing: 0.2em; background-color: white;">
+>
                         <button class="btn btn-outline-success btn-lg join-code-copy-btn" type="button"
                           data-class-id="{{ current_class_id }}" data-join-code="{{ current_class_join_code }}">
-                          <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">content_copy</span>
+                          <span class="material-symbols-outlined icon-middle" aria-hidden="true">content_copy</span>
                           Copy
                         </button>
                       </div>
@@ -339,7 +352,7 @@
                     <caption class="visually-hidden">Current class student roster</caption>
                     <thead class="table-dark">
                       <tr>
-                        <th style="width: 40px;" scope="col">
+                        <th class="col-select" scope="col">
                           <input type="checkbox" class="form-check-input select-all-checkbox"
                             onchange="toggleSelectAll(this)" aria-label="Select all students">
                         </th>
@@ -348,7 +361,7 @@
                         <th scope="col">Savings</th>
                         <th scope="col">Hall Passes</th>
                         <th scope="col">Privileges</th>
-                        <th scope="col" style="width: 200px;">Actions</th>
+                        <th class="col-actions" scope="col">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -383,8 +396,8 @@
                           <div class="d-flex flex-wrap gap-1">
                             {% for privilege in privileges %}
                             <span
-                              class="badge bg-{% if privilege.source == 'rent' %}success{% else %}info{% endif %} text-white"
-                              style="font-size: 0.75rem;"
+                              class="badge bg-{% if privilege.source == 'rent' %}success{% else %}info{% endif %} text-white type-xs"
+
                               title="{% if privilege.source == 'rent' %}Covered by rent{% else %}Individually purchased{% endif %}">
                               {{ privilege.name }}
                             </span>
@@ -401,13 +414,13 @@
                             data-student-last-name="{{ profile.last_name if profile else '' }}"
                             data-student-notes="{{ profile.notes if profile and profile.notes else '' }}"
                             data-student-class-id="{{ student.class_id }}">
-                            <span class="material-symbols-outlined" aria-hidden="true" style="vertical-align: middle;">edit</span>
+                            <span class="material-symbols-outlined icon-middle" aria-hidden="true">edit</span>
                             <span class="visually-hidden">Edit {{ student_display_name }}</span>
                           </button>
                         <button type="button" class="btn btn-sm btn-outline-danger quick-action-btn" data-bs-toggle="modal"
                             data-bs-target="#deleteStudentModal" data-student-id="{{ student.id }}"
                             data-student-name="{{ student_display_name }}">
-                            <span class="material-symbols-outlined" aria-hidden="true" style="vertical-align: middle;">delete</span>
+                            <span class="material-symbols-outlined icon-middle" aria-hidden="true">delete</span>
                             <span class="visually-hidden">Delete {{ student_display_name }}</span>
                           </button>
                         </td>
@@ -420,7 +433,7 @@
             </div>
             {% else %}
             <div class="alert alert-info">
-              <span class="material-symbols-outlined me-2" style="vertical-align: middle;" aria-hidden="true">info</span>No students have
+              <span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">info</span>No students have
               claimed accounts in {{ class_display_label }} yet.
             </div>
             {% endif %}
@@ -435,7 +448,7 @@
     <div class="card shadow">
       <div class="card-header bg-success text-white">
         <h2 class="mb-0 h5">
-          <span class="material-symbols-outlined me-2" style="vertical-align: middle;" aria-hidden="true">group_add</span>Add Students
+          <span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">group_add</span>Add Students
         </h2>
       </div>
       <div class="card-body">
@@ -468,10 +481,10 @@
                     <caption class="visually-hidden">Student roster staging grid</caption>
             <thead class="table-light">
               <tr>
-                <th scope="col" style="width: 30%;">First Name <span class="text-danger">*</span></th>
-                <th scope="col" style="width: 30%;">Last Name <span class="text-danger">*</span></th>
-                <th scope="col" style="width: 30%;">Notes</th>
-                <th scope="col" style="width: 10%;"><span class="visually-hidden">Actions</span></th>
+                <th class="col-w-30" scope="col">First Name <span class="text-danger">*</span></th>
+                <th class="col-w-30" scope="col">Last Name <span class="text-danger">*</span></th>
+                <th class="col-w-30" scope="col">Notes</th>
+                <th class="col-w-10" scope="col"><span class="visually-hidden">Actions</span></th>
               </tr>
             </thead>
             <tbody id="staging-body">
@@ -487,7 +500,7 @@
 
         <div class="d-flex justify-content-between align-items-center mt-3">
           <button type="button" class="btn btn-outline-secondary btn-sm" id="add-row-btn">
-            <span class="material-symbols-outlined me-1" style="vertical-align: middle; font-size: 18px;" aria-hidden="true">add</span>Add Row
+            <span class="material-symbols-outlined me-1 icon-middle icon-sm" aria-hidden="true">add</span>Add Row
           </button>
           <span class="text-muted small" id="row-count">0 students staged</span>
         </div>
@@ -497,7 +510,7 @@
         <div class="d-flex justify-content-end gap-2">
           <button type="button" class="btn btn-outline-secondary" id="clear-grid-btn">Clear All</button>
           <button type="button" class="btn btn-primary btn-lg" id="submit-students-btn" disabled>
-            <span class="material-symbols-outlined me-1" style="vertical-align: middle;" aria-hidden="true">group_add</span>
+            <span class="material-symbols-outlined me-1 icon-middle" aria-hidden="true">group_add</span>
             Add Students
           </button>
         </div>
@@ -742,7 +755,7 @@
       })
       .finally(() => {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="vertical-align: middle;" aria-hidden="true">group_add</span>Add Students';
+        submitBtn.innerHTML = '<span class="material-symbols-outlined me-1 icon-middle" aria-hidden="true">group_add</span>Add Students';
       });
     });
 
@@ -800,15 +813,13 @@
               <label class="form-check-label" for="edit_reset_login">Reset</label>
             </div>
           </div>
-          <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" style="display:none;">
-            <small><span class="material-symbols-outlined me-2"
-                style="vertical-align: middle;" aria-hidden="true">warning</span>Student will need to re-claim their account using
+          <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" hidden>
+            <small><span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">warning</span>Student will need to re-claim their account using
                 their join code, first name, and last name.</small>
           </div>
 
           <div class="alert alert-info mt-3 mb-0">
-            <small><span class="material-symbols-outlined me-2"
-                style="vertical-align: middle;" aria-hidden="true">info</span><strong>Note:</strong> Changing the name will update what the
+            <small><span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">info</span><strong>Note:</strong> Changing the name will update what the
               student needs to enter during the account claim process.</small>
           </div>
         </div>
@@ -829,7 +840,7 @@
       <div class="modal-content">
         <div class="modal-header bg-danger text-white">
           <h2 class="modal-title h5" id="deleteStudentModalLabel">
-            <span class="material-symbols-outlined me-2" style="vertical-align: middle;" aria-hidden="true">warning</span>Delete Student
+            <span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">warning</span>Delete Student
           </h2>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
@@ -838,7 +849,7 @@
           <input type="hidden" id="delete_student_id" name="seat_id">
 
           <div class="alert alert-danger">
-            <h3 class="h6"><span class="material-symbols-outlined me-2" style="vertical-align: middle;" aria-hidden="true">warning</span>Warning</h3>
+            <h3 class="h6"><span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">warning</span>Warning</h3>
             <p>You are about to delete <strong id="delete_student_name"></strong>.</p>
             <p class="mb-0">This action will permanently delete:</p>
             <ul class="mb-0">
@@ -876,7 +887,7 @@
         <div class="mb-3">
           <div class="small fw-semibold" id="timed-delete-countdown-text">Safety countdown: 30s remaining</div>
           <div class="progress mt-2" role="progressbar" aria-label="Delete countdown" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-            <div id="timed-delete-countdown-bar" class="progress-bar bg-danger" style="width: 0%"></div>
+            <div id="timed-delete-countdown-bar" class="progress-bar bg-danger"></div>
           </div>
         </div>
 
@@ -918,7 +929,7 @@
     navigator.clipboard.writeText(code).then(function () {
       // Show success feedback
       const originalHTML = btn.innerHTML;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">check</span> Copied!';
+      btn.innerHTML = '<span class="material-symbols-outlined icon-middle" aria-hidden="true">check</span> Copied!';
       btn.classList.remove('btn-outline-success');
       btn.classList.add('btn-success');
 
@@ -964,7 +975,7 @@
         if (resetLoginCheckbox) {
           resetLoginCheckbox.checked = false;
           if (resetLoginWarning) {
-            resetLoginWarning.style.display = 'none';
+            resetLoginWarning.hidden = true;
           }
         }
 
@@ -975,7 +986,7 @@
       const resetLoginWarning = editModal.querySelector('#reset_login_warning');
       if (resetLoginCheckbox && resetLoginWarning) {
         resetLoginCheckbox.addEventListener('change', function () {
-          resetLoginWarning.style.display = this.checked ? 'block' : 'none';
+          resetLoginWarning.hidden = !this.checked;
         });
       }
 

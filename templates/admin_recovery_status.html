@@ -11,13 +11,7 @@
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
+        .recovery-page {
             font-family: var(--font-family);
             min-height: 100vh;
             background: var(--neutral-50);
@@ -74,6 +68,10 @@
             border-left-color: var(--success);
         }
 
+        .verification-progress {
+            height: 30px;
+        }
+
         .badge-success {
             background-color: var(--success);
         }
@@ -84,7 +82,7 @@
     </style>
 </head>
 
-<body>
+<body class="recovery-page">
     <main id="main-content" aria-labelledby="recovery-status-heading">
     <div class="container">
         <div class="status-card">
@@ -119,7 +117,7 @@
 
             <div class="progress-container">
                 <div class="progress-label">Student Verification Progress</div>
-                <div class="progress" style="height: 30px;">
+                <div class="progress verification-progress">
                     <div class="progress-bar bg-success" role="progressbar" aria-label="Student verification progress"
                          style="width: {{ (verified_count / total_count * 100) if total_count > 0 else 0 }}%"
                          aria-valuenow="{{ verified_count }}"

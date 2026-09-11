@@ -30,9 +30,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
           if (range && typeof range.min === 'number' && typeof range.max === 'number') {
             tierRangeText.textContent = `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
-            tierRecommendation.style.display = 'block';
+            tierRecommendation.hidden = false;
           } else {
-            tierRecommendation.style.display = 'none';
+            tierRecommendation.hidden = true;
           }
         }
 

@@ -27,6 +27,18 @@
 {% endcall %}
 {% endblock %}
 
+{% block extra_head %}
+<style>
+  .attendance-log-head {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%);
+    color: var(--text-inverse);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 
 
@@ -35,8 +47,7 @@
     <div class="card-body py-3">
         <div class="row align-items-center g-3">
             <div class="col-auto">
-                <span class="material-symbols-outlined"
-                    style="font-size: 2rem; color: var(--primary);" aria-hidden="true">summarize</span>
+                <span class="material-symbols-outlined icon-xl text-primary" aria-hidden="true">summarize</span>
             </div>
             <div class="col">
                 <div class="row g-3">
@@ -88,7 +99,7 @@
             <div class="card-header bg-white py-3">
                 <div class="d-flex justify-content-between align-items-center">
                     <h5 class="mb-0 fw-bold">
-                        <span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">history</span>
+                        <span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">history</span>
                         Attendance History
                     </h5>
                 </div>
@@ -115,12 +126,11 @@
                     </div>
                     <div class="col-12 d-flex align-items-center gap-2">
                         <button type="button" class="btn btn-sm btn-primary" onclick="loadAttendanceHistory()">
-                            <span class="material-symbols-outlined"
-                                style="font-size: 1rem; vertical-align: text-bottom;" aria-hidden="true">filter_alt</span>
+                            <span class="material-symbols-outlined icon-xs icon-text-bottom" aria-hidden="true">filter_alt</span>
                             Apply
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetFilters()" title="Reset filters">
-                            <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">refresh</span>
+                            <span class="material-symbols-outlined icon-xs" aria-hidden="true">refresh</span>
                         </button>
                     </div>
                 </div>
@@ -139,8 +149,7 @@
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0" id="attendanceTable">
                             <caption class="visually-hidden">Attendance records for the current class</caption>
-                            <thead
-                                style="background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%); color: white; position: sticky; top: 0; z-index: 10;">
+                            <thead class="attendance-log-head">
                                 <tr>
 <th scope="col" class="ps-4">Student</th>
 <th scope="col">Class</th>
@@ -157,8 +166,7 @@
                     </div>
 
                     <div id="emptyState" class="text-center py-5 text-muted d-none">
-                        <span class="material-symbols-outlined d-block mb-2"
-                            style="font-size: 3rem; opacity: 0.3;" aria-hidden="true">search_off</span>
+                        <span class="material-symbols-outlined d-block mb-2 icon-2xl alpha-medium" aria-hidden="true">search_off</span>
                         <p class="mb-0">No attendance records found</p>
                         <small>Try adjusting your filters</small>
                     </div>
@@ -204,9 +212,9 @@
     function getStatusBadge(status) {
         const escapedStatus = escapeHtml(status);
         if (status === 'active') {
-            return '<span class="badge bg-success"><span class="material-symbols-outlined" style="font-size: 0.875rem; vertical-align: text-bottom;" aria-hidden="true">login</span> Start Work</span>';
+            return '<span class="badge bg-success"><span class="material-symbols-outlined icon-2xs icon-text-bottom" aria-hidden="true">login</span> Start Work</span>';
         } else if (status === 'inactive') {
-            return '<span class="badge bg-danger"><span class="material-symbols-outlined" style="font-size: 0.875rem; vertical-align: text-bottom;" aria-hidden="true">logout</span> Break</span>';
+            return '<span class="badge bg-danger"><span class="material-symbols-outlined icon-2xs icon-text-bottom" aria-hidden="true">logout</span> Break</span>';
         }
         return '<span class="badge bg-secondary">' + escapedStatus + '</span>';
     }
@@ -315,7 +323,7 @@
         html += `
         <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
             <button type="button" class="page-link" aria-label="Previous page" ${currentPage === 1 ? 'disabled' : ''} onclick="loadAttendanceHistory(${currentPage - 1});">
-                <span class="material-symbols-outlined" aria-hidden="true" style="font-size: 1rem;">chevron_left</span>
+                <span class="material-symbols-outlined icon-xs" aria-hidden="true">chevron_left</span>
             </button>
         </li>
     `;
@@ -355,7 +363,7 @@
         html += `
         <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
             <button type="button" class="page-link" aria-label="Next page" ${currentPage === totalPages ? 'disabled' : ''} onclick="loadAttendanceHistory(${currentPage + 1});">
-                <span class="material-symbols-outlined" aria-hidden="true" style="font-size: 1rem;">chevron_right</span>
+                <span class="material-symbols-outlined icon-xs" aria-hidden="true">chevron_right</span>
             </button>
         </li>
     `;

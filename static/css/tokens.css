@@ -24,6 +24,9 @@
     --text-2xl: 1.5rem;
     --text-3xl: 1.875rem;
     --text-4xl: 2.5rem;
+    /* Display sizes: a status code or a single hero figure, never running text */
+    --text-5xl: 3rem;
+    --text-6xl: 4rem;
 
     --weight-normal: 400;
     --weight-medium: 500;
@@ -56,12 +59,15 @@
     --space-16: 64px;
 
     /* Icon sizing — consumed via the .icon-* utilities, never inline */
+    --icon-2xs: 0.875rem;
     --icon-xs: 1rem;
     --icon-sm: 1.125rem;
     --icon-md: 1.25rem;
     --icon-lg: 1.5rem;
     --icon-xl: 2rem;
     --icon-2xl: 3rem;
+    /* Empty-state and hero glyphs only */
+    --icon-3xl: 4rem;
 
     /* Motion — all subject to the prefers-reduced-motion override in style.css */
     --duration-fast: 120ms;

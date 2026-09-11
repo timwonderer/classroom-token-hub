@@ -38,10 +38,10 @@
         min-height: 150px;
     }
     .editor-toolbar {
-        border-radius: 4px 4px 0 0;
+        border-radius: var(--radius-sm) var(--radius-sm) 0 0;
     }
     .CodeMirror {
-        border-radius: 0 0 4px 4px;
+        border-radius: 0 0 var(--radius-sm) var(--radius-sm);
     }
 </style>
 {% endblock %}
@@ -83,7 +83,7 @@
                             <small class="text-muted">Optional pricing category for organization</small>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <div id="tier-recommendation" class="alert alert-info mt-2" style="display: none;">
+                            <div id="tier-recommendation" class="alert alert-info mt-2" hidden>
                                 <small><strong>Recommended range:</strong> <span id="tier-range-text"></span></small>
                             </div>
                         </div>
@@ -215,7 +215,7 @@
                     <h2 class="accordion-header" id="headingBundle">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBundle" aria-expanded="false" aria-controls="collapseBundle">
                             <span class="material-symbols-outlined me-2" aria-hidden="true">inventory_2</span><strong>Bundle Settings</strong>
-                            <span class="badge bg-success ms-2 bundle-badge" style="display:none;">Active</span>
+                            <span class="badge bg-success ms-2 bundle-badge" hidden>Active</span>
                         </button>
                     </h2>
                     <div id="collapseBundle" class="accordion-collapse collapse" aria-labelledby="headingBundle" data-bs-parent="#itemSettingsAccordion">
@@ -243,7 +243,7 @@
                     <h2 class="accordion-header" id="headingBulkDiscount">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBulkDiscount" aria-expanded="false" aria-controls="collapseBulkDiscount">
                             <span class="material-symbols-outlined me-2" aria-hidden="true">percent</span><strong>Bulk Discount Settings</strong>
-                            <span class="badge bg-success ms-2 bulk-discount-badge" style="display:none;">Active</span>
+                            <span class="badge bg-success ms-2 bulk-discount-badge" hidden>Active</span>
                         </button>
                     </h2>
                     <div id="collapseBulkDiscount" class="accordion-collapse collapse" aria-labelledby="headingBulkDiscount" data-bs-parent="#itemSettingsAccordion">
@@ -333,10 +333,10 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateBundleVisibility() {
         if (isBundleCheck.checked) {
             bundleOptions.style.display = 'block';
-            if (bundleBadge) bundleBadge.style.display = 'inline-block';
+            if (bundleBadge) bundleBadge.hidden = false;
         } else {
             bundleOptions.style.display = 'none';
-            if (bundleBadge) bundleBadge.style.display = 'none';
+            if (bundleBadge) bundleBadge.hidden = true;
         }
     }
 
@@ -354,10 +354,10 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateBulkDiscountVisibility() {
         if (bulkDiscountCheck.checked) {
             bulkDiscountOptions.style.display = 'block';
-            if (bulkDiscountBadge) bulkDiscountBadge.style.display = 'inline-block';
+            if (bulkDiscountBadge) bulkDiscountBadge.hidden = false;
         } else {
             bulkDiscountOptions.style.display = 'none';
-            if (bulkDiscountBadge) bulkDiscountBadge.style.display = 'none';
+            if (bulkDiscountBadge) bulkDiscountBadge.hidden = true;
         }
     }
 

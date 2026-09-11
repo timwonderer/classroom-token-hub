@@ -10,7 +10,7 @@
 
     <link href="{{ url_for('static', filename='css/tokens.css') }}" rel="stylesheet">
     <style>
-        body {
+        .offline-page {
             font-family: var(--font-family);
             background-color: var(--neutral-100);
             color: var(--neutral-800);
@@ -19,38 +19,38 @@
             justify-content: center;
             height: 100vh;
             text-align: center;
-            padding: 20px;
+            padding: var(--space-5);
         }
 
         .offline-container {
             max-width: 400px;
         }
 
-        .icon {
-            font-size: 4rem;
+        .offline-container .icon {
+            font-size: var(--icon-3xl);
             color: var(--primary);
-            margin-bottom: 20px;
+            margin-bottom: var(--space-5);
         }
 
-        h1 {
-            font-weight: 700;
-            margin-bottom: 10px;
+        :where(.offline-page) h1 {
+            font-weight: var(--weight-bold);
+            margin-bottom: var(--space-2);
             color: var(--text-primary);
         }
 
-        p {
+        :where(.offline-page) p {
             margin-bottom: var(--space-5);
             color: var(--text-muted);
         }
 
-        .btn-primary {
+        :where(.offline-page) .btn-primary {
             background-color: var(--primary) !important;
-            border-color: var(--primary) !important;
+            border: none !important;
         }
     </style>
 </head>
 
-<body>
+<body class="offline-page">
     <a href="#offline-main" class="skip-link">Skip to main content</a>
     <main id="offline-main">
     <div class="offline-container">
@@ -61,7 +61,7 @@
         </div>
         <h1>You are offline</h1>
         <p>It looks like you've lost your internet connection. Please check your connection and try again.</p>
-        <a href="/" class="btn btn-primary" style="background-color: var(--primary); border: none;">Try Again</a>
+        <a href="/" class="btn btn-primary">Try Again</a>
     </div>
     </main>
     <script>document.querySelectorAll('.material-symbols-outlined').forEach((icon) => icon.setAttribute('aria-hidden', 'true'));</script>

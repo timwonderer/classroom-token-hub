@@ -1411,12 +1411,22 @@ table.js-sortable thead th:hover .sort-indicator {
     font-size: var(--icon-2xl);
 }
 
+.icon-2xs {
+    font-size: var(--icon-2xs);
+}
+
+.icon-3xl {
+    font-size: var(--icon-3xl);
+}
+
+.icon-2xs,
 .icon-xs,
 .icon-sm,
 .icon-md,
 .icon-lg,
 .icon-xl,
-.icon-2xl {
+.icon-2xl,
+.icon-3xl {
     line-height: 1;
 }
 
@@ -1437,6 +1447,42 @@ table.js-sortable thead th:hover .sort-indicator {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+}
+
+/* ─── Token Utilities ───
+   One class per token, so a template can reach the scale without an inline
+   style attribute or a one-rule page <style> block (SPEC-DES-001 §IX). Each
+   restates no value; change the token and every call site follows. */
+.type-2xs { font-size: var(--text-2xs) !important; }
+.type-xs { font-size: var(--text-xs) !important; }
+.type-sm { font-size: var(--text-sm) !important; }
+.type-base { font-size: var(--text-base) !important; }
+.type-lg { font-size: var(--text-lg) !important; }
+.type-xl { font-size: var(--text-xl) !important; }
+.type-2xl { font-size: var(--text-2xl) !important; }
+.type-3xl { font-size: var(--text-3xl) !important; }
+.type-4xl { font-size: var(--text-4xl) !important; }
+.type-5xl { font-size: var(--text-5xl) !important; }
+.type-6xl { font-size: var(--text-6xl) !important; }
+
+.tracking-wide { letter-spacing: var(--tracking-wide); }
+.tracking-wider { letter-spacing: var(--tracking-wider); }
+.tracking-widest { letter-spacing: var(--tracking-widest); }
+
+.alpha-subtle { opacity: var(--alpha-subtle); }
+.alpha-soft { opacity: var(--alpha-soft); }
+.alpha-medium { opacity: var(--alpha-medium); }
+.alpha-strong { opacity: var(--alpha-strong); }
+
+/* Gold accent as text. --secondary and --secondary-hover are fills and fail
+   AA as text on a light surface; this is the legible variant. */
+.text-accent { color: var(--accent-text-on-light) !important; }
+
+/* A bounded scrolling region inside a card or modal. The cap is structural —
+   it limits one region's height rather than expressing a design scale. */
+.scroll-panel {
+    max-height: 300px;
+    overflow-y: auto;
 }
 
 /* ─── Sysadmin Components ─── */
@@ -2294,5 +2340,100 @@ body.maintenance-active .sidebar {
 
     .auth-body {
         padding: var(--space-8) var(--space-6);
+    }
+}
+
+/* ─── Error Pages ───
+   The 400, 401, 403, 404, 500 and 503 pages share one standalone shell: a
+   centered card with a var(--primary) status band on top and the explanation
+   beneath. The band takes the role theme carried by tokens.css, so no page
+   sets a role colour of its own. Every selector is scoped under
+   body.error-page so none of it reaches another surface; page-specific
+   panels (login links, request URL, status box) stay in their own template.
+   The reset is wrapped in :where() so it keeps the zero specificity of the
+   bare `*` it replaced and still yields to .alert, .btn, and element rules. */
+:where(body.error-page) * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body.error-page {
+    font-family: var(--font-family);
+    background: var(--surface);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8);
+}
+
+.error-page .error-container {
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+    max-width: 900px;
+    width: 100%;
+    overflow: hidden;
+}
+
+.error-page .error-header {
+    background: var(--primary);
+    color: var(--text-inverse);
+    padding: var(--space-8);
+    text-align: center;
+}
+
+/* The status code is display type (--text-6xl); its label sits one step below
+   the display range. */
+.error-page .error-header h1 {
+    font-size: var(--text-6xl);
+    font-weight: var(--weight-normal);
+    margin: 0;
+    color: var(--text-inverse);
+}
+
+.error-page .error-header p {
+    font-size: var(--text-3xl);
+    margin: var(--space-2) 0 0 0;
+    opacity: calc(1 - var(--alpha-subtle));
+}
+
+.error-page .error-body {
+    padding: var(--space-8);
+}
+
+.error-page .troubleshooting {
+    padding: var(--space-6);
+    margin-bottom: var(--space-8);
+}
+
+.error-page .troubleshooting h5 {
+    margin-bottom: var(--space-4);
+    font-weight: var(--weight-semibold);
+}
+
+.error-page .troubleshooting li {
+    padding: var(--space-2) 0;
+}
+
+.error-page .actions {
+    display: flex;
+    gap: var(--space-4);
+    margin-top: var(--space-6);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+@media (max-width: 768px) {
+    .error-page .error-header h1 {
+        font-size: var(--text-5xl);
+    }
+
+    .error-page .error-body {
+        padding: var(--space-6);
+    }
+
+    .error-page .actions {
+        flex-direction: column;
     }
 }

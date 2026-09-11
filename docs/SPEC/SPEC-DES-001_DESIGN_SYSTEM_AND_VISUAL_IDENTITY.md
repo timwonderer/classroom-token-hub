@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-DES-001 | 2.0 | 2026-09-10 | `FEAT-DES-001` v1.1 (archived) | Normative |
+| SPEC-DES-001 | 2.1 | 2026-09-11 | `FEAT-DES-001` v1.1 (archived) | Normative |
 
 > Supersedes `docs/archive/v1-docs/FEATURES/DESIGN/FEAT-DES-001_Design_System.md` (archived, non-normative). That document described the v1 token set and carries values that no longer match the implementation; it governs nothing and is retained as history only.
 
@@ -95,13 +95,13 @@ Defined on `:root`, identical in every role.
 | Category | Tokens | Notes |
 |---|---|---|
 | Typeface | `--font-family`, `--font-display`, `--font-data` | Inter / Atkinson Hyperlegible Next / IBM Plex Mono |
-| Type scale | `--text-2xs` … `--text-4xl`, `--leading-*`, `--weight-*` | §VI.2 |
+| Type scale | `--text-2xs` … `--text-4xl`, `--leading-*`, `--weight-*`, `--tracking-*` | §VI.2 |
 | Spacing | `--space-0` … `--space-16` | §VI.2 |
-| Radius | `--radius-xs` (2px), `--radius-sm` (4px), `--radius-md` (6px), `--radius-lg` (8px), `--radius-pill` (999px) | `sm` cards/inputs, `md` buttons, `lg` modals |
+| Radius | `--radius-xs` (2px), `--radius-sm` (4px), `--radius-md` (6px), `--radius-lg` (8px), `--radius-xl` (12px), `--radius-pill` (999px) | `sm` cards/inputs, `md` buttons, `lg` modals, `xl` auth cards and feature panels |
 | Elevation | `--shadow-sm`, `--shadow-md`, `--shadow-lg` | Overlay only; not decoration |
 | Motion | `--duration-fast/base/slow`, `--ease-standard` | §VI.2 |
 | Opacity | `--alpha-subtle/soft/medium/strong` | §VI.2 |
-| Icon size | `--icon-xs` … `--icon-2xl` | §VI.2 |
+| Icon size | `--icon-2xs` … `--icon-3xl` | §VI.2 |
 | Layout | `--sidebar-width`, `--bottom-nav-height`, `--breakpoint-*` | Structural, role-agnostic |
 | Neutrals | `--neutral-50` … `--neutral-900` | Warm-tinted grayscale |
 | Surfaces | `--background`, `--surface`, `--border-color` | `--background` is `--neutral-100` |
@@ -118,10 +118,13 @@ The v1 system defined color and radius but left spacing, typography, motion, opa
 
 **Type scale** — rem-based, 16px root:
 
-`--text-2xs` 0.6875rem · `--text-xs` 0.75rem · `--text-sm` 0.875rem · `--text-base` 1rem · `--text-lg` 1.125rem · `--text-xl` 1.25rem · `--text-2xl` 1.5rem · `--text-3xl` 1.875rem · `--text-4xl` 2.5rem
+`--text-2xs` 0.6875rem · `--text-xs` 0.75rem · `--text-sm` 0.875rem · `--text-base` 1rem · `--text-lg` 1.125rem · `--text-xl` 1.25rem · `--text-2xl` 1.5rem · `--text-3xl` 1.875rem · `--text-4xl` 2.5rem · `--text-5xl` 3rem · `--text-6xl` 4rem
+
+`--text-5xl` and `--text-6xl` are display sizes — a status code or a single hero figure — and never set running text. Text MUST NOT borrow an `--icon-*` token because the two scales happen to share a value: they are named for different jobs and are free to diverge.
 
 Weights `--weight-normal` 400 · `--weight-medium` 500 · `--weight-semibold` 600 · `--weight-bold` 700.
 Line heights `--leading-tight` 1.25 · `--leading-snug` 1.4 · `--leading-normal` 1.6.
+Tracking `--tracking-tight` -0.01em · `--tracking-normal` 0 · `--tracking-wide` 0.05em · `--tracking-wider` 0.1em · `--tracking-widest` 0.5em. `--tracking-widest` is reserved for PIN and recovery-code inputs, where the gap is what makes a digit group countable.
 
 **Motion** — `--duration-fast` 120ms · `--duration-base` 200ms · `--duration-slow` 300ms · `--ease-standard` `cubic-bezier(0.2, 0, 0.2, 1)`.
 
@@ -129,9 +132,11 @@ All motion MUST remain subject to the `prefers-reduced-motion` override in §XI.
 
 **Opacity** — `--alpha-subtle` 0.08 · `--alpha-soft` 0.16 · `--alpha-medium` 0.35 · `--alpha-strong` 0.6.
 
-**Icon size** — `--icon-xs` 1rem · `--icon-sm` 1.125rem · `--icon-md` 1.25rem · `--icon-lg` 1.5rem · `--icon-xl` 2rem · `--icon-2xl` 3rem.
+**Icon size** — `--icon-2xs` 0.875rem · `--icon-xs` 1rem · `--icon-sm` 1.125rem · `--icon-md` 1.25rem · `--icon-lg` 1.5rem · `--icon-xl` 2rem · `--icon-2xl` 3rem · `--icon-3xl` 4rem (empty-state and hero glyphs only).
 
 Icon sizing MUST be applied through the `.icon-*` utility classes, never through an inline `font-size`.
+
+**Token utilities.** So that a template can reach a token without an inline `style` attribute, `style.css` provides exactly one class per token: `.type-2xs` … `.type-6xl` (font size), `.icon-2xs` … `.icon-3xl`, `.tracking-wide` / `-wider` / `-widest`, `.alpha-subtle` / `-soft` / `-medium` / `-strong`, and `.text-accent` for gold used as legible text. A utility MUST restate no value; it references its token.
 
 ### 3. Theme Layer — role-specific
 
@@ -281,7 +286,7 @@ Structural values are permitted as literals. A value is structural only if chang
 
 CSS repeated across templates MUST be promoted to `style.css`. Duplicated presentation is drift with a delay: the copies diverge on the first edit that does not touch all of them.
 
-The auth shell was reconciled under this rule — `.auth-page`, `.auth-body .form-label`, `.auth-body .subtitle`, `.auth-body .form-text`, `.auth-body .form-group`, `.auth-body .footer-links`, and `.auth-code-input` are defined once in the Auth Shell section of `style.css`. The error pages still carry near-identical duplicated blocks and remain outstanding.
+The auth shell was reconciled under this rule — `.auth-page`, `.auth-body .form-label`, `.auth-body .subtitle`, `.auth-body .form-text`, `.auth-body .form-group`, `.auth-body .footer-links`, and `.auth-code-input` are defined once in the Auth Shell section of `style.css`. The six HTTP error pages were reconciled the same way: their shared chrome is defined once under `body.error-page` in the Error Pages section, and each page keeps only the rules specific to it.
 
 ### The brand mark
 
@@ -396,7 +401,7 @@ At the time of this revision `github-pages/style.css` defines `--secondary: #d3a
 
 ## XIV. Enforcement
 
-Design-system conformance is mechanically checkable and SHOULD be gated rather than reviewed by eye. The checkable rules:
+Design-system conformance is mechanically checkable and SHOULD be gated rather than reviewed by eye. Rules 1, 5, 6, and 7 are gated over every template under `templates/` by `scripts/lint_design_tokens.py`, which `tests/test_design_token_contract.py` runs with one test per rule; run the script directly on the templates being edited. The test also carries probes for each rule, so the gate cannot go green because the scanner stopped seeing. The checkable rules:
 
 1. No hex/`rgb()`/`hsl()` literal under `templates/`.
 2. No raw color in `style.css` outside a token definition block.

@@ -4,7 +4,7 @@
 
 <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
 <!-- Getting Started Widget - Floating onboarding checklist -->
-<div id="gettingStartedWidget" class="getting-started-widget" style="display: none;">
+<div id="gettingStartedWidget" class="getting-started-widget" hidden>
     <!-- Circular Bubble (Collapsed State) -->
     <button type="button" id="gsBubble" class="gs-bubble" data-bs-toggle="collapse" data-bs-target="#gsBody" aria-expanded="false"
         aria-controls="gsBody" data-bs-placement="left"
@@ -42,7 +42,7 @@
                 <!-- REQUIRED TASKS -->
                 <div class="gs-section-header">
 
-                    <span class="badge bg-danger" style="font-size: 0.9rem;"><span class="material-symbols-outlined" aria-hidden="true">error</span>
+                    <span class="badge bg-danger"><span class="material-symbols-outlined" aria-hidden="true">error</span>
                         REQUIRED TASKS</span>
                     <p class="text-danger small mt-2 mb-0">These tasks are required because your classroom economy
                         system won't function properly without them.</p>
@@ -59,8 +59,8 @@
                         </div>
                         <div class="gs-item-actions">
                             <a href="{{ url_for('admin.students') }}" class="btn btn-sm btn-outline-primary">
-                                Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
+                                Go <span class="material-symbols-outlined ms-1 icon-xs"
+                                    aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -77,8 +77,8 @@
                         </div>
                         <div class="gs-item-actions">
                             <a href="{{ url_for('admin.payroll') }}#settings" class="btn btn-sm btn-outline-primary">
-                                Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
+                                Go <span class="material-symbols-outlined ms-1 icon-xs"
+                                    aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -86,7 +86,7 @@
 
                 <!-- OPTIONAL FEATURES -->
                 <div class="gs-section-header mt-3">
-                    <span class="badge bg-secondary" style="font-size: 0.9rem;"><span class="material-symbols-outlined" aria-hidden="true">bookmark</span>
+                    <span class="badge bg-secondary"><span class="material-symbols-outlined" aria-hidden="true">bookmark</span>
                         ADDITIONAL FEATURES</span>
                     <p class="text-primary small mt-2 mb-0">These features are optional but can enhance your classroom
                         economy experience. Feel free to skip any that don't fit your needs.</p>
@@ -106,8 +106,8 @@
                                 Skip
                             </button>
                             <a href="{{ url_for('admin.store_management') }}" class="btn btn-sm btn-outline-primary">
-                                Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
+                                Go <span class="material-symbols-outlined ms-1 icon-xs"
+                                    aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -127,8 +127,8 @@
                                 Skip
                             </button>
                             <a href="{{ url_for('admin.banking') }}" class="btn btn-sm btn-outline-primary">
-                                Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
+                                Go <span class="material-symbols-outlined ms-1 icon-xs"
+                                    aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -148,8 +148,8 @@
                                 Skip
                             </button>
                             <a href="{{ url_for('admin.rent_settings') }}" class="btn btn-sm btn-outline-primary">
-                                Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
+                                Go <span class="material-symbols-outlined ms-1 icon-xs"
+                                    aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -170,8 +170,8 @@
                             </button>
                             <a href="{{ url_for('admin.insurance_management') }}"
                                 class="btn btn-sm btn-outline-primary">
-                                Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
+                                Go <span class="material-symbols-outlined ms-1 icon-xs"
+                                    aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -191,8 +191,8 @@
                                 Skip
                             </button>
                             <a href="{{ url_for('admin.hall_pass') }}" class="btn btn-sm btn-outline-primary">
-                                Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
+                                Go <span class="material-symbols-outlined ms-1 icon-xs"
+                                    aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -213,8 +213,8 @@
                                 Skip
                             </button>
                             <a href="{{ url_for('admin.customizations') }}" class="btn btn-sm btn-outline-primary">
-                                Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
+                                Go <span class="material-symbols-outlined ms-1 icon-xs"
+                                    aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -234,8 +234,8 @@
                                 Skip
                             </button>
                             <a href="{{ url_for('admin.passkey_settings') }}" class="btn btn-sm btn-outline-primary">
-                                Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
+                                Go <span class="material-symbols-outlined ms-1 icon-xs"
+                                    aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -267,24 +267,24 @@
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        box-shadow: 0 4px 12px color-mix(in srgb, black 20%, transparent);
-        transition: all 0.3s ease;
+        box-shadow: var(--shadow-md);
+        transition: all var(--duration-slow) var(--ease-standard);
         position: relative;
-        animation: slideInUp 0.3s ease-out;
+        animation: slideInUp var(--duration-slow) var(--ease-standard);
         border-style: solid;
         border-color: var(--secondary);
     }
 
     .gs-bubble:hover {
         transform: scale(1.1);
-        box-shadow: 0 6px 16px color-mix(in srgb, black 40%, transparent);
-        animation: slideInUp 0.3s ease-out;
+        box-shadow: var(--shadow-lg);
+        animation: slideInUp var(--duration-slow) var(--ease-standard);
     }
 
     .gs-bubble-icon {
-        color: white;
-        font-size: 32px;
-        font-weight: 400;
+        color: var(--text-inverse);
+        font-size: var(--icon-xl);
+        font-weight: var(--weight-normal);
     }
 
     .gs-bubble-badge {
@@ -292,11 +292,11 @@
         top: -4px;
         right: -4px;
         background: var(--danger);
-        color: white;
-        border-radius: 12px;
-        padding: 2px 6px;
-        font-size: 11px;
-        font-weight: 700;
+        color: var(--text-inverse);
+        border-radius: var(--radius-xl);
+        padding: 0 var(--space-1);
+        font-size: var(--text-2xs);
+        font-weight: var(--weight-bold);
         min-width: 24px;
         text-align: center;
     }
@@ -313,49 +313,49 @@
         right: 0;
         width: 400px;
         max-width: calc(100vw - 48px);
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 8px 32px color-mix(in srgb, black 15%, transparent);
+        background: var(--surface);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-lg);
         border: 3px solid var(--secondary);
-        animation: slideInUp 0.3s ease-out;
+        overflow: hidden;
+        animation: slideInUp var(--duration-slow) var(--ease-standard);
     }
 
     .gs-panel-header {
-        padding: 16px;
+        padding: var(--space-4);
         background: var(--primary);
-        color: white;
-        border-radius: 10px 10px 0 0;
+        color: var(--text-inverse);
         cursor: pointer;
         user-select: none;
     }
 
     .gs-panel-header h6 {
-        color: white;
-        font-weight: 400;
+        color: var(--text-inverse);
+        font-weight: var(--weight-normal);
     }
 
     .gs-panel-header .material-symbols-outlined {
         color: var(--secondary);
-        font-weight: 400;
+        font-weight: var(--weight-normal);
     }
 
     .gs-progress-badge {
-        background: color-mix(in srgb, white 20%, transparent);
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: 600;
+        background: color-mix(in srgb, var(--text-inverse) 20%, transparent);
+        padding: 0 var(--space-2);
+        border-radius: var(--radius-xl);
+        font-size: var(--text-xs);
+        font-weight: var(--weight-semibold);
     }
 
     .btn-close-widget {
         background: none;
         border: none;
-        color: white;
+        color: var(--text-inverse);
         cursor: pointer;
         padding: 0;
-        margin-left: 8px;
-        opacity: 0.8;
-        transition: opacity 0.2s;
+        margin-left: var(--space-2);
+        opacity: var(--alpha-strong);
+        transition: opacity var(--duration-base) var(--ease-standard);
     }
 
     .btn-close-widget:hover {
@@ -363,11 +363,11 @@
     }
 
     .btn-close-widget .material-symbols-outlined {
-        font-size: 20px;
+        font-size: var(--icon-md);
     }
 
     .gs-panel-body {
-        padding: 16px;
+        padding: var(--space-4);
         max-height: 500px;
         overflow-y: auto;
     }
@@ -387,13 +387,13 @@
     .gs-checklist {
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: var(--space-3);
     }
 
     .gs-section-header {
-        margin-top: 8px;
-        margin-bottom: 8px;
-        padding-left: 4px;
+        margin-top: var(--space-2);
+        margin-bottom: var(--space-2);
+        padding-left: var(--space-1);
     }
 
     .gs-section-header:first-child {
@@ -401,18 +401,18 @@
     }
 
     .gs-section-header .badge {
-        font-size: 0.75rem;
-        font-weight: 600;
-        padding: 4px 10px;
-        letter-spacing: 0.5px;
+        font-size: var(--text-sm);
+        font-weight: var(--weight-semibold);
+        padding: var(--space-1) var(--space-3);
+        letter-spacing: var(--tracking-wide);
     }
 
     .gs-item {
         border: 1px solid var(--secondary);
-        border-radius: 8px;
-        padding: 12px;
+        border-radius: var(--radius-lg);
+        padding: var(--space-3);
         background: var(--neutral-50);
-        transition: all 0.2s;
+        transition: all var(--duration-base) var(--ease-standard);
     }
 
     .gs-item:hover {
@@ -434,7 +434,21 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: 12px;
+        gap: var(--space-3);
+    }
+
+    .gs-congrats-card {
+        padding: var(--space-3);
+        background-color: var(--primary);
+        color: var(--text-inverse);
+    }
+
+    .gs-congrats-title {
+        color: var(--text-inverse);
+    }
+
+    .gs-congrats-title .material-symbols-outlined {
+        color: var(--secondary);
     }
 
     .gs-item-content .form-check {
@@ -451,35 +465,35 @@
         flex-shrink: 0;
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: var(--space-2);
     }
 
     .gs-item-actions .btn {
-        padding: 4px 12px;
-        font-size: 0.875rem;
+        padding: var(--space-1) var(--space-3);
+        font-size: var(--text-sm);
     }
 
     .gs-item-actions .btn-outline-primary:hover {
         background-color: var(--bs-success);
         border: 1px solid var(--bs-success);
-        color: white;
+        color: var(--text-inverse);
     }
 
     .gs-item-actions .btn-outline-secondary:hover {
         background-color: var(--bs-warning);
         border: 1px solid var(--bs-warning);
-        color: white;
+        color: var(--secondary-text);
     }
 
     /* Hide skipped items */
     .gs-item.skipped {
         background: var(--neutral-50);
-        opacity: 0.6;
+        opacity: var(--alpha-strong);
         border-color: var(--neutral-200);
     }
 
     .gs-item.skipped .form-check-input {
-        opacity: 0.5;
+        opacity: var(--alpha-strong);
     }
 
     /* Mobile responsive */
@@ -495,12 +509,12 @@
         }
 
         .gs-bubble-icon {
-            font-size: 28px;
+            font-size: var(--icon-lg);
         }
 
         .gs-bubble-badge {
-            font-size: 10px;
-            padding: 2px 5px;
+            font-size: var(--text-2xs);
+            padding: 0 var(--space-1);
         }
 
         .gs-panel {
@@ -509,9 +523,8 @@
 
         .gs-congratulations {
             background-color: var(--primary);
-            color: white;
-
-            padding: 10px;
+            color: var(--text-inverse);
+            padding: var(--space-3);
 
         }
     }
@@ -539,7 +552,7 @@
                 widgetDismissed = true;
                 const widget = document.getElementById('gettingStartedWidget');
                 if (widget) {
-                    widget.style.display = 'none';
+                    widget.hidden = true;
                 }
                 return;
             }
@@ -553,7 +566,7 @@
                             widgetDismissed = true;
                             const widget = document.getElementById('gettingStartedWidget');
                             if (widget) {
-                                widget.style.display = 'none';
+                                widget.hidden = true;
                             }
                             return;
                         }
@@ -561,7 +574,7 @@
                         // Show widget
                         const widget = document.getElementById('gettingStartedWidget');
                         if (widget) {
-                            widget.style.display = 'block';
+                            widget.hidden = false;
                         }
 
                         const completion = data.completion || {};
@@ -646,8 +659,8 @@
         // Teachers can skip features they don't want to use
         // Update progress badge
         function updateProgress() {
-            const allTasks = document.querySelectorAll('.gs-item:not([style*="display: none"])');
-            const completedTasks = document.querySelectorAll('.gs-item.completed:not([style*="display: none"])');
+            const allTasks = document.querySelectorAll('.gs-item:not([hidden])');
+            const completedTasks = document.querySelectorAll('.gs-item.completed:not([hidden])');
             const total = allTasks.length;
             const completed = completedTasks.length;
 
@@ -663,8 +676,8 @@
             }
 
             // Auto-dismiss if all required tasks are complete
-            const requiredTasks = document.querySelectorAll('.gs-item:not([data-optional="true"]):not([style*="display: none"])');
-            const completedRequired = document.querySelectorAll('.gs-item.completed:not([data-optional="true"]):not([style*="display: none"])');
+            const requiredTasks = document.querySelectorAll('.gs-item:not([data-optional="true"]):not([hidden])');
+            const completedRequired = document.querySelectorAll('.gs-item.completed:not([data-optional="true"]):not([hidden])');
 
             if (requiredTasks.length > 0 && requiredTasks.length === completedRequired.length) {
                 // All required tasks complete - could auto-collapse or show congratulations
@@ -679,10 +692,10 @@
                 const congrats = document.createElement('div');
                 congrats.className = ' gs-congratulations mt-2';
                 congrats.innerHTML = `
-                <div class=" align-items-start gap-2" style="padding:10px; border-radius: 0px 0px 10px 10px;background-color: var(--primary); color: white; ">
-                    <div class="h5 fw-bold" style="color:var(--secondary)"> <span class="material-symbols-outlined" aria-hidden="true">celebration</span> Great job!</div>
+                <div class="gs-congrats-card align-items-start gap-2">
+                    <div class="h5 fw-bold gs-congrats-title"> <span class="material-symbols-outlined" aria-hidden="true">celebration</span> Great job!</div>
 
-                        <p class="mb-0 small" style="font-weight:300">You've completed all required setup tasks.
+                        <p class="mb-0 small fw-light">You've completed all required setup tasks.
                         You can now dismiss this widget or continue with optional features.</p>
 
                 </div>
@@ -710,9 +723,10 @@
                 widgetDismissed = true;
                 const widget = document.getElementById('gettingStartedWidget');
                 if (widget) {
-                    widget.style.animation = 'slideOutDown 0.3s ease-out';
+                    widget.classList.add('gs-dismissing');
                     setTimeout(() => {
-                        widget.style.display = 'none';
+                        widget.hidden = true;
+                        widget.classList.remove('gs-dismissing');
                     }, 300);
                 }
             }
@@ -731,6 +745,10 @@
 </script>
 
 <style>
+    .getting-started-widget.gs-dismissing {
+        animation: slideOutDown var(--duration-slow) var(--ease-standard) forwards;
+    }
+
     @keyframes slideOutDown {
         from {
             transform: translateY(0);

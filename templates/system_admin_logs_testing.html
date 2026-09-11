@@ -4,6 +4,13 @@
 {% set current_page = "logs" %}
 
 {% block content %}
+<style>
+    .sa-maxw-400 { max-width: 400px; }
+    .sa-w-10p { width: 10%; }
+    .sa-w-15p { width: 15%; }
+    .sa-w-20p { width: 20%; }
+    .sa-w-40p { width: 40%; }
+</style>
 <div class="container-fluid">
     <!-- Error Logs Section -->
     <div class="row mb-4">
@@ -11,7 +18,7 @@
             <div class="card">
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;" aria-hidden="true">error</span> Error Logs Database</h5>
+                        <h5 class="mb-0"><span class="material-symbols-outlined icon-middle icon-md" aria-hidden="true">error</span> Error Logs Database</h5>
                         <a href="{{ url_for('sysadmin.error_logs') }}" class="btn btn-sm btn-outline-primary">
                             View Full Logs
                         </a>
@@ -23,11 +30,11 @@
                             <caption class="visually-hidden">System error logs</caption>
                             <thead>
                                 <tr>
-                                    <th scope="col" style="width: 10%;">Time</th>
-                                    <th scope="col" style="width: 15%;">Error Type</th>
-                                    <th scope="col" style="width: 20%;">Request</th>
-                                    <th scope="col" style="width: 40%;">Message</th>
-                                    <th scope="col" style="width: 15%;">IP Address</th>
+                                    <th class="sa-w-10p" scope="col">Time</th>
+                                    <th class="sa-w-15p" scope="col">Error Type</th>
+                                    <th class="sa-w-20p" scope="col">Request</th>
+                                    <th class="sa-w-40p" scope="col">Message</th>
+                                    <th class="sa-w-15p" scope="col">IP Address</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -44,7 +51,7 @@
                                     </td>
                                     <td><span class="badge bg-danger">{{ error.error_type }}</span></td>
                                     <td><small><span class="badge bg-secondary">{{ error.request_method }}</span> {{ error.request_path }}</small></td>
-                                    <td><small class="text-truncate d-inline-block" style="max-width: 400px;">{{ error.error_message }}</small></td>
+                                    <td><small class="text-truncate d-inline-block sa-maxw-400">{{ error.error_message }}</small></td>
                                     <td><small>{{ error.ip_address }}</small></td>
                                 </tr>
                                 {% else %}
@@ -65,7 +72,7 @@
         <div class="col-md-6 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;" aria-hidden="true">bug_report</span> Test Error Pages</h5>
+                    <h5 class="mb-0"><span class="material-symbols-outlined icon-middle icon-md" aria-hidden="true">bug_report</span> Test Error Pages</h5>
                 </div>
                 <div class="card-body">
                     <p class="mb-3">Click each button to trigger that error type and see how the error page looks.</p>
@@ -73,39 +80,39 @@
                     <div class="row g-2">
                         <div class="col-6">
                             <a href="{{ url_for('sysadmin.test_error_400') }}" class="btn btn-outline-warning w-100" target="_blank" rel="noopener noreferrer">
-                                <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;" aria-hidden="true">warning</span> 400 Bad Request <span class="visually-hidden">(opens in a new tab)</span>
+                                <span class="material-symbols-outlined icon-middle icon-xs" aria-hidden="true">warning</span> 400 Bad Request <span class="visually-hidden">(opens in a new tab)</span>
                             </a>
                         </div>
                         <div class="col-6">
                             <a href="{{ url_for('sysadmin.test_error_401') }}" class="btn btn-outline-info w-100" target="_blank" rel="noopener noreferrer">
-                                <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;" aria-hidden="true">lock</span> 401 Unauthorized <span class="visually-hidden">(opens in a new tab)</span>
+                                <span class="material-symbols-outlined icon-middle icon-xs" aria-hidden="true">lock</span> 401 Unauthorized <span class="visually-hidden">(opens in a new tab)</span>
                             </a>
                         </div>
                         <div class="col-6">
                             <a href="{{ url_for('sysadmin.test_error_403') }}" class="btn btn-outline-danger w-100" target="_blank" rel="noopener noreferrer">
-                                <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;" aria-hidden="true">block</span> 403 Forbidden <span class="visually-hidden">(opens in a new tab)</span>
+                                <span class="material-symbols-outlined icon-middle icon-xs" aria-hidden="true">block</span> 403 Forbidden <span class="visually-hidden">(opens in a new tab)</span>
                             </a>
                         </div>
                         <div class="col-6">
                             <a href="{{ url_for('sysadmin.test_error_404') }}" class="btn btn-outline-secondary w-100" target="_blank" rel="noopener noreferrer">
-                                <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;" aria-hidden="true">help</span> 404 Not Found <span class="visually-hidden">(opens in a new tab)</span>
+                                <span class="material-symbols-outlined icon-middle icon-xs" aria-hidden="true">help</span> 404 Not Found <span class="visually-hidden">(opens in a new tab)</span>
                             </a>
                         </div>
                         <div class="col-6">
                             <a href="{{ url_for('sysadmin.test_error_500') }}" class="btn btn-outline-danger w-100" target="_blank" rel="noopener noreferrer">
-                                <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;" aria-hidden="true">error</span> 500 Internal Error <span class="visually-hidden">(opens in a new tab)</span>
+                                <span class="material-symbols-outlined icon-middle icon-xs" aria-hidden="true">error</span> 500 Internal Error <span class="visually-hidden">(opens in a new tab)</span>
                             </a>
                         </div>
                         <div class="col-6">
                             <a href="{{ url_for('sysadmin.test_error_503') }}" class="btn btn-outline-warning w-100" target="_blank" rel="noopener noreferrer">
-                                <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;" aria-hidden="true">report</span> 503 Unavailable <span class="visually-hidden">(opens in a new tab)</span>
+                                <span class="material-symbols-outlined icon-middle icon-xs" aria-hidden="true">report</span> 503 Unavailable <span class="visually-hidden">(opens in a new tab)</span>
                             </a>
                         </div>
                     </div>
 
                     <div class="alert alert-dark mt-3 mb-0">
                         <small>
-                            <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;" aria-hidden="true">info</span>
+                            <span class="material-symbols-outlined icon-middle icon-xs" aria-hidden="true">info</span>
                             <strong>Tip:</strong> Test buttons open in a new tab. After viewing the error page, close the tab and check the error logs above.
                         </small>
                     </div>
@@ -116,18 +123,18 @@
         <div class="col-md-6 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;" aria-hidden="true">description</span> System Logs (File)</h5>
+                    <h5 class="mb-0"><span class="material-symbols-outlined icon-middle icon-md" aria-hidden="true">description</span> System Logs (File)</h5>
                 </div>
                 <div class="card-body">
                     <p class="mb-3">View system logs from the server log files.</p>
 
                     <a href="{{ logs_url }}" class="btn btn-outline-primary w-100 mb-3" target="_blank" rel="noopener noreferrer">
-                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;" aria-hidden="true">folder_open</span> Open System Log File <span class="visually-hidden">(opens in a new tab)</span>
+                        <span class="material-symbols-outlined icon-middle icon-xs" aria-hidden="true">folder_open</span> Open System Log File <span class="visually-hidden">(opens in a new tab)</span>
                     </a>
 
                     <div class="alert alert-dark mb-0">
                         <small>
-                            <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;" aria-hidden="true">info</span>
+                            <span class="material-symbols-outlined icon-middle icon-xs" aria-hidden="true">info</span>
                             These are server-level logs showing application activity, requests, and system events.
                         </small>
                     </div>

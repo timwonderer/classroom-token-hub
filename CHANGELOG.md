@@ -38,6 +38,22 @@ and this project follows semantic versioning principles.
 
 ### Changed
 
+- **Every template now conforms to the `SPEC-DES-001` template contract, and a gate keeps it that way (2026-09-11)** — An audit of all 103 templates under `templates/` found 1,156 violations in 72 of them: 146 hardcoded colours, 471 static inline `style` attributes, 496 literal design values in page `<style>` blocks, and 43 page selectors that `style.css` also defined. All are resolved. `docs-site/` is a separately published artifact (§XIII) and was not in scope; the in-app docs under `templates/docs/` were.
+
+  The spec already said this was mechanically checkable and should be gated; nothing did. `scripts/lint_design_tokens.py` now checks §XIV rules 1, 5, 6 and 7, and `tests/test_design_token_contract.py` runs it with one test per rule, plus probes proving each rule still detects its violation and still admits tokens, structural geometry and id selectors — so the gate cannot pass by going blind. Run the script directly on templates you are editing.
+
+  Shared layer. The six error pages carried near-identical blocks the spec had listed as outstanding; their chrome is now one `body.error-page` section in `style.css`. New token utilities (`.type-*`, `.tracking-*`, `.alpha-*`, `.text-accent`, `.scroll-panel`, `.icon-2xs`, `.icon-3xl`) give templates one class per token instead of an inline style. New tokens: `--icon-2xs`, `--icon-3xl`, and display sizes `--text-5xl` / `--text-6xl`, so a status code no longer borrows an icon token for text. `SPEC-DES-001` is v2.1.
+
+  Behaviour. Static `style="display:none"` became the `hidden` attribute across 15 templates, `static/js/attendance.js` and `static/js/item-form-economy.js`, with every script that toggled those elements moved to `el.hidden` — Bootstrap's `[hidden]` rule is `!important`, so a leftover `style.display = 'block'` would have silently stopped showing the element.
+
+  Defects found on the way:
+  - Four contrast failures: the select-class panel heading was dark text on the dark green panel; the maintenance page's "bug" badge was white on the gold fill (~2.1:1); the getting-started Skip button hover was white on gold (2.2:1); timeline tag text sat at ~4.4:1.
+  - `student_detail.html` put its styles in `{% block extra_styles %}`, which `layout_admin.html` does not define, so they never rendered. It now uses `extra_head`.
+  - `static/sw.js` precached `style.css` but not `tokens.css`, so the offline page lost every token exactly when the network was down. Cache version bumped to v9.
+  - Dead page CSS removed where it matched nothing or always lost to a shared `!important` rule.
+
+  Deliberate visual changes worth reviewing. With no matching token, some hues now reuse the nearest semantic one: in the docs, IMPORTANT and TIP callouts share the `--primary` family; the timeline's Security (orange) and Philosophy (purple) categories now render gold-brown and graphite; the student troubleshooting card header is the role primary rather than brown. The six error pages share one card treatment, so 404 and 500 lose their rounded corners and the others get `--shadow-lg`. Several floating shadows are softer because `--shadow-lg` is lighter than the hand-written ones it replaces. Other values moved at most one step to the nearest token.
+
 - **Auth form chrome is defined once instead of fourteen times, and the dead copies are gone (2026-09-11)** — The fourteen auth templates carried 58 distinct selectors between them in page-scoped `<style>` blocks, 21 of them duplicated across pages with visible drift. The label, subtitle, help-text, code-input and footer-link rules are now defined once in `style.css` under `.auth-body`; seven templates carry no `<style>` block at all, and the ones that remain hold only genuinely page-specific chrome (QR panels, step indicators, the strength meter, the sysadmin security notice).
 
   Most of what was deleted had never rendered. Every page copy of `.btn-primary`, `.btn-outline-primary`, `.btn-outline-secondary`, `.text-primary` and the bare `a` / `a:hover` rules was already beaten by `style.css`, which claims those selectors with `!important` — and `!important` wins over any specificity. Three of the dead `.btn-primary:hover` copies had independently drifted to a fill that would have failed contrast had it ever applied, which is precisely the risk of an invisible rule: it is edited, reviewed and merged as if it were live. Confirmed rule by rule in-browser before removal, and `.btn-outline-danger` was kept because `style.css` does not claim it.
