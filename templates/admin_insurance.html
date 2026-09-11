@@ -35,7 +35,7 @@
       <p class="text-muted mb-0">Create and manage class insurance products that help students understand, navigate, and manage potential exposure to financial risks.</p>
     </div>
     <a class="btn btn-primary" href="{{ url_for('admin.new_insurance_policy') }}">
-      <span class="material-symbols-outlined me-1" style="vertical-align: text-bottom;" aria-hidden="true">add_circle</span>
+      <span class="material-symbols-outlined me-1 icon-text-bottom" aria-hidden="true">add_circle</span>
       New policy
     </a>
   </div>
@@ -43,7 +43,7 @@
   <div class="card shadow-sm mb-4">
     <div class="card-header bg-info text-white py-3">
       <h5 class="mb-0 fw-semibold text-white">
-        <span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">info</span>
+        <span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">info</span>
         Purchased Insurance Policies are Contracts
       </h5>
     </div>
@@ -57,7 +57,7 @@
       {# `list_insurance_claims` returns every claim in the class regardless of
          status, so this list is not "pending" — the heading says what the query
          actually asks for. #}
-      <h5 class="mb-0 fw-bold"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">other_admission</span>Filed claims</h5>
+      <h5 class="mb-0 fw-bold"><span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">other_admission</span>Filed claims</h5>
     </div>
     <div class="list-group list-group-flush">
       {% for claim in claims %}
@@ -79,7 +79,7 @@
   <div class="card shadow">
     <div class="card-header bg-primary text-white py-3">
       <h5 class="mb-0 fw-bold text-white">
-        <span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">shield</span>
+        <span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">shield</span>
         Existing Policies
       </h5>
     </div>
@@ -127,7 +127,7 @@
         No insurance policies exist for this class yet.
         <div class="mt-2">
           <a class="btn btn-sm btn-primary" href="{{ url_for('admin.new_insurance_policy') }}">
-            <span class="material-symbols-outlined me-1" style="vertical-align: text-bottom;" aria-hidden="true">add_circle</span>
+            <span class="material-symbols-outlined me-1 icon-text-bottom" aria-hidden="true">add_circle</span>
             Create your first policy
           </a>
         </div>

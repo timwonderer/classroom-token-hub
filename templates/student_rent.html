@@ -34,16 +34,16 @@
 {% block extra_styles %}
 <style>
     .bills-tabs .nav-link {
-        color: #1f5f8b;
-        font-weight: 600;
+        color: var(--info);
+        font-weight: var(--weight-semibold);
     }
 
     .bills-tabs .nav-link.active {
-        color: #ffffff;
+        color: var(--text-inverse);
     }
 
     .student-rent-class-hint.alert-info {
-        color: #1f4f73;
+        color: var(--alert-info-text);
     }
 </style>
 {% endblock %}
@@ -73,7 +73,7 @@
 {% endif %}
 
 <div class="alert alert-info mb-4 student-rent-class-hint">
-    <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">arrow_circle_left</span> To see your bills
+    <span class="material-symbols-outlined icon-middle" aria-hidden="true">arrow_circle_left</span> To see your bills
     from another class, use the <strong>Switch Classes</strong> menu on the left.
 </div>
 
@@ -151,7 +151,7 @@
         <h2 class="h6 mb-0 d-flex align-items-center justify-content-between">
             <span>Class: {{ current_block|upper }}</span>
             <span>
-                <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">{{ status_icon }}</span> {{
+                <span class="material-symbols-outlined icon-middle" aria-hidden="true">{{ status_icon }}</span> {{
                 status_text }}
             </span>
         </h2>

@@ -300,13 +300,13 @@ function updateHallPassOverlay(hallPass) {
 
   if (!hallPass || hallPass.status === 'returned') {
     // No active hall pass - hide pass info
-    if (passInfoDisplay) passInfoDisplay.style.display = 'none';
+    if (passInfoDisplay) passInfoDisplay.hidden = true;
     return;
   }
 
   // Show pass info inline based on status
   if (passInfoDisplay) {
-    passInfoDisplay.style.display = 'block';
+    passInfoDisplay.hidden = false;
     passInfoDisplay.textContent = ''; // Clear existing content
 
     const buildStatusLabel = (iconClass, text) => {
@@ -377,7 +377,7 @@ function updateHallPassOverlay(hallPass) {
 
       passInfoDisplay.appendChild(alertDiv);
     } else {
-      passInfoDisplay.style.display = 'none';
+      passInfoDisplay.hidden = true;
     }
   }
 }

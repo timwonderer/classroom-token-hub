@@ -58,10 +58,13 @@
         min-height: 120px;
     }
     .editor-toolbar {
-        border-radius: 4px 4px 0 0;
+        border-radius: var(--radius-sm) var(--radius-sm) 0 0;
     }
     .CodeMirror {
-        border-radius: 0 0 4px 4px;
+        border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    }
+    .progress-thin {
+        height: 10px;
     }
 </style>
 {% endblock %}
@@ -197,7 +200,7 @@
         </div>
         {% else %}
         <div class="text-center text-muted py-3">
-          <span class="material-symbols-outlined" style="font-size: 2rem;" aria-hidden="true">check_circle</span>
+          <span class="material-symbols-outlined icon-xl" aria-hidden="true">check_circle</span>
           <p class="mb-0">No pending redemption requests</p>
         </div>
         {% endif %}
@@ -256,7 +259,7 @@
         </div>
         {% else %}
         <div class="text-center text-muted py-3">
-          <span class="material-symbols-outlined" style="font-size: 2rem;" aria-hidden="true">remove_shopping_cart</span>
+          <span class="material-symbols-outlined icon-xl" aria-hidden="true">remove_shopping_cart</span>
           <p class="mb-0">No purchases yet</p>
         </div>
         {% endif %}
@@ -330,7 +333,7 @@
                       <span>{{ row.class_label }}</span>
                       <span>{{ row.count }}/{{ row.target }}</span>
                     </div>
-                    <div class="progress" style="height: 10px;">
+                    <div class="progress progress-thin">
                       <div class="progress-bar {% if row.is_complete %}bg-success{% else %}bg-warning{% endif %}" role="progressbar" aria-label="{{ row.class_label }} collective purchase progress" style="width: {{ row.percent }}%;" aria-valuenow="{{ row.count }}" aria-valuemin="0" aria-valuemax="{{ row.target }}"></div>
                     </div>
                   </div>
@@ -340,7 +343,7 @@
                 {% endif %}
                 {% if item.collective_goal_expires_at %}
                 <div class="small text-muted mt-1">
-                  <span class="material-symbols-outlined" style="font-size: 13px; vertical-align: middle;" aria-hidden="true">schedule</span>
+                  <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">schedule</span>
                   <strong>Deadline:</strong> {{ item.collective_goal_expires_at.strftime('%b %d, %Y') }}
                 </div>
                 {% endif %}
@@ -429,7 +432,7 @@
                       <small class="text-muted">Optional pricing category for organization</small>
                     </div>
                     <div class="col-md-6 mb-3">
-                      <div id="tier-recommendation" class="alert alert-info mt-2" style="display: none;">
+                      <div id="tier-recommendation" class="alert alert-info mt-2" hidden>
                         <small><strong>Recommended range:</strong> <span id="tier-range-text"></span></small>
                       </div>
                     </div>
@@ -504,7 +507,7 @@
                     {{ form.is_rent_linked.label(class="form-check-label fw-bold", **{'for': 'isRentLinkedCheck'}) }}
                     <small class="d-block text-muted">A rent-linked item is handed to a student automatically when they pay their rent — they do not buy it.</small>
                   </div>
-                  <div id="rentLinkedOptions" style="display: none;">
+                  <div id="rentLinkedOptions" hidden>
                     <div class="row">
                       <div class="col-md-6 mb-3">
                         {{ form.rent_linked_quantity.label(class="form-label fw-bold") }}
@@ -530,7 +533,7 @@
                     {{ form.is_bundle.label(class="form-check-label fw-bold", **{'for': 'isBundleCheck'}) }}
                     <small class="d-block text-muted">Bundled items give students multiple uses that can be redeemed separately</small>
                   </div>
-                  <div id="bundleOptions" style="display: none;">
+                  <div id="bundleOptions" hidden>
                     <div class="row">
                       <div class="col-md-6 mb-3">
                         {{ form.bundle_quantity.label(class="form-label fw-bold") }}
@@ -553,7 +556,7 @@
                     {{ form.bulk_discount_enabled.label(class="form-check-label fw-bold", **{'for': 'bulkDiscountCheck'}) }}
                     <small class="d-block text-muted">Offer a discount when students buy multiple quantities</small>
                   </div>
-                  <div id="bulkDiscountOptions" style="display: none;">
+                  <div id="bulkDiscountOptions" hidden>
                     <div class="row">
                       <div class="col-md-6 mb-3">
                         {{ form.bulk_discount_quantity.label(class="form-label fw-bold") }}
@@ -571,7 +574,7 @@
               </div>
 
               <!-- Collective Goal Settings -->
-              <div class="card mb-3" id="collectiveGoalCard" style="display: none;">
+              <div class="card mb-3" id="collectiveGoalCard" hidden>
                 <div class="card-header bg-light">
                   <h3 class="mb-0 h6"><span class="material-symbols-outlined me-2" aria-hidden="true">group</span>Collective Goal Settings</h3>
                 </div>
@@ -584,14 +587,14 @@
                     {{ form.collective_goal_type(class="form-select", id="collectiveGoalType") }}
                     <small class="text-muted">Choose how the goal is calculated</small>
                   </div>
-                  <div id="fixedTargetDiv" style="display: none;">
+                  <div id="fixedTargetDiv" hidden>
                     <div class="mb-3">
                       {{ form.collective_goal_target.label(class="form-label fw-bold") }}
                       {{ form.collective_goal_target(class="form-control", placeholder="e.g., 10") }}
                       <small class="text-muted">Number of students who must purchase to unlock this item</small>
                     </div>
                   </div>
-                  <div id="wholeClassInfo" style="display: none;">
+                  <div id="wholeClassInfo" hidden>
                     <div class="alert alert-warning">
                       <small><span class="material-symbols-outlined me-2" aria-hidden="true">info</span><strong>Whole Class Mode:</strong> Every student in the class must purchase (1 per person). The target dynamically updates based on class size.</small>
                     </div>
@@ -885,10 +888,10 @@
   const rentLinkedOptions = document.getElementById('rentLinkedOptions');
   if (isRentLinkedCheck && rentLinkedOptions) {
     isRentLinkedCheck.addEventListener('change', function() {
-      rentLinkedOptions.style.display = this.checked ? 'block' : 'none';
+      rentLinkedOptions.hidden = !this.checked;
     });
     if (isRentLinkedCheck.checked) {
-      rentLinkedOptions.style.display = 'block';
+      rentLinkedOptions.hidden = false;
     }
   }
 
@@ -897,11 +900,11 @@
   const bundleOptions = document.getElementById('bundleOptions');
   if (isBundleCheck) {
     isBundleCheck.addEventListener('change', function() {
-      bundleOptions.style.display = this.checked ? 'block' : 'none';
+      bundleOptions.hidden = !this.checked;
     });
     // Initial state
     if (isBundleCheck.checked) {
-      bundleOptions.style.display = 'block';
+      bundleOptions.hidden = false;
     }
   }
 
@@ -910,11 +913,11 @@
   const bulkDiscountOptions = document.getElementById('bulkDiscountOptions');
   if (bulkDiscountCheck) {
     bulkDiscountCheck.addEventListener('change', function() {
-      bulkDiscountOptions.style.display = this.checked ? 'block' : 'none';
+      bulkDiscountOptions.hidden = !this.checked;
     });
     // Initial state
     if (bulkDiscountCheck.checked) {
-      bulkDiscountOptions.style.display = 'block';
+      bulkDiscountOptions.hidden = false;
     }
   }
 
@@ -928,10 +931,10 @@
   function updateCollectiveGoalVisibility() {
     if (itemTypeSelect && collectiveGoalCard) {
       if (itemTypeSelect.value === 'collective') {
-        collectiveGoalCard.style.display = 'block';
+        collectiveGoalCard.hidden = false;
         updateCollectiveGoalTypeVisibility();
       } else {
-        collectiveGoalCard.style.display = 'none';
+        collectiveGoalCard.hidden = true;
       }
     }
   }
@@ -940,14 +943,14 @@
     if (collectiveGoalTypeSelect) {
       const goalType = collectiveGoalTypeSelect.value;
       if (goalType === 'fixed') {
-        fixedTargetDiv.style.display = 'block';
-        wholeClassInfo.style.display = 'none';
+        fixedTargetDiv.hidden = false;
+        wholeClassInfo.hidden = true;
       } else if (goalType === 'whole_class') {
-        fixedTargetDiv.style.display = 'none';
-        wholeClassInfo.style.display = 'block';
+        fixedTargetDiv.hidden = true;
+        wholeClassInfo.hidden = false;
       } else {
-        fixedTargetDiv.style.display = 'none';
-        wholeClassInfo.style.display = 'none';
+        fixedTargetDiv.hidden = true;
+        wholeClassInfo.hidden = true;
       }
     }
   }

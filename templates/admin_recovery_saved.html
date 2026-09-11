@@ -11,17 +11,11 @@
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
+        .recovery-page {
+            font-family: var(--font-family);
             min-height: 100vh;
             background: var(--neutral-50);
-            padding: 2rem;
+            padding: var(--space-8);
         }
 
         .container {
@@ -30,54 +24,40 @@
         }
 
         .status-card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px color-mix(in srgb, black 10%, transparent);
-            padding: 2rem;
-            margin-bottom: 1.5rem;
+            background: var(--surface);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-md);
+            padding: var(--space-8);
+            margin-bottom: var(--space-6);
         }
 
         .status-header {
-            color: var(--warning);
-            font-weight: 700;
-            font-size: 1.75rem;
-            margin-bottom: 1rem;
+            color: var(--alert-warning-text);
+            font-weight: var(--weight-bold);
+            font-size: var(--text-3xl);
+            margin-bottom: var(--space-4);
         }
 
         .resume-pin-display {
             background: var(--surface);
             border: 3px solid var(--success);
-            border-radius: 10px;
-            padding: 2rem;
+            border-radius: var(--radius-lg);
+            padding: var(--space-8);
             text-align: center;
-            margin: 1.5rem 0;
+            margin: var(--space-6) 0;
         }
 
         .resume-pin {
-            font-size: 3rem;
-            font-weight: 700;
-            letter-spacing: 0.3em;
-            color: var(--success);
             font-family: var(--font-data);
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--warning) 0%, var(--warning) 100%);
-            border: none;
-            padding: 0.85rem 2rem;
-            font-weight: 700;
-            transition: all 0.3s ease;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px color-mix(in srgb, var(--warning) 35%, transparent);
-        }
-
-        .btn-primary:hover {
-            background: linear-gradient(135deg, var(--warning) 0%, var(--warning) 100%);
+            font-size: var(--text-4xl);
+            font-weight: var(--weight-bold);
+            letter-spacing: var(--tracking-widest);
+            color: var(--success);
         }
     </style>
 </head>
 
-<body>
+<body class="recovery-page">
     <main id="main-content" aria-labelledby="recovery-saved-heading">
     <div class="container">
         <div class="status-card">

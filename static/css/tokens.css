@@ -14,6 +14,73 @@
     --bs-body-bg: var(--background);
     --bs-body-color: var(--text-primary);
 
+    /* Type Scale — rem-based on a 16px root (SPEC-DES-001 §VI.2) */
+    --text-2xs: 0.6875rem;
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-base: 1rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.25rem;
+    --text-2xl: 1.5rem;
+    --text-3xl: 1.875rem;
+    --text-4xl: 2.5rem;
+    /* Display sizes: a status code or a single hero figure, never running text */
+    --text-5xl: 3rem;
+    --text-6xl: 4rem;
+
+    --weight-normal: 400;
+    --weight-medium: 500;
+    --weight-semibold: 600;
+    --weight-bold: 700;
+
+    --leading-tight: 1.25;
+    --leading-snug: 1.4;
+    --leading-normal: 1.6;
+
+    /* Tracking. --tracking-widest is for the PIN and recovery-code inputs, where
+       the gap is what makes a digit group countable at a glance, not a flourish. */
+    --tracking-tight: -0.01em;
+    --tracking-normal: 0;
+    --tracking-wide: 0.05em;
+    --tracking-wider: 0.1em;
+    --tracking-widest: 0.5em;
+
+    /* Spacing — 4px base */
+    --space-0: 0;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+
+    /* Icon sizing — consumed via the .icon-* utilities, never inline */
+    --icon-2xs: 0.875rem;
+    --icon-xs: 1rem;
+    --icon-sm: 1.125rem;
+    --icon-md: 1.25rem;
+    --icon-lg: 1.5rem;
+    --icon-xl: 2rem;
+    --icon-2xl: 3rem;
+    /* Empty-state and hero glyphs only */
+    --icon-3xl: 4rem;
+
+    /* Motion — all subject to the prefers-reduced-motion override in style.css */
+    --duration-fast: 120ms;
+    --duration-base: 200ms;
+    --duration-slow: 300ms;
+    --ease-standard: cubic-bezier(0.2, 0, 0.2, 1);
+
+    /* Opacity */
+    --alpha-subtle: 0.08;
+    --alpha-soft: 0.16;
+    --alpha-medium: 0.35;
+    --alpha-strong: 0.6;
+
     /* Radius — Minimal / Crisp */
     --radius-xs: 2px;
     --radius-sm: 4px;
@@ -22,6 +89,8 @@
     /* Buttons */
     --radius-lg: 8px;
     /* Modals, Large Containers */
+    --radius-xl: 12px;
+    /* Auth cards, feature panels */
     --radius-pill: 999px;
     /* Status Badges, Chips */
 
@@ -30,8 +99,16 @@
     --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
     --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
 
-    /* Layout */
+    /* Layout — structural, role-agnostic */
     --sidebar-width: 260px;
+    --bottom-nav-height: 64px;
+
+    /* Breakpoints — mirror Bootstrap's grid tiers.
+       Reference values: CSS media queries cannot read custom properties. */
+    --breakpoint-sm: 576px;
+    --breakpoint-md: 768px;
+    --breakpoint-lg: 992px;
+    --breakpoint-xl: 1200px;
 
     /* Neutral Palette (Warm Tinted) */
     --neutral-50: #fafaf9;
@@ -63,6 +140,21 @@
     --text-muted: var(--neutral-600);
     --text-inverse: #ffffff;
 
+    /* Gold accent text on any light surface. --secondary and --secondary-hover
+       are fills and cannot stand in for it: #D4A857 is 2.12:1 on white and
+       #c09840 is 2.69:1, failing even the large-text threshold. */
+    --accent-text-on-light: #735816;
+
+    /* Alert body text, darkened past the status tokens so it clears AA on the
+       matching --*-subtle fill in every role theme. */
+    --alert-warning-text: #5f3d00;
+    --alert-danger-text: #8f1f1f;
+    --alert-info-text: #1f4f73;
+
+    /* Muted label on the dark landing hero. Lighter than the neutral ramp
+       because that ramp is tuned for dark-on-light, not light-on-dark. */
+    --text-on-dark-muted: #DEDEDE;
+
     --advisor-green: #1a4d47;
     --steward-blue: #2F4F7F;
     --guardian-gray: #303030;
@@ -75,12 +167,14 @@
     --primary-hover: #15403b;
     --primary-subtle: #e8f0ef;
 
-    /* Secondary: Gold */
+    /* Secondary: Gold. Identical in all three role themes — including the hover
+       fill, which must stay light enough for --secondary-text to clear AA on it.
+       A darkened brown here would read as a hover but drop .btn-secondary:hover
+       to ~2.6:1. Gold is a fill, not a text colour; see --accent-text-on-light. */
     --secondary:#D4A857;
-    --secondary-hover: #735816;
+    --secondary-hover: #c09840;
     --secondary-text: var(--neutral-900);
     --secondary-subtle: #f9f5e6;
-    /* Dark text on gold */
     --accent: var(--secondary);
 
     /* Semantic Status Colors (Muted/Professional) */
@@ -104,9 +198,14 @@
     --bs-info: var(--info);
     --bs-warning: var(--warning);
     --bs-danger: var(--danger);
-    /* RGB values approximated for components using rgba() */
+    /* RGB decomposition of the tokens above. These MUST stay in parity —
+       a mismatch renders a stale color in any rgba() context without erroring. */
     --bs-primary-rgb: 26, 77, 71;
-    --bs-secondary-rgb: 211, 175, 55;
+    --bs-secondary-rgb: 212, 168, 87;
+    --bs-success-rgb: 46, 125, 91;
+    --bs-info-rgb: 53, 113, 154;
+    --bs-warning-rgb: 212, 168, 87;
+    --bs-danger-rgb: 192, 57, 43;
 }
 
 /* ─── Student Theme (Steward Blue) ─── */
@@ -116,12 +215,11 @@ body.student-shell {
     --primary-hover: #253f66;
     --primary-subtle: #e8edf4;
 
-    /* Secondary: Bronze/Brown */
+    /* Secondary: Gold */
     --secondary: #D4A857;
-    --secondary-hover: #725132;
-    --secondary-text: var(--text-inverse);
+    --secondary-hover: #c09840;
+    --secondary-text: var(--neutral-900);
     --secondary-subtle: #f4efe9;
-    /* White text on brown */
     --accent: var(--secondary);
 
     /* Semantic Status Colors (Cooler Greens/Blues) */
@@ -138,6 +236,16 @@ body.student-shell {
     --danger-hover: #aa3636;
     --danger-subtle: #fce8e6;
 
+    /* Student shell chrome. Deliberately a brown rather than the gold accent:
+       nav labels are white, which needs a dark fill to clear AA. */
+    --student-nav-active-bg: #7f5b34;
+
+    /* Brand wordmark icon hover accents — saturated on purpose, only ever shown
+       on the dark sidebar, never as text. */
+    --student-brand-bill-hover: #ffd900;
+    --student-brand-store-hover: #00ffbf;
+    --student-brand-stock-hover: #ff6c7d;
+
     /* Bootstrap Variable Mapping */
     --bs-primary: var(--primary);
     --bs-secondary: var(--secondary);
@@ -146,6 +254,11 @@ body.student-shell {
     --bs-warning: var(--warning);
     --bs-danger: var(--danger);
     --bs-primary-rgb: 47, 79, 127;
+    --bs-secondary-rgb: 212, 168, 87;
+    --bs-success-rgb: 58, 125, 92;
+    --bs-info-rgb: 53, 106, 158;
+    --bs-warning-rgb: 212, 168, 87;
+    --bs-danger-rgb: 196, 64, 64;
 }
 
 /* ─── System Admin Theme (Guardian Gray) ─── */
@@ -155,14 +268,18 @@ body.sysadmin-shell {
     --primary-hover: #1a1a1a;
     --primary-subtle: #e8e8e8;
 
-    /* Sysadmin alias variables (for backwards compatibility with template references) */
-    --sysadmin-primary: #303030;
-    --sysadmin-primary-dark: #1a1a1a;
+    /* Sysadmin aliases referenced by templates. These alias the theme tokens
+       rather than restating their values, so they follow the theme when it moves. */
+    --sysadmin-primary: var(--primary);
+    --sysadmin-primary-dark: var(--primary-hover);
     --sysadmin-sidebar-bg: #2C2C2C;
-    --sysadmin-sidebar-text: #ffffff;
-    --sysadmin-accent: #D4A857;
+    --sysadmin-sidebar-text: var(--text-inverse);
+    --sysadmin-accent: var(--secondary);
     --sysadmin-accent-bright: #FDB034;
-    --sysadmin-bottom-nav-height: 64px;
+    --sysadmin-bottom-nav-height: var(--bottom-nav-height);
+    /* Sign-out hover on the dark sysadmin sidebar. --danger is tuned for
+       light surfaces and reads muddy there. */
+    --sysadmin-signout-hover: #ff6666;
 
     /* Secondary: Bright Gold */
     --secondary: #D4A857;
@@ -194,4 +311,9 @@ body.sysadmin-shell {
     --bs-warning: var(--warning);
     --bs-danger: var(--danger);
     --bs-primary-rgb: 48, 48, 48;
+    --bs-secondary-rgb: 212, 168, 87;
+    --bs-success-rgb: 46, 125, 91;
+    --bs-info-rgb: 53, 113, 154;
+    --bs-warning-rgb: 212, 168, 87;
+    --bs-danger-rgb: 192, 57, 43;
 }

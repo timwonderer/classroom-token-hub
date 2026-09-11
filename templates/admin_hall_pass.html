@@ -41,6 +41,13 @@
 {% endcall %}
 {% endblock %}
 
+{% block extra_head %}
+<style>
+  .queue-limit-input {
+    width: 70px;
+  }
+</style>
+{% endblock %}
 
 {% block content %}
 
@@ -69,17 +76,17 @@
         <div class="card-body py-3">
             <div class="row align-items-center g-3">
                 <div class="col-auto">
-                    <span class="material-symbols-outlined text-primary" style="font-size: 1.5rem;" aria-hidden="true">settings</span>
+                    <span class="material-symbols-outlined text-primary icon-lg" aria-hidden="true">settings</span>
                 </div>
                 <div class="col-md-3">
                     <div class="d-flex align-items-center">
-                        <label for="queueLimitInput" class="form-label mb-0 me-2 fw-bold" style="white-space: nowrap;">Out Limit:</label>
-                        <input type="number" class="form-control form-control-sm" id="queueLimitInput" min="1" max="50" step="1" disabled style="width: 70px;">
+                        <label for="queueLimitInput" class="form-label mb-0 me-2 fw-bold text-nowrap">Out Limit:</label>
+                        <input type="number" class="form-control form-control-sm queue-limit-input" id="queueLimitInput" min="1" max="50" step="1" disabled>
                         <span class="ms-2 text-muted small">students</span>
                     </div>
                 </div>
                 <div class="col-auto ms-auto">
-                    <span id="settingsSavedIndicator" class="badge bg-success" style="display: none;">Saved!</span>
+                    <span id="settingsSavedIndicator" class="badge bg-success" hidden>Saved!</span>
                 </div>
             </div>
         </div>
@@ -91,7 +98,7 @@
             <ul class="nav nav-tabs card-header-tabs" id="hallPassTabs" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active d-flex align-items-center" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab" aria-controls="pending" aria-selected="true">
-                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;" aria-hidden="true">schedule</span>
+                        <span class="material-symbols-outlined me-2 icon-md" aria-hidden="true">schedule</span>
                         <span class="fw-bold">Pending</span>
                         {% if pending_requests %}
                             <span class="badge bg-warning text-dark ms-2">{{ pending_requests|length }}</span>
@@ -100,7 +107,7 @@
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link d-flex align-items-center" id="approved-tab" data-bs-toggle="tab" data-bs-target="#approved" type="button" role="tab" aria-controls="approved" aria-selected="false">
-                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;" aria-hidden="true">check_circle</span>
+                        <span class="material-symbols-outlined me-2 icon-md" aria-hidden="true">check_circle</span>
                         <span class="fw-bold">Issued</span>
                         {% if issued_passes %}
                             <span class="badge bg-info ms-2">{{ issued_passes|length }}</span>
@@ -109,7 +116,7 @@
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link d-flex align-items-center" id="out-tab" data-bs-toggle="tab" data-bs-target="#out" type="button" role="tab" aria-controls="out" aria-selected="false">
-                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;" aria-hidden="true">logout</span>
+                        <span class="material-symbols-outlined me-2 icon-md" aria-hidden="true">logout</span>
                         <span class="fw-bold">Out</span>
                         {% if out_of_class %}
                             <span class="badge bg-success ms-2">{{ out_of_class|length }}</span>
@@ -118,13 +125,13 @@
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link d-flex align-items-center" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">
-                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;" aria-hidden="true">history</span>
+                        <span class="material-symbols-outlined me-2 icon-md" aria-hidden="true">history</span>
                         <span class="fw-bold">History</span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link d-flex align-items-center" id="configure-tab" data-bs-toggle="tab" data-bs-target="#configure" type="button" role="tab" aria-controls="configure" aria-selected="false">
-                        <span class="material-symbols-outlined me-2" style="font-size: 1.25rem;" aria-hidden="true">tune</span>
+                        <span class="material-symbols-outlined me-2 icon-md" aria-hidden="true">tune</span>
                         <span class="fw-bold">Configure</span>
                     </button>
                 </li>
@@ -144,10 +151,10 @@
                                     </div>
                                     <div class="btn-group btn-group-sm" role="group" aria-label="Hall pass request actions">
                                     <button type="button" class="btn btn-success" onclick="handlePendingPassAction('{{ req.id }}', 'approve')">
-                                            <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">check</span> Approve
+                                            <span class="material-symbols-outlined icon-xs" aria-hidden="true">check</span> Approve
                                         </button>
                                     <button type="button" class="btn btn-outline-danger" onclick="handlePendingPassAction('{{ req.id }}', 'reject')">
-                                            <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">close</span> Reject
+                                            <span class="material-symbols-outlined icon-xs" aria-hidden="true">close</span> Reject
                                         </button>
                                     </div>
                                 </div>
@@ -155,7 +162,7 @@
                         </div>
                     {% else %}
                         <div class="text-center py-5 text-muted">
-                            <span class="material-symbols-outlined d-block mb-2" style="font-size: 3rem; opacity: 0.3;" aria-hidden="true">inbox</span>
+                            <span class="material-symbols-outlined d-block mb-2 icon-2xl alpha-medium" aria-hidden="true">inbox</span>
                             <p class="mb-0">No pending requests</p>
                         </div>
                     {% endif %}
@@ -172,14 +179,14 @@
                                         <small class="d-block text-muted">Issued: {{ req.decision_time | fmt_timestamp }} | Period: {{ req.period }}</small>
                                     </div>
                             <button type="button" class="btn btn-sm btn-primary" onclick="handlePassAction({{ req.id }}, 'leave')" {% if out_of_class|length >= out_limit %}disabled{% endif %}>
-                                        <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">logout</span> Left Class
+                                        <span class="material-symbols-outlined icon-xs" aria-hidden="true">logout</span> Left Class
                                     </button>
                                 </div>
                             {% endfor %}
                         </div>
                     {% else %}
                         <div class="text-center py-5 text-muted">
-                            <span class="material-symbols-outlined d-block mb-2" style="font-size: 3rem; opacity: 0.3;" aria-hidden="true">check_circle</span>
+                            <span class="material-symbols-outlined d-block mb-2 icon-2xl alpha-medium" aria-hidden="true">check_circle</span>
                             <p class="mb-0">No issued passes are waiting</p>
                         </div>
                     {% endif %}
@@ -196,14 +203,14 @@
                                         <small class="d-block text-muted">Left: {{ req.left_time | fmt_timestamp }} | Period: {{ req.period }}</small>
                                     </div>
                             <button type="button" class="btn btn-sm btn-secondary" onclick="handlePassAction({{ req.id }}, 'return')">
-                                        <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">login</span> Returned
+                                        <span class="material-symbols-outlined icon-xs" aria-hidden="true">login</span> Returned
                                     </button>
                                 </div>
                             {% endfor %}
                         </div>
                     {% else %}
                         <div class="text-center py-5 text-muted">
-                            <span class="material-symbols-outlined d-block mb-2" style="font-size: 3rem; opacity: 0.3;" aria-hidden="true">person_off</span>
+                            <span class="material-symbols-outlined d-block mb-2 icon-2xl alpha-medium" aria-hidden="true">person_off</span>
                             <p class="mb-0">No one is currently out</p>
                         </div>
                     {% endif %}
@@ -234,7 +241,7 @@
                         </div>
                         <div class="col-md-2 d-flex align-items-end">
                             <button type="button" class="btn btn-sm btn-primary w-100" onclick="loadHistory()">
-                                <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">filter_alt</span> Apply
+                                <span class="material-symbols-outlined icon-xs" aria-hidden="true">filter_alt</span> Apply
                             </button>
                         </div>
                     </div>
@@ -256,7 +263,7 @@
                             <tbody id="historyTableBody">
                                 <tr>
                                     <td colspan="6" class="text-center py-4 text-muted">
-                                        <span class="material-symbols-outlined d-block mb-2" style="font-size: 2rem; opacity: 0.3;" aria-hidden="true">filter_alt</span>
+                                        <span class="material-symbols-outlined d-block mb-2 icon-xl alpha-medium" aria-hidden="true">filter_alt</span>
                                         Select filters and click Apply to view history
                                     </td>
                                 </tr>
@@ -409,9 +416,9 @@ function saveQueueSettings() {
         if (data.status === 'success') {
             queueLimitInput.value = data.settings.max_queue_limit;
             // Show "Saved!" indicator
-            settingsSavedIndicator.style.display = 'inline-block';
+            settingsSavedIndicator.hidden = false;
             setTimeout(() => {
-                settingsSavedIndicator.style.display = 'none';
+                settingsSavedIndicator.hidden = true;
             }, 2000);
         } else {
             announceHallPass(data.message || 'The hall pass settings could not be saved. Please try again.');
@@ -474,7 +481,7 @@ function renderHistoryTable(records) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="6" class="text-center py-4 text-muted">
-                    <span class="material-symbols-outlined d-block mb-2" style="font-size: 2rem; opacity: 0.3;" aria-hidden="true">search_off</span>
+                    <span class="material-symbols-outlined d-block mb-2 icon-xl alpha-medium" aria-hidden="true">search_off</span>
                     No records found matching the selected filters
                 </td>
             </tr>
@@ -590,7 +597,7 @@ function showHistoryError(message) {
     tbody.innerHTML = `
         <tr>
             <td colspan="7" class="text-center py-4 text-danger">
-                <span class="material-symbols-outlined d-block mb-2" style="font-size: 2rem;" aria-hidden="true">error</span>
+                <span class="material-symbols-outlined d-block mb-2 icon-xl" aria-hidden="true">error</span>
                 ${message}
             </td>
         </tr>

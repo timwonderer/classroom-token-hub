@@ -2,12 +2,12 @@
 
 A classroom management platform that uses a simulated token economy to drive student engagement and participation. Built with Flask + SQLAlchemy + PostgreSQL, designed for multi-tenant deployment across multiple schools and class periods.
 
-**Version:** 2.0 (Pre-Launch Live Server Test) — **Branch:** `main`
+**Version:** v2.0 (pre-launch; unreleased changes are tracked under `[Unreleased]` in the [changelog](CHANGELOG.md)) — **Branch:** `main`
 **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
 
 > [!NOTE]
 >
-> This branch is the v2 deployment branch. The public GitHub Pages artifact currently uses a `launching soon` holding page; the v2 landing pages are kept on the separate `launch/v2-landing-pages` branch until launch. The application and the static marketing site are separate hosts, and the application is not exposed through a Flask `/gh/` mirror.
+> `main` is the v2 deployment branch; the v1 line lives on `main_legacy_v1.10.0`. The public GitHub Pages artifact currently serves a `launching soon` holding page, and the v2 landing pages are kept on the separate `launch/v2-landing-pages` branch until launch. The application and the static marketing site are separate hosts, and the application is not exposed through a Flask `/gh/` mirror.
 
 ---
 
@@ -15,37 +15,52 @@ A classroom management platform that uses a simulated token economy to drive stu
 
 ### For Teachers
 
-- **Two-Step Sign Up** — Username + authenticator (no PII required)
-- **Admin Dashboard** — Class overview, pending actions, analytics
-- **Roster Management** — Provision seats; students self-claim with credentials
-- **Automated Payroll** — Configure hourly rates, pay schedule, overtime thresholds
-- **Classroom Store** — Create items, bundles, expiration policies; track redemptions
-- **Rent System** — Recurring payments with grace periods, waivers, late fees
-- **Hall Passes** — Track when students leave/return; automatic status updates
-- **Analytics** — Participation rate, money velocity, budget survivability trends
-- **Support Tickets** — Student-submitted issues with admin resolution tracking
+- **Sign Up Without PII** — Three steps: name the class, choose a username and scan a TOTP code, confirm the code. No email or phone
+- **Roster Management** — Upload or add students individually; export the roster
+- **Payroll** — Per-minute pay rates, pay frequency, daily time caps, overtime thresholds and multipliers. Payroll runs automatically on schedule, with manual payments, voids and history
+- **Classroom Store** — Immediate, delayed-use and collective items; bundles, bulk discounts, auto-expiry; redemption approval
+- **Rent** — Recurring bill cycles with grace periods, one-time or recurring late penalties, and waivers
+- **Insurance** — Create policies with tiers, review and resolve student claims
+- **Banking** — Savings interest paid monthly on posted balances; overdraft fees on failed purchases and obligations
+- **Economic Engine** — Derives pricing guidance from the Classroom Wage Index (CWI) and the class's economic policy mode, with a reviewable rebalance
+- **Hall Passes** — Requests, approval, check-out/check-in, and a rotating verification page
+- **Interpretation** — Read-only report of each completed cycle, built from immutable history. It observes; it does not alert or prescribe
+- **Issues** — Resolve or escalate student-reported issues about a transaction, an attendance session, or anything else
+- **Announcements** — Class-scoped, with expiry, shown on the student dashboard
+- **Feature Settings** — Turn store, rent, insurance and other features on per class
 
 ### For Students
 
-- **Portal** — View balances, transaction history, store, attendance
+- **Portal** — Balances, transactions, attendance (start/stop work), store, rent, payroll, insurance
 - **Account Transfers** — Move funds between checking and savings
-- **Seat Claim** — Self-provision using teacher-issued claim credentials
-- **Account Recovery** — Restore access via teacher-verified process
-- **Hall Pass Requests** — Request approval; see status in real-time
+- **Seat Claim** — Claim a seat the teacher provisioned by matching your name against the class roster, then create a username, PIN and passphrase. Join further classes with a join code
+- **Account Recovery** — A teacher issues a short-lived reset code; the student redeems it to set new credentials
+- **Hall Pass Requests** — Request a pass and follow its status on the dashboard
+- **Report an Issue** — About a specific transaction, an attendance session, or a general problem
 
 ### For System Admins
 
-- **Admin Portal** — Teacher overview, support tickets, system events, announcements
-- **User Management** — Provision sysadmins, manage 2FA recovery
+- **Portal** — Teacher, student and open-issue counts, escalated issues, user reports
+- **Logs and Monitoring** — Combined, error and application logs; network activity; Grafana proxy
+- **Accounts** — Sysadmins are created from the CLI (`flask create-sysadmin`) and manage their own passkeys
+
+### Teacher Account Recovery
+
+A teacher who loses access submits a join code and one student username for each class they teach. Those students each confirm the request from their own account and receive a code to hand back; with all codes, the teacher resets their credentials. No email is involved at any step.
 
 ### Platform
 
-- **Multi-Tenant** — Full class-period isolation; students share identity across teachers
+- **Multi-Tenant** — Every query is scoped by `class_id`. One user can hold seats in several classes, and each class is its own isolated economy
+- **Ledger** — Every effect is written `PENDING` and admitted to posted history only by the scheduled settlement job; posted rows are immutable in the database
+- **Scheduled Jobs** — APScheduler runs settlement, payroll, savings interest, rent reconciliation, insurance expiry, collective-goal expiry, rebalance activation, and nightly maintenance and audit checks
 - **Progressive Web App** — Installable on mobile; offline fallback included
-- **Accessibility** — Built against WCAG 2.1 AA: keyboard navigation, ARIA state on disclosure controls, screen-reader labelling. Automated auditing runs per pull request on changed templates; full-corpus conformance has not been independently certified
-- **Security** — PII encryption at rest, TOTP 2FA, CSRF protection, centralized scrypt password hashing, Cloudflare Turnstile, post-claim PII deletion
-- **Observability and status** — OpenTelemetry instrumentation (Flask, SQLAlchemy) with OTLP export, plus bounded `/health/status` signals that do not expose tenant data or raw exceptions
-- **Rate Limiting** — Flask-Limiter with Cloudflare IP detection; disabled in dev
+- **In-App Documentation** — `/docs` renders the user guides in `docs/user-guides/`, with search and audience selection
+- **Accessibility** — Built against WCAG 2.1 AA: keyboard navigation, ARIA state on disclosure controls, screen-reader labelling. Pull requests that change templates run an accessibility check on the changed files; full-corpus conformance has not been independently certified
+- **Design System** — One token layer with three role themes, governed by [SPEC-DES-001](docs/SPEC/SPEC-DES-001_DESIGN_SYSTEM_AND_VISUAL_IDENTITY.md) and checked over every template
+- **Security** — PII encryption at rest, TOTP 2FA, passkeys (WebAuthn via passwordless.dev) for teachers and sysadmins, CSRF protection, scrypt password hashing, Cloudflare Turnstile
+- **Health Signals** — `/health` for liveness and bounded `/health/status` signals that expose no tenant data or raw exceptions
+- **Rate Limiting** — Flask-Limiter with Cloudflare IP detection; off in development unless `DEV_ENABLE_RATELIMIT=1`
+- **Maintenance Mode** — Environment-driven maintenance page with a sysadmin bypass
 
 > [!IMPORTANT]
 >
@@ -61,8 +76,8 @@ A classroom management platform that uses a simulated token economy to drive stu
 
 ### Prerequisites
 
-- Python 3.10+ (CI runs 3.10 and 3.11)
-- PostgreSQL 12+ (developed and tested against 16)
+- Python 3.10+ (`runtime.txt` pins 3.10; CI jobs run 3.10, 3.11 and 3.13)
+- PostgreSQL 15 or 16 (the versions CI runs against)
 - Virtual environment (recommended)
 
 Tests run against a real PostgreSQL database named by `TEST_DATABASE_URL`. There is no SQLite path.
@@ -86,7 +101,6 @@ SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 DATABASE_URL=postgresql://user:password@localhost:5432/classroom_economy
 ENCRYPTION_KEY=$(openssl rand -base64 32)
 PEPPER_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-CSRF_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 AUDIT_HMAC_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 FLASK_ENV=development
 EOF
@@ -99,6 +113,20 @@ flask create-sysadmin  # Follow prompts; scan QR with authenticator
 flask run  # Navigate to http://localhost:5000
 ```
 
+The app refuses to start without the six keys above. Everything else is optional:
+
+| Variable | Purpose |
+| -------- | ------- |
+| `TEST_DATABASE_URL` | PostgreSQL database the test suite rebuilds |
+| `CSRF_SECRET_KEY` | Separate CSRF signing key (defaults to `SECRET_KEY`) |
+| `SECRET_KEY_FALLBACKS` | Previous secret keys, for rotation without logging everyone out |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile; verification is skipped when unset |
+| `PASSWORDLESS_API_KEY`, `PASSWORDLESS_API_PUBLIC`, `PASSWORDLESS_API_URL` | Passkey sign-in |
+| `REDIS_URL`, `RATELIMIT_STORAGE_URI`, `DEV_ENABLE_RATELIMIT` | Rate-limit storage; enable limits in development |
+| `MAINTENANCE_MODE`, `MAINTENANCE_BYPASS_TOKEN`, `MAINTENANCE_SYSADMIN_BYPASS`, `MAINTENANCE_EXPECTED_END`, `MAINTENANCE_CONTACT`, `MAINTENANCE_BADGE_TYPE` | Maintenance mode |
+| `EXTERNAL_DOCS_BASE_URL`, `MARKETING_SITE_URL`, `STATUS_PAGE_URL`, `GRAFANA_URL`, `SUPPORT_EMAIL` | External links |
+| `LOG_LEVEL`, `LOG_FILE` | Logging |
+
 ### Running Tests
 
 ```bash
@@ -106,16 +134,22 @@ flask run  # Navigate to http://localhost:5000
 pytest tests/dom/operation/test_health.py -v
 pytest tests/test_status_contracts.py tests/test_status_projection.py -v
 
-# Full suite (requires TEST_DATABASE_URL set; run separately for release certification)
-# Takes roughly 80 minutes: conftest.py drops and rebuilds the schema by running
-# the real migration chain, so triggers and constraints are live in every test.
-TEST_DATABASE_URL=postgresql://... pytest
-
 # Specific domain
 pytest tests/dom/obligations/ -v
 
+# Full suite (requires TEST_DATABASE_URL). Takes over an hour: conftest.py drops
+# and rebuilds the schema by running the real migration chain, so triggers and
+# constraints are live in every test.
+TEST_DATABASE_URL=postgresql://... pytest
+
 # With coverage
 pytest --cov=app tests/
+```
+
+Templates are held to the design-token contract by `tests/test_design_token_contract.py`. While editing a template, run the checker on just that file:
+
+```bash
+python scripts/lint_design_tokens.py templates/your_page.html
 ```
 
 ### Database Migrations
@@ -130,7 +164,7 @@ flask db downgrade <revision>   # Roll back to that revision
 
 > [!WARNING]
 >
-> Always pass an explicit revision to `flask db downgrade`. The bare form walks back from the current head, and because that head is a merge point with two parents it cannot choose between them — it aborts with `ERROR [flask_migrate] Error: Ambiguous walk` and rolls nothing back. Read the target off `flask db history` first and confirm with `flask db current` afterward.
+> Always pass an explicit revision to `flask db downgrade`. The bare form walks back one step from wherever the database is, and if that revision is a merge point it cannot choose between parents and aborts with `ERROR [flask_migrate] Error: Ambiguous walk`, rolling nothing back. Read the target off `flask db history` first and confirm with `flask db current` afterward.
 
 All migrations must include idempotency helpers and pass the linter before commit:
 
@@ -163,7 +197,7 @@ Before launch, use the [v2 production transition runbook](docs/STANDARD_OPERATIN
 CTH v2 uses a three-layer architecture with strict domain boundaries:
 
 1. **Identity Layer** — `User` (auth principal) → `Seat` (class-local actor) → `ClassEconomy` (tenant boundary via `class_id`)
-2. **Domain Services** — 10 bounded domains (Identity, Class Config, Ledger, Payroll, Obligations, Store, Operations, Interpretation, Policies, Support) that own canonical tables and read queries
+2. **Domain Services** — Ten bounded domains, each with an authority spec under [docs/DOMAIN/](docs/DOMAIN/): Identity, Class Configuration, Ledger, Productivity & Payroll, Obligations, Store & Entitlements, Operations, Interpretation, Policies, and Support. They sit on a shared Core foundation
 3. **FEAT Layer** — All state mutations go through Feature Execution Transactions; no direct `db.session.commit` in routes
 
 All queries must be scoped by `class_id`, never by `teacher_id` alone.
@@ -196,12 +230,14 @@ Documentation is ordered by authority, and the order is load-bearing. When two d
 
 Nothing under `.claude/` is authoritative. It is orientation for agents, not a specification, and it must never be cited to justify a design decision — cite the INV/DOM/FEAT/SPEC/SOP document instead.
 
+User guides live in `docs/user-guides/` and are served in the app at `/docs`. `docs-site/` is a separately published Docusaurus site, which the app can link to through `EXTERNAL_DOCS_BASE_URL`.
+
 ---
 
 ## Deployment
 
 ```bash
-# Liveness — 200 "ok" if the database answers SELECT 1, 500 otherwise
+# Liveness — 200 "ok" if the database answers SELECT 1; 500 with a JSON error otherwise
 curl http://localhost:5000/health
 
 # Bounded status signals for public publication. Every capability reports
