@@ -47,8 +47,14 @@
 {% endcall %}
 {% endblock %}
 
+{% block extra_styles %}
+<style>
+  .claim-form-column { max-width: 720px; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid" style="max-width: 720px;">
+<div class="container-fluid claim-form-column">
 
   <div class="mb-3">
     <a href="{{ url_for('student.student_insurance') }}" class="text-decoration-none small">&larr; Back to insurance</a>

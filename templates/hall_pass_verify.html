@@ -10,10 +10,13 @@
 
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
+    <style>
+        .hall-pass-container { max-width: 520px; margin-top: var(--space-12); }
+    </style>
 </head>
 <body class="hall-pass-page">
     <main id="main-content" aria-labelledby="hall-pass-heading">
-    <div class="container" style="max-width: 520px; margin-top: 3rem;">
+    <div class="container hall-pass-container">
         <div class="text-center mb-4">
             <div class="hall-pass-subtitle text-uppercase small fw-semibold mb-1">Classroom Token Hub</div>
             <h1 id="hall-pass-heading" class="d-flex justify-content-center align-items-center gap-2 mb-1">
@@ -85,7 +88,7 @@
         {# Allow re-verification #}
         <div class="text-center">
             <a href="/verify/hallpass/{{ token }}" class="btn btn-outline-secondary btn-sm">
-                <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1rem; vertical-align:middle;">restart_alt</span>
+                <span class="material-symbols-outlined icon-xs icon-middle" aria-hidden="true">restart_alt</span>
                 Verify Another
             </a>
         </div>

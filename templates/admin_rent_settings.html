@@ -52,8 +52,12 @@
 {% block extra_styles %}
 <style>
   .grayed-out {
-    opacity: 0.5;
+    opacity: var(--alpha-strong);
     pointer-events: none;
+  }
+
+  .col-select {
+    width: 3rem;
   }
 
   .warning-banner {
@@ -113,7 +117,7 @@
                 <div class="text-muted mb-2">Current on Rent</div>
                 <h2 class="text-success mb-0">{{ obligation_summary.current_student_count if obligation_summary else 0 }}</h2>
               </div>
-              <span class="material-symbols-outlined text-success" style="font-size: 3rem;" aria-hidden="true">check_circle</span>
+              <span class="material-symbols-outlined text-success icon-2xl" aria-hidden="true">check_circle</span>
             </div>
           </div>
         </div>
@@ -126,7 +130,7 @@
                 <div class="text-muted mb-2">Behind on Rent</div>
                 <h2 class="text-danger mb-0">{{ obligation_summary.behind_student_count if obligation_summary else 0 }}</h2>
               </div>
-              <span class="material-symbols-outlined text-danger" style="font-size: 3rem;" aria-hidden="true">error</span>
+              <span class="material-symbols-outlined text-danger icon-2xl" aria-hidden="true">error</span>
             </div>
           </div>
         </div>
@@ -136,7 +140,7 @@
     <!-- Current Settings Summary -->
     <div class="card shadow">
       <div class="card-header bg-primary text-white py-3">
-        <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">info</span>Current Rent Configuration</h5>
+        <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">info</span>Current Rent Configuration</h5>
       </div>
       <div class="card-body">
         {# Rent is enabled by definition on this route (see comment above). #}
@@ -221,7 +225,7 @@
     {% if obligation_summary and obligation_summary.student_rows %}
     <div class="card shadow mt-4">
       <div class="card-header bg-primary text-white py-3">
-        <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">group</span>Student Roster</h5>
+        <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">group</span>Student Roster</h5>
       </div>
       <div class="card-body">
         <!-- Compute cycle divisor based on rent frequency -->
@@ -321,7 +325,7 @@
       {% if payroll_warning %}
       <div class="card shadow-sm mb-4">
         <div class="card-header bg-warning text-dark py-3">
-          <h6 class="mb-0 fw-semibold text-dark"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">warning</span>Payroll Configuration Warning</h6>
+          <h6 class="mb-0 fw-semibold text-dark"><span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">warning</span>Payroll Configuration Warning</h6>
         </div>
         <div class="card-body">
           {{ payroll_warning }}
@@ -333,7 +337,7 @@
 
         <div class="card shadow mb-4">
           <div class="card-header bg-primary text-white py-3">
-            <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">tune</span>Rent Settings</h5>
+            <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">tune</span>Rent Settings</h5>
           </div>
           <div class="card-body">
             {# CWI helper lives at the top of the card so the recommendation
@@ -660,7 +664,7 @@
       <div class="col-12 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white py-3">
-            <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">assignment_late</span>Outstanding Rent</h5>
+            <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">assignment_late</span>Outstanding Rent</h5>
           </div>
           <div class="card-body">
             {% if not outstanding_by_student %}
@@ -707,7 +711,7 @@
                               <caption class="visually-hidden">Outstanding rent assessments for {{ student_slug }}</caption>
                               <thead>
                                 <tr>
-                                  <th scope="col" style="width: 3rem;"><span class="visually-hidden">Select</span></th>
+                                  <th class="col-select" scope="col"><span class="visually-hidden">Select</span></th>
                                   <th scope="col">Assessment period (due)</th>
                                   <th scope="col" class="text-end">Remaining</th>
                                   <th scope="col">Status</th>
@@ -762,7 +766,7 @@
                           </div>
                           <div class="text-end">
                             <button type="submit" class="btn btn-primary">
-                              <span class="material-symbols-outlined me-1" style="vertical-align: text-bottom;" aria-hidden="true">check_circle</span>
+                              <span class="material-symbols-outlined me-1 icon-text-bottom" aria-hidden="true">check_circle</span>
                               Waive selected rent
                             </button>
                           </div>
@@ -781,7 +785,7 @@
       <div class="col-12 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white py-3">
-            <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">history</span>Waiver History</h5>
+            <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">history</span>Waiver History</h5>
           </div>
           <div class="card-body">
             {% if not waiver_history %}

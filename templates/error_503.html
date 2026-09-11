@@ -11,123 +11,47 @@
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--surface);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-        }
-
-        .error-container {
-            background: white;
-            box-shadow: 0 10px 10px color-mix(in srgb, black 30%, transparent);
-            max-width: 900px;
-            width: 100%;
-            overflow: hidden;
-        }
-
-        .error-header {
-            background: var(--primary);
-            color: white;
-            padding: 2rem;
-            text-align: center;
-        }
-
-        .error-header h1 {
-            font-size: 4rem;
-            font-weight: 400;
-            margin: 0;
-            color: white;
-        }
-
-        .error-header p {
-            font-size: 2rem;
-            margin: 0.5rem 0 0 0;
-            opacity: 0.9;
-        }
-
-        .error-body {
-            padding: 2rem;
-        }
-
         .status-box {
             background: var(--primary-subtle);
             border-left: 4px solid var(--primary);
-            padding: 1.5rem;
-            margin-bottom: 2rem;
+            padding: var(--space-6);
+            margin-bottom: var(--space-8);
         }
 
         .status-box h5 {
             color: var(--primary);
-            margin-bottom: 1rem;
-            font-weight: 600;
+            margin-bottom: var(--space-4);
+            font-weight: var(--weight-semibold);
         }
 
         .status-box p,
         .status-box ul {
             color: var(--text-secondary);
-            line-height: 1.6;
-        }
-
-        .troubleshooting {
-            background: var(--surface);
-            padding: 1.5rem;
-            margin-bottom: 2rem;
+            line-height: var(--leading-normal);
         }
 
         .auto-refresh {
             background: var(--success-subtle);
             border: 1px solid var(--success);
-            padding: 1rem;
-            margin-top: 1.5rem;
+            padding: var(--space-4);
+            margin-top: var(--space-6);
             text-align: center;
         }
 
         .auto-refresh p {
             margin: 0;
             color: var(--success);
-            font-size: 0.95rem;
+            font-size: var(--text-base);
         }
 
         .countdown {
-            font-weight: 700;
+            font-weight: var(--weight-bold);
             color: var(--success);
-        }
-
-        .actions {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1.5rem;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        @media (max-width: 768px) {
-            .error-header h1 {
-                font-size: 3rem;
-            }
-
-            .error-body {
-                padding: 1.5rem;
-            }
-
-            .actions {
-                flex-direction: column;
-            }
         }
     </style>
 </head>
 
-<body>
+<body class="error-page">
     <main id="main-content" aria-labelledby="error-heading">
     <div class="error-container">
         <div class="error-header">
@@ -158,7 +82,7 @@
                 <button type="button" class="btn bg-primary text-white" onclick="window.location.reload()">Try Again</button>
                 <a href="/" class="btn bg-primary text-white">Return to Login Page</a>
                 <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener noreferrer" class="btn bg-secondary text-white">
-                    Check System Status <span class="visually-hidden">(opens in a new tab)</span><span class="material-symbols-outlined" aria-hidden="true" style="vertical-align: middle;">open_in_new</span>
+                    Check System Status <span class="visually-hidden">(opens in a new tab)</span><span class="material-symbols-outlined icon-middle" aria-hidden="true">open_in_new</span>
                 </a>
             </div>
 

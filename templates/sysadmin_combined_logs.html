@@ -4,6 +4,20 @@
 {% block page_icon %}description{% endblock %}
 
 {% block content %}
+<style>
+    .sa-maxw-240 { max-width: 240px; }
+    .sa-maxw-280 { max-width: 280px; }
+    .sa-maxw-320 { max-width: 320px; }
+    .sa-minw-200 { min-width: 200px; }
+    .sa-scroll-400 { max-height: 400px; overflow-y: auto; }
+    .sa-w-110 { width: 110px; }
+    .sa-w-120 { width: 120px; }
+    .sa-w-130 { width: 130px; }
+    .sa-w-160 { width: 160px; }
+    .sa-w-180 { width: 180px; }
+    .sa-w-60 { width: 60px; }
+    .sa-w-70 { width: 70px; }
+</style>
 <div class="container-fluid px-0">
 
     <!-- ── Summary Stats ── -->
@@ -59,7 +73,7 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'errors' or not active_tab %}active{% endif %}" id="errors-tab"
                 data-bs-toggle="tab" data-bs-target="#errors-pane" type="button" role="tab" aria-controls="errors-pane" aria-selected="{% if active_tab == 'errors' or not active_tab %}true{% else %}false{% endif %}">
-                <span class="material-symbols-outlined align-middle me-1" style="font-size:16px;" aria-hidden="true">error</span>
+                <span class="material-symbols-outlined align-middle me-1 icon-xs" aria-hidden="true">error</span>
                 Error Logs
                 {% if total_errors > 0 %}
                 <span class="badge bg-danger ms-1">{{ total_errors }}</span>
@@ -70,7 +84,7 @@
             <button class="nav-link {% if active_tab == 'network' %}active{% endif %}" id="network-tab"
                 data-bs-toggle="tab" data-bs-target="#network-pane" type="button" role="tab"
                 aria-controls="network-pane" aria-selected="{% if active_tab == 'network' %}true{% else %}false{% endif %}">
-                <span class="material-symbols-outlined align-middle me-1" style="font-size:16px;" aria-hidden="true">network_check</span>
+                <span class="material-symbols-outlined align-middle me-1 icon-xs" aria-hidden="true">network_check</span>
                 Network Activity
             </button>
         </li>
@@ -87,8 +101,8 @@
                 <form method="GET" action="{{ url_for('sysadmin.combined_logs') }}"
                     class="d-flex flex-wrap gap-2 w-100">
                     <input type="hidden" name="tab" value="errors">
-                    <div class="flex-grow-1" style="min-width:200px; max-width:320px;">
-                        <label class="form-label mb-1" style="font-size:0.8rem;">Filter by Error Type</label>
+                    <div class="flex-grow-1 sa-minw-200 sa-maxw-320">
+                        <label class="form-label mb-1 type-xs">Filter by Error Type</label>
                         <select name="error_type" class="form-select form-select-sm" aria-label="Filter by error type">
                             <option value="">All Error Types</option>
                             {% for et in error_types %}
@@ -109,17 +123,17 @@
 
             {% if error_logs %}
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0" style="font-size:0.85rem;">
+                <table class="table table-hover align-middle mb-0 type-sm">
                     <caption class="visually-hidden">System error logs</caption>
                     <thead class="table-light">
                         <tr>
-                            <th scope="col" class="ps-3" style="width:60px;">ID</th>
-                            <th scope="col" style="width:160px;">Timestamp</th>
-                            <th scope="col" style="width:130px;">Error Type</th>
+                            <th scope="col" class="ps-3 sa-w-60">ID</th>
+                            <th class="sa-w-160" scope="col">Timestamp</th>
+                            <th class="sa-w-130" scope="col">Error Type</th>
                             <th scope="col">Message</th>
-                            <th scope="col" class="d-none d-md-table-cell" style="width:180px;">Path</th>
-                            <th scope="col" class="d-none d-md-table-cell" style="width:110px;">IP</th>
-                            <th scope="col" style="width:70px;"></th>
+                            <th scope="col" class="d-none d-md-table-cell sa-w-180">Path</th>
+                            <th scope="col" class="d-none d-md-table-cell sa-w-110">IP</th>
+                            <th class="sa-w-70" scope="col"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -141,12 +155,12 @@
                                     {% elif '401' in (log.error_type or '') %}bg-info
                                     {% elif '400' in (log.error_type or '') %}bg-warning text-dark
                                     {% elif '404' in (log.error_type or '') %}bg-secondary
-                                    {% else %}bg-dark{% endif %}" style="font-size:0.7rem;">
+                                    {% else %}bg-dark{% endif %} type-2xs">
                                     {{ log.error_type or 'Unknown' }}
                                 </span>
                             </td>
                             <td>
-                                <small class="text-truncate d-block" style="max-width:240px;"
+                                <small class="text-truncate d-block sa-maxw-240"
                                     title="{{ log.error_message }}">
                                     {{ log.error_message or 'No message' }}
                                 </small>
@@ -174,8 +188,8 @@
                     <div class="modal-content">
                         <div class="modal-header bg-danger text-white">
                             <h5 class="modal-title" id="errModalLabel{{ log.id }}">
-                                <span class="material-symbols-outlined align-middle me-1"
-                                    style="font-size:18px;" aria-hidden="true">error</span>
+                                <span class="material-symbols-outlined align-middle me-1 icon-sm"
+                                    aria-hidden="true">error</span>
                                 Error #{{ log.id }} — {{ log.error_type }}
                             </h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close error details"></button>
@@ -199,8 +213,7 @@
                             {% if log.stack_trace %}
                             <div class="mb-3">
                                 <strong>Stack Trace:</strong>
-                                <pre class="bg-dark text-light p-3 rounded mt-2"
-                                    style="max-height:300px;overflow-y:auto;font-size:0.78rem;"><code>{{ log.stack_trace }}</code></pre>
+                                <pre class="bg-dark text-light p-3 rounded mt-2 scroll-panel type-xs"><code>{{ log.stack_trace }}</code></pre>
                             </div>
                             {% endif %}
                             {% if log.log_output %}
@@ -210,8 +223,7 @@
                                     <button type="button" class="btn btn-sm btn-outline-secondary"
                                         onclick="copyToClipboard('errlog-{{ log.id }}')">Copy</button>
                                 </div>
-                                <pre id="errlog-{{ log.id }}" class="bg-dark text-light p-3 rounded"
-                                    style="max-height:400px;overflow-y:auto;font-size:0.78rem;"><code>{{ log.log_output }}</code></pre>
+                                <pre id="errlog-{{ log.id }}" class="bg-dark text-light p-3 rounded sa-scroll-400 type-xs"><code>{{ log.log_output }}</code></pre>
                             </div>
                             {% endif %}
                         </div>
@@ -255,8 +267,8 @@
 
             {% else %}
             <div class="p-5 text-center text-muted">
-                <span class="material-symbols-outlined d-block mb-2 text-success"
-                    style="font-size:56px;" aria-hidden="true">check_circle</span>
+                <span class="material-symbols-outlined d-block mb-2 text-success icon-2xl"
+                    aria-hidden="true">check_circle</span>
                 <h5>No errors logged{% if current_error_type %} for this filter{% endif %}</h5>
                 <p class="mb-0">{% if current_error_type %}Try clearing the filter.{% else %}System is healthy.{% endif
                     %}</p>
@@ -273,8 +285,8 @@
                 <form method="GET" action="{{ url_for('sysadmin.combined_logs') }}"
                     class="d-flex flex-wrap gap-2 align-items-end">
                     <input type="hidden" name="tab" value="network">
-                    <div style="min-width:200px; max-width:280px;">
-                        <label class="form-label mb-1" style="font-size:0.8rem;">Filter by IP Address</label>
+                    <div class="sa-minw-200 sa-maxw-280">
+                        <label class="form-label mb-1 type-xs">Filter by IP Address</label>
                         <select name="ip" class="form-select form-select-sm" aria-label="Filter by IP address">
                             <option value="">All IP Addresses</option>
                             {% for ip in ip_addresses %}
@@ -295,7 +307,7 @@
                 <div class="ms-auto d-none d-md-block">
                     <div class="d-flex gap-1 flex-wrap">
                         {% for error_type, count in error_type_stats[:5] %}
-                        <span class="badge bg-secondary" style="font-size:0.7rem;">{{ error_type or 'Unknown' }}: {{
+                        <span class="badge bg-secondary type-2xs">{{ error_type or 'Unknown' }}: {{
                             count }}</span>
                         {% endfor %}
                     </div>
@@ -305,16 +317,16 @@
 
             {% if network_logs %}
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0" style="font-size:0.85rem;">
+                <table class="table table-hover align-middle mb-0 type-sm">
                     <caption class="visually-hidden">Network activity logs</caption>
                     <thead class="table-light">
                         <tr>
-                            <th scope="col" class="ps-3" style="width:160px;">Timestamp</th>
-                            <th scope="col" style="width:70px;">Method</th>
+                            <th scope="col" class="ps-3 sa-w-160">Timestamp</th>
+                            <th class="sa-w-70" scope="col">Method</th>
                             <th scope="col">Path</th>
-                            <th scope="col" style="width:130px;">Status</th>
-                            <th scope="col" class="d-none d-md-table-cell" style="width:120px;">IP</th>
-                            <th scope="col" style="width:70px;"></th>
+                            <th class="sa-w-130" scope="col">Status</th>
+                            <th scope="col" class="d-none d-md-table-cell sa-w-120">IP</th>
+                            <th class="sa-w-70" scope="col"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -333,7 +345,7 @@
                                     {% elif log.request_method == 'POST' %}bg-success
                                     {% elif log.request_method == 'PUT' %}bg-warning text-dark
                                     {% elif log.request_method == 'DELETE' %}bg-danger
-                                    {% else %}bg-secondary{% endif %}" style="font-size:0.7rem;">
+                                    {% else %}bg-secondary{% endif %} type-2xs">
                                     {{ log.request_method or 'N/A' }}
                                 </span>
                             </td>
@@ -346,7 +358,7 @@
                                     {% elif '401' in (log.error_type or '') %}bg-info
                                     {% elif '400' in (log.error_type or '') %}bg-warning text-dark
                                     {% elif '404' in (log.error_type or '') %}bg-secondary
-                                    {% else %}bg-dark{% endif %}" style="font-size:0.7rem;">
+                                    {% else %}bg-dark{% endif %} type-2xs">
                                     {{ log.error_type or 'Unknown' }}
                                 </span>
                             </td>
@@ -371,8 +383,8 @@
                     <div class="modal-content">
                         <div class="modal-header bg-primary text-white">
                             <h5 class="modal-title" id="netModalLabel{{ log.id }}">
-                                <span class="material-symbols-outlined align-middle me-1"
-                                    style="font-size:18px;" aria-hidden="true">info</span>
+                                <span class="material-symbols-outlined align-middle me-1 icon-sm"
+                                    aria-hidden="true">info</span>
                                 Request #{{ log.id }}
                             </h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close request details"></button>
@@ -397,8 +409,7 @@
                                     }}</small></div>
                             {% if log.stack_trace %}
                             <div><strong>Stack Trace:</strong>
-                                <pre class="bg-dark text-light p-3 rounded mt-2"
-                                    style="max-height:300px;overflow-y:auto;font-size:0.78rem;"><code>{{ log.stack_trace }}</code></pre>
+                                <pre class="bg-dark text-light p-3 rounded mt-2 scroll-panel type-xs"><code>{{ log.stack_trace }}</code></pre>
                             </div>
                             {% endif %}
                         </div>
@@ -442,7 +453,7 @@
 
             {% else %}
             <div class="p-5 text-center text-muted">
-                <span class="material-symbols-outlined d-block mb-2" style="font-size:56px;opacity:0.3;" aria-hidden="true">wifi_off</span>
+                <span class="material-symbols-outlined d-block mb-2 icon-2xl alpha-medium" aria-hidden="true">wifi_off</span>
                 <h5>No network activity logged{% if current_ip %} for this IP{% endif %}</h5>
                 <p class="mb-0">{% if current_ip %}Try clearing the filter.{% else %}Network requests will appear here
                     as they occur.{% endif %}</p>
