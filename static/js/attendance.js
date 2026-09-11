@@ -13,7 +13,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const initialState = JSON.parse(serverStateEl.textContent);
       updateAttendanceUI(
         initialState.active,
-        initialState.duration,
+        pickTimeToday(initialState),
         initialState.projected_pay,
         initialState.hall_pass
       );

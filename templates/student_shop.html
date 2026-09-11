@@ -4,6 +4,28 @@
 {% block title %}Store{% endblock %}
 {% block page_icon %}storefront{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Buy what your teacher has listed, then come back to My Items when you actually want to use it.") }}
+
+{% call help.topic('shop-buy', 'shopping_cart', 'Buying an item') %}
+<p>Choose a quantity and confirm with your <strong>passphrase</strong>. The cost comes out of checking, so if the balance is not there the purchase will not go through.</p>
+<p class="mb-0">Check the price against what you owe soon. Spending down to nothing right before rent is charged is the most common way students end up overdrawn.</p>
+{% endcall %}
+
+{% call help.topic('shop-owned', 'inventory_2', 'Buying is not using') %}
+<p class="mb-0">A purchase puts the item in <strong>My Items</strong> and it waits there. Nothing happens in class until you come back and use it, so buying early is safe — just remember it is sitting there.</p>
+{% endcall %}
+
+{% call help.topic('shop-redeem', 'redeem', 'Using an item') %}
+<p><strong>Use Item</strong> sends a redemption request to your teacher with whatever details you provide, and is confirmed with your <strong>PIN</strong>. Say clearly what you are asking for — a vague request is slower to approve.</p>
+<p class="mb-0">The request has to be accepted before anything takes effect. Send it before you need it, not at the moment you need it.</p>
+{% endcall %}
+
+{% call help.topic('shop-credentials', 'lock', 'Why it asks twice') %}
+<p class="mb-0">Spending money asks for your passphrase; redeeming something you already own asks for your PIN. Both exist so nobody else on a shared or unlocked device can spend or redeem in your name. Do not let someone else type either one.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div id="storePageFeedback" class="alert d-none" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
 
@@ -11,12 +33,12 @@
 <ul class="nav nav-tabs mb-4" id="storeTabs" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="browse-tab" data-bs-toggle="tab" data-bs-target="#browse" type="button" role="tab" aria-controls="browse" aria-selected="true">
-            <span class="material-symbols-outlined">shopping_cart</span> Browse Items
+            <span class="material-symbols-outlined" aria-hidden="true">shopping_cart</span> Browse Items
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="my-items-tab" data-bs-toggle="tab" data-bs-target="#my-items" type="button" role="tab" aria-controls="my-items" aria-selected="false">
-            <span class="material-symbols-outlined">inventory_2</span> My Items
+            <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span> My Items
             {% if entitlements %}<span class="badge bg-primary ms-1">{{ entitlements|length }}</span>{% endif %}
         </button>
     </li>
@@ -35,11 +57,11 @@
                         <h2 class="h5 card-title">{{ item.name }}</h2>
                         {% if item.is_rent_covered %}
                         <div class="alert alert-success alert-sm mb-2 py-1 px-2">
-                            <small><strong><span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">check_circle</span> Included in your rent!</strong></small>
+                            <small><strong><span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;" aria-hidden="true">check_circle</span> Included in your rent!</strong></small>
                         </div>
                         {% elif item.is_rent_perk_item %}
                         <div class="mb-2">
-                            <span class="badge bg-info"><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">card_membership</span> Rent Perk</span>
+                            <span class="badge bg-info"><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;" aria-hidden="true">card_membership</span> Rent Perk</span>
                             {% if item.display_rent_perk_message %}
                             <span class="badge bg-success">{{ item.display_rent_perk_message }}</span>
                             {% endif %}
@@ -66,7 +88,7 @@
                         {% if item.is_bundle %}
                         <div class="mb-2">
                             <span class="badge bg-warning text-dark">
-                                <span class="material-symbols-outlined">inventory_2</span> Bundle: {{ item.bundle_quantity }} items
+                                <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span> Bundle: {{ item.bundle_quantity }} items
                             </span>
                         </div>
                         {% endif %}
@@ -74,7 +96,7 @@
                         {% if item.bulk_discount_enabled %}
                         <div class="mb-2">
                             <span class="badge bg-success">
-                                <span class="material-symbols-outlined">percent</span> {{ item.bulk_discount_percentage }}% off when you buy {{ item.bulk_discount_quantity }}+
+                                <span class="material-symbols-outlined" aria-hidden="true">percent</span> {{ item.bulk_discount_percentage }}% off when you buy {{ item.bulk_discount_quantity }}+
                             </span>
                         </div>
                         {% endif %}
@@ -105,11 +127,11 @@
                             {% if not item.collective_progress.is_complete %}
                                 <small class="text-muted">{{ item.collective_progress.remaining_count }} more needed!</small>
                             {% else %}
-                                <small class="text-success"><span class="material-symbols-outlined">check_circle</span> Goal reached! Item will unlock soon.</small>
+                                <small class="text-success"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span> Goal reached! Item will unlock soon.</small>
                             {% endif %}
                             {% if item.collective_progress.display_expires_at %}
                             <div class="alert alert-warning p-2 mt-2 mb-0">
-                                <small><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">schedule</span> <strong>Deadline:</strong> Goal expires {{ item.collective_progress.display_expires_at }}</small>
+                                <small><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;" aria-hidden="true">schedule</span> <strong>Deadline:</strong> Goal expires {{ item.collective_progress.display_expires_at }}</small>
                             </div>
                             {% endif %}
                         </div>
@@ -205,7 +227,7 @@
                                         data-item-name="{{ entitlement.item_name }}"
                                         data-item-type="hall_pass"
                                         data-redemption-prompt="">
-                                    <span class="material-symbols-outlined">exit_to_app</span> Request Hall Pass
+                                    <span class="material-symbols-outlined" aria-hidden="true">exit_to_app</span> Request Hall Pass
                                 </button>
                             {% elif entitlement.can_redeem_immediately %}
                                 <!-- Immediate use item - redeem now -->
@@ -214,7 +236,7 @@
                                         data-item-name="{{ entitlement.item_name }}"
                                         data-item-type="immediate"
                                         data-redemption-prompt="">
-                                    <span class="material-symbols-outlined">redeem</span> Use Now
+                                    <span class="material-symbols-outlined" aria-hidden="true">redeem</span> Use Now
                                 </button>
                             {% elif entitlement.can_request_redemption %}
                                 <!-- Delayed use item - request redemption -->
@@ -223,15 +245,15 @@
                                         data-item-name="{{ entitlement.item_name }}"
                                         data-item-type="delayed"
                                         data-redemption-prompt="{{ entitlement.redemption_prompt or '' }}">
-                                    <span class="material-symbols-outlined">schedule</span> Request Redemption
+                                    <span class="material-symbols-outlined" aria-hidden="true">schedule</span> Request Redemption
                                 </button>
                             {% elif entitlement.is_pending_approval %}
                                 <button type="button" class="btn btn-secondary w-100" disabled>
-                                    <span class="material-symbols-outlined">hourglass_empty</span> Awaiting Approval
+                                    <span class="material-symbols-outlined" aria-hidden="true">hourglass_empty</span> Awaiting Approval
                                 </button>
                             {% elif entitlement.is_processing %}
                                 <button type="button" class="btn btn-info w-100" disabled>
-                                    <span class="material-symbols-outlined">sync</span> Processing
+                                    <span class="material-symbols-outlined" aria-hidden="true">sync</span> Processing
                                 </button>
                             {% endif %}
                         </div>
@@ -242,7 +264,7 @@
         </div>
         {% else %}
         <div class="alert alert-info text-center">
-            <span class="material-symbols-outlined" style="font-size: 3rem;">inventory_2</span>
+            <span class="material-symbols-outlined" style="font-size: 3rem;" aria-hidden="true">inventory_2</span>
             <h2 class="h5 mt-2">No Purchased Items</h2>
             <p class="mb-0">You haven't purchased any items yet. Browse the store to get started!</p>
         </div>
@@ -277,7 +299,7 @@
 
                 <!-- Item Type Explanation -->
                 <div id="itemTypeExplanation" class="alert mb-3" style="display: none;">
-                    <h3 class="h6 alert-heading mb-2"><span class="material-symbols-outlined me-2">info</span>How This Item Works</h3>
+                    <h3 class="h6 alert-heading mb-2"><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>How This Item Works</h3>
                     <p id="explanationText" class="mb-0"></p>
                 </div>
 
@@ -304,7 +326,7 @@
                     <div class="alert alert-success" id="totalPriceDisplay">
                         <strong>Total Price:</strong> $<span id="totalPrice">0.00</span>
                         <span id="savingsDisplay" style="display: none;">
-                            <br><small class="text-success"><span class="material-symbols-outlined">check_circle</span> You save $<span id="savingsAmount">0.00</span>!</small>
+                            <br><small class="text-success"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span> You save $<span id="savingsAmount">0.00</span>!</small>
                         </span>
                     </div>
 

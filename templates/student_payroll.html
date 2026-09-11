@@ -4,22 +4,43 @@
 {% block title %}Payroll{% endblock %}
 {% block page_icon %}receipt_long{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("What you have earned since your last payday, and the attendance record that number is built from.") }}
+
+{% call help.topic('pay-projected', 'schedule', 'Projected pay is not paid yet') %}
+<p>Unpaid time is time you have clocked that has not yet been through a payroll run. <strong>Projected earnings</strong> is what that time is currently worth.</p>
+<p class="mb-0">It is not in your account and you cannot spend it. It becomes real money only when your teacher runs payroll — and it can still change before then if your attendance record does.</p>
+{% endcall %}
+
+{% call help.topic('pay-events', 'history', 'Where the number comes from') %}
+<p class="mb-0">Your pay is calculated from attendance events — each Start Work and each Break. The event list is the evidence. If your projected pay looks wrong, the cause is almost always a missing or mistimed event in that list, not the arithmetic.</p>
+{% endcall %}
+
+{% call help.topic('pay-taponoff', 'timer', 'Forgetting to tap out costs you') %}
+<p class="mb-0">Time only counts while you are tapped in, and a session left open does not run forever — it gets closed for you at the daily limit your class is set to. Tapping out when you stop working keeps the record accurate.</p>
+{% endcall %}
+
+{% call help.topic('pay-dispute', 'flag', 'If an event is wrong') %}
+<p class="mb-0">Report it rather than waiting for the next payday to see whether it resolves. Once payroll runs, the payment is a posted record, and correcting it afterwards is a separate step for your teacher.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <!-- Tabs -->
 <ul class="nav nav-tabs mb-4" id="payrollTabs" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="attendance-tab" data-bs-toggle="tab" data-bs-target="#attendance" type="button" role="tab" aria-controls="attendance" aria-selected="true">
-            <span class="material-symbols-outlined">fact_check</span> Attendance Record
+            <span class="material-symbols-outlined" aria-hidden="true">fact_check</span> Attendance Record
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="productivity-tab" data-bs-toggle="tab" data-bs-target="#productivity" type="button" role="tab" aria-controls="productivity" aria-selected="false">
-            <span class="material-symbols-outlined">analytics</span> Productivity Stats
+            <span class="material-symbols-outlined" aria-hidden="true">analytics</span> Productivity Stats
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="projected-tab" data-bs-toggle="tab" data-bs-target="#projected" type="button" role="tab" aria-controls="projected" aria-selected="false">
-            <span class="material-symbols-outlined">payments</span> Projected Pay
+            <span class="material-symbols-outlined" aria-hidden="true">payments</span> Projected Pay
         </button>
     </li>
 </ul>
@@ -30,7 +51,7 @@
     <div class="tab-pane fade show active" id="attendance" role="tabpanel" aria-labelledby="attendance-tab">
         <div class="card mb-4">
             <div class="card-header">
-                <span class="material-symbols-outlined" style="vertical-align: middle;">schedule</span> Attendance Overview
+                <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">schedule</span> Attendance Overview
             </div>
             <div class="card-body">
                 {% if class_label %}
@@ -93,7 +114,7 @@
                                            class="btn btn-sm btn-link text-muted p-0"
                                            title="Report an issue with this attendance record"
                                            data-bs-toggle="tooltip">
-                                            <span class="material-symbols-outlined fs-6">help</span>
+                                            <span class="material-symbols-outlined fs-6" aria-hidden="true">help</span>
                                         </a>
                                     </td>
                                 </tr>
@@ -106,13 +127,13 @@
                     {% endif %}
                     {% else %}
                     <div class="alert alert-info">
-                        <span class="material-symbols-outlined">info</span> No attendance events recorded for this class yet.
+                        <span class="material-symbols-outlined" aria-hidden="true">info</span> No attendance events recorded for this class yet.
                     </div>
                     {% endif %}
                 </div>
                 {% else %}
                 <div class="alert alert-info">
-                    <span class="material-symbols-outlined">info</span> No class selected.
+                    <span class="material-symbols-outlined" aria-hidden="true">info</span> No class selected.
                 </div>
                 {% endif %}
             </div>
@@ -126,7 +147,7 @@
             <div class="col-md-6 mb-4">
                 <div class="card">
                     <div class="card-header">
-                        <span class="material-symbols-outlined">trending_up</span> Overall Productivity
+                        <span class="material-symbols-outlined" aria-hidden="true">trending_up</span> Overall Productivity
                     </div>
                     <div class="card-body">
                         <div class="mb-3 pb-3 border-bottom">
@@ -155,7 +176,7 @@
         <!-- Attendance History Stats -->
         <div class="card">
             <div class="card-header">
-                <span class="material-symbols-outlined">history</span> Attendance History
+                <span class="material-symbols-outlined" aria-hidden="true">history</span> Attendance History
             </div>
             <div class="card-body">
                 {% if attendance_events %}
@@ -181,7 +202,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-info">
-                    <span class="material-symbols-outlined">info</span> No attendance history available yet.
+                    <span class="material-symbols-outlined" aria-hidden="true">info</span> No attendance history available yet.
                 </div>
                 {% endif %}
             </div>
@@ -195,7 +216,7 @@
             <div class="col-md-6 mb-4">
                 <div class="card">
                     <div class="card-header">
-                        <span class="material-symbols-outlined">account_balance_wallet</span> Current Projections
+                        <span class="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span> Current Projections
                     </div>
                     <div class="card-body">
                         <div class="text-center mb-4">
@@ -211,11 +232,11 @@
             <div class="col-md-6 mb-4">
                         <div class="card">
                     <div class="card-header">
-                        <span class="material-symbols-outlined">attach_money</span> Pay Rate Information
+                        <span class="material-symbols-outlined" aria-hidden="true">attach_money</span> Pay Rate Information
                     </div>
                     <div class="card-body">
                         <div class="alert alert-info">
-                            <span class="material-symbols-outlined">info</span> <strong>Current Pay Rate:</strong> ${{ "%.2f"|format(pay_rate_per_minute) }} per minute
+                            <span class="material-symbols-outlined" aria-hidden="true">info</span> <strong>Current Pay Rate:</strong> ${{ "%.2f"|format(pay_rate_per_minute) }} per minute
                         </div>
                         <h6 class="mb-3">Time Value Calculator:</h6>
                         <div class="table-responsive">
@@ -238,7 +259,7 @@
                             </table>
                         </div>
                         <div class="alert alert-warning mt-3">
-                            <span class="material-symbols-outlined">schedule</span> <strong>Remember:</strong> Time is tracked when you Start Work and Break. Make sure to Start Work when you begin working!
+                            <span class="material-symbols-outlined" aria-hidden="true">schedule</span> <strong>Remember:</strong> Time is tracked when you Start Work and Break. Make sure to Start Work when you begin working!
                         </div>
                     </div>
                 </div>
@@ -249,7 +270,7 @@
         {% if last_payroll_event %}
         <div class="card">
             <div class="card-header">
-                <span class="material-symbols-outlined">history</span> Last Payroll Processed
+                <span class="material-symbols-outlined" aria-hidden="true">history</span> Last Payroll Processed
             </div>
             <div class="card-body">
                 <div class="row">

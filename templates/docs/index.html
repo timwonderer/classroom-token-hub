@@ -14,7 +14,7 @@
             <input type="search" name="q" class="form-control"
                 placeholder="Start with 1-3 keywords about your issue..." aria-label="Search the documentation">
             <button class="btn btn-secondary" type="submit">
-                <span class="material-symbols-outlined" style="vertical-align: middle;">search</span>
+                <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">search</span>
                 Search
             </button>
         </div>
@@ -29,12 +29,12 @@
     <div class="btn-group docs-hero-toggle" role="group" aria-label="Documentation Audience Toggle">
         <a href="{{ url_for('docs.set_audience', aud='user') }}"
             class="btn {% if audience == 'user' %}btn-secondary active fw-bold{% else %}btn-outline-light{% endif %} px-4">
-            <span class="material-symbols-outlined" style="vertical-align: text-bottom; font-size: 1.1rem;">group</span>
+            <span class="material-symbols-outlined" style="vertical-align: text-bottom; font-size: 1.1rem;" aria-hidden="true">group</span>
             User Guides
         </a>
         <a href="{{ url_for('docs.set_audience', aud='devops') }}"
             class="btn {% if audience == 'devops' %}btn-secondary active fw-bold{% else %}btn-outline-light{% endif %} px-4">
-            <span class="material-symbols-outlined" style="vertical-align: text-bottom; font-size: 1.1rem;">terminal</span>
+            <span class="material-symbols-outlined" style="vertical-align: text-bottom; font-size: 1.1rem;" aria-hidden="true">terminal</span>
             Technical Docs
         </a>
     </div>
@@ -53,7 +53,7 @@
                 <div class="card-body">
                     <div class="text-center mb-3">
                         <span class="material-symbols-outlined"
-                            style="font-size: 3rem; color: var(--info);">school</span>
+                            style="font-size: 3rem; color: var(--info);" aria-hidden="true">school</span>
                     </div>
                     <h3 class="card-title h5 text-center">For Students</h3>
                     <p class="card-text text-muted">How everything works, one task at a time.</p>
@@ -83,7 +83,7 @@
                 <div class="card-body">
                     <div class="text-center mb-3">
                         <span class="material-symbols-outlined"
-                            style="font-size: 3rem; color: var(--danger);">person</span>
+                            style="font-size: 3rem; color: var(--danger);" aria-hidden="true">person</span>
                     </div>
                     <h3 class="card-title h5 text-center">For Teachers</h3>
                     <p class="card-text text-muted">Set up your classroom economy, then run it day to day.</p>
@@ -113,7 +113,7 @@
                 <div class="card-body">
                     <div class="text-center mb-3">
                         <span class="material-symbols-outlined"
-                            style="font-size: 3rem; color: var(--success);">build</span>
+                            style="font-size: 3rem; color: var(--success);" aria-hidden="true">build</span>
                     </div>
                     <h3 class="card-title h5 text-center">Something Is Wrong</h3>
                     <p class="card-text text-muted">Solution-first pages for when it is not behaving.</p>
@@ -146,7 +146,7 @@
                 <div class="card-body">
                     <div class="text-center mb-3">
                         <span class="material-symbols-outlined"
-                            style="font-size: 3rem; color: var(--primary);">timeline</span>
+                            style="font-size: 3rem; color: var(--primary);" aria-hidden="true">timeline</span>
                     </div>
                     <h3 class="card-title h5 text-center">Project Timeline</h3>
                     <p class="card-text text-muted">The interactive history of Classroom Token Hub — from classroom idea
@@ -171,7 +171,7 @@
                 <div class="card-body">
                     <div class="text-center mb-3">
                         <span class="material-symbols-outlined"
-                            style="font-size: 3rem; color: var(--primary);">code</span>
+                            style="font-size: 3rem; color: var(--primary);" aria-hidden="true">code</span>
                     </div>
                     <h3 class="card-title h5 text-center">Developer Reference</h3>
                     <p class="card-text text-muted">Architecture, database schema, and API docs for developers and
@@ -198,7 +198,7 @@
                 <div class="card-body">
                     <div class="text-center mb-3">
                         <span class="material-symbols-outlined"
-                            style="font-size: 3rem; color: var(--warning);">cloud_upload</span>
+                            style="font-size: 3rem; color: var(--warning);" aria-hidden="true">cloud_upload</span>
                     </div>
                     <h3 class="card-title h5 text-center">Operations</h3>
                     <p class="card-text text-muted">Deployment, maintenance, and operational procedures for maintainers.
@@ -219,7 +219,7 @@
                 <div class="card-body">
                     <div class="text-center mb-3">
                         <span class="material-symbols-outlined"
-                            style="font-size: 3rem; color: var(--info);">gavel</span>
+                            style="font-size: 3rem; color: var(--info);" aria-hidden="true">gavel</span>
                     </div>
                     <h3 class="card-title h5 text-center">Legal & Licensing</h3>
                     <p class="card-text text-muted">License terms, commercial use policy, attributions, and project
@@ -244,7 +244,7 @@
     <div class="card bg-light">
         <div class="card-body">
             <h2 class="card-title h4">
-                <span class="material-symbols-outlined" style="vertical-align: middle;">bolt</span>
+                <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">bolt</span>
                 Quick Links
             </h2>
             <div class="row">

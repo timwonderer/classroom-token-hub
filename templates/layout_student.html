@@ -59,7 +59,7 @@
     <!-- Mobile Menu Toggle Button -->
     <button type="button" class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle navigation menu"
         aria-controls="studentSidebar" aria-expanded="false">
-        <span class="material-symbols-outlined">menu</span>
+        <span class="material-symbols-outlined" aria-hidden="true">menu</span>
     </button>
 
     <!-- Sidebar Backdrop -->
@@ -70,12 +70,12 @@
                 <a class="student-brand nav-brand-block" href="{{ url_for('student.dashboard') }}">
                     <div>
                         <div><span class="material-symbols-outlined student-home-icon-bill"
-                                style="font-size: 30px; vertical-align: middle; font-weight:200">local_atm</span>Classroom
+                                style="font-size: 30px; vertical-align: middle; font-weight:200" aria-hidden="true">local_atm</span>Classroom
                         </div>
                         <div><span class="material-symbols-outlined student-home-icon-store"
-                                style="font-size: 30px; vertical-align: middle; font-weight:200">store</span>Token</div>
+                                style="font-size: 30px; vertical-align: middle; font-weight:200" aria-hidden="true">store</span>Token</div>
                         <div><span class="material-symbols-outlined student-home-icon-stock"
-                                style="font-size: 30px; vertical-align: middle; font-weight:200">finance_mode</span>Hub
+                                style="font-size: 30px; vertical-align: middle; font-weight:200" aria-hidden="true">finance_mode</span>Hub
                         </div>
                     </div>
                 </a>
@@ -101,39 +101,39 @@
                 <nav class="student-nav nav-shell-body" aria-label="Student portal">
                     <a href="{{ url_for('student.dashboard') }}"
                         class="{% if request.endpoint == 'student.dashboard' %}active{% endif %}" {% if request.endpoint == 'student.dashboard' %}aria-current="page"{% endif %}>
-                        <span class="material-symbols-outlined">home</span> Dashboard
+                        <span class="material-symbols-outlined" aria-hidden="true">home</span> Dashboard
                     </a>
                     <a href="{{ url_for('student.transfer') }}"
                         class="{% if request.endpoint == 'student.transfer' %}active{% endif %}" {% if request.endpoint == 'student.transfer' %}aria-current="page"{% endif %}>
-                        <span class="material-symbols-outlined">account_balance_wallet</span> Accounts
+                        <span class="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span> Accounts
                     </a>
                     {% if feature_settings.store_enabled %}
                     <a href="{{ url_for('student.shop') }}"
                         class="{% if request.endpoint == 'student.shop' %}active{% endif %}" {% if request.endpoint == 'student.shop' %}aria-current="page"{% endif %}>
-                        <span class="material-symbols-outlined">storefront</span> Store
+                        <span class="material-symbols-outlined" aria-hidden="true">storefront</span> Store
                     </a>
                     {% endif %}
                     {% if feature_settings.payroll_enabled %}
                     <a href="{{ url_for('student.payroll') }}"
                         class="{% if request.endpoint == 'student.payroll' %}active{% endif %}" {% if request.endpoint == 'student.payroll' %}aria-current="page"{% endif %}>
-                        <span class="material-symbols-outlined">credit_score</span> Work &amp; Pay
+                        <span class="material-symbols-outlined" aria-hidden="true">credit_score</span> Work &amp; Pay
                     </a>
                     {% endif %}
                     {% if feature_settings.rent_enabled %}
                     <a href="{{ url_for('student.rent') }}"
                         class="{% if request.endpoint == 'student.rent' %}active{% endif %}" {% if request.endpoint == 'student.rent' %}aria-current="page"{% endif %}>
-                        <span class="material-symbols-outlined">receipt_long</span> Rent
+                        <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span> Rent
                     </a>
                     {% endif %}
                     {% if feature_settings.insurance_enabled %}
                     <a href="{{ url_for('student.student_insurance') }}"
                         class="{% if request.endpoint in ['student.student_insurance', 'student.view_policy', 'student.file_claim'] %}active{% endif %}" {% if request.endpoint in ['student.student_insurance', 'student.view_policy', 'student.file_claim'] %}aria-current="page"{% endif %}>
-                        <span class="material-symbols-outlined">shield</span> Insurance
+                        <span class="material-symbols-outlined" aria-hidden="true">shield</span> Insurance
                     </a>
                     {% endif %}
                     <a href="{{ url_for('student.help_support') }}"
                         class="{% if request.endpoint in ['student.help_support', 'student.submit_general_issue', 'student.report_transaction_issue', 'student.report_attendance_session_issue'] %}active{% endif %}" {% if request.endpoint in ['student.help_support', 'student.submit_general_issue', 'student.report_transaction_issue', 'student.report_attendance_session_issue'] %}aria-current="page"{% endif %}>
-                        <span class="material-symbols-outlined">support_agent</span> Help &amp; Support
+                        <span class="material-symbols-outlined" aria-hidden="true">support_agent</span> Help &amp; Support
                     </a>
                 </nav>
 
@@ -143,7 +143,7 @@
                         <div class="d-flex align-items-center justify-content-between mb-1">
                             <label for="class-switcher-select" class="sidebar-switcher-label mb-0">Switch Class</label>
                             <a href="{{ url_for('student.add_class') }}" class="sidebar-switcher-add" aria-label="Add class">
-                                <span class="material-symbols-outlined">add</span>
+                                <span class="material-symbols-outlined" aria-hidden="true">add</span>
                             </a>
                         </div>
                         <select id="class-switcher-select" class="form-select form-select-sm">
@@ -163,7 +163,7 @@
 
                     <div class="pt-3">
                         <a href="{{ url_for('student.logout') }}" class="btn btn-danger w-100 d-flex align-items-center justify-content-center gap-2">
-                            <span class="material-symbols-outlined">logout</span> Sign Out
+                            <span class="material-symbols-outlined" aria-hidden="true">logout</span> Sign Out
                         </a>
                     </div>
                 </div>
@@ -238,7 +238,7 @@
                         <div>
                             <div class="eyebrow">Classroom Token Hub</div>
                             <h1 class="d-flex align-items-center gap-2 mb-1">
-                                <span class="material-symbols-outlined">{{ resolved_page_icon }}</span>
+                                <span class="material-symbols-outlined" aria-hidden="true">{{ resolved_page_icon }}</span>
                                 {{ resolved_page_title }}
                             </h1>
                             {% if student_layout_view.has_class_context %}
@@ -251,7 +251,7 @@
                         <div class="page-header-actions">
                             <button type="button" class="btn btn-outline-primary btn-sm d-flex align-items-center gap-2"
                                 data-bs-toggle="offcanvas" data-bs-target="#studentContextualHelp"
-                                aria-controls="studentContextualHelp">
+                                aria-controls="studentContextualHelp" aria-expanded="false">
                                 <span class="material-symbols-outlined" aria-hidden="true">help</span>
                                 Need Help?
                             </button>
@@ -265,60 +265,16 @@
                             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
                         </div>
                         <div class="offcanvas-body">
-                            <p class="text-muted">Use the guide for this page, or open troubleshooting when something does not work as expected.</p>
-                            {% if help_doc_key == 'student.dashboard' or request.endpoint == 'student.dashboard' %}
-                            <div class="accordion mt-4 mb-4" id="studentDashboardHelpAccordion">
-                                <div class="accordion-item">
-                                    <h3 class="accordion-header" id="studentDashboardAttendanceHeading">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                            data-bs-target="#studentDashboardAttendance" aria-expanded="false"
-                                            aria-controls="studentDashboardAttendance"><span class="material-symbols-outlined me-2" aria-hidden="true">schedule</span>Attendance and work time</button>
-                                    </h3>
-                                    <div id="studentDashboardAttendance" class="accordion-collapse collapse"
-                                        aria-labelledby="studentDashboardAttendanceHeading">
-                                        <div class="accordion-body">The Attendance card shows whether you are working and how long you have worked today. Choose <strong>Start Work</strong> to begin. <strong>Break</strong> becomes available only after you start work.</div>
-                                    </div>
-                                </div>
-                                <div class="accordion-item">
-                                    <h3 class="accordion-header" id="studentDashboardBalancesHeading">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                            data-bs-target="#studentDashboardBalances" aria-expanded="false"
-                                            aria-controls="studentDashboardBalances"><span class="material-symbols-outlined me-2" aria-hidden="true">account_balance_wallet</span>Checking and savings</button>
-                                    </h3>
-                                    <div id="studentDashboardBalances" class="accordion-collapse collapse"
-                                        aria-labelledby="studentDashboardBalancesHeading">
-                                        <div class="accordion-body"><strong>Checking Account</strong> shows money available for spending. <strong>Savings Account</strong> shows saved money and projected interest. Use <strong>Transfer</strong> or <strong>Add to Savings</strong> to move money between accounts.</div>
-                                    </div>
-                                </div>
-                                <div class="accordion-item">
-                                    <h3 class="accordion-header" id="studentDashboardActivityHeading">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                            data-bs-target="#studentDashboardActivity" aria-expanded="false"
-                                            aria-controls="studentDashboardActivity"><span class="material-symbols-outlined me-2" aria-hidden="true">receipt_long</span>Recent activity</button>
-                                    </h3>
-                                    <div id="studentDashboardActivity" class="accordion-collapse collapse"
-                                        aria-labelledby="studentDashboardActivityHeading">
-                                        <div class="accordion-body">Recent Activity is a short list of transactions. Open <strong>Accounts</strong> for the fuller history. Use <strong>Report an issue with this transaction</strong> when a row is incorrect.</div>
-                                    </div>
-                                </div>
-                                <div class="accordion-item">
-                                    <h3 class="accordion-header" id="studentDashboardAlertsHeading">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                            data-bs-target="#studentDashboardAlerts" aria-expanded="false"
-                                            aria-controls="studentDashboardAlerts"><span class="material-symbols-outlined me-2" aria-hidden="true">notifications</span>Alerts and missing information</button>
-                                    </h3>
-                                    <div id="studentDashboardAlerts" class="accordion-collapse collapse"
-                                        aria-labelledby="studentDashboardAlertsHeading">
-                                        <div class="accordion-body">Alerts appear only when there is something to report. If a balance or class looks wrong, confirm the selected class in <strong>Switch Class</strong> and reload the page.</div>
-                                    </div>
-                                </div>
+                            {# Same structure as the teacher shell: an always-visible
+                               lead sentence, then collapsed topics. Pages override
+                               this block with help.panel_lead() and help.topic().
+                               The topic headers take their colour from var(--primary),
+                               which body.student-shell resolves to steward blue. #}
+                            <div class="accordion accordion-flush help-topics" id="helpTopics">
+                            {% block contextual_help_body %}
+                            {{ help.panel_lead("Use the guide for this page, or open troubleshooting when something does not work as expected.") }}
+                            {% endblock %}
                             </div>
-                            {% else %}
-                            <div class="alert alert-info d-flex align-items-start gap-2 mt-4 mb-4" role="note">
-                                <span class="material-symbols-outlined" aria-hidden="true">info</span>
-                                <span>Use the page guide for step-by-step instructions. If something is missing or does not work, open <strong>Troubleshooting</strong> below and follow the checks for this page.</span>
-                            </div>
-                            {% endif %}
                             {{ help.offcanvas_resource_links(help_doc_path, help_diagnostic_path) }}
                         </div>
                     </div>
@@ -332,7 +288,7 @@
                         <div class="toast align-items-center text-white bg-{{ 'success' if category == 'transfer_success' else 'danger' }} border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="4000">
                             <div class="d-flex">
                                 <div class="toast-body">
-                                    <span class="material-symbols-outlined align-middle me-2">
+                                    <span class="material-symbols-outlined align-middle me-2" aria-hidden="true">
                                         {{ 'check_circle' if category == 'transfer_success' else 'warning' }}
                                     </span>
                                     <span class="align-middle">{{ message }}</span>
@@ -468,6 +424,7 @@
     </script>
     <!-- Mobile Sidebar Toggle Script -->
     <script src="{{ static_url('js/mobile-sidebar-toggle.js') }}"></script>
+    <script src="{{ static_url('js/offcanvas-aria.js') }}"></script>
     {% block extra_scripts %}{% endblock %}
 </body>
 

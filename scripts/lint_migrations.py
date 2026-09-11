@@ -205,6 +205,19 @@ def print_issue(issue: Dict, prefix: str):
     print(f"      Fix: {issue['fix']}")
 
 
+def load_baseline(path: Path) -> set:
+    """Read accepted-noncompliance basenames, one per line, '#' comments allowed."""
+    if not path.exists():
+        print(f"❌ Baseline file not found: {path}")
+        sys.exit(2)
+    entries = set()
+    for line in path.read_text(encoding='utf-8').splitlines():
+        line = line.split('#', 1)[0].strip()
+        if line:
+            entries.add(line)
+    return entries
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Lint database migrations for idempotency and safety',
@@ -236,8 +249,78 @@ For more information, see:
         action='store_true',
         help='Show summary report at the end'
     )
+    parser.add_argument(
+        '--baseline',
+        metavar='PATH',
+        help=(
+            'File listing migration basenames whose non-compliance is already '
+            'accepted (SOP-DB-009 VI). Listed files may fail without failing '
+            'the run; a listed file that now passes fails the run so the '
+            'baseline can only shrink.'
+        )
+    )
+    parser.add_argument(
+        '--base-branch-baseline',
+        metavar='PATH',
+        help=(
+            'A copy of the baseline taken from the base branch. Any entry in '
+            '--baseline that is absent here is a new suppression and fails the '
+            'run. Without this, the baseline is read from the same checkout it '
+            'is meant to constrain, so a branch could silence its own failing '
+            'migration by appending one line.'
+        )
+    )
+
+    parser.add_argument(
+        '--changed-files',
+        metavar='PATH',
+        help=(
+            'File listing paths changed relative to the base branch, one per '
+            'line. A baselined migration that appears here loses its exemption: '
+            'the baseline accepts the debt a file already carried, not whatever '
+            'is added to it later. Editing a merged migration is forbidden '
+            'anyway (SOP-DB-009), so this costs a compliant branch nothing.'
+        )
+    )
 
     args = parser.parse_args()
+
+    baseline = load_baseline(Path(args.baseline)) if args.baseline else set()
+
+    changed = set()
+    if args.changed_files:
+        changed_path = Path(args.changed_files)
+        if not changed_path.exists():
+            print(f"❌ Changed-files list not found: {changed_path}")
+            sys.exit(2)
+        changed = {
+            Path(line.strip()).name
+            for line in changed_path.read_text(encoding='utf-8').splitlines()
+            if line.strip()
+        }
+
+    # The baseline only shrinks (SOP-DB-009 VI). Stale entries are caught below,
+    # after linting; additions have to be caught here, before a new entry gets a
+    # chance to suppress the error it was added to hide.
+    if args.base_branch_baseline:
+        on_base_branch = load_baseline(Path(args.base_branch_baseline))
+        additions = sorted(baseline - on_base_branch)
+        if additions:
+            print(f"\n{'='*70}")
+            print(f"❌ {len(additions)} entry/entries were added to the baseline:")
+            for filename in additions:
+                print(f"   + {filename}")
+            print(
+                "\n   The baseline records pre-gate debt and only shrinks. A new\n"
+                "   migration must satisfy the linter, not be excused by it.\n"
+            )
+            sys.exit(1)
+
+    # The baseline accepts the debt a file already carried. A branch that edits a
+    # baselined migration is adding debt under cover of an entry it did not earn,
+    # so that file is linted as if unlisted. The declared baseline is kept intact
+    # so additions and stale entries are still judged against what the file says.
+    exempt = baseline - changed
 
     # Determine which files to lint
     if args.files:
@@ -262,6 +345,8 @@ For more information, see:
     total_warnings = 0
     files_with_errors = []
     files_with_warnings = []
+    baselined_failures = []
+    stale_baseline = []
 
     for migration_file in migrations:
         if not migration_file.exists():
@@ -271,11 +356,22 @@ For more information, see:
         errors, warnings = lint_migration(migration_file, args.verbose)
 
         if errors:
+            if migration_file.name in exempt:
+                baselined_failures.append(migration_file.name)
+                if args.verbose:
+                    print(f"\n🔒 {migration_file.name} (accepted by baseline)")
+                continue
             files_with_errors.append(migration_file.name)
             print(f"\n❌ {migration_file.name}")
+            if migration_file.name in baseline:
+                print("      (baselined, but this branch modified it, so the "
+                      "exemption does not apply)")
             for error in errors:
                 print_issue(error, "ERROR:")
                 total_errors += 1
+
+        elif migration_file.name in baseline:
+            stale_baseline.append(migration_file.name)
 
         elif warnings:
             files_with_warnings.append(migration_file.name)
@@ -292,6 +388,8 @@ For more information, see:
     print(f"   Files with warnings: {len(files_with_warnings)}")
     print(f"   Total errors: {total_errors}")
     print(f"   Total warnings: {total_warnings}")
+    if baseline:
+        print(f"   Accepted by baseline: {len(baselined_failures)}")
 
     # Print report if requested
     if args.report or total_errors > 0:
@@ -313,6 +411,16 @@ For more information, see:
                 print(f"      - {filename}")
             if len(files_with_warnings) > 10:
                 print(f"      ... and {len(files_with_warnings) - 10} more")
+
+    # A baselined file that now passes must leave the baseline, or the accepted
+    # set stops describing reality and quietly re-opens room for regressions.
+    if stale_baseline:
+        print(f"\n{'='*70}")
+        print(f"❌ {len(stale_baseline)} baseline entries now pass and must be removed:")
+        for filename in stale_baseline:
+            print(f"      - {filename}")
+        print("\n   The baseline only shrinks. Delete these lines from it.")
+        sys.exit(1)
 
     # Exit with appropriate code
     if total_errors > 0:

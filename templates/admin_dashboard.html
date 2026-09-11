@@ -2,14 +2,35 @@
 
 {% block page_title %}Teacher Dashboard{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("The state of the class you currently have open — what is waiting on you, what just happened, and who is here. Every number on this page is scoped to that one class.") }}
+
+{% call help.topic('dash-pending', 'pending_actions', 'Pending Actions') %}
+<p class="mb-0"><strong>This is the only part that needs you.</strong> Redemptions, insurance claims, and hall passes sit there until a person decides. Nothing in that queue times out on its own.</p>
+{% endcall %}
+
+{% call help.topic('dash-numbers', 'query_stats', 'Reading the numbers') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Total Economy Value is the sum of student balances,</strong> not money you have budgeted. It grows every payroll and shrinks with rent and purchases — a rising number is normal, not a warning.</li>
+    <li class="mb-0"><strong>Recent Transactions is a window, not the ledger.</strong> For anything you need to explain or reverse, open the student's record or the full transaction list.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('dash-banners', 'campaign', 'Banners and class scope') %}
+<p><strong>Banners at the top are one-time prompts.</strong> The recovery-setup warning matters most: without it, losing your passkey means losing the account.</p>
+<p class="mb-0 text-muted">Teaching more than one class? These figures change entirely when you switch classes. Check the class shown in the sidebar before reading anything here as a total.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <!-- Personalized Greeting -->
 <div class="mb-4 text-center">
     <p class="h2 fw-bold text-primary mb-1 dashboard-greeting" id="dashboard-greeting">
         <span class="fw-light">Hi,</span> {{ admin_layout_view.teacher_display_name or 'Teacher' }} <a
             href="{{ url_for('admin.customizations') }}" class="text-decoration-none" data-bs-toggle="tooltip"
-            data-bs-placement="top" data-bs-title="Click here to change your display name">
-            <span class="material-symbols-outlined align-top fs-6 dashboard-greeting-info">info</span>
+            data-bs-placement="top" data-bs-title="Click here to change your display name"
+            aria-label="Change your display name">
+            <span class="material-symbols-outlined align-top fs-6 dashboard-greeting-info" aria-hidden="true">info</span>
         </a>
     </p>
 
@@ -19,7 +40,7 @@
 
 {% if show_recovery_setup %}
 <div class="alert alert-warning border-0 shadow-sm mb-4 d-flex align-items-center" role="alert">
-    <span class="material-symbols-outlined me-3 fs-3">warning</span>
+    <span class="material-symbols-outlined me-3 fs-3" aria-hidden="true">warning</span>
     <div>
         <h2 class="alert-heading fw-bold h5 mb-1">Action Required: Setup Account Recovery</h2>
         <p class="mb-0">Your account recovery details are missing or outdated. Please update your security setup to
@@ -31,7 +52,7 @@
 {% endif %}
 {% if show_insurance_tier_prompt %}
 <div class="alert alert-info border-0 shadow-sm mb-4 d-flex align-items-center" role="alert">
-    <span class="material-symbols-outlined me-3 fs-3">shield</span>
+    <span class="material-symbols-outlined me-3 fs-3" aria-hidden="true">shield</span>
     <div class="me-3">
         <h2 class="alert-heading fw-bold h5 mb-1">Update insurance to the new tiered design</h2>
         <p class="mb-0">Your existing policies use the legacy setup. Group them into tiers so students see the modern
@@ -52,7 +73,7 @@
             <div class="card-body p-4">
                 <div class="d-flex align-items-center mb-3">
                     <div class="icon-circle bg-primary-subtle text-primary me-3">
-                        <span class="material-symbols-outlined">group</span>
+                        <span class="material-symbols-outlined" aria-hidden="true">group</span>
                     </div>
                     <span class="text-white text-opacity-75 fw-medium">Active Students</span>
                 </div>
@@ -66,7 +87,7 @@
             <div class="card-body p-4">
                 <div class="d-flex align-items-center mb-3">
                     <div class="icon-circle bg-success-subtle text-success me-3">
-                        <span class="material-symbols-outlined">savings</span>
+                        <span class="material-symbols-outlined" aria-hidden="true">savings</span>
                     </div>
                     <span class="fw-medium" style="color: #5f5f5c;">Total Economy Value</span>
                     <span class="text-secondary ms-2" data-bs-toggle="tooltip" data-bs-placement="top"
@@ -84,7 +105,7 @@
             <div class="card-body p-4">
                 <div class="d-flex align-items-center mb-3">
                     <div class="icon-circle bg-warning-subtle text-warning me-3">
-                        <span class="material-symbols-outlined">pending_actions</span>
+                        <span class="material-symbols-outlined" aria-hidden="true">pending_actions</span>
                     </div>
                     <span class="fw-medium" style="color: #5f5f5c;">Pending Tasks</span>
                 </div>
@@ -111,7 +132,7 @@
             <div class="card-body p-4">
                 <div class="d-flex align-items-center mb-3">
                     <div class="icon-circle bg-info-subtle text-info me-3">
-                        <span class="material-symbols-outlined">calendar_clock</span>
+                        <span class="material-symbols-outlined" aria-hidden="true">calendar_clock</span>
                     </div>
                     <span class="fw-medium" style="color: #5f5f5c;">Next Payroll</span>
                 </div>
@@ -136,44 +157,44 @@
     <div class="row g-3">
         <div class="col-6 col-md-3">
             <a href="{{ url_for('admin.attendance_log') }}"
-                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
-                <span class="material-symbols-outlined fs-3 text-primary">fact_check</span>
-                <span class="fw-medium">Attendance</span>
+                class="quick-action">
+                <span class="material-symbols-outlined fs-3 text-primary" aria-hidden="true">fact_check</span>
+                <span class="quick-action-label">Attendance</span>
             </a>
         </div>
         <div class="col-6 col-md-3">
             <a href="{{ url_for('admin.payroll') }}"
-                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
-                <span class="material-symbols-outlined fs-3 text-success">payments</span>
-                <span class="fw-medium">Run Payroll</span>
+                class="quick-action">
+                <span class="material-symbols-outlined fs-3 text-success" aria-hidden="true">payments</span>
+                <span class="quick-action-label">Run Payroll</span>
             </a>
         </div>
         <div class="col-6 col-md-3">
             <a href="{{ url_for('admin.store_management') }}"
-                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
-                <span class="material-symbols-outlined fs-3 text-warning">storefront</span>
-                <span class="fw-medium">Store</span>
+                class="quick-action">
+                <span class="material-symbols-outlined fs-3 text-warning" aria-hidden="true">storefront</span>
+                <span class="quick-action-label">Store</span>
             </a>
         </div>
         <div class="col-6 col-md-3">
             <a href="{{ url_for('admin.students') }}"
-                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
-                <span class="material-symbols-outlined fs-3 text-info">group_add</span>
-                <span class="fw-medium">Manage Students</span>
+                class="quick-action">
+                <span class="material-symbols-outlined fs-3 text-info" aria-hidden="true">group_add</span>
+                <span class="quick-action-label">Manage Students</span>
             </a>
         </div>
         <div class="col-6 col-md-3">
             <a href="{{ url_for('admin.insurance_management') }}"
-                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
-                <span class="material-symbols-outlined fs-3 text-success">shield</span>
-                <span class="fw-medium">Insurance</span>
+                class="quick-action">
+                <span class="material-symbols-outlined fs-3 text-success" aria-hidden="true">shield</span>
+                <span class="quick-action-label">Insurance</span>
             </a>
         </div>
         <div class="col-6 col-md-3">
             <a href="{{ url_for('admin.hall_pass') }}"
-                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
-                <span class="material-symbols-outlined fs-3 text-info">door_open</span>
-                <span class="fw-medium">Hall Passes</span>
+                class="quick-action">
+                <span class="material-symbols-outlined fs-3 text-info" aria-hidden="true">door_open</span>
+                <span class="quick-action-label">Hall Passes</span>
             </a>
         </div>
     </div>
@@ -185,7 +206,7 @@
     <div class="card border-0 shadow-sm">
         <div class="card-header bg-transparent border-0 pt-4 px-4 pb-0">
             <h2 class="h5 fw-bold mb-0">
-                <span class="material-symbols-outlined align-middle me-2">notifications_active</span>
+                <span class="material-symbols-outlined align-middle me-2" aria-hidden="true">notifications_active</span>
                 Pending Actions ({{ total_pending_actions }})
             </h2>
         </div>
@@ -196,7 +217,7 @@
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="redemptions-tab" data-bs-toggle="tab"
                         data-bs-target="#redemptions" type="button" role="tab" aria-controls="redemptions" aria-selected="true">
-                        <span class="material-symbols-outlined me-1">redeem</span>Redemptions <span
+                        <span class="material-symbols-outlined me-1" aria-hidden="true">redeem</span>Redemptions <span
                             class="badge bg-danger ms-1">{{
                             pending_redemptions_count }}</span>
                     </button>
@@ -207,7 +228,7 @@
                     <button class="nav-link {% if pending_redemptions_count == 0 %}active{% endif %}"
                         id="hall-passes-tab" data-bs-toggle="tab" data-bs-target="#hall-passes" type="button"
                         role="tab" aria-controls="hall-passes" aria-selected="{% if pending_redemptions_count == 0 %}true{% else %}false{% endif %}">
-                        <span class="material-symbols-outlined me-1">door_front</span>Hall Passes <span
+                        <span class="material-symbols-outlined me-1" aria-hidden="true">door_front</span>Hall Passes <span
                             class="badge bg-danger ms-1">{{
                             pending_hall_passes_count }}</span>
                     </button>
@@ -218,7 +239,7 @@
                     <button
                         class="nav-link {% if pending_redemptions_count == 0 and pending_hall_passes_count == 0 %}active{% endif %}"
                         id="claims-tab" data-bs-toggle="tab" data-bs-target="#claims" type="button" role="tab" aria-controls="claims" aria-selected="{% if pending_redemptions_count == 0 and pending_hall_passes_count == 0 %}true{% else %}false{% endif %}">
-                        <span class="material-symbols-outlined me-1">verified_user</span>Claims <span
+                        <span class="material-symbols-outlined me-1" aria-hidden="true">verified_user</span>Claims <span
                             class="badge bg-danger ms-1">{{
                             pending_insurance_claims_count }}</span>
                     </button>
@@ -248,11 +269,11 @@
                                 <button type="button" class="btn btn-sm btn-outline-danger reject-redemption-btn"
                                     data-entitlement-id="{{ req.id }}" data-bs-toggle="tooltip"
                                     title="Refund and remove" aria-label="Refund and remove">
-                                    <span class="material-symbols-outlined">cancel</span>
+                                    <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
                                 </button>
                                 <button type="button" class="btn btn-sm btn-success approve-redemption-btn"
                                     data-entitlement-id="{{ req.id }}">
-                                    <span class="material-symbols-outlined me-1">check_circle</span>Approve
+                                    <span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Approve
                                 </button>
                             </div>
                         </div>
@@ -279,7 +300,7 @@
                                 <strong>{{ seat_profiles.get(pass.seat_id).first_name ~ ' ' ~ seat_profiles.get(pass.seat_id).last_name if
                                     seat_profiles.get(pass.seat_id) else 'Unknown' }}</strong>
                                 <br>
-                                <small class="text-muted"><span class="material-symbols-outlined me-1">signpost</span>{{
+                                <small class="text-muted"><span class="material-symbols-outlined me-1" aria-hidden="true">signpost</span>{{
                                     pass.reason }}</small>
                                 <br>
                                 <small class="text-muted">
@@ -288,7 +309,7 @@
                             </div>
                             <div>
                                 <a href="{{ url_for('admin.hall_pass') }}" class="btn btn-sm btn-primary">
-                                    <span class="material-symbols-outlined">open_in_new</span> View
+                                    <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span> View
                                 </a>
                             </div>
                         </div>
@@ -327,7 +348,7 @@
                             </div>
                             <div>
                                 <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-sm btn-primary">
-                                    <span class="material-symbols-outlined">open_in_new</span> View
+                                    <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span> View
                                 </a>
                             </div>
                         </div>
@@ -398,7 +419,7 @@
                 </div>
                 {% else %}
                 <div class="text-center py-5">
-                    <span class="material-symbols-outlined">unknown_document</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">unknown_document</span>
                     <p style="color: #5f5f5c;">No recent activity found.</p>
                 </div>
                 {% endif %}
@@ -420,10 +441,10 @@
                         <div class="me-3">
                             {% if log.status == 'active' %}
                             <span class="badge bg-success-subtle text-success rounded-pill p-2"><span
-                                    class="material-symbols-outlined fs-6 align-bottom">login</span></span>
+                                    class="material-symbols-outlined fs-6 align-bottom" aria-hidden="true">login</span></span>
                             {% else %}
                             <span class="badge bg-secondary-subtle text-secondary rounded-pill p-2"><span
-                                    class="material-symbols-outlined fs-6 align-bottom">logout</span></span>
+                                    class="material-symbols-outlined fs-6 align-bottom" aria-hidden="true">logout</span></span>
                             {% endif %}
                         </div>
                         <div class="flex-grow-1">
@@ -525,7 +546,7 @@
                     if (redemptionsPane) {
                         redemptionsPane.innerHTML = `
                             <div class="text-center text-muted py-4">
-                                <span class="material-symbols-outlined" style="font-size: 2rem;">check_circle</span>
+                                <span class="material-symbols-outlined" style="font-size: 2rem;" aria-hidden="true">check_circle</span>
                                 <p class="mb-0 mt-2">No pending redemptions</p>
                             </div>
                         `;
@@ -594,7 +615,7 @@
 
             // Disable button and show loading state
             button.disabled = true;
-            button.innerHTML = '<span class="material-symbols-outlined">hourglass_top</span> Processing...';
+            button.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">hourglass_top</span> Processing...';
 
             fetch('/api/approve-redemption', {
                 method: 'POST',
@@ -619,14 +640,14 @@
                     } else {
                         showToast('Approval failed: ' + data.message, 'danger');
                         button.disabled = false;
-                        button.innerHTML = '<span class="material-symbols-outlined me-1">check_circle</span>Approve';
+                        button.innerHTML = '<span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Approve';
                     }
                 })
                 .catch(error => {
                     console.error('Approval error:', error);
                     showToast('An unexpected error occurred.', 'danger');
                     button.disabled = false;
-                    button.innerHTML = '<span class="material-symbols-outlined me-1">check_circle</span>Approve';
+                    button.innerHTML = '<span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Approve';
                 });
         });
     });

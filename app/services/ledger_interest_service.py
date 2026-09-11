@@ -13,24 +13,49 @@ from app.utils.canonical_temporal_resolver import (
 )
 
 
+def resolve_savings_policy(class_id):
+    """The savings terms the Economic Engine actually configured for a class.
+
+    Projections must read this rather than re-deriving it: SPEC-ECON-001 §10
+    requires a forecast to use the same rules as execution, and §11 prohibits a
+    hidden default APY. ``annual_rate`` is therefore ``None`` — not a stand-in
+    figure — when the engine has set no rate, so a caller cannot accidentally
+    advertise or pay interest a teacher never configured.
+    """
+    engine = get_current_economic_engine(class_id)
+    return SimpleNamespace(
+        engine=engine,
+        annual_rate=(
+            Decimal(str(engine.interest_rate))
+            if engine and engine.interest_rate is not None
+            else None
+        ),
+        calculation_type=(
+            engine.interest_calculation_type if engine and engine.interest_calculation_type else "simple"
+        ),
+        compound_frequency=(
+            engine.compound_frequency if engine and engine.compound_frequency else "never"
+        ),
+        payout_frequency=(
+            engine.interest_payout_frequency if engine and engine.interest_payout_frequency else "monthly"
+        ),
+    )
+
+
 def apply_monthly_savings_interest(seat, *, annual_rate=None):
     """Post one class-scoped monthly savings-interest effect when eligible."""
     if not seat:
         return None
 
-    engine = get_current_economic_engine(seat.class_id)
+    policy = resolve_savings_policy(seat.class_id)
     if annual_rate is None:
-        annual_rate = (
-            Decimal(str(engine.interest_rate))
-            if engine and engine.interest_rate is not None
-            else None
-        )
+        annual_rate = policy.annual_rate
     if annual_rate is None or annual_rate <= Decimal("0"):
         return None
 
-    calculation_type = engine.interest_calculation_type if engine and engine.interest_calculation_type else "simple"
-    compound_frequency = engine.compound_frequency if engine and engine.compound_frequency else "never"
-    payout_frequency = engine.interest_payout_frequency if engine and engine.interest_payout_frequency else "monthly"
+    calculation_type = policy.calculation_type
+    compound_frequency = policy.compound_frequency
+    payout_frequency = policy.payout_frequency
 
     ctx = SimpleNamespace(class_id=seat.class_id)
     now_eval = canonical_temporal_resolver(

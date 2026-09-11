@@ -1,0 +1,47 @@
+{#
+  Shared markup for the timed destruction gate.
+
+  Two surfaces mount this: the global account-deletion page and the
+  class-scoped class-deletion page. The gate collects proof of intent
+  (countdown, typed phrase, continuous hold) and nothing else — it never
+  carries a deletion target. Every target is resolved server-side from the
+  canonical context.
+#}
+{% macro timed_delete_gate() %}
+<div id="delete-gate-feedback" class="visually-hidden" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1"></div>
+
+<div class="modal fade" id="timedDeleteGateModal" tabindex="-1" aria-labelledby="timedDeleteGateModalLabel"
+     aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger-subtle text-danger-emphasis">
+                <h5 class="modal-title" id="timedDeleteGateModalLabel">Confirm Deletion</h5>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2" id="timed-delete-gate-warning"></p>
+                <ul id="timed-delete-gate-bullets"></ul>
+                <div class="mb-3">
+                    <div class="small fw-semibold" id="timed-delete-countdown-text">ARE YOU SURE YOU WANT TO COMPLETE THIS ACTION? 30s remaining</div>
+                    <div class="progress mt-2" role="progressbar" aria-label="Delete countdown" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                        <div id="timed-delete-countdown-bar" class="progress-bar bg-danger" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <label for="timed-delete-phrase" class="form-label mb-1">Enter the confirmation phrase shown below:</label>
+                <input type="text" class="form-control mb-2" id="timed-delete-phrase" autocomplete="off">
+                <div class="small text-muted mb-3" id="timed-delete-phrase-hint"></div>
+
+                <button type="button" class="btn btn-danger w-100" id="timed-delete-hold-btn" disabled>
+                    Click and Hold this Button to Confirm
+                </button>
+                <div class="small text-muted mt-2" id="timed-delete-hold-status">
+                    The delete button will be enabled after you enter the correct confirmation phrase.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}

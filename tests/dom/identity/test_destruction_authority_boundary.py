@@ -300,6 +300,76 @@ def test_class_delete_gate_fails_closed(client, app, overrides):
     assert ClassEconomy.query.filter_by(class_id=class_id).first() is not None
 
 
+def _nav_group(body: str, container_id: str) -> str:
+    """Return the markup of a nav accordion group, by its container id."""
+    start = body.index(f'id="{container_id}"')
+    depth = 0
+    cursor = body.index(">", start) + 1
+    group_start = cursor
+    while cursor < len(body):
+        if body.startswith("<div", cursor):
+            depth += 1
+        elif body.startswith("</div>", cursor):
+            if depth == 0:
+                return body[group_start:cursor]
+            depth -= 1
+        cursor += 1
+    raise AssertionError(f"unterminated nav group {container_id}")
+
+
+def test_class_deletion_is_absent_from_the_global_account_surface(client, app):
+    """Account deletion acts on the user principal; it must offer no class target."""
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+
+    body = client.get("/admin/account-delete").get_data(as_text=True)
+
+    assert "class-delete-form" not in body
+    assert "/admin/join-code/delete" not in body
+    assert _class_phrase(classroom.class_id) not in body.upper()
+
+
+def test_class_deletion_lives_on_its_own_class_scoped_surface(client, app):
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+
+    response = client.get("/admin/class-delete")
+    assert response.status_code == 200
+
+    body = response.get_data(as_text=True)
+    assert 'id="class-delete-form"' in body
+    assert _class_phrase(classroom.class_id) in body.upper()
+    # The account phrase is not a target this page may offer.
+    assert "account-delete-form" not in body
+
+
+def test_class_delete_surface_requires_an_active_class(client, app):
+    """Without canonical class context there is no target, so nothing renders."""
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    with FEATContext("FEAT-IDEN-001", idempotency_key="destruction-boundary:clear-active-class"):
+        teacher = db.session.get(User, classroom.teacher_user.id)
+        teacher.last_active_class_id = None
+        teacher.last_active_seat_id = None
+        db.session.flush()
+
+    response = client.get("/admin/class-delete", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert "/admin/class-delete" not in response.headers["Location"]
+
+
+def test_nav_places_each_deletion_under_its_own_scope(client, app):
+    """Class Tools is class-scoped; Settings is the global principal surface."""
+    initialize_as_teacher("chemistry_p1", client, app)
+
+    body = client.get("/admin/account-delete").get_data(as_text=True)
+    class_tools = _nav_group(body, "admin-class-tools-links")
+    settings = _nav_group(body, "admin-settings-links")
+
+    assert "/admin/class-delete" in class_tools
+    assert "/admin/class-delete" not in settings
+    assert "/admin/account-delete" in settings
+    assert "/admin/account-delete" not in class_tools
+
+
 def test_class_delete_clears_the_destroyed_canonical_pointer(client, app):
     """INV-ARC-012 §V: the destroyed class must not survive as a pointer."""
     classroom = initialize_as_teacher("chemistry_p1", client, app)

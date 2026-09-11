@@ -10,7 +10,7 @@
     <div class="col-md-6">
       <div class="card">
         <div class="card-header">
-          <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">filter_alt</span> Filter Errors</h5>
+          <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;" aria-hidden="true">filter_alt</span> Filter Errors</h5>
         </div>
         <div class="card-body">
           <form method="GET" action="{{ url_for('sysadmin.error_logs') }}" class="mb-0">
@@ -37,7 +37,7 @@
     <div class="card-header">
       <div class="d-flex justify-content-between align-items-center">
         <h5 class="mb-0">
-          <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">error</span>
+          <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;" aria-hidden="true">error</span>
           {% if current_error_type %}
             {{ current_error_type }} Errors
           {% else %}
@@ -108,7 +108,7 @@
                     <div class="modal-content">
                       <div class="modal-header bg-danger text-white">
                         <h5 class="modal-title" id="errorModalLabel{{ log.id }}">
-                          <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">error</span>
+                          <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;" aria-hidden="true">error</span>
                           Error #{{ log.id }} - {{ log.error_type }}
                         </h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -203,7 +203,7 @@
 
       {% else %}
         <div class="p-5 text-center text-muted">
-          <span class="material-symbols-outlined d-block" style="font-size: 64px; opacity: 0.3;">check_circle</span>
+          <span class="material-symbols-outlined d-block" style="font-size: 64px; opacity: 0.3;" aria-hidden="true">check_circle</span>
           <h4>No errors logged yet</h4>
           <p>This is good news! No errors have been captured by the error logging system.</p>
           <p class="small">You can test the error pages using the buttons on the Logs & Testing page.</p>
@@ -215,7 +215,7 @@
   <div class="row mt-4">
     <div class="col-12 text-center">
       <a href="{{ url_for('sysadmin.combined_logs') }}" class="btn btn-outline-secondary">
-        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;">arrow_back</span>
+        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;" aria-hidden="true">arrow_back</span>
         Back to Logs
       </a>
     </div>

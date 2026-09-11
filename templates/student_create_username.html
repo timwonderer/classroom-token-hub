@@ -174,7 +174,7 @@
             {% if messages %}
             {% for message in messages %}
             <div class="alert alert-danger border-0 shadow-sm d-flex align-items-center mb-4" role="alert">
-                <span class="material-symbols-outlined fs-5 me-2">error</span>
+                <span class="material-symbols-outlined fs-5 me-2" aria-hidden="true">error</span>
                 <div>{{ message }}</div>
             </div>
             {% endfor %}
@@ -183,7 +183,7 @@
 
             <div class="alert alert-info border-0 shadow-sm mb-4" role="alert">
                 <div class="d-flex">
-                    <span class="material-symbols-outlined fs-5 me-2">info</span>
+                    <span class="material-symbols-outlined fs-5 me-2" aria-hidden="true">info</span>
                     <div>
                         <strong>Theme:</strong> {{ theme_prompt }}<br>
                         <small>Please enter one word that fits the prompt above. It should have no spaces and be 3-12 letters long. We will combine it with two random words to create your unique username.</small>
@@ -193,7 +193,7 @@
 
             <div class="alert alert-warning border-0 shadow-sm mb-4" role="alert">
                 <div class="d-flex">
-                    <span class="material-symbols-outlined fs-5 me-2">warning</span>
+                    <span class="material-symbols-outlined fs-5 me-2" aria-hidden="true">warning</span>
                     <div>
                         <small><strong>Important:</strong> Your username will be generated and shown only once on the next page. You must write it down or save it before continuing, as it cannot be retrieved later.</small>
                     </div>
@@ -228,9 +228,9 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    </main>
-{% set contextual_help_path = 'user-guides/features/student/account/login-setup' %}
+    {% set contextual_help_path = 'user-guides/features/student/account/login-setup' %}
 {% include 'components/contextual_help_link.html' %}
+</main>
 </body>
 
 </html>

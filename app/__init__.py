@@ -9,9 +9,7 @@ import os
 import logging
 import urllib.parse
 import uuid
-import pytz
 import sqlalchemy as sa
-from datetime import datetime, date, timezone
 from logging.handlers import RotatingFileHandler
 
 from flask import Flask, request, render_template, session, g, url_for, has_request_context
@@ -76,41 +74,6 @@ def nl2br_filter(s):
         return ''
     # Replace \n with <br> and return as safe HTML
     return Markup(str(s).replace('\n', '<br>\n'))
-
-
-def format_datetime(value, fmt='%Y-%m-%d %I:%M %p'):
-    """
-    Convert a UTC datetime to the user's timezone (from session) and format it.
-    Defaults to Pacific Time if no timezone is set in the session.
-    Handles both datetime and date objects.
-    """
-    if not value:
-        return ''
-
-    # Get user's timezone from session, default to Los Angeles
-    tz_name = session.get('timezone', 'America/Los_Angeles')
-    try:
-        target_tz = pytz.timezone(tz_name)
-    except pytz.UnknownTimeZoneError:
-        # Use current_app.logger if available, otherwise print warning
-        try:
-            from flask import current_app
-            current_app.logger.warning(f"Invalid timezone '{tz_name}' in session, defaulting to LA.")
-        except RuntimeError:
-            print(f"WARNING: Invalid timezone '{tz_name}' in session, defaulting to LA.")
-        target_tz = pytz.timezone('America/Los_Angeles')
-
-    utc = pytz.utc
-
-    # Convert date objects to datetime objects at midnight
-    if isinstance(value, date) and not isinstance(value, datetime):
-        value = datetime.combine(value, datetime.min.time())
-
-    # Localize naive datetimes as UTC before converting
-    dt = value if getattr(value, 'tzinfo', None) else utc.localize(value)
-
-    local_dt = dt.astimezone(target_tz)
-    return local_dt.strftime(fmt)
 
 
 # -------------------- APPLICATION FACTORY --------------------
@@ -494,7 +457,6 @@ def create_app():
     # -------------------- JINJA2 FILTERS AND GLOBALS --------------------
     app.jinja_env.filters['url_encode'] = url_encode_filter
     app.jinja_env.filters['urlencode'] = url_encode_filter
-    app.jinja_env.filters['format_datetime'] = format_datetime
     app.jinja_env.filters['markdown'] = render_markdown
     app.jinja_env.filters['nl2br'] = nl2br_filter
 
@@ -1126,7 +1088,6 @@ app = create_app()
 # Re-export commonly used objects for convenience.
 from app.extensions import db  # noqa: E402
 from app.models import AttendanceSession, Transaction  # noqa: E402
-from app.routes.student import apply_savings_interest  # noqa: E402
 
 __all__ = [
     "app",
@@ -1134,5 +1095,4 @@ __all__ = [
     "db",
     "AttendanceSession",
     "Transaction",
-    "apply_savings_interest",
 ]

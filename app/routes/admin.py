@@ -85,7 +85,7 @@ from app.utils.join_code import generate_join_code, get_display_join_code
 from app.utils.economy_balance import EconomyBalanceChecker
 from app.utils.economy_policy import (
     POLICY_MODES,
-    convert_weekly_amount_to_frequency,
+    frequency_label,
     get_active_policy_mode_for_class,
     get_class_feature_settings_for_class,
     get_class_feature_settings,
@@ -127,7 +127,12 @@ from app.feats.class_configuration import (
     InsuranceContractViolation,
 )
 # TODO (Phase 4): insurance_claim_feat deleted; use FEAT-STOR-003 instead
-from app.feats.insurance_claim_feat import resolve_insurance_claim
+from app.feats.insurance_claim_feat import (
+    InsuranceClaimPolicyError,
+    describe_claim_contract,
+    resolve_insurance_claim,
+)
+from app.services import insurance_claim_service
 # TODO (Phase 4): store_entitlement_service deleted
 # from app.services.store_entitlement_service import get_insurance_claim, get_last_entitlement_end_for_policy_version, derive_display_status
 from app.services.classroom_setup import (
@@ -139,6 +144,7 @@ from app.services.classroom_setup import (
 )
 from app.services.payroll_settings_service import upsert_payroll_settings
 from app.services import store_service
+from app.services.entitlement_read_service import derive_display_status
 from app.services.store import collective_goals
 from app.services.store_service import (
     publish_product,
@@ -2122,17 +2128,6 @@ def _format_money(value):
     return f"${Decimal(str(value)):.2f}"
 
 
-def _format_frequency_label(frequency, custom_frequency_value=None, custom_frequency_unit=None):
-    frequency = (frequency or '').lower()
-    if frequency == 'custom':
-        unit = (custom_frequency_unit or 'days').lower()
-        count = custom_frequency_value or 1
-        return f"every {count} {unit}"
-    if frequency:
-        return frequency
-    return "configured cadence"
-
-
 def _warning_to_alignment(level_value):
     if level_value == 'critical':
         return 'significantly_off'
@@ -2288,22 +2283,30 @@ def _extract_pending_rebalance_effective_at(policy_summary: dict) -> datetime | 
 
 def _build_rebalance_preview(canonical_context, class_id, checker, cwi, rent_settings, insurance_policies):
     preview_items = []
-    recommendations = get_price_recommendation_context(checker.policy_mode, cwi) or {}
 
     if rent_settings:
-        recommended_amount = convert_weekly_amount_to_frequency(
-            Decimal(str(recommendations['rent_weekly']['recommended'])),
+        custom_frequency_unit = getattr(rent_settings, 'custom_frequency_unit', None)
+        # The same band the rent page quotes and the balance warning judges
+        # against. Scaling the already-rounded weekly figure here proposed a
+        # rebalance target a cent off the one the page recommends (INV-ARC-022).
+        recommended_amount = checker.rent_band(
+            cwi,
+            rent_settings.frequency_type,
+            rent_settings.custom_frequency_value,
+            custom_frequency_unit,
+        )['recommended']
+        cadence = frequency_label(
             rent_settings.frequency_type,
             custom_frequency_value=rent_settings.custom_frequency_value,
-            custom_frequency_unit=getattr(rent_settings, 'custom_frequency_unit', None),
+            custom_frequency_unit=custom_frequency_unit,
         )
         current_amount = Decimal(str(rent_settings.rent_amount or 0))
         if current_amount != recommended_amount:
             preview_items.append({
                 'key': 'rent',
                 'label': 'Rent',
-                'current': f"{_format_money(current_amount)} / {_format_frequency_label(rent_settings.frequency_type, rent_settings.custom_frequency_value, getattr(rent_settings, 'custom_frequency_unit', None))}",
-                'recommended': f"{_format_money(recommended_amount)} / {_format_frequency_label(rent_settings.frequency_type, rent_settings.custom_frequency_value, getattr(rent_settings, 'custom_frequency_unit', None))}",
+                'current': f"{_format_money(current_amount)} {cadence}",
+                'recommended': f"{_format_money(recommended_amount)} {cadence}",
                 'apply_by_default': True,
                 'change': {
                     'type': 'rent',
@@ -2338,14 +2341,9 @@ def _load_economy_rebalance_context(canonical_context, class_id):
     return payroll_settings, rent_settings, insurance_policies
 
 
-def _apply_rebalance_plan(canonical_context, settings_row, change_plan, activation_mode):
-    """Apply rebalance plan for a class (wrapper for economy_rebalance function).
-
-    Refactored in Phase 2 to extract class_id from settings_row instead of passing
-    the FeatureSettings object directly (FeatureSettings table dropped).
-    """
+def _apply_rebalance_plan(canonical_context, class_id, change_plan, activation_mode):
+    """Apply rebalance plan for a class (wrapper for economy_rebalance function)."""
     user_id = canonical_context.user_id
-    class_id = getattr(settings_row, "class_id", None)
     applied_labels = apply_rebalance_changes(user_id, class_id, change_plan, activation_mode)
     current_app.logger.info(
         "Applied economy rebalance for teacher=%s class_id=%s activation=%s changes=%s",
@@ -4327,7 +4325,14 @@ def edit_student():
 @admin_required
 def delete_student():
     """Remove a student from this teacher and delete fully if no links remain."""
-    current_app.logger.info(f"Delete student route accessed. Method: {request.method}, Form data: {dict(request.form)}")
+    # Log which fields arrived, never their values: this form carries the CSRF
+    # token, and a whole-form dump puts a session-bound secret in an unencrypted
+    # log (.claude/rules/security.md, "NEVER commit secrets ... ALWAYS use CSRF").
+    current_app.logger.info(
+        "Delete student route accessed. method=%s form_keys=%s",
+        request.method,
+        sorted(request.form.keys()),
+    )
 
     # If GET request, show error and redirect (for debugging)
     if request.method == 'GET':
@@ -4366,9 +4371,13 @@ def delete_student():
         else:
             flash(f"Removed {student_name} from this class. Student still exists in other linked classes.", "success")
 
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        current_app.logger.error(f"Error deleting student {student_name}")
+        # Never log the identity profile name here. It is decrypted PII and
+        # application logs are unencrypted and routinely shipped off-host
+        # (INV-ARC-005; .claude/rules/security.md "Sensitive Data Exposure").
+        # The seat id locates the record without exposing the student.
+        current_app.logger.exception("Error deleting student seat_id=%s", seat_id)
         flash("Cannot delete student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
@@ -6366,82 +6375,6 @@ def delete_insurance_policy(policy_uuid):
     return redirect(url_for('admin.insurance_management'))
 
 
-@admin_required
-def view_student_policy(enrollment_id):
-    """View student's policy enrollment details and claims history."""
-    class_id = g.canonical_context.class_id
-    student = SimpleNamespace(full_name="", public_id="")
-    claims = list_insurance_claims(class_id=class_id)
-    placeholder_policy = SimpleNamespace(
-        id=enrollment_id,
-        title="Insurance",
-        description="",
-        premium=Decimal("0.00"),
-        charge_frequency="monthly",
-        waiting_period_days=0,
-        autopay=False,
-        auto_cancel_nonpay_days=0,
-        claim_type="TRANSACTION",
-        no_repurchase_after_cancel=False,
-        repurchase_wait_days=0,
-    )
-    enrollment = SimpleNamespace(
-        id=enrollment_id,
-        contract_title="Insurance",
-        contract_description="",
-        policy=placeholder_policy,
-        status="active",
-        purchase_date=utc_now(),
-        coverage_start_date=None,
-        payment_current=True,
-        days_unpaid=0,
-        next_payment_due=None,
-        contract_claim_time_limit_days=0,
-        contract_max_claim_amount=None,
-        contract_max_claims_count=None,
-        contract_max_claims_period="period",
-    )
-    def _claim_display_row(claim):
-        raw_incident = (claim.claimed_dates or [None])[0] if getattr(claim, "claimed_dates", None) else None
-        if isinstance(raw_incident, str):
-            try:
-                incident_dt = datetime.fromisoformat(raw_incident)
-            except ValueError:
-                incident_dt = claim.submitted_at
-        elif raw_incident is not None:
-            incident_dt = raw_incident
-        else:
-            incident_dt = claim.submitted_at
-        return SimpleNamespace(
-            id=claim.id,
-            claim_id=claim.claim_id,
-            policy=SimpleNamespace(title=getattr(getattr(claim.entitlement, "store_item", None), "name", "Insurance")),
-            status=getattr(claim.status, "value", claim.status),
-            approved_amount=getattr(claim, "approved_amount", None),
-            claim_amount=getattr(claim, "claim_amount", None),
-            rejection_reason=getattr(claim, "rejection_reason", None),
-            description=getattr(claim, "description", ""),
-            teacher_notes=getattr(claim, "teacher_notes", None),
-            incident_date=incident_dt,
-            filed_date=claim.submitted_at,
-        )
-    if claims:
-        first_claim = claims[0]
-        entitlement_item = getattr(getattr(first_claim, "entitlement", None), "store_item", None)
-        if entitlement_item is not None:
-            placeholder_policy.title = getattr(entitlement_item, "name", placeholder_policy.title)
-            placeholder_policy.description = getattr(entitlement_item, "description", placeholder_policy.description)
-    return render_template(
-        'admin_view_student_policy.html',
-        current_page='insurance',
-        student=student,
-        enrollment=enrollment,
-        policy=placeholder_policy,
-        claims=[_claim_display_row(claim) for claim in claims],
-        seat=SimpleNamespace(public_id=""),
-    )
-
-
 @admin_bp.route('/insurance/claim/<claim_id>', methods=['GET', 'POST'])
 @admin_required
 def process_claim(claim_id):
@@ -6452,15 +6385,18 @@ def process_claim(claim_id):
     form = AdminClaimProcessForm()
     if request.method == 'GET':
         form.status.data = getattr(claim.status, "value", claim.status)
-    claims = list_insurance_claims(class_id=g.canonical_context.class_id)
     claim_basis = claim.claim_basis or {}
-    policy_uuid = claim_basis.get('policy_uuid')
-    policy = (
-        InsurancePolicy.query.filter_by(
-            class_id=claim.class_id,
-            policy_uuid=policy_uuid,
-        ).first()
-        if policy_uuid else None
+    try:
+        contract = describe_claim_contract(claim, canonical_context=g.canonical_context)
+    except InsuranceClaimPolicyError:
+        # Fail visibly: an unresolvable policy lineage means there are no terms to
+        # review, and inventing them is how a teacher approves a payout blind.
+        abort(404)
+    policy = contract.policy
+    claims = insurance_claim_service.list_claims_for_entitlement(
+        class_id=claim.class_id,
+        entitlement_id=claim.entitlement_id,
+        target_seat_id=claim.target_seat_id,
     )
     student_profile = IdentityProfile.query.filter_by(seat_id=claim.target_seat_id).first()
     incident_dates = claim_basis.get('claimed_dates') or []
@@ -6475,23 +6411,6 @@ def process_claim(claim_id):
             parsed_incident_dates.append(raw_date)
     if not parsed_incident_dates:
         parsed_incident_dates = [claim.submitted_at]
-    placeholder_policy = SimpleNamespace(
-        title=policy.title if policy and policy.title else "Insurance",
-        description=policy.description if policy and policy.description else "",
-        premium=Decimal("0.00"),
-        charge_frequency="monthly",
-        waiting_period_days=0,
-        autopay=False,
-        auto_cancel_nonpay_days=0,
-        claim_type=claim_basis.get('claim_type', 'TRANSACTION'),
-        no_repurchase_after_cancel=False,
-        repurchase_wait_days=0,
-    )
-    enrollment = SimpleNamespace(
-        coverage_start_date=None,
-        payment_current=True,
-        days_unpaid=0,
-    )
     claim_view = SimpleNamespace(
         id=claim.claim_id,
         claim_id=claim.claim_id,
@@ -6543,24 +6462,25 @@ def process_claim(claim_id):
         'admin_process_claim.html',
         current_page='insurance',
         claim=claim_view,
-        claim_type='TRANSACTION',
-        contract_title=placeholder_policy.title,
-        contract_description=placeholder_policy.description,
-        contract_claim_time_limit_days=0,
-        contract_max_claim_amount=None,
-        remaining_period_cap=None,
-        contract_max_claims_count=None,
-        contract_max_claims_period='period',
-        contract_max_payout_per_period=None,
-        validation_errors=[],
+        claim_type=policy.insurance_type,
+        contract_title=policy.title,
+        contract_description=policy.description or '',
+        contract_reimbursement_percentage=policy.reimbursement_percentage,
+        contract_claim_window_days=contract.claim_window_days,
+        contract_waiting_period_days=policy.waiting_period_days or 0,
+        coverage_start=contract.coverage_start_utc,
+        coverage_effective_date=contract.coverage_effective_date,
+        contract_allowance_unit=contract.allowance_unit,
+        contract_period_allowance=contract.period_allowance,
+        contract_period_consumed=contract.period_consumed,
+        contract_max_payout_per_period=contract.maximum_policy_payout,
+        remaining_period_cap=contract.remaining_period_cap,
         claims_stats=SimpleNamespace(
             pending=sum(1 for c in claims if getattr(c.status, "value", c.status) == "SUBMITTED"),
             approved=sum(1 for c in claims if getattr(c.status, "value", c.status) == "APPROVED"),
             rejected=sum(1 for c in claims if getattr(c.status, "value", c.status) == "REJECTED"),
-            paid=0,
         ),
-        enrollment=enrollment,
-        policy=placeholder_policy,
+        policy=policy,
         form=form,
     )
 
@@ -6850,13 +6770,10 @@ def apply_economy_rebalance():
         abort(404)
     activation_mode = (request.form.get('activation_mode') or REBALANCE_ACTIVATION_NEXT_RENEWAL).strip().lower()
     selected_keys = set(request.form.getlist('selected_changes'))
-    settings_row = get_feature_settings_row_for_class(
-        selected_scope['class_id'],
-        create=True,
-    )
-    if not settings_row:
-        flash("Class scope not found for the selected period.", "warning")
-        return redirect(url_for('admin.economic_engine', review_rebalance=1))
+    # No FeatureSettings row is read here. Fetching one with create=True flushed a
+    # new row outside a FEAT context, so this route raised for any class that did
+    # not already have one — and both branches below only ever needed the class_id
+    # that `selected_scope` has already been authority-checked for.
     allowed_activation_modes = {
         REBALANCE_ACTIVATION_IMMEDIATE,
         REBALANCE_ACTIVATION_NEXT_RENEWAL,
@@ -6933,7 +6850,7 @@ def apply_economy_rebalance():
         if activation_mode == REBALANCE_ACTIVATION_IMMEDIATE:
             applied_labels = _apply_rebalance_plan(
                 g.canonical_context,
-                settings_row,
+                selected_scope['class_id'],
                 change_plan,
                 activation_mode=REBALANCE_ACTIVATION_IMMEDIATE,
             )
@@ -6946,7 +6863,7 @@ def apply_economy_rebalance():
             )
             queued_transition_count = queue_scheduled_policy_transitions(
                 g.canonical_context.user_id,
-                settings_row,
+                selected_scope['class_id'],
                 scheduled_changes,
                 activation_mode=activation_mode,
             )
@@ -9081,15 +8998,6 @@ def account_delete():
     # Presentation only (INV-CORE-000 §III.4): lawful Identity display read.
     confirmation_phrase = _account_delete_confirmation_phrase(g.canonical_context)
 
-    # Presentation only: lawful Class display read for the active class, used to
-    # render the class-destruction surface. The class deleted by
-    # ``admin.delete_join_code`` is resolved server-side from the canonical
-    # context, never from anything rendered here.
-    active_class_id = (getattr(g.canonical_context, "class_id", None) or "").strip() or None
-    active_class_row = (
-        verify_teacher_owns_class(active_class_id, user_id) if active_class_id else None
-    )
-
     if request.method == 'POST':
         request_type = request.form.get('request_type')  # account only
 
@@ -9143,13 +9051,36 @@ def account_delete():
         'admin_account_delete.html',
         current_page="account_delete",
         confirmation_phrase=confirmation_phrase,
-        class_confirmation_phrase=(
-            _class_delete_confirmation_phrase(active_class_row) if active_class_row else None
-        ),
-        class_display_label=(
-            _class_display_label(active_class_row) if active_class_row else None
-        ),
-        class_join_code=get_display_join_code(active_class_id) if active_class_row else None,
+    )
+
+
+@admin_bp.route('/class-delete', methods=['GET'])
+@admin_required
+def class_delete():
+    """Class-scoped destruction surface for the active class.
+
+    Deleting a class is an operation on one tenant, so it belongs with the
+    other active-class tools rather than beside account deletion, which acts
+    on the global user principal. The destruction itself is still performed by
+    ``admin.delete_join_code``, which resolves its target from the canonical
+    context alone — nothing rendered here selects what gets destroyed.
+    """
+    user_id = g.canonical_context.user_id
+    active_class_id = (getattr(g.canonical_context, "class_id", None) or "").strip() or None
+    active_class_row = (
+        verify_teacher_owns_class(active_class_id, user_id) if active_class_id else None
+    )
+    if not active_class_row:
+        flash('Select a class before deleting one.', 'error')
+        return redirect(url_for('admin.dashboard'))
+
+    # Presentation only (INV-CORE-000 §III.4): lawful Class display reads.
+    return render_template(
+        'admin_class_delete.html',
+        current_page="class_delete",
+        class_confirmation_phrase=_class_delete_confirmation_phrase(active_class_row),
+        class_display_label=_class_display_label(active_class_row),
+        class_join_code=get_display_join_code(active_class_id),
     )
 
 
@@ -10241,6 +10172,13 @@ def api_economy_validate(feature):
             'is_valid': len([w for w in warnings if w.get('level') == 'critical']) == 0,
             'warnings': warnings,
             'recommendations': recommendations,
+            # The cadence wording the band is quoted in, so the page prints the
+            # server's phrasing of the server's band rather than its own.
+            'period_label': frequency_label(
+                validation_kwargs['frequency_type'],
+                custom_frequency_value=validation_kwargs['custom_frequency_value'],
+                custom_frequency_unit=validation_kwargs['custom_frequency_unit'],
+            ) if feature == 'rent' else None,
             'cwi': cwi,
             'ratio': ratio if feature != 'insurance' else None,
             'cwi_breakdown': {

@@ -56,6 +56,61 @@
   </div>
 {% endmacro %}
 
+{#
+  Contextual help panel structure.
+
+  Every teacher help panel has the same shape, and these macros are what make
+  that true rather than hoped-for:
+
+      {% block contextual_help_body %}
+      {{ help.panel_lead("One sentence on what this page is for.") }}
+      {% call help.topic('rent-enable', 'toggle_on', 'Enable or disable rent') %}
+        <p>...</p>
+      {% endcall %}
+      {% endblock %}
+
+  The lead is always visible because a teacher who opened the panel deserves an
+  answer before they click anything. Everything else is a collapsed topic, so a
+  long page does not arrive as a wall of text the reader has to scroll past to
+  find the one thing they came for.
+#}
+
+{% macro panel_lead(text) %}
+  <p class="help-panel-lead mb-3">{{ text }}</p>
+{% endmacro %}
+
+{% macro topic(slug, icon, title, parent="helpTopics") %}
+  {#
+    One collapsed topic inside the panel accordion.
+
+    Args:
+      slug:   unique within the page; used to build the element ids
+      icon:   Material Symbols name
+      title:  the question this topic answers
+      parent: accordion container id, so opening one topic closes the others
+  #}
+  <div class="accordion-item help-topic">
+    <h3 class="accordion-header" id="help-h-{{ slug }}">
+      {# Colour comes from .help-topic in the stylesheet, which reads
+         var(--primary) — advisor green for teachers, steward blue under
+         body.student-shell. Do not add a bg-* utility here; it would pin one
+         role's colour onto both shells. #}
+      <button class="accordion-button collapsed" type="button"
+              data-bs-toggle="collapse" data-bs-target="#help-c-{{ slug }}"
+              aria-expanded="false" aria-controls="help-c-{{ slug }}">
+        <span class="material-symbols-outlined me-2" aria-hidden="true">{{ icon }}</span>
+        <strong>{{ title }}</strong>
+      </button>
+    </h3>
+    <div id="help-c-{{ slug }}" class="accordion-collapse collapse"
+         aria-labelledby="help-h-{{ slug }}" data-bs-parent="#{{ parent }}">
+      <div class="accordion-body">
+        {{ caller() }}
+      </div>
+    </div>
+  </div>
+{% endmacro %}
+
 {% macro help_section(title, doc_path, description=None) %}
   {#
     Render a help section banner for a page.
@@ -66,14 +121,14 @@
       description: Optional description
   #}
   <div class="help-section alert alert-info d-flex align-items-start mb-3">
-    <span class="material-symbols-outlined me-2" style="font-size: 1.5rem;">info</span>
+    <span class="material-symbols-outlined me-2" style="font-size: 1.5rem;" aria-hidden="true">info</span>
     <div class="flex-grow-1">
       <h6 class="mb-1">{{ title }}</h6>
       {% if description %}
         <p class="mb-2 small">{{ description }}</p>
       {% endif %}
       <a href="{{ doc_url(doc_path) }}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
-        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1rem;">menu_book</span>
+        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1rem;" aria-hidden="true">menu_book</span>
         View Guide <span class="visually-hidden">(opens in a new tab)</span>
       </a>
     </div>
@@ -92,11 +147,11 @@
   #}
   <div class="card border-primary">
     <div class="card-body text-center">
-      <span class="material-symbols-outlined mb-3" style="font-size: 3rem; color: var(--primary);">{{ icon }}</span>
+      <span class="material-symbols-outlined mb-3" style="font-size: 3rem; color: var(--primary);" aria-hidden="true">{{ icon }}</span>
       <h5 class="card-title">{{ title }}</h5>
       <p class="card-text text-muted">{{ description }}</p>
       <a href="{{ doc_url(doc_path) }}" class="btn btn-primary" target="_blank" rel="noopener">
-        <span class="material-symbols-outlined" style="vertical-align: middle;">menu_book</span>
+        <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">menu_book</span>
         Learn How <span class="visually-hidden">(opens in a new tab)</span>
       </a>
     </div>

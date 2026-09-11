@@ -93,7 +93,7 @@ from app.services.ledger_balance_query_service import (
     get_available_balances,
     get_posted_balance,
 )
-from app.services.ledger_interest_service import apply_monthly_savings_interest as post_monthly_savings_interest
+from app.services.ledger_interest_service import resolve_savings_policy
 from app.services.economic_engine import (
     savings_interest_for_payout_period,
     project_savings_balances,
@@ -118,7 +118,7 @@ from app.services.recovery_service import (
 from app.services.classroom_setup import create_student_user_for_seat
 from app.feats.base import requires_feat_context, FEATContext
 from app.feats.rent_payment_feat import execute_rent_payment, execute_rent_bill_payment
-from app.feats.transfer_feat import execute_account_transfer
+from app.feats.transfer_feat import InsufficientFunds, execute_account_transfer
 from app.feats.store_purchase_feat import execute_store_purchase
 from app.feats.insurance_claim_feat import submit_insurance_claim
 from app.payroll import get_pay_rate_for_class
@@ -880,8 +880,18 @@ def dashboard():
     savings_transactions = [tx for tx in transactions if tx.account_type == 'savings']
 
     checking_balance, savings_balance = get_available_balances(scope.seat_id, scope.class_id)
-    # Calculate forecast interest using Decimal
-    forecast_interest = _quantize_currency(savings_balance * Decimal('0.045') / Decimal('12'))
+    # The projection runs the payout engine over the posted balance, on the
+    # class's configured terms. A hardcoded APY here is prohibited outright
+    # (SPEC-ECON-001 §10, §11), and accrual is posted-only (§9.2).
+    savings_policy = resolve_savings_policy(scope.class_id)
+    posted_savings_balance = get_posted_balance(scope.seat_id, scope.class_id, 'savings')
+    forecast_interest = savings_interest_for_payout_period(
+        posted_balance=posted_savings_balance,
+        annual_rate=savings_policy.annual_rate,
+        calculation_type=savings_policy.calculation_type,
+        compound_frequency=savings_policy.compound_frequency,
+        payout_frequency=savings_policy.payout_frequency,
+    )
 
     attendance_state = get_class_attendance_status(student, class_id=scope.class_id, ctx=scope)
     if 'projected_pay' in attendance_state and attendance_state['projected_pay'] is not None:
@@ -1144,6 +1154,9 @@ def dashboard():
         recent_transactions=transactions[:5],  # Most recent 5 transactions
         now=local_now,
         forecast_interest=float(forecast_interest),
+        posted_savings_balance=float(posted_savings_balance),
+        savings_annual_rate=savings_policy.annual_rate,
+        savings_payout_frequency=savings_policy.payout_frequency,
         recent_deposit=recent_deposit,
         active_insurance=active_insurance,
         rent_status=rent_status,
@@ -1377,6 +1390,24 @@ def transfer():
                 current_app.logger.info(
                     f"Transfer {amount} from {from_account} to {to_account} for seat {seat_id}"
                 )
+            except InsufficientFunds as e:
+                # The checks above ran before the seat row was locked, so a
+                # concurrent transfer can have spent the balance in between. The
+                # FEAT re-checks under the lock and this is that verdict.
+                #
+                # The wording is composed here from the exception's structured
+                # `from_account`, never from `str(e)`. Rendering an exception's
+                # own text into a response is the shape of a stack-trace leak
+                # even when the current message happens to be a safe constant:
+                # it makes every future edit to that exception a change to what
+                # students see. This keeps the two identical in wording to the
+                # pre-lock branches above and independent of the raise site.
+                db.session.rollback()
+                message = f"Insufficient {e.from_account} funds."
+                if is_json:
+                    return jsonify(status="error", message=message), 400
+                flash(message, "transfer_error")
+                return redirect(url_for("student.transfer"))
             except SQLAlchemyError as e:
                 db.session.rollback()
                 current_app.logger.error(
@@ -1400,14 +1431,15 @@ def transfer():
     checking_transactions = [t for t in transactions if t.account_type == 'checking']
     savings_transactions = [t for t in transactions if t.account_type == 'savings']
 
-    # Economic Engine is the sole authority for savings policy (SPEC-ECON-001).
-    # No hardcoded APY default: if the engine has not configured a rate, savings
-    # earns nothing and we must NOT advertise a fabricated rate (§11).
-    settings = get_current_economic_engine(context.class_id)
-    annual_rate = settings.interest_rate if settings and settings.interest_rate is not None else None
-    calculation_type = settings.interest_calculation_type if settings and settings.interest_calculation_type else 'simple'
-    compound_frequency = settings.compound_frequency if settings and settings.compound_frequency else 'never'
-    payout_frequency = settings.interest_payout_frequency if settings and settings.interest_payout_frequency else 'monthly'
+    # Economic Engine is the sole authority for savings policy (SPEC-ECON-001),
+    # read through the same resolver the payout command uses so a projection
+    # cannot drift from execution (§10).
+    policy = resolve_savings_policy(context.class_id)
+    settings = policy.engine
+    annual_rate = policy.annual_rate
+    calculation_type = policy.calculation_type
+    compound_frequency = policy.compound_frequency
+    payout_frequency = policy.payout_frequency
     monthly_interest_rate = (annual_rate / Decimal('12')) if annual_rate is not None else Decimal('0')
 
     # Balances shown to the student: available for spend/transfer display.
@@ -1461,18 +1493,6 @@ def transfer():
                          projection_months=projection_months,
                          projection_balances=projection_balances,
                          transfer_token=transfer_token)
-
-
-def apply_savings_interest(student, annual_rate=Decimal('0.045')):
-    """Compatibility command wrapper that forwards savings-interest writes into the ledger service."""
-    context = resolve_canonical_context()
-    if not context:
-        return None
-    seat = get_current_seat()
-    if not seat:
-        return None
-    interest_tx = post_monthly_savings_interest(seat, annual_rate=annual_rate)
-    return interest_tx
 
 
 # -------------------- INSURANCE --------------------

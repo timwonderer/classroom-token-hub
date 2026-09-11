@@ -3,12 +3,51 @@
 {% set current_page = "rent" %}
 {% block title %}Rent Management{% endblock %}
 {% block page_icon %}home{% endblock %}
-{% block contextual_help_trigger %}
-<button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
-  data-bs-target="#rentGuide" aria-controls="rentGuide">
-  <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
-</button>
+{% block contextual_help_body %}
+{{ help.panel_lead("Set rent rules, review payment status, and manage waivers for the current class.") }}
+
+{% call help.topic('rent-enable', 'toggle_on', 'Enable / Disable Rent') %}
+<p>Rent is enabled from <strong>Feature Settings</strong>. This page manages the rent rules after rent is enabled.</p>
+<div class="alert alert-warning mb-0">
+  <strong>To turn rent off:</strong> go to Feature Settings and disable the Rent feature. Students will immediately stop seeing rent or rent notifications.
+</div>
+{% endcall %}
+
+{% call help.topic('rent-settings', 'tune', 'Settings Breakdown') %}
+<ul class="mb-0">
+  <li><strong>Active class context:</strong> configure rent independently for the currently selected class
+    period (e.g., enable for Period 1, disable for Period 2).</li>
+  <li><strong>Rent amount:</strong> the base charge students owe each rent period.</li>
+  <li><strong>Frequency:</strong> daily, weekly, monthly, or custom intervals; controls how often rent
+    posts.</li>
+  <li><strong>First due date / due day:</strong> sets the first billing date or the day of month rent is
+    due.</li>
+  <li><strong>Grace period:</strong> days after the due date before late penalties apply.</li>
+  <li><strong>Late penalty:</strong> amount charged when rent is late; can apply once or recur.</li>
+  <li><strong>Recurring penalty frequency:</strong> how often the late fee repeats (when recurring is
+    enabled).</li>
+  <li><strong>Bill preview:</strong> shows upcoming rent to students a set number of days early.</li>
+  <li><strong>Incremental payments:</strong> allows partial payments instead of a single full payment.</li>
+  <li><strong>Block purchases when late:</strong> prevents store purchases if rent is overdue.</li>
+</ul>
+<div class="alert alert-info mt-3 mb-0">
+  <strong>Side effects:</strong> Changing frequency or due dates can shift when students are billed next.
+</div>
+{% endcall %}
+
+{% call help.topic('rent-overview', 'insights', 'Review Overview') %}
+<p class="mb-0">Check paid vs. unpaid totals to understand how rent is impacting the class.</p>
+{% endcall %}
+
+{% call help.topic('rent-waivers', 'event_busy', 'Manage Waivers') %}
+<p class="mb-0">Add waivers for special cases or missed periods in the Waivers tab.</p>
+{% endcall %}
+
+{% call help.topic('rent-balance', 'balance', 'Balance Against CWI') %}
+<p class="mb-0">Use Economy Health to check whether rent aligns to student earnings.</p>
+{% endcall %}
 {% endblock %}
+
 
 {% block extra_styles %}
 <style>
@@ -29,115 +68,6 @@
 
 {% block content %}
 
-<div class="offcanvas offcanvas-end" tabindex="-1" id="rentGuide" aria-labelledby="rentGuideLabel">
-  <div class="offcanvas-header">
-    <h2 class="offcanvas-title h5" id="rentGuideLabel">How to: Rent Management</h2>
-    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-  </div>
-<div class="offcanvas-body">
-  {{ help.offcanvas_resource_links(help_doc_path, 'user-guides/diagnostics/teacher/rent-insurance') }}
-    <p>Set rent rules, review payment status, and manage waivers for the current class.</p>
-    <div class="accordion mt-4 mb-4" id="rentGuideAccordion">
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="rentGuideHeadingEnable">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#rentGuideEnable" aria-expanded="false" aria-controls="rentGuideEnable">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">toggle_on</span>
-            <strong>Enable / Disable Rent</strong>
-          </button>
-        </h2>
-        <div id="rentGuideEnable" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingEnable"
-          data-bs-parent="#rentGuideAccordion">
-          <div class="accordion-body">
-            <p>Rent is enabled from <strong>Feature Settings</strong>. This page manages the rent rules after rent is enabled.</p>
-            <div class="alert alert-warning mb-0">
-              <strong>To turn rent off:</strong> go to Feature Settings and disable the Rent feature. Students will immediately stop seeing rent or rent notifications.
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="rentGuideHeadingSettings">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#rentGuideSettings" aria-expanded="false" aria-controls="rentGuideSettings">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tune</span>
-            <strong>Settings Breakdown</strong>
-          </button>
-        </h2>
-        <div id="rentGuideSettings" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingSettings"
-          data-bs-parent="#rentGuideAccordion">
-          <div class="accordion-body">
-            <ul class="mb-0">
-              <li><strong>Active class context:</strong> configure rent independently for the currently selected class
-                period (e.g., enable for Period 1, disable for Period 2).</li>
-              <li><strong>Rent amount:</strong> the base charge students owe each rent period.</li>
-              <li><strong>Frequency:</strong> daily, weekly, monthly, or custom intervals; controls how often rent
-                posts.</li>
-              <li><strong>First due date / due day:</strong> sets the first billing date or the day of month rent is
-                due.</li>
-              <li><strong>Grace period:</strong> days after the due date before late penalties apply.</li>
-              <li><strong>Late penalty:</strong> amount charged when rent is late; can apply once or recur.</li>
-              <li><strong>Recurring penalty frequency:</strong> how often the late fee repeats (when recurring is
-                enabled).</li>
-              <li><strong>Bill preview:</strong> shows upcoming rent to students a set number of days early.</li>
-              <li><strong>Incremental payments:</strong> allows partial payments instead of a single full payment.</li>
-              <li><strong>Block purchases when late:</strong> prevents store purchases if rent is overdue.</li>
-            </ul>
-            <div class="alert alert-info mt-3 mb-0">
-              <strong>Side effects:</strong> Changing frequency or due dates can shift when students are billed next.
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="rentGuideHeadingOverview">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#rentGuideOverview" aria-expanded="false" aria-controls="rentGuideOverview">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">insights</span>
-            <strong>Review Overview</strong>
-          </button>
-        </h2>
-        <div id="rentGuideOverview" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingOverview"
-          data-bs-parent="#rentGuideAccordion">
-          <div class="accordion-body">
-            <p>Check paid vs. unpaid totals to understand how rent is impacting the class.</p>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="rentGuideHeadingWaivers">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#rentGuideWaivers" aria-expanded="false" aria-controls="rentGuideWaivers">
-            <span class="material-symbols-outlined me-2"
-              style="font-size:25pt; vertical-align:middle;">event_busy</span>
-            <strong>Manage Waivers</strong>
-          </button>
-        </h2>
-        <div id="rentGuideWaivers" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingWaivers"
-          data-bs-parent="#rentGuideAccordion">
-          <div class="accordion-body">
-            <p>Add waivers for special cases or missed periods in the Waivers tab.</p>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="rentGuideHeadingBalance">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#rentGuideBalance" aria-expanded="false" aria-controls="rentGuideBalance">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">balance</span>
-            <strong>Balance Against CWI</strong>
-          </button>
-        </h2>
-        <div id="rentGuideBalance" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingBalance"
-          data-bs-parent="#rentGuideAccordion">
-          <div class="accordion-body">
-            <p>Use Economy Health to check whether rent aligns to student earnings.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 mt-0 gap-3">
     <div class="d-flex align-items-center gap-2">
       <p class="text-muted mb-0 mt-0">Configure recurring class rent to create consistent and deterministic economic pressure that encourages the habits of looking-ahead and planning ahead. Set up optional perks and rewards to help build good financial habits.</p>
@@ -151,17 +81,17 @@
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button"
       role="tab" aria-controls="overview" aria-selected="true">
-      <span class="material-symbols-outlined me-1">grid_view</span>Overview
+      <span class="material-symbols-outlined me-1" aria-hidden="true">grid_view</span>Overview
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab" aria-controls="settings" aria-selected="false">
-      <span class="material-symbols-outlined me-1">settings</span>Settings
+      <span class="material-symbols-outlined me-1" aria-hidden="true">settings</span>Settings
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="waivers-tab" data-bs-toggle="tab" data-bs-target="#waivers" type="button" role="tab" aria-controls="waivers" aria-selected="false">
-      <span class="material-symbols-outlined me-1">event_busy</span>Waivers
+      <span class="material-symbols-outlined me-1" aria-hidden="true">event_busy</span>Waivers
     </button>
   </li>
 </ul>
@@ -183,7 +113,7 @@
                 <div class="text-muted mb-2">Current on Rent</div>
                 <h2 class="text-success mb-0">{{ obligation_summary.current_student_count if obligation_summary else 0 }}</h2>
               </div>
-              <span class="material-symbols-outlined text-success" style="font-size: 3rem;">check_circle</span>
+              <span class="material-symbols-outlined text-success" style="font-size: 3rem;" aria-hidden="true">check_circle</span>
             </div>
           </div>
         </div>
@@ -196,7 +126,7 @@
                 <div class="text-muted mb-2">Behind on Rent</div>
                 <h2 class="text-danger mb-0">{{ obligation_summary.behind_student_count if obligation_summary else 0 }}</h2>
               </div>
-              <span class="material-symbols-outlined text-danger" style="font-size: 3rem;">error</span>
+              <span class="material-symbols-outlined text-danger" style="font-size: 3rem;" aria-hidden="true">error</span>
             </div>
           </div>
         </div>
@@ -206,7 +136,7 @@
     <!-- Current Settings Summary -->
     <div class="card shadow">
       <div class="card-header bg-primary text-white py-3">
-        <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;">info</span>Current Rent Configuration</h5>
+        <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">info</span>Current Rent Configuration</h5>
       </div>
       <div class="card-body">
         {# Rent is enabled by definition on this route (see comment above). #}
@@ -291,7 +221,7 @@
     {% if obligation_summary and obligation_summary.student_rows %}
     <div class="card shadow mt-4">
       <div class="card-header bg-primary text-white py-3">
-        <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;">group</span>Student Roster</h5>
+        <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">group</span>Student Roster</h5>
       </div>
       <div class="card-body">
         <!-- Compute cycle divisor based on rent frequency -->
@@ -391,7 +321,7 @@
       {% if payroll_warning %}
       <div class="card shadow-sm mb-4">
         <div class="card-header bg-warning text-dark py-3">
-          <h6 class="mb-0 fw-semibold text-dark"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;">warning</span>Payroll Configuration Warning</h6>
+          <h6 class="mb-0 fw-semibold text-dark"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">warning</span>Payroll Configuration Warning</h6>
         </div>
         <div class="card-body">
           {{ payroll_warning }}
@@ -403,7 +333,7 @@
 
         <div class="card shadow mb-4">
           <div class="card-header bg-primary text-white py-3">
-            <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;">tune</span>Rent Settings</h5>
+            <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">tune</span>Rent Settings</h5>
           </div>
           <div class="card-body">
             {# CWI helper lives at the top of the card so the recommendation
@@ -417,7 +347,7 @@
             <h2 class="accordion-header" id="headingAmount">
               <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAmount"
                 aria-expanded="true" aria-controls="collapseAmount">
-                <span class="material-symbols-outlined me-2">attach_money</span><strong>Rent Amount & Frequency</strong>
+                <span class="material-symbols-outlined me-2" aria-hidden="true">attach_money</span><strong>Rent Amount & Frequency</strong>
                 <span class="badge bg-info ms-2 d-none" id="customFrequencyBadge">Custom</span>
               </button>
             </h2>
@@ -491,7 +421,7 @@
             <h2 class="accordion-header" id="headingDueDate">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                 data-bs-target="#collapseDueDate" aria-expanded="false" aria-controls="collapseDueDate">
-                <span class="material-symbols-outlined me-2">event</span><strong>Due Date Settings</strong>
+                <span class="material-symbols-outlined me-2" aria-hidden="true">event</span><strong>Due Date Settings</strong>
                 <span class="badge bg-success ms-2 d-none" id="dueDateBadge">Active</span>
               </button>
             </h2>
@@ -524,7 +454,7 @@
             <h2 class="accordion-header" id="headingPenalties">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                 data-bs-target="#collapsePenalties" aria-expanded="false" aria-controls="collapsePenalties">
-                <span class="material-symbols-outlined me-2">warning</span><strong>Grace Period & Late Penalties</strong>
+                <span class="material-symbols-outlined me-2" aria-hidden="true">warning</span><strong>Grace Period & Late Penalties</strong>
                 <span class="badge bg-warning text-dark ms-2 d-none" id="penaltiesBadge">Active</span>
               </button>
             </h2>
@@ -577,7 +507,7 @@
             <h2 class="accordion-header" id="headingOptions">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                 data-bs-target="#collapseOptions" aria-expanded="false" aria-controls="collapseOptions">
-                <span class="material-symbols-outlined me-2">payments</span><strong>Student Payment Options</strong>
+                <span class="material-symbols-outlined me-2" aria-hidden="true">payments</span><strong>Student Payment Options</strong>
                 <span class="badge bg-primary ms-2 d-none" id="paymentOptionsBadge">Active</span>
               </button>
             </h2>
@@ -655,7 +585,7 @@
             <h2 class="accordion-header" id="headingItemization">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                 data-bs-target="#collapseItemization" aria-expanded="false" aria-controls="collapseItemization">
-                <span class="material-symbols-outlined me-2">checklist</span><strong>Rent Benefits</strong>
+                <span class="material-symbols-outlined me-2" aria-hidden="true">checklist</span><strong>Rent Benefits</strong>
                 <span class="badge bg-info ms-2">{% if rent_items|length > 0 %}{{ rent_items|length }} items{% else %}None{% endif %}</span>
               </button>
             </h2>
@@ -663,7 +593,7 @@
               data-bs-parent="#rentSettingsAccordion">
               <div class="accordion-body">
                 <div class="alert alert-info">
-                  <span class="material-symbols-outlined me-2">info</span>
+                  <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>
                   <strong>What students receive for paying rent.</strong><br>
                   These are set in the Store: open an item and turn on
                   <em>&ldquo;Students receive this item when they pay rent&rdquo;</em>. A change there
@@ -673,7 +603,7 @@
 
                 {% if rent_items|length == 0 %}
                 <div class="text-center text-muted py-4">
-                  <span class="material-symbols-outlined fs-1">inbox</span>
+                  <span class="material-symbols-outlined fs-1" aria-hidden="true">inbox</span>
                   <p class="mb-0">Paying rent currently grants nothing beyond satisfying the charge.</p>
                 </div>
                 {% else %}
@@ -694,7 +624,7 @@
                 {% endif %}
 
                 <a href="{{ url_for('admin.store_management') }}" class="btn btn-outline-primary mt-3">
-                  <span class="material-symbols-outlined me-2">storefront</span>Manage in Store
+                  <span class="material-symbols-outlined me-2" aria-hidden="true">storefront</span>Manage in Store
                 </a>
               </div>
             </div>
@@ -704,7 +634,7 @@
           </div>
           <div class="card-footer bg-white text-end py-3">
             <button type="submit" class="btn btn-primary btn-lg">
-              <span class="material-symbols-outlined me-2">save</span>Save Settings
+              <span class="material-symbols-outlined me-2" aria-hidden="true">save</span>Save Settings
             </button>
           </div>
         </div>
@@ -730,7 +660,7 @@
       <div class="col-12 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white py-3">
-            <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;">assignment_late</span>Outstanding Rent</h5>
+            <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">assignment_late</span>Outstanding Rent</h5>
           </div>
           <div class="card-body">
             {% if not outstanding_by_student %}
@@ -832,7 +762,7 @@
                           </div>
                           <div class="text-end">
                             <button type="submit" class="btn btn-primary">
-                              <span class="material-symbols-outlined me-1" style="vertical-align: text-bottom;">check_circle</span>
+                              <span class="material-symbols-outlined me-1" style="vertical-align: text-bottom;" aria-hidden="true">check_circle</span>
                               Waive selected rent
                             </button>
                           </div>
@@ -851,7 +781,7 @@
       <div class="col-12 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white py-3">
-            <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;">history</span>Waiver History</h5>
+            <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;" aria-hidden="true">history</span>Waiver History</h5>
           </div>
           <div class="card-body">
             {% if not waiver_history %}
@@ -1008,17 +938,38 @@
         expectedWeeklyHours: {{ (expected_weekly_hours if expected_weekly_hours is defined and expected_weekly_hours is not none else 5.0) | float }},
         // The CWI helper box above already shows range + recommended
         // proactively; suppress the JS Recommendations echo so the same
-        // numbers don't appear twice (and to avoid the rounding-drift
-        // between the two calculation paths).
+        // numbers don't appear twice.
         suppressRecommendationsEcho: true,
     });
 
   // Display CWI info if payroll is configured (class-scoped via canonical context on server).
-  // Cache the analysis so frequency changes can re-render without a network round-trip.
+  // The analysis supplies the policy context; the band itself is asked for per
+  // cadence, because the cadence-scaled band is the server's to compute.
   let cachedCWIAnalysis = null;
+
+  const currentFrequency = () => {
+    const freq = (document.getElementById('frequency_type') || {}).value || 'monthly';
+    const valueEl = document.getElementById('custom_frequency_value');
+    const unitEl = document.getElementById('custom_frequency_unit');
+    const value = valueEl ? parseFloat(valueEl.value) : NaN;
+    return {
+      frequency: freq,
+      customValue: Number.isFinite(value) ? value : null,
+      customUnit: unitEl ? (unitEl.value || null) : null,
+    };
+  };
+
+  const renderCWIInfo = () => {
+    if (!cachedCWIAnalysis) return;
+    const { frequency, customValue, customUnit } = currentFrequency();
+    economyChecker.fetchRentBand(frequency, customValue, customUnit)
+      .then(band => economyChecker.displayCWIInfo(cachedCWIAnalysis, '#cwi-info', band))
+      .catch(err => console.warn('Rent band unavailable.', err));
+  };
+
   economyChecker.analyzeEconomy().then(analysis => {
     cachedCWIAnalysis = analysis;
-    economyChecker.displayCWIInfo(analysis, '#cwi-info');
+    renderCWIInfo();
   }).catch(err => {
     console.warn('CWI analysis unavailable; rent guidance will remain unavailable.', err);
     const info = document.querySelector('#cwi-info');
@@ -1037,11 +988,7 @@
   cwiFrequencyWatchers.forEach(({ id, event }) => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.addEventListener(event, function () {
-      if (cachedCWIAnalysis) {
-        economyChecker.displayCWIInfo(cachedCWIAnalysis, '#cwi-info');
-      }
-    });
+    el.addEventListener(event, renderCWIInfo);
   });
 
   // Re-validate rent when frequency changes

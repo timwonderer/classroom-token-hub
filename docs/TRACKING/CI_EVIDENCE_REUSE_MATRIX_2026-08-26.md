@@ -41,7 +41,7 @@ prove a claim that it does not evaluate.
 ## Targeted execution record
 
 All tests below used the repository venv at
-`/Users/timothychang/Documents/GitHub/classroom-economy/.venv/bin/pytest`.
+`.venv/bin/pytest`.
 No full suite was run.
 
 | Slice | Result artifact |

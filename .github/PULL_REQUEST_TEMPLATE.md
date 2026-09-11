@@ -87,8 +87,9 @@ If **Yes**, confirm:
 - [ ] Synced with `main` branch immediately before running `flask db migrate`
 - [ ] Migration file reviewed and verified correct `down_revision`
 - [ ] Tested `flask db upgrade` successfully
-- [ ] Tested `flask db downgrade` successfully
+- [ ] Tested `flask db downgrade <revision>` successfully — name the target explicitly; the bare form aborts with "Ambiguous walk" when the head is a merge point, which it is today
 - [ ] Confirmed only ONE migration head exists (pre-push hook should verify this)
+- [ ] Ran `python scripts/lint_migrations.py --baseline migrations/lint_baseline.txt` clean
 - [ ] Migration has a descriptive message/filename
 - [ ] Breaking changes or data migrations documented in PR description
 

@@ -3,106 +3,58 @@
 {% set current_page = "banking" %}
 {% block title %}Banking Management{% endblock %}
 {% block page_icon %}account_balance{% endblock %}
-{% block contextual_help_trigger %}
-<button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
-  data-bs-target="#bankingGuide" aria-controls="bankingGuide">
-  <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
-</button>
+{% block contextual_help_body %}
+{{ help.panel_lead("Check class balances, review transactions, and manage savings interest.") }}
+
+{% call help.topic('bank-overview', 'grid_view', 'Overview Stats') %}
+<p class="mb-2"><strong>What you'll see:</strong></p>
+<ul class="mb-3">
+  <li><strong>Total Checking</strong> — All money available for immediate spending</li>
+  <li><strong>Total Savings</strong> — Money set aside earning interest</li>
+  <li><strong>Total Deposits</strong> — Combined checking + savings across all students</li>
+  <li><strong>Students w/ Savings</strong> — How many students are actively saving</li>
+</ul>
+<div class="alert alert-info mb-0">
+  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">lightbulb</span>Teaching Tip:</strong> Encourage at least 30% of students
+  to use savings accounts. This teaches delayed gratification and financial planning!
+</div>
+{% endcall %}
+
+{% call help.topic('bank-transactions', 'receipt_long', 'Transactions') %}
+<p>Open <strong>Transactions</strong> to review deposits, withdrawals, transfers, and fees.</p>
+<ul class="mb-0">
+  <li>Filter by student, account type, or date to investigate a specific concern.</li>
+  <li>Common entries include payroll deposits, rent charges, store purchases, and savings transfers.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('bank-settings', 'settings', 'Savings Interest') %}
+<p>Open <strong>Settings</strong> to set the savings rate and payout frequency.</p>
+<p class="mb-0">Rate changes affect future payouts only and will not re-calculate past interest. Each save
+  creates a new economic-engine version, preserving your class's economy history.</p>
+{% endcall %}
 {% endblock %}
+
 {% block content %}
 
-<div class="offcanvas offcanvas-end" tabindex="-1" id="bankingGuide" aria-labelledby="bankingGuideLabel">
-  <div class="offcanvas-header">
-    <h5 class="offcanvas-title" id="bankingGuideLabel">How to: Banking Management</h5>
-    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-  </div>
-  <div class="offcanvas-body">
-    {{ help.offcanvas_resource_links(help_doc_path, 'user-guides/diagnostics/teacher/transactions-banking') }}
-    <p>Check class balances, review transactions, and manage savings interest.</p>
-    <div class="accordion mt-4 mb-4" id="bankingGuideAccordion">
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="bankingGuideHeadingOverview">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#bankingGuideOverview" aria-expanded="false" aria-controls="bankingGuideOverview">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">grid_view</span>
-            <strong>Overview Stats</strong>
-          </button>
-        </h2>
-        <div id="bankingGuideOverview" class="accordion-collapse collapse mt-2"
-          aria-labelledby="bankingGuideHeadingOverview" data-bs-parent="#bankingGuideAccordion">
-          <div class="accordion-body">
-            <p class="mb-2"><strong>What you'll see:</strong></p>
-            <ul class="mb-3">
-              <li><strong>Total Checking</strong> — All money available for immediate spending</li>
-              <li><strong>Total Savings</strong> — Money set aside earning interest</li>
-              <li><strong>Total Deposits</strong> — Combined checking + savings across all students</li>
-              <li><strong>Students w/ Savings</strong> — How many students are actively saving</li>
-            </ul>
-            <div class="alert alert-info mb-0">
-              <strong><span class="material-symbols-outlined me-1">lightbulb</span>Teaching Tip:</strong> Encourage at least 30% of students
-              to use savings accounts. This teaches delayed gratification and financial planning!
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="bankingGuideHeadingTransactions">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#bankingGuideTransactions" aria-expanded="false" aria-controls="bankingGuideTransactions">
-            <span class="material-symbols-outlined me-2"
-              style="font-size:25pt; vertical-align:middle;">receipt_long</span>
-            <strong>Transactions</strong>
-          </button>
-        </h2>
-        <div id="bankingGuideTransactions" class="accordion-collapse collapse mt-2"
-          aria-labelledby="bankingGuideHeadingTransactions" data-bs-parent="#bankingGuideAccordion">
-          <div class="accordion-body">
-            <p>Open <strong>Transactions</strong> to review deposits, withdrawals, transfers, and fees.</p>
-            <ul class="mb-0">
-              <li>Filter by student, account type, or date to investigate a specific concern.</li>
-              <li>Common entries include payroll deposits, rent charges, store purchases, and savings transfers.</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="bankingGuideHeadingSettings">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
-            data-bs-target="#bankingGuideSettings" aria-expanded="false" aria-controls="bankingGuideSettings">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">settings</span>
-            <strong>Savings Interest</strong>
-          </button>
-        </h2>
-        <div id="bankingGuideSettings" class="accordion-collapse collapse mt-2"
-          aria-labelledby="bankingGuideHeadingSettings" data-bs-parent="#bankingGuideAccordion">
-          <div class="accordion-body">
-            <p>Open <strong>Settings</strong> to set the savings rate and payout frequency.</p>
-            <p class="mb-0">Rate changes affect future payouts only and will not re-calculate past interest. Each save
-              creates a new economic-engine version, preserving your class's economy history.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- Nav Tabs -->
 <ul class="nav nav-tabs mb-4" id="bankingTabs" role="tablist">
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button"
       role="tab" aria-controls="overview" aria-selected="true">
-      <span class="material-symbols-outlined me-1">grid_view</span>Overview
+      <span class="material-symbols-outlined me-1" aria-hidden="true">grid_view</span>Overview
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="transactions-tab" data-bs-toggle="tab" data-bs-target="#transactions" type="button"
       role="tab" aria-controls="transactions" aria-selected="false">
-      <span class="material-symbols-outlined me-1">receipt_long</span>Transactions
+      <span class="material-symbols-outlined me-1" aria-hidden="true">receipt_long</span>Transactions
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab" aria-controls="settings" aria-selected="false">
-      <span class="material-symbols-outlined me-1">settings</span>Settings
+      <span class="material-symbols-outlined me-1" aria-hidden="true">settings</span>Settings
     </button>
   </li>
 </ul>
@@ -115,7 +67,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><span class="material-symbols-outlined me-2">trending_up</span>Banking Statistics</h5>
+            <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">trending_up</span>Banking Statistics</h5>
           </div>
           <div class="card-body">
             <div class="row text-center">
@@ -144,7 +96,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow">
           <div class="card-header bg-success text-white">
-            <h5 class="mb-0"><span class="material-symbols-outlined me-2">info</span>Current Savings Interest</h5>
+            <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>Current Savings Interest</h5>
           </div>
           <div class="card-body">
             <ul class="list-unstyled mb-0">
@@ -166,7 +118,7 @@
     <!-- Recent Activity -->
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0"><span class="material-symbols-outlined me-2">history</span>Recent Transaction Activity</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Recent Transaction Activity</h5>
       </div>
       <div class="card-body">
         {% if transactions %}
@@ -225,7 +177,7 @@
   <div class="tab-pane fade" id="transactions" role="tabpanel" aria-labelledby="transactions-tab">
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0"><span class="material-symbols-outlined me-2">receipt_long</span>All Banking Transactions</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">receipt_long</span>All Banking Transactions</h5>
       </div>
       <div class="card-body">
         <!-- Filter Controls -->
@@ -270,10 +222,10 @@
           <div class="row mt-3">
             <div class="col-12">
               <button type="submit" class="btn btn-primary btn-sm me-2">
-                <span class="material-symbols-outlined me-1">filter_alt</span>Apply Filters
+                <span class="material-symbols-outlined me-1" aria-hidden="true">filter_alt</span>Apply Filters
               </button>
               <a href="{{ url_for('admin.banking') }}" class="btn btn-outline-secondary btn-sm">
-                <span class="material-symbols-outlined me-1">cancel</span>Clear Filters
+                <span class="material-symbols-outlined me-1" aria-hidden="true">cancel</span>Clear Filters
               </a>
               <span class="ms-3 text-muted">
                 Showing {{ transactions|length }} of {{ total_transactions|default(0) }} transactions
@@ -324,7 +276,7 @@
                   {% if not tx.is_void %}
                   <button type="button" class="btn btn-sm btn-outline-danger" onclick="voidTransaction({{ tx.id }})"
                     title="Void transaction">
-                    <span class="material-symbols-outlined">cancel</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
                   </button>
                   {% else %}
                   <span class="text-muted small">Voided</span>
@@ -400,7 +352,7 @@
         <div class="col-lg-6 mb-4">
           <div class="card shadow h-100">
             <div class="card-header bg-primary text-white">
-              <h5 class="mb-0"><span class="material-symbols-outlined me-2">percent</span>Savings Interest</h5>
+              <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">percent</span>Savings Interest</h5>
             </div>
             <div class="card-body">
               <div class="mb-4">
@@ -413,7 +365,7 @@
                 <small class="text-muted">Annual yield applied to savings balances. Set 0 to disable interest.</small>
                 {% if savings_reco and savings_reco.cwi %}
                 <div class="mt-2 small text-success">
-                  <span class="material-symbols-outlined align-middle" style="font-size:1rem;">recommend</span>
+                  <span class="material-symbols-outlined align-middle" style="font-size:1rem;" aria-hidden="true">recommend</span>
                   Economic Engine ceiling: <strong>{{ "%.2f"|format(savings_reco.max_apy_percent|float) }}% APY</strong>
                   max for <em>{{ savings_reco.mode }}</em> mode at
                   <em>{{ savings_reco.compound_frequency }}</em> compounding
@@ -462,7 +414,7 @@
               </div>
 
               <div class="alert alert-info mb-0">
-                <span class="material-symbols-outlined me-1">info</span>
+                <span class="material-symbols-outlined me-1" aria-hidden="true">info</span>
                 Saving creates a new economic-engine version. Rate changes affect future payouts only.
               </div>
             </div>
@@ -472,7 +424,7 @@
         <div class="col-lg-6 mb-4">
           <div class="card shadow h-100">
             <div class="card-header bg-danger text-white">
-              <h5 class="mb-0"><span class="material-symbols-outlined me-2">account_balance_wallet</span>Overdraft</h5>
+              <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">account_balance_wallet</span>Overdraft</h5>
             </div>
             <div class="card-body">
               <div class="form-check form-switch mb-4">
@@ -496,7 +448,7 @@
                 <small class="text-muted">Charged when an account overdraws. Leave blank to charge no fee.</small>
                 {% if overdraft_reco and overdraft_reco.cwi %}
                 <div class="mt-2 small text-success">
-                  <span class="material-symbols-outlined align-middle" style="font-size:1rem;">recommend</span>
+                  <span class="material-symbols-outlined align-middle" style="font-size:1rem;" aria-hidden="true">recommend</span>
                   Economic Engine range: <strong>{{ overdraft_reco.flat_fee_lower }}–{{ overdraft_reco.flat_fee_upper }}</strong>
                   for <em>{{ overdraft_reco.mode }}</em> mode
                   ({{ "%.0f"|format(overdraft_reco.fine_rate_lower|float * 100) }}%–{{ "%.0f"|format(overdraft_reco.fine_rate_upper|float * 100) }}% of CWI).
@@ -513,14 +465,14 @@
                    §4.6.1.1). Mirrors the rent/store balance alerts. #}
                 {% for w in overdraft_fee_warnings|default([]) %}
                 <div class="mt-2 small text-danger">
-                  <span class="material-symbols-outlined align-middle" style="font-size:1rem;">warning</span>
+                  <span class="material-symbols-outlined align-middle" style="font-size:1rem;" aria-hidden="true">warning</span>
                   {{ w.message }}
                 </div>
                 {% endfor %}
               </div>
 
               <div class="alert alert-warning mb-0">
-                <span class="material-symbols-outlined me-1">warning</span>
+                <span class="material-symbols-outlined me-1" aria-hidden="true">warning</span>
                 Overdraft fees reuse the classroom fine band. A fee is only active while a value is set.
               </div>
             </div>

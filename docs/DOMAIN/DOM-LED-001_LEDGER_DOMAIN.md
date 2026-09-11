@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-LED-001 | 2.4 | 2026-09-01 | 2.3 | Constitutional |
+| DOM-LED-001 | 2.5 | 2026-09-10 | 2.4 | Constitutional |
 
 ---
 
@@ -56,7 +56,7 @@ No other domain may define fields or mutate these tables. Mutation is permitted 
 ## VII. Invariants
 
 - **INV-LED-001: Class-Bound Transaction Scope**. All financial state shall be anchored to `class_id`, `target_seat_id`, and `actor_seat_id`. Isolation is not inferred from global seat uniqueness.
-- **INV-LED-002: Immutable Facts**. Once inserted, a transaction row's protected fields are immutable. No later lifecycle patching is allowed.
+- **INV-LED-002: Immutable Facts**. Once inserted, a transaction row's protected fields are immutable. No later lifecycle patching is allowed. Immutability is a rule about mutation of a **surviving** class universe; see §VII.2 for its boundary against lawful lifecycle destruction.
 - **INV-LED-003: Append-Only Corrections**. Reversals and voids must be recorded as **new** transactions linked through `correlation_id` and type, not by mutating the original row.
 - **INV-LED-004: Reconciliation-Derived Posting**. `PENDING` and `POSTED` are reconciliation semantics, not stored transaction state.
 - **INV-LED-005: Command-Scoped Idempotency**. Ledger idempotency belongs to
@@ -112,6 +112,42 @@ The physical enforcement representation—reservation table, command record, or
 another structural mechanism—is intentionally deferred. The current
 `ledger_transaction` uniqueness constraint is transitional evidence and does
 not, by itself, define command-level idempotency.
+
+### VII.2 Immutability Scope and Lifecycle Destruction
+
+Ledger immutability applies to financial state **within a surviving class
+universe**. Ledger rows owned by an existing seat MUST NOT be rewritten or
+selectively deleted. Lawful seat deletion destroys the ledger state owned by
+that seat as part of removing that actor from the class universe. Lawful class
+destruction removes the entire class-scoped ledger universe. Cascade deletion
+performed as part of lawful lifecycle destruction is **not** a mutation of
+surviving financial history.
+
+The distinction is between mutating a universe that continues to exist and
+destroying an entity from that universe. While a seat exists, its ledger
+contribution is part of the economic truth of its `class_id`, and editing or
+removing any part of it falsifies a reconciliation that other rows still
+depend on. When the seat is destroyed, the actor and every economic effect
+attributable to that actor cease together. There is never a lawful state in
+which the seat is gone but the seat's money remains.
+
+**Enforcement consequence.** INV-LED-002 is enforced against `UPDATE`, and
+that is its correct and complete scope. A general prohibition on `DELETE` of
+`ledger_transaction` MUST NOT be installed, because it would assert the
+inverse rule — that ledger history must outlive the entity whose existence
+gives it meaning — and would abort lawful actor removal.
+
+**Implementation note.** `ledger_transaction.actor_seat_id` and
+`target_seat_id` are **provenance and participation references**, not
+economic ownership; economic ownership is carried by `seat_id`. A teacher seat
+may therefore appear as `actor_seat_id` on rows owned by student seats. This
+does not create a partial-destruction hazard, because deletion of a teacher
+seat while its class survives is not a valid runtime state: class ownership
+cascades from the teacher principal, class destruction cascades to all seats
+and their ledger rows, and the lawful seat-deletion paths accept student seats
+only. Teacher-attributed rows can therefore be reached by cascade only when
+the entire class universe is already being destroyed, at which point no
+surviving student economy exists whose reconciliation could be harmed.
 
 ## VIII. Schema Contract
 

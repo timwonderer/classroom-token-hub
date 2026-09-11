@@ -3,66 +3,35 @@
 {% set page_title = "Class Announcements" %}
 {% block title %}Class Announcements{% endblock %}
 {% block page_icon %}campaign{% endblock %}
-{% block contextual_help_trigger %}
-  <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#announcementsGuide" aria-controls="announcementsGuide">
-    <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
-  </button>
+{% block contextual_help_body %}
+{{ help.panel_lead("Post a short update for students in the current class, then control when it is visible.") }}
+
+{% call help.topic('ann-create', 'post_add', 'Create an Announcement') %}
+<p class="mb-0">Select <strong>New Announcement</strong>, choose a priority, write the message, and save it.</p>
+{% endcall %}
+
+{% call help.topic('ann-manage', 'visibility', 'Manage Visibility') %}
+<p>Use <strong>Activate</strong> or <strong>Deactivate</strong> to control visibility. Use <strong>Edit</strong> to change the message.</p>
+<div class="alert alert-info mb-0">
+    <strong>Tip:</strong> Inactive announcements are hidden from students but stay in your list.
+</div>
+{% endcall %}
 {% endblock %}
+
 
 {% block content %}
 
 <div id="announcements-feedback" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
 
-<div class="offcanvas offcanvas-end" tabindex="-1" id="announcementsGuide" aria-labelledby="announcementsGuideLabel">
-    <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="announcementsGuideLabel">How to: Class Announcements</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-    </div>
-  <div class="offcanvas-body">
-    {{ help.offcanvas_resource_links(help_doc_path, 'user-guides/diagnostics/teacher/announcements-issues') }}
-        <p>Post a short update for students in the current class, then control when it is visible.</p>
-        <div class="accordion mt-4 mb-4" id="announcementsGuideAccordion">
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="announcementsGuideHeadingCreate">
-                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#announcementsGuideCreate" aria-expanded="false" aria-controls="announcementsGuideCreate">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">post_add</span>
-                        <strong>Create an Announcement</strong>
-                    </button>
-                </h2>
-                <div id="announcementsGuideCreate" class="accordion-collapse collapse mt-2" aria-labelledby="announcementsGuideHeadingCreate" data-bs-parent="#announcementsGuideAccordion">
-                    <div class="accordion-body">
-                        <p>Select <strong>New Announcement</strong>, choose a priority, write the message, and save it.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="announcementsGuideHeadingManage">
-                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#announcementsGuideManage" aria-expanded="false" aria-controls="announcementsGuideManage">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">visibility</span>
-                        <strong>Manage Visibility</strong>
-                    </button>
-                </h2>
-                <div id="announcementsGuideManage" class="accordion-collapse collapse mt-2" aria-labelledby="announcementsGuideHeadingManage" data-bs-parent="#announcementsGuideAccordion">
-                    <div class="accordion-body">
-                        <p>Use <strong>Activate</strong> or <strong>Deactivate</strong> to control visibility. Use <strong>Edit</strong> to change the message.</p>
-                        <div class="alert alert-info mb-0">
-                            <strong>Tip:</strong> Inactive announcements are hidden from students but stay in your list.
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
 <div class="d-flex mb-4">
     <a href="{{ url_for('admin.announcement_create') }}" class="btn btn-primary">
-        <span class="material-symbols-outlined me-1">add_circle</span>New Announcement
+        <span class="material-symbols-outlined me-1" aria-hidden="true">add_circle</span>New Announcement
     </a>
 </div>
 
 <div class="alert alert-light border mb-4 d-flex align-items-center gap-2">
-    <span class="material-symbols-outlined text-primary">info</span>
+    <span class="material-symbols-outlined text-primary" aria-hidden="true">info</span>
     <span><strong>Active Class:</strong> {{ active_class_label }}</span>
 </div>
 
@@ -73,7 +42,7 @@
             <div class="card shadow {{ 'border-start border-5' if announcement.is_active else '' }} {{ 'border-danger' if announcement.priority == 'urgent' else 'border-warning' if announcement.priority == 'high' else 'border-info' if announcement.priority == 'normal' else 'border-secondary' }}">
                 <div class="card-header d-flex justify-content-between align-items-center {{ announcement.get_priority_class() }}">
                     <div>
-                        <span class="material-symbols-outlined me-2 align-middle">{{ announcement.get_priority_icon() }}</span>
+                        <span class="material-symbols-outlined me-2 align-middle" aria-hidden="true">{{ announcement.get_priority_icon() }}</span>
                         <strong>{{ announcement.title }}</strong>
                         {% if not announcement.is_active %}
                             <span class="badge bg-secondary ms-2">Inactive</span>
@@ -86,26 +55,26 @@
                         <button type="button" class="btn btn-sm btn-outline-{{ 'success' if not announcement.is_active else 'secondary' }}"
                                 onclick="toggleAnnouncement({{ announcement.id }})"
                                 id="toggle-btn-{{ announcement.id }}">
-                            <span class="material-symbols-outlined">{{ 'visibility' if not announcement.is_active else 'visibility_off' }}</span>
+                            <span class="material-symbols-outlined" aria-hidden="true">{{ 'visibility' if not announcement.is_active else 'visibility_off' }}</span>
                             {{ 'Activate' if not announcement.is_active else 'Deactivate' }}
                         </button>
                         <a href="{{ url_for('admin.announcement_edit', announcement_id=announcement.id) }}"
                            class="btn btn-sm btn-outline-primary">
-                            <span class="material-symbols-outlined">edit</span> Edit
+                            <span class="material-symbols-outlined" aria-hidden="true">edit</span> Edit
                         </a>
                         <button type="button" class="btn btn-sm btn-outline-danger"
                                 onclick="deleteAnnouncement({{ announcement.id }}, '{{ announcement.title }}')">
-                            <span class="material-symbols-outlined">delete</span> Delete
+                            <span class="material-symbols-outlined" aria-hidden="true">delete</span> Delete
                         </button>
                     </div>
                 </div>
                 <div class="card-body">
                     <p class="mb-2">{{ announcement.message|nl2br|safe }}</p>
                     <div class="text-muted small">
-                        <span class="material-symbols-outlined me-1">calendar_month</span>Created: {{ announcement.created_at.strftime('%b %d, %Y at %I:%M %p') }}
+                        <span class="material-symbols-outlined me-1" aria-hidden="true">calendar_month</span>Created: {{ announcement.created_at.strftime('%b %d, %Y at %I:%M %p') }}
                         {% if announcement.expires_at %}
                             <span class="ms-3">
-                                <span class="material-symbols-outlined me-1">schedule</span>Expires: {{ announcement.expires_at.strftime('%b %d, %Y') }}
+                                <span class="material-symbols-outlined me-1" aria-hidden="true">schedule</span>Expires: {{ announcement.expires_at.strftime('%b %d, %Y') }}
                             </span>
                         {% endif %}
                     </div>
@@ -116,7 +85,7 @@
     </div>
 {% else %}
     <div class="alert alert-info">
-        <span class="material-symbols-outlined me-2">info</span>No announcements yet. Create your first announcement to communicate with students in the active class.
+        <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>No announcements yet. Create your first announcement to communicate with students in the active class.
     </div>
 {% endif %}
 

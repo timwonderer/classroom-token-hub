@@ -1,7 +1,9 @@
 # Core Invariants of Classroom Token Hub
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|INV-CORE-000| 1.2 | 2026-03-31 | 1.0 |Foundational|
+|INV-CORE-000| 1.2 | 2026-03-31 | 1.0 |Archived - non-normative|
+
+> **Archived — history, not authority.** This document describes a superseded version of the system and is retained under `docs/archive/` as a record of what was once true. It governs nothing. Current authority lives in `docs/INVARIANT/`, `docs/DOMAIN/`, and `docs/STANDARD_OPERATING_PROCEDURES/`, in that order (`.claude/rules/documentation.md`).
 
 ## I. Purpose
 This document defines the core invariants, or underlying principles, that drives the design of this application. Any future development of this application must stay within the boundaries of these invariants. This document serves as top level authority in which all other levels of authority derives from.

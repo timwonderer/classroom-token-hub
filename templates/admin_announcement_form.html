@@ -4,6 +4,26 @@
 {% block title %}{{ action }} Announcement{% endblock %}
 {% block page_icon %}text_ad{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Announcements appear on the dashboard of every student in one class. They are the class-wide channel — anything meant for one student belongs in that student's record instead.") }}
+
+{% call help.topic('ann-class', 'groups', 'Which class this posts to') %}
+<p class="mb-0"><strong>The class is the one you have open,</strong> shown in the banner above the form. You cannot post to a different class from here; switch classes first and start a new announcement.</p>
+{% endcall %}
+
+{% call help.topic('ann-priority', 'priority_high', 'Priority is styling, not delivery') %}
+<p class="mb-0">Low, Normal, High, and Urgent change how the message looks on the dashboard. Nothing is sent, and nothing escalates. Reserve Urgent for the rare thing, or it stops meaning anything.</p>
+{% endcall %}
+
+{% call help.topic('ann-lifecycle', 'schedule', 'Expiry and taking one down') %}
+<ul class="ps-3">
+    <li class="mb-2"><strong>An expiry date is a cleanup you do not have to remember.</strong> Once it passes, the announcement hides itself. Leave it blank and the message stays up until you take it down.</li>
+    <li class="mb-0"><strong>Unchecking Active hides it without deleting it</strong> — useful for something you post every term and want back later.</li>
+</ul>
+<p class="mb-0 text-muted">Editing an existing announcement shows a live preview below the form, styled exactly as students will see it.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 
 <div class="row justify-content-center">
@@ -11,7 +31,7 @@
         <div class="card shadow">
             <div class="card-header bg-primary text-white">
                 <h4 class="mb-0">
-                    <span class="material-symbols-outlined" style="vertical-align: middle;">edit_document</span>
+                    <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">edit_document</span>
                     {{ action }} Announcement
                 </h4>
             </div>
@@ -21,14 +41,14 @@
 
                     {% if action == 'Create' %}
                     <div class="alert alert-info mb-3">
-                        <span class="material-symbols-outlined me-2">info</span>
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>
                         This announcement will post to the class currently selected in the sidebar:
                         <strong>{{ active_class_label }}</strong>.
                     </div>
                     {{ form.class_id }}
                     {% elif action == 'Edit' and teacher_block %}
                     <div class="alert alert-info mb-3">
-                        <span class="material-symbols-outlined me-2">info</span>
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>
                         <strong>Class Period:</strong> {{ teacher_block.class_label }}
                         <br><small>To post to a different class, switch class in the sidebar and create a new announcement.</small>
                     </div>
@@ -93,7 +113,7 @@
 
                     <div class="d-flex justify-content-between">
                         <a href="{{ url_for('admin.announcements') }}" class="btn btn-secondary">
-                            <span class="material-symbols-outlined me-1">cancel</span>Cancel
+                            <span class="material-symbols-outlined me-1" aria-hidden="true">cancel</span>Cancel
                         </a>
                         {{ form.submit(class="btn btn-primary") }}
                     </div>
@@ -104,11 +124,11 @@
         {% if action == 'Edit' and announcement %}
         <div class="card shadow mt-3">
             <div class="card-header bg-light">
-                <h5 class="mb-0"><span class="material-symbols-outlined me-2">info</span>Preview</h5>
+                <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>Preview</h5>
             </div>
             <div class="card-body">
                 <div class="alert {{ announcement.priority_class }} mb-0">
-                    <strong><span class="material-symbols-outlined me-2 align-middle">{{ announcement.priority_icon }}</span>{{ announcement.title }}</strong>
+                    <strong><span class="material-symbols-outlined me-2 align-middle" aria-hidden="true">{{ announcement.priority_icon }}</span>{{ announcement.title }}</strong>
                     <p class="mb-0 mt-2">{{ announcement.message }}</p>
                 </div>
             </div>

@@ -10,7 +10,7 @@
         aria-controls="gsBody" data-bs-placement="left"
         title="I can help you set up your classroom economy!">
 
-        <span class="material-symbols-outlined gs-bubble-icon">rocket_launch</span>
+        <span class="material-symbols-outlined gs-bubble-icon" aria-hidden="true">rocket_launch</span>
         <span class="gs-bubble-badge" id="gsBubbleBadge">0/9</span>
     </button>
 
@@ -20,13 +20,13 @@
         <div class="gs-panel-header">
             <div class="d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center gap-2">
-                    <span class="material-symbols-outlined">rocket_launch</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span>
                     <div class="mb-0 h6">Getting Started</div>
                 </div>
                 <div class="d-flex align-items-center gap-2">
                     <span class="gs-progress-badge" id="gsProgressBadge">0/9</span>
                     <button type="button" class="btn-close-widget" onclick="dismissGettingStarted(event)" title="Dismiss permanently" aria-label="Dismiss getting started guide permanently">
-                        <span class="material-symbols-outlined">close</span>
+                        <span class="material-symbols-outlined" aria-hidden="true">close</span>
                     </button>
                 </div>
             </div>
@@ -42,7 +42,7 @@
                 <!-- REQUIRED TASKS -->
                 <div class="gs-section-header">
 
-                    <span class="badge bg-danger" style="font-size: 0.9rem;"><span class="material-symbols-outlined">error</span>
+                    <span class="badge bg-danger" style="font-size: 0.9rem;"><span class="material-symbols-outlined" aria-hidden="true">error</span>
                         REQUIRED TASKS</span>
                     <p class="text-danger small mt-2 mb-0">These tasks are required because your classroom economy
                         system won't function properly without them.</p>
@@ -60,7 +60,7 @@
                         <div class="gs-item-actions">
                             <a href="{{ url_for('admin.students') }}" class="btn btn-sm btn-outline-primary">
                                 Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;">arrow_forward</span>
+                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -78,7 +78,7 @@
                         <div class="gs-item-actions">
                             <a href="{{ url_for('admin.payroll') }}#settings" class="btn btn-sm btn-outline-primary">
                                 Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;">arrow_forward</span>
+                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -86,7 +86,7 @@
 
                 <!-- OPTIONAL FEATURES -->
                 <div class="gs-section-header mt-3">
-                    <span class="badge bg-secondary" style="font-size: 0.9rem;"><span class="material-symbols-outlined">bookmark</span>
+                    <span class="badge bg-secondary" style="font-size: 0.9rem;"><span class="material-symbols-outlined" aria-hidden="true">bookmark</span>
                         ADDITIONAL FEATURES</span>
                     <p class="text-primary small mt-2 mb-0">These features are optional but can enhance your classroom
                         economy experience. Feel free to skip any that don't fit your needs.</p>
@@ -107,7 +107,7 @@
                             </button>
                             <a href="{{ url_for('admin.store_management') }}" class="btn btn-sm btn-outline-primary">
                                 Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;">arrow_forward</span>
+                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -128,7 +128,7 @@
                             </button>
                             <a href="{{ url_for('admin.banking') }}" class="btn btn-sm btn-outline-primary">
                                 Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;">arrow_forward</span>
+                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -149,7 +149,7 @@
                             </button>
                             <a href="{{ url_for('admin.rent_settings') }}" class="btn btn-sm btn-outline-primary">
                                 Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;">arrow_forward</span>
+                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -171,7 +171,7 @@
                             <a href="{{ url_for('admin.insurance_management') }}"
                                 class="btn btn-sm btn-outline-primary">
                                 Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;">arrow_forward</span>
+                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -192,7 +192,7 @@
                             </button>
                             <a href="{{ url_for('admin.hall_pass') }}" class="btn btn-sm btn-outline-primary">
                                 Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;">arrow_forward</span>
+                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -214,7 +214,7 @@
                             </button>
                             <a href="{{ url_for('admin.customizations') }}" class="btn btn-sm btn-outline-primary">
                                 Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;">arrow_forward</span>
+                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -235,7 +235,7 @@
                             </button>
                             <a href="{{ url_for('admin.passkey_settings') }}" class="btn btn-sm btn-outline-primary">
                                 Go <span class="material-symbols-outlined ms-1"
-                                    style="font-size: 16px;">arrow_forward</span>
+                                    style="font-size: 16px;" aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>
                     </div>
@@ -680,7 +680,7 @@
                 congrats.className = ' gs-congratulations mt-2';
                 congrats.innerHTML = `
                 <div class=" align-items-start gap-2" style="padding:10px; border-radius: 0px 0px 10px 10px;background-color: var(--primary); color: white; ">
-                    <div class="h5 fw-bold" style="color:var(--secondary)"> <span class="material-symbols-outlined">celebration</span> Great job!</div>
+                    <div class="h5 fw-bold" style="color:var(--secondary)"> <span class="material-symbols-outlined" aria-hidden="true">celebration</span> Great job!</div>
 
                         <p class="mb-0 small" style="font-weight:300">You've completed all required setup tasks.
                         You can now dismiss this widget or continue with optional features.</p>

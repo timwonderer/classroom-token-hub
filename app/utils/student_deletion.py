@@ -82,8 +82,36 @@ def _unclaim_all_seats_for_student(student_id):
     )
 
 
-def _clear_cross_transaction_refs(tx_ids):
-    """Clear references to transactions that are about to be deleted."""
+def _clear_support_transaction_refs(tx_ids):
+    """Null support-domain references to ledger rows that are about to be deleted.
+
+    ``issues.related_transaction_id`` and
+    ``issue_resolution_actions.related_transaction_id`` are real foreign keys with
+    ``ON DELETE NO ACTION``, and ``issues`` carries no class or seat scope of its own,
+    so those rows do not cascade away with the seat. Without this sweep the delete
+    aborts on a live FK reference.
+
+    **What this deliberately does not touch.** The ledger's own
+    ``original_transaction_id`` / ``reversal_transaction_id`` self-references are
+    *not* swept, for two independent reasons:
+
+    1. They are not FK-enforced (no constraint on ``ledger_transaction`` references
+       either column), so nothing about the delete requires them to be cleared.
+    2. A reversal pair can never span economic owners. Both policy writers bind the
+       link to a single ``seat_id``: ``ledger_correction_service.reverse_transaction``
+       copies ``seat_id``/``class_id``/``target_seat_id`` from the original into the
+       reversal (only ``actor_seat_id``, a provenance column, may differ), and the
+       insurance-reimbursement path in ``insurance_claim_feat`` writes
+       ``seat_id=student_seat.id`` behind
+       ``insurance_eligibility_contract``'s ``transaction.seat_id != covered_seat_id``
+       rejection. Every other writer merely forwards a caller-supplied value.
+
+    So lawful seat deletion removes *both* ends of the pair in the same cascade;
+    a surviving row pointing at a deleted row is not a reachable state. Clearing
+    these columns would therefore rewrite a surviving financial fact, which
+    DOM-LED-001 §VII.2 forbids and the ``ledger_transaction_no_rewrite`` trigger
+    rejects outright.
+    """
     if not tx_ids:
         return
 
@@ -97,18 +125,6 @@ def _clear_cross_transaction_refs(tx_ids):
         IssueResolutionAction.related_transaction_id.in_(tx_ids)
     ).update(
         {IssueResolutionAction.related_transaction_id: None},
-        synchronize_session=False,
-    )
-    Transaction.query.filter(
-        Transaction.original_transaction_id.in_(tx_ids)
-    ).update(
-        {Transaction.original_transaction_id: None},
-        synchronize_session=False,
-    )
-    Transaction.query.filter(
-        Transaction.reversal_transaction_id.in_(tx_ids)
-    ).update(
-        {Transaction.reversal_transaction_id: None},
         synchronize_session=False,
     )
 
@@ -260,7 +276,7 @@ def hard_delete_student_if_orphaned(student_id):
 
     entitlement_ids, issue_ids, tx_ids, seat_ids = _collect_related_ids(student_id)
     _unclaim_all_seats_for_student(student_id)
-    _clear_cross_transaction_refs(tx_ids)
+    _clear_support_transaction_refs(tx_ids)
     _delete_student_scoped_rows(student_id, entitlement_ids, issue_ids, tx_ids, seat_ids)
     Seat.query.filter(Seat.user_id == student_id).delete(synchronize_session=False)
     # The principal does not outlive its last seat.
@@ -295,7 +311,7 @@ def remove_student_from_teacher_scope(seat_id, user_id):
     )
     remaining_links = db.session.query(Seat.id).filter(Seat.user_id == student_user_id).all()
     if remaining_links:
-        _clear_cross_transaction_refs(scoped_tx_ids)
+        _clear_support_transaction_refs(scoped_tx_ids)
         _delete_student_scoped_rows(
             student_user_id,
             scoped_entitlement_ids,
@@ -307,7 +323,7 @@ def remove_student_from_teacher_scope(seat_id, user_id):
         return False
 
     entitlement_ids, issue_ids, tx_ids, seat_ids = _collect_related_ids_for_seats(scoped_seat_ids)
-    _clear_cross_transaction_refs(tx_ids)
+    _clear_support_transaction_refs(tx_ids)
     _delete_student_scoped_rows(
         student_user_id,
         entitlement_ids,

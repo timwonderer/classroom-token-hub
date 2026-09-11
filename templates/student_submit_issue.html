@@ -2,6 +2,23 @@
 
 {% block page_icon %}support_agent{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Tell your teacher that a specific record on your account is wrong.") }}
+
+{% call help.topic('issue-write', 'edit_note', 'Describe what is wrong') %}
+<p>Say what the record currently shows and what you believe it should show. Those are two different sentences, and the second one is the one your teacher acts on.</p>
+<p class="mb-0">Include when it happened and what you were doing. Your teacher is checking your account against what they remember of the class, so anything that helps them place the moment helps you.</p>
+{% endcall %}
+
+{% call help.topic('issue-final', 'lock', 'You cannot edit this later') %}
+<p class="mb-0">Once submitted, an issue cannot be changed or withdrawn — it becomes part of the record your teacher reviews. Read it back before you send it. If you realise something is missing afterwards, say so in a new issue rather than refiling the same one.</p>
+{% endcall %}
+
+{% call help.topic('issue-expect', 'hourglass_top', 'What happens next') %}
+<p class="mb-0">Your teacher reviews it and decides. A decision may take a day or two, and the outcome may be that the record was right — that is still an answer. Track where it stands under your issues list.</p>
+{% endcall %}
+{% endblock %}
+
 {% block extra_styles %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
 <style>
@@ -24,13 +41,13 @@
         <div class="col-lg">
             <!-- Back Button -->
             <a href="{{ url_for('student.help_support') }}" class="btn btn-outline-secondary mb-3">
-                <span class="material-symbols-outlined me-2">arrow_back</span>Back to Help & Support
+                <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_back</span>Back to Help & Support
             </a>
 
             <div class="card shadow">
                 <div class="card-header bg-primary text-white">
                     <h4 class="mb-0">
-                        <span class="material-symbols-outlined" style="font-size:28pt; vertical-align:middle; margin-right:8px;">
+                        <span class="material-symbols-outlined" style="font-size:28pt; vertical-align:middle; margin-right:8px;" aria-hidden="true">
                             problem
                         </span>
                         Details about the issue
@@ -41,7 +58,7 @@
                     {% if issue_type == 'transaction' and transaction %}
                     <div class="alert alert-info lh-lg ">
                         <h5 class="alert-heading">
-                            <span class="material-symbols-outlined">receipt_long</span> You are creating support ticket for this transaction:
+                            <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span> You are creating support ticket for this transaction:
                         </h5>
                             <ul class="mb-0">
                                 <li><strong>Amount:</strong> ${{ "%.2f"|format(transaction.amount) }}</li>          
@@ -64,7 +81,7 @@
                         <h4>Tell us what's wrong with this transaction</h4>
                         {% endif %}
                     <div class="mt-2 mb-4 p-3 bg-light rounded">
-                        <h6 class="mb-2"><span class="material-symbols-outlined me-2 text-warning">lightbulb</span>Tips for Good Reports</h6>
+                        <h6 class="mb-2"><span class="material-symbols-outlined me-2 text-warning" aria-hidden="true">lightbulb</span>Tips for Good Reports</h6>
                         <ul class="mb-0">
                             <li>Be specific about what went wrong</li>
                             <li>Include what you were trying to do</li>

@@ -11,7 +11,7 @@
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
                 <div class="sysadmin-stat-icon bg-primary-subtle">
-                    <span class="material-symbols-outlined text-primary">mark_unread_chat_alt</span>
+                    <span class="material-symbols-outlined text-primary" aria-hidden="true">mark_unread_chat_alt</span>
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ new_reports }}</div>
@@ -22,7 +22,7 @@
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
                 <div class="sysadmin-stat-icon bg-warning-subtle">
-                    <span class="material-symbols-outlined text-warning">pending</span>
+                    <span class="material-symbols-outlined text-warning" aria-hidden="true">pending</span>
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ pending_issues }}</div>
@@ -33,7 +33,7 @@
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
                 <div class="sysadmin-stat-icon bg-info-subtle">
-                    <span class="material-symbols-outlined text-info">rate_review</span>
+                    <span class="material-symbols-outlined text-info" aria-hidden="true">rate_review</span>
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ in_review_issues }}</div>
@@ -44,7 +44,7 @@
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
                 <div class="sysadmin-stat-icon bg-success-subtle">
-                    <span class="material-symbols-outlined text-success">task_alt</span>
+                    <span class="material-symbols-outlined text-success" aria-hidden="true">task_alt</span>
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ reviewed_reports }}</div>
@@ -59,7 +59,7 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'reports' or not active_tab %}active{% endif %}"
                 id="reports-tab" data-bs-toggle="tab" data-bs-target="#reports-pane" type="button" role="tab" aria-controls="reports-pane" aria-selected="{% if active_tab == 'reports' or not active_tab %}true{% else %}false{% endif %}">
-                <span class="material-symbols-outlined align-middle me-1" style="font-size:16px;">bug_report</span>
+                <span class="material-symbols-outlined align-middle me-1" style="font-size:16px;" aria-hidden="true">bug_report</span>
                 Teacher Issues
                 {% if new_reports > 0 %}
                 <span class="badge bg-primary ms-1">{{ new_reports }}</span>
@@ -70,7 +70,7 @@
             <button class="nav-link {% if active_tab == 'issues' %}active{% endif %}" id="issues-tab"
                 data-bs-toggle="tab" data-bs-target="#issues-pane" type="button" role="tab" aria-controls="issues-pane" aria-selected="{% if active_tab == 'issues' %}true{% else %}false{% endif %}">
                 <span class="material-symbols-outlined align-middle me-1"
-                    style="font-size:16px;">escalator_warning</span>
+                    style="font-size:16px;" aria-hidden="true">escalator_warning</span>
                 Escalated Student Issues
                 {% if (pending_issues + in_review_issues) > 0 %}
                 <span class="badge bg-warning text-dark ms-1">{{ pending_issues + in_review_issues }}</span>
@@ -222,7 +222,7 @@
             {% else %}
             <div class="p-5 text-center text-muted">
                 <span class="material-symbols-outlined d-block mb-2"
-                    style="font-size:56px;opacity:0.3;">chat_bubble_outline</span>
+                    style="font-size:56px;opacity:0.3;" aria-hidden="true">chat_bubble_outline</span>
                 <h5>No teacher issues found</h5>
                 <p class="mb-0">{% if status_filter != 'all' or report_type_filter != 'all' %}Try clearing the
                     filters.{% else %}No teacher issues have been submitted yet.{% endif %}</p>
@@ -282,18 +282,18 @@
                                     <!-- Badges row -->
                                     <div class="d-flex flex-wrap gap-1 mb-2">
                                         <span class="badge bg-secondary" style="font-size:0.7rem;">
-                                            <span class="material-symbols-outlined me-1">person</span>
+                                            <span class="material-symbols-outlined me-1" aria-hidden="true">person</span>
                                             {{ issue.actor_public_id[:8] }}...
                                         </span>
                                         <span class="badge bg-light text-dark border" style="font-size:0.7rem;">
                                             {{ issue.category_name }}
                                         </span>
                                         <span class="badge bg-primary" style="font-size:0.7rem;">
-                                            <span class="material-symbols-outlined me-1">badge</span>{% if issue.reviewer_public_id %}{{ issue.reviewer_public_id[:8] }}...{% else %}Unattributed{% endif %}
+                                            <span class="material-symbols-outlined me-1" aria-hidden="true">badge</span>{% if issue.reviewer_public_id %}{{ issue.reviewer_public_id[:8] }}...{% else %}Unattributed{% endif %}
                                         </span>
                                         {% if issue.share_class_name_with_sysadmin and issue.class_label %}
                                         <span class="badge bg-info" style="font-size:0.7rem;">
-                                            <span class="material-symbols-outlined me-1">door_front</span>{{ issue.class_label }}
+                                            <span class="material-symbols-outlined me-1" aria-hidden="true">door_front</span>{{ issue.class_label }}
                                         </span>
                                         {% endif %}
                                     </div>
@@ -306,13 +306,13 @@
                                     </div>
                                     <div class="text-muted mt-1" style="font-size:0.72rem;">
                                         {% if pill_id == 'pending' %}
-                                        <span class="material-symbols-outlined me-1">arrow_circle_up</span>
+                                        <span class="material-symbols-outlined me-1" aria-hidden="true">arrow_circle_up</span>
                                         Escalated {{ issue.escalated_at|fmt_timestamp }}
                                         {% elif pill_id == 'review' %}
-                                        <span class="material-symbols-outlined me-1">visibility</span>
+                                        <span class="material-symbols-outlined me-1" aria-hidden="true">visibility</span>
                                         In review since {{ (issue.sysadmin_reviewed_at or issue.escalated_at)|fmt_timestamp }}
                                         {% else %}
-                                        <span class="material-symbols-outlined me-1">check_circle</span>
+                                        <span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>
                                         Resolved {{ issue.sysadmin_resolved_at|fmt_timestamp }}
                                         {% endif %}
                                     </div>
@@ -330,7 +330,7 @@
                     <div class="p-5 text-center text-muted">
                         <span
                             class="material-symbols-outlined d-block mb-2{% if pill_id == 'pending' %} text-success{% endif %}"
-                            style="font-size:48px;opacity:0.5;">{{ empty_icon }}</span>
+                            style="font-size:48px;opacity:0.5;" aria-hidden="true">{{ empty_icon }}</span>
                         <p class="mb-0">{{ empty_msg }}</p>
                     </div>
                     {% endif %}

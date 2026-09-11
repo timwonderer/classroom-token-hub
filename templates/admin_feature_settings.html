@@ -4,11 +4,31 @@
 {% set current_page = "feature_settings" %}
 {% block page_icon %}tune{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Decides which parts of the economy exist for this class. A feature that is off is invisible to students and its settings pages are closed.") }}
+
+{% call help.topic('feat-groups', 'category', 'The three groups on this page') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Core features have no toggle.</strong> Payroll defines the economy and banking holds it — without them there is nothing for the other features to price against.</li>
+    <li class="mb-2"><strong>Features</strong> can be turned on and off freely. Use them to introduce one idea at a time rather than opening everything at once.</li>
+    <li class="mb-0"><strong>Pricing features</strong> — insurance, rent, store — stay locked until payroll and the economic engine are configured. They price against student income, so they cannot be sensibly enabled before income exists.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('feat-saving', 'save', 'Saving and turning things off') %}
+<ul class="ps-3">
+    <li class="mb-2"><strong>Changes save as you toggle.</strong> There is no Save button; watch the status line for confirmation.</li>
+    <li class="mb-0"><strong>Turning a feature off does not erase its data.</strong> Balances, purchases, and history are preserved and reappear if you turn it back on.</li>
+</ul>
+<p class="mb-0 text-muted">This applies to the class you currently have open, not to every class you teach.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="card shadow mb-4">
   <div class="card-header bg-info text-white">
     <h5 class="mb-0">
-      <span class="material-symbols-outlined me-2" style="vertical-align: middle;">tune</span>
+      <span class="material-symbols-outlined me-2" style="vertical-align: middle;" aria-hidden="true">tune</span>
       Feature Settings — {{ view.class_label }}
     </h5>
   </div>
@@ -24,14 +44,14 @@
       <div class="card h-100">
         <div class="card-body py-3 d-flex align-items-center justify-content-between gap-3">
           <div class="d-flex align-items-center gap-3">
-            <span class="material-symbols-outlined text-primary">{{ feat.icon }}</span>
+            <span class="material-symbols-outlined text-primary" aria-hidden="true">{{ feat.icon }}</span>
             <div class="mb-0">
               <div class="fw-semibold">{{ feat.name }}</div>
               <small class="text-muted">{{ feat.description }}</small>
             </div>
           </div>
           <span class="badge bg-success d-flex align-items-center gap-1">
-            <span class="material-symbols-outlined" style="font-size: 1rem;">check_circle</span> Always on
+            <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">check_circle</span> Always on
           </span>
         </div>
       </div>
@@ -47,7 +67,7 @@
       <div class="card h-100">
         <div class="card-body py-3 d-flex align-items-center justify-content-between gap-3">
           <div class="d-flex align-items-center gap-3">
-            <span class="material-symbols-outlined text-primary">{{ feat.icon }}</span>
+            <span class="material-symbols-outlined text-primary" aria-hidden="true">{{ feat.icon }}</span>
             <div class="mb-0">
               <div class="fw-semibold">{{ feat.name }}</div>
               <small class="text-muted">{{ feat.description }}</small>
@@ -75,17 +95,17 @@
     {% if not view.cwi_ready %}
     <div class="alert alert-warning">
       <div class="mb-2">
-        <span class="material-symbols-outlined" style="vertical-align: middle;">info</span>
+        <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">info</span>
         In order to use these features, you must first set up payroll and configure your
         economic engine.
       </div>
       <div class="d-flex flex-wrap gap-2">
         <span class="badge {{ 'bg-success' if view.payroll_ready else 'bg-secondary' }} d-flex align-items-center gap-1">
-          <span class="material-symbols-outlined" style="font-size: 1rem;">{{ 'check_box' if view.payroll_ready else 'check_box_outline_blank' }}</span>
+          <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">{{ 'check_box' if view.payroll_ready else 'check_box_outline_blank' }}</span>
           Payroll
         </span>
         <span class="badge {{ 'bg-success' if view.engine_ready else 'bg-secondary' }} d-flex align-items-center gap-1">
-          <span class="material-symbols-outlined" style="font-size: 1rem;">{{ 'check_box' if view.engine_ready else 'check_box_outline_blank' }}</span>
+          <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">{{ 'check_box' if view.engine_ready else 'check_box_outline_blank' }}</span>
           Economic Engine
         </span>
       </div>
@@ -96,7 +116,7 @@
       <div class="card h-100">
         <div class="card-body py-3 d-flex align-items-center justify-content-between gap-3">
           <div class="d-flex align-items-center gap-3">
-            <span class="material-symbols-outlined text-primary">{{ feat.icon }}</span>
+            <span class="material-symbols-outlined text-primary" aria-hidden="true">{{ feat.icon }}</span>
             <div class="mb-0">
               <div class="fw-semibold">{{ feat.name }}</div>
               <small class="text-muted">{{ feat.description }}</small>
@@ -119,7 +139,7 @@
     {% endif %}
 
     <div class="mt-4 text-muted small" id="feature-save-status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">
-      <span class="material-symbols-outlined" style="vertical-align: middle;">sync</span>
+      <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">sync</span>
       Changes are saved automatically.
     </div>
   </div>

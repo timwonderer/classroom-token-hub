@@ -470,7 +470,10 @@ def activate_due_rebalances(user_id, *, class_id=None, reference_time=None):
                 activation_mode = transition.activation_mode or REBALANCE_ACTIVATION_NEXT_PAYROLL
                 effective_at = _parse_dt(change.get("effective_at"))
                 is_due = False
-                if activation_mode == REBALANCE_ACTIVATION_NEXT_PAYROLL and effective_at is None:
+                # A deferred transition whose effective date could not be
+                # computed has no later moment to wait for, so it activates on
+                # the next sweep rather than sitting pending forever.
+                if activation_mode != REBALANCE_ACTIVATION_IMMEDIATE and effective_at is None:
                     is_due = True
                 elif effective_at is not None and effective_at <= reference_time:
                     is_due = True
@@ -515,7 +518,7 @@ def activate_due_rebalances(user_id, *, class_id=None, reference_time=None):
 
 def queue_scheduled_policy_transitions(
     user_id: int,
-    settings_row,
+    class_id: str,
     scheduled_changes: list[dict[str, Any]],
     *,
     activation_mode: str = REBALANCE_ACTIVATION_NEXT_RENEWAL,
@@ -523,7 +526,7 @@ def queue_scheduled_policy_transitions(
 ) -> int:
     reference_time = ensure_utc(reference_time) if reference_time else utc_now()
     created = _create_policy_transitions_for_changes(
-        settings_row,
+        class_id,
         scheduled_changes,
         activation_mode=activation_mode,
         created_by=user_id,

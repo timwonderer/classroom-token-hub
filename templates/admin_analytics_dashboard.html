@@ -2,6 +2,29 @@
 {% block page_title %}Interpretation{% endblock %}
 {% block page_icon %}insights{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("What the class economy recorded during a completed payroll cycle, described in plain language.") }}
+
+{% call help.topic('itr-cycles', 'calendar_month', 'One completed cycle at a time') %}
+<p class="mb-0">Nothing appears until your first payroll cycle closes, and each cycle is interpreted as it stood when it closed. Use the selector to move between them.</p>
+{% endcall %}
+
+{% call help.topic('itr-reading', 'menu_book', 'How to read a section') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Start with the overview cards</strong> for the headline observation in each section, then jump to a section for the detail behind it.</li>
+    <li class="mb-0"><strong>"How to read this"</strong> explains what a section is measuring. Worth reading before drawing a conclusion from an unfamiliar number.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('itr-limits', 'help_center', 'Blanks, prompts, and what this page will not do') %}
+<ul class="ps-3">
+    <li class="mb-2"><strong>Some observations say "not applicable."</strong> That means the cycle did not contain the activity needed to compute them — it is not a zero and not a problem.</li>
+    <li class="mb-0"><strong>The guiding questions are prompts, not findings.</strong> They are collapsed on purpose so they never read as the system's verdict on your class.</li>
+</ul>
+<p class="mb-0 text-muted">This page only observes. It reads the economy and never changes it, so nothing you do here can affect a student's balance.</p>
+{% endcall %}
+{% endblock %}
+
 {#
   Interpretation page (DOM-ITR). This template is a PURE CONSUMER of the
   page view model (app/services/interpretation/page_view.py): it renders the

@@ -4,6 +4,31 @@
 {% block title %}Insurance{% endblock %}
 {% block page_icon %}shield{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Policies you can buy, the coverage you already hold, and the claims you have filed against it.") }}
+
+{% call help.topic('ins-what', 'shield', 'What a policy actually buys') %}
+<p>You pay a <strong>premium</strong> on a schedule. In return, if the thing the policy covers happens to you, you can file a claim and be paid back for part or all of it.</p>
+<p class="mb-0">If nothing happens, you do not get the premiums back. That is not a bug — it is what you were buying. Insurance is worth it when the loss you are protecting against would hurt more than the premiums do.</p>
+{% endcall %}
+
+{% call help.topic('ins-before', 'fact_check', 'Read these before you buy') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Waiting period</strong> — how long after buying before coverage starts. Buying a policy after the thing has already happened does not cover it.</li>
+    <li class="mb-2"><strong>Claim limits</strong> — the most one claim can pay, and how many claims you get in a period.</li>
+    <li class="mb-0"><strong>Premium and frequency</strong> — how much leaves checking, and how often. This keeps charging you.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('ins-paying', 'payments', 'Keep the premium paid') %}
+<p class="mb-0">Premiums come out of checking on a schedule. If they cannot be paid the policy falls behind, and after enough unpaid days it cancels — usually right when you would have wanted it. Some policies also make you wait before you can buy them again.</p>
+{% endcall %}
+
+{% call help.topic('ins-claims', 'assignment_turned_in', 'Filing and tracking claims') %}
+<p class="mb-0">File from the policy itself, within its claim deadline, and say plainly what happened. <strong>Your claims</strong> shows where each one stands. Approval is your teacher's decision, and a claim can be capped or refused if it is outside the terms you bought.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid" style="max-width: 960px;">
 

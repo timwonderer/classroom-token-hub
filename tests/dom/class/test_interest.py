@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from app import Transaction, apply_savings_interest, db
+from app import Transaction, db
 from app.models import TransactionStatus, LedgerBalanceSnapshot as BalanceCache
 from app.feats.base import FEATContext
 from unittest.mock import patch

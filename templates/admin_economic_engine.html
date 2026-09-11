@@ -1,107 +1,56 @@
 {% extends "layout_admin.html" %}
-{% import "macros/help.html" as help %}
 {% block page_title %}Economic Engine{% endblock %}
 {% block page_icon %}display_settings{% endblock %}
 {% set current_page = "economic_engine" %}
-{% block contextual_help_trigger %}
-  <button class="btn btn-primary d-flex align-items-center gap-2 mb-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#economyHealthGuide" aria-controls="economyHealthGuide">
-    <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
-  </button>
-{% endblock %}
-{% block content %}
-<div class="offcanvas offcanvas-end" tabindex="-1" id="economyHealthGuide" aria-labelledby="economyHealthGuideLabel">
-  <div class="offcanvas-header">
-    <h5 class="offcanvas-title" id="economyHealthGuideLabel">How to: Economy Health</h5>
-    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-  </div>
-  <div class="offcanvas-body">
-    {{ help.offcanvas_resource_links(help_doc_path, 'user-guides/diagnostics/teacher/analytics') }}
-    <p>Use this dashboard to balance payroll, rent, insurance, banking, and store pricing around your CWI.</p>
-    <div class="accordion mt-4 mb-4" id="economyHealthGuideAccordion">
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="economyHealthGuideHeadingCwi">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideCwi" aria-expanded="false" aria-controls="economyHealthGuideCwi">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">monitor_heart</span>
-            <strong>Understand Your CWI</strong>
-          </button>
-        </h2>
-        <div id="economyHealthGuideCwi" class="accordion-collapse collapse mt-2" aria-labelledby="economyHealthGuideHeadingCwi" data-bs-parent="#economyHealthGuideAccordion">
-          <div class="accordion-body">
-            <p><strong>What is CWI?</strong> Your Classroom Wage Index represents the average weekly income students can expect to earn.</p>
+{% block contextual_help_body %}
+{{ help.panel_lead("Use this dashboard to balance payroll, rent, insurance, banking, and store pricing around your CWI.") }}
 
-            <p class="mb-2"><strong>How it's calculated:</strong></p>
-            <p class="mb-3"><code>CWI = Pay Rate × Expected Weekly Hours</code></p>
+{% call help.topic('econ-cwi', 'monitor_heart', 'Understand Your CWI') %}
+<p><strong>What is CWI?</strong> Your Classroom Wage Index represents the average weekly income students can expect to earn.</p>
 
-            <p class="mb-2"><strong>Example:</strong></p>
-            <ul class="mb-3">
-              <li>Pay rate: $10/hour</li>
-              <li>Expected hours: 5 hours/week</li>
-              <li><strong>CWI = $50/week</strong></li>
-            </ul>
+<p class="mb-2"><strong>How it's calculated:</strong></p>
+<p class="mb-3"><code>CWI = Pay Rate × Expected Weekly Hours</code></p>
 
-            <div class="alert alert-success mb-3">
-              <strong><span class="material-symbols-outlined me-1">payments</span>Why CWI Matters:</strong> Use the active policy's pricing recommendations and alert thresholds to balance your economy; rent and store guidance varies by policy.
-            </div>
+<p class="mb-2"><strong>Example:</strong></p>
+<ul class="mb-3">
+  <li>Pay rate: $10/hour</li>
+  <li>Expected hours: 5 hours/week</li>
+  <li><strong>CWI = $50/week</strong></li>
+</ul>
 
-            <div class="alert alert-info mb-0">
-              <strong><span class="material-symbols-outlined me-1">settings</span>Setup:</strong> If payroll is not configured yet, set it up first to unlock CWI calculations.
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="economyHealthGuideHeadingHours">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideHours" aria-expanded="false" aria-controls="economyHealthGuideHours">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">schedule</span>
-            <strong>Update Expected Hours</strong>
-          </button>
-        </h2>
-        <div id="economyHealthGuideHours" class="accordion-collapse collapse mt-2" aria-labelledby="economyHealthGuideHeadingHours" data-bs-parent="#economyHealthGuideAccordion">
-          <div class="accordion-body">
-            <p>Adjust expected hours to match your class schedule and update per class or across all classes.</p>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="economyHealthGuideHeadingSettingsBreakdown">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideSettingsBreakdown" aria-expanded="false" aria-controls="economyHealthGuideSettingsBreakdown">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tune</span>
-            <strong>Settings Breakdown</strong>
-          </button>
-        </h2>
-        <div id="economyHealthGuideSettingsBreakdown" class="accordion-collapse collapse mt-2" aria-labelledby="economyHealthGuideHeadingSettingsBreakdown" data-bs-parent="#economyHealthGuideAccordion">
-          <div class="accordion-body">
-            <ul class="mb-0">
-          <li><strong>Current class:</strong> this page shows the economy settings for the class currently selected in the teacher navigation.</li>
-              <li><strong>Expected weekly hours:</strong> updates the CWI and balance calculations for the selected class.</li>
-              <li><strong>Balance snapshot:</strong> flags mismatches between CWI and costs so you can adjust settings.</li>
-            </ul>
-            <div class="alert alert-info mt-3 mb-0">
-              <strong>Side effects:</strong> Adjusting hours changes CWI immediately for the selected class.
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="economyHealthGuideHeadingBalance">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideBalance" aria-expanded="false" aria-controls="economyHealthGuideBalance">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">balance</span>
-            <strong>Balance Snapshot</strong>
-          </button>
-        </h2>
-        <div id="economyHealthGuideBalance" class="accordion-collapse collapse mt-2" aria-labelledby="economyHealthGuideHeadingBalance" data-bs-parent="#economyHealthGuideAccordion">
-          <div class="accordion-body">
-            <p>Review the balance snapshot to see how rent, insurance, fines, and store prices compare to CWI.</p>
-            <div class="alert alert-warning mb-0">
-              <strong>Watch for flags:</strong> Large gaps suggest a setting may be too high or too low.
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+<div class="alert alert-success mb-3">
+  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">payments</span>Why CWI Matters:</strong> Use the active policy's pricing recommendations and alert thresholds to balance your economy; rent and store guidance varies by policy.
 </div>
 
+<div class="alert alert-info mb-0">
+  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">settings</span>Setup:</strong> If payroll is not configured yet, set it up first to unlock CWI calculations.
+</div>
+{% endcall %}
+
+{% call help.topic('econ-hours', 'schedule', 'Update Expected Hours') %}
+<p class="mb-0">Adjust expected hours to match your class schedule and update per class or across all classes.</p>
+{% endcall %}
+
+{% call help.topic('econ-settings', 'tune', 'Settings Breakdown') %}
+<ul class="mb-0">
+  <li><strong>Current class:</strong> this page shows the economy settings for the class currently selected in the teacher navigation.</li>
+  <li><strong>Expected weekly hours:</strong> updates the CWI and balance calculations for the selected class.</li>
+  <li><strong>Balance snapshot:</strong> flags mismatches between CWI and costs so you can adjust settings.</li>
+</ul>
+<div class="alert alert-info mt-3 mb-0">
+  <strong>Side effects:</strong> Adjusting hours changes CWI immediately for the selected class.
+</div>
+{% endcall %}
+
+{% call help.topic('econ-balance', 'balance', 'Balance Snapshot') %}
+<p>Review the balance snapshot to see how rent, insurance, fines, and store prices compare to CWI.</p>
+<div class="alert alert-warning mb-0">
+  <strong>Watch for flags:</strong> Large gaps suggest a setting may be too high or too low.
+</div>
+{% endcall %}
+{% endblock %}
+
+{% block content %}
 <div class="container-fluid py-3">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 mt-0 gap-3">
     <div class="d-flex align-items-center gap-2">
@@ -113,7 +62,7 @@
 
   {% if not payroll_settings %}
   <div class="alert alert-warning d-flex align-items-start gap-2">
-    <span class="material-symbols-outlined">warning</span>
+    <span class="material-symbols-outlined" aria-hidden="true">warning</span>
     <div>
       <strong>Set up payroll to calculate CWI.</strong>
       <div class="small">We need a pay rate and expected hours per week to compute the Classroom Wage Index. Head to <a href="{{ payroll_link }}" class="alert-link">Payroll Management</a> to configure it.</div>
@@ -126,7 +75,7 @@
       <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
         <div>
           <h5 class="mb-1 d-inline-flex align-items-center gap-2">
-            <span class="material-symbols-outlined">tune</span>
+            <span class="material-symbols-outlined" aria-hidden="true">tune</span>
             <span>Economic Policy</span>
             {% if policy_summary.overall_status == 'aligned' %}
             <span class="badge bg-success">Pricing Aligned</span>
@@ -231,17 +180,18 @@
           <div class="col-lg-6">
             <label class="form-label">Effective Date</label>
             <div class="form-check">
-              <input class="form-check-input" type="radio" name="activation_mode" id="activationNextPayroll" value="next_payroll" checked>
-              <label class="form-check-label" for="activationNextPayroll">Next Payroll Run (Recommended)</label>
+              <input class="form-check-input" type="radio" name="activation_mode" id="activationNextCycle" value="next_renewal" checked>
+              <label class="form-check-label" for="activationNextCycle">Next Cycle (Recommended)</label>
             </div>
             <div class="form-check">
               <input class="form-check-input" type="radio" name="activation_mode" id="activationImmediate" value="immediate">
               <label class="form-check-label" for="activationImmediate">Apply Immediately</label>
             </div>
+            <div class="form-text">Rent is billed per cycle, so a new amount takes effect on the cycle after the upcoming bill. Store prices are not cycle-based and change immediately on the store page.</div>
           </div>
-          <div class="col-lg-6">
+          <div class="col-lg-6" id="immediateChangeWarning" hidden>
             <div class="alert alert-warning mb-2">
-              Applying changes to cycle-based settings immediately can create inconsistencies in student payroll and bills. This means students may be charged differently on rent and insurance or receive different pay rates. 
+              Applying a cycle-based change immediately re-prices rent part-way through a cycle, so students can be billed a different amount than the one they were told at the start of it.
             </div>
             <div class="form-check">
               <input class="form-check-input" type="checkbox" name="confirm_immediate" id="confirmImmediate" value="yes">
@@ -266,7 +216,7 @@
         <div class="card-body">
           <div class="d-flex align-items-center gap-2 mb-2">
             <h5 class="mb-0 d-inline-flex align-items-center gap-2">
-              <span class="material-symbols-outlined">trending_up</span>
+              <span class="material-symbols-outlined" aria-hidden="true">trending_up</span>
               <span>Classroom Wage Index  (CWI)</span>
             </h5>
             {% if cwi_calc %}
@@ -343,7 +293,7 @@
         <div class="card-body">
           <div class="d-flex align-items-center gap-2 mb-2">
             <h5 class="mb-0 d-inline-flex align-items-center gap-2">
-              <span class="material-symbols-outlined">price_change</span>
+              <span class="material-symbols-outlined" aria-hidden="true">price_change</span>
               <span>Economic Balance</span>
             </h5>
             {% if analysis and actionable_warning_count == 0 and banking_summary.level == 'success' %}
@@ -412,7 +362,7 @@
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
         <div class="card-header d-inline-flex align-items-center gap-2">
-          <h6 class="mb-0 d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined">savings</span>Banking & Interest</h6>
+          <h6 class="mb-0 d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined" aria-hidden="true">savings</span>Banking & Interest</h6>
           {% if banking_summary.level == 'success' %}
             <span class="badge bg-success">Balanced</span>
           {% else %}
@@ -430,7 +380,7 @@
     </div>
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
-        <h6 class="card-header d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined">lightbulb</span><span>Current Recommended Settings</span></h6>
+        <h6 class="card-header d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined" aria-hidden="true">lightbulb</span><span>Current Recommended Settings</span></h6>
         <div class="card-body">
           {% if recommendations %}
           <ul class="mb-2">
@@ -458,7 +408,7 @@
 
   <div class="card shadow-sm">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <div class="d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined">tooltip_2</span><span>Additional Information</span></div>
+      <div class="d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined" aria-hidden="true">tooltip_2</span><span>Additional Information</span></div>
       <small class="text-muted">Sorted by severity</small>
     </div>
     <div class="card-body">
@@ -499,4 +449,25 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const panel = document.getElementById('immediateChangeWarning');
+  if (!panel) return;
+  const confirmBox = document.getElementById('confirmImmediate');
+  const modes = document.querySelectorAll('input[name="activation_mode"]');
+
+  function sync() {
+    const immediate = document.getElementById('activationImmediate');
+    const show = !!(immediate && immediate.checked);
+    panel.hidden = !show;
+    if (!show && confirmBox) confirmBox.checked = false;
+  }
+
+  modes.forEach(function (input) { input.addEventListener('change', sync); });
+  sync();
+});
+</script>
 {% endblock %}

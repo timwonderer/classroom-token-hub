@@ -212,7 +212,6 @@ class PayrollSettingsForm(FlaskForm):
     pay_rate = FloatField('Pay Rate ($ per minute)', validators=[DataRequired()], default=0.25)
     payroll_frequency_days = IntegerField('Payroll Frequency (days)', validators=[DataRequired()], default=14)
     overtime_multiplier = FloatField('Overtime Multiplier', validators=[Optional()], default=1.0)
-    bonus_rate = FloatField('Bonus Rate ($ per minute)', validators=[Optional()], default=0.0)
     apply_to_all = BooleanField('Apply to All Blocks', default=False)
     is_active = BooleanField('Settings Active', default=True)
     submit = SubmitField('Save Settings')

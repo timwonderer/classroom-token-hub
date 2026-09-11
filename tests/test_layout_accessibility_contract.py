@@ -1,7 +1,9 @@
 """Regression checks for the shared navigation accessibility contract."""
 
+import re
 from pathlib import Path
 
+import pytest
 from bs4 import BeautifulSoup
 
 
@@ -89,6 +91,83 @@ def test_authenticated_layouts_hide_decorative_material_symbols_from_accessibili
         html = (REPO_ROOT / "templates" / name).read_text(encoding="utf-8")
         assert "querySelectorAll('.material-symbols-outlined')" in html
         assert "setAttribute('aria-hidden', 'true')" in html
+
+
+def _open_span_tags(source: str):
+    """Yield every `<span ...>` open tag, tolerating `>` inside Jinja expressions.
+
+    A `<span[^>]*>` regex splits `class="{{ 'a' if x > y else 'b' }}"` in the
+    wrong place, and BeautifulSoup cannot reach the icons that live inside
+    `innerHTML` strings in `<script>` blocks. Both are real in this corpus.
+    """
+    index = 0
+    while True:
+        index = source.find("<span", index)
+        if index == -1:
+            return
+        if index + 5 < len(source) and (
+            source[index + 5].isalnum() or source[index + 5] in "-_"
+        ):
+            index += 5
+            continue
+        cursor = index + 5
+        quote = None
+        while cursor < len(source):
+            char = source[cursor]
+            if quote:
+                if char == quote:
+                    quote = None
+            elif char in "\"'":
+                quote = char
+            elif char == "{" and cursor + 1 < len(source) and source[cursor + 1] in "{%":
+                closing = "}}" if source[cursor + 1] == "{" else "%}"
+                end = source.find(closing, cursor)
+                if end == -1:
+                    break
+                cursor = end + 1
+            elif char == ">":
+                yield source[index:cursor]
+                break
+            cursor += 1
+        index = cursor + 1
+
+
+def test_material_symbol_icons_are_hidden_from_the_accessibility_tree():
+    """Ligature icon fonts read their glyph name aloud unless hidden.
+
+    Without `aria-hidden`, a screen reader announces the literal ligature —
+    "quick_reference_all" — as page content. The layouts carry a runtime
+    JavaScript sweep as well, but that only helps pages that inherit a layout
+    and only after scripts run, so the markup has to be correct on its own.
+    """
+    offenders = []
+    for page in sorted((REPO_ROOT / "templates").rglob("*.html")):
+        source = page.read_text(encoding="utf-8")
+        if "material-symbols-outlined" not in source:
+            continue
+        for tag in _open_span_tags(source):
+            if "material-symbols-outlined" not in tag or "aria-hidden" in tag:
+                continue
+            offenders.append(f"{page.relative_to(REPO_ROOT)}: {tag[:80]}")
+    assert not offenders, "Decorative icons exposed to assistive technology:\n" + "\n".join(
+        offenders
+    )
+
+
+def test_icon_only_controls_carry_their_own_accessible_name():
+    """Hiding an icon that is a control's only content leaves it unnamed.
+
+    Bootstrap's `data-bs-title` renders a tooltip; it is not an accessible
+    name. These two controls were the whole set when the icons were hidden.
+    """
+    dashboard = _template("admin_dashboard.html")
+    greeting_link = dashboard.select_one("a[data-bs-title]")
+    assert greeting_link is not None
+    assert greeting_link.get("aria-label")
+
+    docs_search = _template("docs/view.html").select_one('button[type="submit"]')
+    assert docs_search is not None
+    assert docs_search.get("aria-label")
 
 
 def test_sortable_tables_have_keyboard_and_sort_state_support():
@@ -181,21 +260,96 @@ def test_templates_and_client_scripts_do_not_use_blocking_alerts():
             assert "alert(" not in source, f"Blocking alert remains in {path}"
 
 
-def test_admin_dropdown_triggers_describe_their_controlled_links():
-    soup = _template("layout_admin.html")
-    for trigger in soup.select("button[aria-controls]"):
+# A trigger's expanded state is either a literal, or a Jinja conditional that
+# renders to one. Matching the shape rather than an enumerated list of specific
+# expressions means adding a nav section does not silently need a test edit —
+# the previous hardcoded set covered only the admin layout's five accordions.
+_EXPANDED_EXPR = re.compile(
+    r"^\{\{\s*'(?:true|false)'\s+if\s+.+\s+else\s+'(?:true|false)'\s*\}\}$"
+    r"|^\{%\s*if\s+.+?%\}\s*(?:true|false)\s*\{%\s*else\s*%\}\s*(?:true|false)\s*\{%\s*endif\s*%\}$"
+)
+
+LAYOUTS_WITH_TRIGGERS = ("layout_admin.html", "layout_student.html")
+
+TEMPLATES_WITH_TRIGGERS = sorted(
+    path.relative_to(REPO_ROOT / "templates").as_posix()
+    for path in (REPO_ROOT / "templates").rglob("*.html")
+    if "aria-controls" in path.read_text(encoding="utf-8")
+)
+
+
+def _describes_expanded_state(value):
+    return value in {"true", "false"} or bool(value and _EXPANDED_EXPR.match(value))
+
+
+@pytest.mark.parametrize("template", TEMPLATES_WITH_TRIGGERS)
+def test_disclosure_triggers_describe_their_controlled_state(template):
+    """Every disclosure trigger reports whether its target is open (WCAG 4.1.2).
+
+    Scoped to the whole template corpus, not to the two layouts. Fixing the
+    admin layout's "Need Help?" trigger left the same defect standing in ten
+    per-page copies of it, because no test looked past the shell.
+
+    Tabs are excluded: an ARIA tab reports selection through `aria-selected`,
+    and adding `aria-expanded` to one would be wrong, not merely redundant.
+    Target existence is asserted only when the target is declared in the same
+    file — a page trigger may legitimately control a panel defined in its
+    parent layout.
+    """
+    soup = _template(template)
+    triggers = [
+        trigger
+        for trigger in soup.select("button[aria-controls], a[aria-controls]")
+        if trigger.get("role") != "tab"
+    ]
+    if not triggers:
+        pytest.skip(f"{template} has no non-tab aria-controls triggers")
+    for trigger in triggers:
         controlled_id = trigger["aria-controls"]
-        controlled = soup.find(id=controlled_id)
-        assert controlled is not None, f"Missing controlled element: {controlled_id}"
-        assert trigger.get("aria-expanded") in {
-            "true",
-            "false",
-            "{{ 'true' if classroom_open else 'false' }}",
-            "{{ 'true' if economy_open else 'false' }}",
-            "{{ 'true' if bills_open else 'false' }}",
-            "{{ 'true' if class_tools_open else 'false' }}",
-            "{{ 'true' if settings_open else 'false' }}",
-        }
+        value = trigger.get("aria-expanded")
+        label = " ".join(trigger.get_text(strip=True).split())[:40]
+        assert _describes_expanded_state(value), (
+            f"{template}: trigger for {controlled_id} (“{label}”) has "
+            f"aria-expanded={value!r}; expected 'true'/'false' or a Jinja "
+            f"conditional rendering one"
+        )
+
+
+@pytest.mark.parametrize("template", TEMPLATES_WITH_TRIGGERS)
+def test_disclosure_triggers_target_elements_that_exist(template):
+    """A trigger pointing at an id declared nowhere in this file or the layouts."""
+    soup = _template(template)
+    known_ids = {element["id"] for element in soup.find_all(id=True)}
+    for layout in LAYOUTS_WITH_TRIGGERS:
+        known_ids |= {element["id"] for element in _template(layout).find_all(id=True)}
+
+    for trigger in soup.select("[aria-controls]"):
+        controlled_id = trigger["aria-controls"]
+        if "{" in controlled_id:
+            continue  # Jinja-computed target; resolvable only at render time.
+        assert controlled_id in known_ids, (
+            f"{template}: aria-controls names {controlled_id!r}, which is "
+            f"declared neither here nor in a portal layout"
+        )
+
+
+@pytest.mark.parametrize("layout", LAYOUTS_WITH_TRIGGERS)
+def test_offcanvas_triggers_have_their_state_kept_in_sync(layout):
+    """A static `aria-expanded` that never updates is still a lie.
+
+    Bootstrap manages the panel but does not touch `aria-expanded` on the
+    trigger, so the attribute has to be driven by `offcanvas-aria.js`. This
+    asserts the layout loads it; the attribute check above cannot tell a
+    maintained value from a frozen one.
+    """
+    soup = _template(layout)
+    if not soup.select('[data-bs-toggle="offcanvas"][aria-controls]'):
+        pytest.skip(f"{layout} has no offcanvas triggers")
+    sources = " ".join(s.get("src", "") for s in soup.find_all("script"))
+    assert "offcanvas-aria.js" in sources, (
+        f"{layout} has offcanvas triggers but never loads offcanvas-aria.js, "
+        f"so their aria-expanded would stay frozen at its initial value"
+    )
 
 
 def test_admin_dashboard_exposes_current_location_to_assistive_technology():

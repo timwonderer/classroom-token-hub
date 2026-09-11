@@ -1,5 +1,7 @@
 # Documentation Standards
 
+> **Not authoritative.** This file is operational guidance for agents. Normative authority lives only under `docs/INVARIANT/`, `docs/DOMAIN/`, `docs/FEATURE-EXECUTION/`, `docs/SPEC/`, and `docs/STANDARD_OPERATING_PROCEDURES/`. Where this file conflicts with one of those, the normative document wins and this file is what gets corrected.
+
 **CRITICAL:** Documentation must be updated whenever features are added, changed, or removed. Outdated documentation is worse than no documentation.
 
 ---

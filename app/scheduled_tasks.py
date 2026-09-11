@@ -6,6 +6,7 @@ Contains periodic tasks that run in the background to maintain system state.
 
 import logging
 import secrets
+from typing import Callable, NamedTuple
 from app.feats.base import FEATContextError, requires_feat_context
 from app.services.insurance_policy_service import delete_due_policy_lineages
 # TODO (Phase 4): insurance_billing deleted; move to Obligations domain
@@ -722,6 +723,27 @@ def run_economy_rebalance_activation_job():
     )
 
 
+def run_ledger_settlement_job():
+    """Settle every seat context carrying unsettled ledger activity.
+
+    ``create_pending_transaction`` is the only ledger write boundary and it
+    creates every effect PENDING, so settlement is what admits money to posted
+    history: it assigns ``posting_sequence`` and advances
+    ``LedgerBalanceSnapshot``. Nothing else in the application calls it, which
+    means without this job no transaction ever posts, every snapshot stays
+    absent, and every posted-balance read answers zero forever.
+    """
+    from app.services.ledger_settlement_service import settle_pending_transaction_contexts
+
+    logger = logging.getLogger('scheduled_tasks')
+    summary = settle_pending_transaction_contexts()
+    logger.info(
+        "Ledger settlement sweep completed; settled %s context(s), failed %s context(s)",
+        summary["settled_contexts"], summary["failed_contexts"],
+    )
+    return summary
+
+
 def run_savings_interest_job():
     """Post the current savings-interest payout for eligible class seats."""
     from app.extensions import db
@@ -729,6 +751,13 @@ def run_savings_interest_job():
     from app.models import Seat
     from app.services.ledger_interest_service import apply_monthly_savings_interest
     from app.utils.canonical_temporal_resolver import utc_now
+
+    # Interest accrues on posted balances only (SPEC-ECON-001 §9.2), so an
+    # unsettled ledger presents a zero base and this job underpays silently
+    # rather than failing. Two independent interval jobs have no ordering
+    # guarantee between them, so the dependency is discharged here instead of
+    # being left to registration order.
+    run_ledger_settlement_job()
 
     logger = logging.getLogger('scheduled_tasks')
     class_ids = [row[0] for row in db.session.query(Seat.class_id).distinct().all()]
@@ -755,6 +784,118 @@ def run_savings_interest_job():
     )
 
 
+SCHEDULED_JOB_MAX_INSTANCES = 1
+
+
+class ScheduledJobSpec(NamedTuple):
+    """One scheduled job's registration, declared apart from the scheduler.
+
+    The jobs used to be registered by ten inline ``scheduler.add_job`` calls
+    inside ``init_scheduled_tasks``, which is skipped under TESTING and only
+    reachable by starting a real BackgroundScheduler. That made "is this job
+    registered at all?" untestable — and a settlement sweep that existed as a
+    function nobody scheduled is exactly the defect that shipped. Declaring the
+    set here lets a test assert membership and ordering without a scheduler.
+    """
+
+    id: str
+    name: str
+    func: Callable[[], object]
+    trigger: str
+    trigger_kwargs: dict
+
+
+# Ordering is meaningful where one job depends on another having run: ledger
+# settlement precedes savings interest because interest accrues on posted
+# balances only. Registration order alone does not enforce that at runtime —
+# run_savings_interest_job discharges the dependency itself — but declaring it
+# here keeps the relationship visible and assertable.
+SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
+    ScheduledJobSpec(
+        id='enforce_daily_limits',
+        name='Enforce daily attendance limits',
+        func=enforce_daily_limits_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    ScheduledJobSpec(
+        id='database_maintenance',
+        name='Nightly database maintenance',
+        func=database_maintenance_job,
+        trigger='cron',
+        trigger_kwargs={'hour': 2, 'minute': 0},
+    ),
+    ScheduledJobSpec(
+        id='audit_invariant_check',
+        name='Nightly audit chain integrity verification',
+        func=run_audit_invariant_check_job,
+        trigger='cron',
+        trigger_kwargs={'hour': 3, 'minute': 0},
+    ),
+    # Hourly so cycle boundaries and rent-boundary PERK expiry are materialized
+    # promptly across timezones, even when no student visits the rent page.
+    # Idempotent per class.
+    ScheduledJobSpec(
+        id='rent_reconciliation',
+        name='Rent lifecycle reconciliation',
+        func=run_rent_reconciliation_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    # Fires the canonical completion FEAT only for classes whose
+    # next_payroll_date is due; idempotent per scheduled occurrence, so an
+    # hourly cadence never double-runs a cycle.
+    ScheduledJobSpec(
+        id='automatic_payroll',
+        name='Automatic payroll (due classes)',
+        func=run_automatic_payroll_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    # Reads the bill-cycle table for terminal insurance lineages whose coverage
+    # boundary has passed and writes EXPIRED via FEAT-STOR-002. Idempotent per
+    # entitlement/boundary, so a daily cadence never double-expires.
+    ScheduledJobSpec(
+        id='insurance_expiry',
+        name='Insurance boundary expiry',
+        func=run_insurance_expiry_job,
+        trigger='cron',
+        trigger_kwargs={'hour': 4, 'minute': 0},
+    ),
+    # Hourly, because a goal deadline is a wall-clock instant the teacher chose
+    # rather than a daily boundary, and students can see the deadline pass.
+    # Skips goals already met and lineages already terminated.
+    ScheduledJobSpec(
+        id='collective_goal_expiry',
+        name='Collective goal expiry and refund',
+        func=run_collective_goal_expiry_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    ScheduledJobSpec(
+        id='economy_rebalance_activation',
+        name='Activate due economy rebalances',
+        func=run_economy_rebalance_activation_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    ScheduledJobSpec(
+        id='ledger_settlement',
+        name='Ledger settlement sweep',
+        func=run_ledger_settlement_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    ScheduledJobSpec(
+        id='savings_interest_payout',
+        name='Savings interest payout',
+        func=run_savings_interest_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+)
+
+
 def init_scheduled_tasks(app):
     """
     Initialize and start scheduled tasks.
@@ -766,169 +907,30 @@ def init_scheduled_tasks(app):
 
     logger = logging.getLogger('scheduled_tasks')
 
-    # Wrapper function that runs the enforce_daily_limits_job with Flask app context
-    def run_enforce_daily_limits():
-        with app.app_context():
-            enforce_daily_limits_job()
-
-    # Wrapper function that runs the database_maintenance_job with Flask app context
-    def run_database_maintenance():
-        with app.app_context():
-            database_maintenance_job()
-
-    def run_audit_invariant_check():
-        with app.app_context():
-            run_audit_invariant_check_job()
-
-    # Wrapper that runs the rent reconciliation job with Flask app context
-    def run_rent_reconciliation():
-        with app.app_context():
-            run_rent_reconciliation_job()
-
-    # Wrapper that runs the automatic-payroll job with Flask app context
-    def run_automatic_payroll():
-        with app.app_context():
-            run_automatic_payroll_job()
-
-    # Wrapper that runs the insurance boundary-expiry job with Flask app context
-    def run_insurance_expiry():
-        with app.app_context():
-            run_insurance_expiry_job()
-
-    # Wrapper that runs the collective-goal expiry sweep with Flask app context
-    def run_collective_goal_expiry():
-        with app.app_context():
-            run_collective_goal_expiry_job()
-
-    def run_economy_rebalance_activation():
-        with app.app_context():
-            run_economy_rebalance_activation_job()
-
-    def run_savings_interest():
-        with app.app_context():
-            run_savings_interest_job()
-
-    if not scheduler.running:
-        # Add the daily-limit enforcement job to run every hour
-        scheduler.add_job(
-            func=run_enforce_daily_limits,
-            trigger='interval',
-            hours=1,
-            id='enforce_daily_limits',
-            name='Enforce daily attendance limits',
-            replace_existing=True,
-            max_instances=1  # Prevent overlapping executions
-        )
-
-        # Add the database maintenance job to run nightly at 2 AM UTC
-        scheduler.add_job(
-            func=run_database_maintenance,
-            trigger='cron',
-            hour=2,
-            minute=0,
-            id='database_maintenance',
-            name='Nightly database maintenance',
-            replace_existing=True,
-            max_instances=1  # Prevent overlapping executions
-        )
-
-        # Nightly audit chain integrity check — runs at 3 AM UTC (after maintenance)
-        scheduler.add_job(
-            func=run_audit_invariant_check,
-            trigger='cron',
-            hour=3,
-            minute=0,
-            id='audit_invariant_check',
-            name='Nightly audit chain integrity verification',
-            replace_existing=True,
-            max_instances=1
-        )
-
-        # Rent lifecycle reconciliation — runs hourly so cycle boundaries and
-        # rent-boundary PERK expiry are materialized promptly across timezones,
-        # even when no student visits the rent page. Idempotent per class.
-        scheduler.add_job(
-            func=run_rent_reconciliation,
-            trigger='interval',
-            hours=1,
-            id='rent_reconciliation',
-            name='Rent lifecycle reconciliation',
-            replace_existing=True,
-            max_instances=1  # Prevent overlapping executions
-        )
-
-        # Automatic payroll — hourly. Fires the canonical completion FEAT only for
-        # classes whose next_payroll_date is due; idempotent per scheduled
-        # occurrence, so an hourly cadence never double-runs a cycle.
-        scheduler.add_job(
-            func=run_automatic_payroll,
-            trigger='interval',
-            hours=1,
-            id='automatic_payroll',
-            name='Automatic payroll (due classes)',
-            replace_existing=True,
-            max_instances=1  # Prevent overlapping executions
-        )
-
-        # Insurance boundary expiry — daily at 4 AM UTC. Reads the bill-cycle table
-        # for terminal insurance lineages whose coverage boundary has passed and
-        # writes EXPIRED via FEAT-STOR-002. Idempotent per entitlement/boundary, so
-        # a daily cadence never double-expires.
-        scheduler.add_job(
-            func=run_insurance_expiry,
-            trigger='cron',
-            hour=4,
-            minute=0,
-            id='insurance_expiry',
-            name='Insurance boundary expiry',
-            replace_existing=True,
-            max_instances=1  # Prevent overlapping executions
-        )
-
-        # Collective-goal expiry — hourly, because a goal deadline is a wall-clock
-        # instant the teacher chose rather than a daily boundary, and students can
-        # see the deadline pass. Skips goals already met and lineages already
-        # terminated, so an hourly cadence never double-expires or double-refunds.
-        scheduler.add_job(
-            func=run_collective_goal_expiry,
-            trigger='interval',
-            hours=1,
-            id='collective_goal_expiry',
-            name='Collective goal expiry and refund',
-            replace_existing=True,
-            max_instances=1  # Prevent overlapping executions
-        )
-
-        scheduler.add_job(
-            func=run_economy_rebalance_activation,
-            trigger='interval',
-            hours=1,
-            id='economy_rebalance_activation',
-            name='Activate due economy rebalances',
-            replace_existing=True,
-            max_instances=1,
-        )
-
-        scheduler.add_job(
-            func=run_savings_interest,
-            trigger='interval',
-            hours=1,
-            id='savings_interest_payout',
-            name='Savings interest payout',
-            replace_existing=True,
-            max_instances=1,
-        )
-
-        scheduler.start()
-        logger.info(
-            "Scheduled tasks initialized: daily-limit enforcement (hourly), "
-            "database maintenance (2 AM UTC), "
-            "audit invariant check (3 AM UTC), "
-            "rent reconciliation (hourly), "
-            "automatic payroll (hourly), "
-            "insurance boundary expiry (4 AM UTC), "
-            "collective goal expiry (hourly)"
-            ", savings interest payout (hourly)"
-        )
-    else:
+    if scheduler.running:
         logger.info("Scheduler already running")
+        return
+
+    def in_app_context(job_func):
+        def run():
+            with app.app_context():
+                job_func()
+        run.__name__ = job_func.__name__
+        return run
+
+    for spec in SCHEDULED_JOB_SPECS:
+        scheduler.add_job(
+            func=in_app_context(spec.func),
+            trigger=spec.trigger,
+            id=spec.id,
+            name=spec.name,
+            replace_existing=True,
+            max_instances=SCHEDULED_JOB_MAX_INSTANCES,
+            **spec.trigger_kwargs,
+        )
+
+    scheduler.start()
+    logger.info(
+        "Scheduled tasks initialized: %s",
+        ", ".join(spec.id for spec in SCHEDULED_JOB_SPECS),
+    )
