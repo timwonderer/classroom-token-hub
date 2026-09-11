@@ -513,9 +513,11 @@
         background-color: color-mix(in srgb, black 5%, transparent);
     }
 
+    /* Gold on --primary is 3.75:1 in the student theme, short of AA for text
+       this size. The fill already carries the selected state. */
     .docs-layout .docs-sidebar .nav-link.active {
         background-color: var(--primary);
-        color: var(--secondary);
+        color: var(--text-inverse);
     }
 
     .sidebar-heading {

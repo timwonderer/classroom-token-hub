@@ -1,4 +1,5 @@
 {% from "macros/auth_brand.html" import auth_brand %}
+{% from "macros/turnstile.html" import turnstile %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -76,12 +77,12 @@
         }
 
         a {
-            color: var(--secondary);
+            color: var(--accent-text-on-light);
         }
 
         a:hover {
-            color: var(--secondary);
-            opacity: 0.8;
+            color: var(--accent-text-on-light);
+            text-decoration: underline;
         }
 
     </style>
@@ -131,11 +132,7 @@
                     autocomplete="current-password", id="studentPassphrase") }}
                 </div>
 
-                {% if turnstile_site_key %}
-                <div class="mb-4 d-flex justify-content-center">
-                    <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}" data-theme="light"></div>
-                </div>
-                {% endif %}
+                {{ turnstile(turnstile_site_key, "mb-4 d-flex justify-content-center") }}
 
                 {{ form.submit(class="btn btn-primary w-100 btn-lg mb-4") }}
             </form>
@@ -172,11 +169,11 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow-lg">
                 <div class="modal-body text-center p-5">
-                    <div class="spinner-border text-primary mb-4" role="status" style="width: 3rem; height: 3rem;">
+                    <div class="spinner-border text-primary mb-4 auth-loading-spinner" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
                     <h5 class="fw-bold mb-3 text-primary" id="loadingTipsModalLabel">Did you know?</h5>
-                    <p class="text-secondary mb-0" id="tipText" style="min-height: 3rem; line-height: 1.6;">
+                    <p class="text-secondary mb-0 auth-loading-tip" id="tipText">
                         Loading your account...
                     </p>
                 </div>

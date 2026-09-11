@@ -1787,7 +1787,7 @@ body.maintenance-active .sidebar {
 }
 
 .landing-signin-note-title {
-    color: var(--secondary-hover);
+    color: var(--accent-text-on-light);
     font-size: 1rem;
     font-style: italic;
     font-weight: 600;
@@ -2187,6 +2187,31 @@ body.maintenance-active .sidebar {
 
 .auth-body {
     padding: var(--space-12);
+}
+
+/* Gold is a fill, never body text: --secondary is 2.12:1 on --surface. This
+   floor outranks a bare `a` in a page-local <style>, so a page that reaches for
+   the accent again still renders the darkened variant. Buttons are excluded —
+   they carry their own foreground against a filled background. */
+.auth-body a:not(.btn) {
+    color: var(--accent-text-on-light);
+}
+
+.auth-body a:not(.btn):hover,
+.auth-body a:not(.btn):focus-visible {
+    color: var(--accent-text-on-light);
+    text-decoration: underline;
+}
+
+/* Progress and tip chrome for the sign-in wait modal. */
+.auth-loading-spinner {
+    width: var(--space-12);
+    height: var(--space-12);
+}
+
+.auth-loading-tip {
+    min-height: var(--space-12);
+    line-height: var(--leading-normal);
 }
 
 @media (max-width: 768px) {

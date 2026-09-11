@@ -159,9 +159,12 @@ These are the authoritative values. Where any other artifact disagrees, that art
 | `--primary-hover` | `#15403b` | `#253f66` | `#1a1a1a` |
 | `--primary-subtle` | `#e8f0ef` | `#e8edf4` | `#e8e8e8` |
 | `--secondary` | `#D4A857` | `#D4A857` | `#D4A857` |
-| `--secondary-text` | `--neutral-900` | `--text-inverse` | `--neutral-900` |
+| `--secondary-hover` | `#c09840` | `#c09840` | `#c09840` |
+| `--secondary-text` | `--neutral-900` | `--neutral-900` | `--neutral-900` |
 
-> **Naming note.** v1 documented the teacher accent as `#d3af37` and the student accent as bronze `#ac8255`. The implementation has since converged all three roles on a single gold `#D4A857`. The v1 values are superseded. The student theme retains a brown `--secondary-hover` and a warm `--secondary-subtle` from the bronze era; this is a deliberate carry-over, not drift, but the label "Bronze" no longer describes the base accent.
+> **The secondary triplet is role-agnostic, and that is load-bearing.** `--secondary` and `--secondary-text` are consumed together by shared components — `.bg-secondary`, `.btn-secondary`, and every badge built on them — so the pair has to satisfy §XI in whichever theme happens to be mounted. It cannot be satisfied per-role by accident. Gold is a *fill*: it carries `--neutral-900` at 8.71:1 and white at 2.12:1. A role theme therefore MUST NOT set a light `--secondary-text`, and MUST NOT darken `--secondary-hover` past the point where `--secondary-text` still clears AA on it — `#c09840` holds at 6.85:1, a brown such as `#725132` collapses to 2.58:1.
+>
+> **Naming note.** v1 documented the teacher accent as `#d3af37` and the student accent as bronze `#ac8255`, and the student theme long carried a brown `--secondary-hover` with white text to match. All three roles have since converged on a single gold; the v1 values and the brown hover are superseded. Only `--secondary-subtle` still differs by role, and it is a background fill that never pairs with a pinned foreground. The label "Bronze" no longer describes the student accent.
 
 ### 5. Adding a Token
 
@@ -277,6 +280,10 @@ Two macros render it, and a third surface MUST reuse one rather than add a fourt
 Sign-in, sign-up, and recovery pages use one stacked layout: the brand band on top, the interactive panel (`.auth-body`) beneath. A two-column split that places the brand beside the form is prohibited — it forces the brand to be dropped entirely at narrow widths, which is what the prior `@media (max-width: 768px) { .login-right { display: none } }` rule did on all fourteen pages.
 
 The band's fill is `var(--primary)`, so the role theme carried on `<body>` selects it with no per-page override and no role conditional (§V.2). Wordmark text is `var(--text-inverse)`; the leading icons are `var(--secondary)` and are decorative (`aria-hidden="true"`), per §VIII.4.
+
+Inside `.auth-body` the surface is `var(--surface)`, so **no text may use `--secondary` or `--secondary-hover`** — they are 2.12:1 and 2.69:1 on white. Links, subtitles, field labels, and helper text take `var(--accent-text-on-light)` (§V.6). The shell defines `.auth-body a:not(.btn)` as a floor precisely because these pages carry page-local `<style>` blocks: a bare `a { color: var(--secondary) }` in one of them loses to the floor on specificity, so the accessible colour survives a page that reaches for the accent again. A hover MUST NOT be expressed as `opacity` on the link — diluting `--accent-text-on-light` to 80% lands at 4.21:1, below the §XI threshold. Use `text-decoration: underline`.
+
+**Third-party widgets sized in pixels.** `.auth-container` sets `overflow: hidden`, and the panel's content box is ~304px at its widest and narrower on every phone. Any embedded widget with a fixed pixel width MUST be checked against that budget rather than assumed to fit. Cloudflare Turnstile is the live case: its default widget is a fixed 300px and its "flexible" mode still floors at 300px, so the panel clips it on any viewport below ~396px — which would leave the form unsubmittable. `macros/turnstile.html` is the only sanctioned way to render it; it selects the documented 150px `compact` size below that threshold. Do not hand-write a `.cf-turnstile` div.
 
 ---
 

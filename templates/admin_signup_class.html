@@ -1,4 +1,5 @@
 {% from "macros/auth_brand.html" import auth_brand %}
+{% from "macros/turnstile.html" import turnstile %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -28,8 +29,8 @@
             font-size: 0.75rem;
             letter-spacing: 0.05em;
         }
-        a { color: var(--secondary); }
-        a:hover { color: var(--secondary); opacity: 0.8; }
+        a { color: var(--accent-text-on-light); }
+        a:hover { color: var(--accent-text-on-light); text-decoration: underline; }
         .btn-primary {
             background: var(--primary);
             border: none;
@@ -76,11 +77,7 @@
 
                 {% include '_class_setup_fields.html' %}
 
-                {% if turnstile_site_key %}
-                <div class="mb-3">
-                    <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}" data-theme="light"></div>
-                </div>
-                {% endif %}
+                {{ turnstile(turnstile_site_key, "mb-3") }}
 
                 <input type="hidden" name="tos_agreed" id="tos_agreed_input" value="false">
                 <input type="hidden" name="signup_step" value="class_setup">

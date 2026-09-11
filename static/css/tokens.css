@@ -124,9 +124,9 @@
     --text-muted: var(--neutral-600);
     --text-inverse: #ffffff;
 
-    /* Gold accent text on any light surface. Deliberately role-agnostic: the
-       per-role --secondary-hover values do not all clear AA here — sysadmin's
-       #c09840 is 2.69:1 on white, failing even the large-text threshold. */
+    /* Gold accent text on any light surface. --secondary and --secondary-hover
+       are fills and cannot stand in for it: #D4A857 is 2.12:1 on white and
+       #c09840 is 2.69:1, failing even the large-text threshold. */
     --accent-text-on-light: #735816;
 
     /* Alert body text, darkened past the status tokens so it clears AA on the
@@ -151,12 +151,14 @@
     --primary-hover: #15403b;
     --primary-subtle: #e8f0ef;
 
-    /* Secondary: Gold */
+    /* Secondary: Gold. Identical in all three role themes — including the hover
+       fill, which must stay light enough for --secondary-text to clear AA on it.
+       A darkened brown here would read as a hover but drop .btn-secondary:hover
+       to ~2.6:1. Gold is a fill, not a text colour; see --accent-text-on-light. */
     --secondary:#D4A857;
-    --secondary-hover: #735816;
+    --secondary-hover: #c09840;
     --secondary-text: var(--neutral-900);
     --secondary-subtle: #f9f5e6;
-    /* Dark text on gold */
     --accent: var(--secondary);
 
     /* Semantic Status Colors (Muted/Professional) */
@@ -197,12 +199,11 @@ body.student-shell {
     --primary-hover: #253f66;
     --primary-subtle: #e8edf4;
 
-    /* Secondary: Bronze/Brown */
+    /* Secondary: Gold */
     --secondary: #D4A857;
-    --secondary-hover: #725132;
-    --secondary-text: var(--text-inverse);
+    --secondary-hover: #c09840;
+    --secondary-text: var(--neutral-900);
     --secondary-subtle: #f4efe9;
-    /* White text on brown */
     --accent: var(--secondary);
 
     /* Semantic Status Colors (Cooler Greens/Blues) */
@@ -219,8 +220,8 @@ body.student-shell {
     --danger-hover: #aa3636;
     --danger-subtle: #fce8e6;
 
-    /* Student shell chrome. The nav-active fill is darker than --secondary-hover
-       so white nav labels clear AA against it. */
+    /* Student shell chrome. Deliberately a brown rather than the gold accent:
+       nav labels are white, which needs a dark fill to clear AA. */
     --student-nav-active-bg: #7f5b34;
 
     /* Brand wordmark icon hover accents — saturated on purpose, only ever shown

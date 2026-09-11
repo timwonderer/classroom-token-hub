@@ -1,4 +1,5 @@
 {% from "macros/auth_brand.html" import auth_brand %}
+{% from "macros/turnstile.html" import turnstile %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -70,12 +71,12 @@
         }
 
         a {
-            color: var(--secondary);
+            color: var(--accent-text-on-light);
         }
 
         a:hover {
-            color: var(--secondary);
-            opacity: 0.8;
+            color: var(--accent-text-on-light);
+            text-decoration: underline;
         }
 
         .text-primary {
@@ -123,17 +124,12 @@
                     autocapitalize="off",inputmode="numeric", pattern="\\d{6}", maxlength="6", id="totpCodeField") }}
                 </div>
 
-                {% if turnstile_site_key %}
-                <div class="mb-4">
-                    <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}" data-theme="light"></div>
-                </div>
-                {% endif %}
+                {{ turnstile(turnstile_site_key, "mb-4") }}
 
                 <div class="d-grid gap-2 mb-4">
                     {{ form.submit(class="btn btn-primary btn-lg") }}
                     <button type="button" id="usePasskeyBtn" class="btn btn-outline-primary btn-lg">
-                        <span class="material-symbols-outlined align-middle me-2" aria-hidden="true"
-                            style="font-size: 1.5rem;">fingerprint</span>
+                        <span class="material-symbols-outlined align-middle me-2 icon-lg" aria-hidden="true">fingerprint</span>
                         Sign in with Passkey
                     </button>
                 </div>
