@@ -12,50 +12,32 @@
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
-        body {
-            background-color: var(--background);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-        }
-        .btn-primary {
-            background: var(--primary);
-            border: none;
-            padding: 0.8rem 1.5rem;
-        }
-        .btn-primary:hover {
-            background: var(--primary-hover);
-        }
         .form-control-lg {
-            padding: 0.8rem 1rem;
+            padding: var(--space-3) var(--space-4);
         }
+
         .back-link {
             text-decoration: none;
             color: var(--accent-text-on-light);
             display: flex;
             align-items: center;
-            font-size: 0.9rem;
-            margin-bottom: 2rem;
+            font-size: var(--text-sm);
+            margin-bottom: var(--space-8);
         }
+
         .back-link:hover {
             color: var(--primary);
         }
 
         @media (max-width: 768px) {
-            body {
-                align-items: flex-start;
-                padding: 0.75rem;
-            }
             .btn-lg {
-                padding: 0.85rem 1rem;
-                font-size: 1rem;
+                padding: var(--space-3) var(--space-4);
+                font-size: var(--text-base);
             }
         }
     </style>
 </head>
-<body class="student-shell">
+<body class="student-shell auth-page">
     <main id="main-content" aria-labelledby="student-recovery-heading">
     <div class="auth-container">
         {{ auth_brand() }}

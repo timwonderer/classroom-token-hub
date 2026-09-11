@@ -12,64 +12,21 @@
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
-        body {
-            background-color: var(--background);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-        }
-
         .info-box {
             border: 2px solid var(--primary);
-            padding: 1rem;
-            margin-bottom: 1.5rem;
+            padding: var(--space-4);
+            margin-bottom: var(--space-6);
             background-color: var(--background);
         }
 
         .info-box p {
-            margin-bottom: 0.5rem;
-            font-size: 0.9rem;
+            margin-bottom: var(--space-2);
+            font-size: var(--text-sm);
         }
-
-        .subtitle {
-            color: var(--accent-text-on-light) !important;
-        }
-
-        .form-label {
-            color: var(--accent-text-on-light) !important;
-            text-transform: uppercase;
-            font-weight: 600;
-            font-size: 0.75rem;
-            letter-spacing: 0.05em;
-        }
-
-        a {
-            color: var(--accent-text-on-light);
-        }
-
-        a:hover {
-            color: var(--accent-text-on-light);
-            text-decoration: underline;
-        }
-
-        .btn-primary {
-            background: var(--primary);
-            border: none;
-            color: white;
-            transition: all 0.3s ease;
-        }
-
-        .btn-primary:hover {
-            background: var(--secondary);
-            color: var(--neutral-900);
-        }
-
     </style>
 </head>
 
-<body class="student-shell">
+<body class="student-shell auth-page">
     <main id="main-content" aria-labelledby="find-account-heading">
     <div class="auth-container">
         {{ auth_brand() }}

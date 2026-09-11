@@ -256,11 +256,32 @@ A template MUST NOT contain:
 A template MAY contain:
 
 1. An inline `style` attribute whose value is **computed per render** — e.g. `style="width: {{ pct }}%"` on a progress bar. This is the legitimate use of the attribute and is not a violation. The dynamic portion MUST still reference tokens for any non-computed part.
-2. A page-scoped `<style>` block for genuinely single-use layout, provided every value in it resolves to a token.
+2. A page-scoped `<style>` block for genuinely single-use layout, provided every **design value** in it resolves to a token.
+
+### Design values versus structural values
+
+The token requirement above governs design values only. A **design value** is one the design system has an opinion about and could change system-wide:
+
+| Category | Token family |
+|---|---|
+| Color | `--primary`, `--surface`, `--text-*`, `--*-subtle`, status colors |
+| Type size, weight, leading, tracking | `--text-*`, `--weight-*`, `--leading-*`, `--tracking-*` |
+| Spacing — padding, margin, gap | `--space-*` |
+| Radius | `--radius-*` |
+| Elevation | `--shadow-*` |
+| Motion — duration, easing | `--duration-*`, `--ease-standard` |
+| Opacity | `--alpha-*` |
+| Icon size | `--icon-*` |
+
+A **structural value** describes the geometry of one specific element and has no system-wide meaning. `min-height: 100dvh` on a full-viewport page, `width: 0%` on a meter that script drives to its real width, `border-radius: 50%` to make a square a circle, `grid-template-columns: 1fr 1fr auto`, `max-width: 200px` capping a QR image, `border-left: 4px solid var(--border-color)` — the number in each is a fact about that element, not a design decision the system owns. Tokenizing them would invent tokens with one call site each and make the scale meaningless.
+
+Structural values are permitted as literals. A value is structural only if changing the corresponding token everywhere would not be expected to change it; when in doubt, it is a design value.
 
 ### Shared-surface rule
 
-CSS repeated across templates MUST be promoted to `style.css`. At the time of this revision the error pages, login pages, and recovery pages each carried near-identical duplicated blocks. Duplicated presentation is drift with a delay: the copies diverge on the first edit that does not touch all of them.
+CSS repeated across templates MUST be promoted to `style.css`. Duplicated presentation is drift with a delay: the copies diverge on the first edit that does not touch all of them.
+
+The auth shell was reconciled under this rule — `.auth-page`, `.auth-body .form-label`, `.auth-body .subtitle`, `.auth-body .form-text`, `.auth-body .form-group`, `.auth-body .footer-links`, and `.auth-code-input` are defined once in the Auth Shell section of `style.css`. The error pages still carry near-identical duplicated blocks and remain outstanding.
 
 ### The brand mark
 
@@ -347,7 +368,8 @@ Inside `.auth-body` the surface is `var(--surface)`, so **no text may use `--sec
 
 A surface conforms when:
 
-- no design value is expressed literally; every one resolves through a token
+- no design value is expressed literally; every one resolves through a token. Structural values (§IX) are exempt and are the only exemption
+- no CSS rule in a page-scoped `<style>` block is also matched by a rule in `style.css`, whether the page copy agrees with it or is beaten by it
 - no template carries a hardcoded color, in markup, `<style>`, or script
 - every inline `style` attribute is per-render computed
 - role identity is carried solely by the body class
@@ -381,6 +403,10 @@ Design-system conformance is mechanically checkable and SHOULD be gated rather t
 3. `--bs-*-rgb` parity with its paired token.
 4. Theme-layer token set completeness across all three role blocks.
 5. No inline `style` attribute lacking a Jinja expression.
+6. No literal length, weight, duration, or opacity in a template `<style>` block outside the structural categories named in §IX.
+7. No selector appearing in both a template `<style>` block and `style.css`.
+
+Rule 7 catches a failure mode the others miss. A page copy that loses the cascade renders nothing, so it can drift arbitrarily far from the shared rule without any visible symptom — it is edited, reviewed, and merged as if it were live. The fourteen auth templates each carried a `.btn-primary` block that had not rendered since `style.css` claimed the selector with `!important`, and three of them had independently drifted the hover fill to a colour that would have failed contrast had it ever applied.
 
 Per `INV-ARC-020` §VIII.4, any change to `static/css/` affecting rendered color, spacing, display state, or focus styling is a high-risk change class and carries the accessibility validation obligation in `INV-ARC-020` §X.
 

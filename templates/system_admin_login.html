@@ -16,77 +16,18 @@
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
-        /* System Admin Theme Override managed by tokens.css + sysadmin-shell class */
-
-        body {
-            background-color: var(--background);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-        }
-
         .security-notice {
             background-color: var(--warning-subtle);
             border: 1px solid var(--warning);
-            padding: 0.75rem;
-            margin-bottom: 1.5rem;
+            padding: var(--space-3);
+            margin-bottom: var(--space-6);
             text-align: center;
-            font-size: 0.875rem;
+            font-size: var(--text-sm);
         }
-
-        .btn-primary {
-            background: var(--primary);
-            border: none;
-            color: white;
-            transition: all 0.3s ease;
-        }
-
-        .btn-primary:hover {
-            background: var(--secondary);
-            color: var(--text-primary);
-        }
-
-        .btn-outline-primary:hover {
-            background: var(--secondary);
-            border-color: var(--secondary);
-            color: var(--text-primary);
-        }
-
-        .subtitle {
-            color: var(--accent-text-on-light) !important;
-        }
-
-        .form-label {
-            color: var(--accent-text-on-light) !important;
-            text-transform: uppercase;
-            font-weight: 600;
-
-            font-size: 0.75rem;
-            letter-spacing: 0.05em;
-        }
-
-        .text-center a {
-            color: var(--accent-text-on-light);
-        }
-
-        a {
-            color: var(--accent-text-on-light);
-        }
-
-        a:hover {
-            color: var(--accent-text-on-light);
-            text-decoration: underline;
-        }
-
-        .text-primary {
-            color: var(--primary) !important;
-        }
-
     </style>
 </head>
 
-<body class="sysadmin-shell">
+<body class="sysadmin-shell auth-page">
     <main id="main-content" aria-labelledby="sysadmin-login-heading">
     <div class="auth-container">
         {{ auth_brand() }}

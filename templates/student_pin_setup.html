@@ -19,148 +19,69 @@
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
-        body {
-            background-color: var(--background);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-        }
-
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        .btn-primary {
-            background: var(--primary);
-            border: none;
-            color: white;
-            transition: all 0.3s ease;
-        }
-
-        .btn-primary:hover {
-            background: var(--primary-hover);
-            color: white;
-        }
-
-        .btn-primary:disabled {
-            background: var(--neutral-300);
-            cursor: not-allowed;
-        }
-
-        .form-label {
-            color: var(--accent-text-on-light) !important;
-            text-transform: uppercase;
-            font-weight: 600;
-            font-size: 0.75rem;
-            letter-spacing: 0.05em;
-        }
-
-        .form-text {
-            color: var(--accent-text-on-light);
-            font-size: 0.875rem;
-        }
-
-        .subtitle {
-            color: var(--accent-text-on-light) !important;
-        }
-
-        .alert {
-            border: none;
-            border-radius: 8px;
-        }
-
-        .alert-info {
-            background-color: var(--info-subtle);
-            color: var(--info);
-        }
-
-        .alert-danger {
-            background-color: var(--danger-subtle);
-            color: var(--danger);
-        }
-
-        .footer-links {
-            text-align: center;
-            padding-top: 1.5rem;
-            border-top: 1px solid var(--border-color);
-            margin-top: 2rem;
-        }
-
-        .footer-links a {
-            color: var(--accent-text-on-light);
-            text-decoration: none;
-            font-size: 0.875rem;
-        }
-
-        .footer-links a:hover {
-            color: var(--primary);
-            text-decoration: underline;
-        }
-
         .strength-meter {
-            height: 10px;
+            height: var(--space-2);
             width: 100%;
             background-color: var(--border-color);
-            margin-top: 0.5rem;
-            border-radius: 5px;
+            margin-top: var(--space-2);
+            border-radius: var(--radius-sm);
             overflow: hidden;
         }
 
+        /* Width and colour are driven from script as the passphrase is typed. */
         .strength-meter-fill {
             height: 100%;
             width: 0%;
-            background-color: red;
-            border-radius: 5px;
-            transition: width 0.3s ease-in-out, background-color 0.3s ease-in-out;
+            background-color: var(--danger);
+            border-radius: var(--radius-sm);
+            transition: width var(--duration-slow) var(--ease-standard),
+                        background-color var(--duration-slow) var(--ease-standard);
         }
 
         #strength-feedback {
-            margin-top: 0.5rem;
-            font-weight: 500;
+            margin-top: var(--space-2);
+            font-weight: var(--weight-medium);
             color: var(--accent-text-on-light);
-            font-size: 0.875rem;
+            font-size: var(--text-sm);
         }
 
         .disabled-fields {
-            opacity: 0.55;
+            opacity: var(--alpha-strong);
             filter: grayscale(0.35);
             pointer-events: none;
-            transition: opacity 0.2s ease;
+            transition: opacity var(--duration-base) var(--ease-standard);
         }
 
         .username-badge {
             background-color: var(--info-subtle);
             border: 1px solid var(--info);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1.5rem;
+            border-radius: var(--radius-lg);
+            padding: var(--space-4);
+            margin-bottom: var(--space-6);
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: var(--space-4);
         }
 
         .username-badge .material-symbols-outlined {
             color: var(--info);
-            font-size: 1.5rem;
+            font-size: var(--icon-lg);
         }
 
         .username-badge-content strong {
             color: var(--info);
             display: block;
-            font-size: 1rem;
+            font-size: var(--text-base);
         }
 
         .username-badge-content small {
             color: var(--accent-text-on-light);
             display: block;
         }
-
     </style>
 </head>
 
-<body class="student-shell">
+<body class="student-shell auth-page">
     <main id="main-content" aria-labelledby="student-pin-heading">
     <div class="auth-container">
         {{ auth_brand() }}

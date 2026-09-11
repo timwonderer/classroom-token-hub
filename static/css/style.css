@@ -2154,9 +2154,23 @@ body.maintenance-active .sidebar {
    end up as wide as its own longest line of copy. `max-width: 100%` cannot
    rescue it either: a flex item's automatic minimum size is pinned by the
    specified width, so the card would overflow instead of shrinking. */
+/* Auto margins on the card rather than `align-items: center` here. Centring from
+   the parent clips the top of a card taller than the viewport and puts it out of
+   reach; auto margins centre identically and collapse to the start edge once the
+   free space is gone. */
+.auth-page {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100dvh;
+    margin: 0;
+    padding: var(--space-8) var(--space-4);
+    background-color: var(--background);
+}
+
 .auth-container {
     width: min(400px, calc(100vw - var(--space-12)));
-    margin: var(--space-4) auto;
+    margin: auto;
     background: var(--surface);
     box-shadow: var(--shadow-lg);
     overflow: hidden;
@@ -2200,6 +2214,56 @@ body.maintenance-active .sidebar {
 .auth-body a:not(.btn):hover,
 .auth-body a:not(.btn):focus-visible {
     color: var(--accent-text-on-light);
+    text-decoration: underline;
+}
+
+/* Form chrome. The accent carries short label-like text; sentences stay neutral,
+   because a run of prose in the accent reads as a warning rather than a caption. */
+.auth-body .form-label {
+    color: var(--accent-text-on-light);
+    text-transform: uppercase;
+    font-weight: var(--weight-semibold);
+    font-size: var(--text-xs);
+    letter-spacing: var(--tracking-wide);
+}
+
+.auth-body .subtitle {
+    color: var(--text-secondary);
+    margin-bottom: var(--space-6);
+}
+
+.auth-body .form-text {
+    color: var(--accent-text-on-light);
+    font-size: var(--text-sm);
+}
+
+.auth-body .form-group {
+    margin-bottom: var(--space-6);
+}
+
+/* PIN, TOTP, and recovery-code fields. The tracking is what makes a digit group
+   countable at a glance, so it is load-bearing rather than decorative. */
+.auth-code-input {
+    font-family: var(--font-data);
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-widest);
+    text-align: center;
+}
+
+.auth-body .footer-links {
+    text-align: center;
+    padding-top: var(--space-6);
+    margin-top: var(--space-8);
+    border-top: 1px solid var(--border-color);
+}
+
+.auth-body .footer-links a {
+    font-size: var(--text-sm);
+    text-decoration: none;
+}
+
+.auth-body .footer-links a:hover {
     text-decoration: underline;
 }
 

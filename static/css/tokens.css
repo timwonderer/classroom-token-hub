@@ -34,6 +34,14 @@
     --leading-snug: 1.4;
     --leading-normal: 1.6;
 
+    /* Tracking. --tracking-widest is for the PIN and recovery-code inputs, where
+       the gap is what makes a digit group countable at a glance, not a flourish. */
+    --tracking-tight: -0.01em;
+    --tracking-normal: 0;
+    --tracking-wide: 0.05em;
+    --tracking-wider: 0.1em;
+    --tracking-widest: 0.5em;
+
     /* Spacing — 4px base */
     --space-0: 0;
     --space-1: 4px;
@@ -75,6 +83,8 @@
     /* Buttons */
     --radius-lg: 8px;
     /* Modals, Large Containers */
+    --radius-xl: 12px;
+    /* Auth cards, feature panels */
     --radius-pill: 999px;
     /* Status Badges, Chips */
 

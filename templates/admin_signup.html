@@ -10,45 +10,8 @@
 
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
-    <style>
-        body {
-            background-color: var(--background);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-        }
-        .subtitle {
-            color: var(--text-secondary) !important;
-        }
-        .form-label {
-            color: var(--primary) !important;
-            text-transform: uppercase;
-            font-weight: 600;
-            font-size: 0.75rem;
-            letter-spacing: 0.05em;
-        }
-        a {
-            color: var(--accent-text-on-light);
-        }
-        a:hover {
-            color: var(--accent-text-on-light);
-            text-decoration: underline;
-        }
-        .btn-primary {
-            background: var(--primary);
-            border: none;
-            color: white;
-            transition: all 0.3s ease;
-        }
-        .btn-primary:hover {
-            background: var(--secondary);
-            color: var(--text-primary);
-        }
-    </style>
 </head>
-<body>
+<body class="auth-page">
     <main id="main-content" aria-labelledby="teacher-signup-heading">
     <div class="auth-container">
         {{ auth_brand() }}
