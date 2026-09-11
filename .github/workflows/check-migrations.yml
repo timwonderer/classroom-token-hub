@@ -83,20 +83,20 @@ jobs:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           echo "🔍 Linting migrations against the frozen baseline..."
-          TRUSTED=""
+          COMPARE=""
           if [ -n "$BASE_REF" ]; then
-            if git show "origin/$BASE_REF:migrations/lint_baseline.txt" > /tmp/trusted_baseline.txt 2>/dev/null; then
+            if git show "origin/$BASE_REF:migrations/lint_baseline.txt" > /tmp/base_branch_baseline.txt 2>/dev/null; then
               echo "   Comparing baseline against origin/$BASE_REF."
-              TRUSTED="--trusted-baseline /tmp/trusted_baseline.txt"
+              COMPARE="--base-branch-baseline /tmp/base_branch_baseline.txt"
             else
               # The branch that introduces the baseline is the one branch whose
               # entries are all legitimately new, so there is nothing to compare
-              # against yet. Treating an absent file as an empty trusted set
+              # against yet. Treating an absent file as an empty prior baseline
               # rejects exactly that branch and no other.
               echo "   No baseline on origin/$BASE_REF yet; additions cannot be compared."
             fi
           fi
-          python scripts/lint_migrations.py --baseline migrations/lint_baseline.txt $TRUSTED
+          python scripts/lint_migrations.py --baseline migrations/lint_baseline.txt $COMPARE
 
       - name: Comment on PR (if check fails)
         if: failure() && github.event_name == 'pull_request'

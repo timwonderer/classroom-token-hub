@@ -260,7 +260,7 @@ For more information, see:
         )
     )
     parser.add_argument(
-        '--trusted-baseline',
+        '--base-branch-baseline',
         metavar='PATH',
         help=(
             'A copy of the baseline taken from the base branch. Any entry in '
@@ -278,9 +278,9 @@ For more information, see:
     # The baseline only shrinks (SOP-DB-009 VI). Stale entries are caught below,
     # after linting; additions have to be caught here, before a new entry gets a
     # chance to suppress the error it was added to hide.
-    if args.trusted_baseline:
-        trusted = load_baseline(Path(args.trusted_baseline))
-        additions = sorted(baseline - trusted)
+    if args.base_branch_baseline:
+        on_base_branch = load_baseline(Path(args.base_branch_baseline))
+        additions = sorted(baseline - on_base_branch)
         if additions:
             print(f"\n{'='*70}")
             print(f"❌ {len(additions)} entry/entries were added to the baseline:")

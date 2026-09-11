@@ -59,15 +59,15 @@ def test_a_non_idempotent_migration_fails_on_its_own(failing_migration):
 
 def test_self_added_baseline_entry_cannot_suppress_the_failure(failing_migration, tmp_path):
     """The hole: the branch adds its own migration to the baseline it is judged by."""
-    trusted = tmp_path / "trusted.txt"
-    trusted.write_text("", encoding="utf-8")
+    on_base = tmp_path / "on_base_branch.txt"
+    on_base.write_text("", encoding="utf-8")
     tampered = tmp_path / "tampered.txt"
     tampered.write_text(f"{failing_migration.name}\n", encoding="utf-8")
 
     result = _run(
         str(failing_migration),
         "--baseline", str(tampered),
-        "--trusted-baseline", str(trusted),
+        "--base-branch-baseline", str(on_base),
     )
 
     assert result.returncode == 1, result.stdout
@@ -82,7 +82,7 @@ def test_an_entry_present_on_the_base_branch_still_suppresses(failing_migration,
     result = _run(
         str(failing_migration),
         "--baseline", str(baseline),
-        "--trusted-baseline", str(baseline),
+        "--base-branch-baseline", str(baseline),
     )
 
     assert result.returncode == 0, result.stdout
@@ -95,13 +95,13 @@ def test_comments_and_blank_lines_are_not_read_as_additions(failing_migration, t
         f"# accepted pre-gate debt\n\n{failing_migration.name}  # SOP-DB-009 VI\n",
         encoding="utf-8",
     )
-    trusted = tmp_path / "trusted.txt"
-    trusted.write_text(f"{failing_migration.name}\n", encoding="utf-8")
+    on_base = tmp_path / "on_base_branch.txt"
+    on_base.write_text(f"{failing_migration.name}\n", encoding="utf-8")
 
     result = _run(
         str(failing_migration),
         "--baseline", str(baseline),
-        "--trusted-baseline", str(trusted),
+        "--base-branch-baseline", str(on_base),
     )
 
     assert result.returncode == 0, result.stdout
