@@ -2341,14 +2341,9 @@ def _load_economy_rebalance_context(canonical_context, class_id):
     return payroll_settings, rent_settings, insurance_policies
 
 
-def _apply_rebalance_plan(canonical_context, settings_row, change_plan, activation_mode):
-    """Apply rebalance plan for a class (wrapper for economy_rebalance function).
-
-    Refactored in Phase 2 to extract class_id from settings_row instead of passing
-    the FeatureSettings object directly (FeatureSettings table dropped).
-    """
+def _apply_rebalance_plan(canonical_context, class_id, change_plan, activation_mode):
+    """Apply rebalance plan for a class (wrapper for economy_rebalance function)."""
     user_id = canonical_context.user_id
-    class_id = getattr(settings_row, "class_id", None)
     applied_labels = apply_rebalance_changes(user_id, class_id, change_plan, activation_mode)
     current_app.logger.info(
         "Applied economy rebalance for teacher=%s class_id=%s activation=%s changes=%s",
@@ -6775,13 +6770,10 @@ def apply_economy_rebalance():
         abort(404)
     activation_mode = (request.form.get('activation_mode') or REBALANCE_ACTIVATION_NEXT_RENEWAL).strip().lower()
     selected_keys = set(request.form.getlist('selected_changes'))
-    settings_row = get_feature_settings_row_for_class(
-        selected_scope['class_id'],
-        create=True,
-    )
-    if not settings_row:
-        flash("Class scope not found for the selected period.", "warning")
-        return redirect(url_for('admin.economic_engine', review_rebalance=1))
+    # No FeatureSettings row is read here. Fetching one with create=True flushed a
+    # new row outside a FEAT context, so this route raised for any class that did
+    # not already have one — and both branches below only ever needed the class_id
+    # that `selected_scope` has already been authority-checked for.
     allowed_activation_modes = {
         REBALANCE_ACTIVATION_IMMEDIATE,
         REBALANCE_ACTIVATION_NEXT_RENEWAL,
@@ -6858,7 +6850,7 @@ def apply_economy_rebalance():
         if activation_mode == REBALANCE_ACTIVATION_IMMEDIATE:
             applied_labels = _apply_rebalance_plan(
                 g.canonical_context,
-                settings_row,
+                selected_scope['class_id'],
                 change_plan,
                 activation_mode=REBALANCE_ACTIVATION_IMMEDIATE,
             )
@@ -6871,7 +6863,7 @@ def apply_economy_rebalance():
             )
             queued_transition_count = queue_scheduled_policy_transitions(
                 g.canonical_context.user_id,
-                settings_row,
+                selected_scope['class_id'],
                 scheduled_changes,
                 activation_mode=activation_mode,
             )

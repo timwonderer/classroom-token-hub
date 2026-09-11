@@ -518,7 +518,7 @@ def activate_due_rebalances(user_id, *, class_id=None, reference_time=None):
 
 def queue_scheduled_policy_transitions(
     user_id: int,
-    settings_row,
+    class_id: str,
     scheduled_changes: list[dict[str, Any]],
     *,
     activation_mode: str = REBALANCE_ACTIVATION_NEXT_RENEWAL,
@@ -526,7 +526,7 @@ def queue_scheduled_policy_transitions(
 ) -> int:
     reference_time = ensure_utc(reference_time) if reference_time else utc_now()
     created = _create_policy_transitions_for_changes(
-        settings_row,
+        class_id,
         scheduled_changes,
         activation_mode=activation_mode,
         created_by=user_id,

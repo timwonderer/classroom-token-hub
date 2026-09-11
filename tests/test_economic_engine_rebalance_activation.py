@@ -12,6 +12,9 @@ consequence of a choice they had not made.
 
 from __future__ import annotations
 
+import re
+
+from app.models import PolicyTransition
 from tests.helpers.class_domain import update_expected_weekly_hours
 from tests.helpers.classroom_initializer import initialize_as_teacher
 
@@ -39,3 +42,30 @@ def test_immediate_change_warning_starts_hidden(client, app):
     body = _rebalance_page(client, app)
 
     assert 'id="immediateChangeWarning" hidden' in body
+
+
+def test_submitting_the_default_deferred_mode_queues_a_transition(client, app):
+    """Offering the mode is not the same as being able to submit it.
+
+    The route passed its FeatureSettings row into the ``class_id`` parameter of
+    ``queue_scheduled_policy_transitions``, so the default choice raised instead
+    of queuing anything. Asserting the rendered radio could not see that.
+    """
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    update_expected_weekly_hours(client, "40")
+    body = client.get("/admin/economic-engine?review_rebalance=1").get_data(as_text=True)
+    offered = re.findall(r'name="selected_changes"[^>]*value="([^"]+)"', body)
+    assert offered, "no rebalance change was offered, so the submit path is untested"
+
+    response = client.post(
+        "/admin/economy-policy/rebalance",
+        data={"activation_mode": "next_renewal", "selected_changes": offered},
+    )
+
+    assert response.status_code == 302, response.get_data(as_text=True)[:2000]
+    with app.app_context():
+        queued = PolicyTransition.query.filter_by(
+            class_id=classroom.class_id,
+            activation_mode="next_renewal",
+        ).all()
+    assert queued, "the deferred submission queued no policy transition"
