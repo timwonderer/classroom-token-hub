@@ -300,6 +300,12 @@
                 <div class="small text-muted mb-3">
                     <span class="material-symbols-outlined align-bottom fs-6" aria-hidden="true">trending_up</span>
                     Projected Interest: +${{ "%.2f"|format(forecast_interest) }} per {{ savings_payout_frequency }} payout
+                    {% if savings_balance != posted_savings_balance %}
+                    <br>
+                    This balance includes money that has not finished settling yet. Interest is earned
+                    on your posted balance of <strong>${{ "%.2f"|format(posted_savings_balance) }}</strong>
+                    only, so the two figures agree once settlement completes.
+                    {% endif %}
                 </div>
                 {% endif %}
                 <a href="{{ url_for('student.transfer') }}" class="btn btn-success btn-sm">

@@ -884,8 +884,9 @@ def dashboard():
     # class's configured terms. A hardcoded APY here is prohibited outright
     # (SPEC-ECON-001 §10, §11), and accrual is posted-only (§9.2).
     savings_policy = resolve_savings_policy(scope.class_id)
+    posted_savings_balance = get_posted_balance(scope.seat_id, scope.class_id, 'savings')
     forecast_interest = savings_interest_for_payout_period(
-        posted_balance=get_posted_balance(scope.seat_id, scope.class_id, 'savings'),
+        posted_balance=posted_savings_balance,
         annual_rate=savings_policy.annual_rate,
         calculation_type=savings_policy.calculation_type,
         compound_frequency=savings_policy.compound_frequency,
@@ -1153,6 +1154,7 @@ def dashboard():
         recent_transactions=transactions[:5],  # Most recent 5 transactions
         now=local_now,
         forecast_interest=float(forecast_interest),
+        posted_savings_balance=float(posted_savings_balance),
         savings_annual_rate=savings_policy.annual_rate,
         savings_payout_frequency=savings_policy.payout_frequency,
         recent_deposit=recent_deposit,
