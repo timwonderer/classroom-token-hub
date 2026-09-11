@@ -103,6 +103,7 @@ function showTimedDeleteGate(options) {
                 }
                 countdownText.textContent = 'Countdown complete. Enter exact phrase and hold button for 10 seconds.';
                 countdownBar.style.width = '100%';
+                countdownBar.parentElement.setAttribute('aria-valuenow', '100');
             }
         };
 
