@@ -54,8 +54,11 @@ NAMED_COLORS = (
 ).split()
 NAMED = re.compile(r"(?<![\w-])(?:" + "|".join(NAMED_COLORS) + r")(?![\w-])", re.I)
 
-STYLE_BLOCK = re.compile(r"(<style\b[^>]*>)(.*?)</style>", re.S | re.I)
-SCRIPT_BLOCK = re.compile(r"(<script\b[^>]*>)(.*?)</script>", re.S | re.I)
+# The end tag is `</name`, then anything up to `>` — HTML lets whitespace and even
+# ignored attributes sit there, so `</style >` closes the block. Matching a bare
+# `</style>` would run the block on to the next one and scan markup as CSS.
+STYLE_BLOCK = re.compile(r"(<style\b[^>]*>)(.*?)</style\b[^>]*>", re.S | re.I)
+SCRIPT_BLOCK = re.compile(r"(<script\b[^>]*>)(.*?)</script\b[^>]*>", re.S | re.I)
 STYLE_ATTR = re.compile(r"""\sstyle\s*=\s*(["'])(.*?)\1""", re.S | re.I)
 SVG_COLOR_ATTR = re.compile(r"""\s(?:fill|stroke|stop-color|color|bgcolor)\s*=\s*(["'])(.*?)\1""", re.I)
 RULE = re.compile(r"([^{}]+)\{([^{}]*)\}")

@@ -53,6 +53,11 @@ def test_SPEC_DES_001__templates_conform(findings, rule):
         ('<style>.x { opacity: 0.3; }</style>', "R6"),
         ('<div style="width: {{ pct }}%; font-size: 14px"></div>', "R6"),
         ('<style>.btn-primary { background: var(--primary); }</style>', "R7"),
+        # HTML lets whitespace and ignored attributes sit in an end tag, so a block
+        # closed with `</style >` is a real block and must not slip past the scanner.
+        ('<style>.x { color: #6c757d; }</style >', "R1"),
+        ('<style>.x { font-size: 0.85rem; }</style\n>', "R6"),
+        ("<script>const c = '#198754';</script >", "R1"),
     ],
 )
 def test_scanner_detects_each_rule(tmp_path, monkeypatch, markup, rule):
