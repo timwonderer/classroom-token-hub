@@ -170,7 +170,7 @@ a:hover {
 
 .btn-outline-info:hover {
     background-color: var(--info) !important;
-    color: #fff !important;
+    color: var(--text-inverse) !important;
 }
 
 /* Fix hardcoded text-white on bg-secondary (Gold in Teacher theme) */
@@ -271,14 +271,14 @@ a:hover {
 }
 
 .btn-danger {
-    background-color: #b3261e;
-    border-color: #b3261e;
+    background-color: var(--danger);
+    border-color: var(--danger);
     color: white;
 }
 
 .btn-danger:hover {
-    background-color: #8f1f1f;
-    border-color: #8f1f1f;
+    background-color: var(--danger-hover);
+    border-color: var(--danger-hover);
     color: white;
 }
 
@@ -334,7 +334,7 @@ a:hover {
 .show > .btn-outline-primary.dropdown-toggle {
     background-color: var(--primary) !important;
     border-color: var(--primary) !important;
-    color: #fff !important;
+    color: var(--text-inverse) !important;
 }
 
 .btn-check:focus + .btn-outline-primary,
@@ -357,16 +357,16 @@ a:hover {
 
 /* Steward / Student Role Utilities */
 .bg-student {
-    background-color: var(--student-primary) !important;
+    background-color: var(--steward-blue) !important;
     color: white;
 }
 
 .text-student {
-    color: var(--student-primary) !important;
+    color: var(--steward-blue) !important;
 }
 
 .border-student {
-    border-color: var(--student-primary) !important;
+    border-color: var(--steward-blue) !important;
 }
 
 /* ─── Cards & Containers ─── */
@@ -481,13 +481,13 @@ a:hover {
     --bs-accordion-btn-icon: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
     --bs-accordion-btn-active-icon: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='m2 11 6-6 6 6'/%3e%3c/svg%3e");
     background-color: var(--primary) !important;
-    color: #fff !important;
+    color: var(--text-inverse) !important;
 }
 
 .offcanvas .accordion-button .material-symbols-outlined,
 .offcanvas .accordion-button:not(.collapsed) .material-symbols-outlined,
 .offcanvas .accordion-button.collapsed .material-symbols-outlined {
-    color: #fff !important;
+    color: var(--text-inverse) !important;
 }
 
 .accordion-body {
@@ -690,7 +690,7 @@ a:hover {
 .nav-accordion-btn:hover,
 .nav-accordion-btn:focus {
     background: rgba(255, 255, 255, 0.16);
-    color: #fff;
+    color: var(--text-inverse);
 }
 
 .nav-accordion-btn.dropdown-toggle::after {
@@ -753,7 +753,7 @@ a:hover {
 }
 
 .sidebar-scope-name {
-    color: #fff;
+    color: var(--text-inverse);
     font-size: 1.2rem;
     font-weight: 800;
     letter-spacing: 0.02em;
@@ -812,7 +812,7 @@ a:hover {
 .sidebar-switcher .form-select {
     background-color: rgba(255, 255, 255, 0.1);
     border: none;
-    color: #fff;
+    color: var(--text-inverse);
     font-weight: 600;
 }
 
@@ -829,7 +829,7 @@ a:hover {
 .sidebar-switcher .alert {
     background: rgba(255, 193, 7, 0.15);
     border: 1px solid rgba(255, 193, 7, 0.4);
-    color: #fff;
+    color: var(--text-inverse);
 }
 
 .sidebar-switcher-add {
@@ -840,13 +840,13 @@ a:hover {
     justify-content: center;
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    color: var(--text-inverse);
     text-decoration: none;
 }
 
 .sidebar-switcher-add:hover {
     background: rgba(255, 255, 255, 0.18);
-    color: #fff;
+    color: var(--text-inverse);
 }
 
 .sidebar-switcher-add .material-symbols-outlined {
@@ -889,7 +889,7 @@ a:hover {
     align-items: center;
     gap: 0.75rem;
     margin-bottom: 1.5rem;
-    color: #ffffff;
+    color: var(--text-inverse);
     font-weight: 700;
     font-size: 1.1rem;
     text-decoration: none;
@@ -897,7 +897,7 @@ a:hover {
 
 .student-brand:hover {
     text-decoration: none;
-    color: #ffffff;
+    color: var(--text-inverse);
 }
 
 .student-identity {
@@ -934,7 +934,7 @@ a:hover {
 }
 
 .student-nav a.active {
-    background-color: #7f5b34;
+    background-color: var(--student-nav-active-bg);
     color: white;
     font-weight: 700;
 }
@@ -942,20 +942,20 @@ a:hover {
 .student-home-icon-bill,
 .student-home-icon-store,
 .student-home-icon-stock {
-    color: #ffffff;
+    color: var(--text-inverse);
     transition: color 0.2s ease;
 }
 
 .student-brand:hover .student-home-icon-bill {
-    color: #ffd900;
+    color: var(--student-brand-bill-hover);
 }
 
 .student-brand:hover .student-home-icon-store {
-    color: #00ffbf;
+    color: var(--student-brand-store-hover);
 }
 
 .student-brand:hover .student-home-icon-stock {
-    color: #ff6c7d;
+    color: var(--student-brand-stock-hover);
 }
 
 .student-main {
@@ -972,30 +972,30 @@ a:hover {
 
 .student-content .text-muted,
 .student-content .text-secondary {
-    color: #5f5f5c !important;
+    color: var(--text-muted) !important;
 }
 
 .student-content .badge.text-muted,
 .student-content .badge.bg-secondary,
 .student-content .badge.bg-secondary.text-muted {
-    color: #ffffff !important;
+    color: var(--text-inverse) !important;
 }
 
 .student-content .alert-warning {
-    color: #5f3d00;
+    color: var(--alert-warning-text);
 }
 
 .student-content .alert-danger {
-    color: #8f1f1f;
+    color: var(--alert-danger-text);
 }
 
 .student-content .alert-info {
-    color: #1f4f73;
+    color: var(--alert-info-text);
 }
 
 .student-shell .sidebar a.active,
 .student-sidebar .student-nav a.active {
-    background-color: #7f5b34;
+    background-color: var(--student-nav-active-bg);
     color: white;
 }
 
@@ -1096,7 +1096,7 @@ body.sysadmin-shell {
 }
 
 .sysadmin-nav-signout:hover {
-    color: #ff6666 !important;
+    color: var(--sysadmin-signout-hover) !important;
     border-color: rgba(220, 80, 80, 0.4) !important;
 }
 
@@ -1104,7 +1104,7 @@ body.sysadmin-shell {
     flex-grow: 1;
     min-height: 100vh;
     margin-left: 260px;
-    background: linear-gradient(135deg, #f5f5f3 0%, #fafaf8 100%);
+    background: linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-50) 100%);
 }
 
 .sysadmin-content {
@@ -1145,7 +1145,7 @@ body.sysadmin-shell .eyebrow {
         width: 44px;
         height: 44px;
         background: var(--primary);
-        color: #fff;
+        color: var(--text-inverse);
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -1316,7 +1316,7 @@ body.sysadmin-shell .eyebrow {
 
 .bg-warning-subtle {
     background-color: var(--warning-subtle) !important;
-    color: var(--warning-text, #856404);
+    color: var(--alert-warning-text);
 }
 
 .bg-danger-subtle {
@@ -1382,6 +1382,51 @@ table.js-sortable thead th:hover .sort-indicator {
 /* ─── Icon Normalization ─── */
 .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Icon sizing utilities (SPEC-DES-001 §VI.2). Icons are a font, so "size" is
+   font-size; these exist so templates never set it inline. `1` on the line-height
+   keeps the glyph box square, which is what makes optical alignment predictable. */
+.icon-xs {
+    font-size: var(--icon-xs);
+}
+
+.icon-sm {
+    font-size: var(--icon-sm);
+}
+
+.icon-md {
+    font-size: var(--icon-md);
+}
+
+.icon-lg {
+    font-size: var(--icon-lg);
+}
+
+.icon-xl {
+    font-size: var(--icon-xl);
+}
+
+.icon-2xl {
+    font-size: var(--icon-2xl);
+}
+
+.icon-xs,
+.icon-sm,
+.icon-md,
+.icon-lg,
+.icon-xl,
+.icon-2xl {
+    line-height: 1;
+}
+
+/* Optical alignment against adjacent text, replacing inline vertical-align. */
+.icon-middle {
+    vertical-align: middle;
+}
+
+.icon-text-bottom {
+    vertical-align: text-bottom;
 }
 
 .icon-circle {
@@ -1514,13 +1559,13 @@ table.js-sortable thead th:hover .sort-indicator {
     text-transform: uppercase;
     font-size: 0.75rem;
     letter-spacing: 0.08em;
-    color: #5f5f5c;
+    color: var(--text-muted);
     margin-bottom: 0.25rem;
     font-weight: 600;
 }
 
 .page-header .meta {
-    color: #5f5f5c;
+    color: var(--text-muted);
     font-weight: 500;
 }
 
@@ -1643,7 +1688,7 @@ body.maintenance-active .sidebar {
 }
 
 .landing-welcome .version {
-    color: #DEDEDE;
+    color: var(--text-on-dark-muted);
     font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.3em;
@@ -1706,7 +1751,7 @@ body.maintenance-active .sidebar {
     font-size: 1.15rem;
     line-height: 1.2;
     transition: filter 120ms ease-in-out;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-md);
 }
 
 .landing-signin-btn:hover,
@@ -1774,7 +1819,7 @@ body.maintenance-active .sidebar {
 }
 
 .landing-status-label {
-    color: var(--text-light);
+    color: var(--text-on-dark-muted);
     font-size: 0.8rem;
     font-weight: 400;
     letter-spacing: 0.05em;
@@ -2096,4 +2141,69 @@ body.maintenance-active .sidebar {
     .quick-action:hover,
     .quick-action:focus-visible,
     .quick-action:active { transform: none; }
+}
+
+/* ─── Auth Shell ───
+   Sign-in, sign-up, and recovery pages share one stacked layout: a text brand
+   band on top, the interactive panel beneath. The band is filled with
+   var(--primary), so it takes the role theme carried on <body> without any
+   per-page override. */
+/* Explicit width, and the narrow-screen cap is measured against the viewport
+   rather than the parent. These pages center the card as a flex item, so a
+   percentage would resolve against a shrink-to-fit parent and each page would
+   end up as wide as its own longest line of copy. `max-width: 100%` cannot
+   rescue it either: a flex item's automatic minimum size is pinned by the
+   specified width, so the card would overflow instead of shrinking. */
+.auth-container {
+    width: min(400px, calc(100vw - var(--space-12)));
+    margin: var(--space-4) auto;
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+}
+
+/* Vertical wordmark, matching the public landing hero's .landing-brand stack. */
+.auth-brand {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-8) var(--space-12);
+    background: var(--primary);
+    color: var(--text-inverse);
+}
+
+.auth-brand-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-3xl);
+    font-weight: var(--weight-medium);
+    line-height: 1;
+}
+
+.auth-brand-row .material-symbols-outlined {
+    color: var(--secondary);
+    font-size: var(--text-3xl);
+}
+
+.auth-body {
+    padding: var(--space-12);
+}
+
+@media (max-width: 768px) {
+    .auth-container {
+        margin: var(--space-4);
+    }
+
+    .auth-brand {
+        padding: var(--space-6);
+    }
+
+    .auth-brand-row,
+    .auth-brand-row .material-symbols-outlined {
+        font-size: var(--text-2xl);
+    }
+
+    .auth-body {
+        padding: var(--space-8) var(--space-6);
+    }
 }

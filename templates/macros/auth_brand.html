@@ -1,0 +1,21 @@
+{#
+  Text brand band for the auth shell. Renders above the interactive panel on
+  every sign-in, sign-up, and recovery page. The fill comes from var(--primary),
+  so the role theme on <body> selects the colour.
+#}
+{% macro auth_brand() %}
+<div class="auth-brand">
+    <div class="auth-brand-row">
+        <span class="material-symbols-outlined" aria-hidden="true">local_atm</span>
+        <span>CLASSROOM</span>
+    </div>
+    <div class="auth-brand-row">
+        <span class="material-symbols-outlined" aria-hidden="true">store</span>
+        <span>TOKEN</span>
+    </div>
+    <div class="auth-brand-row">
+        <span class="material-symbols-outlined" aria-hidden="true">finance_mode</span>
+        <span>HUB</span>
+    </div>
+</div>
+{% endmacro %}
