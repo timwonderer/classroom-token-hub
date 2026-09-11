@@ -74,10 +74,28 @@ jobs:
       # linted against a frozen baseline of the debt SOP-DB-009 VI already
       # accepts: history may fail, new work may not, and the baseline can only
       # shrink. Editing merged migrations to clear it is forbidden by policy.
+      #
+      # On a pull request the baseline is also compared against the base branch's
+      # copy. Reading it only from the PR's own checkout let a branch excuse its
+      # own failing migration by appending one line to the very file the gate trusts.
       - name: Lint migrations for idempotency
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           echo "🔍 Linting migrations against the frozen baseline..."
-          python scripts/lint_migrations.py --baseline migrations/lint_baseline.txt
+          TRUSTED=""
+          if [ -n "$BASE_REF" ]; then
+            if git show "origin/$BASE_REF:migrations/lint_baseline.txt" > /tmp/trusted_baseline.txt 2>/dev/null; then
+              echo "   Comparing baseline against origin/$BASE_REF."
+            else
+              # The base branch predates the baseline, so every entry is an
+              # addition. An empty trusted set states exactly that.
+              : > /tmp/trusted_baseline.txt
+              echo "   No baseline on origin/$BASE_REF; treating every entry as new."
+            fi
+            TRUSTED="--trusted-baseline /tmp/trusted_baseline.txt"
+          fi
+          python scripts/lint_migrations.py --baseline migrations/lint_baseline.txt $TRUSTED
 
       - name: Comment on PR (if check fails)
         if: failure() && github.event_name == 'pull_request'

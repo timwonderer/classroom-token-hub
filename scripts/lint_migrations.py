@@ -259,10 +259,38 @@ For more information, see:
             'baseline can only shrink.'
         )
     )
+    parser.add_argument(
+        '--trusted-baseline',
+        metavar='PATH',
+        help=(
+            'A copy of the baseline taken from the base branch. Any entry in '
+            '--baseline that is absent here is a new suppression and fails the '
+            'run. Without this, the baseline is read from the same checkout it '
+            'is meant to constrain, so a branch could silence its own failing '
+            'migration by appending one line.'
+        )
+    )
 
     args = parser.parse_args()
 
     baseline = load_baseline(Path(args.baseline)) if args.baseline else set()
+
+    # The baseline only shrinks (SOP-DB-009 VI). Stale entries are caught below,
+    # after linting; additions have to be caught here, before a new entry gets a
+    # chance to suppress the error it was added to hide.
+    if args.trusted_baseline:
+        trusted = load_baseline(Path(args.trusted_baseline))
+        additions = sorted(baseline - trusted)
+        if additions:
+            print(f"\n{'='*70}")
+            print(f"❌ {len(additions)} entry/entries were added to the baseline:")
+            for filename in additions:
+                print(f"   + {filename}")
+            print(
+                "\n   The baseline records pre-gate debt and only shrinks. A new\n"
+                "   migration must satisfy the linter, not be excused by it.\n"
+            )
+            sys.exit(1)
 
     # Determine which files to lint
     if args.files:
