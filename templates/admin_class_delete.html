@@ -50,8 +50,15 @@
                         <li>This action is permanent, irreversible, and unrecoverable.</li>
                     </ul>
                     <p class="alert alert-warning">
-                        If this is the last class you own, your account will also be deleted.
-                       
+                        <strong>Your teacher account is not deleted by this.</strong>
+                        That is true even if this is the only class you own. To delete your
+                        account, use Settings &rsaquo; Account Deletion.
+                    </p>
+                    <p class="alert alert-secondary mb-3">
+                        <strong>One thing is not erased.</strong> Each token transaction wrote a
+                        tamper-evident audit entry when it happened, and those entries cannot be
+                        edited or deleted by anyone, including us. They record identifiers and
+                        cryptographic digests — not names, and not readable transaction detail.
                     </p>
 
                     <form id="class-delete-form"
@@ -98,14 +105,14 @@ document.addEventListener('DOMContentLoaded', function() {
             title: 'Safety Check: Please Read Carefully',
             warning: `You are about to permanently delete ${classLabel}.`,
             expectedPhrase,
-            holdPrompt: 'To proceed with class deletion, click and hold the button for 10 seconds. Any interruption will reset the timer.',
+            holdPrompt: 'To proceed with class deletion, hold this button for 10 seconds — press and hold with the pointer, or hold Space or Enter. Any interruption will reset the timer.',
             bullets: [
                 'You are performing an irreversible action.',
                 'Every transaction, payroll, and purchase record for this class will be destroyed.',
                 'Recovery of this class is not possible.',
                 'Any student account not linked to another class will be deleted as well.',
-                'If this is your last class, your account will also be deleted.',
-                'Classroom Token Hub does not maintain universal logs or audit records.',
+                'Your own teacher account is NOT deleted by this, even if this is your only class.',
+                'Tamper-evident audit entries for this class’s transactions are kept permanently and cannot be deleted. They hold identifiers and digests, not names.',
             ],
         }).then(gatePayload => {
             if (!gatePayload) {

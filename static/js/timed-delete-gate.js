@@ -35,7 +35,7 @@ function showTimedDeleteGate(options) {
         const expectedPhrase = String(options.expectedPhrase || '').toUpperCase();
         const title = options.title || 'Confirm Deletion';
         const warning = options.warning || 'You are about to permanently delete this record.';
-        const holdPrompt = options.holdPrompt || 'To proceed, click and hold the button for 10 seconds. Any interruption will reset the timer.';
+        const holdPrompt = options.holdPrompt || 'To proceed, hold this button for 10 seconds — press and hold with the pointer, or hold Space or Enter. Any interruption will reset the timer.';
         const countdownSeconds = 30;
         const holdMs = 10000;
         const holdSeconds = 10;
@@ -61,7 +61,7 @@ function showTimedDeleteGate(options) {
         phraseInput.value = '';
         phraseInput.disabled = true;
         phraseHint.textContent = `Required phrase: ${expectedPhrase}`;
-        holdBtn.textContent = 'Click and Hold this Button to Confirm';
+        holdBtn.textContent = 'Hold to Confirm — click and hold, or hold Space or Enter';
         holdStatus.textContent = 'Hold button unlocks after countdown + exact phrase match.';
 
         const cleanup = () => {
@@ -77,6 +77,9 @@ function showTimedDeleteGate(options) {
             holdBtn.removeEventListener('pointerup', cancelHold);
             holdBtn.removeEventListener('pointerleave', cancelHold);
             holdBtn.removeEventListener('pointercancel', cancelHold);
+            holdBtn.removeEventListener('keydown', onHoldKeydown);
+            holdBtn.removeEventListener('keyup', onHoldKeyup);
+            holdBtn.removeEventListener('blur', cancelHold);
             cancelBtn.removeEventListener('click', onCancelClick);
             modalEl.removeEventListener('hidden.bs.modal', onHidden);
         };
@@ -156,6 +159,29 @@ function showTimedDeleteGate(options) {
             }, holdMs);
         };
 
+        // WCAG 2.1.1 Keyboard (Level A). The hold listened for pointer events only,
+        // so a keyboard-only teacher could clear the countdown and type the phrase
+        // and then had no way to finish the gate — no path to deleting their own
+        // class or account at all. Space and Enter mirror press-and-hold: key
+        // auto-repeat must not restart the timer, and losing focus counts as
+        // releasing, so the hold stays genuinely continuous either way.
+        const isHoldKey = (event) => event.key === ' ' || event.key === 'Spacebar' || event.key === 'Enter';
+
+        const onHoldKeydown = (event) => {
+            if (!isHoldKey(event)) return;
+            if (event.repeat) {
+                event.preventDefault();
+                return;
+            }
+            startHold(event);
+        };
+
+        const onHoldKeyup = (event) => {
+            if (!isHoldKey(event) || resolved) return;
+            event.preventDefault();
+            cancelHold();
+        };
+
         const cancelHold = () => {
             if (!isHolding) return;
             resetHoldState();
@@ -185,6 +211,9 @@ function showTimedDeleteGate(options) {
         holdBtn.addEventListener('pointerup', cancelHold);
         holdBtn.addEventListener('pointerleave', cancelHold);
         holdBtn.addEventListener('pointercancel', cancelHold);
+        holdBtn.addEventListener('keydown', onHoldKeydown);
+        holdBtn.addEventListener('keyup', onHoldKeyup);
+        holdBtn.addEventListener('blur', cancelHold);
         cancelBtn.addEventListener('click', onCancelClick);
         modalEl.addEventListener('hidden.bs.modal', onHidden);
 
