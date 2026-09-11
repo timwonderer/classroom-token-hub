@@ -105,3 +105,39 @@ def test_comments_and_blank_lines_are_not_read_as_additions(failing_migration, t
     )
 
     assert result.returncode == 0, result.stdout
+
+
+def test_editing_a_baselined_migration_forfeits_its_exemption(failing_migration, tmp_path):
+    """The other half of the hole: exemption is by basename, so a branch could
+    add unsafe operations to an already-listed file and never touch the baseline."""
+    baseline = tmp_path / "baseline.txt"
+    baseline.write_text(f"{failing_migration.name}\n", encoding="utf-8")
+    changed = tmp_path / "changed.txt"
+    changed.write_text(f"migrations/versions/{failing_migration.name}\n", encoding="utf-8")
+
+    result = _run(
+        str(failing_migration),
+        "--baseline", str(baseline),
+        "--base-branch-baseline", str(baseline),
+        "--changed-files", str(changed),
+    )
+
+    assert result.returncode == 1, result.stdout
+    assert "this branch modified it" in result.stdout
+
+
+def test_an_untouched_baselined_migration_keeps_its_exemption(failing_migration, tmp_path):
+    """A changed-file list that does not name the migration changes nothing."""
+    baseline = tmp_path / "baseline.txt"
+    baseline.write_text(f"{failing_migration.name}\n", encoding="utf-8")
+    changed = tmp_path / "changed.txt"
+    changed.write_text("app/routes/admin.py\nREADME.md\n", encoding="utf-8")
+
+    result = _run(
+        str(failing_migration),
+        "--baseline", str(baseline),
+        "--base-branch-baseline", str(baseline),
+        "--changed-files", str(changed),
+    )
+
+    assert result.returncode == 0, result.stdout

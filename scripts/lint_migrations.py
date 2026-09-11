@@ -271,9 +271,33 @@ For more information, see:
         )
     )
 
+    parser.add_argument(
+        '--changed-files',
+        metavar='PATH',
+        help=(
+            'File listing paths changed relative to the base branch, one per '
+            'line. A baselined migration that appears here loses its exemption: '
+            'the baseline accepts the debt a file already carried, not whatever '
+            'is added to it later. Editing a merged migration is forbidden '
+            'anyway (SOP-DB-009), so this costs a compliant branch nothing.'
+        )
+    )
+
     args = parser.parse_args()
 
     baseline = load_baseline(Path(args.baseline)) if args.baseline else set()
+
+    changed = set()
+    if args.changed_files:
+        changed_path = Path(args.changed_files)
+        if not changed_path.exists():
+            print(f"❌ Changed-files list not found: {changed_path}")
+            sys.exit(2)
+        changed = {
+            Path(line.strip()).name
+            for line in changed_path.read_text(encoding='utf-8').splitlines()
+            if line.strip()
+        }
 
     # The baseline only shrinks (SOP-DB-009 VI). Stale entries are caught below,
     # after linting; additions have to be caught here, before a new entry gets a
@@ -291,6 +315,12 @@ For more information, see:
                 "   migration must satisfy the linter, not be excused by it.\n"
             )
             sys.exit(1)
+
+    # The baseline accepts the debt a file already carried. A branch that edits a
+    # baselined migration is adding debt under cover of an entry it did not earn,
+    # so that file is linted as if unlisted. The declared baseline is kept intact
+    # so additions and stale entries are still judged against what the file says.
+    exempt = baseline - changed
 
     # Determine which files to lint
     if args.files:
@@ -326,13 +356,16 @@ For more information, see:
         errors, warnings = lint_migration(migration_file, args.verbose)
 
         if errors:
-            if migration_file.name in baseline:
+            if migration_file.name in exempt:
                 baselined_failures.append(migration_file.name)
                 if args.verbose:
                     print(f"\n🔒 {migration_file.name} (accepted by baseline)")
                 continue
             files_with_errors.append(migration_file.name)
             print(f"\n❌ {migration_file.name}")
+            if migration_file.name in baseline:
+                print("      (baselined, but this branch modified it, so the "
+                      "exemption does not apply)")
             for error in errors:
                 print_issue(error, "ERROR:")
                 total_errors += 1

@@ -78,6 +78,10 @@ jobs:
       # On a pull request the baseline is also compared against the base branch's
       # copy. Reading it only from the PR's own checkout let a branch excuse its
       # own failing migration by appending one line to the very file the gate trusts.
+      #
+      # The changed-file list closes the other half of that hole: exemption is by
+      # basename, so without it a branch could add unsafe operations to one of the
+      # already-baselined files and stay green without touching the baseline.
       - name: Lint migrations for idempotency
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -85,9 +89,11 @@ jobs:
           echo "🔍 Linting migrations against the frozen baseline..."
           COMPARE=""
           if [ -n "$BASE_REF" ]; then
+            git diff --name-only "origin/$BASE_REF...HEAD" > /tmp/changed_files.txt
+            COMPARE="--changed-files /tmp/changed_files.txt"
             if git show "origin/$BASE_REF:migrations/lint_baseline.txt" > /tmp/base_branch_baseline.txt 2>/dev/null; then
               echo "   Comparing baseline against origin/$BASE_REF."
-              COMPARE="--base-branch-baseline /tmp/base_branch_baseline.txt"
+              COMPARE="$COMPARE --base-branch-baseline /tmp/base_branch_baseline.txt"
             else
               # The branch that introduces the baseline is the one branch whose
               # entries are all legitimately new, so there is nothing to compare
