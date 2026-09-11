@@ -29,8 +29,15 @@
 {% endcall %}
 {% endblock %}
 
+{% block extra_styles %}
+<style>
+  .insurance-market-column { max-width: 960px; }
+  .insurance-cancel-passphrase { max-width: 12rem; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid" style="max-width: 960px;">
+<div class="container-fluid insurance-market-column">
 
   {# ---- Your coverage ---------------------------------------------------- #}
   <section class="mb-4">
@@ -67,7 +74,7 @@
                     onsubmit="return confirm('Cancel this coverage? It will stop renewing — your benefits continue until the end of the current period.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                 <label class="visually-hidden" for="cancelPassphrase-{{ cov.policy_uuid }}">Passphrase</label>
-                <input type="password" class="form-control form-control-sm" style="max-width: 12rem;"
+                <input type="password" class="form-control form-control-sm insurance-cancel-passphrase"
                        id="cancelPassphrase-{{ cov.policy_uuid }}" name="passphrase"
                        placeholder="Passphrase" autocomplete="current-password" required />
                 <button type="submit" class="btn btn-outline-danger btn-sm">Cancel coverage</button>

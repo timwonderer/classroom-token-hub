@@ -38,7 +38,7 @@
                 <div class="card-header bg-primary text-white">
                     <div class="d-flex justify-content-between align-items-center">
                         <h4 class="mb-0">
-                            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;" aria-hidden="true">
+                            <span class="material-symbols-outlined me-2 icon-xl icon-middle" aria-hidden="true">
                                 description
                             </span>Issue Descriptions
                         </h4>
@@ -292,7 +292,7 @@
                             </select>
                         </div>
 
-                        <div class="mb-3" id="denialReasonDiv" style="display: none;">
+                        <div class="mb-3" id="denialReasonDiv" hidden>
                             <label class="form-label" for="denialReason">Denial Reason</label>
                             <textarea class="form-control" id="denialReason" name="denial_reason" rows="2" placeholder="Why are you denying this issue?"></textarea>
                         </div>
@@ -526,19 +526,14 @@ if (actionType) {
     actionType.addEventListener('change', function() {
         const denialDiv = document.getElementById('denialReasonDiv');
         if (this.value === 'deny_issue') {
-            denialDiv.style.display = 'block';
+            denialDiv.hidden = false;
             denialDiv.querySelector('textarea').required = true;
         } else {
-            denialDiv.style.display = 'none';
+            denialDiv.hidden = true;
             denialDiv.querySelector('textarea').required = false;
         }
     });
 }
 </script>
 
-<style>
-.timeline-marker i {
-    font-size: 0.5rem;
-}
-</style>
 {% endblock %}

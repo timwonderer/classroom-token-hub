@@ -159,7 +159,7 @@
                   <option value="__new__">＋ New group…</option>
                 </select>
               </div>
-              <div class="col-md-4" id="tier_group_new_wrap" style="display:none;">
+              <div class="col-md-4" id="tier_group_new_wrap" hidden>
                 <label class="form-label fw-bold" for="tier_group_new">New group name</label>
                 <input class="form-control" id="tier_group_new" name="tier_group_new" maxlength="60" placeholder="e.g. Paycheck Protection">
               </div>
@@ -250,7 +250,7 @@
 
     function applyGroup() {
       var isNew = groupSel.value === '__new__';
-      if (newWrap) newWrap.style.display = isNew ? '' : 'none';
+      if (newWrap) newWrap.hidden = !isNew;
       if (newInput) newInput.disabled = !toggle.checked || !isNew;
 
       // Disable ranks already taken in the selected existing group (the 3-tier cap),

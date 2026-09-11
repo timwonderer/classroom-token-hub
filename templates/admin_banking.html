@@ -365,7 +365,7 @@
                 <small class="text-muted">Annual yield applied to savings balances. Set 0 to disable interest.</small>
                 {% if savings_reco and savings_reco.cwi %}
                 <div class="mt-2 small text-success">
-                  <span class="material-symbols-outlined align-middle" style="font-size:1rem;" aria-hidden="true">recommend</span>
+                  <span class="material-symbols-outlined align-middle icon-xs" aria-hidden="true">recommend</span>
                   Economic Engine ceiling: <strong>{{ "%.2f"|format(savings_reco.max_apy_percent|float) }}% APY</strong>
                   max for <em>{{ savings_reco.mode }}</em> mode at
                   <em>{{ savings_reco.compound_frequency }}</em> compounding
@@ -448,7 +448,7 @@
                 <small class="text-muted">Charged when an account overdraws. Leave blank to charge no fee.</small>
                 {% if overdraft_reco and overdraft_reco.cwi %}
                 <div class="mt-2 small text-success">
-                  <span class="material-symbols-outlined align-middle" style="font-size:1rem;" aria-hidden="true">recommend</span>
+                  <span class="material-symbols-outlined align-middle icon-xs" aria-hidden="true">recommend</span>
                   Economic Engine range: <strong>{{ overdraft_reco.flat_fee_lower }}–{{ overdraft_reco.flat_fee_upper }}</strong>
                   for <em>{{ overdraft_reco.mode }}</em> mode
                   ({{ "%.0f"|format(overdraft_reco.fine_rate_lower|float * 100) }}%–{{ "%.0f"|format(overdraft_reco.fine_rate_upper|float * 100) }}% of CWI).
@@ -465,7 +465,7 @@
                    §4.6.1.1). Mirrors the rent/store balance alerts. #}
                 {% for w in overdraft_fee_warnings|default([]) %}
                 <div class="mt-2 small text-danger">
-                  <span class="material-symbols-outlined align-middle" style="font-size:1rem;" aria-hidden="true">warning</span>
+                  <span class="material-symbols-outlined align-middle icon-xs" aria-hidden="true">warning</span>
                   {{ w.message }}
                 </div>
                 {% endfor %}

@@ -90,7 +90,7 @@
 {% endif %}
 
 <!-- Delete Confirmation Form (hidden) -->
-<form id="delete-form" method="POST" style="display: none;">
+<form id="delete-form" method="POST" hidden>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 </form>
 

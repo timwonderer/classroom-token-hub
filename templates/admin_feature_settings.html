@@ -28,7 +28,7 @@
 <div class="card shadow mb-4">
   <div class="card-header bg-info text-white">
     <h5 class="mb-0">
-      <span class="material-symbols-outlined me-2" style="vertical-align: middle;" aria-hidden="true">tune</span>
+      <span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">tune</span>
       Feature Settings — {{ view.class_label }}
     </h5>
   </div>
@@ -51,7 +51,7 @@
             </div>
           </div>
           <span class="badge bg-success d-flex align-items-center gap-1">
-            <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">check_circle</span> Always on
+            <span class="material-symbols-outlined icon-xs" aria-hidden="true">check_circle</span> Always on
           </span>
         </div>
       </div>
@@ -95,17 +95,17 @@
     {% if not view.cwi_ready %}
     <div class="alert alert-warning">
       <div class="mb-2">
-        <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">info</span>
+        <span class="material-symbols-outlined icon-middle" aria-hidden="true">info</span>
         In order to use these features, you must first set up payroll and configure your
         economic engine.
       </div>
       <div class="d-flex flex-wrap gap-2">
         <span class="badge {{ 'bg-success' if view.payroll_ready else 'bg-secondary' }} d-flex align-items-center gap-1">
-          <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">{{ 'check_box' if view.payroll_ready else 'check_box_outline_blank' }}</span>
+          <span class="material-symbols-outlined icon-xs" aria-hidden="true">{{ 'check_box' if view.payroll_ready else 'check_box_outline_blank' }}</span>
           Payroll
         </span>
         <span class="badge {{ 'bg-success' if view.engine_ready else 'bg-secondary' }} d-flex align-items-center gap-1">
-          <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">{{ 'check_box' if view.engine_ready else 'check_box_outline_blank' }}</span>
+          <span class="material-symbols-outlined icon-xs" aria-hidden="true">{{ 'check_box' if view.engine_ready else 'check_box_outline_blank' }}</span>
           Economic Engine
         </span>
       </div>
@@ -139,7 +139,7 @@
     {% endif %}
 
     <div class="mt-4 text-muted small" id="feature-save-status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">
-      <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">sync</span>
+      <span class="material-symbols-outlined icon-middle" aria-hidden="true">sync</span>
       Changes are saved automatically.
     </div>
   </div>

@@ -26,6 +26,14 @@
 {% endcall %}
 {% endblock %}
 
+{% block extra_styles %}
+<style>
+    .shop-goal-progress { height: 25px; }
+    /* Modal notes shown as blocks; [hidden] still wins when they are hidden. */
+    .shop-modal-block { display: block; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div id="storePageFeedback" class="alert d-none" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
 
@@ -57,11 +65,11 @@
                         <h2 class="h5 card-title">{{ item.name }}</h2>
                         {% if item.is_rent_covered %}
                         <div class="alert alert-success alert-sm mb-2 py-1 px-2">
-                            <small><strong><span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;" aria-hidden="true">check_circle</span> Included in your rent!</strong></small>
+                            <small><strong><span class="material-symbols-outlined icon-xs icon-middle" aria-hidden="true">check_circle</span> Included in your rent!</strong></small>
                         </div>
                         {% elif item.is_rent_perk_item %}
                         <div class="mb-2">
-                            <span class="badge bg-info"><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;" aria-hidden="true">card_membership</span> Rent Perk</span>
+                            <span class="badge bg-info"><span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">card_membership</span> Rent Perk</span>
                             {% if item.display_rent_perk_message %}
                             <span class="badge bg-success">{{ item.display_rent_perk_message }}</span>
                             {% endif %}
@@ -113,7 +121,7 @@
                                     <small><strong>Collective Goal:</strong> {{ item.collective_progress.target_count }} students needed to unlock</small>
                                 </div>
                             {% endif %}
-                            <div class="progress" style="height: 25px;">
+                            <div class="progress shop-goal-progress">
                                 <div class="progress-bar {% if item.collective_progress.is_complete %}bg-success{% else %}bg-warning{% endif %}"
                                      role="progressbar"
                                      aria-label="{{ item.name }} collective purchase progress"
@@ -131,7 +139,7 @@
                             {% endif %}
                             {% if item.collective_progress.display_expires_at %}
                             <div class="alert alert-warning p-2 mt-2 mb-0">
-                                <small><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;" aria-hidden="true">schedule</span> <strong>Deadline:</strong> Goal expires {{ item.collective_progress.display_expires_at }}</small>
+                                <small><span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">schedule</span> <strong>Deadline:</strong> Goal expires {{ item.collective_progress.display_expires_at }}</small>
                             </div>
                             {% endif %}
                         </div>
@@ -264,7 +272,7 @@
         </div>
         {% else %}
         <div class="alert alert-info text-center">
-            <span class="material-symbols-outlined" style="font-size: 3rem;" aria-hidden="true">inventory_2</span>
+            <span class="material-symbols-outlined icon-2xl" aria-hidden="true">inventory_2</span>
             <h2 class="h5 mt-2">No Purchased Items</h2>
             <p class="mb-0">You haven't purchased any items yet. Browse the store to get started!</p>
         </div>
@@ -285,20 +293,20 @@
                 <div class="alert alert-info">
                     <strong>Item:</strong> <span id="modalItemName"></span><br>
                     <strong>Unit Price:</strong> $<span id="modalItemPrice"></span><br>
-                    <span id="rentPerkModalNote" style="display: none;">
+                    <span id="rentPerkModalNote" hidden>
                         <strong>Rent Perk:</strong> You already hold free uses of this item — redeem them from
                         <em>My Items</em> at no cost. Buying here is an additional purchase at the price above.<br>
                     </span>
-                    <span id="modalBundleInfo" style="display: none;">
+                    <span id="modalBundleInfo" class="shop-modal-block" hidden>
                         <strong>Bundle:</strong> <span id="modalBundleQuantity"></span> items per bundle<br>
                     </span>
-                    <span id="modalDiscountInfo" style="display: none;">
+                    <span id="modalDiscountInfo" class="shop-modal-block" hidden>
                         <strong>Bulk Discount:</strong> <span id="modalDiscountPercentage"></span>% off when buying <span id="modalDiscountQuantity"></span>+<br>
                     </span>
                 </div>
 
                 <!-- Item Type Explanation -->
-                <div id="itemTypeExplanation" class="alert mb-3" style="display: none;">
+                <div id="itemTypeExplanation" class="alert mb-3" hidden>
                     <h3 class="h6 alert-heading mb-2"><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>How This Item Works</h3>
                     <p id="explanationText" class="mb-0"></p>
                 </div>
@@ -325,7 +333,7 @@
 
                     <div class="alert alert-success" id="totalPriceDisplay">
                         <strong>Total Price:</strong> $<span id="totalPrice">0.00</span>
-                        <span id="savingsDisplay" style="display: none;">
+                        <span id="savingsDisplay" class="shop-modal-block" hidden>
                             <br><small class="text-success"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span> You save $<span id="savingsAmount">0.00</span>!</small>
                         </span>
                     </div>
@@ -361,7 +369,7 @@
                 <form id="useItemForm">
                     <input type="hidden" id="useModalItemId" name="entitlement_id">
                     <input type="hidden" id="useModalItemType" name="item_type">
-                    <div class="mb-3" id="redemptionDetailsDiv" style="display: none;">
+                    <div class="mb-3" id="redemptionDetailsDiv" hidden>
                         <label for="redemptionDetails" class="form-label fw-bold">
                             <span id="redemptionPromptLabel">Additional Information</span>
                         </label>
@@ -440,24 +448,23 @@
         document.getElementById('modalBasePrice').value = currentItemData.basePrice;
         document.getElementById('modalInventory').value = currentItemData.inventory;
         const rentPerkModalNote = document.getElementById('rentPerkModalNote');
-        rentPerkModalNote.style.display =
-            currentItemData.rentPerkMessage ? 'inline' : 'none';
+        rentPerkModalNote.hidden = !currentItemData.rentPerkMessage;
 
         // Show bundle info
         if (currentItemData.isBundle) {
-            document.getElementById('modalBundleInfo').style.display = 'block';
+            document.getElementById('modalBundleInfo').hidden = false;
             document.getElementById('modalBundleQuantity').textContent = currentItemData.bundleQuantity;
         } else {
-            document.getElementById('modalBundleInfo').style.display = 'none';
+            document.getElementById('modalBundleInfo').hidden = true;
         }
 
         // Show discount info
         if (currentItemData.bulkDiscountEnabled) {
-            document.getElementById('modalDiscountInfo').style.display = 'block';
+            document.getElementById('modalDiscountInfo').hidden = false;
             document.getElementById('modalDiscountPercentage').textContent = currentItemData.bulkDiscountPercentage;
             document.getElementById('modalDiscountQuantity').textContent = currentItemData.bulkDiscountQuantity;
         } else {
-            document.getElementById('modalDiscountInfo').style.display = 'none';
+            document.getElementById('modalDiscountInfo').hidden = true;
         }
 
         // Show item type explanation
@@ -490,9 +497,9 @@
         if (explanation) {
             explanationDiv.className = `alert mb-3 ${alertClass}`;
             explanationText.innerHTML = explanation;
-            explanationDiv.style.display = 'block';
+            explanationDiv.hidden = false;
         } else {
-            explanationDiv.style.display = 'none';
+            explanationDiv.hidden = true;
         }
 
         // Set max quantity if inventory limited
@@ -562,9 +569,9 @@
         // Show savings if discount applied
         if (hasDiscount && savings > 0) {
             document.getElementById('savingsAmount').textContent = savings.toFixed(2);
-            document.getElementById('savingsDisplay').style.display = 'block';
+            document.getElementById('savingsDisplay').hidden = false;
         } else {
-            document.getElementById('savingsDisplay').style.display = 'none';
+            document.getElementById('savingsDisplay').hidden = true;
         }
 
         // Update quantity hint
@@ -656,7 +663,7 @@
 
             if (itemType === 'delayed') {
                 // Show redemption details for delayed items
-                redemptionDetailsDiv.style.display = 'block';
+                redemptionDetailsDiv.hidden = false;
 
                 // Set custom prompt if provided, otherwise use default
                 if (redemptionPrompt && redemptionPrompt.trim() !== '') {
@@ -668,7 +675,7 @@
                 document.getElementById('useModalMessage').textContent = 'This will request redemption. Your teacher will review and approve it.';
             } else {
                 // Hide for other item types
-                redemptionDetailsDiv.style.display = 'none';
+                redemptionDetailsDiv.hidden = true;
                 redemptionDetailsTextarea.value = ''; // Clear previous value
 
                 if (itemType === 'hall_pass') {

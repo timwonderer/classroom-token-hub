@@ -50,6 +50,14 @@
 {% endcall %}
 {% endblock %}
 
+{% block extra_head %}
+<style>
+  .cwi-hours-panel {
+    max-width: 320px;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid py-3">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 mt-0 gap-3">
@@ -271,7 +279,7 @@
             Pricing recommendations are disabled until CWI is configured; features
             like rent, insurance, and store will still work.
           </div>
-          <div class="p-3 bg-light rounded" style="max-width: 320px;">
+          <div class="p-3 bg-light rounded cwi-hours-panel">
             <div class="text-muted small">Expected Hours/Week</div>
             <form method="post" action="{{ url_for('admin.update_expected_weekly_hours') }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

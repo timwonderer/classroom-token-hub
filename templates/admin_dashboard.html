@@ -89,7 +89,7 @@
                     <div class="icon-circle bg-success-subtle text-success me-3">
                         <span class="material-symbols-outlined" aria-hidden="true">savings</span>
                     </div>
-                    <span class="fw-medium" style="color: #5f5f5c;">Total Economy Value</span>
+                    <span class="fw-medium text-muted">Total Economy Value</span>
                     <span class="text-secondary ms-2" data-bs-toggle="tooltip" data-bs-placement="top"
                         title="Sum of all student account balances" aria-label="Sum of all student account balances">
                         <span class="material-symbols-outlined align-top fs-6" aria-hidden="true">info</span>
@@ -107,11 +107,11 @@
                     <div class="icon-circle bg-warning-subtle text-warning me-3">
                         <span class="material-symbols-outlined" aria-hidden="true">pending_actions</span>
                     </div>
-                    <span class="fw-medium" style="color: #5f5f5c;">Pending Tasks</span>
+                    <span class="fw-medium text-muted">Pending Tasks</span>
                 </div>
                 <div class="display-6 fw-bold mb-0 text-dark">{{ total_pending_actions }}</div>
                 {% if total_pending_actions > 0 %}
-                <div class="mt-2 small" style="color: #5f5f5c;">
+                <div class="mt-2 small text-muted">
                     {% if pending_redemptions_count > 0 %}
                     <span class="badge bg-warning text-dark me-1">{{ pending_redemptions_count }} orders</span>
                     {% endif %}
@@ -134,14 +134,14 @@
                     <div class="icon-circle bg-info-subtle text-info me-3">
                         <span class="material-symbols-outlined" aria-hidden="true">calendar_clock</span>
                     </div>
-                    <span class="fw-medium" style="color: #5f5f5c;">Next Payroll</span>
+                    <span class="fw-medium text-muted">Next Payroll</span>
                 </div>
                 <div class="fw-bold h5 mb-1 text-dark">{{ next_payroll_date|fmt_compact_date }}</div>
-                <div class="small" style="color: #5f5f5c;">
+                <div class="small text-muted">
                     Est: ${{ "{:,.0f}".format(total_payroll_estimate) }}
                     {% if payroll_updated_at %}
                     <br>
-                    <span class="text-muted" style="font-size: 0.85em;">
+                    <span class="text-muted type-sm">
                         Updated {{ payroll_updated_at|fmt_timestamp }}
                     </span>
                     {% endif %}
@@ -153,7 +153,7 @@
 
 <!-- Quick Actions -->
 <div class="mb-4">
-    <h2 class="h5 fw-bold mb-3 small text-uppercase" style="color: #5f5f5c;">Quick Actions</h2>
+    <h2 class="h5 fw-bold mb-3 small text-uppercase text-muted">Quick Actions</h2>
     <div class="row g-3">
         <div class="col-6 col-md-3">
             <a href="{{ url_for('admin.attendance_log') }}"
@@ -251,7 +251,7 @@
                 <!-- Redemptions Tab -->
                 {% if pending_redemptions_count > 0 %}
                 <div class="tab-pane fade show active" id="redemptions" role="tabpanel" aria-labelledby="redemptions-tab">
-                    <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
+                    <div class="list-group list-group-flush scroll-panel">
                         {% for req in recent_redemptions %}
                         <div
                             class="list-group-item px-0 d-flex justify-content-between align-items-center border-0 py-3">
@@ -292,7 +292,7 @@
                 {% if pending_hall_passes_count > 0 %}
                 <div class="tab-pane fade {% if pending_redemptions_count == 0 %}show active{% endif %}"
                     id="hall-passes" role="tabpanel" aria-labelledby="hall-passes-tab">
-                    <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
+                    <div class="list-group list-group-flush scroll-panel">
                         {% for pass in recent_hall_passes %}
                         <div
                             class="list-group-item px-0 d-flex justify-content-between align-items-center border-0 py-3">
@@ -328,7 +328,7 @@
                 {% if pending_insurance_claims_count > 0 %}
                 <div class="tab-pane fade {% if pending_redemptions_count == 0 and pending_hall_passes_count == 0 %}show active{% endif %}"
                     id="claims" role="tabpanel" aria-labelledby="claims-tab">
-                    <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
+                    <div class="list-group list-group-flush scroll-panel">
                         {% for claim in recent_insurance_claims %}
                         <div
                             class="list-group-item px-0 d-flex justify-content-between align-items-center border-0 py-3">
@@ -420,7 +420,7 @@
                 {% else %}
                 <div class="text-center py-5">
                     <span class="material-symbols-outlined" aria-hidden="true">unknown_document</span>
-                    <p style="color: #5f5f5c;">No recent activity found.</p>
+                    <p class="text-muted">No recent activity found.</p>
                 </div>
                 {% endif %}
             </div>
@@ -546,7 +546,7 @@
                     if (redemptionsPane) {
                         redemptionsPane.innerHTML = `
                             <div class="text-center text-muted py-4">
-                                <span class="material-symbols-outlined" style="font-size: 2rem;" aria-hidden="true">check_circle</span>
+                                <span class="material-symbols-outlined icon-xl" aria-hidden="true">check_circle</span>
                                 <p class="mb-0 mt-2">No pending redemptions</p>
                             </div>
                         `;
