@@ -162,6 +162,12 @@
                         Savings interest is not currently configured for this class, so your
                         posted balance of <strong>${{ "%.2f"|format(posted_savings_balance) }}</strong> is projected flat.
                         {% endif %}
+                        {% if savings_balance != posted_savings_balance %}
+                        <br>
+                        Your savings card shows <strong>${{ "%.2f"|format(savings_balance) }}</strong> because it
+                        includes money that has not finished settling yet. Interest is earned on your posted
+                        balance only, so the two figures agree once settlement completes.
+                        {% endif %}
                     </small>
                 </div>
             </div>

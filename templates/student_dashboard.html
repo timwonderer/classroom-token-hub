@@ -296,20 +296,24 @@
                 </div>
                 {% if savings_balance > 0 %}
                 <div class="display-6 fw-bold text-success mb-2">${{ "%.2f"|format(savings_balance) }}</div>
+                {% if savings_annual_rate %}
                 <div class="small text-muted mb-3">
                     <span class="material-symbols-outlined align-bottom fs-6" aria-hidden="true">trending_up</span>
-                    Projected Interest: +${{ "%.2f"|format(forecast_interest) }}/month
+                    Projected Interest: +${{ "%.2f"|format(forecast_interest) }} per {{ savings_payout_frequency }} payout
                 </div>
+                {% endif %}
                 <a href="{{ url_for('student.transfer') }}" class="btn btn-success btn-sm">
                     <span class="material-symbols-outlined align-bottom fs-6 me-1" aria-hidden="true">add</span> Add to Savings
                 </a>
                 {% else %}
                 <div class="display-6 fw-bold text-muted mb-2">$0.00</div>
+                {% if savings_annual_rate %}
                 <div class="alert alert-warning border-warning py-2 px-3 mb-3 small d-flex align-items-start" style="color: #5f3d00;">
                     <span class="material-symbols-outlined fs-6 me-2" aria-hidden="true">info</span>
                     <span>You're missing out on interest! Transfer money from Checking to Savings to start
                         earning.</span>
                 </div>
+                {% endif %}
                 <a href="{{ url_for('student.transfer') }}" class="btn btn-success btn-sm">
                     <span class="material-symbols-outlined align-bottom fs-6 me-1" aria-hidden="true">add</span> Start Saving
                 </a>

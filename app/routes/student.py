@@ -93,7 +93,7 @@ from app.services.ledger_balance_query_service import (
     get_available_balances,
     get_posted_balance,
 )
-from app.services.ledger_interest_service import apply_monthly_savings_interest as post_monthly_savings_interest
+from app.services.ledger_interest_service import resolve_savings_policy
 from app.services.economic_engine import (
     savings_interest_for_payout_period,
     project_savings_balances,
@@ -880,8 +880,17 @@ def dashboard():
     savings_transactions = [tx for tx in transactions if tx.account_type == 'savings']
 
     checking_balance, savings_balance = get_available_balances(scope.seat_id, scope.class_id)
-    # Calculate forecast interest using Decimal
-    forecast_interest = _quantize_currency(savings_balance * Decimal('0.045') / Decimal('12'))
+    # The projection runs the payout engine over the posted balance, on the
+    # class's configured terms. A hardcoded APY here is prohibited outright
+    # (SPEC-ECON-001 §10, §11), and accrual is posted-only (§9.2).
+    savings_policy = resolve_savings_policy(scope.class_id)
+    forecast_interest = savings_interest_for_payout_period(
+        posted_balance=get_posted_balance(scope.seat_id, scope.class_id, 'savings'),
+        annual_rate=savings_policy.annual_rate,
+        calculation_type=savings_policy.calculation_type,
+        compound_frequency=savings_policy.compound_frequency,
+        payout_frequency=savings_policy.payout_frequency,
+    )
 
     attendance_state = get_class_attendance_status(student, class_id=scope.class_id, ctx=scope)
     if 'projected_pay' in attendance_state and attendance_state['projected_pay'] is not None:
@@ -1144,6 +1153,8 @@ def dashboard():
         recent_transactions=transactions[:5],  # Most recent 5 transactions
         now=local_now,
         forecast_interest=float(forecast_interest),
+        savings_annual_rate=savings_policy.annual_rate,
+        savings_payout_frequency=savings_policy.payout_frequency,
         recent_deposit=recent_deposit,
         active_insurance=active_insurance,
         rent_status=rent_status,
@@ -1418,14 +1429,15 @@ def transfer():
     checking_transactions = [t for t in transactions if t.account_type == 'checking']
     savings_transactions = [t for t in transactions if t.account_type == 'savings']
 
-    # Economic Engine is the sole authority for savings policy (SPEC-ECON-001).
-    # No hardcoded APY default: if the engine has not configured a rate, savings
-    # earns nothing and we must NOT advertise a fabricated rate (§11).
-    settings = get_current_economic_engine(context.class_id)
-    annual_rate = settings.interest_rate if settings and settings.interest_rate is not None else None
-    calculation_type = settings.interest_calculation_type if settings and settings.interest_calculation_type else 'simple'
-    compound_frequency = settings.compound_frequency if settings and settings.compound_frequency else 'never'
-    payout_frequency = settings.interest_payout_frequency if settings and settings.interest_payout_frequency else 'monthly'
+    # Economic Engine is the sole authority for savings policy (SPEC-ECON-001),
+    # read through the same resolver the payout command uses so a projection
+    # cannot drift from execution (§10).
+    policy = resolve_savings_policy(context.class_id)
+    settings = policy.engine
+    annual_rate = policy.annual_rate
+    calculation_type = policy.calculation_type
+    compound_frequency = policy.compound_frequency
+    payout_frequency = policy.payout_frequency
     monthly_interest_rate = (annual_rate / Decimal('12')) if annual_rate is not None else Decimal('0')
 
     # Balances shown to the student: available for spend/transfer display.
@@ -1479,18 +1491,6 @@ def transfer():
                          projection_months=projection_months,
                          projection_balances=projection_balances,
                          transfer_token=transfer_token)
-
-
-def apply_savings_interest(student, annual_rate=Decimal('0.045')):
-    """Compatibility command wrapper that forwards savings-interest writes into the ledger service."""
-    context = resolve_canonical_context()
-    if not context:
-        return None
-    seat = get_current_seat()
-    if not seat:
-        return None
-    interest_tx = post_monthly_savings_interest(seat, annual_rate=annual_rate)
-    return interest_tx
 
 
 # -------------------- INSURANCE --------------------
