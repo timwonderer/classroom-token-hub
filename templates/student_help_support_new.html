@@ -81,7 +81,7 @@
                 <!-- Troubleshooting -->
                 <div class="col-lg-6">
                     <div class="card shadow-sm h-100">
-                        <div class="card-header text-white" style="background-color: #6f4e2f;">
+                        <div class="card-header bg-primary text-white">
                             <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">help</span>Troubleshooting</h2>
                         </div>
                         <div class="card-body">
@@ -139,7 +139,7 @@
                                     <h3 class="card-title h5">Something wrong with your transaction, payroll, or attendance record?</h3>
                                     <p class="card-text text-muted">
                                         Reports about transactions and attendance records can be made directly from where the log is located.</p> 
-                                        <p class="card-text text-muted">Just click on the <span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;" aria-hidden="true">help</span> icon next to the entry you wish to report.
+                                        <p class="card-text text-muted">Just click on the <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">help</span> icon next to the entry you wish to report.
                                     </p>
 
                                     
@@ -153,15 +153,15 @@
                         <div class="accordion-item">
                             <h3 class="accordion-header" id="reportIssueHelpHeading">
                                 <button class="accordion-button collapsed bg-success text-white" type="button" data-bs-toggle="collapse" data-bs-target="#reportIssueHelpBody" aria-expanded="false" aria-controls="reportIssueHelpBody">
-                                    <span class="material-symbols-outlined me-2" style="font-size: 24px; vertical-align: middle;" aria-hidden="true">live_help</span>
+                                    <span class="material-symbols-outlined icon-lg icon-middle me-2" aria-hidden="true">live_help</span>
                                     How to report an issue
                                 </button>
                             </h3>
                             <div id="reportIssueHelpBody" class="accordion-collapse collapse" aria-labelledby="reportIssueHelpHeading" data-bs-parent="#reportIssueHelpAccordion">
-                                <div class="accordion-body" style="padding: 1.5rem;">
+                                <div class="accordion-body p-4">
                                     <p>When something is not working correctly, you can report the problem to your teacher. There are two kinds of problems you can report:</p>
                                     <ul>
-                                        <li><strong>Transaction / Record Issue:</strong> If you notice there's a mistake in a specific log entry, you can click on the <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;" aria-hidden="true">help</span> icon next to that entry to report it directly. This helps your teacher quickly find and fix the issue.</li>
+                                        <li><strong>Transaction / Record Issue:</strong> If you notice there's a mistake in a specific log entry, you can click on the <span class="material-symbols-outlined icon-xs icon-middle" aria-hidden="true">help</span> icon next to that entry to report it directly. This helps your teacher quickly find and fix the issue.</li>
                                         <li><strong>General Issue:</strong> For other problems like features not working or clock-in issues, you can use the "Report General Issue" button below to let your teacher know.</li>
                                     </ul>
                                     <p>After reporting your issue, your teacher will review it and decide what to do next. You can track the status of your report in the <strong>"My Issues"</strong> tab. If the issue is something your teacher cannot fix, they will <strong>escalate</strong> the issue to the app developer. If what you have found is a real bug, you can receive a reward.</p>
@@ -233,11 +233,11 @@
 
 <style>
 .hover-shadow {
-    transition: box-shadow 0.3s ease-in-out;
+    transition: box-shadow var(--duration-slow) ease-in-out;
 }
 
 .hover-shadow:hover {
-    box-shadow: 0 0.5rem 1rem color-mix(in srgb, black 15%, transparent) !important;
+    box-shadow: var(--shadow-lg) !important;
 }
 </style>
 {% endblock %}

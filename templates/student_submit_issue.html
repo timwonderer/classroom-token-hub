@@ -26,10 +26,10 @@
         min-height: 120px;
     }
     .editor-toolbar {
-        border-radius: 4px 4px 0 0;
+        border-radius: var(--radius-sm) var(--radius-sm) 0 0;
     }
     .CodeMirror {
-        border-radius: 0 0 4px 4px;
+        border-radius: 0 0 var(--radius-sm) var(--radius-sm);
     }
 </style>
 {% endblock %}
@@ -47,7 +47,7 @@
             <div class="card shadow">
                 <div class="card-header bg-primary text-white">
                     <h4 class="mb-0">
-                        <span class="material-symbols-outlined" style="font-size:28pt; vertical-align:middle; margin-right:8px;" aria-hidden="true">
+                        <span class="material-symbols-outlined icon-xl icon-middle me-2" aria-hidden="true">
                             problem
                         </span>
                         Details about the issue

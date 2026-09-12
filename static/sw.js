@@ -1,8 +1,11 @@
-const CACHE_NAME = 'classroom-token-hub-v8';
+const CACHE_NAME = 'classroom-token-hub-v9';
 const STATIC_ASSETS = [
   '/static/manifest.json',
   '/static/images/icon-192.png',
   '/static/images/icon-512.png',
+  // The offline page resolves every colour and spacing value through tokens;
+  // without this it renders unstyled exactly when the network is gone.
+  '/static/css/tokens.css',
   '/static/css/style.css',
   '/offline'
 ];

@@ -306,7 +306,7 @@
                             </label>
                         </div>
 
-                        <div class="mb-3" id="reward_amount_field" style="display: none;">
+                        <div class="mb-3" id="reward_amount_field" hidden>
                             <label for="reward_amount" class="form-label">Reward Amount</label>
                             <div class="input-group">
                                 <span class="input-group-text">$</span>
@@ -367,10 +367,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (checkbox && amountField && amountInput) {
         checkbox.addEventListener('change', function() {
             if (this.checked) {
-                amountField.style.display = 'block';
+                amountField.hidden = false;
                 amountInput.required = true;
             } else {
-                amountField.style.display = 'none';
+                amountField.hidden = true;
                 amountInput.required = false;
                 amountInput.value = '';
             }

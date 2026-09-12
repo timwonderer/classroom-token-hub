@@ -45,8 +45,9 @@ from app.services.ledger_posting_service import create_pending_transaction_idemp
 from app.services import entitlement_service
 from app.services import store_service
 from app.services.class_configuration_query_service import get_rent_settings
-from app.feats.base import requires_feat_context, FEATContext
+from app.feats.base import get_active_feat_name, requires_feat_context, FEATContext
 from app.feats.satisfy_obligation_feat import satisfy_obligation, SatisfyObligationRequest
+from app.utils.transaction_idempotency import get_idempotent_transaction
 
 logger = logging.getLogger(__name__)
 
@@ -183,11 +184,49 @@ def pay_rent(
             fully_paid=True,
         )
 
-    seat = Seat.query.filter_by(id=seat_id, class_id=class_id).first()
+    # The seat row serializes this seat's money (INV-LED-015). Taking it here,
+    # before the affordability read below, holds it through the debit write, so
+    # a concurrent debit or settlement for the same seat waits for this payment
+    # instead of authorizing against the same pre-payment balance.
+    seat = (
+        Seat.query.filter_by(id=seat_id, class_id=class_id)
+        .with_for_update()
+        .first()
+    )
     if seat is None:
         return RentPaymentResult(
             success=False, correlation_id=correlation_id,
             error_code="NO_SEAT", error_message="Seat not found in class scope",
+        )
+
+    # A same-key replay resolves from this command's own ledger row, and only
+    # under the seat lock, so a retry that waited here for its predecessor sees
+    # the row that predecessor committed. Recomputing instead would count the
+    # committed debit in `paid_before`, get the same row back from the idempotent
+    # write, and report the payment a second time against a remaining balance
+    # that was never actually paid down.
+    ledger_key = f"rent-payment:{idempotency_key}:principal"
+    prior_debit = get_idempotent_transaction(
+        ledger_key, class_id=class_id, seat_id=seat_id, feat_code=get_active_feat_name(),
+    )
+    if prior_debit is not None:
+        replay_assessed = obligations_service.resolve_assessment_amount(assessment)
+        prior_payment = obligations_service.get_payment_event_by_ledger(prior_debit.id)
+        if prior_payment is None:
+            raise RuntimeError("FATAL: Rent payment debit has no PAYMENT satisfaction event")
+        replay_paid = obligations_service.get_paid_magnitude_through_event(
+            correlation_id, prior_payment
+        )
+        replay_fully_paid = replay_paid >= replay_assessed
+        return RentPaymentResult(
+            success=True,
+            correlation_id=correlation_id,
+            already_satisfied=replay_fully_paid,
+            transaction_id=prior_debit.id,
+            amount_paid=abs(Decimal(str(prior_debit.amount))),
+            remaining_after=max(Decimal("0.00"), replay_assessed - replay_paid),
+            fully_paid=replay_fully_paid,
+            passes_awarded=0,
         )
 
     # Resolve the policy THIS OBLIGATION WAS ASSESSED UNDER, not whatever is
@@ -273,7 +312,7 @@ def pay_rent(
     #     distinct command posts a distinct partial debit.
     authority_seat_id = resolve_teacher_seat_for_class(class_id).id
     transaction, _created = create_pending_transaction_idempotent(
-        idempotency_key=f"rent-payment:{idempotency_key}:principal",
+        idempotency_key=ledger_key,
         seat_id=seat_id,
         class_id=class_id,
         target_seat_id=authority_seat_id,

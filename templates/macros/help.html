@@ -27,7 +27,7 @@
      {% if tooltip %}title="{{ tooltip }}" aria-label="{{ tooltip }}"{% elif icon_only %}aria-label="Learn more"{% endif %}
      target="_blank"
      rel="noopener">
-    <span class="material-symbols-outlined" aria-hidden="true" style="vertical-align: middle; font-size: 1.1rem; color: var(--text-secondary);">help</span>
+    <span class="material-symbols-outlined icon-sm icon-middle text-muted" aria-hidden="true">help</span>
     {% if not icon_only %}
       <span class="help-text">{{ text or "Learn more" }}</span>
     {% endif %}
@@ -121,14 +121,14 @@
       description: Optional description
   #}
   <div class="help-section alert alert-info d-flex align-items-start mb-3">
-    <span class="material-symbols-outlined me-2" style="font-size: 1.5rem;" aria-hidden="true">info</span>
+    <span class="material-symbols-outlined icon-lg me-2" aria-hidden="true">info</span>
     <div class="flex-grow-1">
       <h6 class="mb-1">{{ title }}</h6>
       {% if description %}
         <p class="mb-2 small">{{ description }}</p>
       {% endif %}
       <a href="{{ doc_url(doc_path) }}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
-        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1rem;" aria-hidden="true">menu_book</span>
+        <span class="material-symbols-outlined icon-xs icon-middle" aria-hidden="true">menu_book</span>
         View Guide <span class="visually-hidden">(opens in a new tab)</span>
       </a>
     </div>
@@ -147,11 +147,11 @@
   #}
   <div class="card border-primary">
     <div class="card-body text-center">
-      <span class="material-symbols-outlined mb-3" style="font-size: 3rem; color: var(--primary);" aria-hidden="true">{{ icon }}</span>
+      <span class="material-symbols-outlined icon-2xl text-primary mb-3" aria-hidden="true">{{ icon }}</span>
       <h5 class="card-title">{{ title }}</h5>
       <p class="card-text text-muted">{{ description }}</p>
       <a href="{{ doc_url(doc_path) }}" class="btn btn-primary" target="_blank" rel="noopener">
-        <span class="material-symbols-outlined" style="vertical-align: middle;" aria-hidden="true">menu_book</span>
+        <span class="material-symbols-outlined icon-middle" aria-hidden="true">menu_book</span>
         Learn How <span class="visually-hidden">(opens in a new tab)</span>
       </a>
     </div>
