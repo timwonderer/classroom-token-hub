@@ -392,9 +392,9 @@
         <div class="card-body">
           {% if recommendations %}
           <ul class="mb-2">
-            <li>Rent: ${{ recommendations.rent_weekly.min }} - ${{ recommendations.rent_weekly.max }} per week (ideal ${{ recommendations.rent_weekly.recommended }})</li>
+            <li>Rent: ${{ recommendations.rent_weekly.min }} - ${{ recommendations.rent_weekly.max }} per week</li>
             {% if insurance_recommendation %}
-            <li>Insurance (weekly premium): ${{ insurance_recommendation.weekly_min }} - ${{ insurance_recommendation.weekly_max }}{% if insurance_recommendation.weekly_recommended is not none %} (ideal ${{ insurance_recommendation.weekly_recommended }}){% endif %}. Per-policy payout ceilings depend on product &amp; tier — set them in insurance settings.</li>
+            <li>Insurance (weekly premium): ${{ insurance_recommendation.weekly_min }} - ${{ insurance_recommendation.weekly_max }}. Per-policy payout ceilings depend on product &amp; tier — set them in insurance settings.</li>
             {% endif %}
             <li>Fines: ${{ recommendations.fine.min }} - ${{ recommendations.fine.max }} per incident</li>
             <li>Store pricing tiers scale with CWI. Basic items between ${{ recommendations.store_tiers.basic.min }} and ${{ recommendations.store_tiers.basic.max }}.</li>

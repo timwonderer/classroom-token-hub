@@ -5026,6 +5026,9 @@ def store_management():
             EntitlementEvent.class_id == selected_scope['class_id'],
             EntitlementEvent.event_type == "GRANTED",
             EntitlementEvent.acquisition_type == "PURCHASE",
+            # Insurance grants are also GRANTED/PURCHASE but carry no store
+            # product; product_id is what names a store product lineage.
+            EntitlementEvent.product_id.isnot(None),
         )
         .order_by(EntitlementEvent.timestamp.desc())
         .limit(10)
@@ -5033,15 +5036,14 @@ def store_management():
     )
     for entitlement in recent_entitlements:
         item = store_service.resolve_entitlement_product(entitlement)
+        if item is None:
+            continue
         seat = db.session.get(Seat, entitlement.target_seat_id)
         profile = seat.identity_profile if seat else None
 
         # Extract quantity from payload (defaults to 1 if not present)
         payload = entitlement.payload or {}
         quantity_total = payload.get('quantity_total', 1)
-
-        # Determine if this is from a bundle purchase
-        is_from_bundle = item.is_bundle if item else False
 
         recent_purchases.append(SimpleNamespace(
             id=entitlement.entitlement_id,
@@ -5052,7 +5054,7 @@ def store_management():
             purchased_at=entitlement.timestamp,
             purchase_date=entitlement.timestamp,
             quantity=quantity_total,
-            is_from_bundle=is_from_bundle,
+            is_from_bundle=item.is_bundle,
         ))
 
     collective_progress_by_item = {}
@@ -7029,7 +7031,6 @@ def economic_engine():
         insurance_recommendation = {
             'weekly_min': float(_quantize_currency(_ins.cwi * Decimal(str(_rate_lo)))),
             'weekly_max': float(_quantize_currency(_ins.cwi * Decimal(str(_rate_hi)))),
-            'weekly_recommended': float(_ins.weekly_premium) if _ins.weekly_premium is not None else None,
         }
 
     return render_template(

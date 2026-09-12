@@ -113,8 +113,11 @@ class EntitlementCardView:
     item_description: str | None  # Flattened from ORM
     status: str  # 'purchased', 'pending', 'processing', etc.
     display_status: str  # Display label: "Ready to Use", "Pending Approval", etc.
-    display_purchased_date: str  # Pre-formatted ISO timestamp or "N/A"
-    display_expiry_date: str | None  # Pre-formatted as "MM/DD/YY" or None if no expiry
+    # Timestamps stay as datetimes. Rendering them is the temporal resolver's
+    # job (fmt_timestamp / fmt_date), which localizes to the class timezone;
+    # pre-formatting here would hard-code UTC.
+    purchased_at: datetime | None
+    expires_at: datetime | None
     has_expiry_date: bool
     redemption_prompt: str | None
 
@@ -275,7 +278,7 @@ def build_entitlement_card_view(
         entitlement_id = getattr(entitlement, 'id', 'unknown')
         purchase_date = getattr(entitlement, 'purchase_date', None)
         expiry_date = getattr(entitlement, 'expiry_date', None)
-        item_id = item.id if item else 0
+        item_id = item.product_lineage_uuid if item else 0
         redemption_prompt = getattr(item, 'redemption_prompt', None) if item else None
     else:
         # EntitlementEvent model
@@ -308,25 +311,17 @@ def build_entitlement_card_view(
     }
     display_status = status_labels.get(status, status.title())
 
-    # Pre-format dates (eliminating strftime from template)
-    display_purchased_date = (
-        purchase_date.strftime("%Y-%m-%dT%H:%M:%SZ") if purchase_date else "N/A"
-    )
-
-    # Expiry date (if applicable)
-    display_expiry_date = None
-    has_expiry_date = False
+    # The expiry date arrives from the event payload, so it may be an ISO string.
+    expires_at = None
     if expiry_date:
         try:
-            # Parse if it's a string, or use directly if datetime
             if isinstance(expiry_date, str):
-                expiry_dt = datetime.fromisoformat(expiry_date.replace("Z", "+00:00"))
+                expires_at = datetime.fromisoformat(expiry_date.replace("Z", "+00:00"))
             else:
-                expiry_dt = expiry_date
-            display_expiry_date = expiry_dt.strftime("%m/%d/%y")
-            has_expiry_date = True
-        except (ValueError, AttributeError, TypeError):
+                expires_at = expiry_date
+        except (ValueError, TypeError):
             pass
+    has_expiry_date = expires_at is not None
 
     # Derive presentation state
     is_hall_pass = item_type == "hall_pass"
@@ -359,8 +354,8 @@ def build_entitlement_card_view(
         item_description=item_description,
         status=status,
         display_status=display_status,
-        display_purchased_date=display_purchased_date,
-        display_expiry_date=display_expiry_date,
+        purchased_at=purchase_date,
+        expires_at=expires_at,
         has_expiry_date=has_expiry_date,
         redemption_prompt=redemption_prompt,
         can_redeem_immediately=can_redeem_immediately,
