@@ -320,6 +320,23 @@ def get_paid_magnitude(correlation_id: str) -> Decimal:
     return total
 
 
+def get_paid_magnitude_through_event(
+    correlation_id: str, boundary_event: ObligationAssessment
+) -> Decimal:
+    """Sum PAYMENT magnitudes through one immutable satisfaction event."""
+    total = Decimal('0.00')
+    for event in get_satisfaction_events(correlation_id):
+        if event.event_type == 'PAYMENT' and (
+            event.timestamp < boundary_event.timestamp
+            or (event.timestamp == boundary_event.timestamp and event.id <= boundary_event.id)
+        ) and event.ledger_transaction_id:
+            from app.models import Transaction
+            txn = db.session.get(Transaction, event.ledger_transaction_id)
+            if txn is not None and txn.amount is not None:
+                total += abs(Decimal(str(txn.amount)))
+    return total
+
+
 def get_payment_event_by_ledger(
     ledger_transaction_id: int | None,
 ) -> ObligationAssessment | None:

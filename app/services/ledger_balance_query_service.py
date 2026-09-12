@@ -48,6 +48,8 @@ def _require_balance_scope(seat_id: int, class_id: str, account_type: str) -> No
         # seat that has money. A read that cannot name its account must fail, not
         # answer.
         raise ValueError("FATAL: Balance lookup requires account_type.")
+    if account_type not in {"checking", "savings"}:
+        raise ValueError(f"FATAL: Unsupported account_type: {account_type}.")
 
 
 def _get_balance_cache(seat_id: int, class_id: str, account_type: str):

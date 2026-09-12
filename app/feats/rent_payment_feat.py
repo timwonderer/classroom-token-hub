@@ -211,7 +211,12 @@ def pay_rent(
     )
     if prior_debit is not None:
         replay_assessed = obligations_service.resolve_assessment_amount(assessment)
-        replay_paid = obligations_service.get_paid_magnitude(correlation_id)
+        prior_payment = obligations_service.get_payment_event_by_ledger(prior_debit.id)
+        if prior_payment is None:
+            raise RuntimeError("FATAL: Rent payment debit has no PAYMENT satisfaction event")
+        replay_paid = obligations_service.get_paid_magnitude_through_event(
+            correlation_id, prior_payment
+        )
         replay_fully_paid = replay_paid >= replay_assessed
         return RentPaymentResult(
             success=True,

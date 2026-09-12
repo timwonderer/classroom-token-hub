@@ -330,6 +330,10 @@ def test_INV_LED_015__partial_rent_replay_reports_the_original_payment(app):
             class_id, seat_id, correlation_id,
             idempotency_key=key, payment_amount=Decimal("20.00"),
         )
+        second = execute_rent_payment(
+            class_id, seat_id, correlation_id,
+            idempotency_key=f"{key}:later", payment_amount=Decimal("10.00"),
+        )
         replay = execute_rent_payment(
             class_id, seat_id, correlation_id,
             idempotency_key=key, payment_amount=Decimal("20.00"),
@@ -337,6 +341,8 @@ def test_INV_LED_015__partial_rent_replay_reports_the_original_payment(app):
 
         assert first.success is True and first.fully_paid is False
         assert first.remaining_after == Decimal("30.00")
+        assert second.success is True
+        assert second.remaining_after == Decimal("20.00")
 
         assert replay.success is True
         assert replay.transaction_id == first.transaction_id
@@ -348,5 +354,5 @@ def test_INV_LED_015__partial_rent_replay_reports_the_original_payment(app):
         payments = ObligationAssessment.query.filter_by(
             correlation_id=correlation_id, event_type="PAYMENT"
         ).count()
-        assert payments == 1
-        assert obligations_service.get_paid_magnitude(correlation_id) == Decimal("20.00")
+        assert payments == 2
+        assert obligations_service.get_paid_magnitude(correlation_id) == Decimal("30.00")
