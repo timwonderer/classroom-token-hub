@@ -8207,9 +8207,11 @@ def upload_students():
                     roster_fingerprint=roster_fingerprint,
                 )
                 added_count += 1
-            except Exception as e:
-                current_app.logger.error(f"Error processing row {i+1}: {e}")
-                errors.append(f"Row {i+1}: {str(e)}")
+            except Exception:
+                # Detail stays server-side: row exceptions can carry SQL text and
+                # roster names, neither of which belongs in an HTTP response.
+                current_app.logger.exception("Error processing roster row %d", i + 1)
+                errors.append(f"Row {i+1}: Could not be processed.")
 
     status = "success" if not errors else "partial"
     return jsonify(
