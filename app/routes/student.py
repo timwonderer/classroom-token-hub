@@ -120,7 +120,7 @@ from app.feats.base import requires_feat_context, FEATContext
 from app.feats.rent_payment_feat import execute_rent_payment, execute_rent_bill_payment
 from app.feats.transfer_feat import InsufficientFunds, execute_account_transfer
 from app.feats.store_purchase_feat import execute_store_purchase
-from app.feats.insurance_claim_feat import submit_insurance_claim
+from app.feats.insurance_claim_feat import coverage_effective_start_utc, submit_insurance_claim
 from app.payroll import get_pay_rate_for_class
 from app.utils.join_code import get_display_join_code
 from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
@@ -1919,25 +1919,21 @@ def view_policy(policy_uuid):
         entitlement_item_id=policy.policy_uuid,
         payload={},
     )
+    purchase_date = None
     coverage_start_date = None
     if entitlement is not None:
-        from app.models import ObligationAssessment
-        coverage_row = (
-            ObligationAssessment.query.filter_by(
-                class_id=context.class_id,
-                seat_id=context.seat_id,
-                policy_uuid=policy_uuid,
-            )
-            .order_by(ObligationAssessment.timestamp.desc(), ObligationAssessment.id.desc())
-            .first()
+        purchase_date = ensure_utc(entitlement.timestamp)
+        _, coverage_start_date = coverage_effective_start_utc(
+            context,
+            purchase_date,
+            placeholder_policy.waiting_period_days,
         )
-        coverage_start_date = getattr(coverage_row, "coverage_start_time", None)
     enrollment = SimpleNamespace(
         id=policy_uuid,
         policy=placeholder_policy,
         contract_title=placeholder_policy.title,
         contract_description=placeholder_policy.description,
-        purchase_date=utc_now(),
+        purchase_date=purchase_date,
         coverage_start_date=coverage_start_date,
         payment_current=entitlement is not None,
         days_unpaid=0,

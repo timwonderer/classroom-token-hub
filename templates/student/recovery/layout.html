@@ -42,14 +42,13 @@
     <div class="auth-container">
         {{ auth_brand() }}
         <div class="auth-body">
-            <a href="{{ url_for('student.login') }}" class="back-link">
-                <span class="material-symbols-outlined me-1" aria-hidden="true">arrow_back</span>
-                Back to Login
-            </a>
+            
 
-            <div class="mb-4">
-                <h1 id="student-recovery-heading" class="h3 fw-bold text-primary">{% block header %}Recover Account{% endblock %}</h1>
-                <p class="text-secondary">{% block subheader %}Follow the steps to regain access{% endblock %}</p>
+           <div class="mb-2">
+                <small class="text-muted">STUDENT PORTAL</small>
+                <h1 id="find-account-heading" class="h3 fw-bold mb-2  text-primary">Recover Account</h1>
+                <p class="subtitle">Enter the following information to recover your account.
+                </p>
             </div>
 
             {% with messages = get_flashed_messages(with_categories=true) %}

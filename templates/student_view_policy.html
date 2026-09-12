@@ -53,13 +53,15 @@
                         </p>
                     </div>
                     <div class="col-md-6">
-                        <p><strong>Purchase Date:</strong> {{ enrollment.purchase_date.strftime('%B %d, %Y') }}</p>
+                        <p><strong>Purchase Date:</strong> {{ enrollment.purchase_date | fmt_date }}</p>
                         <p><strong>Coverage Start:</strong>
-                            {% if enrollment.coverage_start_date %}
-                            {{ enrollment.coverage_start_date.strftime('%B %d, %Y') }}
+                            {% if not enrollment.coverage_start_date %}
+                            &mdash;
+                            {% elif enrollment.coverage_start_date > now %}
+                            <span class="text-warning">{{ enrollment.coverage_start_date | fmt_date }} (after {{
+                                enrollment.policy.waiting_period_days }}-day waiting period)</span>
                             {% else %}
-                            <span class="text-warning">In waiting period ({{ enrollment.policy.waiting_period_days }}
-                                days)</span>
+                            {{ enrollment.coverage_start_date | fmt_date }}
                             {% endif %}
                         </p>
                         <p><strong>Payment Status:</strong>
@@ -105,7 +107,7 @@
                             <li>Frequency: {{ enrollment.policy.charge_frequency|title }}</li>
                             <li>Autopay: {{ 'Yes' if enrollment.policy.autopay else 'No' }}</li>
                             {% if enrollment.next_payment_due %}
-                            <li>Next payment: {{ enrollment.next_payment_due.strftime('%B %d, %Y') }}</li>
+                            <li>Next payment: {{ enrollment.next_payment_due | fmt_date }}</li>
                             {% endif %}
                             <li>Auto-cancel after {{ enrollment.policy.auto_cancel_nonpay_days }} days of non-payment
                             </li>
@@ -137,8 +139,8 @@
                         <tbody>
                             {% for claim in claims %}
                             <tr>
-                                <td>{{ (claim.claimed_dates[0] if claim.claimed_dates else claim.submitted_at).strftime('%Y-%m-%d') }}</td>
-                                <td>{{ claim.submitted_at.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ claim.incident_date | fmt_date }}</td>
+                                <td>{{ claim.filed_date | fmt_date }}</td>
                                 <td>
                                     {% if claim.approved_amount %}
                                     ${{ "%.2f"|format(claim.approved_amount) }}
@@ -175,7 +177,7 @@
                                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close claim details"></button>
                                         </div>
                                         <div class="modal-body">
-                                            <p><strong>Incident Date:</strong> {{ (claim.claimed_dates[0] if claim.claimed_dates else claim.submitted_at).strftime('%B %d, %Y') }}</p>
+                                            <p><strong>Incident Date:</strong> {{ claim.incident_date | fmt_date }}</p>
                                             <p><strong>Description:</strong></p>
                                             <p class="bg-light p-3 rounded">{{ claim.description }}</p>
 

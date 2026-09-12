@@ -2226,7 +2226,7 @@ body.maintenance-active .sidebar {
 .auth-brand {
     display: grid;
     gap: var(--space-1);
-    padding: var(--space-8) var(--space-12);
+    padding: var(--space-4) var(--space-10);
     background: var(--primary);
     color: var(--text-inverse);
 }
@@ -2246,7 +2246,7 @@ body.maintenance-active .sidebar {
 }
 
 .auth-body {
-    padding: var(--space-12);
+    padding: var(--space-8);
 }
 
 /* Gold is a fill, never body text: --secondary is 2.12:1 on --surface. This
