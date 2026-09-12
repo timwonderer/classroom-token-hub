@@ -252,7 +252,7 @@ def _sum_approved_payouts(class_id: str, entitlement_id: str) -> Decimal:
     return _quantize_currency(total)
 
 
-def _coverage_effective_start_utc(
+def coverage_effective_start_utc(
     canonical_context: CanonicalContext,
     coverage_start_utc: datetime,
     waiting_period_days: int,
@@ -314,7 +314,7 @@ def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> Cl
     policy = _resolve_claim_policy(claim.entitlement_id, class_id=class_id, seat_id=seat_id)
 
     coverage_start_utc = ensure_utc(grant.timestamp)
-    effective_date, _ = _coverage_effective_start_utc(
+    effective_date, _ = coverage_effective_start_utc(
         canonical_context, coverage_start_utc, policy.waiting_period_days or 0
     )
     week_equiv = _coverage_week_equivalent(
@@ -397,7 +397,7 @@ def _enforce_non_monetary_submission(
     if not waiting_period_days:
         return None
 
-    effective_date, effective_start = _coverage_effective_start_utc(
+    effective_date, effective_start = coverage_effective_start_utc(
         canonical_context,
         ensure_utc(granted_event.timestamp),
         waiting_period_days,
