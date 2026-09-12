@@ -3,12 +3,45 @@
 {% set current_page = "dashboard" %}
 {% block title %}Student Dashboard{% endblock %}
 {% block page_icon %}dashboard{% endblock %}
+
+{% block contextual_help_body %}
+{{ help.panel_lead("Your dashboard is the short version of your account: whether you are on the clock, what you have, and what has happened lately.") }}
+
+{% call help.topic('dash-attendance', 'schedule', 'Attendance and work time') %}
+<p class="mb-0">The Attendance card shows whether you are working and how long you have worked today. Choose <strong>Start Work</strong> to begin. <strong>Break</strong> becomes available only after you start work.</p>
+{% endcall %}
+
+{% call help.topic('dash-balances', 'account_balance_wallet', 'Checking and savings') %}
+<p class="mb-0"><strong>Checking Account</strong> shows money available for spending. <strong>Savings Account</strong> shows saved money and projected interest. Use <strong>Transfer</strong> or <strong>Add to Savings</strong> to move money between accounts.</p>
+{% endcall %}
+
+{% call help.topic('dash-activity', 'receipt_long', 'Recent activity') %}
+<p class="mb-0">Recent Activity is a short list of transactions. Open <strong>Accounts</strong> for the fuller history. Use <strong>Report an issue with this transaction</strong> when a row is incorrect.</p>
+{% endcall %}
+
+{% call help.topic('dash-alerts', 'notifications', 'Alerts and missing information') %}
+<p class="mb-0">Alerts appear only when there is something to report. If a balance or class looks wrong, confirm the selected class in <strong>Switch Class</strong> and reload the page.</p>
+{% endcall %}
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+    /* Page-local stacking for the attendance toast layer. */
+    #toast-container { z-index: 1050; }
+
+    .attendance-status-neutral {
+        background-color: var(--neutral-600);
+        color: var(--text-inverse);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 
 <!-- Personalized Time-Based Greeting -->
 <div class="mb-4">
     <h2 class="h3 fw-bold text-primary mb-0 text-center" id="dashboard-greeting">
-        <span id="greeting-text" style="font-weight:300">Good day</span>, {{ student_layout_view.student_display_first_name }}!
+        <span id="greeting-text" class="fw-light">Good day</span>, {{ student_layout_view.student_display_first_name }}!
     </h2>
 </div>
 
@@ -30,32 +63,31 @@
     })();
 </script>
 <!-- Toast Container for Notifications -->
-<div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1050;"></div>
+<div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3"></div>
 
 <!-- Server State for JS -->
-<div id="serverState" style="display:none;">{{ attendance_state_json|safe }}</div>
+<div id="serverState" hidden>{{ attendance_state_json|safe }}</div>
 
 <!-- Account Recovery Request -->
 {% if pending_recovery_code %}
 <div class="alert alert-info alert-dismissible fade show shadow-sm border-0 mb-4" role="alert">
     <div class="d-flex align-items-start">
-        <span class="material-symbols-outlined fs-3 text-info me-3">security</span>
+        <span class="material-symbols-outlined fs-3 text-info me-3" aria-hidden="true">security</span>
         <div class="flex-grow-1">
             <h3 class="alert-heading h5 fw-bold mb-2">Account Recovery Request</h3>
             <p class="mb-2">Your teacher is trying to recover their account and needs your help to verify their
                 identity.</p>
             <p class="mb-3 small text-muted">
-                <span class="material-symbols-outlined fs-6 align-text-bottom">schedule</span>
+                <span class="material-symbols-outlined fs-6 align-text-bottom" aria-hidden="true">schedule</span>
                 Expires on {{ pending_recovery_code.recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }}
             </p>
             <div class="d-flex gap-2">
                 <a href="{{ url_for('student.verify_recovery', code_id=pending_recovery_code.id) }}"
                     class="btn btn-primary btn-sm">
-                    <span class="material-symbols-outlined fs-6 align-bottom me-1">verified_user</span>
+                    <span class="material-symbols-outlined fs-6 align-bottom me-1" aria-hidden="true">verified_user</span>
                     Help Verify Identity
                 </a>
-                <form method="POST" action="{{ url_for('student.dismiss_recovery', code_id=pending_recovery_code.id) }}"
-                    style="display: inline;">
+                <form method="POST" action="{{ url_for('student.dismiss_recovery', code_id=pending_recovery_code.id) }}" class="d-inline">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-secondary btn-sm">Dismiss for now</button>
                 </form>
@@ -68,7 +100,7 @@
 
 {% if recent_deposit %}
 <div class="alert alert-success d-flex align-items-center mb-4 border-0 shadow-sm" role="alert">
-    <span class="material-symbols-outlined me-2 fs-4">payments</span>
+    <span class="material-symbols-outlined me-2 fs-4" aria-hidden="true">payments</span>
     <div>
         You received a deposit of <strong>${{ "%.2f"|format(recent_deposit.amount) }}</strong>!
     </div>
@@ -81,13 +113,13 @@
 {% for announcement in announcements %}
 <div class="alert {{ announcement.get_priority_class() }} d-flex align-items-start mb-3 border-0 shadow-sm policy-announcement"
     role="alert" data-announcement-id="{{ announcement.id }}">
-    <span class="material-symbols-outlined me-3 fs-4">{{ announcement.get_priority_icon() }}</span>
+    <span class="material-symbols-outlined me-3 fs-4" aria-hidden="true">{{ announcement.get_priority_icon() }}</span>
     <div class="flex-grow-1">
         <h3 class="alert-heading h6 fw-bold mb-2">{{ announcement.title }}</h3>
         <p class="mb-1">{{ announcement.message|nl2br|safe }}</p>
         {% if announcement.expires_at %}
         <small class="text-muted d-block mt-2">
-            <span class="material-symbols-outlined fs-6 align-text-bottom">schedule</span>
+            <span class="material-symbols-outlined fs-6 align-text-bottom" aria-hidden="true">schedule</span>
             Expires {{ announcement.expires_at.strftime('%b %d, %Y') }}
         </small>
         {% endif %}
@@ -126,7 +158,7 @@
     <div class="card-body p-4">
         <div class="d-flex align-items-center justify-content-between mb-3">
             <div class="d-flex align-items-center">
-                <span class="material-symbols-outlined text-primary me-2">analytics</span>
+                <span class="material-symbols-outlined text-primary me-2" aria-hidden="true">analytics</span>
                 <h3 class="h5 fw-bold mb-0">Weekly Stats</h3>
             </div>
             {{ help.help_icon("user-guides/features/student/work/attendance-history", "Learn about earning tokens") }}
@@ -134,21 +166,21 @@
         <div class="row g-3">
             <div class="col-6 col-md-3">
                 <div class="text-center p-3 bg-primary-subtle rounded-3">
-                    <span class="material-symbols-outlined text-primary fs-3">event_available</span>
+                    <span class="material-symbols-outlined text-primary fs-3" aria-hidden="true">event_available</span>
                     <div class="h2 fw-bold text-primary mb-0 mt-2">{{ unique_days_tapped }}</div>
                     <div class="small text-secondary">Days Tapped In</div>
                 </div>
             </div>
             <div class="col-6 col-md-3">
                 <div class="text-center  p-3 bg-info-subtle rounded-3">
-                    <span class="material-symbols-outlined text-primary fs-3">schedule</span>
+                    <span class="material-symbols-outlined text-primary fs-3" aria-hidden="true">schedule</span>
                     <div class="h2 fw-bold text-primary mb-0 mt-2">{{ total_minutes_this_week }}</div>
                     <div class="small text-secondary">Minutes This Week</div>
                 </div>
             </div>
             <div class="col-6 col-md-3">
                 <div class="text-center p-3 bg-success-subtle rounded-3">
-                    <span class="material-symbols-outlined text-success fs-3">trending_up</span>
+                    <span class="material-symbols-outlined text-success fs-3" aria-hidden="true">trending_up</span>
                     <div class="h2 fw-bold text-success mb-0 mt-2">${{ "%.0f"|format(earnings_this_week) }}</div>
                     <div class="small text-secondary">Earned This Week</div>
 
@@ -156,7 +188,7 @@
             </div>
             <div class="col-6 col-md-3">
                 <div class="text-center p-3 bg-danger-subtle rounded-3">
-                    <span class="material-symbols-outlined text-danger fs-3">trending_down</span>
+                    <span class="material-symbols-outlined text-danger fs-3" aria-hidden="true">trending_down</span>
                     <div class="h2 fw-bold text-danger mb-0 mt-2">${{ "%.0f"|format(spending_this_week) }}</div>
                     <div class="small text-secondary">Spent This Week</div>
 
@@ -171,7 +203,7 @@
     <div class="card-body p-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div class="d-flex align-items-center gap-2">
-                <span class="material-symbols-outlined text-primary me-2">schedule</span>
+                <span class="material-symbols-outlined text-primary me-2" aria-hidden="true">schedule</span>
                 <h3 class="h5 fw-bold mb-0">Attendance</h3>
                 {{ help.help_icon("user-guides/features/student/work/start-end-work", "Learn how attendance tracking works")
                 }}
@@ -185,7 +217,7 @@
             <div class="d-flex justify-content-between align-items-center mb-3 bg-light rounded p-3">
                 <div>
                     <div class="small text-muted text-uppercase fw-bold mb-1">Current Class</div>
-                    <span class="attendance-status badge" style="background-color: #6c757d; color: #ffffff;">Inactive</span>
+                    <span class="attendance-status badge attendance-status-neutral">Inactive</span>
                 </div>
                 <div class="text-end">
                     <small class="text-muted d-block mb-1">Time Today</small>
@@ -194,20 +226,20 @@
             </div>
 
             <!-- Hall Pass Info Display (Inline) -->
-            <div id="hallPassInfo" style="display:none;" class="mb-3"></div>
+            <div id="hallPassInfo" class="mb-3" hidden></div>
 
             <div class="d-grid gap-2 d-flex flex-wrap">
                 <button type="button" id="startWork" class="btn btn-success flex-grow-1 attendance-action-btn py-2 fw-bold"
                     data-action="start_work">
-                    <span class="material-symbols-outlined align-bottom me-1">login</span> Start Work
+                    <span class="material-symbols-outlined align-bottom me-1" aria-hidden="true">login</span> Start Work
                 </button>
                 <button type="button" id="breakWork" class="btn btn-warning flex-grow-1 attendance-action-btn py-2 fw-bold"
                     data-action="break" disabled>
-                    <span class="material-symbols-outlined align-bottom me-1">pause_circle</span> Break
+                    <span class="material-symbols-outlined align-bottom me-1" aria-hidden="true">pause_circle</span> Break
                 </button>
             </div>
             <!-- Hidden pay cell for JS compatibility -->
-            <span class="attendance-pay" style="display:none;">0.00</span>
+            <span class="attendance-pay" hidden>0.00</span>
         </div>
     </div>
 </div>
@@ -226,7 +258,7 @@
                 </div>
                 <hr>
                 <button type="button" class="btn btn-outline-danger w-100" id="doneForDayBreakBtn">
-                    <span class="material-symbols-outlined align-bottom me-1">done_all</span>
+                    <span class="material-symbols-outlined align-bottom me-1" aria-hidden="true">done_all</span>
                     Done for the day
                 </button>
             </div>
@@ -242,7 +274,7 @@
             <div class="card-body p-4">
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <div class="d-flex align-items-center gap-2">
-                        <span class="material-symbols-outlined text-primary me-2 fs-3">account_balance_wallet</span>
+                        <span class="material-symbols-outlined text-primary me-2 fs-3" aria-hidden="true">account_balance_wallet</span>
                         <h3 class="h5 fw-bold mb-0 text-dark">Checking Account</h3>
                         {{ help.help_icon("user-guides/features/student/banking/accounts-transfers", "Learn about checking and savings")
                         }}
@@ -251,7 +283,7 @@
                 <div class="display-6 fw-bold text-primary mb-3">${{ "%.2f"|format(checking_balance) }}</div>
                 <div class="d-flex gap-2">
                     <a href="{{ url_for('student.transfer') }}" class="btn btn-primary btn-sm">
-                        <span class="material-symbols-outlined align-bottom fs-6 me-1">swap_horiz</span> Transfer
+                        <span class="material-symbols-outlined align-bottom fs-6 me-1" aria-hidden="true">swap_horiz</span> Transfer
                     </a>
                     <a href="{{ url_for('student.payroll') }}" class="btn btn-outline-primary btn-sm">
                         View Payslips
@@ -267,7 +299,7 @@
             <div class="card-body p-4">
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <div class="d-flex align-items-center gap-2">
-                        <span class="material-symbols-outlined text-success me-2 fs-3">savings</span>
+                        <span class="material-symbols-outlined text-success me-2 fs-3" aria-hidden="true">savings</span>
                         <h3 class="h5 fw-bold mb-0 text-dark">Savings Account</h3>
                         {{ help.help_icon("user-guides/features/student/banking/savings-interest", "Learn about interest and savings")
                         }}
@@ -275,22 +307,32 @@
                 </div>
                 {% if savings_balance > 0 %}
                 <div class="display-6 fw-bold text-success mb-2">${{ "%.2f"|format(savings_balance) }}</div>
+                {% if savings_annual_rate %}
                 <div class="small text-muted mb-3">
-                    <span class="material-symbols-outlined align-bottom fs-6">trending_up</span>
-                    Projected Interest: +${{ "%.2f"|format(forecast_interest) }}/month
+                    <span class="material-symbols-outlined align-bottom fs-6" aria-hidden="true">trending_up</span>
+                    Projected Interest: +${{ "%.2f"|format(forecast_interest) }} per {{ savings_payout_frequency }} payout
+                    {% if savings_balance != posted_savings_balance %}
+                    <br>
+                    This balance includes money that has not finished settling yet. Interest is earned
+                    on your posted balance of <strong>${{ "%.2f"|format(posted_savings_balance) }}</strong>
+                    only, so the two figures agree once settlement completes.
+                    {% endif %}
                 </div>
+                {% endif %}
                 <a href="{{ url_for('student.transfer') }}" class="btn btn-success btn-sm">
-                    <span class="material-symbols-outlined align-bottom fs-6 me-1">add</span> Add to Savings
+                    <span class="material-symbols-outlined align-bottom fs-6 me-1" aria-hidden="true">add</span> Add to Savings
                 </a>
                 {% else %}
                 <div class="display-6 fw-bold text-muted mb-2">$0.00</div>
-                <div class="alert alert-warning border-warning py-2 px-3 mb-3 small d-flex align-items-start" style="color: #5f3d00;">
-                    <span class="material-symbols-outlined fs-6 me-2">info</span>
+                {% if savings_annual_rate %}
+                <div class="alert alert-warning border-warning py-2 px-3 mb-3 small d-flex align-items-start">
+                    <span class="material-symbols-outlined fs-6 me-2" aria-hidden="true">info</span>
                     <span>You're missing out on interest! Transfer money from Checking to Savings to start
                         earning.</span>
                 </div>
+                {% endif %}
                 <a href="{{ url_for('student.transfer') }}" class="btn btn-success btn-sm">
-                    <span class="material-symbols-outlined align-bottom fs-6 me-1">add</span> Start Saving
+                    <span class="material-symbols-outlined align-bottom fs-6 me-1" aria-hidden="true">add</span> Start Saving
                 </a>
                 {% endif %}
             </div>
@@ -314,7 +356,7 @@
                         <div class="rounded-circle p-2 d-flex align-items-center justify-content-center"
                             style="width: 40px; height: 40px; background-color: {{ 'var(--success-subtle)' if t.amount > 0 else 'var(--danger-subtle)' }};">
                             <span
-                                class="material-symbols-outlined fs-5 {{ 'text-success' if t.amount > 0 else 'text-danger' }}">
+                                class="material-symbols-outlined fs-5 {{ 'text-success' if t.amount > 0 else 'text-danger' }}" aria-hidden="true">
                                 {{ 'input' if t.amount > 0 else 'output' }}
                             </span>
                         </div>
@@ -331,7 +373,7 @@
                         <a href="{{ url_for('student.report_transaction_issue', transaction_id=t.id) }}"
                             class="btn btn-sm btn-link text-muted p-0" title="Report an issue with this transaction"
                             data-bs-toggle="tooltip">
-                            <span class="material-symbols-outlined fs-6">help</span>
+                            <span class="material-symbols-outlined fs-6" aria-hidden="true">help</span>
                         </a>
                     </div>
                 </div>
@@ -340,7 +382,7 @@
         </div>
         {% else %}
         <div class="text-center py-5 text-muted">
-            <span class="material-symbols-outlined fs-2 opacity-25 d-block mb-2">receipt_long</span>
+            <span class="material-symbols-outlined fs-2 opacity-25 d-block mb-2" aria-hidden="true">receipt_long</span>
             No recent transactions
         </div>
         {% endif %}

@@ -1,0 +1,77 @@
+name: Full Test Suite
+
+# Every other gate in this repository is scoped: constitutional-ci is
+# diff-scoped, schema-gate runs only -m "critical or regression", and
+# accessibility-gate audits only changed templates. Nothing ran the whole
+# suite, so a green CI badge never meant "every test passes" — a red,
+# database-free accessibility test sat on main undetected because no workflow
+# had a reason to execute it.
+
+on:
+  schedule:
+    # 09:00 UTC daily — after US evening commits have landed, before the
+    # school day starts in any US timezone.
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-suite:
+    name: Full test suite
+    runs-on: ubuntu-latest
+    # Observed runtime is ~1h20m against the real 141-migration chain.
+    timeout-minutes: 150
+
+    services:
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:16
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: classroom_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run full suite
+        env:
+          FLASK_APP: app
+          FLASK_ENV: testing
+          # conftest.py supplies its own deterministic test values for
+          # SECRET_KEY, PEPPER_KEY, ENCRYPTION_KEY and AUDIT_HMAC_KEY, so no
+          # repository secrets are needed. Passing them here would be worse:
+          # an unset secret expands to an empty string, which defeats the
+          # setdefault() the suite relies on.
+          DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
+        run: pytest -q
+
+      - name: Upload pytest artifacts
+        # An 82-minute run is too expensive to repeat just to read the failure.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results
+          path: pytest_result/
+          if-no-files-found: ignore
+          retention-days: 30

@@ -1,0 +1,145 @@
+{% extends "layout_admin.html" %}
+{% import "components/timed_delete_gate.html" as gate %}
+{% set page_title = "Delete Class" %}
+{% set current_page = "class_delete" %}
+{% block title %}Delete Class{% endblock %}
+{% block page_icon %}delete_sweep{% endblock %}
+
+{% block contextual_help_body %}
+{{ help.panel_lead("Destroys the class you currently have open, along with every record belonging to it. There is no undo and no backup to restore from.") }}
+
+{% call help.topic('class-del-target', 'my_location', 'What gets deleted, and what does not') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Only the open class can be deleted here.</strong> The target is taken from the class you are working in, never from anything you type. To delete a different one, switch to it first.</li>
+    <li class="mb-2"><strong>Your teacher account survives.</strong> So do your other classes. This removes one class, not you.</li>
+    <li class="mb-0"><strong>Students linked to another class keep their account</strong> and simply lose this one. Students who exist only here are deleted with it.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('class-del-before', 'download', 'Before you start') %}
+<p class="mb-0"><strong>Transactions, payroll, and purchase history go too.</strong> If you need any of it — for grades, for a record, for anything — take it out before you start.</p>
+{% endcall %}
+
+{% call help.topic('class-del-gate', 'lock_clock', 'The confirmation gate') %}
+<p><strong>The confirmation gate is deliberately slow.</strong> A countdown, a phrase you must type by hand, then a ten-second hold. It is friction on purpose, and you can cancel at any point.</p>
+<p class="mb-0 text-muted">Deleting your teacher account instead is a separate action, under Settings &rsaquo; Account Deletion.</p>
+{% endcall %}
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-lg-8 offset-lg-2">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">You are about to perform an irreversible action</h5>
+                </div>
+                <div class="card-body">
+                    <p>
+                        You are about to delete <strong>{{ class_display_label }}</strong>.
+                    </p>
+                    <p>This permanently deletes
+                        <strong>{{ class_display_label }}</strong>{% if class_join_code %}
+                        (with join code <code>{{ class_join_code }}</code>){% endif %}
+                        and every record connected to this class. 
+                    </p>
+                    <ul>
+                        <li>All students in this class will be removed from it.</li>
+                        <li>All transaction, payroll, and purchase history for this class will be deleted.</li>
+                        <li>If your students have only joined  <strong>{{ class_display_label }}</strong>, their accounts will be deleted entirely.</li>
+                        <li>This action is permanent, irreversible, and unrecoverable.</li>
+                    </ul>
+                    <p class="alert alert-warning">
+                        <strong>Your teacher account is not deleted by this.</strong>
+                        That is true even if this is the only class you own. To delete your
+                        account, use Settings &rsaquo; Account Deletion.
+                    </p>
+                    <p class="alert alert-secondary mb-3">
+                        <strong>One thing is not erased.</strong> Each token transaction wrote a
+                        tamper-evident audit entry when it happened, and those entries cannot be
+                        edited or deleted by anyone, including us. They record identifiers and
+                        cryptographic digests — not names, and not readable transaction detail.
+                    </p>
+
+                    <form id="class-delete-form"
+                          data-confirmation-phrase="{{ class_confirmation_phrase }}"
+                          data-class-label="{{ class_display_label }}">
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-danger">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete_history</span>
+                                Delete {{ class_display_label }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {{ gate.timed_delete_gate() }}
+        </div>
+    </div>
+</div>
+
+<script src="{{ static_url('js/timed-delete-gate.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const classDeleteForm = document.getElementById('class-delete-form');
+    if (!classDeleteForm) return;
+
+    classDeleteForm.addEventListener('submit', function(event) {
+        event.preventDefault();
+
+        const classLabel = (classDeleteForm.dataset.classLabel || 'this class').trim();
+        // Server-rendered from the canonical class_id. Presentation only —
+        // the server never accepts a client-supplied class target.
+        const expectedPhrase = (classDeleteForm.dataset.confirmationPhrase || '').trim().toUpperCase();
+        const feedback = document.getElementById('delete-gate-feedback');
+
+        const reportFailure = (message) => {
+            feedback.textContent = message;
+            feedback.className = 'alert alert-danger';
+            feedback.classList.remove('visually-hidden');
+            feedback.focus();
+        };
+
+        showTimedDeleteGate({
+            title: 'Safety Check: Please Read Carefully',
+            warning: `You are about to permanently delete ${classLabel}.`,
+            expectedPhrase,
+            holdPrompt: 'To proceed with class deletion, hold this button for 10 seconds — press and hold with the pointer, or hold Space or Enter. Any interruption will reset the timer.',
+            bullets: [
+                'You are performing an irreversible action.',
+                'Every transaction, payroll, and purchase record for this class will be destroyed.',
+                'Recovery of this class is not possible.',
+                'Any student account not linked to another class will be deleted as well.',
+                'Your own teacher account is NOT deleted by this, even if this is your only class.',
+                'Tamper-evident audit entries for this class’s transactions are kept permanently and cannot be deleted. They hold identifiers and digests, not names.',
+            ],
+        }).then(gatePayload => {
+            if (!gatePayload) {
+                return;
+            }
+
+            fetch('{{ url_for("admin.delete_join_code") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify(gatePayload),
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        window.location.assign('{{ url_for("admin.dashboard") }}');
+                        return;
+                    }
+                    reportFailure('Error: ' + (data.message || 'Class deletion failed.'));
+                })
+                .catch(() => {
+                    reportFailure('Network error while deleting the class. Please try again.');
+                });
+        });
+    });
+});
+</script>
+{% endblock %}

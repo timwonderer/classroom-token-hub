@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| FEAT-CORE-000    | 1.0     | 2026-03-01     | N/A        | Normative       |
+| FEAT-CORE-000    | 1.0     | 2026-03-01     | N/A        | Archived - non-normative       |
+
+> **Archived — history, not authority.** This document describes a superseded version of the system and is retained under `docs/archive/` as a record of what was once true. It governs nothing. Current authority lives in `docs/INVARIANT/`, `docs/DOMAIN/`, and `docs/STANDARD_OPERATING_PROCEDURES/`, in that order (`.claude/rules/documentation.md`).
 
 ## I. Purpose
 To govern the creation, format, dependencies, and rollout scope of any new user-facing functionality proposed for the application.

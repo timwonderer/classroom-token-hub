@@ -13,7 +13,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const initialState = JSON.parse(serverStateEl.textContent);
       updateAttendanceUI(
         initialState.active,
-        initialState.duration,
+        pickTimeToday(initialState),
         initialState.projected_pay,
         initialState.hall_pass
       );
@@ -258,7 +258,9 @@ function renderBreakDestinations(passTypes) {
   }
 
   passTypes.forEach(passType => {
-    const destination = (passType && passType.name) ? String(passType.name) : '';
+    const destination = (passType && (passType.name || passType.pass_name))
+      ? String(passType.name || passType.pass_name)
+      : '';
     if (!destination) return;
     const button = document.createElement('button');
     button.type = 'button';
@@ -298,13 +300,13 @@ function updateHallPassOverlay(hallPass) {
 
   if (!hallPass || hallPass.status === 'returned') {
     // No active hall pass - hide pass info
-    if (passInfoDisplay) passInfoDisplay.style.display = 'none';
+    if (passInfoDisplay) passInfoDisplay.hidden = true;
     return;
   }
 
   // Show pass info inline based on status
   if (passInfoDisplay) {
-    passInfoDisplay.style.display = 'block';
+    passInfoDisplay.hidden = false;
     passInfoDisplay.textContent = ''; // Clear existing content
 
     const buildStatusLabel = (iconClass, text) => {
@@ -375,7 +377,7 @@ function updateHallPassOverlay(hallPass) {
 
       passInfoDisplay.appendChild(alertDiv);
     } else {
-      passInfoDisplay.style.display = 'none';
+      passInfoDisplay.hidden = true;
     }
   }
 }

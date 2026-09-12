@@ -20,9 +20,9 @@ Diagnostic guide for resolving payroll calculation errors and attendance trackin
 - Students receive incorrect amounts when payroll is run.
 
 ### Causes & Solutions
-**Cause 1: Payroll feature is disabled**
-- **Check:** Go to Feature Settings and verify that Payroll is enabled for the class period.
-- **Fix:** Enable the Payroll feature.
+**Cause 1: Class, payroll, or attendance settings are incorrect**
+- **Check:** Payroll is always on. Verify the student is in the intended class, then check payroll settings and attendance records for the affected period.
+- **Fix:** Select the intended class and review Payroll Settings before the next run. Attendance history cannot be edited. If an earlier run paid the wrong amount, contact Support with the student, class, payment date, and expected amount. Do not edit attendance or rerun payroll solely to correct that payment.
 
 **Cause 2: No attendance activity**
 - **Check:** Look at the attendance log for the period. Are there complete tap events?
@@ -41,7 +41,7 @@ Diagnostic guide for resolving payroll calculation errors and attendance trackin
 ### Causes & Solutions
 **Cause 1: Missing tap-out events**
 - **Check:** Check the attendance log for unpaired "Start Work" events.
-- **Fix:** The system uses auto-tap-out limits if students forget. The attendance log is append-only and cannot be manually edited; use manual adjustments to correct pay if necessary.
+- **Fix:** The system uses auto-tap-out limits if students forget. The attendance log is append-only and cannot be manually edited. If a payment is incorrect, contact Support with the affected student, class, payment date, and expected amount.
 
 **Cause 2: Confusion from hall passes**
 - **Check:** Look for Hall Pass actions interspersed with regular attendance.

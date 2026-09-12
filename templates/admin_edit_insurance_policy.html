@@ -4,6 +4,28 @@
 {% set current_page = "insurance" %}
 {% block title %}{{ page_title }}{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("You are writing the terms of a product students will pay for. Whatever you save here is what a buyer is owed.") }}
+
+{% call help.topic('pol-type', 'category', 'Insurance type decides which fields matter') %}
+<p>The form hides the ones that do not apply:</p>
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Transaction</strong> — covers a specific charge. Set reimbursement %, payout multiple, claims per week-equivalent, and the claim window (how long after a charge a student may still file).</li>
+    <li class="mb-2"><strong>Productivity</strong> — covers days of work. Set reimbursement %, payout multiple, and how many dates per week-equivalent may be claimed.</li>
+    <li class="mb-0"><strong>Non-monetary</strong> — covers a benefit rather than a payout. Set the claim allowance and a waiting period before coverage begins.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('pol-price', 'payments', 'Premium, frequency, and tiers') %}
+<p><strong>Premium and charge frequency</strong> together set the real cost. A small premium charged weekly is not a cheap policy — price it against what students actually earn.</p>
+<p class="mb-0"><strong>Tier groups</strong> put several policies on one ladder (basic / standard / premium) so students compare within a family instead of across your whole catalog.</p>
+{% endcall %}
+
+{% call help.topic('pol-versions', 'edit_note', 'What editing does to current holders') %}
+<p class="mb-0"><strong>Editing publishes a new version; it does not rewrite history.</strong> Students already covered keep the terms they bought until their coverage ends. To move everyone, hide the old policy and sell the new one.</p>
+{% endcall %}
+{% endblock %}
+
 {#- Resolve the current value of a field: prefer a rejected resubmission, then
     the existing policy row, then a default. Keeps the form sticky on validation
     failure without mutating the immutable prior definition. -#}
@@ -137,7 +159,7 @@
                   <option value="__new__">＋ New group…</option>
                 </select>
               </div>
-              <div class="col-md-4" id="tier_group_new_wrap" style="display:none;">
+              <div class="col-md-4" id="tier_group_new_wrap" hidden>
                 <label class="form-label fw-bold" for="tier_group_new">New group name</label>
                 <input class="form-control" id="tier_group_new" name="tier_group_new" maxlength="60" placeholder="e.g. Paycheck Protection">
               </div>
@@ -228,7 +250,7 @@
 
     function applyGroup() {
       var isNew = groupSel.value === '__new__';
-      if (newWrap) newWrap.style.display = isNew ? '' : 'none';
+      if (newWrap) newWrap.hidden = !isNew;
       if (newInput) newInput.disabled = !toggle.checked || !isNew;
 
       // Disable ranks already taken in the selected existing group (the 3-tier cap),

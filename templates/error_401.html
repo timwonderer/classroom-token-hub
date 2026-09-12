@@ -11,99 +11,34 @@
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--surface);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-        }
-
-        .error-container {
-            background: white;
-            box-shadow: 0 10px 10px color-mix(in srgb, black 30%, transparent);
-            max-width: 900px;
-            width: 100%;
-            overflow: hidden;
-        }
-
-        .error-header {
-            background: var(--primary);
-            color: white;
-            padding: 2rem;
-            text-align: center;
-        }
-
-        .error-header h1 {
-            font-size: 4rem;
-            font-weight: 400;
-            margin: 0;
-            color: white;
-        }
-
-        .error-header p {
-            font-size: 2rem;
-            margin: 0.5rem 0 0 0;
-            opacity: 0.9;
-        }
-
-        .error-body {
-            padding: 2rem;
-        }
-
         .login-links {
             background: var(--surface);
-            padding: 1.5rem;
-            margin: 1.5rem 0;
+            padding: var(--space-6);
+            margin: var(--space-6) 0;
         }
 
         .login-links h6 {
             color: var(--text-primary);
-            margin-bottom: 1rem;
-            font-weight: 600;
+            margin-bottom: var(--space-4);
+            font-weight: var(--weight-semibold);
             text-align: center;
         }
 
         .login-buttons {
             display: flex;
-            gap: 1rem;
+            gap: var(--space-4);
             justify-content: center;
             flex-wrap: wrap;
         }
 
         .login-buttons a {
             text-decoration: none;
-            padding: 0.6rem 1.2rem;
-            font-weight: 500;
-            transition: transform 0.2s;
-        }
-
-        .actions {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1.5rem;
-            flex-wrap: wrap;
-            justify-content: center;
+            padding: var(--space-2) var(--space-5);
+            font-weight: var(--weight-medium);
+            transition: transform var(--duration-base);
         }
 
         @media (max-width: 768px) {
-            .error-header h1 {
-                font-size: 3rem;
-            }
-
-            .error-body {
-                padding: 1.5rem;
-            }
-
-            .actions,
             .login-buttons {
                 flex-direction: column;
             }
@@ -111,11 +46,11 @@
     </style>
 </head>
 
-<body>
+<body class="error-page">
     <main id="main-content" aria-labelledby="error-heading">
     <div class="error-container">
         <div class="error-header">
-            <span class="material-symbols-outlined mb-2" aria-hidden="true" style="font-size:3rem; vertical-align: middle;">lock_person</span>
+            <span class="material-symbols-outlined icon-2xl icon-middle mb-2" aria-hidden="true">lock_person</span>
             <h1 id="error-heading">401</h1>
             <p>Authentication Required</p>
         </div>
@@ -147,7 +82,7 @@
                 <a href="/" class="btn bg-primary text-white">Return to Login Page</a>
                 <button type="button" class="btn bg-primary text-white" onclick="history.back()">Go Back to Last Page</button>
                 <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener noreferrer" class="btn bg-secondary text-white">
-                    Check System Status <span class="visually-hidden">(opens in a new tab)</span> <span class="material-symbols-outlined" style="vertical-align: middle;">open_in_new</span>
+                    Check System Status <span class="visually-hidden">(opens in a new tab)</span> <span class="material-symbols-outlined icon-middle" aria-hidden="true">open_in_new</span>
                 </a>
             </div>
         </div>

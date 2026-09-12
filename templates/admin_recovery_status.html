@@ -11,17 +11,11 @@
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
+        .recovery-page {
+            font-family: var(--font-family);
             min-height: 100vh;
             background: var(--neutral-50);
-            padding: 2rem;
+            padding: var(--space-8);
         }
 
         .container {
@@ -30,30 +24,30 @@
         }
 
         .status-card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px color-mix(in srgb, black 10%, transparent);
-            padding: 2rem;
-            margin-bottom: 1.5rem;
+            background: var(--surface);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-md);
+            padding: var(--space-8);
+            margin-bottom: var(--space-6);
         }
 
         .status-header {
-            color: var(--warning);
-            font-weight: 700;
-            font-size: 1.75rem;
-            margin-bottom: 1rem;
+            color: var(--alert-warning-text);
+            font-weight: var(--weight-bold);
+            font-size: var(--text-3xl);
+            margin-bottom: var(--space-4);
         }
 
         .progress-container {
             background: var(--surface);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin: 1.5rem 0;
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            margin: var(--space-6) 0;
         }
 
         .progress-label {
-            font-weight: 600;
-            margin-bottom: 0.5rem;
+            font-weight: var(--weight-semibold);
+            margin-bottom: var(--space-2);
         }
 
         .student-list {
@@ -62,10 +56,10 @@
         }
 
         .student-item {
-            padding: 1rem;
-            margin-bottom: 0.5rem;
-            border-radius: 8px;
-            background: white;
+            padding: var(--space-4);
+            margin-bottom: var(--space-2);
+            border-radius: var(--radius-lg);
+            background: var(--surface);
             border-left: 4px solid var(--border-color);
         }
 
@@ -74,18 +68,8 @@
             border-left-color: var(--success);
         }
 
-        .btn-primary {
-            background: linear-gradient(135deg, var(--warning) 0%, var(--warning) 100%);
-            border: none;
-            padding: 0.85rem 2rem;
-            font-weight: 700;
-            transition: all 0.3s ease;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px color-mix(in srgb, var(--warning) 35%, transparent);
-        }
-
-        .btn-primary:hover {
-            background: linear-gradient(135deg, var(--warning) 0%, var(--warning) 100%);
+        .verification-progress {
+            height: 30px;
         }
 
         .badge-success {
@@ -98,7 +82,7 @@
     </style>
 </head>
 
-<body>
+<body class="recovery-page">
     <main id="main-content" aria-labelledby="recovery-status-heading">
     <div class="container">
         <div class="status-card">
@@ -133,7 +117,7 @@
 
             <div class="progress-container">
                 <div class="progress-label">Student Verification Progress</div>
-                <div class="progress" style="height: 30px;">
+                <div class="progress verification-progress">
                     <div class="progress-bar bg-success" role="progressbar" aria-label="Student verification progress"
                          style="width: {{ (verified_count / total_count * 100) if total_count > 0 else 0 }}%"
                          aria-valuenow="{{ verified_count }}"
@@ -152,7 +136,7 @@
                         <div>
                             <strong>Student #{{ loop.index }}</strong>
                             {% if code.code_hash %}
-                                <span class="badge badge-success ms-2"><span class="material-symbols-outlined me-1">check_circle</span>Verified</span>
+                                <span class="badge badge-success ms-2"><span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Verified</span>
                                 <small class="d-block text-muted">Verified {{ code.verified_at.strftime('%B %d at %I:%M %p') if code.verified_at else 'recently' }}</small>
                             {% else %}
                                 <span class="badge badge-secondary ms-2">Pending</span>
@@ -167,7 +151,7 @@
             <div class="mt-4">
                 {% if all_verified %}
                 <div class="alert alert-success">
-                    <h5 class="alert-heading"><span class="material-symbols-outlined me-1">check_circle</span>All Students Verified!</h5>
+                    <h5 class="alert-heading"><span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>All Students Verified!</h5>
                     <p class="mb-0">You can now proceed to reset your credentials using the recovery codes your students gave you.</p>
                 </div>
                 <a href="{{ url_for('admin.reset_credentials') }}" class="btn btn-primary w-100">
@@ -175,7 +159,7 @@
                 </a>
                 {% else %}
                 <div class="alert alert-warning">
-                    <h5 class="alert-heading"><span class="material-symbols-outlined me-1">hourglass_top</span>Waiting for Student Verification</h5>
+                    <h5 class="alert-heading"><span class="material-symbols-outlined me-1" aria-hidden="true">hourglass_top</span>Waiting for Student Verification</h5>
                     <p class="mb-0">Please wait for all your students to verify their identity. This page will automatically update when they do.</p>
                     <small class="d-block mt-2">You can refresh this page to check the latest status.</small>
                 </div>
@@ -203,8 +187,8 @@
         }, 10000);
     </script>
     {% endif %}
-    </main>
-{% set contextual_help_path = 'user-guides/features/teacher/settings/account-recovery' %}
+    {% set contextual_help_path = 'user-guides/features/teacher/settings/account-recovery' %}
 {% include 'components/contextual_help_link.html' %}
+</main>
 </body>
 </html>

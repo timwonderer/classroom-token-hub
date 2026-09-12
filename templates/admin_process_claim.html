@@ -3,6 +3,29 @@
 {% set current_page = "insurance" %}
 {% block title %}Process Claim{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("This is where you decide a single claim. Everything above the form is evidence; the form at the bottom is the decision.") }}
+
+{% call help.topic('claim-decide', 'gavel', 'Deciding the claim') %}
+<ol class="ps-3 mb-0">
+    <li class="mb-2"><strong>Read the claim against the policy that was purchased</strong>, shown in <em>Policy Information</em> — not against the policy as it reads today. A purchase freezes its terms.</li>
+    <li class="mb-2"><strong>Check the claims history</strong> for this student. Repeat claims are usually the interesting signal.</li>
+    <li class="mb-0"><strong>Set the status</strong>, then submit.</li>
+</ol>
+{% endcall %}
+
+{% call help.topic('claim-writing', 'edit_note', 'What the student sees, and what stays with you') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Rejection reason is required when you reject.</strong> The student sees it, so write the reason you would be willing to defend out loud.</li>
+    <li class="mb-0"><strong>Teacher notes are yours.</strong> Use them for the reasoning you do not want to publish.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('claim-payout', 'calculate', 'Who sets the payout') %}
+<p class="mb-0"><strong>You do not.</strong> Approved amounts are calculated from the linked transaction, then capped by the policy's per-claim and per-period limits.</p>
+{% endcall %}
+{% endblock %}
+
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
 <style>
@@ -10,10 +33,10 @@
         min-height: 100px;
     }
     .editor-toolbar {
-        border-radius: 4px 4px 0 0;
+        border-radius: var(--radius-sm) var(--radius-sm) 0 0;
     }
     .CodeMirror {
-        border-radius: 0 0 4px 4px;
+        border-radius: 0 0 var(--radius-sm) var(--radius-sm);
     }
 </style>
 {% endblock %}
@@ -127,68 +150,53 @@
         <p><strong>Claim Type:</strong><br>
           {% if claim_type == 'TRANSACTION' %}
             <span class="badge bg-info">[TXN] Transaction-based</span>
-          {% elif claim_type == 'NON_MONETARY' %}
-            <span class="badge bg-warning text-dark">[NON-MONETARY]</span>
+          {% elif claim_type == 'PRODUCTIVITY' %}
+            <span class="badge bg-primary">[PRODUCTIVITY]</span>
           {% else %}
-            <span class="badge bg-primary">[CUSTOM]</span>
+            <span class="badge bg-warning text-dark">[NON-MONETARY]</span>
           {% endif %}
         </p>
 
         <p><strong>Coverage Start:</strong><br>
-          {% if enrollment.coverage_start_date %}
-            {{ enrollment.coverage_start_date.strftime('%B %d, %Y') }}
-          {% else %}
-            <span class="text-warning">Still in waiting period</span>
-          {% endif %}
+          {{ coverage_start | fmt_date }}
         </p>
 
         <p><strong>Waiting Period:</strong><br>
-          {{ claim.policy.waiting_period_days }} days
-        </p>
-
-        <p><strong>Claim Time Limit:</strong><br>
-          {{ contract_claim_time_limit_days }} days from incident
-        </p>
-
-        <p><strong>Max Claim Amount:</strong><br>
-          {% if contract_max_claim_amount %}
-            ${{ "%.2f"|format(contract_max_claim_amount) }}
+          {% if contract_waiting_period_days %}
+            {{ contract_waiting_period_days }} days — claimable from {{ coverage_effective_date.isoformat() }}
           {% else %}
-            Unlimited
+            None — coverage is immediate
           {% endif %}
         </p>
 
-        <p><strong>Max Claims:</strong><br>
-          {% if contract_max_claims_count %}
-            {{ contract_max_claims_count }} per {{ contract_max_claims_period }}
+        <p><strong>Filing Window:</strong><br>
+          {% if contract_claim_window_days is not none %}
+            {{ contract_claim_window_days }} days from the covered transaction
           {% else %}
-            Unlimited
+            No filing window for this product
           {% endif %}
         </p>
 
-        <p><strong>Premium Status:</strong><br>
-          {% if enrollment.payment_current %}
-            <span class="badge bg-success">Current</span>
-          {% else %}
-            <span class="badge bg-danger">{{ enrollment.days_unpaid }} days overdue</span>
-          {% endif %}
-        </p>
-
-        {% if remaining_period_cap is not none and contract_max_payout_per_period %}
-          <p><strong>Remaining Period Cap:</strong><br>
-            ${{ '%.2f'|format(remaining_period_cap) }} left this {{ contract_max_claims_period }}
+        {% if contract_reimbursement_percentage is not none %}
+          <p><strong>Reimbursement:</strong><br>
+            {{ contract_reimbursement_percentage }}% of the covered loss
           </p>
         {% endif %}
 
-        <hr>
+        <p><strong>Period Allowance:</strong><br>
+          {% if contract_period_allowance is not none %}
+            {{ contract_period_consumed }} of {{ contract_period_allowance }}
+            {{ contract_allowance_unit }}{{ '' if contract_period_allowance == 1 else 's' }} used this coverage period
+          {% else %}
+            Not metered for this product
+          {% endif %}
+        </p>
 
-        <h6>Validation Status:</h6>
-        {% if validation_errors %}
-          {% for error in validation_errors %}
-            <div class="alert alert-danger py-2 small">{{ error }}</div>
-          {% endfor %}
-        {% else %}
-          <div class="alert alert-success py-2 small"><span class="material-symbols-outlined me-1">check_circle</span>Claim meets all requirements</div>
+        {% if contract_max_payout_per_period %}
+          <p><strong>Period Payout Capacity:</strong><br>
+            ${{ '%.2f'|format(remaining_period_cap) }} remaining of
+            ${{ '%.2f'|format(contract_max_payout_per_period) }}
+          </p>
         {% endif %}
       </div>
     </div>
@@ -203,12 +211,12 @@
           <li>Pending: {{ claims_stats.pending }} claims</li>
           <li>Approved: {{ claims_stats.approved }} claims</li>
           <li>Rejected: {{ claims_stats.rejected }} claims</li>
-          <li>Paid: {{ claims_stats.paid }} claims</li>
         </ul>
 
-        {% if contract_max_claims_count %}
+        {% if contract_period_allowance is not none %}
           <p class="text-muted small">
-            Used {{ claims_stats.approved + claims_stats.paid }} of {{ contract_max_claims_count }} claims this {{ contract_max_claims_period }}
+            {{ contract_period_consumed }} of {{ contract_period_allowance }}
+            {{ contract_allowance_unit }}{{ '' if contract_period_allowance == 1 else 's' }} drawn this coverage period
           </p>
         {% endif %}
       </div>

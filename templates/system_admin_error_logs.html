@@ -4,13 +4,23 @@
 {% set current_page = "logs" %}
 
 {% block content %}
+<style>
+    .sa-maxw-300 { max-width: 300px; }
+    .sa-scroll-400 { max-height: 400px; overflow-y: auto; }
+    .sa-w-120 { width: 120px; }
+    .sa-w-150 { width: 150px; }
+    .sa-w-180 { width: 180px; }
+    .sa-w-200 { width: 200px; }
+    .sa-w-60 { width: 60px; }
+    .sa-w-80 { width: 80px; }
+</style>
 <div class="container-fluid">
   <!-- Filter and Stats Section -->
   <div class="row mb-4">
     <div class="col-md-6">
       <div class="card">
         <div class="card-header">
-          <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">filter_alt</span> Filter Errors</h5>
+          <h5 class="mb-0"><span class="material-symbols-outlined icon-middle icon-md" aria-hidden="true">filter_alt</span> Filter Errors</h5>
         </div>
         <div class="card-body">
           <form method="GET" action="{{ url_for('sysadmin.error_logs') }}" class="mb-0">
@@ -37,7 +47,7 @@
     <div class="card-header">
       <div class="d-flex justify-content-between align-items-center">
         <h5 class="mb-0">
-          <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">error</span>
+          <span class="material-symbols-outlined icon-middle icon-md" aria-hidden="true">error</span>
           {% if current_error_type %}
             {{ current_error_type }} Errors
           {% else %}
@@ -54,13 +64,13 @@
             <caption class="visually-hidden">System error log records</caption>
             <thead>
               <tr>
-                <th scope="col" style="width: 60px;">ID</th>
-                <th scope="col" style="width: 180px;">Timestamp</th>
-                <th scope="col" style="width: 150px;">Error Type</th>
+                <th class="sa-w-60" scope="col">ID</th>
+                <th class="sa-w-180" scope="col">Timestamp</th>
+                <th class="sa-w-150" scope="col">Error Type</th>
                 <th scope="col">Error Message</th>
-                <th scope="col" style="width: 200px;">Request Path</th>
-                <th scope="col" style="width: 120px;">IP Address</th>
-                <th scope="col" style="width: 80px;">Details</th>
+                <th class="sa-w-200" scope="col">Request Path</th>
+                <th class="sa-w-120" scope="col">IP Address</th>
+                <th class="sa-w-80" scope="col">Details</th>
               </tr>
             </thead>
             <tbody>
@@ -89,7 +99,7 @@
                     </span>
                   </td>
                   <td>
-                    <small class="text-truncate d-block" style="max-width: 300px;" title="{{ log.error_message }}">
+                    <small class="text-truncate d-block sa-maxw-300" title="{{ log.error_message }}">
                       {{ log.error_message or 'No message' }}
                     </small>
                   </td>
@@ -108,7 +118,7 @@
                     <div class="modal-content">
                       <div class="modal-header bg-danger text-white">
                         <h5 class="modal-title" id="errorModalLabel{{ log.id }}">
-                          <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">error</span>
+                          <span class="material-symbols-outlined icon-middle icon-md" aria-hidden="true">error</span>
                           Error #{{ log.id }} - {{ log.error_type }}
                         </h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -148,7 +158,7 @@
                         {% if log.stack_trace %}
                           <div class="mb-3">
                             <strong>Stack Trace:</strong>
-                            <pre class="bg-dark text-light p-3 rounded" style="max-height: 300px; overflow-y: auto;"><code>{{ log.stack_trace }}</code></pre>
+                            <pre class="bg-dark text-light p-3 rounded scroll-panel"><code>{{ log.stack_trace }}</code></pre>
                           </div>
                         {% endif %}
 
@@ -156,7 +166,7 @@
                           <div class="mb-3">
                             <strong>Log Output (Last 50 Lines):</strong>
                             <button type="button" class="btn btn-sm btn-outline-secondary float-end" onclick="copyToClipboard('log-{{ log.id }}')">Copy</button>
-                            <pre id="log-{{ log.id }}" class="bg-dark text-light p-3 rounded mt-2" style="max-height: 400px; overflow-y: auto;"><code>{{ log.log_output }}</code></pre>
+                            <pre id="log-{{ log.id }}" class="bg-dark text-light p-3 rounded mt-2 sa-scroll-400"><code>{{ log.log_output }}</code></pre>
                           </div>
                         {% endif %}
                       </div>
@@ -203,7 +213,7 @@
 
       {% else %}
         <div class="p-5 text-center text-muted">
-          <span class="material-symbols-outlined d-block" style="font-size: 64px; opacity: 0.3;">check_circle</span>
+          <span class="material-symbols-outlined d-block icon-3xl alpha-medium" aria-hidden="true">check_circle</span>
           <h4>No errors logged yet</h4>
           <p>This is good news! No errors have been captured by the error logging system.</p>
           <p class="small">You can test the error pages using the buttons on the Logs & Testing page.</p>
@@ -215,7 +225,7 @@
   <div class="row mt-4">
     <div class="col-12 text-center">
       <a href="{{ url_for('sysadmin.combined_logs') }}" class="btn btn-outline-secondary">
-        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;">arrow_back</span>
+        <span class="material-symbols-outlined icon-middle icon-xs" aria-hidden="true">arrow_back</span>
         Back to Logs
       </a>
     </div>

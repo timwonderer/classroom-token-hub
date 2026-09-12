@@ -23,11 +23,12 @@ related:
 
 Above the tabs sits a compact settings row:
 
-- **Hall Pass Granting** — the master switch. Off means students cannot request passes at all.
 - **Out Limit** — how many students may be out at once (1–50).
-- **Configure Pass Types** — opens the separate setup page covered below.
+- **Configure** — opens the configuration tab within Hall Pass Management.
 
 Changes here save as you make them; a green **Saved!** badge confirms it.
+
+Enable or disable Hall Pass from **Class Tools → Economy Features**. The Out Limit control becomes available after the saved setting loads. If loading or saving fails, the page displays an error; reload to check the saved value before trying again.
 
 ### Working the four tabs
 
@@ -44,9 +45,9 @@ Empty states are distinct so you can tell them apart at a glance: *No pending re
 
 ### Configuring pass types
 
-**Configure Pass Types** opens **Hall Pass Configuration**, a separate page with its own master switch, a list of destinations, and per-destination limits.
+The **Configure** tab opens **Hall Pass Configuration** within Hall Pass Management. It contains the destination list and per-destination limits; the Hall Pass feature itself is enabled from **Class Tools → Economy Features**.
 
-That page controls the destinations and per-destination limits students see. [Hall Pass Configuration](hall-pass-setup.md) covers the setup fields.
+That tab controls the destinations and per-destination limits students see. [Hall Pass Configuration](hall-pass-setup.md) covers the setup fields.
 
 ### Office Verification
 
@@ -55,7 +56,7 @@ That page controls the destinations and per-destination limits students see. [Ha
 ## Important notes
 
 > [!WARNING]
-> **Pass type configuration is class-scoped.** Save while the intended class is active, then reload the setup page to confirm the saved destinations.
+> **Pass type configuration is class-scoped.** Save while the intended class is active, then reload Hall Pass Management and reopen **Configure** to confirm the saved destinations.
 
 > [!IMPORTANT]
 > **Out Limit is enforced.** The **Left Class** button becomes unavailable once the configured number of students are out. Mark a student **Returned** to open a place.

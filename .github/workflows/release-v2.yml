@@ -90,7 +90,15 @@ jobs:
             cd ~/classroom-economy
             git fetch --no-tags origin "$RELEASE_REVISION"
             git reset --hard "$RELEASE_REVISION"
+            # `reset --hard` leaves untracked files in place, and /docs serves any
+            # .md it finds under docs/. Without this, a document deleted in git
+            # stays on disk and stays publicly readable for the life of the box.
+            # Scoped to docs/ on purpose: a bare clean would delete venv/ and .env.
+            git clean -fd docs/
             source venv/bin/activate
+            # Before migrations: a revision that bumps a pin may also ship a
+            # migration that imports the new version.
+            pip install --requirement requirements.txt
             flask db upgrade
             sudo systemctl restart classroom-economy
             sudo systemctl is-active --quiet classroom-economy

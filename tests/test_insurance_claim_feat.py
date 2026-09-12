@@ -13,6 +13,9 @@ Uses canonical test initializer per SPEC-TEST-001.
 
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from pathlib import Path
+
+import pytest
 from uuid import uuid4
 from app.extensions import db
 from app.feats.base import FEATContext
@@ -43,6 +46,8 @@ from app.feats.class_configuration.feat_class_004_feature_enablement import (
     execute_enable_feature,
 )
 from app.feats.insurance_claim_feat import (
+    InsuranceClaimPolicyError,
+    describe_claim_contract,
     submit_insurance_claim,
     resolve_insurance_claim,
     build_productivity_review_context,
@@ -2004,3 +2009,122 @@ class TestNonMonetaryWaitingPeriod:
             )
 
             assert result.success is True, result.error_message
+
+
+class TestClaimContractProjection:
+    """The review projection must report the terms enforcement actually uses.
+
+    Regression for a defect where the teacher claim-review screen rendered a
+    placeholder policy (premium 0.00, waiting period 0, allowance None) while the
+    submission gates adjudicated against the real immutable policy row.
+    """
+
+    def _teacher_context(self, classroom):
+        teacher = classroom.teacher_seat
+        return CanonicalContext(
+            user_id=teacher.user_id,
+            class_id=classroom.class_id,
+            seat_id=teacher.id,
+            actor_role="teacher",
+        )
+
+    def test_projection_reports_real_transaction_terms(self, app):
+        """Every projected term is read from the policy, not invented."""
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+
+        with app.app_context():
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="claim-contract:projection"):
+                _add_granted_event(
+                    classroom,
+                    student,
+                    entitlement_id,
+                    premium="100.00",
+                    payout_multiple="2",
+                    claims_per_week_equivalent="3",
+                    claim_window_days=5,
+                )
+                source = _seed_source_loss(classroom, student, idem="claim-contract")
+                source_txn_id = source.id
+
+            student_context = CanonicalContext(
+                user_id=student.user.id,
+                class_id=classroom.class_id,
+                seat_id=student.seat.id,
+                actor_role="student",
+            )
+            result = submit_insurance_claim(
+                canonical_context=student_context,
+                entitlement_id=entitlement_id,
+                claim_subject={"transaction_id": source_txn_id},
+            )
+            assert result.success is True, result.error_message
+
+            claim = db.session.query(InsuranceClaim).filter_by(claim_id=result.claim_id).first()
+            contract = describe_claim_contract(
+                claim, canonical_context=self._teacher_context(classroom)
+            )
+
+            assert contract.policy.premium == Decimal("100.00")
+            assert contract.claim_window_days == 5
+            assert contract.allowance_unit == "claim"
+            assert contract.period_allowance == 3
+            assert contract.period_consumed == 1
+            # premium × payout_multiple, with nothing approved yet.
+            assert contract.maximum_policy_payout == Decimal("200.00")
+            assert contract.remaining_period_cap == Decimal("200.00")
+
+    def test_review_template_renders_no_fabricated_terms(self):
+        """The review screen no longer consumes the placeholder-only variables."""
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "templates"
+            / "admin_process_claim.html"
+        ).read_text()
+
+        for fabricated in (
+            "contract_max_claim_amount",
+            "contract_claim_time_limit_days",
+            "claims_stats.paid",
+            "validation_errors",
+            "enrollment.payment_current",
+        ):
+            assert fabricated not in source
+
+    def test_projection_fails_closed_without_policy_lineage(self, app):
+        """A grant carrying no policy_uuid raises rather than yielding blank terms."""
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+
+        with app.app_context():
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="claim-contract:no-lineage"):
+                db.session.add(
+                    EntitlementEvent(
+                        event_id=str(uuid4()),
+                        class_id=classroom.class_id,
+                        entitlement_id=entitlement_id,
+                        target_seat_id=student.seat.id,
+                        actor_seat_id=student.seat.id,
+                        product_id=None,
+                        entitlement_type="INSURANCE",
+                        acquisition_type="PURCHASE",
+                        event_type="GRANTED",
+                        payload={},
+                    )
+                )
+                db.session.flush()
+                claim = insurance_claim_service.create_claim(
+                    class_id=classroom.class_id,
+                    entitlement_id=entitlement_id,
+                    target_seat_id=student.seat.id,
+                    actor_seat_id=student.seat.id,
+                    correlation_id=f"corr_no_lineage_{uuid4().hex}",
+                    claim_basis={"transaction_id": None},
+                )
+
+            with pytest.raises(InsuranceClaimPolicyError):
+                describe_claim_contract(
+                    claim, canonical_context=self._teacher_context(classroom)
+                )

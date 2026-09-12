@@ -4,13 +4,35 @@
 {% set current_page = "customizations" %}
 {% block page_icon %}style{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Names and labels — how you and this class are presented. None of it changes how the economy behaves.") }}
+
+{% call help.topic('cust-names', 'badge', 'Display names') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Your display name</strong> is what students see instead of an account name. Set it to whatever you are called in the room.</li>
+    <li class="mb-0"><strong>Class display name and section</strong> label this class for you and your students. They are decoration: the system identifies a class by its own ID, so renaming is always safe and never moves anyone's records.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('cust-scope', 'swap_horiz', 'Which class you are editing') %}
+<p class="mb-0"><strong>This page edits the class you currently have open.</strong> Switch classes first if you meant a different one.</p>
+{% endcall %}
+
+{% call help.topic('cust-ids', 'fingerprint', 'IDs and the Getting Started widget') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Teacher ID and Class ID are for support.</strong> Quote them in a ticket — they identify you without exposing student information.</li>
+    <li class="mb-0"><strong>Getting Started widget</strong> can be brought back here if you dismissed it and want the setup checklist again.</li>
+</ul>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="row">
     <div class="col-lg-8 offset-lg-2">
         <div class="card shadow-sm">
             <div class="card-header bg-primary text-white" >
                 <h5 class="mb-0">
-                    <span class="material-symbols-outlined" style="vertical-align: middle;">display_settings</span>
+                    <span class="material-symbols-outlined icon-middle" aria-hidden="true">display_settings</span>
                     Display Settings
                 </h5>
             </div>
@@ -21,7 +43,7 @@
                     <!-- Display Name Section -->
                     <div class="mb-4">
                         <h5 class="text-primary mb-3">
-                            <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 25px;">badge</span>
+                            <span class="material-symbols-outlined icon-middle icon-lg" aria-hidden="true">badge</span>
                             Teacher Display Name
                         </h5>
                         <p class="mb-3">
@@ -63,7 +85,7 @@
                     <!-- Class Settings Section -->
                     <div class="mb-4">
                         <h5 class="text-primary mb-3">
-                            <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 25px;">school</span>
+                            <span class="material-symbols-outlined icon-middle icon-lg" aria-hidden="true">school</span>
                             Class Display Settings
                         </h5>
                         <p class="mb-3">
@@ -97,7 +119,7 @@
                         </div>
                         {% else %}
                         <div class="alert alert-info">
-                            <span class="material-symbols-outlined" style="vertical-align: middle;">info</span>
+                            <span class="material-symbols-outlined icon-middle" aria-hidden="true">info</span>
                             No class selected. Switch to a class to configure its settings.
                         </div>
                         {% endif %}
@@ -108,7 +130,7 @@
                     <!-- Account Info (Read-only) -->
                     <div class="mb-4">
                         <h5 class="text-primary mb-3">
-                            <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 25px;">info</span>
+                            <span class="material-symbols-outlined icon-middle icon-lg" aria-hidden="true">info</span>
                             Account Information
                         </h5>
                         <p class="mb-3">
@@ -138,7 +160,7 @@
                     <!-- Submit Button -->
                     <div class="d-grid gap-2">
                         <button type="submit" class="btn btn-primary btn-lg">
-                            <span class="material-symbols-outlined" style="vertical-align: middle;">save</span>
+                            <span class="material-symbols-outlined icon-middle" aria-hidden="true">save</span>
                             Save Settings
                         </button>
                     </div>
@@ -149,14 +171,14 @@
                 <!-- Reset Getting Started Widget Section -->
                 <div class="mb-4">
                     <h5 class="text-primary mb-3">
-                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 25px;">restart_alt</span>
+                        <span class="material-symbols-outlined icon-middle icon-lg" aria-hidden="true">restart_alt</span>
                         Getting Started Widget
                     </h5>
                     <p class="text-muted mb-3">
                         Show the getting started widget again if you dismissed it or want to review setup tasks.
                     </p>
                     <button type="button" class="btn btn-outline-secondary" onclick="showGettingStartedWidget()">
-                        <span class="material-symbols-outlined" style="vertical-align: middle;">refresh</span>
+                        <span class="material-symbols-outlined icon-middle" aria-hidden="true">refresh</span>
                         Show Getting Started Widget
                     </button>
                 </div>

@@ -8,7 +8,7 @@
   <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
   <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
   <style>
-    body {
+    .class-gate-page {
       background:
         radial-gradient(circle at top left, color-mix(in srgb, var(--primary) 10%, transparent), transparent 32%),
         radial-gradient(circle at bottom right, color-mix(in srgb, var(--secondary) 14%, transparent), transparent 30%),
@@ -17,7 +17,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 2rem 1rem;
+      padding: var(--space-8) var(--space-4);
     }
     .class-gate {
       width: min(760px, 100%);
@@ -25,28 +25,26 @@
       grid-template-columns: 1.1fr 0.9fr;
       background: var(--surface);
       border: 1px solid var(--border-color);
-      border-radius: 24px;
+      border-radius: var(--radius-xl);
       box-shadow: var(--shadow-lg);
       overflow: hidden;
     }
     .class-gate-main {
-      padding: 2.5rem;
+      padding: var(--space-10);
     }
     .class-gate-side {
-      background: linear-gradient(140deg, var(--primary), color-mix(in srgb, var(--primary) 70%, #000));
-      color: white;
-      padding: 2.5rem;
+      background: linear-gradient(140deg, var(--primary), color-mix(in srgb, var(--primary) 70%, var(--neutral-900)));
+      color: var(--text-inverse);
+      padding: var(--space-10);
       display: flex;
       flex-direction: column;
       justify-content: center;
-      gap: 1rem;
+      gap: var(--space-4);
     }
-    .class-option-card {
-      border: 1px solid var(--border-color);
-      border-radius: 16px;
-      padding: 1rem 1.1rem;
-      margin-bottom: 0.85rem;
-      background: white;
+    /* style.css pins every heading to --text-primary, which is dark on this
+       dark panel; the heading must take the panel's inverse text instead. */
+    .class-gate-side h2 {
+      color: inherit;
     }
     @media (max-width: 768px) {
       .class-gate {
@@ -58,7 +56,7 @@
     }
   </style>
 </head>
-<body>
+<body class="class-gate-page">
   <main class="class-gate">
     <section class="class-gate-main">
       <div class="mb-4">
@@ -99,8 +97,8 @@
       <h2 class="h4 mb-0">Why am I seeing this screen?</h2>
       <p class="mb-0">Classroom Token Hub generally saves your last active class so you may resume where you left off. When we could not locate your last active class, we ask you to explicitly select the class you wish to access. This is a normal behavior and nothing in your class economy is affected.</p>
     </aside>
-  </main>
-{% set contextual_help_path = 'user-guides/features/teacher/classroom/class-setup' %}
+  {% set contextual_help_path = 'user-guides/features/teacher/classroom/class-setup' %}
 {% include 'components/contextual_help_link.html' %}
+</main>
 </body>
 </html>

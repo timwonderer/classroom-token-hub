@@ -56,11 +56,17 @@ from app.routes.student import (
     _is_student_coverage_period_paid,
 )
 from app.services.context_resolver import resolve_canonical_context, ContextResolutionError
-from app.feats.base import FEATContext, requires_feat_context
+from app.feats.base import FEATContext
 from app.feats.store_purchase_feat import execute_store_purchase
 from app.feats.ledger_resolution_feat import build_intended_ledger_plan, resolve_intended_ledger_plan, apply_resolved_ledger_plan
 from app.services import store_service
-from app.services.entitlement_read_service import get_purchase_count
+from app.services.entitlement_read_service import (
+    derive_display_status,
+    entitlement_terminal_event,
+    get_purchase_count,
+    latest_entitlement_grant,
+    pending_action_for_entitlement,
+)
 from app.services.class_configuration_query_service import (
     get_class_economy,
     get_all_classes_by_teacher,
@@ -120,52 +126,6 @@ def _safe_exception_prefix_message(exc, default_message, *, allowed_prefixes=Non
                 return allowed_prefix
     return default_message
 
-
-def _latest_entitlement_grant(entitlement_id: str):
-    return (
-        EntitlementEvent.query
-        .filter(
-            EntitlementEvent.entitlement_id == entitlement_id,
-            EntitlementEvent.event_type == "GRANTED",
-        )
-        .order_by(EntitlementEvent.timestamp.desc(), EntitlementEvent.event_id.desc())
-        .first()
-    )
-
-
-def _entitlement_terminal_event(entitlement_id: str):
-    return (
-        EntitlementEvent.query
-        .filter(
-            EntitlementEvent.entitlement_id == entitlement_id,
-            EntitlementEvent.event_type.in_(["CONSUMED", "EXPIRED", "REVOKED"]),
-        )
-        .order_by(EntitlementEvent.timestamp.desc(), EntitlementEvent.event_id.desc())
-        .first()
-    )
-
-
-def _pending_action_for_entitlement(entitlement_id: str):
-    return (
-        PendingAction.query
-        .filter(
-            PendingAction.entitlement_id == entitlement_id,
-            PendingAction.payload["outcome"].as_string().is_(None),
-        )
-        .order_by(PendingAction.submitted_at.desc(), PendingAction.pending_action_id.desc())
-        .first()
-    )
-
-
-def derive_display_status(entitlement_id: str) -> str:
-    """Return the canonical display status for an entitlement lineage."""
-    if _pending_action_for_entitlement(entitlement_id):
-        return "processing"
-    if _entitlement_terminal_event(entitlement_id):
-        return "consumed"
-    if _latest_entitlement_grant(entitlement_id):
-        return "purchased"
-    return "unknown"
 
 @api_bp.errorhandler(ContextResolutionError)
 def handle_api_context_resolution_error(e):
@@ -244,9 +204,9 @@ def _resolve_class_display_label(class_id, fallback_block=None):
     return fallback_block or "Unknown Class"
 
 
-def _get_hall_pass_settings_scope(class_id):
+def _get_hall_pass_settings_scope(user_id, class_id):
     """Resolve canonical class scope for hall pass settings."""
-    return resolve_class_scope(None, class_id=class_id)
+    return resolve_class_scope(user_id, class_id=class_id)
 
 
 def _admin_has_class_scope(canonical_context, class_id):
@@ -400,7 +360,7 @@ def use_item():
         return jsonify({"status": "error", "message": "Incorrect passphrase."}), 403
 
     # 2. Get the entitlement lineage
-    entitlement = _latest_entitlement_grant(entitlement_id)
+    entitlement = latest_entitlement_grant(entitlement_id)
     if not entitlement or entitlement.target_seat_id != student.id:
         return jsonify({"status": "error", "message": "Invalid item."}), 404
 
@@ -413,12 +373,12 @@ def use_item():
     if not store_item or store_item.class_id != entitlement.class_id:
         return jsonify({"status": "error", "message": "Invalid item."}), 404
 
-    current_action = _pending_action_for_entitlement(entitlement.entitlement_id)
+    current_action = pending_action_for_entitlement(entitlement.entitlement_id)
     if current_action:
         return jsonify({"status": "error", "message": "This item is already pending approval."}), 400
 
     if store_item.item_type == 'immediate':
-        terminal = _entitlement_terminal_event(entitlement.entitlement_id)
+        terminal = entitlement_terminal_event(entitlement.entitlement_id)
         if terminal:
             return jsonify({"status": "error", "message": "This item is not available for redemption."}), 400
         from app.feats.entitlement_lifecycle_feat import execute_use_item_immediate
@@ -455,7 +415,7 @@ def use_item():
 
     # PendingAction.correlation_id is unique, and the key below becomes that
     # correlation. A rejected request stays on file for the audit history while
-    # `_pending_action_for_entitlement` above only blocks on *unresolved* rows —
+    # `pending_action_for_entitlement` above only blocks on *unresolved* rows —
     # so a student may legitimately re-request after a rejection, and a key
     # derived from the entitlement alone would collide at flush. Keying on the
     # attempt keeps each request distinct; a double submit within one attempt is
@@ -494,7 +454,7 @@ def approve_redemption():
     if not entitlement_id:
         return jsonify({"status": "error", "message": "Missing entitlement ID."}), 400
 
-    entitlement = _latest_entitlement_grant(entitlement_id)
+    entitlement = latest_entitlement_grant(entitlement_id)
     if not entitlement:
         return jsonify({"status": "error", "message": "Invalid item."}), 404
 
@@ -516,7 +476,7 @@ def approve_redemption():
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
 
     try:
-        pending_action = _pending_action_for_entitlement(entitlement.entitlement_id)
+        pending_action = pending_action_for_entitlement(entitlement.entitlement_id)
         if not pending_action:
             return jsonify({"status": "error", "message": "Redemption request is no longer pending and cannot be approved."}), 409
 
@@ -553,7 +513,7 @@ def reject_redemption():
     if not entitlement_id:
         return jsonify({"status": "error", "message": "Missing entitlement ID."}), 400
 
-    entitlement = _latest_entitlement_grant(entitlement_id)
+    entitlement = latest_entitlement_grant(entitlement_id)
     if not entitlement:
         return jsonify({"status": "error", "message": "Invalid item."}), 404
 
@@ -571,7 +531,7 @@ def reject_redemption():
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
 
     try:
-        pending_action = _pending_action_for_entitlement(entitlement.entitlement_id)
+        pending_action = pending_action_for_entitlement(entitlement.entitlement_id)
         if not pending_action:
             return jsonify({"status": "error", "message": "Redemption request could not be rejected in its current state."}), 409
 
@@ -1002,11 +962,15 @@ def update_hall_pass_settings():
         return jsonify({"status": "error", "message": "Class context is required"}), 400
 
     data = request.get_json() or {}
+    if (not isinstance(data, dict) or set(data) != {"max_queue_limit"}
+            or type(data["max_queue_limit"]) is not int
+            or not 1 <= data["max_queue_limit"] <= 50):
+        return jsonify({"status": "error", "message": "Out Limit must be a whole number between 1 and 50."}), 400
     try:
         settings = feat_update_hall_pass_queue_settings(
             user_id=context.user_id if context else None,
             class_id=class_id,
-            max_queue_limit=data.get("max_queue_limit", 10),
+            max_queue_limit=data["max_queue_limit"],
             updated_at=utc_now(),
             correlation_id=f"corr_settings_queue_{uuid.uuid4().hex}",
             idempotency_key=f"feat:settings:hall-pass-queue:{context.user_id}:{class_id}:{uuid.uuid4().hex}",
@@ -1181,7 +1145,7 @@ def get_hall_pass_setup():
     if not current_class_id:
         return jsonify({"status": "error", "message": "Active class context is required"}), 400
 
-    scope = _get_hall_pass_settings_scope(current_class_id)
+    scope = _get_hall_pass_settings_scope(context.user_id, current_class_id)
     if not scope:
         return jsonify({"status": "error", "message": "Class scope not found"}), 404
 
@@ -1247,7 +1211,7 @@ def save_hall_pass_setup():
             return jsonify({"status": "error", "message": "Invalid pass type limits"}), 400
 
     try:
-        scope = _get_hall_pass_settings_scope(current_class_id)
+        scope = _get_hall_pass_settings_scope(context.user_id, current_class_id)
         if not scope:
             return jsonify({"status": "error", "message": "Class scope not found"}), 404
         feature_scope = resolve_feature_class_for_class(scope["class_id"], 'hall_pass')
@@ -1637,8 +1601,15 @@ def attendance_history():
 
 @api_bp.route('/tap', methods=['POST'])
 @limiter.limit("100 per minute")
-@requires_feat_context("FEAT-PROD-001")
 def handle_tap():
+    """Student-initiated attendance tap (FEAT-PROD-001).
+
+    The FEAT envelope belongs to ``record_attendance_session``, which carries
+    its own ``@requires_feat_context("FEAT-PROD-001")``. This route must open
+    none: a route-level decorator here makes that call nest inside it and raise
+    ``FEATContextError``. The route's own work is PIN verification and
+    resolution — reads only.
+    """
     data = request.get_json(silent=True) or {}
     safe_data = {k: ('***' if k == 'pin' else v) for k, v in data.items()}
     current_app.logger.info(f"TAP DEBUG: Received data {safe_data}")

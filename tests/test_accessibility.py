@@ -1,9 +1,14 @@
-"""
-Accessibility smoke tests for rendered public and auth pages.
+"""Accessibility smoke tests for rendered public and auth pages.
 
-The test scope is intentionally narrow: it audits the exact rendered HTML for
-the template(s) or static GitHub Pages files listed in
-ACCESSIBILITY_TEMPLATE_PATHS.
+Audits the exact rendered HTML — the only place duplicate ids, missing labels,
+and heading structure can be judged, since a Jinja fragment says nothing about
+what the finished document looks like.
+
+`ACCESSIBILITY_TEMPLATE_PATHS` narrows the run to specific files, which is what
+the diff-scoped CI gate sets. When it is unset, the default corpus is every
+page `_render_page` knows how to build. It used to default to *empty*, so a
+plain `pytest` run audited nothing at all and CI reported green while `main`
+was red.
 """
 
 from __future__ import annotations
@@ -25,10 +30,20 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 GITHUB_PAGES_DIR = REPO_ROOT / "github-pages"
 
 
+def _default_corpus() -> list[Path]:
+    """Every page this module can render, plus the static public pages."""
+    with flask_app.test_client() as client:
+        pages = [Path(key) for key in _route_map(client)]
+    pages += sorted(
+        path.relative_to(REPO_ROOT) for path in GITHUB_PAGES_DIR.glob("*.html")
+    )
+    return pages
+
+
 def _template_paths() -> list[Path]:
     raw = os.environ.get("ACCESSIBILITY_TEMPLATE_PATHS", "").strip()
     if not raw:
-        return []
+        return _default_corpus()
     return [Path(item) for item in raw.splitlines() if item.strip()]
 
 
@@ -142,18 +157,9 @@ class _DummyForm:
         raise AttributeError(item)
 
 
-def _render_page(template_path: Path, client) -> str:
-    name = template_path.name
-
-    github_pages_map = {
-        "privacy.html": GITHUB_PAGES_DIR / "privacy.html",
-        "district.html": GITHUB_PAGES_DIR / "district.html",
-        "terms.html": GITHUB_PAGES_DIR / "terms.html",
-    }
-    if template_path in github_pages_map.values():
-        return _render_static_github_page(template_path)
-
-    route_map = {
+def _route_map(client) -> dict:
+    """Template path → callable producing that page's finished HTML."""
+    return {
         "templates/admin_login.html": lambda: _render_route(client, "/admin/login"),
         "templates/admin_recovery_saved.html": lambda: _render_direct(
             "admin_recovery_saved.html",
@@ -205,7 +211,12 @@ def _render_page(template_path: Path, client) -> str:
         ),
     }
 
-    key = str(template_path)
+
+def _render_page(template_path: Path, client) -> str:
+    name = template_path.name
+
+    key = template_path.as_posix()
+    route_map = _route_map(client)
     if key in route_map:
         return route_map[key]()
 
@@ -230,8 +241,17 @@ def _render_page(template_path: Path, client) -> str:
     return html
 
 
-@pytest.mark.parametrize("template_path", _template_paths())
+@pytest.mark.parametrize("template_path", _template_paths(), ids=lambda p: p.as_posix())
 def test_template_accessibility_smoke(template_path: Path):
     with flask_app.test_client() as client:
         html = _render_page(template_path, client)
     _audit_html_accessibility(html)
+
+
+def test_the_default_corpus_is_not_empty():
+    """A silently empty corpus is the failure mode this module already had.
+
+    With no env override, `_template_paths()` returned `[]`, parametrize
+    produced zero cases, and the file reported green having audited nothing.
+    """
+    assert len(_default_corpus()) >= 15

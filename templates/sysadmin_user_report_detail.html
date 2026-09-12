@@ -3,9 +3,9 @@
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><span class="material-symbols-outlined me-2">description</span>Teacher Issue {{ report_ref[:12] }}...</h2>
+        <h2><span class="material-symbols-outlined me-2" aria-hidden="true">description</span>Teacher Issue {{ report_ref[:12] }}...</h2>
         <a href="{{ url_for('sysadmin.support_tickets') }}?tab=reports" class="btn btn-secondary">
-            <span class="material-symbols-outlined me-2">arrow_back</span>Back to Teacher Issues
+            <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_back</span>Back to Teacher Issues
         </a>
     </div>
 
@@ -14,7 +14,7 @@
         <div class="col-lg-8">
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">info</span>Report Details</h5>
+                    <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>Report Details</h5>
                 </div>
                 <div class="card-body">
                     <div class="row mb-3">
@@ -116,7 +116,7 @@
 
                     {% if report.reviewed_at %}
                     <div class="text-muted small">
-                        <span class="material-symbols-outlined me-1">schedule</span>Reviewed: {{ report.reviewed_at|fmt_timestamp }}
+                        <span class="material-symbols-outlined me-1" aria-hidden="true">schedule</span>Reviewed: {{ report.reviewed_at|fmt_timestamp }}
                     </div>
                     {% endif %}
                 </div>
@@ -125,7 +125,7 @@
             <!-- Technical Details -->
             <div class="card shadow-sm">
                 <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">terminal</span>Technical Details</h5>
+                    <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">terminal</span>Technical Details</h5>
                 </div>
                 <div class="card-body">
                     <div class="mb-2">
@@ -144,7 +144,7 @@
             <!-- Update Status -->
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">edit_square</span>Update Report</h5>
+                    <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">edit_square</span>Update Report</h5>
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('sysadmin.update_user_report', report_ref=report_ref) }}">
@@ -183,7 +183,7 @@
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100">
-                            <span class="material-symbols-outlined me-2">save</span>Update Report
+                            <span class="material-symbols-outlined me-2" aria-hidden="true">save</span>Update Report
                         </button>
                     </form>
                 </div>
@@ -192,7 +192,7 @@
             <!-- Quick Stats -->
             <div class="card shadow-sm">
                 <div class="card-header bg-info text-white">
-                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">bar_chart</span>Reporter Stats</h5>
+                    <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">bar_chart</span>Reporter Stats</h5>
                 </div>
                 <div class="card-body">
                     {% set user_reports = report.__class__.query.filter_by(anonymous_code=report.anonymous_code).all() %}

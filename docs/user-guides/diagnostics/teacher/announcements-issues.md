@@ -39,9 +39,9 @@ Diagnostic guide for resolving problems with class announcements and student iss
 - You do not see issues submitted by students in your queue.
 
 ### Causes & Solutions
-**Cause 1: Bug reports disabled**
-- **Check:** Go to Feature Settings and see if "Issue Reporting" is disabled.
-- **Fix:** Enable Issue Reporting in the Feature Settings for the relevant class.
+**Cause 1: The student is not using Help & Support**
+- **Check:** Ask the student to open **Help & Support → Report an Issue**.
+- **Fix:** Issue reporting is part of Help & Support and has no separate Economy Features switch. Confirm the student is signed in and has the intended class selected.
 
 **Cause 2: Student looking at wrong class context**
 - **Check:** Verify the student is in the correct class context when submitting the issue.

@@ -4,6 +4,16 @@
 {% block page_icon %}support_agent{% endblock %}
 
 {% block content %}
+<style>
+    .sa-maxw-200 { max-width: 200px; }
+    .sa-maxw-400 { max-width: 400px; }
+    .sa-minw-160 { min-width: 160px; }
+    .sa-w-120 { width: 120px; }
+    .sa-w-130 { width: 130px; }
+    .sa-w-70 { width: 70px; }
+    .sa-w-80 { width: 80px; }
+    .sa-w-90 { width: 90px; }
+</style>
 <div class="container-fluid px-0">
 
     <!-- ── Summary Stats ── -->
@@ -11,7 +21,7 @@
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
                 <div class="sysadmin-stat-icon bg-primary-subtle">
-                    <span class="material-symbols-outlined text-primary">mark_unread_chat_alt</span>
+                    <span class="material-symbols-outlined text-primary" aria-hidden="true">mark_unread_chat_alt</span>
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ new_reports }}</div>
@@ -22,7 +32,7 @@
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
                 <div class="sysadmin-stat-icon bg-warning-subtle">
-                    <span class="material-symbols-outlined text-warning">pending</span>
+                    <span class="material-symbols-outlined text-warning" aria-hidden="true">pending</span>
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ pending_issues }}</div>
@@ -33,7 +43,7 @@
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
                 <div class="sysadmin-stat-icon bg-info-subtle">
-                    <span class="material-symbols-outlined text-info">rate_review</span>
+                    <span class="material-symbols-outlined text-info" aria-hidden="true">rate_review</span>
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ in_review_issues }}</div>
@@ -44,7 +54,7 @@
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
                 <div class="sysadmin-stat-icon bg-success-subtle">
-                    <span class="material-symbols-outlined text-success">task_alt</span>
+                    <span class="material-symbols-outlined text-success" aria-hidden="true">task_alt</span>
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ reviewed_reports }}</div>
@@ -59,7 +69,7 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'reports' or not active_tab %}active{% endif %}"
                 id="reports-tab" data-bs-toggle="tab" data-bs-target="#reports-pane" type="button" role="tab" aria-controls="reports-pane" aria-selected="{% if active_tab == 'reports' or not active_tab %}true{% else %}false{% endif %}">
-                <span class="material-symbols-outlined align-middle me-1" style="font-size:16px;">bug_report</span>
+                <span class="material-symbols-outlined align-middle me-1 icon-xs" aria-hidden="true">bug_report</span>
                 Teacher Issues
                 {% if new_reports > 0 %}
                 <span class="badge bg-primary ms-1">{{ new_reports }}</span>
@@ -69,8 +79,8 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'issues' %}active{% endif %}" id="issues-tab"
                 data-bs-toggle="tab" data-bs-target="#issues-pane" type="button" role="tab" aria-controls="issues-pane" aria-selected="{% if active_tab == 'issues' %}true{% else %}false{% endif %}">
-                <span class="material-symbols-outlined align-middle me-1"
-                    style="font-size:16px;">escalator_warning</span>
+                <span class="material-symbols-outlined align-middle me-1 icon-xs"
+                    aria-hidden="true">escalator_warning</span>
                 Escalated Student Issues
                 {% if (pending_issues + in_review_issues) > 0 %}
                 <span class="badge bg-warning text-dark ms-1">{{ pending_issues + in_review_issues }}</span>
@@ -90,8 +100,8 @@
                 <form method="GET" action="{{ url_for('sysadmin.support_tickets') }}"
                     class="d-flex flex-wrap gap-2 w-100">
                     <input type="hidden" name="tab" value="reports">
-                    <div style="min-width:160px; max-width:200px;">
-                        <label class="form-label mb-1" style="font-size:0.8rem;">Status</label>
+                    <div class="sa-minw-160 sa-maxw-200">
+                        <label class="form-label mb-1 type-xs">Status</label>
                         <select name="status" class="form-select form-select-sm" aria-label="Filter support tickets by status" onchange="this.form.submit()">
                             <option value="all" {% if status_filter=='all' %}selected{% endif %}>All Statuses</option>
                             <option value="new" {% if status_filter=='new' %}selected{% endif %}>New</option>
@@ -101,8 +111,8 @@
                             <option value="spam" {% if status_filter=='spam' %}selected{% endif %}>Spam</option>
                         </select>
                     </div>
-                    <div style="min-width:160px; max-width:200px;">
-                        <label class="form-label mb-1" style="font-size:0.8rem;">Type</label>
+                    <div class="sa-minw-160 sa-maxw-200">
+                        <label class="form-label mb-1 type-xs">Type</label>
                         <select name="type" class="form-select form-select-sm" aria-label="Filter support tickets by type" onchange="this.form.submit()">
                             <option value="all" {% if report_type_filter=='all' %}selected{% endif %}>All Types</option>
                             <option value="bug" {% if report_type_filter=='bug' %}selected{% endif %}>Bug</option>
@@ -124,18 +134,18 @@
             {% if reports %}
             <!-- Desktop Table -->
             <div class="d-none d-md-block table-responsive">
-                <table class="table table-hover align-middle mb-0" style="font-size:0.85rem;">
+                <table class="table table-hover align-middle mb-0 type-sm">
                     <caption class="visually-hidden">Support tickets and reported issues</caption>
                     <thead class="table-light">
                         <tr>
-                            <th scope="col" class="ps-3" style="width:120px;">Reference</th>
-                            <th scope="col" style="width:90px;">Type</th>
+                            <th scope="col" class="ps-3 sa-w-120">Reference</th>
+                            <th class="sa-w-90" scope="col">Type</th>
                             <th scope="col">Title</th>
-                            <th scope="col" style="width:90px;">Reporter</th>
-                            <th scope="col" style="width:80px;">Error</th>
-                            <th scope="col" style="width:130px;">Submitted</th>
-                            <th scope="col" style="width:90px;">Status</th>
-                            <th scope="col" style="width:70px;"></th>
+                            <th class="sa-w-90" scope="col">Reporter</th>
+                            <th class="sa-w-80" scope="col">Error</th>
+                            <th class="sa-w-130" scope="col">Submitted</th>
+                            <th class="sa-w-90" scope="col">Status</th>
+                            <th class="sa-w-70" scope="col"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -146,16 +156,16 @@
                                 <span class="badge
                                     {% if report.report_type == 'bug' %}bg-danger
                                     {% elif report.report_type == 'suggestion' %}bg-primary
-                                    {% else %}bg-secondary{% endif %}" style="font-size:0.7rem;">
+                                    {% else %}bg-secondary{% endif %} type-2xs">
                                     {{ report.report_type|title }}
                                 </span>
                             </td>
-                            <td class="text-truncate" style="max-width:200px;" title="{{ report.title }}">{{
+                            <td class="text-truncate sa-maxw-200" title="{{ report.title }}">{{
                                 report.title }}</td>
-                            <td><span class="badge bg-warning text-dark" style="font-size:0.7rem;">Teacher</span></td>
+                            <td><span class="badge bg-warning text-dark type-2xs">Teacher</span></td>
                             <td>
                                 {% if report.error_code %}
-                                <span class="badge bg-dark" style="font-size:0.7rem;">{{ report.error_code }}</span>
+                                <span class="badge bg-dark type-2xs">{{ report.error_code }}</span>
                                 {% else %}
                                 <span class="text-muted">—</span>
                                 {% endif %}
@@ -172,7 +182,7 @@
                                     {% if report.status == 'new' %}bg-primary
                                     {% elif report.status == 'reviewed' %}bg-info
                                     {% elif report.status == 'closed' %}bg-secondary
-                                    {% else %}bg-warning text-dark{% endif %}" style="font-size:0.7rem;">
+                                    {% else %}bg-warning text-dark{% endif %} type-2xs">
                                     {{ report.status|title }}
                                 </span>
                             </td>
@@ -195,21 +205,21 @@
                             <span class="badge
                                 {% if report.report_type == 'bug' %}bg-danger
                                 {% elif report.report_type == 'suggestion' %}bg-primary
-                                {% else %}bg-secondary{% endif %} me-1" style="font-size:0.7rem;">
+                                {% else %}bg-secondary{% endif %} me-1 type-2xs">
                                 {{ report.report_type|title }}
                             </span>
-                            <span class="badge bg-warning text-dark" style="font-size:0.7rem;">Teacher</span>
+                            <span class="badge bg-warning text-dark type-2xs">Teacher</span>
                         </div>
                         <span class="badge
                             {% if report.status == 'new' %}bg-primary
                             {% elif report.status == 'reviewed' %}bg-info
                             {% elif report.status == 'closed' %}bg-secondary
-                            {% else %}bg-warning text-dark{% endif %}" style="font-size:0.7rem;">
+                            {% else %}bg-warning text-dark{% endif %} type-2xs">
                             {{ report.status|title }}
                         </span>
                     </div>
-                    <div class="fw-semibold mb-1" style="font-size:0.9rem;">{{ report.title }}</div>
-                    <div class="text-muted mb-2" style="font-size:0.75rem;">
+                    <div class="fw-semibold mb-1 type-sm">{{ report.title }}</div>
+                    <div class="text-muted mb-2 type-xs">
                         {{ report_ref_for(report.id)[:12] }}...
                         {% if report.submitted_at %} · {{ report.submitted_at|fmt_timestamp }}{% endif %}
                     </div>
@@ -221,8 +231,8 @@
 
             {% else %}
             <div class="p-5 text-center text-muted">
-                <span class="material-symbols-outlined d-block mb-2"
-                    style="font-size:56px;opacity:0.3;">chat_bubble_outline</span>
+                <span class="material-symbols-outlined d-block mb-2 icon-2xl alpha-medium"
+                    aria-hidden="true">chat_bubble_outline</span>
                 <h5>No teacher issues found</h5>
                 <p class="mb-0">{% if status_filter != 'all' or report_type_filter != 'all' %}Try clearing the
                     filters.{% else %}No teacher issues have been submitted yet.{% endif %}</p>
@@ -238,8 +248,7 @@
             <div class="p-3 border-bottom bg-light">
                 <ul class="nav nav-pills nav-sm gap-2" id="issuePills" role="tablist">
                     <li class="nav-item">
-                        <button type="button" class="nav-link active py-1 px-3" data-bs-toggle="pill" data-bs-target="#pill-pending"
-                            style="font-size:0.85rem;">
+                        <button type="button" class="nav-link active py-1 px-3 type-sm" data-bs-toggle="pill" data-bs-target="#pill-pending">
                             Pending
                             {% if issues_pending|length > 0 %}
                             <span class="badge bg-warning text-dark ms-1">{{ issues_pending|length }}</span>
@@ -247,8 +256,7 @@
                         </button>
                     </li>
                     <li class="nav-item">
-                        <button type="button" class="nav-link py-1 px-3" data-bs-toggle="pill" data-bs-target="#pill-review"
-                            style="font-size:0.85rem;">
+                        <button type="button" class="nav-link py-1 px-3 type-sm" data-bs-toggle="pill" data-bs-target="#pill-review">
                             In Review
                             {% if issues_in_review|length > 0 %}
                             <span class="badge bg-info ms-1">{{ issues_in_review|length }}</span>
@@ -256,8 +264,7 @@
                         </button>
                     </li>
                     <li class="nav-item">
-                        <button type="button" class="nav-link py-1 px-3" data-bs-toggle="pill" data-bs-target="#pill-resolved"
-                            style="font-size:0.85rem;">
+                        <button type="button" class="nav-link py-1 px-3 type-sm" data-bs-toggle="pill" data-bs-target="#pill-resolved">
                             Resolved
                         </button>
                     </li>
@@ -281,43 +288,43 @@
                                 <div class="flex-grow-1 me-3 min-width-0">
                                     <!-- Badges row -->
                                     <div class="d-flex flex-wrap gap-1 mb-2">
-                                        <span class="badge bg-secondary" style="font-size:0.7rem;">
-                                            <span class="material-symbols-outlined me-1">person</span>
+                                        <span class="badge bg-secondary type-2xs">
+                                            <span class="material-symbols-outlined me-1" aria-hidden="true">person</span>
                                             {{ issue.actor_public_id[:8] }}...
                                         </span>
-                                        <span class="badge bg-light text-dark border" style="font-size:0.7rem;">
+                                        <span class="badge bg-light text-dark border type-2xs">
                                             {{ issue.category_name }}
                                         </span>
-                                        <span class="badge bg-primary" style="font-size:0.7rem;">
-                                            <span class="material-symbols-outlined me-1">badge</span>{% if issue.reviewer_public_id %}{{ issue.reviewer_public_id[:8] }}...{% else %}Unattributed{% endif %}
+                                        <span class="badge bg-primary type-2xs">
+                                            <span class="material-symbols-outlined me-1" aria-hidden="true">badge</span>{% if issue.reviewer_public_id %}{{ issue.reviewer_public_id[:8] }}...{% else %}Unattributed{% endif %}
                                         </span>
                                         {% if issue.share_class_name_with_sysadmin and issue.class_label %}
-                                        <span class="badge bg-info" style="font-size:0.7rem;">
-                                            <span class="material-symbols-outlined me-1">door_front</span>{{ issue.class_label }}
+                                        <span class="badge bg-info type-2xs">
+                                            <span class="material-symbols-outlined me-1" aria-hidden="true">door_front</span>{{ issue.class_label }}
                                         </span>
                                         {% endif %}
                                     </div>
                                     <!-- Escalation reason -->
-                                    <div class="fw-semibold mb-1" style="font-size:0.88rem;">{{ issue.escalation_reason
+                                    <div class="fw-semibold mb-1 type-sm">{{ issue.escalation_reason
                                         }}</div>
-                                    <div class="text-muted text-truncate" style="font-size:0.78rem; max-width:400px;">
+                                    <div class="text-muted text-truncate type-xs sa-maxw-400">
                                         {{ issue.student_explanation[:150] }}{% if issue.student_explanation|length >
                                         150 %}...{% endif %}
                                     </div>
-                                    <div class="text-muted mt-1" style="font-size:0.72rem;">
+                                    <div class="text-muted mt-1 type-2xs">
                                         {% if pill_id == 'pending' %}
-                                        <span class="material-symbols-outlined me-1">arrow_circle_up</span>
+                                        <span class="material-symbols-outlined me-1" aria-hidden="true">arrow_circle_up</span>
                                         Escalated {{ issue.escalated_at|fmt_timestamp }}
                                         {% elif pill_id == 'review' %}
-                                        <span class="material-symbols-outlined me-1">visibility</span>
+                                        <span class="material-symbols-outlined me-1" aria-hidden="true">visibility</span>
                                         In review since {{ (issue.sysadmin_reviewed_at or issue.escalated_at)|fmt_timestamp }}
                                         {% else %}
-                                        <span class="material-symbols-outlined me-1">check_circle</span>
+                                        <span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>
                                         Resolved {{ issue.sysadmin_resolved_at|fmt_timestamp }}
                                         {% endif %}
                                     </div>
                                 </div>
-                                <span class="badge {{ badge_class }} flex-shrink-0" style="font-size:0.7rem;">
+                                <span class="badge {{ badge_class }} flex-shrink-0 type-2xs">
                                     {% if pill_id == 'pending' %}Pending
                                     {% elif pill_id == 'review' %}In Review
                                     {% else %}Resolved{% endif %}
@@ -329,8 +336,8 @@
                     {% else %}
                     <div class="p-5 text-center text-muted">
                         <span
-                            class="material-symbols-outlined d-block mb-2{% if pill_id == 'pending' %} text-success{% endif %}"
-                            style="font-size:48px;opacity:0.5;">{{ empty_icon }}</span>
+                            class="material-symbols-outlined d-block mb-2{% if pill_id == 'pending' %} text-success{% endif %} icon-2xl alpha-strong"
+                            aria-hidden="true">{{ empty_icon }}</span>
                         <p class="mb-0">{{ empty_msg }}</p>
                     </div>
                     {% endif %}

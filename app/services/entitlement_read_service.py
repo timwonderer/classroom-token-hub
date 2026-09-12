@@ -755,3 +755,60 @@ def get_active_rent_grant(
             return candidate
 
     return None
+
+
+def latest_entitlement_grant(entitlement_id: str):
+    """Return the most recent GRANTED event for an entitlement lineage."""
+    return (
+        EntitlementEvent.query
+        .filter(
+            EntitlementEvent.entitlement_id == entitlement_id,
+            EntitlementEvent.event_type == "GRANTED",
+        )
+        .order_by(EntitlementEvent.timestamp.desc(), EntitlementEvent.event_id.desc())
+        .first()
+    )
+
+
+def entitlement_terminal_event(entitlement_id: str):
+    """Return the most recent terminal event for an entitlement lineage."""
+    return (
+        EntitlementEvent.query
+        .filter(
+            EntitlementEvent.entitlement_id == entitlement_id,
+            EntitlementEvent.event_type.in_(["CONSUMED", "EXPIRED", "REVOKED"]),
+        )
+        .order_by(EntitlementEvent.timestamp.desc(), EntitlementEvent.event_id.desc())
+        .first()
+    )
+
+
+def pending_action_for_entitlement(entitlement_id: str):
+    """Return the latest unresolved PendingAction for an entitlement lineage."""
+    from app.models import PendingAction
+
+    return (
+        PendingAction.query
+        .filter(
+            PendingAction.entitlement_id == entitlement_id,
+            PendingAction.payload["outcome"].as_string().is_(None),
+        )
+        .order_by(PendingAction.submitted_at.desc(), PendingAction.pending_action_id.desc())
+        .first()
+    )
+
+
+def derive_display_status(entitlement_id: str) -> str:
+    """Return the canonical display status for an entitlement lineage.
+
+    This is the UI vocabulary ('processing'/'consumed'/'purchased'), which is
+    deliberately distinct from the domain vocabulary that
+    ``get_entitlement_status`` returns.
+    """
+    if pending_action_for_entitlement(entitlement_id):
+        return "processing"
+    if entitlement_terminal_event(entitlement_id):
+        return "consumed"
+    if latest_entitlement_grant(entitlement_id):
+        return "purchased"
+    return "unknown"

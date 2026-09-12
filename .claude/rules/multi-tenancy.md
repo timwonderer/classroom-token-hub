@@ -1,319 +1,235 @@
 # Multi-Tenancy Scoping Rules
 
-**CRITICAL:** This project had a P0 same-teacher multi-period data leak. Student data must always be resolved in the active class scope identified by `join_code`.
+> **Not authoritative.** This file is operational guidance for agents. Normative authority lives only under `docs/INVARIANT/`, `docs/DOMAIN/`, `docs/FEATURE-EXECUTION/`, `docs/SPEC/`, and `docs/STANDARD_OPERATING_PROCEDURES/`. Where this file conflicts with one of those, the normative document wins and this file is what gets corrected.
+
+**CRITICAL:** This project had a P0 same-teacher multi-period data leak. Every read and
+write touching seat-owned data must be scoped by `class_id`.
 
 ---
 
 ## The Golden Rules
 
-1. **`join_code` is the class isolation key.**
-2. **`ClassMembership` is the class-boundary authority.**
-3. **`StudentTeacher` defines teacher ownership, not class membership.**
-4. **`StudentBlock` stores per-student per-period state, not balances or membership authority.**
-5. **Never scope student data by `teacher_id` alone.**
+1. **`class_id` is the class isolation key.** It is a UUID string, PK of `classes`.
+2. **`seat_id` is the activity anchor.** Ledger, attendance, hall passes, and
+   entitlements all key off `seat_id` — never off a user id.
+3. **`join_code` is an ingress alias only.** It resolves to `class_id` at the boundary
+   and is never a scoping key for a domain query.
+4. **Teacher ownership is not class scope.** `classes.teacher_user_id` says who owns a
+   class; it does not identify *which* class period a request is operating in.
+5. **Balances are read from the ledger, never from a per-student row.**
 
 ---
 
 ## Runtime Model
 
-### Class scope
-
-```python
-ClassEconomy
-├── join_code (PK)
-└── display_name / status / metadata
-
-ClassMembership
-├── join_code (FK to ClassEconomy)
-├── admin_id OR student_id
-├── role      # admin | student
-└── status    # active | archived
+```
+User (users)              — global auth principal
+Seat (seats)              — class-local actor; UNIQUE(user_id, class_id)
+IdentityProfile           — display-only name, 1:1 with Seat
+ClassEconomy (classes)    — the isolation boundary
 ```
 
-### Teacher ownership
-
 ```python
-StudentTeacher
-├── student_id
-└── teacher_id
-```
+ClassEconomy            # __tablename__ = 'classes'
+├── class_id            # String(36) UUID, PRIMARY KEY — the canonical scope key
+├── class_public_id     # opaque external handle
+├── join_code           # String(20), unique — public alias, ingress only
+├── teacher_user_id     # FK users.id — ownership, NOT scope
+├── section             # display metadata (what older docs called "block")
+├── display_name
+└── class_timezone      # NOT NULL, immutable once set
 
-### Student records and per-class state
-
-```python
-Student
+Seat                    # __tablename__ = 'seats'
 ├── id
-├── identity_id
-├── block
-├── join_code / join_code_id   # compatibility + claim flows
-├── credential hashes
-├── recovery fields
-└── opaque/internal references
-
-StudentBlock
-├── student_id
-├── seat_id
-├── period
-├── join_code
-├── tap_enabled
-├── done_for_day_date
-└── rent_hall_passes
+├── public_id
+├── user_id             # FK users.id
+├── class_id            # FK classes.class_id
+├── role                # 'student' | 'teacher'
+├── claim_first_name_hash / claim_last_name_hash / roster_fingerprint
+└── has_received_rent_exemption
 ```
 
-### Financial and attendance scope
+`Seat.block` exists only as a read-through property onto `ClassEconomy.section`, for
+legacy admin rendering. It is display metadata. Never scope by it.
 
-- `Transaction.join_code`
-- `TapEvent.join_code`
-- `HallPassLog.join_code`
-- `PayrollSettings.join_code`
-- `RentSettings.join_code`
-- `BankingSettings.join_code`
-- `FeatureSettings.join_code`
-- `BalanceCache.join_code`
+### There is no v1 identity layer left
 
-`BalanceCache` stores posted balances. Student balances are read through scoped methods on `Student`, not from `StudentBlock`.
+`Student`, `Admin`, `StudentBlock`, `ClassMembership`, `TeacherBlock`,
+`StudentTeacher`, and `BalanceCache` **do not exist** — not as models, not as tables.
+Neither do `Student.get_checking_balance()` / `get_savings_balance()`. If you find text
+anywhere instructing you to use them, that text is stale; do not resurrect them.
+
+Remaining `join_code` columns in the schema: `classes.join_code` (the alias itself) plus
+two nullable legacy columns that no domain query filters on. Treat any new `join_code`
+filter as a bug.
+
+---
+
+## Getting Class Context
+
+### Student routes
+
+```python
+from app.services.context_resolver import resolve_canonical_context
+
+context = resolve_canonical_context()          # CanonicalContext
+class_id = context.class_id
+seat_id = context.seat_id
+```
+
+`CanonicalContext` is a frozen dataclass carrying exactly `user_id`, `class_id`,
+`seat_id`, `actor_role`. Its `__getattr__` **raises** on `join_code`, `teacher_id`,
+`block`, `section`, and `student_id` — that is deliberate, not a gap to work around.
+
+To get the seat object itself, `app/routes/student.py` provides
+`_get_canonical_student_from_context()`, which returns a `Seat`.
+
+### Admin routes
+
+Class context is attached to `g` by the blueprint's before-request hook, and ownership
+is re-verified per request:
+
+```python
+from flask import g
+from app.services.class_configuration_query_service import verify_teacher_owns_class
+
+canonical_context = getattr(g, "canonical_context", None)
+class_id = (getattr(canonical_context, "class_id", None) or "").strip()
+class_row = verify_teacher_owns_class(class_id, canonical_context.user_id)
+if not class_row:
+    abort(403)
+```
+
+Teachers holding no active class get a `BoundaryContext` (`user_id` + `actor_role`
+only); accessing `class_id` or `seat_id` on it raises — resolve class selection first.
+Sysadmins are *forbidden* from holding class context at all.
 
 ---
 
 ## Correct Scoping Patterns
 
-### Pattern 1: Get students for the selected class
-
-Resolve canonical context first, then add class membership scope.
+### Pattern 1: Roster for the active class
 
 ```python
-from app.models import ClassMembership, Student
-from app.services.context_resolver import resolve_canonical_context
+from app.models import Seat
 
+seats = Seat.query.filter_by(class_id=class_id, role="student").all()
+```
 
-def get_students_for_current_class(join_code):
-    if not resolve_canonical_context():
-        return []
-    students = (
-        Student.query
-        .join(
-            ClassMembership,
-            ClassMembership.student_id == Student.id,
-        )
-        .filter(
-            ClassMembership.join_code == join_code,
-            ClassMembership.role == "student",
-            ClassMembership.status == "active",
-        )
-        .all()
+```python
+# WRONG — teacher ownership spans every period they teach
+seats = Seat.query.join(ClassEconomy).filter(
+    ClassEconomy.teacher_user_id == user_id
+).all()
+```
+
+### Pattern 2: Class-scoped ledger reads
+
+```python
+from app.models import Transaction, TransactionStatus
+
+txns = (
+    Transaction.query
+    .filter(
+        Transaction.seat_id == seat_id,
+        Transaction.class_id == class_id,
+        Transaction.status != TransactionStatus.VOID,
     )
-    return students
-```
-
-```python
-# WRONG: teacher ownership is not enough to identify one class
-students = Student.query.filter_by(teacher_id=teacher_id).all()
-```
-
-### Pattern 2: Get class-scoped transactions
-
-```python
-def get_student_transactions(student_id, join_code):
-    return (
-        Transaction.query
-        .filter_by(student_id=student_id, join_code=join_code)
-        .order_by(Transaction.timestamp.desc())
-        .all()
-    )
-```
-
-### Pattern 3: Get class-scoped balances
-
-```python
-def get_student_balance(student, join_code, teacher_id):
-    return {
-        "checking": student.get_checking_balance(
-            join_code=join_code,
-            teacher_id=teacher_id,
-        ),
-        "savings": student.get_savings_balance(
-            join_code=join_code,
-            teacher_id=teacher_id,
-        ),
-    }
-```
-
-```python
-# WRONG: StudentBlock does not store balances
-student_block.checking_balance
-student_block.savings_balance
-```
-
-### Pattern 4: Update class-scoped settings
-
-```python
-def get_payroll_settings(join_code):
-    return PayrollSettings.query.filter_by(join_code=join_code).first()
-```
-
-```python
-# WRONG: teacher-global settings can affect multiple periods
-PayrollSettings.query.filter_by(teacher_id=teacher_id).first()
-```
-
----
-
-## Getting Current Class Context
-
-### Student routes
-
-```python
-from app.routes.student import get_current_class_context
-
-
-context = get_current_class_context()
-if not context:
-    return redirect(url_for("student.select_class"))
-
-join_code = context["join_code"]
-teacher_id = context["teacher_id"]
-```
-
-Use both values when you need a class-scoped balance read:
-
-```python
-checking = student.get_checking_balance(
-    join_code=join_code,
-    teacher_id=teacher_id,
-)
-```
-
-### Admin routes
-
-```python
-join_code = session.get("current_join_code")
-if not join_code:
-    return redirect(url_for("admin.index"))
-```
-
-For admin-accessible students:
-
-```python
-student = get_student_for_admin(student_id)
-if not student:
-    abort(404)
-```
-
-If the route is class-specific, validate the selected `join_code` before performing mutations or rendering class-bound data.
-
----
-
-## Scoped Helper Functions
-
-Legacy helper names in `app/auth.py` are removed; use canonical context and class joins.
-
-### Canonical student query
-
-- Returns students only after canonical class scope is established
-- Must still be combined with `join_code` / `ClassMembership` / route-specific class checks when the route is period-specific
-
-### Canonical student lookup
-
-- Returns a single student only after canonical class scope is established
-- For class-specific operations, still validate the selected class context
-
----
-
-## Common Mistakes
-
-### Mistake 1: Treating ownership as class scope
-
-```python
-# WRONG
-students = Student.query.all()
-```
-
-```python
-# CORRECT
-students = (
-    Student.query
-    .join(ClassMembership, ClassMembership.student_id == Student.id)
-    .filter(ClassMembership.join_code == join_code)
+    .order_by(Transaction.timestamp.desc())
     .all()
 )
 ```
 
-### Mistake 2: Reading balances from `StudentBlock`
+### Pattern 3: Balances
 
 ```python
-# WRONG
-student_block = StudentBlock.query.filter_by(student_id=student.id, join_code=join_code).first()
-balance = student_block.checking_balance
-```
-
-```python
-# CORRECT
-balance = student.get_checking_balance(join_code=join_code, teacher_id=teacher_id)
-```
-
-### Mistake 3: Creating ledger records without `join_code`
-
-```python
-# WRONG
-db.session.add(Transaction(student_id=student.id, amount=50))
-```
-
-```python
-# CORRECT
-db.session.add(
-    Transaction(
-        student_id=student.id,
-        join_code=join_code,
-        amount=50,
-    )
+from app.services.ledger_balance_query_service import (
+    get_available_balance,
+    get_available_balances,
 )
+
+checking = get_available_balance(seat_id, class_id, "checking")
+checking, savings = get_available_balances(seat_id, class_id)
 ```
 
-### Mistake 4: Mixing hall-pass state with student lock state
+`get_available_balance` = posted (from `LedgerBalanceSnapshot.posted_balance_cents`,
+with a summation fallback) + pending delta. All three arguments are mandatory; the
+service raises rather than silently answering a narrower question — omitting
+`account_type` would report zero for a seat that has money.
 
-- `HallPassLog.status` supports `pending`, `approved`, `rejected`, `left`, `returned`
-- `StudentBlock.done_for_day_date` is a separate per-class student lock state
+For rosters use `get_batch_balances_by_class_seat(pairs)` instead of looping.
 
----
+### Pattern 4: Class-scoped settings
 
-## Current Status of Legacy Teacher Scoping
+```python
+settings = PayrollSettings.query.filter_by(class_id=class_id).first()
+```
 
-- The runtime model does **not** include `students.teacher_id`.
-- Teacher ownership lives in `student_teachers`.
-- Class membership lives in `class_memberships`.
-- Some comments or legacy utilities still refer to older teacher-global assumptions; do not copy that pattern into new code.
+### Pattern 5: New records
 
----
-
-## Session Checklist
-
-- [ ] Resolve or validate the active `join_code`
-- [ ] Use ownership helpers for teacher access
-- [ ] Add class membership or route-specific class checks for period-specific reads/writes
-- [ ] Include `join_code` on new attendance, ledger, and hall-pass records
-- [ ] Use `Student.get_checking_balance()` / `get_savings_balance()` for balances
-- [ ] Do not use `teacher_id` alone for student scoping
+Every new row in a class-scoped table carries both `seat_id` and `class_id`, and is
+written through a FEAT — never `db.session.add` in a route.
 
 ---
 
 ## Tables That Must Be Class-Scoped
 
-- `transactions`
-- `tap_events`
-- `hall_pass_logs`
-- `student_blocks`
-- `balance_cache`
-- `payroll_settings`
-- `rent_settings`
-- `rent_payments`
-- `rent_waivers`
-- `banking_settings`
-- `feature_settings`
-- `student_items`
-- `student_insurance`
-- `insurance_claims`
+All 31 tables carrying a `class_id` column, notably:
+
+`seats`, `identity_profiles`, `ledger_transaction`, `ledger_balance_snapshot`,
+`attendance_sessions`, `hall_pass_logs`, `hall_pass_settings`, `payroll_settings`,
+`payroll_cycle_completion`, `rent_settings`, `bill_cycles`, `insurance_policies`,
+`insurance_claims`, `insurance_claim_productivity_dates`, `policy_versions`,
+`policy_transitions`, `store_products`, `entitlement_events`, `pending_actions`,
+`assessment_events`, `feature_settings`, `class_features`, `economic_engine`,
+`announcements`, `student_recovery_codes`, `actor_request_trace`.
+
+If you add a table holding seat-owned or class-owned state, it gets `class_id`.
 
 ---
 
-**Last Updated:** 2026-03-08
+## Common Mistakes
+
+### `Seat.user_id` is a `User.id`
+
+```python
+# WRONG — there is no Student model; this compares unrelated id spaces
+Seat.query.filter_by(user_id=student.id)
+
+# CORRECT
+Seat.query.filter_by(user_id=user.id, class_id=class_id).one_or_none()
+```
+
+### Scoping by teacher
+
+`teacher_user_id` alone returns data across every period that teacher runs. That is the
+exact shape of the original P0 leak. Always add `class_id`.
+
+### Reaching for `join_code`
+
+`join_code` belongs in three places only: the join/claim ingress flow, the
+`ClassEconomy` boundary lookup that turns it into a `class_id`, and user-facing
+display. Anywhere else it is a scoping bug.
+
+### Trusting a client-supplied `class_id`
+
+A `class_id` arriving in a form or query string is an assertion, not authority. Admin
+writes must reconcile it against session context (`_admin_write_has_join_code_conflict`
+in `app/routes/admin.py` exists for exactly this) and pass `verify_teacher_owns_class`.
+
+---
+
+## Session Checklist
+
+- [ ] Class context resolved via `resolve_canonical_context()` / `g.canonical_context`
+- [ ] Every seat-owned query filtered by `class_id`
+- [ ] Admin writes re-verified with `verify_teacher_owns_class`
+- [ ] New rows carry `seat_id` **and** `class_id`
+- [ ] Balances read through `ledger_balance_query_service`
+- [ ] No `join_code` outside ingress / boundary lookup / display
+- [ ] No `teacher_user_id`-only scoping
+
+---
+
+**Last Updated:** 2026-09-09
 **Critical Incident:** P0 same-teacher multi-period data leak

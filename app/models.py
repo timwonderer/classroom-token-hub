@@ -665,6 +665,127 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
     # 4. Identity synchronization (pure assignment only)
     # seat_id is the runtime anchor; student_id is only used for seat lookup.
 
+
+# The monetary and identity facts a posted row asserts. INV-LED-002 forbids
+# later lifecycle patching of these, and INV-LED-003 requires corrections to
+# arrive as new linked rows rather than edits — so a reversal that rewrote
+# `amount` in place would erase the very history the ledger exists to keep.
+_LEDGER_IMMUTABLE_FIELDS = frozenset({
+    'seat_id', 'target_seat_id', 'actor_seat_id', 'user_id', 'class_id',
+    'join_code', 'mechanism', 'amount', 'amount_cents', 'timestamp',
+    'account_type', 'effective_at', 'date_funds_available', 'description',
+    'correlation_id', 'original_transaction_id',
+    'policy_id', 'type', 'compensation_subtype', 'command_reservation_id',
+})
+
+# Fields the lawful post-insert paths populate exactly once: settlement assigns
+# `posting_sequence`/`posted_at` (INV-LED-007), correction links
+# `reversal_transaction_id` (INV-LED-013), `create_reserved_effects` stamps
+# `idempotency_key` on its effects once the reservation is held, and the audit
+# emitter stamps lineage after the row has an id. NULL -> value is the
+# assignment; value -> value' is a rewrite of a settled fact and is rejected on
+# the same grounds as the set above.
+_LEDGER_WRITE_ONCE_FIELDS = frozenset({
+    'posting_sequence', 'posted_at', 'reversal_transaction_id',
+    'idempotency_key', 'lineage_event_id', 'lineage_token', 'lineage_version',
+})
+
+
+_LEDGER_GUARDED_FIELDS = tuple(sorted(_LEDGER_IMMUTABLE_FIELDS | _LEDGER_WRITE_ONCE_FIELDS))
+
+# `status` cannot sit in either set above: settlement genuinely does rewrite it.
+# But it is a one-way street, not a free column. `ledger_settlement_service` is
+# the only post-insert writer and it only ever moves PENDING to POSTED, and
+# INV-LED-003 requires a void to arrive as a new linked row rather than as an
+# edit to the original — so POSTED -> PENDING, anything -> VOID, and a revived
+# VOID are all rewrites of a settled fact wearing a lifecycle costume.
+_LEDGER_LAWFUL_STATUS_TRANSITIONS = frozenset({
+    (TransactionStatus.PENDING.name, TransactionStatus.POSTED.name),
+})
+
+
+def _ledger_comparable(value):
+    """Flatten a value to something comparable across ORM and driver types."""
+    if isinstance(value, enum.Enum):
+        return value.value
+    return value
+
+
+def _ledger_status_name(value):
+    """Normalize a status to the label PostgreSQL actually stores.
+
+    `status` is a native enum declared as `db.Enum(TransactionStatus)` with no
+    `values_callable`, so SQLAlchemy persists the member **name** — the labels in
+    `transactionstatus` are `PENDING` / `POSTED` / `VOID`, not the lowercase
+    `.value` strings. `_ledger_comparable` returns `.value`, which is right for
+    `mechanism` (whose labels *are* its values) and wrong here: comparing
+    `'posted'` to a stored `'POSTED'` would make every update look like a status
+    change and reject the settlement path outright.
+    """
+    if isinstance(value, TransactionStatus):
+        return value.name
+    if value is None:
+        return None
+    return str(value).upper()
+
+
+@sa.event.listens_for(Transaction, "before_update")
+def _guard_ledger_immutability(_mapper, connection, target):
+    """Reject in-place edits to settled ledger facts (INV-LED-002).
+
+    The comparison is against the stored row rather than SQLAlchemy attribute
+    history, because history cannot distinguish the two UPDATEs that matter here.
+    `Transaction.target_seat` and `actor_seat` are ``post_update`` relationships,
+    so every INSERT is immediately followed by an UPDATE whose history still
+    presents the freshly-set columns as changes — and after a commit the instance
+    is expired, so a genuine rewrite presents no prior value at all. The row
+    itself is unambiguous in both cases.
+
+    `status` is guarded by transition rather than by equality — settlement moves
+    PENDING to POSTED and nothing else may move it at all. `feat_code` is the one
+    genuinely unguarded column: `_enforce_transaction_integrity` restamps it with
+    the FEAT performing the lawful update. Everything else on a persisted row is
+    history.
+    """
+    if target.id is None:
+        return
+
+    stored = connection.execute(
+        sa.text(
+            f"SELECT status, {', '.join(_LEDGER_GUARDED_FIELDS)} "
+            "FROM ledger_transaction WHERE id = :id"
+        ),
+        {"id": target.id},
+    ).mappings().first()
+    if stored is None:
+        return
+
+    previous_status = _ledger_status_name(stored['status'])
+    next_status = _ledger_status_name(getattr(target, 'status', None))
+    if next_status != previous_status and (
+        (previous_status, next_status) not in _LEDGER_LAWFUL_STATUS_TRANSITIONS
+    ):
+        raise ValueError(
+            f"ledger_transaction status may not move {previous_status} -> {next_status}. "
+            "Settlement advances PENDING to POSTED; every other change of standing "
+            "is recorded as a new linked transaction."
+        )
+
+    violations = []
+    for field in _LEDGER_GUARDED_FIELDS:
+        previous = stored[field]
+        if field in _LEDGER_WRITE_ONCE_FIELDS and previous is None:
+            continue
+        if _ledger_comparable(getattr(target, field, None)) != _ledger_comparable(previous):
+            violations.append(field)
+
+    if violations:
+        raise ValueError(
+            f"ledger_transaction fields are immutable: {sorted(violations)}. "
+            "Record a linked correcting transaction instead of editing this row."
+        )
+
+
 def _resolve_seat_id(connection, student_id, *, class_id=None):
     """Lookup seat ID for a student in a class universe."""
     if not student_id or not class_id:
@@ -2201,7 +2322,6 @@ class PayrollSettings(db.Model):
 
     # Optional: different rates for different scenarios
     overtime_multiplier = db.Column(db.Float, default=1.0)
-    bonus_rate = db.Column(db.Float, default=0.0)
 
     # Enhanced settings for simple/advanced modes
     settings_mode = db.Column(db.String(20), nullable=False, default='simple')  # 'simple' or 'advanced'
@@ -2237,7 +2357,7 @@ class PayrollSettings(db.Model):
     # the definition a teacher submits.
     _FROZEN_POLICY_FIELDS = (
         'block', 'pay_rate', 'payroll_frequency_days', 'overtime_multiplier',
-        'bonus_rate', 'settings_mode', 'daily_limit_hours', 'time_unit',
+        'settings_mode', 'daily_limit_hours', 'time_unit',
         'overtime_enabled', 'overtime_threshold', 'overtime_threshold_unit',
         'overtime_threshold_period', 'max_time_per_day', 'max_time_per_day_unit',
         'pay_schedule_type', 'pay_schedule_custom_value', 'pay_schedule_custom_unit',

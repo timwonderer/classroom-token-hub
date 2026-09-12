@@ -18,6 +18,7 @@ times through the source transaction timestamp per SPEC-TIME-001 (no wall-clock
 business decisions in the assertions).
 """
 
+from contextlib import contextmanager
 from datetime import timedelta
 from decimal import Decimal
 from uuid import uuid4
@@ -31,6 +32,7 @@ from app.feats.insurance_claim_feat import (
     submit_insurance_claim,
     resolve_insurance_claim,
 )
+from app.utils import canonical_temporal_resolver as canonical_temporal_resolver_module
 from app.utils.canonical_temporal_resolver import (
     canonical_temporal_resolver,
     CLASS_LEVEL_EVALUATION,
@@ -92,22 +94,63 @@ def _add_granted(classroom, student, entitlement_id, *, granted_at=None, **froze
     return ev
 
 
+@contextmanager
+def _clock_at(at):
+    """Run the block as if the wall clock read ``at``.
+
+    `Transaction.timestamp` defaults to `utc_now()`, and the Ledger posting
+    boundary accepts no caller-supplied time on purpose — when a monetary effect
+    happened is a fact the Ledger stamps, not a parameter a caller chooses. So a
+    test that needs a loss dated eight days ago has exactly two levers: rewrite
+    the row afterwards, or move the clock the insert reads.
+
+    This used to rewrite the row, with a raw `UPDATE` chosen specifically to slip
+    past the `before_update` mapper listener. That worked only because the guard
+    was ORM-deep; `ledger_transaction_no_rewrite` now enforces INV-LED-002 in the
+    database, where the write actually lands, and it rejects the rewrite from any
+    access path. Which is the correct outcome: the fixture was not exercising a
+    lawful ledger operation, it was demonstrating that the guard could be walked
+    around.
+
+    Moving the clock keeps the fiction where it belongs — in the test's notion of
+    "now" — and leaves the row immutable from the moment it is inserted. The
+    patch targets the `datetime` name inside the temporal resolver rather than
+    `utc_now` itself, because `db.Column(default=utc_now)` captured the function
+    object at class-definition time and never re-reads the module attribute.
+    """
+    real_datetime = canonical_temporal_resolver_module.datetime
+
+    class _FrozenDatetime(real_datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return at if tz is not None else at.replace(tzinfo=None)
+
+    canonical_temporal_resolver_module.datetime = _FrozenDatetime
+    try:
+        yield
+    finally:
+        canonical_temporal_resolver_module.datetime = real_datetime
+
+
 def _seed_loss(classroom, student, *, idem, amount, at=None):
-    txn, _created = create_ledger_idempotent_transaction(
-        idempotency_key=f"econ-source:{idem}:{uuid4().hex}",
-        seat_id=student.seat.id,
-        class_id=classroom.class_id,
-        user_id=student.user.id,
-        amount=Decimal(amount),
-        account_type="checking",
-        type="purchase",
-        description="Insurance claim source loss",
-        actor_seat_id=student.seat.id,
-    )
-    if at is not None:
-        txn.timestamp = at
-        db.session.flush()
-    return txn
+    def _create():
+        txn, _created = create_ledger_idempotent_transaction(
+            idempotency_key=f"econ-source:{idem}:{uuid4().hex}",
+            seat_id=student.seat.id,
+            class_id=classroom.class_id,
+            user_id=student.user.id,
+            amount=Decimal(amount),
+            account_type="checking",
+            type="purchase",
+            description="Insurance claim source loss",
+            actor_seat_id=student.seat.id,
+        )
+        return txn
+
+    if at is None:
+        return _create()
+    with _clock_at(at):
+        return _create()
 
 
 def _student_ctx(classroom, student):

@@ -2,6 +2,29 @@
 
 {% block page_icon %}help_outline{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Look up how something works, report a problem, and see what you have already reported.") }}
+
+{% call help.topic('help-first', 'menu_book', 'Try the guides first') %}
+<p class="mb-0">Most questions here are about how the class economy works rather than something being broken — how interest is worked out, why rent was charged, what a waiting period means. The guides answer those immediately, without waiting on your teacher.</p>
+{% endcall %}
+
+{% call help.topic('help-which', 'call_split', 'Which kind of problem is it?') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>A record on your account is wrong</strong> — a payment, an attendance event, a charge. Report it as an issue so your teacher can check it against the class record.</li>
+    <li class="mb-0"><strong>The app itself is misbehaving</strong> — a page will not load, a button does nothing. Report that here. Your teacher can pass it on if it needs the developers.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('help-write', 'edit_note', 'Getting a useful answer') %}
+<p class="mb-0">Say what you did, what you expected, and what happened instead. "It's broken" gives nobody anything to check. If it happened on a particular page, name the page.</p>
+{% endcall %}
+
+{% call help.topic('help-track', 'format_list_bulleted', 'Following what you sent') %}
+<p class="mb-0">Your reports stay listed with their status, so you do not need to send the same thing twice. Duplicates make the queue slower for everyone, including you.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
 
@@ -9,17 +32,17 @@
     <ul class="nav nav-tabs mb-4" id="helpTabs" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="kb-tab" data-bs-toggle="tab" data-bs-target="#kb" type="button" role="tab" aria-controls="kb" aria-selected="true">
-                <span class="material-symbols-outlined me-2">menu_book</span>Knowledge Base
+                <span class="material-symbols-outlined me-2" aria-hidden="true">menu_book</span>Knowledge Base
             </button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="report-tab" data-bs-toggle="tab" data-bs-target="#report" type="button" role="tab" aria-controls="report" aria-selected="false">
-                <span class="material-symbols-outlined me-2">flag</span>Report an Issue
+                <span class="material-symbols-outlined me-2" aria-hidden="true">flag</span>Report an Issue
             </button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="myissues-tab" data-bs-toggle="tab" data-bs-target="#myissues" type="button" role="tab" aria-controls="myissues" aria-selected="false">
-                <span class="material-symbols-outlined me-2">format_list_bulleted</span>My Issues
+                <span class="material-symbols-outlined me-2" aria-hidden="true">format_list_bulleted</span>My Issues
             </button>
         </li>
     </ul>
@@ -32,7 +55,7 @@
                 <div class="col-lg-6">
                     <div class="card shadow-sm h-100">
                         <div class="card-header bg-success text-white">
-                            <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2">rocket_launch</span>How To Guides</h2>
+                            <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">rocket_launch</span>How To Guides</h2>
                         </div>
                         <div class="card-body">
                             <div class="accordion" id="howToAccordion">
@@ -58,8 +81,8 @@
                 <!-- Troubleshooting -->
                 <div class="col-lg-6">
                     <div class="card shadow-sm h-100">
-                        <div class="card-header text-white" style="background-color: #6f4e2f;">
-                            <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2">help</span>Troubleshooting</h2>
+                        <div class="card-header bg-primary text-white">
+                            <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">help</span>Troubleshooting</h2>
                         </div>
                         <div class="card-body">
                             <div class="accordion" id="troubleshootAccordion">
@@ -88,7 +111,7 @@
         <div class="tab-pane fade" id="report" role="tabpanel" aria-labelledby="report-tab">
             <div class="card shadow-sm">
                 <div class="card-header bg-primary text-white">
-                    <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2">flag</span>Report an Issue</h2>
+                    <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">flag</span>Report an Issue</h2>
                 </div>
                 <div class="card-body">
                   
@@ -97,13 +120,13 @@
                         <div class="col-md-6">
                             <div class="card h-100 hover-shadow">
                                 <div class="card-body text-center">
-                                    <span class="material-symbols-outlined display-4 text-warning mb-3">warning</span>
+                                    <span class="material-symbols-outlined display-4 text-warning mb-3" aria-hidden="true">warning</span>
                                     <h3 class="card-title h5">General Issue</h3>
                                     <p class="card-text text-muted">
                                         When the app is not working correctly such as giving error messages or opening a blank page.
                                     </p>
                                     <a href="{{ url_for('student.submit_general_issue') }}" class="btn btn-primary">
-                                        <span class="material-symbols-outlined me-2">flag</span>Report General Issue
+                                        <span class="material-symbols-outlined me-2" aria-hidden="true">flag</span>Report General Issue
                                     </a>
                                 </div>
                             </div>
@@ -112,11 +135,11 @@
                         <div class="col-md-6">
                             <div class="card h-100 hover-shadow">
                                 <div class="card-body text-center">
-                                    <span class="material-symbols-outlined display-4 text-danger mb-3">receipt_long</span>
+                                    <span class="material-symbols-outlined display-4 text-danger mb-3" aria-hidden="true">receipt_long</span>
                                     <h3 class="card-title h5">Something wrong with your transaction, payroll, or attendance record?</h3>
                                     <p class="card-text text-muted">
                                         Reports about transactions and attendance records can be made directly from where the log is located.</p> 
-                                        <p class="card-text text-muted">Just click on the <span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">help</span> icon next to the entry you wish to report.
+                                        <p class="card-text text-muted">Just click on the <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">help</span> icon next to the entry you wish to report.
                                     </p>
 
                                     
@@ -130,15 +153,15 @@
                         <div class="accordion-item">
                             <h3 class="accordion-header" id="reportIssueHelpHeading">
                                 <button class="accordion-button collapsed bg-success text-white" type="button" data-bs-toggle="collapse" data-bs-target="#reportIssueHelpBody" aria-expanded="false" aria-controls="reportIssueHelpBody">
-                                    <span class="material-symbols-outlined me-2" style="font-size: 24px; vertical-align: middle;">live_help</span>
+                                    <span class="material-symbols-outlined icon-lg icon-middle me-2" aria-hidden="true">live_help</span>
                                     How to report an issue
                                 </button>
                             </h3>
                             <div id="reportIssueHelpBody" class="accordion-collapse collapse" aria-labelledby="reportIssueHelpHeading" data-bs-parent="#reportIssueHelpAccordion">
-                                <div class="accordion-body" style="padding: 1.5rem;">
+                                <div class="accordion-body p-4">
                                     <p>When something is not working correctly, you can report the problem to your teacher. There are two kinds of problems you can report:</p>
                                     <ul>
-                                        <li><strong>Transaction / Record Issue:</strong> If you notice there's a mistake in a specific log entry, you can click on the <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">help</span> icon next to that entry to report it directly. This helps your teacher quickly find and fix the issue.</li>
+                                        <li><strong>Transaction / Record Issue:</strong> If you notice there's a mistake in a specific log entry, you can click on the <span class="material-symbols-outlined icon-xs icon-middle" aria-hidden="true">help</span> icon next to that entry to report it directly. This helps your teacher quickly find and fix the issue.</li>
                                         <li><strong>General Issue:</strong> For other problems like features not working or clock-in issues, you can use the "Report General Issue" button below to let your teacher know.</li>
                                     </ul>
                                     <p>After reporting your issue, your teacher will review it and decide what to do next. You can track the status of your report in the <strong>"My Issues"</strong> tab. If the issue is something your teacher cannot fix, they will <strong>escalate</strong> the issue to the app developer. If what you have found is a real bug, you can receive a reward.</p>
@@ -152,7 +175,7 @@
         <div class="tab-pane fade" id="myissues" role="tabpanel" aria-labelledby="myissues-tab">
             <div class="card shadow-sm">
                 <div class="card-header bg-secondary text-white">
-                    <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2">format_list_bulleted</span>My Submitted Issues</h2>
+                    <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">format_list_bulleted</span>My Submitted Issues</h2>
                 </div>
                 <div class="card-body">
                     {% if my_issues %}
@@ -197,7 +220,7 @@
                         </div>
                     {% else %}
                         <div class="text-center py-5">
-                            <span class="material-symbols-outlined fs-1 text-muted">inbox</span>
+                            <span class="material-symbols-outlined fs-1 text-muted" aria-hidden="true">inbox</span>
                             <p class="text-muted mt-2">You haven't submitted any issues yet.</p>
                             <p class="text-muted">If you have a problem, use the "Report an Issue" tab above.</p>
                         </div>
@@ -210,11 +233,11 @@
 
 <style>
 .hover-shadow {
-    transition: box-shadow 0.3s ease-in-out;
+    transition: box-shadow var(--duration-slow) ease-in-out;
 }
 
 .hover-shadow:hover {
-    box-shadow: 0 0.5rem 1rem color-mix(in srgb, black 15%, transparent) !important;
+    box-shadow: var(--shadow-lg) !important;
 }
 </style>
 {% endblock %}

@@ -1,7 +1,9 @@
 # DOM-IDEN-002: Student Account Recovery
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-002     | 2.1     | 2026-06-05     | 2.0 | Normative |
+| DOM-IDEN-002     | 2.1     | 2026-06-05     | 2.0 | Archived - non-normative |
+
+> **Archived — history, not authority.** This document describes a superseded version of the system and is retained under `docs/archive/` as a record of what was once true. It governs nothing. Current authority lives in `docs/INVARIANT/`, `docs/DOMAIN/`, and `docs/STANDARD_OPERATING_PROCEDURES/`, in that order (`.claude/rules/documentation.md`).
 
 ## I. Purpose
 

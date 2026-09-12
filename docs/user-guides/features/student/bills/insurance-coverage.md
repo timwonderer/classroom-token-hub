@@ -23,11 +23,7 @@ Two things about it are worth knowing before you spend anything. Buying and canc
 
 ### Finding the page
 
-Insurance lives under **Bills** in the sidebar. Where **Bills** takes you depends on what your teacher has switched on:
-
-- **Rent and insurance both on** — **Bills** opens Rent, with **Rent** and **Insurance** pill tabs at the top. Click **Insurance**.
-- **Insurance only** — **Bills** opens the insurance page directly.
-- **Neither** — there is no **Bills** item in your sidebar at all.
+Insurance has its own **Insurance** item in the sidebar. It is independent of Rent: turning Rent off does not hide Insurance, and turning Insurance off does not hide Rent. If your teacher has disabled Insurance, the item is not shown.
 
 ### Reading the page
 

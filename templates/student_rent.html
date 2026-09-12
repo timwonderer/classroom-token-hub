@@ -3,19 +3,47 @@
 {% set current_page = "rent" %}
 {% block title %}Rent{% endblock %}
 {% block page_icon %}home{% endblock %}
+
+{% block contextual_help_body %}
+{{ help.panel_lead("What you owe for this rent period, when it is due, and what happens if it goes unpaid.") }}
+
+{% call help.topic('rent-bill', 'receipt_long', 'One bill, not several') %}
+<p>Rent for a period and any late fees it produced are a single bill. The card shows the summed total and itemizes it underneath, so you can see which part is rent and which part is a fee.</p>
+<p class="mb-0">Paying settles the whole bill in one payment — rent first, then the fees. You do not pay them separately.</p>
+{% endcall %}
+
+{% call help.topic('rent-due', 'event', 'Due date, then grace period') %}
+<p>Rent is due on the date shown. After that you still have a grace period, listed at the bottom of the page, to pay without a penalty.</p>
+<p class="mb-0">The bill is only late once the grace period ends. That is when a late fee is added — not on the due date itself.</p>
+{% endcall %}
+
+{% call help.topic('rent-late', 'gavel', 'A late fee does not go away') %}
+<p class="mb-0">A late fee is its own charge, recorded against the bill it came from. It stays on your record after it is paid, which is why the Late Fee History list shows settled fees as well as outstanding ones. Paying the bill clears the balance; it does not erase the history.</p>
+{% endcall %}
+
+{% call help.topic('rent-funds', 'account_balance', 'Rent is paid from checking') %}
+<p>The Pay button only appears when your checking balance covers the full bill. Savings is not drawn on automatically — if the money you need is in savings, move it over on the Transfer page first.</p>
+<p class="mb-0">If you are short, the page tells you the exact amount you still need.</p>
+{% endcall %}
+
+{% call help.topic('rent-class', 'swap_horiz', 'Bills are per class') %}
+<p class="mb-0">Each class runs its own economy, so rent, due dates, and grace periods are set separately in each one. This page shows the class you are currently viewing. Use <strong>Switch Classes</strong> in the left menu to see another one.</p>
+{% endcall %}
+{% endblock %}
+
 {% block extra_styles %}
 <style>
     .bills-tabs .nav-link {
-        color: #1f5f8b;
-        font-weight: 600;
+        color: var(--info);
+        font-weight: var(--weight-semibold);
     }
 
     .bills-tabs .nav-link.active {
-        color: #ffffff;
+        color: var(--text-inverse);
     }
 
     .student-rent-class-hint.alert-info {
-        color: #1f4f73;
+        color: var(--alert-info-text);
     }
 </style>
 {% endblock %}
@@ -27,12 +55,12 @@
     <ul class="nav nav-pills bills-tabs mb-0">
         <li class="nav-item">
             <a class="nav-link active d-flex align-items-center gap-1" href="{{ url_for('student.rent') }}">
-                <span class="material-symbols-outlined">receipt_long</span> Rent
+                <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span> Rent
             </a>
         </li>
         <li class="nav-item">
             <a class="nav-link d-flex align-items-center gap-1" href="{{ url_for('student.student_insurance') }}">
-                <span class="material-symbols-outlined">shield</span> Insurance
+                <span class="material-symbols-outlined" aria-hidden="true">shield</span> Insurance
             </a>
         </li>
     </ul>
@@ -45,7 +73,7 @@
 {% endif %}
 
 <div class="alert alert-info mb-4 student-rent-class-hint">
-    <span class="material-symbols-outlined" style="vertical-align: middle;">arrow_circle_left</span> To see your bills
+    <span class="material-symbols-outlined icon-middle" aria-hidden="true">arrow_circle_left</span> To see your bills
     from another class, use the <strong>Switch Classes</strong> menu on the left.
 </div>
 
@@ -97,7 +125,7 @@
 <div class="card mb-4">
     <div class="card-header">
         <h2 class="h6 mb-0 d-flex align-items-center gap-2">
-            <span class="material-symbols-outlined">account_balance</span> Your Balance
+            <span class="material-symbols-outlined" aria-hidden="true">account_balance</span> Your Balance
         </h2>
     </div>
     <div class="card-body">
@@ -123,7 +151,7 @@
         <h2 class="h6 mb-0 d-flex align-items-center justify-content-between">
             <span>Class: {{ current_block|upper }}</span>
             <span>
-                <span class="material-symbols-outlined" style="vertical-align: middle;">{{ status_icon }}</span> {{
+                <span class="material-symbols-outlined icon-middle" aria-hidden="true">{{ status_icon }}</span> {{
                 status_text }}
             </span>
         </h2>
@@ -260,7 +288,7 @@
     <div class="card bg-light mt-4 border-warning">
         <div class="card-header bg-warning ">
             <h2 class="h6 mb-0 d-flex align-items-center gap-2">
-                <span class="material-symbols-outlined">gavel</span> Late Fee History
+                <span class="material-symbols-outlined" aria-hidden="true">gavel</span> Late Fee History
                 {% if view.late_fees_total_due and view.late_fees_total_due > 0 %}
                     <span class="badge bg-danger ms-auto">${{ "%.2f"|format(view.late_fees_total_due) }} due</span>
                 {% endif %}
@@ -296,7 +324,7 @@
     <div class="card bg-light mt-4 border-primary">
         <div class="card-header bg-primary text-white ">
             <h2 class="h6 mb-0 d-flex align-items-center gap-2 text-white">
-                <span class="material-symbols-outlined">info</span> Rent Information
+                <span class="material-symbols-outlined" aria-hidden="true">info</span> Rent Information
             </h2>
         </div>
         <div class="card-body">
