@@ -37,6 +37,7 @@ def _invalid_balance_scope(class_id: str, seat_id: int, account_type: str) -> bo
 
 
 def _require_balance_scope(seat_id: int, class_id: str, account_type: str) -> None:
+    """Reject balance reads that do not identify a seat, class, and account."""
     if not class_id or not seat_id:
         raise ValueError("FATAL: Balance lookup requires class_id and seat_id.")
     if not account_type:
@@ -50,6 +51,7 @@ def _require_balance_scope(seat_id: int, class_id: str, account_type: str) -> No
 
 
 def _get_balance_cache(seat_id: int, class_id: str, account_type: str):
+    """Return the canonical posted-balance snapshot for one scoped account."""
     _require_balance_scope(seat_id, class_id, account_type)
     return LedgerBalanceSnapshot.query.filter_by(seat_id=seat_id, class_id=class_id, account_type=account_type).first()
 
@@ -122,12 +124,14 @@ def _available_balance_expression(seat_id: int, class_id: str, account_type: str
 
 
 def get_available_balance(seat_id: int, class_id: str, account_type: str) -> Decimal:
+    """Return posted plus pending balance from one database snapshot."""
     _require_balance_scope(seat_id, class_id, account_type)
     total = db.session.query(_available_balance_expression(seat_id, class_id, account_type)).scalar()
     return _quantize_currency(total or Decimal("0.00"))
 
 
 def get_available_balances(seat_id: int, class_id: str) -> tuple[Decimal, Decimal]:
+    """Return checking and savings available balances in one statement."""
     _require_balance_scope(seat_id, class_id, "checking")
     checking, savings = db.session.query(
         _available_balance_expression(seat_id, class_id, "checking"),

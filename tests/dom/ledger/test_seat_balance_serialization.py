@@ -52,6 +52,7 @@ pytestmark = [pytest.mark.regression]
 
 
 def _fund(student, class_id, amount, key):
+    """Credit and commit funds for a seat serialization scenario."""
     with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"inv-led-015:{key}:{student.seat.id}"):
         create_ledger_idempotent_transaction(
             idempotency_key=f"inv-led-015-fund:{key}:{student.seat.id}",
@@ -67,12 +68,14 @@ def _fund(student, class_id, amount, key):
 
 
 def _settle(seat_id, class_id):
+    """Settle a seat's pending ledger entries under a unique command key."""
     with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"inv-led-015:settle:{uuid4().hex}"):
         settle_ledger_balances(seat_id, class_id)
 
 
 @contextmanager
 def _recorded_statements():
+    """Capture normalized SQL statements emitted within the context."""
     statements: list[str] = []
 
     def record(_conn, _cursor, statement, *_args):
@@ -86,14 +89,17 @@ def _recorded_statements():
 
 
 def _first_index(statements, predicate):
+    """Return the first statement index satisfying a predicate, if any."""
     return next((i for i, s in enumerate(statements) if predicate(s)), None)
 
 
 def _is_seat_lock(statement):
+    """Return whether SQL takes an exclusive lock on a seat row."""
     return "FROM seats" in statement and "FOR UPDATE" in statement
 
 
 def _is_balance_read(statement):
+    """Return whether SQL reads a canonical ledger balance snapshot."""
     return "ledger_balance_snapshot" in statement and "posted_balance_cents" in statement
 
 
@@ -241,10 +247,12 @@ def test_INV_LED_015__available_balance_is_read_in_one_statement(app):
 
 
 def _is_insurance_replay_lookup(statement):
+    """Return whether SQL looks up an insurance grant by correlation ID."""
     return "FROM entitlement_events" in statement and "entitlement_events.correlation_id" in statement
 
 
 def _is_rent_replay_lookup(statement):
+    """Return whether SQL looks up a rent debit by idempotency key."""
     return "FROM ledger_transaction" in statement and "ledger_transaction.idempotency_key" in statement
 
 
