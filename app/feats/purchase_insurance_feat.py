@@ -125,6 +125,23 @@ def execute_purchase_insurance(
 
     # ----- Phase 1: read-only validation ----------------------------------- #
 
+    # The seat row serializes this seat's money (INV-LED-015). It is taken first,
+    # before even the replay lookup: a same-key retry that waited here must see
+    # the grant its predecessor committed, or it would fall through to the
+    # coverage check and report POLICY_ALREADY_HELD for its own purchase. Held
+    # through the premium debit, it also keeps concurrent purchases, debits and
+    # settlement for this seat from passing the same balance check.
+    seat = (
+        Seat.query.filter_by(id=seat_id, class_id=class_id)
+        .with_for_update()
+        .first()
+    )
+    if seat is None:
+        return InsurancePurchaseResult(
+            success=False, correlation_id=correlation_id,
+            error_code="NO_SEAT", error_message="Seat not found in class scope",
+        )
+
     # (0) Idempotent replay: this exact command already produced a grant.
     prior_grant = (
         EntitlementEvent.query
@@ -142,21 +159,6 @@ def execute_purchase_insurance(
             success=True, already_enrolled=True,
             correlation_id=correlation_id,
             entitlement_id=prior_grant.entitlement_id,
-        )
-
-    # The seat row serializes this seat's money (INV-LED-015). Taking it before
-    # the affordability read holds it through the premium debit, so concurrent
-    # purchases, debits, or a settlement for this seat cannot all pass the same
-    # balance check.
-    seat = (
-        Seat.query.filter_by(id=seat_id, class_id=class_id)
-        .with_for_update()
-        .first()
-    )
-    if seat is None:
-        return InsurancePurchaseResult(
-            success=False, correlation_id=correlation_id,
-            error_code="NO_SEAT", error_message="Seat not found in class scope",
         )
 
     definition = insurance_defs.get_insurance_definition(policy_uuid, class_id=class_id)

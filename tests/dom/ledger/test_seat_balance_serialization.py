@@ -33,13 +33,15 @@ from app.feats.base import FEATContext
 from app.feats.purchase_insurance_feat import execute_purchase_insurance
 from app.feats.reconcile_rent_feat import execute_reconcile_rent
 from app.feats.rent_payment_feat import execute_rent_payment
-from app.models import Transaction, TransactionStatus
+from app.models import ObligationAssessment, Transaction, TransactionStatus
+from app.services import obligations_service
 from app.services.ledger_balance_query_service import (
     get_available_balance,
     get_available_balances,
     get_pending_balance_delta,
     get_posted_balance,
 )
+from tests.helpers.class_domain import customize_rent_settings
 from tests.helpers.classroom_initializer import initialize
 from tests.helpers.ledger import create_ledger_idempotent_transaction, settle_ledger_balances
 from tests.test_insurance_purchase_feat import _setup as _setup_insurance_class
@@ -224,3 +226,119 @@ def test_INV_LED_015__available_balance_is_read_in_one_statement(app):
         _settle(seat_id, class_id)
         _fund(student, class_id, "2.50", "snapshot-plus-pending")
         assert assert_single_statement_and_consistent() == Decimal("42.50")
+
+
+# --------------------------------------------------------------------------- #
+# Replay resolution under the seat lock                                        #
+# --------------------------------------------------------------------------- #
+#
+# A same-key retry that waited on the seat lock must resolve its replay AFTER the
+# lock, or it acts on a read taken before its predecessor committed. Two real
+# transactions racing to the lock are not deterministic in a test, so these
+# assert the two properties that make the race harmless: the replay lookup runs
+# after the lock is taken, and a replay resolved there reports the original
+# command rather than recomputing it.
+
+
+def _is_insurance_replay_lookup(statement):
+    return "FROM entitlement_events" in statement and "entitlement_events.correlation_id" in statement
+
+
+def _is_rent_replay_lookup(statement):
+    return "FROM ledger_transaction" in statement and "ledger_transaction.idempotency_key" in statement
+
+
+def test_INV_LED_015__insurance_purchase_resolves_its_replay_under_the_seat_lock(app):
+    """A retry must not see a pre-lock read and report POLICY_ALREADY_HELD for itself."""
+    classroom, policy_uuid = _setup_insurance_class(app)
+    with app.app_context():
+        with _recorded_statements() as statements:
+            result = execute_purchase_insurance(
+                canonical_context=_student_ctx(classroom),
+                policy_uuid=policy_uuid,
+                idempotency_key="inv-led-015:insurance-replay",
+            )
+        assert result.success, result.error_message
+        db.session.commit()
+
+        seat_lock = _first_index(statements, _is_seat_lock)
+        replay_lookup = _first_index(statements, _is_insurance_replay_lookup)
+        assert seat_lock is not None, "insurance purchase did not lock the seat row"
+        assert replay_lookup is not None, "insurance purchase did not look up its replay"
+        assert seat_lock < replay_lookup
+
+        replay = execute_purchase_insurance(
+            canonical_context=_student_ctx(classroom),
+            policy_uuid=policy_uuid,
+            idempotency_key="inv-led-015:insurance-replay",
+        )
+        db.session.commit()
+        assert replay.success is True
+        assert replay.already_enrolled is True
+        assert replay.entitlement_id == result.entitlement_id
+
+
+def test_INV_LED_015__rent_payment_resolves_its_replay_under_the_seat_lock(app):
+    """The replay lookup must see what a predecessor committed while this call waited."""
+    classroom = initialize("chemistry_p1", app)
+    with app.app_context():
+        _setup_rent_class(classroom)
+        customize_rent_settings(classroom.class_id, allow_incremental_payment=True)
+        student = classroom.students[0]
+        seat_id, class_id = student.seat.id, classroom.class_id
+        execute_reconcile_rent(class_id, reference_time_utc=_T_INITIAL)
+        _fund(student, class_id, "100.00", "rent-replay-order")
+        correlation_id = f"rent:{class_id}:{seat_id}:cycle:1"
+
+        with _recorded_statements() as statements:
+            result = execute_rent_payment(
+                class_id, seat_id, correlation_id,
+                idempotency_key=f"inv-led-015:rent-replay-order:{correlation_id}",
+                payment_amount=Decimal("20.00"),
+            )
+        assert result.success is True, result.error_message
+
+        seat_lock = _first_index(statements, _is_seat_lock)
+        replay_lookup = _first_index(statements, _is_rent_replay_lookup)
+        assert seat_lock is not None, "rent payment did not lock the seat row"
+        assert replay_lookup is not None, "rent payment did not look up its replay"
+        assert seat_lock < replay_lookup
+
+
+def test_INV_LED_015__partial_rent_replay_reports_the_original_payment(app):
+    """Replaying a 20.00 partial payment must not claim 20.00 more came off the bill."""
+    classroom = initialize("chemistry_p1", app)
+    with app.app_context():
+        _setup_rent_class(classroom)
+        customize_rent_settings(classroom.class_id, allow_incremental_payment=True)
+        student = classroom.students[0]
+        seat_id, class_id = student.seat.id, classroom.class_id
+        execute_reconcile_rent(class_id, reference_time_utc=_T_INITIAL)
+        _fund(student, class_id, "100.00", "rent-replay")
+        correlation_id = f"rent:{class_id}:{seat_id}:cycle:1"
+        key = f"inv-led-015:rent-partial-replay:{correlation_id}"
+
+        first = execute_rent_payment(
+            class_id, seat_id, correlation_id,
+            idempotency_key=key, payment_amount=Decimal("20.00"),
+        )
+        replay = execute_rent_payment(
+            class_id, seat_id, correlation_id,
+            idempotency_key=key, payment_amount=Decimal("20.00"),
+        )
+
+        assert first.success is True and first.fully_paid is False
+        assert first.remaining_after == Decimal("30.00")
+
+        assert replay.success is True
+        assert replay.transaction_id == first.transaction_id
+        assert replay.amount_paid == Decimal("20.00")
+        assert replay.remaining_after == Decimal("30.00")
+        assert replay.fully_paid is False
+        assert replay.passes_awarded == 0
+
+        payments = ObligationAssessment.query.filter_by(
+            correlation_id=correlation_id, event_type="PAYMENT"
+        ).count()
+        assert payments == 1
+        assert obligations_service.get_paid_magnitude(correlation_id) == Decimal("20.00")
