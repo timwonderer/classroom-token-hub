@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from decimal import Decimal
 from typing import NamedTuple
-from sqlalchemy import func, tuple_
+from sqlalchemy import Numeric, case, cast, func, tuple_
 
 from app.extensions import db
 from app.models import LedgerBalanceSnapshot, Transaction, TransactionStatus, _quantize_currency
@@ -36,7 +36,8 @@ def _invalid_balance_scope(class_id: str, seat_id: int, account_type: str) -> bo
     return not class_id or not seat_id or account_type not in {"checking", "savings"}
 
 
-def _get_balance_cache(seat_id: int, class_id: str, account_type: str):
+def _require_balance_scope(seat_id: int, class_id: str, account_type: str) -> None:
+    """Reject balance reads that do not identify a seat, class, and account."""
     if not class_id or not seat_id:
         raise ValueError("FATAL: Balance lookup requires class_id and seat_id.")
     if not account_type:
@@ -47,6 +48,13 @@ def _get_balance_cache(seat_id: int, class_id: str, account_type: str):
         # seat that has money. A read that cannot name its account must fail, not
         # answer.
         raise ValueError("FATAL: Balance lookup requires account_type.")
+    if account_type not in {"checking", "savings"}:
+        raise ValueError(f"FATAL: Unsupported account_type: {account_type}.")
+
+
+def _get_balance_cache(seat_id: int, class_id: str, account_type: str):
+    """Return the canonical posted-balance snapshot for one scoped account."""
+    _require_balance_scope(seat_id, class_id, account_type)
     return LedgerBalanceSnapshot.query.filter_by(seat_id=seat_id, class_id=class_id, account_type=account_type).first()
 
 
@@ -73,12 +81,65 @@ def get_pending_balance_delta(seat_id: int, class_id: str, account_type: str) ->
     return _quantize_currency(pending)
 
 
+def _available_balance_expression(seat_id: int, class_id: str, account_type: str):
+    """Posted plus pending for one account, as a single SQL expression.
+
+    Every term is a scalar subquery of the same statement, so PostgreSQL
+    evaluates them against one snapshot. Read as separate statements, a
+    settlement committing between them moves a pending debit into the posted
+    snapshot after the posted term was read and before the pending term is, and
+    the debit is counted in neither (#1364).
+    """
+    scope = (
+        Transaction.seat_id == seat_id,
+        Transaction.class_id == class_id,
+        Transaction.account_type == account_type,
+        _non_void_filter(),
+    )
+    snapshot_cents = (
+        db.session.query(LedgerBalanceSnapshot.posted_balance_cents)
+        .filter(
+            LedgerBalanceSnapshot.seat_id == seat_id,
+            LedgerBalanceSnapshot.class_id == class_id,
+            LedgerBalanceSnapshot.account_type == account_type,
+        )
+        .limit(1)
+        .scalar_subquery()
+    )
+    posted_sum = (
+        db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .filter(*scope, Transaction.status == TransactionStatus.POSTED)
+        .scalar_subquery()
+    )
+    pending_sum = (
+        db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .filter(*scope, Transaction.status == TransactionStatus.PENDING)
+        .scalar_subquery()
+    )
+    # Same precedence as get_posted_balance: the snapshot when one exists, else
+    # the posted-history fallback.
+    posted = case(
+        (snapshot_cents.isnot(None), cast(snapshot_cents, Numeric(18, 2)) / 100),
+        else_=posted_sum,
+    )
+    return posted + pending_sum
+
+
 def get_available_balance(seat_id: int, class_id: str, account_type: str) -> Decimal:
-    return _quantize_currency(get_posted_balance(seat_id, class_id, account_type) + get_pending_balance_delta(seat_id, class_id, account_type))
+    """Return posted plus pending balance from one database snapshot."""
+    _require_balance_scope(seat_id, class_id, account_type)
+    total = db.session.query(_available_balance_expression(seat_id, class_id, account_type)).scalar()
+    return _quantize_currency(total or Decimal("0.00"))
 
 
 def get_available_balances(seat_id: int, class_id: str) -> tuple[Decimal, Decimal]:
-    return (get_available_balance(seat_id, class_id, "checking"), get_available_balance(seat_id, class_id, "savings"))
+    """Return checking and savings available balances in one statement."""
+    _require_balance_scope(seat_id, class_id, "checking")
+    checking, savings = db.session.query(
+        _available_balance_expression(seat_id, class_id, "checking"),
+        _available_balance_expression(seat_id, class_id, "savings"),
+    ).one()
+    return _quantize_currency(checking or Decimal("0.00")), _quantize_currency(savings or Decimal("0.00"))
 
 
 def get_batch_balances_by_class_seat(class_seat_pairs):
