@@ -41,6 +41,7 @@ from tests.helpers.classroom_initializer import initialize
 
 
 def _teacher_ctx(classroom) -> CanonicalContext:
+    """Canonical teacher context — the actor the sweep itself writes rows as."""
     return CanonicalContext(
         user_id=classroom.teacher_user.id,
         class_id=classroom.class_id,
@@ -50,6 +51,7 @@ def _teacher_ctx(classroom) -> CanonicalContext:
 
 
 def _now_utc(classroom):
+    """Canonical now for the class, per SPEC-TIME-001. Never ``datetime.now()``."""
     return canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=_teacher_ctx(classroom),
@@ -58,6 +60,11 @@ def _now_utc(classroom):
 
 
 def _day_bounds(classroom, reference_time_utc):
+    """Day start/end in the canonical class timezone around a given instant.
+
+    Called with a BACKDATED reference in these tests: the whole defect was the
+    job resolving these bounds against today instead of the session's own day.
+    """
     return canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=_teacher_ctx(classroom),
@@ -67,6 +74,7 @@ def _day_bounds(classroom, reference_time_utc):
 
 
 def _tap_in(classroom, seat, *, at):
+    """Open an attendance session at ``at`` and leave it open (no tap-out)."""
     record_attendance_session(
         ctx=_teacher_ctx(classroom),
         target_seat_id=seat.id,
@@ -80,6 +88,7 @@ def _tap_in(classroom, seat, *, at):
 
 
 def _configure_daily_limit(class_id, *, daily_limit_hours, idempotency_key):
+    """Set the class daily limit, enabling the DOM-PROD-001 §314 path."""
     with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
         upsert_payroll_settings(
             class_id=class_id,
@@ -95,10 +104,16 @@ def _configure_daily_limit(class_id, *, daily_limit_hours, idempotency_key):
 
 
 def _aware(ts):
+    """Coerce a naive DB timestamp to UTC-aware so it can be compared safely."""
     return ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
 
 
 def _closing_row(classroom, seat):
+    """The EARLIEST inactive row for the seat, or None if the sweep left it open.
+
+    Ordered ascending so a test cannot pass by finding some later closure that
+    happens to look right.
+    """
     return (
         AttendanceSession.query.filter_by(
             target_seat_id=seat.id,
@@ -125,7 +140,12 @@ def test_DOM_PROD_001__stale_session_closes_at_its_own_day_end(client):
     assert close_row is not None, "a session open across a day boundary must be closed"
     assert close_row.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value
     assert close_row.mechanism == "system"
-    # Dated to the end of the ORIGINATING day, not to today.
+    # The TIMESTAMP is what discriminates §312 from §314 in the persisted record.
+    # Both rules write reason_code = done_for_day (DOM-PROD-001 §312/§314), and
+    # `AttendanceSession` has no `reason` column — the human-readable reason the
+    # job builds reaches the log line only, never the row. So asserting the
+    # closure instant is the only way to prove WHICH rule fired: §312 closes at
+    # the end of the originating day, never at today's boundary.
     assert _aware(close_row.timestamp) == _day_bounds(classroom, tap_in_at).boundary_end_utc
 
 
@@ -147,8 +167,14 @@ def test_DOM_PROD_001__stale_session_limit_applies_within_its_own_day(client):
 
     close_row = _closing_row(classroom, seat)
     assert close_row is not None
-    # The limit is measured from the actual tap-in, NOT from today's midnight.
+    assert close_row.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value
+    assert close_row.mechanism == "system"
+    # Both §312 and §314 apply here — the day is long over AND the limit was
+    # reached — so this pins the precedence: the limit closes the session first.
+    # The limit is measured from the actual tap-in, NOT from today's midnight,
+    # and the instant is the only persisted evidence of which rule won.
     assert _aware(close_row.timestamp) == tap_in_at + timedelta(hours=daily_limit_hours)
+    assert _aware(close_row.timestamp) < _day_bounds(classroom, tap_in_at).boundary_end_utc
 
 
 def test_DOM_PROD_001__stale_closure_does_not_block_working_today(client):
