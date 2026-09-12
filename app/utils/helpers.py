@@ -9,7 +9,7 @@ This module provides reusable helper functions for:
 """
 
 from datetime import timezone
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, urlunparse
 import hashlib
 import hmac
 import json
@@ -166,12 +166,49 @@ def is_safe_url(target, host_url=None):
     # Allow empty targets
     if not target:
         return True
+    # Browsers normalize backslashes to forward slashes, so "/\evil.com" is a
+    # protocol-relative URL to them while urlparse reads it as a local path.
+    target = target.replace('\\', '/')
+    # Any leading-slash run is protocol-relative to a browser. urljoin collapses
+    # three-or-more slashes into a local path, so it would report "///evil.example"
+    # as same-origin while the Location header still navigates off-site.
+    if target.startswith('//'):
+        return False
     # Use provided host_url or fall back to request.host_url
     if host_url is None:
         host_url = request.host_url
     ref_url = urlparse(host_url)
     test_url = urlparse(urljoin(host_url, target))
     return test_url.scheme in ('http', 'https') and ref_url.netloc == test_url.netloc
+
+
+def safe_redirect_target(target, fallback):
+    """
+    Resolve a user-supplied redirect target to a same-origin relative URL.
+
+    Returns ``fallback`` unless ``target`` is a root-relative in-app path. Any
+    absolute URL, protocol-relative URL, or scheme-bearing target is rejected
+    rather than sanitized, so an attacker-controlled ``?next=`` can never send
+    an authenticated user off-origin.
+
+    Args:
+        target: The untrusted redirect target (e.g. ``request.args.get("next")``)
+        fallback: Trusted URL to use when ``target`` is absent or unsafe
+    """
+    if not target:
+        return fallback
+    # Normalize before parsing: browsers treat "/\evil.com" as protocol-relative.
+    candidate = target.replace('\\', '/')
+    # Reject any leading-slash run outright rather than letting urlparse collapse
+    # "///evil.example" down to a path that only looks local.
+    if candidate.startswith('//'):
+        return fallback
+    parsed = urlparse(candidate)
+    if parsed.scheme or parsed.netloc:
+        return fallback
+    if not parsed.path.startswith('/'):
+        return fallback
+    return urlunparse(('', '', parsed.path, parsed.params, parsed.query, parsed.fragment))
 
 
 def render_markdown(text):

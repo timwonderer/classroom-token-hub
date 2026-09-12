@@ -18,7 +18,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db, limiter
 from app.models import User, UserRole
 from app.hash_utils import hash_username_lookup
-from app.utils.helpers import render_template_with_fallback as render_template, is_safe_url
+from app.utils.helpers import render_template_with_fallback as render_template, safe_redirect_target
 from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
 
 # Create blueprint
@@ -378,7 +378,4 @@ def switch_view():
     else:
         session.pop('force_desktop', None)
 
-    if not is_safe_url(next_url):
-        return redirect(url_for('main.home'))
-
-    return redirect(next_url)  # nosec # Safe: validated by is_safe_url()
+    return redirect(safe_redirect_target(next_url, url_for('main.home')))

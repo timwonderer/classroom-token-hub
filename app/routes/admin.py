@@ -80,7 +80,7 @@ from app.forms import (
     ManualPaymentForm
 )
 # Import utility functions
-from app.utils.helpers import is_safe_url, format_utc_iso, generate_anonymous_code, render_template_with_fallback as render_template
+from app.utils.helpers import safe_redirect_target, format_utc_iso, generate_anonymous_code, render_template_with_fallback as render_template
 from app.utils.join_code import generate_join_code, get_display_join_code
 from app.utils.economy_balance import EconomyBalanceChecker
 from app.utils.economy_policy import (
@@ -2844,10 +2844,12 @@ def login():
                                 _login_display = _seat.identity_profile.full_name
                         set_admin_display_name_cache(user_id=user.id, display_name=_login_display)
                         flash("Admin login successful.")
-                        next_url = request.args.get("next")
+                        next_url = safe_redirect_target(
+                            request.args.get("next"), url_for("admin.dashboard")
+                        )
                         # If user already has a last_active_class_id, go straight to dashboard
                         if user.last_active_class_id and user.last_active_seat_id:
-                            return redirect(next_url or url_for("admin.dashboard"))
+                            return redirect(next_url)
 
                         class_options = _get_validated_teacher_class_options(user.id)
                         if not class_options:
@@ -2857,7 +2859,7 @@ def login():
                             only_class = class_options[0]
                             user.last_active_class_id = only_class["class_id"]
                             user.last_active_seat_id = only_class["seat_id"]
-                            return redirect(next_url or url_for("admin.dashboard"))
+                            return redirect(next_url)
 
                         return redirect(url_for("admin.select_class_context"))
         flash("Invalid credentials or TOTP code.", "error")
@@ -8205,9 +8207,11 @@ def upload_students():
                     roster_fingerprint=roster_fingerprint,
                 )
                 added_count += 1
-            except Exception as e:
-                current_app.logger.error(f"Error processing row {i+1}: {e}")
-                errors.append(f"Row {i+1}: {str(e)}")
+            except Exception:
+                # Detail stays server-side: row exceptions can carry SQL text and
+                # roster names, neither of which belongs in an HTTP response.
+                current_app.logger.exception("Error processing roster row %d", i + 1)
+                errors.append(f"Row {i+1}: Could not be processed.")
 
     status = "success" if not errors else "partial"
     return jsonify(
