@@ -169,6 +169,11 @@ def is_safe_url(target, host_url=None):
     # Browsers normalize backslashes to forward slashes, so "/\evil.com" is a
     # protocol-relative URL to them while urlparse reads it as a local path.
     target = target.replace('\\', '/')
+    # Any leading-slash run is protocol-relative to a browser. urljoin collapses
+    # three-or-more slashes into a local path, so it would report "///evil.example"
+    # as same-origin while the Location header still navigates off-site.
+    if target.startswith('//'):
+        return False
     # Use provided host_url or fall back to request.host_url
     if host_url is None:
         host_url = request.host_url
@@ -194,10 +199,14 @@ def safe_redirect_target(target, fallback):
         return fallback
     # Normalize before parsing: browsers treat "/\evil.com" as protocol-relative.
     candidate = target.replace('\\', '/')
+    # Reject any leading-slash run outright rather than letting urlparse collapse
+    # "///evil.example" down to a path that only looks local.
+    if candidate.startswith('//'):
+        return fallback
     parsed = urlparse(candidate)
     if parsed.scheme or parsed.netloc:
         return fallback
-    if not parsed.path.startswith('/') or parsed.path.startswith('//'):
+    if not parsed.path.startswith('/'):
         return fallback
     return urlunparse(('', '', parsed.path, parsed.params, parsed.query, parsed.fragment))
 

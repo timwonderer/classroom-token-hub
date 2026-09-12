@@ -18,7 +18,12 @@ OFF_ORIGIN_TARGETS = [
     "https://evil.example",
     "http://evil.example/path",
     "//evil.example",
+    # Three or more leading slashes: urljoin collapses these into a path that
+    # reads as local, so they must be rejected on the raw prefix instead.
+    "///evil.example",
     "////evil.example",
+    "\\\\\\evil.example",
+    "/\\/evil.example",
     "/\\evil.example",
     "\\/evil.example",
     "\\\\evil.example",
@@ -57,9 +62,20 @@ def test_safe_redirect_target_rejects_scheme_relative_without_leading_slash():
     assert safe_redirect_target("relative/path", FALLBACK) == FALLBACK
 
 
-@pytest.mark.parametrize("target", ["/\\evil.example", "\\/evil.example"])
+@pytest.mark.parametrize(
+    "target",
+    [
+        "/\\evil.example",
+        "\\/evil.example",
+        # urljoin resolves these against the trusted host, so is_safe_url used to
+        # return True while the unmodified target still navigated off-origin.
+        "///evil.example",
+        "\\\\\\evil.example",
+        "/\\/evil.example",
+    ],
+)
 def test_is_safe_url_rejects_backslash_bypass(app, target):
-    """Backslash forms must not pass is_safe_url (the pre-fix bypass)."""
+    """Backslash and multi-slash forms must not pass is_safe_url (the pre-fix bypass)."""
     with app.test_request_context("/", base_url="https://school.example"):
         assert is_safe_url(target) is False
 

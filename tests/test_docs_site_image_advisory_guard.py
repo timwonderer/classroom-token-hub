@@ -37,14 +37,16 @@ EXCLUDED_DIRS = {"node_modules", "build", ".docusaurus", ".cache"}
 # image-size sniffs format from magic bytes, not the file extension, so the guard
 # covers any raster/vector asset rather than only .icns/.jxl/.heif.
 IMAGE_SUFFIXES = {
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".bmp", ".tiff",
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".bmp", ".tif", ".tiff",
     ".icns", ".jxl", ".heif", ".heic", ".avif",
 }
 
 MARKDOWN_SUFFIXES = {".md", ".mdx"}
 
-# Markdown image syntax, deliberately not matching plain links.
-MARKDOWN_IMAGE = re.compile(r"!\[[^\]]*\]\(")
+# Markdown image syntax, deliberately not matching plain links. Both the inline
+# `![alt](src)` and reference `![alt][label]` forms reach the same remark
+# transform, so the reference form has to be caught too.
+MARKDOWN_IMAGE = re.compile(r"!\[[^\]]*\](?:\(|\[[^\]]*\])")
 HTML_IMAGE = re.compile(r"<img\b", re.IGNORECASE)
 
 REASSESS = (
@@ -133,6 +135,34 @@ def test_docs_site_has_no_image_assets():
     assert not assets, (
         f"docs-site gained {len(assets)} image asset(s): {assets}\n\n{REASSESS}"
     )
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "![proof](./payload.tif)",
+        # Reference-style images are a separate mdast node shape but hit the same
+        # remark transform, so the detector must not only match the inline form.
+        "![proof][asset]",
+        '<img src="./payload.tif" />',
+    ],
+)
+def test_detector_matches_every_image_reference_form(line):
+    """The scanner itself must recognize each syntax that reaches image-size."""
+    assert MARKDOWN_IMAGE.search(line) or HTML_IMAGE.search(line)
+
+
+@pytest.mark.parametrize("line", ["[docs](./page.md)", "not an image: ![", "a] [b]"])
+def test_detector_ignores_plain_links(line):
+    """Plain links must not trip the guard; a false positive blocks docs authoring."""
+    assert not MARKDOWN_IMAGE.search(line)
+    assert not HTML_IMAGE.search(line)
+
+
+@pytest.mark.parametrize("suffix", [".tif", ".tiff", ".icns", ".jxl", ".heif"])
+def test_asset_suffixes_cover_formats_image_size_parses(suffix):
+    """image-size 2.0.2 parses TIFF, so both spellings of the suffix must be covered."""
+    assert suffix in IMAGE_SUFFIXES
 
 
 @requires_vulnerable_dep
