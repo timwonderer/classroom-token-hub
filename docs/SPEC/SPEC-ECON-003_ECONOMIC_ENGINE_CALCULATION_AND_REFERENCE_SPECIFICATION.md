@@ -129,25 +129,7 @@ with `rent_rate` constrained to the mode-specific band.
 
 ---
 
-### 4.4 Utilities
-
-The engine SHALL provide a canonical utilities band as a percentage of `CWI`.
-
-| Economic Mode | Utilities Band |
-| --- | ---: |
-| `tight` | 7% to 12% of CWI |
-| `default` | 5% to 10% of CWI |
-| `comfortable` | 4% to 8% of CWI |
-
-Formula:
-
-```text
-utilities = CWI × utilities_rate
-```
-
----
-
-### 4.5 Insurance
+### 4.4 Insurance
 
 Insurance is not a single product. `FEAT-STOR-003` defines three canonical insurance
 products, each with a distinct claim lifecycle and therefore a distinct economic
@@ -163,7 +145,7 @@ over claim submission, validation, approval, and compensation execution. This
 specification is authoritative only over the CWI-relative economic reference values used
 to price and bound insurance.
 
-#### 4.5.1 Two Independent Axes
+#### 4.4.1 Two Independent Axes
 
 Insurance economics are governed by two axes that MUST be kept separate:
 
@@ -205,7 +187,7 @@ The exact numerical coverage values for each tier are defined per product in the
 preset tables (§ 4.5.3–§ 4.5.5), selected deterministically per § 4.5.8. Implementations MUST
 source them from this document and MUST NOT invent or override them.
 
-#### 4.5.2 Premium Pricing Envelope (economic-mode axis)
+#### 4.4.2 Premium Pricing Envelope (economic-mode axis)
 
 The engine SHALL price insurance premiums CWI-relative, within the canonical mode-specific
 premium envelope:
@@ -283,7 +265,7 @@ The upcoming renewal period MUST be calculable before renewal. Student-facing in
 SHALL surface the next coverage interval, the next premium, and other derived renewal values
 ahead of the charge so students can plan for renewal.
 
-#### 4.5.3 `TRANSACTION` Insurance
+#### 4.4.3 `TRANSACTION` Insurance
 
 `TRANSACTION` insurance reimburses part of a single posted Ledger transaction. Consistent
 with `FEAT-STOR-003`, one claim covers exactly one canonical Ledger transaction. Its
@@ -319,7 +301,7 @@ a `TRANSACTION` claim is eligible only when the referenced transaction is:
 These are mechanical eligibility gates only; the teacher retains approval authority per
 `FEAT-STOR-003`.
 
-#### 4.5.4 `PRODUCTIVITY` Insurance
+#### 4.4.4 `PRODUCTIVITY` Insurance
 
 `PRODUCTIVITY` is the canonical product name for attendance / lost-wage insurance.
 
@@ -461,7 +443,7 @@ weekly `1 CWI` and `expected_weekly_hours` figures are advisory economic-coheren
 not mechanical caps. These preset values are settled; only the monthly allowance rounding
 convention was flagged for confirmation and is fixed in § 4.5.8.
 
-#### 4.5.5 `NON_MONETARY` Insurance
+#### 4.4.5 `NON_MONETARY` Insurance
 
 `NON_MONETARY` is the external-benefit insurance product. CTH records the lawful claim
 decision but does not own, price the reimbursement of, or verify the external benefit
@@ -507,7 +489,7 @@ The premium figures are **affordability guidance**, not calculated fair value; C
 value the external benefit. The `Single` column uses the mode-band midpoint (equivalent to
 `Mid`) per § 4.5.8. All other coverage numbers here are mechanical limits only.
 
-#### 4.5.6 Resolution Status
+#### 4.4.6 Resolution Status
 
 As of v1.2 the insurance economic model is numerically complete. The canonical preset tables
 for all three products (§ 4.5.3, § 4.5.4, § 4.5.5), the deterministic premium-selection rule,
@@ -517,7 +499,7 @@ No insurance numerical value remains intentionally TBD. Any future change to the
 a normative amendment to this specification, not an implementation choice. Implementations
 MUST source these values from this document and MUST NOT invent or override them in code.
 
-#### 4.5.7 Presentation of Economic Values
+#### 4.4.7 Presentation of Economic Values
 
 CWI percentages and multiples are the Engine's internal normalization and calculation
 mechanism. Teacher-facing surfaces SHALL present the **consequences** of a configuration
@@ -528,7 +510,7 @@ SHALL present `$280 maximum policy payout` as the primary result, and MAY show `
 secondary context. This presentation rule does not change any calculation; it governs how
 results are displayed.
 
-#### 4.5.8 Deterministic Premium Selection and Period Scaling
+#### 4.4.8 Deterministic Premium Selection and Period Scaling
 
 For the canonical presets, the premium is selected directly from the mode band by tier — no
 `risk_factor` or exposure-multiplier formula is used:
@@ -567,7 +549,7 @@ may be paid.
 
 ---
 
-### 4.6 Fines
+### 4.5 Fines
 
 The engine SHALL provide a canonical fine band as a percentage of `CWI`.
 
@@ -582,7 +564,7 @@ Formula:
 ```text
 fine = CWI × fine_rate
 ```
-#### 4.6.1 Internal Fines
+#### 4.5.1 Internal Fines
 
 Fines such as overdraft or non-sufficient funds (NSF) fees and late fees shall use the same formula as generic classroom fines recommendations. These recommendations shall surface the recommended price range of the fines, not a single recommended price.
 
@@ -596,7 +578,7 @@ Economic engine table shall persist the chosen overdraft fee under `flat_overdra
 
 Internal fines are only active if their value is not `NULL` for the economic policy being enforced. When disabling fines, the backend shall create a new economic policy with the value set to `NULL`
 
-##### 4.6.1.1 Overdraft / NSF Fee Applicability
+##### 4.5.1.1 Overdraft / NSF Fee Applicability
 
 An overdraft / non-sufficient-funds (NSF) fee is a fine charged for a **failed
 agreement**: a transaction that was meant to fulfill an **intended purchase**
@@ -631,7 +613,7 @@ overdraft/NSF ownership question previously open in `DOM-ITR-001` §XIII.c.
 
 ---
 
-### 4.7 Collective Goals
+### 4.6 Collective Goals
 
 The engine SHALL provide a canonical collective-goal band as a multiple of `CWI`.
 
@@ -649,7 +631,7 @@ collective_goal = CWI × goal_multiple
 
 ---
 
-### 4.8 Store Pricing Tiers
+### 4.7 Store Pricing Tiers
 
 Store pricing is tier-based rather than policy-mode-based.
 
