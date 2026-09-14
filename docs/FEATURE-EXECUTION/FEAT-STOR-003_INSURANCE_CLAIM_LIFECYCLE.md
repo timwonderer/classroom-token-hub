@@ -37,6 +37,13 @@ Claim activity does not consume the insurance entitlement.
 
 This FEAT does not create or satisfy debt. If an insurance product requires premium assessment or renewal settlement, that work belongs to Obligations and Ledger through the canonical debt lifecycle.
 
+Insurance premium guidance SHALL consume the Economic Engine Helper contract in
+`SPEC-ECON-003`. Economic Mode may change premium guidance, but it MUST NOT
+change coverage parameters such as reimbursement percentage, payout multiple,
+claim allowance, waiting period, or coverage boundary. Insurance rebalance is
+review-only when a premium change would alter downstream payout; policy edits
+remain owned by the Insurance Management workflow.
+
 ## II. Authority
 
 Store and Entitlements owns:

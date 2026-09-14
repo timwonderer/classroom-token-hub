@@ -57,6 +57,11 @@ This specification is authoritative over:
 - future economic law visibility,
 - future economic impact visibility.
 
+Pricing disclosures SHALL also follow the unified CWI Helper contract in
+`SPEC-ECON-003`: classroom currency and consequence are primary, with CWI share,
+reference range, and position shown as supporting explanation. A ratio without
+its currency amount is not sufficient disclosure.
+
 ---
 
 # IV. Constitutional Visibility Principles
@@ -314,4 +319,3 @@ This specification establishes:
 - contextual operational disclosure.
 
 Economic policy therefore behaves as publicly visible constitutional law rather than hidden backend configuration state.
-

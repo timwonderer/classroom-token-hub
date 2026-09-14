@@ -456,6 +456,13 @@ The following SHALL NOT be persisted as canonical truth:
 
 ## XII. Guarantees
 
+Economic role is configuration guidance, not entitlement authority. A Store
+product SHALL carry exactly one `economic_role` from `necessity`, `convenience`,
+or `add_on`; the role does not reclassify the product, change its configured
+price, or create a new acquisition path. CWI reference position and purchase
+scenarios belong to the Economic Engine Helper, while Store remains authoritative
+for the product policy and resulting entitlement lifecycle.
+
 This domain guarantees:
 
 - entitlement facts are immutable;

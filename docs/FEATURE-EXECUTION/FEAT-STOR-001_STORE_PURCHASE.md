@@ -382,6 +382,13 @@ On success:
 
 ## XVI. Amendment
 
+### Economic Helper disclosure
+
+Store pricing guidance SHALL use the Store product Helper contract in
+`SPEC-ECON-003`: currency first, CWI share second, economic-role reference
+position, and the teacher-selected purchase scenario. It MUST NOT use the
+retired Basic, Standard, Premium, or Luxury tier model.
+
 Revisions to this document must:
 
 1. increment the version number;

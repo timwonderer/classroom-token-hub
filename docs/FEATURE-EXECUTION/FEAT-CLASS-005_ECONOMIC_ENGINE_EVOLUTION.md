@@ -205,4 +205,13 @@ Each selected mutation remains class-scoped, append-only, idempotent, and
 atomic within the rebalance command boundary. Historical assessments,
 entitlements, claims, and ledger facts are never rewritten.
 
+## XII. Unified CWI Helper Contract
+
+Every teacher-facing pricing surface coordinated by this FEAT SHALL present the
+configured amount in classroom currency first, followed by its CWI share, the
+applicable reference range, the value's position relative to that range, and
+the owning surface's consequence primitive defined by `SPEC-ECON-003`. The
+Helper MUST NOT present a bare ratio as the primary explanation or predict
+optional purchases, claims, fines, or savings behavior.
+
 ---
