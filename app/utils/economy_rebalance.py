@@ -14,6 +14,8 @@ from app.models import (
     RentSettings,
 )
 from app.services.admin_settings_service import supersede_rent_settings
+from app.services import store_service
+from app.models import StoreProduct
 from app.services.class_configuration_query_service import get_rent_settings
 from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
 
@@ -74,6 +76,8 @@ def prepare_scheduled_rebalance_changes(change_plan, *, rent_settings=None, insu
 def _domain_for_change(change: dict[str, Any]) -> str | None:
     change_type = (change.get("type") or "").strip().lower()
     if change_type == "rent":
+        return REBALANCE_DOMAIN_RENT
+    if change_type == "rent_late_penalty":
         return REBALANCE_DOMAIN_RENT
     return None
 
@@ -370,6 +374,32 @@ def _apply_change_list(user_id, class_id, changes, activation_mode, *, reference
                 )
                 applied_labels.append("Rent")
                 applied_changes.append(dict(change))
+        elif change_type == "rent_late_penalty":
+            rent_settings = _get_effective_rent_settings(class_id)
+            if rent_settings:
+                supersede_rent_settings(
+                    class_id=class_id,
+                    updates={"late_penalty_amount": Decimal(str(change.get("new_value")))},
+                )
+                applied_labels.append("Rent late penalty")
+                applied_changes.append(dict(change))
+        elif change_type == "store_item":
+            product = StoreProduct.query.filter_by(
+                class_id=class_id,
+                product_lineage_uuid=change.get("product_lineage_uuid"),
+                availability_state=store_service.IN_USE,
+            ).first()
+            if product is None:
+                raise ValueError("Store product is no longer available for this class.")
+            definition = {
+                field: getattr(product, field)
+                for field in store_service._DEFINITION_FIELDS
+                if hasattr(product, field)
+            }
+            definition["price"] = Decimal(str(change.get("new_value")))
+            store_service.supersede_product(current=product, definition=definition)
+            applied_labels.append(f"Store: {product.name}")
+            applied_changes.append(dict(change))
 
     return applied_labels, applied_changes
 

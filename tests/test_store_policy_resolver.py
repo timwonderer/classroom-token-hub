@@ -196,19 +196,19 @@ class TestPublicationValidation:
         with app.app_context():
             goal = dict(
                 entitlement_type="COLLECTIVE_GOAL",
-                price="5.00",
+                price=None,
                 collective_goal_type="fixed",
                 collective_goal_target=100,
                 collective_goal_expires_at=utc_now() + timedelta(days=30),
             )
             with FEATContext("FEAT-TEST-SETUP", idempotency_key="store-publish:goal-bundle"):
-                with pytest.raises(InvalidDefinition, match="bundle or bulk discount"):
+                with pytest.raises(InvalidDefinition, match="cannot be bundled"):
                     self._publish(
                         test_class["class_id"], teacher_seat["seat_id"],
                         is_bundle=True, bundle_quantity=5, **goal,
                     )
             with FEATContext("FEAT-TEST-SETUP", idempotency_key="store-publish:goal-bulk"):
-                with pytest.raises(InvalidDefinition, match="bundle or bulk discount"):
+                with pytest.raises(InvalidDefinition, match="cannot be given a bulk discount"):
                     self._publish(
                         test_class["class_id"], teacher_seat["seat_id"],
                         bulk_discount_enabled=True,
@@ -403,6 +403,7 @@ class TestVersionSupersession:
                     definition={
                         "name": "Notebook",
                         "price": "75.00",
+                        "economic_role": "necessity",
                         "item_type": "delayed",
                     },
                     actor_seat_id=teacher_seat["seat_id"],
@@ -455,6 +456,7 @@ class TestVersionSupersession:
                     definition={
                         "name": "Notebook",
                         "price": "60.00",
+                        "economic_role": "necessity",
                         "item_type": "delayed",
                     },
                     actor_seat_id=teacher_seat["seat_id"],
@@ -477,3 +479,99 @@ class TestVersionSupersession:
             surviving = StorePolicyResolver.resolve_store_item(v2_uuid)
             assert surviving.price == Decimal("60.00")
             assert surviving.product_id == v2_lineage
+
+
+class TestEconomicRoleIsAdvisory:
+    """``economic_role`` selects a reference band; it authorizes nothing.
+
+    DOM-STORE-001 outranks SPEC-ECON-003, so the overdue-obligation gate is
+    carried by ``essential_when_overdue`` alone. The two fields are therefore
+    independent: a Necessity product is not implicitly essential, and an Add-on
+    product may be marked essential.
+    """
+
+    def test_necessity_role_does_not_imply_essential_when_overdue(
+        self, app, test_class, teacher_seat
+    ):
+        with app.app_context():
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="role-advisory:necessity"):
+                product = publish_store_product(
+                    class_id=test_class["class_id"],
+                    entitlement_type="DELAYED_USE",
+                    name="Pencil",
+                    price="5.00",
+                    economic_role="necessity",
+                    created_by_seat_id=teacher_seat["seat_id"],
+                )
+
+            resolved = StorePolicyResolver.resolve_store_item(product.policy_uuid)
+            assert resolved.economic_role == "necessity"
+            assert resolved.essential_when_overdue is False
+
+    def test_add_on_role_may_still_be_essential_when_overdue(
+        self, app, test_class, teacher_seat
+    ):
+        with app.app_context():
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="role-advisory:add-on"):
+                product = publish_store_product(
+                    class_id=test_class["class_id"],
+                    entitlement_type="DELAYED_USE",
+                    name="Field Trip Slot",
+                    price="80.00",
+                    economic_role="add_on",
+                    essential_when_overdue=True,
+                    created_by_seat_id=teacher_seat["seat_id"],
+                )
+
+            resolved = StorePolicyResolver.resolve_store_item(product.policy_uuid)
+            assert resolved.economic_role == "add_on"
+            assert resolved.essential_when_overdue is True
+
+    @pytest.mark.parametrize("item_type,entitlement_type,price", [
+        ("delayed", "DELAYED_USE", "5.00"),
+        ("immediate", "IMMEDIATE_USE", "5.00"),
+        ("collective", "COLLECTIVE_GOAL", None),
+    ])
+    def test_every_item_type_requires_an_economic_role(
+        self, app, test_class, test_user, teacher_seat, item_type, entitlement_type, price
+    ):
+        """SPEC-STORE-001 §IV.A: the field is required, collective included."""
+        definition = {
+            "name": f"Roleless {item_type}",
+            "price": price,
+            "item_type": item_type,
+        }
+        if item_type == "collective":
+            definition.update({
+                "collective_goal_type": "fixed",
+                "collective_goal_target": 10,
+                "collective_goal_expires_at": utc_now() + timedelta(days=30),
+            })
+        else:
+            definition["direct_purchase_allowed"] = True
+
+        with app.app_context():
+            with pytest.raises(InvalidDefinition, match="economic_role"):
+                with FEATContext(
+                    "FEAT-TEST-SETUP",
+                    idempotency_key=f"role-required:{item_type}",
+                ):
+                    store_service.publish_product(
+                        user_id=test_user["user_id"],
+                        class_id=test_class["class_id"],
+                        definition=definition,
+                        actor_seat_id=teacher_seat["seat_id"],
+                    )
+
+    def test_a_non_canonical_role_is_rejected(self, app, test_class, teacher_seat):
+        with app.app_context():
+            with pytest.raises(InvalidDefinition, match="economic_role"):
+                with FEATContext("FEAT-TEST-SETUP", idempotency_key="role-invalid"):
+                    publish_store_product(
+                        class_id=test_class["class_id"],
+                        entitlement_type="DELAYED_USE",
+                        name="Bad Role",
+                        price="5.00",
+                        economic_role="premium",
+                        created_by_seat_id=teacher_seat["seat_id"],
+                    )

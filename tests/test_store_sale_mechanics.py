@@ -221,8 +221,7 @@ class TestVersionedProductDerivations:
                 buyer,
                 "Editable Goal",
                 entitlement_type="COLLECTIVE_GOAL",
-                price="10.00",
-                inventory_total=4,
+                price=None,
                 collective_goal_type="fixed",
                 collective_goal_target=10,
                 collective_goal_expires_at=utc_now() + timedelta(days=30),
@@ -234,7 +233,7 @@ class TestVersionedProductDerivations:
                 quantity=1,
             )
             assert result.success is True
-            assert _checking(buyer) == before - Decimal("10.00")
+            assert _checking(buyer) == before
 
             current = StoreProduct.query.filter_by(policy_uuid=product.policy_uuid).one()
             with FEATContext(
@@ -245,9 +244,9 @@ class TestVersionedProductDerivations:
                     current=current,
                     definition={
                         "name": "Editable Goal Revised",
-                        "price": Decimal("12.00"),
+                        "price": None,
                         "item_type": "collective",
-                        "inventory_total": 4,
+                        "economic_role": "necessity",
                         "collective_goal_type": "fixed",
                         "collective_goal_target": 10,
                         "collective_goal_expires_at": utc_now() + timedelta(days=30),
@@ -257,7 +256,6 @@ class TestVersionedProductDerivations:
             db.session.commit()
 
             assert successor.product_lineage_uuid == product.product_lineage_uuid
-            assert store_service.stock_remaining(successor) == 3
             assert count_goal_participants(
                 buyer["class_id"], [successor.product_lineage_uuid]
             )[successor.product_lineage_uuid] == 1
@@ -418,7 +416,7 @@ class TestCollectiveGoalDeadline:
             product = _publish(
                 buyer, "Lapsed Pizza Party",
                 entitlement_type="COLLECTIVE_GOAL",
-                price="5.00",
+                price=None,
                 collective_goal_type="fixed",
                 collective_goal_target=100,
                 collective_goal_expires_at=utc_now() - timedelta(days=1),
@@ -443,7 +441,7 @@ class TestCollectiveGoalDeadline:
             product = _publish(
                 buyer, "Open Pizza Party",
                 entitlement_type="COLLECTIVE_GOAL",
-                price="5.00",
+                price=None,
                 collective_goal_type="fixed",
                 collective_goal_target=100,
                 collective_goal_expires_at=utc_now() + timedelta(days=30),
@@ -453,9 +451,9 @@ class TestCollectiveGoalDeadline:
             result = execute_store_purchase(
                 canonical_context=buyer["context"],
                 policy_uuid=product.policy_uuid,
-                quantity=2,
+                quantity=1,
             )
 
             assert result.success is True
-            assert len(_granted_units(buyer, product)) == 2
-            assert before - _checking(buyer) == Decimal("10.00")
+            assert len(_granted_units(buyer, product)) == 1
+            assert _checking(buyer) == before

@@ -114,6 +114,15 @@ class EconomyBalanceChecker {
             getParamValue(periodTarget, 'max_payout_per_period');
         }
 
+        // The Store price is reported against the role the teacher selected, so
+        // the role travels with the value rather than being inferred from it.
+        if (feature === 'store_item') {
+            const roleSelect = document.querySelector('[data-economic-role-select]');
+            if (roleSelect && roleSelect.value) {
+                additionalParams.economic_role = roleSelect.value;
+            }
+        }
+
         // For rent validation, collect additional frequency parameters from the form
         if (feature === 'rent') {
             const frequencyTypeInput = document.getElementById('frequency_type');
@@ -263,13 +272,14 @@ class EconomyBalanceChecker {
                 bodyHtml += `</div>`;
             }
 
-            if (recommendations.tiers) {
-                bodyHtml += '<div class="pricing-tiers mt-2">';
-                bodyHtml += '<strong>Store Item Pricing Tiers:</strong>';
+            if (recommendations.roles) {
+                bodyHtml += '<div class="economic-roles mt-2">';
+                bodyHtml += '<strong>Store reference ranges:</strong>';
                 bodyHtml += '<div class="row mt-1">';
-                Object.entries(recommendations.tiers).forEach(([tier, range]) => {
-                    bodyHtml += `<div class="col-6 col-md-3 mb-1">`;
-                    bodyHtml += `<span class="badge bg-secondary">${tier.toUpperCase()}</span><br>`;
+                Object.entries(recommendations.roles).forEach(([role, range]) => {
+                    const label = role.replace('_', '-');
+                    bodyHtml += `<div class="col-6 col-md-4 mb-1">`;
+                    bodyHtml += `<span class="badge bg-secondary">${label.toUpperCase()}</span><br>`;
                     bodyHtml += `<small>$${range.min} - $${range.max}</small>`;
                     bodyHtml += `</div>`;
                 });

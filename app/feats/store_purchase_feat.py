@@ -34,7 +34,7 @@ from app.feats.ledger_resolution_feat import (
     resolve_intended_ledger_plan,
     apply_resolved_ledger_plan,
 )
-from app.models import Seat, EntitlementEvent, ClassEconomy
+from app.models import Seat, EntitlementEvent, ClassEconomy, PendingAction
 from app.services.context_resolver import CanonicalContext
 from app.services.class_configuration_query_service import get_current_economic_engine
 from app.services.class_configuration_query_service import get_rent_settings
@@ -86,6 +86,19 @@ def _calculate_debit(policy_config, quantity: int) -> tuple[Decimal, bool]:
     multiplier = (Decimal('100') - Decimal(str(percentage))) / Decimal('100')
     discounted = (gross * multiplier).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     return discounted, True
+
+
+def _holding_quantity(class_id: str, seat_id: int, product_id: str) -> int:
+    """Derive current possession from immutable grant and terminal events."""
+    events = EntitlementEvent.query.filter_by(
+        class_id=class_id, target_seat_id=seat_id, product_id=product_id
+    ).all()
+    granted = {event.entitlement_id for event in events if event.event_type == 'GRANTED'}
+    terminal = {
+        event.entitlement_id for event in events
+        if event.event_type in {'CONSUMED', 'EXPIRED', 'REVOKED'}
+    }
+    return len(granted - terminal)
 
 
 def execute_store_purchase(
@@ -238,7 +251,8 @@ def _execute_store_purchase_impl(
             for benefit in rent_settings.get_satisfaction_benefit_grants()
             if benefit.get("product_lineage_uuid")
         }
-        if is_late and policy_config.product_lineage_uuid not in linked_lineages:
+        if (is_late and policy_config.product_lineage_uuid not in linked_lineages
+                and not policy_config.essential_when_overdue):
             return StorePurchaseResult(
                 success=False,
                 correlation_id="",
@@ -255,6 +269,24 @@ def _execute_store_purchase_impl(
             quantity_granted=0,
             error_code="PRODUCT_NOT_PURCHASABLE",
             error_message=f"Product {policy_config.product_id} is not purchasable",
+        )
+
+    if not policy_config.direct_purchase_allowed:
+        return StorePurchaseResult(
+            success=False,
+            correlation_id="",
+            quantity_granted=0,
+            error_code="DIRECT_PURCHASE_NOT_ALLOWED",
+            error_message="This item is not available for direct student purchase",
+        )
+
+    if policy_config.price is None and policy_config.entitlement_type != 'COLLECTIVE_GOAL':
+        return StorePurchaseResult(
+            success=False,
+            correlation_id="",
+            quantity_granted=0,
+            error_code="PRICE_NOT_CONFIGURED",
+            error_message="This product has no configured purchase price",
         )
 
     # Insurance is NOT a store product. It is acquired through FEAT-OBL-004
@@ -314,31 +346,68 @@ def _execute_store_purchase_impl(
     units_per_purchase = policy_config.bundle_quantity or 1
     units_to_grant = quantity * units_per_purchase
 
-    # Validate per-student limit (if configured)
-    if policy_config.limit_per_student is not None:
-        # Count existing GRANTED entitlements for this seat and product
-        existing_count = db.session.query(EntitlementEvent).filter_by(
-            class_id=canonical_context.class_id,
-            target_seat_id=canonical_context.seat_id,
-            product_id=policy_config.product_id,
-            event_type='GRANTED',
-        ).count()
-
-        # The teacher configures a *purchase* limit, but grants are counted in
-        # units, so convert the limit into the same unit before comparing —
-        # otherwise a bundle of five would exhaust a limit of five in one buy.
-        granted_units_allowed = policy_config.limit_per_student * units_per_purchase
-        if existing_count + units_to_grant > granted_units_allowed:
+    if policy_config.holding_limit is not None:
+        holding_quantity = _holding_quantity(
+            canonical_context.class_id,
+            canonical_context.seat_id,
+            policy_config.product_id,
+        )
+        if holding_quantity + units_to_grant > policy_config.holding_limit:
             return StorePurchaseResult(
                 success=False,
                 correlation_id="",
                 quantity_granted=0,
-                error_code="LIMIT_EXCEEDED",
-                error_message=f"Purchasing {quantity} would exceed per-student limit of {policy_config.limit_per_student}",
+                error_code="HOLDING_LIMIT_EXCEEDED",
+                error_message=f"This purchase would exceed the holding limit of {policy_config.holding_limit}",
             )
 
     # Generate or use provided correlation ID
     corr_id = correlation_id or get_correlation_id() or f"store_purchase_{uuid.uuid4().hex}"
+
+    # Collective Goals are participation actions, not priced Store purchases.
+    # They intentionally have no price, tier, inventory, or holding limit and
+    # therefore must not enter the paid Ledger path. The participation itself
+    # is still an immutable entitlement event and gets the same Pending Action
+    # lifecycle as the other action-producing item types.
+    if policy_config.entitlement_type == 'COLLECTIVE_GOAL':
+        temporal_eval = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=canonical_context,
+            primitive="current_time",
+        )
+        timestamp_utc = temporal_eval.canonical_now_utc
+        entitlement_id = str(uuid.uuid4())
+        db.session.add(EntitlementEvent(
+            event_id=str(uuid.uuid4()),
+            entitlement_id=entitlement_id,
+            class_id=canonical_context.class_id,
+            target_seat_id=canonical_context.seat_id,
+            actor_seat_id=canonical_context.seat_id,
+            product_id=policy_config.product_id,
+            entitlement_type=policy_config.entitlement_type,
+            acquisition_type="PURCHASE",
+            event_type="GRANTED",
+            correlation_id=corr_id,
+            payload={"policy_uuid": policy_config.policy_uuid, "collective_participation": True},
+            timestamp=timestamp_utc,
+        ))
+        db.session.add(PendingAction(
+            class_id=canonical_context.class_id,
+            seat_id=canonical_context.seat_id,
+            entitlement_id=entitlement_id,
+            correlation_id=f"{corr_id}:pending:{entitlement_id}",
+            authoritative_feat="FEAT-STOR-002",
+            payload={"trigger": "collective_goal_participation", "entitlement_type": "COLLECTIVE_GOAL"},
+            submitted_at=timestamp_utc,
+        ))
+        db.session.flush()
+        return StorePurchaseResult(
+            success=True,
+            correlation_id=corr_id,
+            quantity_granted=1,
+            entitlement_ids=[entitlement_id],
+            product_id=policy_config.product_id,
+        )
 
     # =========================================================================
     # PHASE 2: Ledger Execution

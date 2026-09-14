@@ -29,8 +29,15 @@
     /* Page-local stacking for the attendance toast layer. */
     #toast-container { z-index: 1050; }
 
+    /* The fill and the text have to move together. A state class that sets only
+       one of them inherits the other from whichever state rendered last. */
     .attendance-status-neutral {
         background-color: var(--neutral-600);
+        color: var(--text-inverse);
+    }
+
+    .attendance-status-active {
+        background-color: var(--success);
         color: var(--text-inverse);
     }
 </style>

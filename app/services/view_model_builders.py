@@ -277,6 +277,14 @@ def build_policy_list_view(class_id: str) -> list[PolicyListView]:
 
 
 @dataclass(frozen=True)
+class StoreFormContract:
+    """Server-owned gating contract for the Store creation/edit form."""
+    item_type_rules: MappingProxyType
+    collective_goal_band: MappingProxyType
+    rent_prevents_purchase_when_late: bool
+
+
+@dataclass(frozen=True)
 class StoreManagementView:
     """Phase 6-7: Canonical view model for admin store management page."""
     # Store items (owned by Store domain)
@@ -323,6 +331,7 @@ class StoreManagementView:
         warnings=(),
         display_context=MappingProxyType({}),
     ))
+    form_contract: StoreFormContract | None = None
 
 
 def build_store_management_view(
@@ -349,6 +358,7 @@ def build_store_management_view(
     audit_end_date: str = "",
     selected_scope: dict[str, Any] | None = None,
     feature_options: list[dict[str, Any]] | None = None,
+    form_contract: StoreFormContract | None = None,
 ) -> StoreManagementView:
     """
     Build the canonical store management view for admin dashboard.
@@ -386,4 +396,5 @@ def build_store_management_view(
             warnings=(),
             display_context=MappingProxyType({}),
         ),
+        form_contract=form_contract,
     )

@@ -157,8 +157,8 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
           <div>
-            <h6 class="mb-1">Rent Rebalance Preview</h6>
-            <p class="text-muted mb-0">Choose whether to apply the recommended rent change for the {{ policy_summary.profile.label }} policy. Insurance, fees, and store pricing are reviewed on their own settings pages.</p>
+            <h6 class="mb-1">Economy Pricing Rebalance Preview</h6>
+            <p class="text-muted mb-0">Review every teacher-configured price outside its canonical CWI range. Select a row, then choose the midpoint or enter a bounded custom amount. Each change is applied through its owning feature.</p>
           </div>
         </div>
         <div class="table-responsive">
@@ -166,19 +166,36 @@
             <caption class="visually-hidden">Economic engine rent rebalance preview</caption>
             <thead>
               <tr>
-                <th scope="col">Apply</th>
+                <th scope="col">Select</th>
                 <th scope="col">Feature</th>
                 <th scope="col">Current</th>
-                <th scope="col">Recommended</th>
+                <th scope="col">Recommended range / action</th>
               </tr>
             </thead>
             <tbody>
               {% for item in rebalance_preview %}
               <tr>
-                <td><input id="rebalance-change-{{ loop.index }}" class="form-check-input" type="checkbox" name="selected_changes" value="{{ item.key }}" {% if item.apply_by_default %}checked{% endif %}><label class="visually-hidden" for="rebalance-change-{{ loop.index }}">Apply {{ item.label }} change</label></td>
-                <td>{{ item.label }}</td>
+                <td>{% if item.selectable is not defined or item.selectable %}<input id="rebalance-change-{{ loop.index }}" class="form-check-input" type="checkbox" name="selected_changes" value="{{ item.key }}" {% if item.apply_by_default %}checked{% endif %}><label class="visually-hidden" for="rebalance-change-{{ loop.index }}">Select {{ item.label }} change</label>{% else %}<span class="badge text-bg-secondary">Review only</span>{% endif %}</td>
+                <td>{{ item.label }}{% if item.owner_url %}<br><a href="{{ item.owner_url }}" class="small">Edit in {{ item.owner_label }}</a>{% endif %}</td>
                 <td>{{ item.current }}</td>
-                <td>{{ item.recommended }}</td>
+                <td>
+                  {{ item.recommended }}
+                  {% if item.advisory_only %}<div class="small text-muted mt-2">{{ item.message }}</div>{% else %}<div class="small fw-bold mt-2">Choose action</div>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="rebalance_mode_{{ item.key|replace(':', '-') }}" value="midpoint" checked>
+                    <label class="form-check-label small">Set midpoint ({{ item.recommended_value }})</label>
+                  </div>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="rebalance_mode_{{ item.key|replace(':', '-') }}" value="custom">
+                    <label class="form-check-label small">Custom</label>
+                  </div>
+                  <div class="input-group input-group-sm" style="max-width: 230px;">
+                    <span class="input-group-text">$</span>
+                    <input class="form-control" type="number" name="rebalance_amount_{{ item.key|replace(':', '-') }}" min="{{ item.recommended_min }}" max="{{ item.recommended_max }}" step="0.01" placeholder="Custom amount">
+                  </div>
+                  <div class="form-text">Choose any amount within the recommended range.</div>
+                  {% endif %}
+                </td>
               </tr>
               {% endfor %}
             </tbody>
@@ -397,7 +414,7 @@
             <li>Insurance (weekly premium): ${{ insurance_recommendation.weekly_min }} - ${{ insurance_recommendation.weekly_max }}. Per-policy payout ceilings depend on product &amp; tier — set them in insurance settings.</li>
             {% endif %}
             <li>Fines: ${{ recommendations.fine.min }} - ${{ recommendations.fine.max }} per incident</li>
-            <li>Store pricing tiers scale with CWI. Basic items between ${{ recommendations.store_tiers.basic.min }} and ${{ recommendations.store_tiers.basic.max }}.</li>
+            <li>Store reference ranges scale with CWI: Necessity ${{ recommendations.store_roles.necessity.min }} - ${{ recommendations.store_roles.necessity.max }}, Convenience ${{ recommendations.store_roles.convenience.min }} - ${{ recommendations.store_roles.convenience.max }}, Add-on ${{ recommendations.store_roles.add_on.min }} - ${{ recommendations.store_roles.add_on.max }}.</li>
             <li>Students should be able to save at least ${{ recommendations.min_weekly_savings }} weekly.</li>
           </ul>
           <div class="d-flex flex-wrap gap-2">

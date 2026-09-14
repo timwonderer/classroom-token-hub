@@ -583,7 +583,18 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
         if session and _is_new_insert:
             active_corr = session.info.get("active_correlation_id")
             if active_corr and target.correlation_id != active_corr:
-                 raise ValueError(f"FATAL: Mixed correlation in flush. Context={active_corr}, Object={target.correlation_id}")
+                # A compensating Ledger effect intentionally preserves the
+                # original economic correlation. It is a new row in the
+                # current FEAT, but its provenance must remain linked to the
+                # original transaction (FEAT-LED-002 / SPEC-OPS-001).
+                linked_corr = None
+                if target.original_transaction_id:
+                    linked_corr = _connection.execute(
+                        sa.text("SELECT correlation_id FROM ledger_transaction WHERE id = :id"),
+                        {"id": target.original_transaction_id},
+                    ).scalar()
+                if linked_corr != target.correlation_id:
+                    raise ValueError(f"FATAL: Mixed correlation in flush. Context={active_corr}, Object={target.correlation_id}")
             session.info["active_correlation_id"] = target.correlation_id
     else:
         from app.feats.base import FEATContextError
@@ -1120,14 +1131,21 @@ class StoreProduct(db.Model):
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    price = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
-    tier = db.Column(db.String(20), nullable=True) # basic, standard, premium, luxury (teacher-only organizational label)
+    price = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
+    # Configuration guidance, not entitlement authority (DOM-STORE-001 §XII).
+    # It selects which CWI reference band the Helper reports the price against;
+    # it never authorizes a purchase. The overdue-obligation gate is carried by
+    # essential_when_overdue alone.
+    economic_role = db.Column(db.String(20), nullable=False, default='necessity') # necessity, convenience, add_on
     item_type = db.Column(db.String(20), nullable=False, default='delayed') # immediate, delayed, collective
     # Configured ceiling, not a balance. NULL = unlimited. Units remaining are
     # derived from GRANTED entitlement events for the lineage; DOM-STORE-001
     # §VII.A forbids persisting the remainder.
     inventory_total = db.Column(db.Integer, nullable=True)
-    limit_per_student = db.Column(db.Integer, nullable=True) # null for no limit
+    holding_limit = db.Column(db.Integer, nullable=True) # absolute active-entitlement cap
+    direct_purchase_allowed = db.Column(db.Boolean, default=True, nullable=False)
+    essential_when_overdue = db.Column(db.Boolean, default=False, nullable=False)
+    activation_at = db.Column(db.DateTime(timezone=True), nullable=True)
     auto_delist_date = db.Column(db.DateTime(timezone=True), nullable=True)
     auto_expiry_days = db.Column(db.Integer, nullable=True) # days student has to use the item
     is_long_term_goal = db.Column(db.Boolean, default=False, nullable=False) # if true, exclude from CWI balance checks
@@ -1177,8 +1195,8 @@ class StoreProduct(db.Model):
         # Read-only. The primaryjoin marks product_lineage_uuid as the foreign
         # side, so a writable relationship would let a caller de-associate a row
         # by NULLing a non-nullable column, failing the flush. Every visibility
-        # writer (set_blocks below, the admin routes) uses explicit deletes and
-        # inserts, so nothing needs to write through the relationship.
+        # writer uses explicit deletes and inserts, so nothing needs to write
+        # through the relationship.
         viewonly=True,
     )
 
@@ -1195,6 +1213,13 @@ class StoreProduct(db.Model):
         db.CheckConstraint(
             "item_type IN ('immediate','delayed','collective','hall_pass','privilege')",
             name='ck_store_products_item_type',
+        ),
+        # SPEC-STORE-001 §V.C: the role vocabulary is closed. An unmapped role
+        # would have no reference band, leaving the Helper unable to report a
+        # position for the price.
+        db.CheckConstraint(
+            "economic_role IN ('necessity','convenience','add_on')",
+            name='ck_store_products_economic_role',
         ),
         # At most one sellable version per product. This is the constraint that
         # makes "edit = supersede" safe: minting a new IN_USE version without
@@ -1214,57 +1239,6 @@ class StoreProduct(db.Model):
         db.Index('ix_store_products_class_created', 'class_id', 'created_at'),
     )
 
-    @property
-    def blocks_list(self):
-        """Return block labels derived from canonical seat-level visibility."""
-        seat_ids = [row.seat_id for row in self.visible_seats.all()]
-        if not seat_ids:
-            return []
-        rows = (
-            db.session.query(ClassEconomy.section)
-            .join(Seat, Seat.class_id == ClassEconomy.class_id)
-            .filter(Seat.id.in_(seat_ids), ClassEconomy.section.isnot(None))
-            .distinct()
-            .all()
-        )
-        return [section for (section,) in rows if section]
-
-    def set_blocks(self, block_list):
-        """Set the visibility blocks using canonical seat-level visibility rows.
-
-        Keyed by lineage: visibility describes the product, so it survives the
-        supersession that an edit performs.
-        """
-        StoreItemVisibility.query.filter_by(
-            product_lineage_uuid=self.product_lineage_uuid
-        ).delete()
-        if not block_list:
-            return
-        normalized_blocks = {block.strip().upper() for block in block_list if block and block.strip()}
-        if not normalized_blocks:
-            return
-        seat_ids = [
-            seat_id
-            for (seat_id,) in (
-                db.session.query(Seat.id)
-                .join(ClassEconomy, ClassEconomy.class_id == Seat.class_id)
-                .filter(
-                    ClassEconomy.section.isnot(None),
-                    ClassEconomy.section.in_(normalized_blocks),
-                    ClassEconomy.class_id == self.class_id,
-                )
-                .distinct()
-                .all()
-            )
-        ]
-        if seat_ids:
-            db.session.add_all([
-                StoreItemVisibility(
-                    product_lineage_uuid=self.product_lineage_uuid, seat_id=seat_id
-                )
-                for seat_id in seat_ids
-            ])
-
 
 # Fields frozen once a version exists. An "edit" mints a new version instead of
 # rewriting these, so a student's purchased terms cannot move underneath them
@@ -1272,8 +1246,8 @@ class StoreProduct(db.Model):
 # metadata may change on a persisted row.
 _STORE_PRODUCT_IMMUTABLE_FIELDS = frozenset({
     'policy_uuid', 'product_lineage_uuid', 'class_id', 'user_id', 'name',
-    'description', 'price', 'tier', 'item_type', 'inventory_total',
-    'limit_per_student', 'auto_delist_date', 'auto_expiry_days',
+    'description', 'price', 'economic_role', 'item_type', 'inventory_total',
+    'holding_limit', 'direct_purchase_allowed', 'essential_when_overdue', 'activation_at', 'auto_delist_date', 'auto_expiry_days',
     'is_long_term_goal', 'bypass_cwi_warnings', 'is_bundle', 'bundle_quantity',
     'bulk_discount_enabled', 'bulk_discount_quantity', 'bulk_discount_percentage',
     'collective_goal_type', 'collective_goal_target', 'collective_goal_expires_at',

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Authority Level |
 |------------------|---------|----------------|-----------------|
-| SPEC-STORE-001 | 1.1 | 2026-09-13 | Normative |
+| SPEC-STORE-001 | 1.2 | 2026-09-13 | Normative |
 
 ## I. Purpose
 
@@ -68,7 +68,7 @@ This approach provides JSON storage flexibility (fields can change) without surr
 | `supports_direct_grants` | boolean | Can teachers grant directly? | Required for FEAT-STOR-004 validation |
 | `price` | decimal (string) | Cost per unit | Must be ≥ 0; decimal with 2 scale |
 | `entitlement_type` | enum | Entitlement lifecycle type | See Section IV.B for valid values |
-| `economic_role` | enum | Required Store economic role | One of `necessity`, `convenience`, `add_on` |
+| `economic_role` | enum | Required Store economic role | One of `necessity`, `convenience`, `add_on`; advisory only (see Section IV.D) |
 
 ### B. Entitlement Type Values
 
@@ -87,12 +87,17 @@ COLLECTIVE_GOAL   - Threshold/deadline purchase (group goal completion)
 
 ```json
 {
+  "item_type": <enum | null>,
   "holding_limit": <integer | null>,
+  "inventory_total": <integer | null>,
   "rent_grant_quantity": <integer | null>,
   "direct_purchase_allowed": <boolean>,
   "available_with_overdue_obligations": <boolean | null>,
   "rent_linked": <boolean>,
+  "activation_at": <ISO8601 datetime | null>,
+  "auto_delist_date": <ISO8601 datetime | null>,
   "auto_expiry_days": <integer | null>,
+  "redemption_prompt": <string | null>,
   "name": <string | null>,
   "description": <string | null>,
   "bypass_cwi_warnings": <boolean>,
@@ -110,12 +115,17 @@ COLLECTIVE_GOAL   - Threshold/deadline purchase (group goal completion)
 
 | Field | Type | Description | Constraints |
 |-------|------|-------------|-------------|
+| `item_type` | enum \| null | Persisted catalog type the teacher selects; `entitlement_type` is derived from it | One of `immediate`, `delayed`, `hall_pass`, `privilege`, `collective`. Required at product creation; a payload consumed by a FEAT carries the derived `entitlement_type` instead. See Section IV.D |
 | `holding_limit` | int \| null | Absolute maximum active entitlements held by one student, regardless of acquisition source | Required for countable products; if set, must be > 0 |
+| `inventory_total` | int \| null | Configured ceiling on units the product may ever grant | If set, must be > 0; null = unlimited. Configuration, not a balance — units remaining are derived, never persisted |
 | `rent_grant_quantity` | int \| null | Number of entitlements attempted by a qualifying rent event | Required when `rent_linked` is true; if set, must be > 0 |
 | `direct_purchase_allowed` | boolean | Whether a student may acquire the product through direct Store purchase | Required; independent of rent linkage |
 | `available_with_overdue_obligations` | boolean \| null | Whether this product is permitted under `SPECIFIED_ITEMS_ONLY` | Required only for products subject to the specified-item policy; does not restrict rent grants |
 | `rent_linked` | boolean | Whether qualifying rent may grant this product | If true, rent-grant rules below apply |
+| `activation_at` | datetime \| null | When the product first becomes sellable | ISO8601; null = sellable as soon as its version is `IN_USE` |
+| `auto_delist_date` | datetime \| null | When the product stops being offered | ISO8601; null = no scheduled delisting. MUST NOT be used as a rent-linked entitlement's termination mechanism |
 | `auto_expiry_days` | int \| null | Days until entitlement expires | If set, must be > 0; null = never expires |
+| `redemption_prompt` | string \| null | Prompt shown to the student at redemption | DELAYED_USE and HALL_PASS only; informational |
 | `name` | string \| null | Display name (UI only) | Max 100 chars; informational only |
 | `description` | string \| null | Product description (UI only) | Informational only |
 | `bypass_cwi_warnings` | boolean | Override CWI balance warnings? | Default: false |
@@ -126,6 +136,29 @@ COLLECTIVE_GOAL   - Threshold/deadline purchase (group goal completion)
 | `collective_goal_type` | string \| null | Goal threshold type | Values: "fixed" or "whole_class"; mutually exclusive with bundle fields |
 | `collective_goal_target` | int \| null | Required purchases for goal | If set, must be > 0; requires collective_goal_type and collective_goal_expires_at |
 | `collective_goal_expires_at` | datetime \| null | Deadline for goal completion | ISO8601 format; required if collective_goal_type is set |
+
+### D. Persisted Inputs vs Derived Projections
+
+Some declared fields are configured by the teacher and stored; others are
+projected from a stored field at read time. Both are declared here, because
+Section III.A governs the payload surface as a whole, but only a persisted
+input may be written.
+
+| Derived field | Projected from | Rule |
+|---------------|----------------|------|
+| `entitlement_type` | `item_type` | The catalog vocabulary is closed. An `item_type` with no mapping is a validation failure for the whole class, not a skipped row |
+| `is_purchasable` | `item_type` + availability + `direct_purchase_allowed` | Never written directly |
+| `supports_direct_grants` | `entitlement_type` | Never written directly |
+
+**`economic_role` is advisory.** It is configuration guidance for the teacher
+and the input to the Store CWI Helper projection required by
+`SPEC-ECON-003` §4.7 and §4.9. Per `DOM-STORE-001` §XII it does not reclassify
+a product, change its configured price, create a new acquisition path, or
+authorize a purchase. In particular, a role of `necessity` does not itself
+permit purchase while the overdue-obligation gate is active — that permission
+is carried solely by `available_with_overdue_obligations` under the class
+`SPECIFIED_ITEMS_ONLY` policy. A teacher is expected, but not required, to
+align the two.
 
 ## V. Validation Rules
 
@@ -195,50 +228,6 @@ different reason, given below.
 - Bundle fields MUST all be null
 - Cannot coexist with bundle/bulk discount
 
-### D. Teacher-facing creation sequence and gates
-
-Blank optional inputs resolve as follows: `holding_limit`,
-`inventory_total`, `auto_expiry_days`, `redemption_prompt`, and
-`auto_delist_date` remain unlimited, perpetual, empty, or unset as applicable;
-boolean options default to `false`, except `is_active` and the mandatory
-direct-purchase behavior for non-rent-linked products, which default to
-`true`.
-
-The creation form follows this order because each decision narrows the legal
-configuration surface that follows it:
-
-```text
-REQUIRED: item type
-        |
-        v
-ITEM TYPE GATE
-  immediate  -> no redemption prompt, expiry, bundle, or goal; bulk discount allowed
-  delayed    -> redemption prompt and expiry become available
-  hall_pass  -> delayed-style holding settings; grant lifecycle applies
-  collective -> goal settings become available; bundle/bulk settings disappear
-        |
-        v
-RENT LINK GATE
-  not rent-linked -> direct purchase is mandatory; no direct-purchase toggle
-  rent-linked     -> show direct-purchase toggle and rent quantity
-                    -> rent grant quantity is required and positive
-        |
-        v
-ACQUISITION / HOLDING
-  inventory blank       -> unlimited inventory
-  holding limit blank   -> unlimited active holdings
-        |
-        v
-LIFECYCLE / ADVANCED
-  auto-expiry blank     -> no Store expiry for applicable types
-  redemption blank      -> no redemption prompt
-  auto-delist blank     -> no automatic delisting date
-  boolean options blank -> their documented false default applies
-```
-
-The UI MAY hide fields before this sequence reaches them, but the server MUST
-reapply every gate and reject an otherwise hidden illegal field combination.
-
 ### B. Mutual Exclusion Rules
 
 1. **Bundle XOR Collective Goal**
@@ -255,13 +244,70 @@ reapply every gate and reject an otherwise hidden illegal field combination.
 ### C. Value Range Rules
 
 1. **Price:** Must be ≥ 0 (Decimal with 2 scale)
-3. **auto_expiry_days:** If set, must be > 0
-4. **bundle_quantity:** If set, must be > 1
-5. **bulk_discount_quantity:** If set, must be > 1
-6. **bulk_discount_percentage:** If set, must be in range [0, 100]
-7. **Bulk discounts:** If either bulk-discount field is set, `entitlement_type` MUST be `IMMEDIATE_USE`, `DELAYED_USE`, or `HALL_PASS`. Privilege and collective-goal products cannot use bulk discounts.
-7. **collective_goal_target:** If set, must be > 0
-8. **collective_goal_expires_at:** If set, must be a valid future datetime
+2. **economic_role:** MUST be exactly one of `necessity`, `convenience`, `add_on`. A value outside the enum is a validation failure; a price outside the role's reference band is not — pricing position is reported by the Helper, never enforced here.
+3. **item_type:** MUST be exactly one of `immediate`, `delayed`, `hall_pass`, `privilege`, `collective`
+4. **inventory_total:** If set, must be > 0
+5. **auto_expiry_days:** If set, must be > 0
+6. **bundle_quantity:** If set, must be > 1
+7. **bulk_discount_quantity:** If set, must be > 1
+8. **bulk_discount_percentage:** If set, must be in range [0, 100]
+9. **Bulk discounts:** If either bulk-discount field is set, `entitlement_type` MUST be `IMMEDIATE_USE`, `DELAYED_USE`, or `HALL_PASS`. Privilege and collective-goal products cannot use bulk discounts.
+10. **collective_goal_target:** If set, must be > 0
+11. **collective_goal_expires_at:** If set, must be a valid future datetime
+
+### D. Teacher-facing creation sequence and gates
+
+Blank optional inputs resolve as follows: `holding_limit`,
+`inventory_total`, `auto_expiry_days`, `redemption_prompt`, and
+`auto_delist_date` remain unlimited, perpetual, empty, or unset as applicable;
+boolean options default to `false`, except the mandatory direct-purchase
+behavior for non-rent-linked products, which defaults to `true`.
+
+Sellability is not a payload boolean. It is the `availability_state`
+projection (`IN_USE`, `HIDDEN`, `RETIRED`) owned by `DOM-POL-001` §IX, and it
+is the only part of a persisted version that may change.
+
+The creation form follows this order because each decision narrows the legal
+configuration surface that follows it:
+
+```text
+REQUIRED: item type
+        |
+        v
+ITEM TYPE GATE
+  immediate  -> no redemption prompt, expiry, bundle, or goal; bulk discount allowed
+  delayed    -> redemption prompt and expiry become available
+  hall_pass  -> delayed-style holding settings; grant lifecycle applies
+  privilege  -> holding limit hard-set to 1; no bundle or goal
+  collective -> goal settings become available; bundle/bulk settings disappear
+        |
+        v
+RENT LINK GATE
+  not rent-linked -> direct purchase is mandatory; no direct-purchase toggle
+  rent-linked     -> show direct-purchase toggle and rent quantity
+                    -> rent grant quantity is required and positive
+        |
+        v
+ECONOMIC ROLE
+  required for every product -> drives the Helper projection only;
+                                grants no purchase authorization
+        |
+        v
+ACQUISITION / HOLDING
+  inventory blank       -> unlimited inventory
+  holding limit blank   -> unlimited active holdings
+        |
+        v
+LIFECYCLE / ADVANCED
+  activation blank      -> sellable as soon as the version is IN_USE
+  auto-expiry blank     -> no Store expiry for applicable types
+  redemption blank      -> no redemption prompt
+  auto-delist blank     -> no automatic delisting date
+  boolean options blank -> their documented false default applies
+```
+
+The UI MAY hide fields before this sequence reaches them, but the server MUST
+reapply every gate and reject an otherwise hidden illegal field combination.
 
 ## VI. Example Payloads
 
@@ -308,6 +354,7 @@ reapply every gate and reject an otherwise hidden illegal field combination.
   "entitlement_type": "PRIVILEGE",
   "name": "Seat Selection",
   "description": "Choose your own seat for one term",
+  "economic_role": "convenience"
 }
 ```
 
@@ -324,7 +371,8 @@ reapply every gate and reject an otherwise hidden illegal field combination.
   "collective_goal_type": "fixed",
   "collective_goal_target": 50,
   "collective_goal_expires_at": "2026-08-31T23:59:59Z",
-  "description": "50 purchases triggers class pizza party"
+  "description": "50 purchases triggers class pizza party",
+  "economic_role": "add_on"
 }
 ```
 
@@ -341,7 +389,8 @@ reapply every gate and reject an otherwise hidden illegal field combination.
   "auto_expiry_days": 60,
   "bulk_discount_quantity": 5,
   "bulk_discount_percentage": 15.0,
-  "description": "Buy 5+ for 15% discount"
+  "description": "Buy 5+ for 15% discount",
+  "economic_role": "necessity"
 }
 ```
 
@@ -384,6 +433,8 @@ If any validation step fails, raise an exception immediately. Do not attempt rec
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 2026-07-28 | Initial specification |
+| 1.1 | 2026-09-13 | Retired the Store pricing tier. Added required `economic_role` (`necessity`, `convenience`, `add_on`) per SPEC-ECON-003 §4.7 |
+| 1.2 | 2026-09-13 | Declared the persisted fields Section V.D already depended on (`item_type`, `inventory_total`, `activation_at`, `auto_delist_date`, `redemption_prompt`), closing a Section III.A governance gap. Added Section IV.D distinguishing persisted inputs from derived projections and fixing `economic_role` as advisory per DOM-STORE-001 §XII. Replaced the stale `is_active` reference with the `availability_state` projection. Added `economic_role` to Examples 2-4 and corrected malformed JSON in Example 2. Renumbered Section V.C and restored A/B/C/D section order |
 
 ## IX. Amendment Process
 

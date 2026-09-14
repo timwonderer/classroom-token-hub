@@ -105,10 +105,14 @@ def test_rent_link_toggle_updates_benefit_without_rewriting_the_existing_policy(
         ):
             db.session.add(open_cycle)
             db.session.flush()
+        # No activation date: the benefit takes effect now, which is the case
+        # this test pins. The supersede call reads the field unconditionally, so
+        # the stub must carry it even when the answer is "unset".
         form = SimpleNamespace(
             is_rent_linked=SimpleNamespace(data=True),
             item_type=SimpleNamespace(data="delayed"),
             rent_linked_quantity=SimpleNamespace(data=2),
+            activation_date=SimpleNamespace(data=None),
         )
 
         with FEATContext(

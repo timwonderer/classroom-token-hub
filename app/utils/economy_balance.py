@@ -28,6 +28,7 @@ from app.utils.economy_policy import (
     get_price_recommendation_context,
     normalize_policy_mode,
     scale_band,
+    STORE_ROLE_RATIOS,
     weeks_per_period,
 )
 
@@ -39,12 +40,17 @@ class WarningLevel(Enum):
     CRITICAL = "critical"
 
 
-class PricingTier(Enum):
-    """Store item pricing tiers per SPEC-ECON-003 §4.8 (store tier reference)."""
-    BASIC = "basic"           # 0.02-0.05 * CWI
-    STANDARD = "standard"     # 0.05-0.10 * CWI
-    PREMIUM = "premium"       # 0.10-0.25 * CWI
-    LUXURY = "luxury"         # 0.25-0.50 * CWI
+class EconomicRole(Enum):
+    """Store economic roles per SPEC-ECON-003 §4.7.
+
+    The teacher declares the role; the price is then reported against that
+    role's reference band. The old pricing tiers ran the other way — they were
+    inferred from the price — which meant a product had no stable role to be
+    judged against across a price change.
+    """
+    NECESSITY = "necessity"        # 0.01-0.10 * CWI
+    CONVENIENCE = "convenience"    # 0.11-0.20 * CWI
+    ADD_ON = "add_on"              # 0.21-0.30 * CWI
 
 
 @dataclass
@@ -94,33 +100,19 @@ class EconomyBalanceChecker:
     - Balance warnings
     """
 
-    # Standard ratios; canonical reference per SPEC-ECON-003 §4 and §8 (Canonical Economic Reference Table)
-    RENT_MIN_RATIO = 2.0
-    RENT_MAX_RATIO = 2.5
-    RENT_DEFAULT_RATIO = 2.25
-
-    UTILITIES_MIN_RATIO = 0.20
-    UTILITIES_MAX_RATIO = 0.30
-    UTILITIES_DEFAULT_RATIO = 0.25
-
+    # Rent, fine, collective-goal and savings ratios are NOT restated here. They
+    # are read per-mode from POLICY_MODES, which transcribes the SPEC-ECON-003 §4
+    # tables; a local fallback copy is a second spelling of the band and drifts
+    # silently from the one the teacher is shown (INV-ARC-022).
+    #
     # NOTE (SPEC-ECON-003 migration): insurance CWI-band and coverage/period-cap
     # multiplier constants were removed. Insurance economics are owned by the
     # Economic Engine (app/services/economic_engine.resolve_insurance).
 
-    FINE_MIN_RATIO = 0.05
-    FINE_MAX_RATIO = 0.15
-    FINE_DEFAULT_RATIO = 0.10
-
-    # Store item tier ratios
-    STORE_TIERS = {
-        PricingTier.BASIC: (0.02, 0.05),
-        PricingTier.STANDARD: (0.05, 0.10),
-        PricingTier.PREMIUM: (0.10, 0.25),
-        PricingTier.LUXURY: (0.25, 0.50),
+    STORE_ROLE_BANDS = {
+        role: (STORE_ROLE_RATIOS[role.value]["min"], STORE_ROLE_RATIOS[role.value]["max"])
+        for role in EconomicRole
     }
-
-    # Budget survival minimum
-    MIN_WEEKLY_SAVINGS_RATIO = 0.10
 
     # Conversion helpers. The month length is the policy module's constant, not a
     # local restatement of it — two spellings produced two rent bands.
@@ -157,28 +149,16 @@ class EconomyBalanceChecker:
         self.policy_mode = resolved_mode
         self.policy_profile = get_policy_profile(resolved_mode)
 
-    def _ratio_band(self, key: str, fallback_min: float, fallback_max: float, fallback_recommended: float) -> Tuple[float, float, float]:
-        ratios = self.policy_profile.get("ratios", {}).get(key, {})
+    def _ratio_band(self, key: str) -> Tuple[float, float, float]:
+        ratios = self.policy_profile["ratios"][key]
         return (
-            float(ratios.get("min", fallback_min)),
-            float(ratios.get("max", fallback_max)),
-            float(ratios.get("recommended", fallback_recommended)),
+            float(ratios["min"]),
+            float(ratios["max"]),
+            float(ratios["recommended"]),
         )
 
-    def _minimum_ratio(self, key: str, fallback_value: float) -> float:
-        ratios = self.policy_profile.get("ratios", {}).get(key, {})
-        return float(ratios.get("min", fallback_value))
-
-    def _store_tiers(self) -> Dict[PricingTier, Tuple[float, float]]:
-        tiers = dict(self.STORE_TIERS)
-        configured_tiers = self.policy_profile.get("ratios", {}).get("store_tiers", {})
-        for tier in PricingTier:
-            tier_config = configured_tiers.get(tier.value, {})
-            tiers[tier] = (
-                float(tier_config.get("min", self.STORE_TIERS[tier][0])),
-                float(tier_config.get("max", self.STORE_TIERS[tier][1])),
-            )
-        return tiers
+    def _minimum_ratio(self, key: str) -> float:
+        return float(self.policy_profile["ratios"][key]["min"])
 
     def rent_band(
         self,
@@ -193,12 +173,7 @@ class EconomyBalanceChecker:
         and the balance warning both read it, so the number a teacher is shown is
         the number they are judged against (INV-ARC-022).
         """
-        min_ratio, max_ratio, recommended_ratio = self._ratio_band(
-            "rent_weekly",
-            self.RENT_MIN_RATIO,
-            self.RENT_MAX_RATIO,
-            self.RENT_DEFAULT_RATIO,
-        )
+        min_ratio, max_ratio, recommended_ratio = self._ratio_band("rent_weekly")
         return scale_band(
             cwi,
             {"min": min_ratio, "max": max_ratio, "recommended": recommended_ratio},
@@ -211,22 +186,17 @@ class EconomyBalanceChecker:
 
     def fine_band(self, cwi: float) -> Dict[str, Decimal]:
         """The fine band for a class's policy mode, on the cent grid."""
-        min_ratio, max_ratio, recommended_ratio = self._ratio_band(
-            "fine_weekly",
-            self.FINE_MIN_RATIO,
-            self.FINE_MAX_RATIO,
-            self.FINE_DEFAULT_RATIO,
-        )
+        min_ratio, max_ratio, recommended_ratio = self._ratio_band("fine_weekly")
         return scale_band(
             cwi,
             {"min": min_ratio, "max": max_ratio, "recommended": recommended_ratio},
         )
 
-    def store_tier_bands(self, cwi: float) -> Dict[PricingTier, Dict[str, Decimal]]:
-        """Each store tier's price band for a class's policy mode."""
+    def store_role_bands(self, cwi: float) -> Dict[EconomicRole, Dict[str, Decimal]]:
+        """Each economic role's reference price band, on the cent grid."""
         return {
-            tier: scale_band(cwi, {"min": bounds[0], "max": bounds[1]})
-            for tier, bounds in self._store_tiers().items()
+            role: scale_band(cwi, {"min": bounds[0], "max": bounds[1]})
+            for role, bounds in self.STORE_ROLE_BANDS.items()
         }
 
     def _normalize_to_weekly(
@@ -439,18 +409,11 @@ class EconomyBalanceChecker:
         if not fines:
             return warnings
 
-        fine_min_ratio, fine_max_ratio, _ = self._ratio_band(
-            "fine_weekly",
-            self.FINE_MIN_RATIO,
-            self.FINE_MAX_RATIO,
-            self.FINE_DEFAULT_RATIO,
-        )
+        fine_min_ratio, fine_max_ratio, _ = self._ratio_band("fine_weekly")
         recommended_min = cwi * fine_min_ratio
         recommended_max = cwi * fine_max_ratio
 
         for fine in fines:
-            if not fine.is_active:
-                continue
 
             from app.models import _quantize_currency
             fine_amount = _quantize_currency(fine.amount)
@@ -554,62 +517,70 @@ class EconomyBalanceChecker:
         if not store_items:
             return warnings
 
+        # Availability is the caller's to decide, not this checker's. A product
+        # version is sellable when its availability_state is IN_USE, and every
+        # caller resolves that through store_service before handing the list
+        # over. Re-deriving it here meant reading a v1 `is_active` column that
+        # no longer exists, which took the whole analysis down with an
+        # AttributeError.
         for item in store_items:
-            if not item.is_active:
-                continue
-
             # Skip long-term goal items from CWI balance checks
             if getattr(item, 'is_long_term_goal', False):
+                continue
+
+            # Grant-only products carry no price, so there is nothing to
+            # position against the role's band.
+            if item.price is None:
                 continue
 
             price = float(item.price)
             price_ratio = price / cwi if cwi > 0 else 0
 
-            # Determine appropriate tier
-            appropriate_tier = None
-            tier_message = ""
+            try:
+                role = EconomicRole(getattr(item, 'economic_role', None))
+            except ValueError:
+                continue
 
-            store_tiers = self._store_tiers()
-            for tier, (min_ratio, max_ratio) in store_tiers.items():
-                if min_ratio <= price_ratio <= max_ratio:
-                    appropriate_tier = tier
-                    tier_message = f"Price fits {tier.value.upper()} tier"
-                    break
+            band = self.store_role_bands(cwi)[role]
+            band_min, band_max = float(band['min']), float(band['max'])
+            label = role.value.replace('_', '-').title()
 
-            if appropriate_tier:
+            if band_min <= price <= band_max:
                 warnings.append(BalanceWarning(
                     feature=f"Store Item: {item.name}",
                     level=WarningLevel.INFO,
-                    message=f"{tier_message}: ${price:.2f} ({price_ratio:.2f}x CWI)",
+                    message=f"${price:.2f} is within the {label} range (${band_min:.2f}–${band_max:.2f}).",
                     current_value=price,
                     recommended_min=None,
                     recommended_max=None,
                     cwi_ratio=price_ratio
                 ))
+            elif price > band_max:
+                warnings.append(BalanceWarning(
+                    feature=f"Store Item: {item.name}",
+                    level=WarningLevel.WARNING,
+                    message=(
+                        f"${price:.2f} is above the {label} range (${band_min:.2f}–${band_max:.2f}). "
+                        "It takes students longer to reach than the role suggests."
+                    ),
+                    current_value=price,
+                    recommended_min=band_min,
+                    recommended_max=band_max,
+                    cwi_ratio=price_ratio
+                ))
             else:
-                # Price is outside all tiers
-                if price_ratio > store_tiers[PricingTier.LUXURY][1]:
-                    max_recommended = cwi * store_tiers[PricingTier.LUXURY][1]
-                    warnings.append(BalanceWarning(
-                        feature=f"Store Item: {item.name}",
-                        level=WarningLevel.CRITICAL,
-                        message=f"Price (${price:.2f}) exceeds LUXURY tier max (${max_recommended:.2f}). Students may never afford this. Consider marking as 'Long Term Goal Item' if this is intentional.",
-                        current_value=price,
-                        recommended_min=cwi * store_tiers[PricingTier.BASIC][0],
-                        recommended_max=cwi * store_tiers[PricingTier.LUXURY][1],
-                        cwi_ratio=price_ratio
-                    ))
-                elif price_ratio < store_tiers[PricingTier.BASIC][0]:
-                    min_recommended = cwi * store_tiers[PricingTier.BASIC][0]
-                    warnings.append(BalanceWarning(
-                        feature=f"Store Item: {item.name}",
-                        level=WarningLevel.WARNING,
-                        message=f"Price (${price:.2f}) is below BASIC tier min (${min_recommended:.2f}). May not be a meaningful reward.",
-                        current_value=price,
-                        recommended_min=cwi * store_tiers[PricingTier.BASIC][0],
-                        recommended_max=cwi * store_tiers[PricingTier.LUXURY][1],
-                        cwi_ratio=price_ratio
-                    ))
+                warnings.append(BalanceWarning(
+                    feature=f"Store Item: {item.name}",
+                    level=WarningLevel.WARNING,
+                    message=(
+                        f"${price:.2f} is below the {label} range (${band_min:.2f}–${band_max:.2f}). "
+                        "Students reach it sooner than the role suggests."
+                    ),
+                    current_value=price,
+                    recommended_min=band_min,
+                    recommended_max=band_max,
+                    cwi_ratio=price_ratio
+                ))
 
         return warnings
 
@@ -721,43 +692,64 @@ class EconomyBalanceChecker:
 
         return warnings, recommendations, float(ratio)
 
-    def validate_store_item_value(self, price: float, cwi: float) -> Tuple[List[Dict[str, str]], Dict[str, Dict[str, float]], float]:
+    def validate_store_item_value(
+        self,
+        price: float,
+        cwi: float,
+        economic_role: Optional[str] = None,
+    ) -> Tuple[List[Dict[str, str]], Dict[str, Dict[str, float]], float]:
+        """Position a price against its declared economic role's band.
+
+        The role is an input, not an inference. A price outside its role's band
+        stays valid (SPEC-ECON-003 §4.7) — the report says where it sits, it
+        does not reclassify the product or reject the value.
+        """
         price = float(price)
         cwi = float(cwi)
         ratio = price / cwi if cwi > 0 else 0
-        recommendations: Dict[str, Dict[str, float]] = {}
         warnings: List[Dict[str, str]] = []
 
-        # Tiers are matched on the displayed band, not the raw ratio: a price
-        # copied from a tier's printed maximum rounds a fraction of a cent above
-        # the ratio boundary and was rejected as unaffordable.
-        tier_bands = {
-            tier: {key: float(value) for key, value in band.items()}
-            for tier, band in self.store_tier_bands(cwi).items()
+        # Bands are compared on the displayed currency figure, not the raw
+        # ratio: a price copied from a band's printed maximum rounds a fraction
+        # of a cent above the ratio boundary and read as out of range.
+        role_bands = {
+            role: {key: float(value) for key, value in band.items()}
+            for role, band in self.store_role_bands(cwi).items()
         }
-        tier_found = None
-        for tier, band in tier_bands.items():
-            if band['min'] <= price <= band['max']:
-                tier_found = tier
-                recommendations[tier.value] = dict(band)
-                break
+        recommendations: Dict[str, Dict[str, float]] = {
+            'roles': {role.value: dict(band) for role, band in role_bands.items()}
+        }
 
-        recommendations['tiers'] = {tier.value: dict(band) for tier, band in tier_bands.items()}
+        try:
+            role = EconomicRole(economic_role)
+        except ValueError:
+            return warnings, recommendations, float(ratio)
 
-        if tier_found:
+        band = role_bands[role]
+        label = role.value.replace('_', '-').title()
+        recommendations[role.value] = dict(band)
+        recommendations['selected_role'] = dict(band)
+
+        if band['min'] <= price <= band['max']:
             warnings.append({
                 'level': 'success',
-                'message': f'Price fits {tier_found.value.upper()} tier (${price:.2f})',
+                'message': f"${price:.2f} is within the {label} range (${band['min']:.2f}–${band['max']:.2f}).",
             })
-        elif price > tier_bands[PricingTier.LUXURY]['max']:
-            warnings.append({
-                'level': 'critical',
-                'message': f'Price (${price:.2f}) exceeds LUXURY tier max. Students may never afford this.',
-            })
-        elif price < tier_bands[PricingTier.BASIC]['min']:
+        elif price > band['max']:
             warnings.append({
                 'level': 'warning',
-                'message': f'Price (${price:.2f}) is below BASIC tier. May not be meaningful reward.',
+                'message': (
+                    f"${price:.2f} is above the {label} range (${band['min']:.2f}–${band['max']:.2f}). "
+                    "It takes students longer to reach than the role suggests."
+                ),
+            })
+        else:
+            warnings.append({
+                'level': 'warning',
+                'message': (
+                    f"${price:.2f} is below the {label} range (${band['min']:.2f}–${band['max']:.2f}). "
+                    "Students reach it sooner than the role suggests."
+                ),
             })
 
         return warnings, recommendations, float(ratio)
@@ -778,7 +770,7 @@ class EconomyBalanceChecker:
         if feature == 'fine':
             return self.validate_fine_value(value, cwi)
         if feature == 'store_item':
-            return self.validate_store_item_value(value, cwi)
+            return self.validate_store_item_value(value, cwi, kwargs.get('economic_role'))
 
         raise ValueError('Unsupported feature type')
 
@@ -816,21 +808,20 @@ class EconomyBalanceChecker:
                 getattr(rent_settings, 'custom_frequency_unit', None)
             ))
 
-        # Calculate weekly insurance (use cheapest active policy as baseline)
+        # Calculate weekly insurance (use cheapest offered policy as baseline).
+        # Same rule as store items: the caller passes the offered set; this
+        # checker does not re-derive availability.
         weekly_insurance = 0
         if insurance_policies:
-            active_policies = [p for p in insurance_policies if p.is_active]
-            if active_policies:
-                # Find cheapest weekly equivalent
-                cheapest_weekly = float('inf')
-                for policy in active_policies:
-                    premium = float(policy.premium)
-                    weekly_equiv = float(self._normalize_to_weekly(premium, policy.charge_frequency))
+            cheapest_weekly = float('inf')
+            for policy in insurance_policies:
+                premium = float(policy.premium)
+                weekly_equiv = float(self._normalize_to_weekly(premium, policy.charge_frequency))
 
-                    if weekly_equiv < cheapest_weekly:
-                        cheapest_weekly = weekly_equiv
+                if weekly_equiv < cheapest_weekly:
+                    cheapest_weekly = weekly_equiv
 
-                weekly_insurance = cheapest_weekly if cheapest_weekly != float('inf') else 0
+            weekly_insurance = cheapest_weekly if cheapest_weekly != float('inf') else 0
 
         # Estimate weekly store spending if not provided
         if average_store_spending is None:
@@ -840,7 +831,7 @@ class EconomyBalanceChecker:
         # Calculate weekly savings
         weekly_savings = weekly_income - weekly_rent - weekly_insurance - average_store_spending
 
-        required_savings = cwi * self._minimum_ratio("savings_weekly", self.MIN_WEEKLY_SAVINGS_RATIO)
+        required_savings = cwi * self._minimum_ratio("savings_weekly")
         passed = weekly_savings >= required_savings
 
         return passed, weekly_savings
@@ -921,9 +912,9 @@ class EconomyBalanceChecker:
             all_warnings.append(BalanceWarning(
                 feature="Budget Survival Test",
                 level=WarningLevel.CRITICAL,
-                message=f"Students cannot save enough income! Weekly savings: ${weekly_savings:.2f} (need ${cwi * self._minimum_ratio('savings_weekly', self.MIN_WEEKLY_SAVINGS_RATIO):.2f})",
+                message=f"Students cannot save enough income! Weekly savings: ${weekly_savings:.2f} (need ${cwi * self._minimum_ratio('savings_weekly'):.2f})",
                 current_value=weekly_savings,
-                recommended_min=cwi * self._minimum_ratio("savings_weekly", self.MIN_WEEKLY_SAVINGS_RATIO),
+                recommended_min=cwi * self._minimum_ratio("savings_weekly"),
                 recommended_max=None,
                 cwi_ratio=weekly_savings / cwi if cwi > 0 else 0
             ))

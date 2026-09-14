@@ -55,7 +55,6 @@ class StoreItemCardView:
     policy_uuid: str | None
     item_type: str  # 'immediate', 'delayed', 'collective', 'hall_pass'
     inventory_available: int | None  # None means unlimited
-    limit_per_student: int | None
     is_bundle: bool
     bundle_quantity: int | None
     bulk_discount_enabled: bool
@@ -229,7 +228,6 @@ def build_store_item_card_view(
         policy_uuid=item.policy_uuid,
         item_type=item.item_type,
         inventory_available=stock_remaining,
-        limit_per_student=item.limit_per_student,
         is_bundle=item.is_bundle,
         bundle_quantity=item.bundle_quantity,
         bulk_discount_enabled=item.bulk_discount_enabled,

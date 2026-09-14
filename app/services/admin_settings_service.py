@@ -23,7 +23,7 @@ def create_rent_settings(*, class_id: str) -> RentSettings:
     return settings
 
 
-def supersede_rent_settings(*, class_id: str, updates: dict) -> RentSettings:
+def supersede_rent_settings(*, class_id: str, updates: dict, effective_at=None) -> RentSettings:
     """Record a new immutable rent policy version for ``class_id``.
 
     This is the ONLY lawful way to change a class's rent terms. Per DOM-POL-001
@@ -57,6 +57,7 @@ def supersede_rent_settings(*, class_id: str, updates: dict) -> RentSettings:
 
     successor = RentSettings(class_id=class_id, **carried)
     successor.rent_configured_at = utc_now()
+    successor.rent_effective_at = effective_at or utc_now()
     successor.availability_state = 'IN_USE'
     db.session.add(successor)
 

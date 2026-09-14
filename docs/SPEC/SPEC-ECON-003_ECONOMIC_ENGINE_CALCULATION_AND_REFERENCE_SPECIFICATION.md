@@ -575,7 +575,15 @@ fine = CWI × fine_rate
 ```
 #### 4.5.1 Internal Fines
 
-Fines such as overdraft or non-sufficient funds (NSF) fees and late fees shall use the same formula as generic classroom fines recommendations. These recommendations shall surface the recommended price range of the fines, not a single recommended price.
+Fines such as overdraft or non-sufficient funds (NSF) fees and late fees shall use the same formula as generic classroom fines recommendations — `fine = CWI × rate`. These recommendations shall surface the recommended price range of the fines, not a single recommended price.
+
+An internal fine may be configured in one of two shapes, and the two are priced
+against **different** reference sets:
+
+- **Flat.** Persisted as `flat_overdraft_fee`. A flat internal fee is an ordinary
+  fine and SHALL be recommended against the generic fine band of § 4.5.
+- **Progressive.** Persisted as the precomputed `progressive_overdraft_fee` JSON
+  object, using the escalating schedule below.
 
 Economic engine table shall persist the chosen overdraft fee under `flat_overdraft_fee` or persist the precomputed `progressive_overdraft_fee` as json object with the following fine schedule
 
@@ -584,6 +592,21 @@ Economic engine table shall persist the chosen overdraft fee under `flat_overdra
 | `tight` | 7% CWI | 12.5% CWI | 18% CWI |
 | `default` | 5% CWI | 10% CWI | 15% CWI|
 | `comfortable` | 4% CWI | 8% CWI | 12% CWI |
+
+This progressive schedule is a **self-contained reference set**, not a subdivision
+of the § 4.5 generic fine band. Its purpose is escalation across repeat
+occurrences, so its upper tiers are expected to sit above the generic band's
+ceiling and its first tier may sit below the generic band's floor. Implementations
+MUST NOT clamp, rescale, or validate the progressive tiers against the § 4.5 band,
+and MUST NOT raise an out-of-band finding for a progressive tier that falls outside
+it. The § 8 instruction that system-defined fines reference the canonical table
+applies to the flat shape; the progressive shape is governed by this table.
+
+The two schedules also order the economic modes differently, and this is deliberate.
+The generic band of § 4.5 rises from `tight` to `comfortable` alongside rent and the
+savings target. The progressive schedule instead escalates hardest under `tight`,
+because repeat-occurrence pressure is the lever a leaner economy uses. A mode that
+carries a lower generic fine band may therefore carry a higher tier-3 internal fee.
 
 Internal fines are only active if their value is not `NULL` for the economic policy being enforced. When disabling fines, the backend shall create a new economic policy with the value set to `NULL`
 
@@ -650,8 +673,8 @@ The v2 roles replace Basic/Standard/Premium/Luxury. Their reference bands are
 non-overlapping and are advisory, not enforcement boundaries:
 
 | Economic role | CWI reference band | Meaning |
-| --- | ---: |
-| Necessity | 1% to 10% of CWI | Routine or important purchase; remains purchasable when the overdue-rent Store gate is active. |
+| --- | ---: | --- |
+| Necessity | 1% to 10% of CWI | Routine or important purchase; the role a teacher is expected to pair with an item they also mark essential during overdue rent. |
 | Convenience | 11% to 20% of CWI | Optional purchase that improves flexibility or experience. |
 | Add-on | 21% to 30% of CWI | Fully optional enhancement or reward; may reasonably require accumulated savings. |
 
@@ -667,9 +690,15 @@ store_price_share = store_price / CWI
 
 The Helper MUST show one, two, three, or teacher-selected purchase scenarios.
 Multipacks remain one Store unit under existing Store semantics. Scenarios MUST
-NOT predict student behavior. When overdue-rent Store gating is enabled,
-Necessity remains purchasable while Convenience and Add-on remain subject to the
-gate; when the gate is disabled, the distinction has no access effect.
+NOT predict student behavior.
+
+The economic role carries no purchase authority. When overdue-rent Store gating
+is enabled, the product's own `essential_when_overdue` flag decides access, per
+DOM-STORE-001 §XII, which outranks this specification on Store entitlement
+authority. Necessity is the role a teacher SHOULD select for a product they also
+mark essential, and the Helper MAY report a mismatch between the two as guidance;
+selecting Necessity MUST NOT grant the exemption, and selecting Convenience or
+Add-on MUST NOT withhold it.
 
 ### 4.8 Economy Pricing Rebalance Review
 
@@ -906,7 +935,7 @@ The following table is the canonical reference set for the Economic Engine.
 
 The `Insurance premium` row is the **premium pricing envelope only** (the economic-mode / cost axis of § 4.4), and is engine guidance rather than a hard cap. It does not define any coverage, reimbursement percentage, payout cap, or claim allowance. Those belong to the insurance-tier / coverage axis and are defined by the canonical preset tables in § 4.4.3–§ 4.4.5 with the deterministic selection rule in § 4.4.8; this table MUST NOT be read as a complete insurance economic model. For `NON_MONETARY` this band is affordability guidance only (§ 4.4.5). For `PRODUCTIVITY` the settled mechanical bounds in § 4.4.4 (remaining period payout capacity and remaining claim allowance, with the configured daily payroll limit as the submission-time hours ceiling) bound exposure independently of this row; the weekly `expected_weekly_hours` and `CWI` figures are advisory economic-coherence guidance.
 
-System-defined fines such as rent late fees and overdraft fees shall use the above table for reference when making recommendations. Actual configured fine amount shall persist on `economic_engine` for overdraft fines and `rent_settings` for rent late fees.
+System-defined fines such as rent late fees and overdraft fees shall use the above table for reference when making recommendations, where those fines are configured as a single flat amount. Progressive internal fee schedules are the one exception: they are priced against the self-contained tier table in § 4.5.1 and are not bounded by the `Fine` row above. Actual configured fine amount shall persist on `economic_engine` for overdraft fines and `rent_settings` for rent late fees.
 
 Store economic-role reference:
 

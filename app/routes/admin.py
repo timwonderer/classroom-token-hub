@@ -18,7 +18,7 @@ import secrets
 import threading
 import qrcode
 import hashlib
-from types import SimpleNamespace
+from types import SimpleNamespace, MappingProxyType
 from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -157,7 +157,8 @@ from app.services.store_service import (
     units_sold_by_lineage,
     StoreServiceError,
 )
-from app.services.view_model_builders import build_identity_profile_view, build_store_management_view
+from app.services.view_model_builders import build_identity_profile_view, build_store_management_view, StoreFormContract
+from app.services.store.form_contract import contract_payload, form_field_catalog, resolve_store_form_contract
 from app.services.class_configuration_economic_service import build_economic_view
 from app.services.class_configuration_query_service import (
     get_class_economy,
@@ -2281,45 +2282,170 @@ def _extract_pending_rebalance_effective_at(policy_summary: dict) -> datetime | 
     return get_pending_policy_transition_effective_at(class_id)
 
 
-def _build_rebalance_preview(canonical_context, class_id, checker, cwi, rent_settings, insurance_policies):
+def _safe_rebalance_owner_url(endpoint):
+    try:
+        return url_for(endpoint)
+    except RuntimeError:
+        # Pure preview unit tests do not create a Flask application context.
+        return None
+
+
+def _build_rebalance_preview(canonical_context, class_id, checker, cwi, rent_settings, insurance_policies, store_items=None, economic_engine=None):
     preview_items = []
+
+    # Insurance is deliberately advisory here. Premium determines the policy's
+    # payout/coverage terms, so changing it from the Economic Engine would
+    # silently alter an insurance contract. Surface only out-of-band policies
+    # and send the teacher to the owning management flow.
+    if insurance_policies:
+        from app.services.economic_engine import resolve_insurance
+        from app.services.insurance_policy_service import normalize_insurance_type
+        import json
+
+        for policy_version in insurance_policies:
+            if not getattr(policy_version, 'is_active', False):
+                continue
+            try:
+                payload = json.loads(policy_version.policy_payload_json or '{}')
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            raw_premium = payload.get('premium')
+            if raw_premium in (None, ''):
+                continue
+            try:
+                current = Decimal(str(raw_premium))
+            except (InvalidOperation, ValueError):
+                continue
+            product = normalize_insurance_type(payload.get('insurance_type') or payload.get('claim_type'))
+            recommendation = resolve_insurance(product=product, cwi=cwi, mode=getattr(checker, 'mode', 'default'))
+            if recommendation.cwi is None:
+                continue
+            rate_min, rate_max = recommendation.recommended_ranges['premium_rate']
+            minimum = (recommendation.cwi * Decimal(str(rate_min))).quantize(Decimal('0.01'))
+            maximum = (recommendation.cwi * Decimal(str(rate_max))).quantize(Decimal('0.01'))
+            if minimum <= current <= maximum:
+                continue
+            preview_items.append({
+                'key': f"insurance:{policy_version.id}",
+                'label': f"Insurance: {payload.get('name') or payload.get('title') or 'Policy'}",
+                'owner_label': 'Insurance',
+                'owner_url': _safe_rebalance_owner_url('admin.insurance_management'),
+                'current': _format_money(current),
+                'recommended': f"{_format_money(minimum)}–{_format_money(maximum)}",
+                'apply_by_default': False,
+                'selectable': False,
+                'advisory_only': True,
+                'message': 'Edit this policy in Insurance Management; Economic Engine cannot rebalance insurance premiums.',
+            })
 
     if rent_settings:
         custom_frequency_unit = getattr(rent_settings, 'custom_frequency_unit', None)
         # The same band the rent page quotes and the balance warning judges
         # against. Scaling the already-rounded weekly figure here proposed a
         # rebalance target a cent off the one the page recommends (INV-ARC-022).
-        recommended_amount = checker.rent_band(
+        rent_band = checker.rent_band(
             cwi,
             rent_settings.frequency_type,
             rent_settings.custom_frequency_value,
             custom_frequency_unit,
-        )['recommended']
+        )
+        recommended_amount = rent_band['recommended']
         cadence = frequency_label(
             rent_settings.frequency_type,
             custom_frequency_value=rent_settings.custom_frequency_value,
             custom_frequency_unit=custom_frequency_unit,
         )
         current_amount = Decimal(str(rent_settings.rent_amount or 0))
-        if current_amount != recommended_amount:
+        # Rebalance is an out-of-range review, not a recommendation-to-midpoint
+        # prompt. A value at either canonical boundary is already aligned and
+        # must not produce a row merely because it differs from the midpoint.
+        if current_amount < rent_band['min'] or current_amount > rent_band['max']:
             preview_items.append({
                 'key': 'rent',
                 'label': 'Rent',
+                'owner_label': 'Rent',
+                'owner_url': _safe_rebalance_owner_url('admin.rent_settings'),
                 'current': f"{_format_money(current_amount)} {cadence}",
-                'recommended': f"{_format_money(recommended_amount)} {cadence}",
-                'apply_by_default': True,
+                'recommended': (
+                    f"{_format_money(rent_band['min'])}–{_format_money(rent_band['max'])} {cadence}"
+                ),
+                'apply_by_default': False,
                 'change': {
                     'type': 'rent',
                     'class_id': class_id,
                     'current_value': str(current_amount),
                     'new_value': str(recommended_amount),
                 },
+                'recommended_value': str(recommended_amount),
+                'recommended_min': str(rent_band['min']),
+                'recommended_max': str(rent_band['max']),
             })
 
-    # NOTE (SPEC-ECON-003 migration): insurance premium rebalancing is no longer
-    # driven by the legacy price-recommendation builder. Insurance recommendations
-    # are owned by the Economic Engine (resolve_insurance) and surfaced through the
-    # product-aware edit flow, not this bulk rebalance preview.
+        late_penalty = Decimal(str(getattr(rent_settings, 'late_penalty_amount', 0) or 0))
+        fine_band = checker.fine_band(cwi)
+        if hasattr(rent_settings, 'late_penalty_amount') and (late_penalty < fine_band['min'] or late_penalty > fine_band['max']):
+            midpoint = ((fine_band['min'] + fine_band['max']) / Decimal('2')).quantize(Decimal('0.01'))
+            preview_items.append({
+                'key': 'rent-late-penalty', 'label': 'Rent: Late penalty',
+                'owner_label': 'Rent', 'owner_url': _safe_rebalance_owner_url('admin.rent_settings'),
+                'current': _format_money(late_penalty),
+                'recommended': f"{_format_money(fine_band['min'])}–{_format_money(fine_band['max'])}",
+                'apply_by_default': False, 'recommended_value': str(midpoint),
+                'recommended_min': str(fine_band['min']), 'recommended_max': str(fine_band['max']),
+                'change': {'type': 'rent_late_penalty', 'class_id': class_id,
+                           'current_value': str(late_penalty), 'new_value': str(midpoint)},
+            })
+
+    role_bands = checker.store_role_bands(cwi)
+    for product in store_items or []:
+        if product.price is None:
+            continue
+        role = next((key for key in role_bands if key.value == product.economic_role), None)
+        band = role_bands.get(role) if role else None
+        if not band:
+            continue
+        current = Decimal(str(product.price))
+        if band['min'] <= current <= band['max']:
+            continue
+        midpoint = ((band['min'] + band['max']) / Decimal('2')).quantize(Decimal('0.01'))
+        preview_items.append({
+            'key': f"store:{product.product_lineage_uuid}",
+            'label': f"Store: {product.name}",
+            'owner_label': 'Store',
+            'owner_url': _safe_rebalance_owner_url('admin.store_management'),
+            'current': _format_money(current),
+            'recommended': f"{_format_money(band['min'])}–{_format_money(band['max'])}",
+            'apply_by_default': False,
+            'recommended_value': str(midpoint),
+            'recommended_min': str(band['min']),
+            'recommended_max': str(band['max']),
+            'change': {
+                'type': 'store_item', 'class_id': class_id,
+                'product_lineage_uuid': product.product_lineage_uuid,
+                'current_value': str(current), 'new_value': str(midpoint),
+            },
+        })
+
+    # Insurance and overdraft/fine rows are intentionally added only when their
+    # owning resolver supplies a concrete range. The rebalance surface must not
+    # invent ranges or reinterpret coverage policy.
+    if economic_engine and economic_engine.flat_overdraft_fee is not None:
+        fine_band = checker.fine_band(cwi)
+        current = Decimal(str(economic_engine.flat_overdraft_fee))
+        if current < fine_band['min'] or current > fine_band['max']:
+            midpoint = ((fine_band['min'] + fine_band['max']) / Decimal('2')).quantize(Decimal('0.01'))
+            preview_items.append({
+                'key': 'overdraft_fee', 'label': 'Banking: Overdraft / NSF fee',
+                'owner_label': 'Banking', 'owner_url': _safe_rebalance_owner_url('admin.banking'),
+                'current': _format_money(current),
+                'recommended': f"{_format_money(fine_band['min'])}–{_format_money(fine_band['max'])}",
+                'apply_by_default': False,
+                'recommended_value': str(midpoint),
+                'recommended_min': str(fine_band['min']),
+                'recommended_max': str(fine_band['max']),
+                'change': {'type': 'overdraft_fee', 'class_id': class_id,
+                           'current_value': str(current), 'new_value': str(midpoint)},
+            })
 
     return preview_items
 
@@ -4746,7 +4872,6 @@ def generate_collective_goal_instance_code():
 _RENT_LINK_ENTITLEMENT_TYPES = {
     'immediate': 'IMMEDIATE_USE',
     'delayed': 'DELAYED_USE',
-    'collective': 'PRIVILEGE',
     'hall_pass': 'HALL_PASS',
 }
 
@@ -4764,16 +4889,24 @@ def _store_definition_from_form(form) -> dict:
         'description': form.description.data,
         'item_type': form.item_type.data,
         'price': form.price.data,
-        'tier': form.tier.data or None,
+        'economic_role': form.economic_role.data,
         'inventory_total': form.inventory.data,
-        'limit_per_student': form.limit_per_student.data,
-        'auto_delist_date': _end_of_day_utc(form.auto_delist_date.data),
-        'auto_expiry_days': form.auto_expiry_days.data,
+        'holding_limit': 1 if form.item_type.data == 'privilege' else form.holding_limit.data,
+        # Non-rent-linked products are always directly purchasable. This option
+        # only has meaning when Rent provisions the same lineage.
+        'direct_purchase_allowed': bool(form.direct_purchase_allowed.data) if form.is_rent_linked.data else True,
+        'essential_when_overdue': bool(form.essential_when_overdue.data) if form.is_rent_linked.data and form.direct_purchase_allowed.data else False,
+        'activation_at': (
+            datetime.combine(form.activation_date.data, datetime.min.time(), tzinfo=timezone.utc)
+            if form.activation_date.data else None
+        ),
+        'auto_delist_date': None,
+        'auto_expiry_days': form.auto_expiry_days.data if form.item_type.data in {'delayed', 'privilege', 'hall_pass'} else None,
         'is_long_term_goal': bool(form.is_long_term_goal.data),
         'bypass_cwi_warnings': bool(form.bypass_cwi_warnings.data),
-        'is_bundle': bool(form.is_bundle.data),
+        'is_bundle': False if form.item_type.data in {'immediate', 'privilege', 'collective'} else bool(form.is_bundle.data),
         'bundle_quantity': form.bundle_quantity.data if form.is_bundle.data else None,
-        'bulk_discount_enabled': bool(form.bulk_discount_enabled.data),
+        'bulk_discount_enabled': False if form.item_type.data in {'privilege', 'collective'} else bool(form.bulk_discount_enabled.data),
         'bulk_discount_quantity': (
             form.bulk_discount_quantity.data if form.bulk_discount_enabled.data else None
         ),
@@ -4787,10 +4920,12 @@ def _store_definition_from_form(form) -> dict:
         ),
         'collective_goal_instance_code': (
             generate_collective_goal_instance_code()
-            if is_collective and form.is_active.data
+            if is_collective and (not form.activation_date.data or form.activation_date.data <= utc_now().date())
             else None
         ),
-        'redemption_prompt': form.redemption_prompt.data or None,
+        'redemption_prompt': (
+            form.redemption_prompt.data if form.redemption_prompt_enabled.data and form.item_type.data in {'delayed', 'collective'} else None
+        ),
     }
 
 
@@ -4847,7 +4982,43 @@ def _apply_rent_link_from_form(form, *, class_id: str, product_lineage_uuid: str
     supersede_rent_settings(
         class_id=class_id,
         updates={'satisfaction_benefits': updated or None},
+        effective_at=(
+            datetime.combine(
+            form.activation_date.data,
+                datetime.min.time(),
+                tzinfo=timezone.utc,
+            ) if form.activation_date.data else utc_now()
+        ),
     )
+
+
+def _validate_rent_link_effective_date(form, class_id: str) -> None:
+    """Validate the Store rent-link date against the next Rent cycle boundary."""
+    if form.is_rent_linked.data and form.item_type.data == 'collective':
+        raise ValueError('Collective Goals cannot be rent-linked.')
+    if not form.is_rent_linked.data or not form.activation_date.data:
+        return
+    settings = get_rent_settings(class_id)
+    if settings is None:
+        raise ValueError('Rent settings are required for a rent-linked item.')
+    from app.routes.student import _calculate_rent_timeline
+    timeline = _calculate_rent_timeline(settings, utc_now())
+    next_cycle = timeline.get('upcoming_due_date')
+    next_cycle_date = next_cycle.date() if hasattr(next_cycle, 'date') else next_cycle
+    effective_date = form.activation_date.data
+    if effective_date < utc_now().date() or (next_cycle_date and effective_date > next_cycle_date):
+        raise ValueError('Rent-link effective date must be between today and the next rent-cycle start date.')
+
+
+def _validate_essential_overdue_access(form, class_id: str) -> None:
+    """Re-check the live Rent gate before allowing Essential access."""
+    if not form.essential_when_overdue.data:
+        return
+    if not form.is_rent_linked.data or not form.direct_purchase_allowed.data:
+        raise ValueError('Essential purchase access requires a rent-linked, directly purchasable item.')
+    settings = get_rent_settings(class_id)
+    if not settings or not settings.prevent_purchase_when_late:
+        raise ValueError('Essential purchase access is available only while Rent prevents overdue purchases.')
 
 
 @admin_bp.route('/store', methods=['GET', 'POST'])
@@ -4867,28 +5038,17 @@ def store_management():
     selected_scope = next((option for option in feature_options if option.get('class_id') == current_class_id), None)
     if not selected_scope:
         abort(404)
-    selected_join_code = selected_scope['join_code']
-    selected_block = selected_scope['block']
     form = StoreItemForm()
+    active_form_contract = resolve_store_form_contract(
+        item_type=form.item_type.data or 'immediate',
+        rent_linked=bool(form.is_rent_linked.data),
+        direct_purchase=True,
+        rent_prevents_purchase_when_late=bool((get_rent_settings(selected_scope['class_id']) or None) and get_rent_settings(selected_scope['class_id']).prevent_purchase_when_late),
+        collective_goal_band=get_policy_profile(get_active_policy_mode_for_class(selected_scope['class_id']))['ratios']['collective_goal'],
+    )
 
-    def _set_tier_choices(target_form):
-        mode = get_active_policy_mode_for_class(selected_scope['class_id'])
-        profile = get_policy_profile(mode)
-        tier_ranges = profile.get('ratios', {}).get('store_tiers', {})
-        labels = [('','No Tier')]
-        for key, title in (
-            ('basic', 'Basic'), ('standard', 'Standard'),
-            ('premium', 'Premium'), ('luxury', 'Luxury'),
-        ):
-            band = tier_ranges.get(key, {})
-            labels.append((key, f"{title} ({band.get('min', 0):g}-{band.get('max', 0):g}% of CWI)"))
-        target_form.tier.choices = labels
-
-    _set_tier_choices(form)
-
-    # Limit store scope to classes where the feature is enabled.
-    blocks = [option['block'] for option in feature_options if option.get('block')]
-    form.blocks.choices = [(block, f"Period {block}") for block in blocks]
+    _policy_profile = get_policy_profile(get_active_policy_mode_for_class(selected_scope['class_id']))
+    collective_goal_band = _policy_profile['ratios']['collective_goal']
 
     # Display-only label map for the single active class. block/section is
     # never a scoping key; this is a pure {section -> display_name} lookup for
@@ -4901,10 +5061,12 @@ def store_management():
         )
 
     if form.validate_on_submit():
-        submitted_blocks = {block.strip().upper() for block in (form.blocks.data or []) if block}
-        enabled_blocks = {block for block in blocks if block}
-        if submitted_blocks and not submitted_blocks.issubset(enabled_blocks):
-            abort(404)
+        try:
+            _validate_rent_link_effective_date(form, selected_scope['class_id'])
+            _validate_essential_overdue_access(form, selected_scope['class_id'])
+        except ValueError as exc:
+            flash(str(exc), 'error')
+            return redirect(url_for('admin.store_management'))
         payload_hash = hashlib.sha256(
             json.dumps(
                 {
@@ -4912,8 +5074,7 @@ def store_management():
                     "name": form.name.data,
                     "item_type": form.item_type.data,
                     "price": str(form.price.data),
-                    "is_active": bool(form.is_active.data),
-                    "blocks": sorted(submitted_blocks),
+                    "activation_date": form.activation_date.data,
                 },
                 sort_keys=True,
                 default=str,
@@ -4931,10 +5092,12 @@ def store_management():
                     user_id=user_id,
                     class_id=selected_scope['class_id'],
                     definition=_store_definition_from_form(form),
-                    availability_state=store_service.IN_USE if form.is_active.data else store_service.HIDDEN,
+                    availability_state=(
+                        store_service.IN_USE
+                        if not form.activation_date.data or form.activation_date.data <= utc_now().date()
+                        else store_service.HIDDEN
+                    ),
                 )
-                if form.blocks.data:
-                    new_item.set_blocks(form.blocks.data)
                 _apply_rent_link_from_form(
                     form,
                     class_id=selected_scope['class_id'],
@@ -4949,10 +5112,7 @@ def store_management():
     # Current versions only. RETIRED rows are prior versions and withdrawn
     # products; they stay in the table so entitlements sold under them remain
     # resolvable, but they are not part of the teacher's catalog view.
-    items = [
-        item for item in list_products(selected_scope['class_id'])
-        if not item.blocks_list or selected_block in {b.strip().upper() for b in item.blocks_list if b}
-    ]
+    items = list_products(selected_scope['class_id'])
     items.sort(key=lambda item: (item.name or '').lower())
 
     # Get store statistics for overview tab
@@ -5088,13 +5248,7 @@ def store_management():
         )
 
         for item in collective_items:
-            if item.blocks_list:
-                applicable_join_codes = [
-                    jc for jc, block in join_code_to_block.items()
-                    if block in {b.strip().upper() for b in item.blocks_list if b}
-                ]
-            else:
-                applicable_join_codes = list(join_code_to_block.keys())
+            applicable_join_codes = list(join_code_to_block.keys())
 
             per_class = []
             for jc in sorted(applicable_join_codes):
@@ -5289,9 +5443,33 @@ def store_management():
         audit_end_date=audit_end_date,
         selected_scope=selected_scope,
         feature_options=feature_options,
+        form_contract=StoreFormContract(
+            item_type_rules=MappingProxyType(store_service.item_type_field_rules()),
+            collective_goal_band=MappingProxyType(collective_goal_band),
+            rent_prevents_purchase_when_late=bool(_rent_settings and _rent_settings.prevent_purchase_when_late),
+        ),
     )
 
-    return render_template('admin_store.html', form=form, view=view, current_page="store")
+    return render_template(
+        'admin_store.html',
+        form=form,
+        view=view,
+        current_page="store",
+        item_type_field_rules=dict(view.form_contract.item_type_rules),
+        rent_prevents_purchase_when_late=view.form_contract.rent_prevents_purchase_when_late,
+        collective_goal_band=view.form_contract.collective_goal_band,
+        store_form_contracts=contract_payload(
+            rent_prevents_purchase_when_late=view.form_contract.rent_prevents_purchase_when_late,
+            collective_goal_band=dict(view.form_contract.collective_goal_band),
+            cwi=view.economic.display_context.get('cwi'),
+        ),
+        form_field_catalog=form_field_catalog(
+            rent_prevents_purchase_when_late=view.form_contract.rent_prevents_purchase_when_late,
+            collective_goal_band=dict(view.form_contract.collective_goal_band),
+            cwi=view.economic.display_context.get('cwi'),
+        ),
+        active_form_contract=active_form_contract,
+    )
 
 
 @admin_bp.route('/store/edit/<product_lineage_uuid>', methods=['GET', 'POST'])
@@ -5320,43 +5498,44 @@ def edit_store_item(product_lineage_uuid):
     item = get_current_version(selected_scope['class_id'], product_lineage_uuid)
     if item is None:
         abort(404)
-    if item.blocks_list and selected_scope['block'] not in {b.strip().upper() for b in item.blocks_list if b}:
-        abort(404)
-    form = StoreItemForm(obj=item)
-    mode = get_active_policy_mode_for_class(selected_scope['class_id'])
-    tier_ranges = get_policy_profile(mode).get('ratios', {}).get('store_tiers', {})
-    form.tier.choices = [('', 'No Tier')] + [
-        (key, f"{title} ({tier_ranges.get(key, {}).get('min', 0):g}-{tier_ranges.get(key, {}).get('max', 0):g}% of CWI)")
-        for key, title in (
-            ('basic', 'Basic'), ('standard', 'Standard'),
-            ('premium', 'Premium'), ('luxury', 'Luxury'),
-        )
-    ]
 
-    # Populate blocks choices from the teacher's students
-    blocks = [option['block'] for option in get_admin_feature_join_code_options('store', canonical_context=g.canonical_context) if option.get('block')]
-    form.blocks.choices = [(block, f"Period {block}") for block in blocks]
+    form = StoreItemForm(obj=item)
 
     rent_link = _rent_link_for_lineage(selected_scope['class_id'], product_lineage_uuid)
 
-    # Pre-populate selected blocks on GET request (using many-to-many relationship)
     if request.method == 'GET':
-        form.blocks.data = item.blocks_list
-        form.is_active.data = item.availability_state == store_service.IN_USE
+        form.activation_date.data = item.activation_at.date() if item.activation_at else None
         form.inventory.data = item.inventory_total
+        form.holding_limit.data = item.holding_limit
+        form.direct_purchase_allowed.data = bool(item.direct_purchase_allowed)
+        form.redemption_prompt_enabled.data = bool(item.redemption_prompt)
         form.is_rent_linked.data = rent_link is not None
         form.rent_linked_quantity.data = rent_link['quantity'] if rent_link else None
         # Convert stored datetimes to dates for the DateFields
         if item.collective_goal_expires_at:
             form.collective_goal_expires_at.data = item.collective_goal_expires_at.date()
-        if item.auto_delist_date:
-            form.auto_delist_date.data = item.auto_delist_date.date()
+
+    edit_policy_profile = get_policy_profile(get_active_policy_mode_for_class(selected_scope['class_id']))
+    edit_form_contract = StoreFormContract(
+        item_type_rules=MappingProxyType(store_service.item_type_field_rules()),
+        collective_goal_band=MappingProxyType(edit_policy_profile['ratios']['collective_goal']),
+        rent_prevents_purchase_when_late=bool((get_rent_settings(selected_scope['class_id']) or None) and get_rent_settings(selected_scope['class_id']).prevent_purchase_when_late),
+    )
+    active_form_contract = resolve_store_form_contract(
+        item_type=form.item_type.data or 'immediate',
+        rent_linked=bool(form.is_rent_linked.data),
+        direct_purchase=(not form.is_rent_linked.data) or bool(form.direct_purchase_allowed.data),
+        rent_prevents_purchase_when_late=edit_form_contract.rent_prevents_purchase_when_late,
+        collective_goal_band=dict(edit_form_contract.collective_goal_band),
+    )
 
     if form.validate_on_submit():
-        submitted_blocks = {block.strip().upper() for block in (form.blocks.data or []) if block}
-        enabled_blocks = {block for block in blocks if block}
-        if submitted_blocks and not submitted_blocks.issubset(enabled_blocks):
-            abort(404)
+        try:
+            _validate_rent_link_effective_date(form, selected_scope['class_id'])
+            _validate_essential_overdue_access(form, selected_scope['class_id'])
+        except ValueError as exc:
+            flash(str(exc), 'error')
+            return redirect(url_for('admin.edit_store_item', product_lineage_uuid=product_lineage_uuid))
         payload_hash = hashlib.sha256(
             json.dumps(
                 {
@@ -5365,8 +5544,7 @@ def edit_store_item(product_lineage_uuid):
                     "name": form.name.data,
                     "item_type": form.item_type.data,
                     "price": str(form.price.data),
-                    "is_active": bool(form.is_active.data),
-                    "blocks": sorted(submitted_blocks),
+                    "activation_date": form.activation_date.data,
                 },
                 sort_keys=True,
                 default=str,
@@ -5389,7 +5567,7 @@ def edit_store_item(product_lineage_uuid):
                 # a fresh one is issued only when the goal is being restarted
                 # (revived from hidden, or newly made collective), because the
                 # code is what separates one run of the goal from the next.
-                if form.item_type.data == 'collective' and form.is_active.data:
+                if form.item_type.data == 'collective' and (not form.activation_date.data or form.activation_date.data <= utc_now().date()):
                     was_live = current.availability_state == store_service.IN_USE
                     if was_live and current.collective_goal_instance_code:
                         definition['collective_goal_instance_code'] = (
@@ -5397,9 +5575,8 @@ def edit_store_item(product_lineage_uuid):
                         )
 
                 successor = supersede_product(current=current, definition=definition)
-                if not form.is_active.data:
+                if form.activation_date.data and form.activation_date.data > utc_now().date():
                     store_service.hide_product(successor)
-                successor.set_blocks(form.blocks.data if form.blocks.data else [])
                 _apply_rent_link_from_form(
                     form,
                     class_id=selected_scope['class_id'],
@@ -5422,6 +5599,20 @@ def edit_store_item(product_lineage_uuid):
         payroll_settings=payroll_settings,
         expected_weekly_hours=_resolve_expected_weekly_hours(payroll_settings) if payroll_settings else None,
         selected_feature_scope=selected_scope,
+        item_type_field_rules=dict(edit_form_contract.item_type_rules),
+        rent_prevents_purchase_when_late=edit_form_contract.rent_prevents_purchase_when_late,
+        collective_goal_band=edit_form_contract.collective_goal_band,
+        store_form_contracts=contract_payload(
+            rent_prevents_purchase_when_late=edit_form_contract.rent_prevents_purchase_when_late,
+            collective_goal_band=dict(edit_form_contract.collective_goal_band),
+            cwi=build_economic_view(selected_scope['class_id']).display_context.get('cwi'),
+        ),
+        form_field_catalog=form_field_catalog(
+            rent_prevents_purchase_when_late=edit_form_contract.rent_prevents_purchase_when_late,
+            collective_goal_band=dict(edit_form_contract.collective_goal_band),
+            cwi=build_economic_view(selected_scope['class_id']).display_context.get('cwi'),
+        ),
+        active_form_contract=active_form_contract,
     )
 
 
@@ -5449,9 +5640,6 @@ def delete_store_item(product_lineage_uuid):
     item = get_current_version(selected_scope['class_id'], product_lineage_uuid)
     if item is None:
         abort(404)
-    if item.blocks_list and selected_scope['block'] not in {b.strip().upper() for b in item.blocks_list if b}:
-        abort(404)
-
     item_name = item.name
     idempotency_key = (
         f"feat:store:item-retire:{selected_scope['class_id']}:{product_lineage_uuid}"
@@ -5474,9 +5662,6 @@ def hard_delete_store_item(product_lineage_uuid):
     item = get_current_version(selected_scope['class_id'], product_lineage_uuid)
     if item is None:
         abort(404)
-    if item.blocks_list and selected_scope['block'] not in {b.strip().upper() for b in item.blocks_list if b}:
-        abort(404)
-
     flash(
         f"Hard deletion for '{item.name}' is disabled. Withdraw items instead, "
         "or delete the class join code for full scoped cleanup.",
@@ -5840,6 +6025,36 @@ def rent_settings():
             display_first_rent_due_date = settings.first_rent_due_date.strftime("%B %d, %Y")
             display_first_rent_due_date_iso = settings.first_rent_due_date.strftime("%Y-%m-%d")
 
+    canonical_rent_band = None
+    if settings and payroll_settings:
+        try:
+            rent_checker = EconomyBalanceChecker(
+                g.canonical_context.user_id,
+                class_id=class_id,
+            )
+            rent_cwi = rent_checker.calculate_cwi(
+                payroll_settings,
+                expected_weekly_hours=_resolve_expected_weekly_hours(payroll_settings),
+            ).cwi
+            rent_band = rent_checker.rent_band(
+                rent_cwi,
+                settings.frequency_type,
+                settings.custom_frequency_value,
+                getattr(settings, 'custom_frequency_unit', None),
+            )
+            canonical_rent_band = {
+                'cwi': float(rent_cwi),
+                'min': float(rent_band['min']),
+                'max': float(rent_band['max']),
+                'period_label': frequency_label(
+                    settings.frequency_type,
+                    custom_frequency_value=settings.custom_frequency_value,
+                    custom_frequency_unit=getattr(settings, 'custom_frequency_unit', None),
+                ),
+            }
+        except (TypeError, ValueError, AttributeError):
+            canonical_rent_band = None
+
     if current_period_start and current_period_end:
         display_current_period_start = current_period_start.strftime("%b %d, %Y")
         display_current_period_end = current_period_end.strftime("%b %d, %Y")
@@ -5865,6 +6080,7 @@ def rent_settings():
                           display_current_period_start=display_current_period_start,
                           display_current_period_end=display_current_period_end,
                           display_next_due_date=display_next_due_date,
+                          canonical_rent_band=canonical_rent_band,
                           current_period_start=current_period_start,
                           current_period_end=current_period_end,
                           next_due_date=next_due_date)
@@ -6824,6 +7040,8 @@ def apply_economy_rebalance():
         analysis.cwi.cwi,
         rent_settings,
         insurance_policies,
+        store_items=scoped_store_items,
+        economic_engine=_resolve_economic_engine_for_class_id(selected_scope['class_id']),
     )
 
     change_plan = [
@@ -6831,6 +7049,26 @@ def apply_economy_rebalance():
         for item in preview_items
         if item.get('key') in selected_keys and item.get('change')
     ]
+
+    for change in change_plan:
+        key = next(item['key'] for item in preview_items if item['change'] is change or item['change'] == change)
+        safe_key = key.replace(':', '-')
+        mode = request.form.get(f"rebalance_mode_{safe_key}", "midpoint")
+        if mode == "custom":
+            raw = (request.form.get(f"rebalance_amount_{safe_key}") or '').strip()
+            if not raw:
+                flash(f"Enter a custom amount for {change.get('type')}.", "warning")
+                return redirect(url_for('admin.economic_engine', review_rebalance=1))
+            try:
+                amount = Decimal(raw)
+            except (InvalidOperation, ValueError):
+                flash("Enter valid custom amounts.", "warning")
+                return redirect(url_for('admin.economic_engine', review_rebalance=1))
+            row = next(item for item in preview_items if item['key'] == key)
+            if amount < Decimal(row['recommended_min']) or amount > Decimal(row['recommended_max']):
+                flash("Custom amounts must remain within the recommended range.", "warning")
+                return redirect(url_for('admin.economic_engine', review_rebalance=1))
+            change['new_value'] = str(amount.quantize(Decimal('0.01')))
 
     if not change_plan:
         flash("No rebalance changes were selected.", "warning")
@@ -6844,8 +7082,14 @@ def apply_economy_rebalance():
     # be supplied via the bare @requires_feat_context route decorator (which passes no key
     # and would fail fatally on entry). Open the FEAT inline with a deterministic key that
     # wraps only the mutation section.
+    choice_fingerprint = []
+    for change in change_plan:
+        key = next(item['key'] for item in preview_items if item['change'] is change or item['change'] == change)
+        safe_key = key.replace(':', '-')
+        mode = request.form.get(f"rebalance_mode_{safe_key}", "midpoint")
+        choice_fingerprint.append(f"{key}:{mode}:{change.get('new_value')}")
     rebalance_fingerprint = hashlib.sha256(
-        f"{activation_mode}:{'|'.join(sorted(selected_keys))}".encode("utf-8")
+        f"{activation_mode}:{'|'.join(sorted(choice_fingerprint))}".encode("utf-8")
     ).hexdigest()[:16]
     rebalance_idempotency_key = (
         f"feat:class-005:rebalance:{selected_scope['class_id']}:{rebalance_fingerprint}"
@@ -7005,6 +7249,8 @@ def economic_engine():
             cwi_calc.cwi,
             rent_settings,
             insurance_policies,
+            store_items=store_items,
+            economic_engine=economic_engine,
         )
 
     feature_links = {
@@ -10151,6 +10397,9 @@ def api_economy_validate(feature):
             'frequency_type': data.get('frequency_type', data.get('frequency', 'monthly')),
             'custom_frequency_value': data.get('custom_frequency_value'),
             'custom_frequency_unit': data.get('custom_frequency_unit'),
+            # Store: the role the teacher selected on the form, which selects
+            # the reference band the price is reported against.
+            'economic_role': data.get('economic_role'),
             # Insurance-specific parameters for coverage and period cap validation
             'max_claim_amount': data.get('max_claim_amount'),
             'max_payout_per_period': data.get('max_payout_per_period'),

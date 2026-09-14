@@ -22,7 +22,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 from app.extensions import db
-from app.models import StoreProduct, ClassEconomy
+from app.models import StoreProduct, ClassEconomy, utc_now
 
 
 class StorePolicyError(Exception):
@@ -63,15 +63,20 @@ class StorePolicyConfig:
     product_id: str
     is_purchasable: bool
     supports_direct_grants: bool
-    price: Decimal
+    price: Optional[Decimal]
     entitlement_type: str  # IMMEDIATE_USE | DELAYED_USE | HALL_PASS | PRIVILEGE | INSURANCE | COLLECTIVE_GOAL
 
+    # Advisory pricing guidance, never an authorization input (SPEC-STORE-001
+    # §IV.D). Purchase gating reads essential_when_overdue, not this.
+    economic_role: str  # necessity | convenience | add_on
+
     # Optional fields per SPEC-STORE-001 §IV.C
-    limit_per_student: Optional[int] = None
+    holding_limit: Optional[int] = None
+    direct_purchase_allowed: bool = True
+    essential_when_overdue: bool = False
     auto_expiry_days: Optional[int] = None
     name: Optional[str] = None
     description: Optional[str] = None
-    tier: Optional[str] = None
     bypass_cwi_warnings: bool = False
     is_long_term_goal: bool = False
     bundle_quantity: Optional[int] = None
@@ -80,6 +85,7 @@ class StorePolicyConfig:
     collective_goal_type: Optional[str] = None
     collective_goal_target: Optional[int] = None
     collective_goal_expires_at: Optional[datetime] = None
+    redemption_prompt: Optional[str] = None
 
     # Insurance publication locator (DOM-STORE-001): required iff
     # entitlement_type == INSURANCE, forbidden otherwise. Points to the
@@ -141,16 +147,21 @@ class StorePolicyResolver:
 
         return StorePolicyConfig(
             product_id=product.product_lineage_uuid,
-            is_purchasable=(product.availability_state == 'IN_USE'),
+            is_purchasable=(
+                product.availability_state == 'IN_USE'
+                and (product.activation_at is None or product.activation_at <= utc_now())
+            ),
             # HALL_PASS is the only catalog type a teacher may grant directly.
             supports_direct_grants=(entitlement_type == 'HALL_PASS'),
             price=product.price,
             entitlement_type=entitlement_type,
-            limit_per_student=product.limit_per_student,
+            economic_role=product.economic_role,
+            holding_limit=product.holding_limit,
+            direct_purchase_allowed=bool(product.direct_purchase_allowed),
+            essential_when_overdue=bool(product.essential_when_overdue),
             auto_expiry_days=product.auto_expiry_days,
             name=product.name,
             description=product.description,
-            tier=product.tier,
             bypass_cwi_warnings=bool(product.bypass_cwi_warnings),
             is_long_term_goal=bool(product.is_long_term_goal),
             bundle_quantity=(
@@ -167,6 +178,7 @@ class StorePolicyResolver:
             collective_goal_type=product.collective_goal_type,
             collective_goal_target=product.collective_goal_target,
             collective_goal_expires_at=product.collective_goal_expires_at,
+            redemption_prompt=product.redemption_prompt,
             policy_uuid=product.policy_uuid,
             class_id=product.class_id,
             created_at=product.created_at,
