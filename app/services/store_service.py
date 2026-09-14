@@ -72,7 +72,7 @@ AVAILABILITY_STATES = frozenset({IN_USE, HIDDEN, RETIRED})
 # allow-list only — semantic validation belongs to the calling FEAT.
 _DEFINITION_FIELDS = frozenset({
     "name", "description", "price", "economic_role", "item_type", "inventory_total",
-    "holding_limit", "direct_purchase_allowed", "essential_when_overdue", "activation_at", "auto_delist_date", "auto_expiry_days",
+    "holding_limit", "direct_purchase_allowed", "available_with_overdue_obligations", "activation_at", "auto_delist_date", "auto_expiry_days",
     "is_long_term_goal", "bypass_cwi_warnings", "is_bundle", "bundle_quantity",
     "bulk_discount_enabled", "bulk_discount_quantity", "bulk_discount_percentage",
     "collective_goal_type", "collective_goal_target", "collective_goal_expires_at",
@@ -128,6 +128,10 @@ _NON_EXPIRING_ITEM_TYPES = frozenset({'immediate'})
 _RENT_LINKABLE_ITEM_TYPES = CANONICAL_ITEM_TYPES - {'collective'}
 
 
+# SPEC-STORE-001 §IV.C: a redemption prompt is for DELAYED_USE and HALL_PASS only.
+_PROMPTABLE_ITEM_TYPES = frozenset({'delayed', 'hall_pass'})
+
+
 def item_type_field_rules() -> dict[str, dict[str, bool]]:
     """Which configuration groups each catalog type may legally carry.
 
@@ -142,7 +146,7 @@ def item_type_field_rules() -> dict[str, dict[str, bool]]:
             'expiring': item_type in {'delayed', 'privilege', 'hall_pass'},
             'collective': item_type == 'collective',
             'rent_linkable': item_type in _RENT_LINKABLE_ITEM_TYPES,
-            'promptable': item_type in {'delayed', 'collective'},
+            'promptable': item_type in _PROMPTABLE_ITEM_TYPES,
         }
         for item_type in sorted(CANONICAL_ITEM_TYPES)
     }
@@ -184,15 +188,16 @@ def _validate_definition(definition: dict) -> None:
             raise InvalidDefinition("privileges cannot be bundled or bulk discounted")
         if definition.get('redemption_prompt'):
             raise InvalidDefinition("privileges do not use redemption prompts")
-        if definition.get('direct_purchase_allowed') and not definition.get('auto_expiry_days'):
+        # The resolved flag, not the raw key: an omitted key means directly purchasable.
+        if direct_purchase_allowed and not definition.get('auto_expiry_days'):
             raise InvalidDefinition("purchased privileges require an expiration duration")
 
     if item_type == 'immediate' and definition.get('redemption_prompt'):
         raise InvalidDefinition("immediate-use items do not use redemption prompts")
-    if item_type not in {'delayed', 'collective'} and definition.get('redemption_prompt'):
-        raise InvalidDefinition("redemption prompts are only supported for delayed or collective items")
+    if item_type not in _PROMPTABLE_ITEM_TYPES and definition.get('redemption_prompt'):
+        raise InvalidDefinition("redemption prompts are only supported for delayed-use and hall-pass items")
 
-    if definition.get('essential_when_overdue') and not direct_purchase_allowed:
+    if definition.get('available_with_overdue_obligations') and not direct_purchase_allowed:
         raise InvalidDefinition("essential purchase access requires a purchasable item")
 
     price = definition.get('price')

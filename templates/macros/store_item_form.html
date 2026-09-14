@@ -1,0 +1,48 @@
+{#
+  One renderer for the server-resolved Store item contract, shared by the
+  create and edit forms. It was copied into both templates, and the copies lost
+  the hooks live CWI feedback binds to: the price input's data-economy-validate
+  marker and the #economy-warnings container.
+
+  Legality comes from the contract; store_item_type_gating.js only selects which
+  resolved contract is showing, and disables what it hides.
+#}
+{% macro render_store_item_contract(form, form_field_catalog) %}
+<div id="store-form-contract-renderer">
+  {% for section in form_field_catalog %}
+  <section class="card mb-3" data-contract-section="{{ section.key }}">
+    <div class="card-header bg-light"><h3 class="mb-0 h6">{{ section.title }}</h3></div>
+    <div class="card-body">
+      {% for field in section.fields %}
+      <div class="mb-3" data-contract-field="{{ field.name }}"{% if field.depends_on and (':' not in field.depends_on and not form[field.depends_on].data or ':' in field.depends_on and form[field.depends_on.split(':')[0]].data != field.depends_on.split(':')[1]) %} hidden{% endif %}>
+      {% if field.kind == 'info' %}
+        <div class="alert alert-info mb-0">{{ field.label }}</div>
+      {% else %}
+        {% set control = form[field.name] %}
+        {% if field.kind == 'checkbox' %}
+        <div class="form-check">
+          {{ control(class="form-check-input") }}
+          {{ control.label(class="form-check-label fw-bold") }}
+        </div>
+        {% else %}
+        {{ control.label(class="form-label fw-bold") }}
+        {% if field.name == 'price' %}
+        {{ control(class="form-control", **{'data-economy-validate': 'store_item'}) }}
+        {% elif field.name == 'economic_role' %}
+        {{ control(class="form-select", **{'data-economic-role-select': 'true', 'data-economy-trigger': '[data-economy-validate]'}) }}
+        {% else %}
+        {{ control(class="form-control" if field.kind != 'select' else "form-select") }}
+        {% endif %}
+        {% endif %}
+        {% if field.name == 'economic_role' %}<div id="role-recommendation" class="alert alert-info mt-2" hidden><small><strong>Reference range:</strong> <span id="role-range-text"></span></small></div>{% endif %}
+        {% if field.name == 'price' %}<div id="economy-warnings" aria-live="polite"></div>{% endif %}
+        {% if field.help_text %}<small class="text-muted d-block mt-1">{{ field.help_text }}</small>{% endif %}
+        {% for error in control.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+      {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% endmacro %}

@@ -60,6 +60,87 @@ def test_collective_goal_allows_only_its_own_settings():
     assert collective["rent_linkable"] is False
 
 
+def test_overdue_permission_is_offered_on_any_directly_purchasable_item():
+    """SPEC-STORE-001 §IV.C: the permission is not conditioned on rent linkage."""
+    from app.services.store.form_contract import resolve_store_form_contract
+
+    def legal(**state):
+        return resolve_store_form_contract(rent_prevents_purchase_when_late=True, **state).legal_fields
+
+    field = "available_with_overdue_obligations"
+    assert field in legal(item_type="delayed", rent_linked=False, direct_purchase=True)
+    assert field in legal(item_type="collective", rent_linked=False, direct_purchase=True)
+    assert field in legal(item_type="delayed", rent_linked=True, direct_purchase=True)
+    assert field not in legal(item_type="delayed", rent_linked=True, direct_purchase=False)
+    assert field not in resolve_store_form_contract(
+        item_type="delayed", rent_linked=False, direct_purchase=True,
+        rent_prevents_purchase_when_late=False,
+    ).legal_fields
+
+
+def test_long_term_goal_and_delist_date_are_teacher_controls_where_a_price_is():
+    from app.services.store.form_contract import resolve_store_form_contract
+
+    purchasable = resolve_store_form_contract(
+        item_type="delayed", rent_linked=False, direct_purchase=True,
+        rent_prevents_purchase_when_late=False,
+    )
+    kinds = {field.name: field.kind for section in purchasable.sections for field in section.fields}
+    assert kinds["is_long_term_goal"] == "checkbox"
+    assert kinds["auto_delist_date"] == "date"
+
+    grant_only = resolve_store_form_contract(
+        item_type="delayed", rent_linked=True, direct_purchase=False,
+        rent_prevents_purchase_when_late=False,
+    )
+    assert "is_long_term_goal" not in grant_only.legal_fields
+    assert "auto_delist_date" not in grant_only.legal_fields
+
+
+def test_rent_linkable_types_all_map_to_a_rent_grant():
+    """The form's rent-linkable set and the save path's mapping cannot disagree."""
+    from app.models import _SATISFACTION_BENEFIT_ENTITLEMENT_TYPES
+    from app.routes.admin import _rent_link_entitlement_type
+    from app.services.store.form_contract import _RENT_LINKABLE
+
+    for item_type in _RENT_LINKABLE:
+        assert _rent_link_entitlement_type(item_type) in _SATISFACTION_BENEFIT_ENTITLEMENT_TYPES, item_type
+    assert _rent_link_entitlement_type("privilege") == "PRIVILEGE"
+    assert _rent_link_entitlement_type("collective") is None
+
+
+@pytest.mark.parametrize("surface", ["create", "edit"])
+def test_every_legal_contract_field_is_rendered_for_the_script_to_gate(client, surface):
+    """The shipped payload is only half of the gate.
+
+    The script can only show, hide and disable a field that is rendered as a
+    ``data-contract-field`` wrapper, so every field any contract makes legal must
+    have one on both surfaces, and nothing outside the contracts may. Browser
+    behaviour itself is not exercised here.
+    """
+    classroom = initialize_as_teacher("chemistry_p1", client, client.application)
+    enable_class_feature(class_id=classroom.class_id, feature="store")
+    db.session.commit()
+    path = "/admin/store"
+    if surface == "edit":
+        with FEATContext("FEAT-SETTINGS-001", idempotency_key=f"store_gating:rendered:{classroom.class_id}"):
+            item = publish_store_product(
+                class_id=classroom.class_id,
+                entitlement_type="DELAYED_USE",
+                user_id=classroom.teacher_user.id,
+                name="Rendered Gating Pass",
+                price="25.00",
+            )
+        path = f"/admin/store/edit/{item.product_lineage_uuid}"
+
+    body = client.get(path).get_data(as_text=True)
+    rendered = set(re.findall(r'data-contract-field="([^"]+)"', body))
+    contracts = _contracts_payload(body)
+    legal = set().union(*(set(contract["legal_fields"]) for contract in contracts.values()))
+
+    assert legal == rendered
+
+
 def test_create_form_gates_every_published_rule(client):
     """The Add New Item form tags a group for each rule and ships the payload."""
     classroom = initialize_as_teacher("chemistry_p1", client, client.application)

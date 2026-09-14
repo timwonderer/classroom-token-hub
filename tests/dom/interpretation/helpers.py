@@ -143,37 +143,63 @@ def _seed_reverse_category(idempotency_key: str) -> IssueCategory:
     return category
 
 
-def issue_reverse_success_state(client, app):
-    """Success scenario: everything is in-scope for the active teacher.
+def unused_store_purchase(classroom, student, *, key: str, price: str = "30.00") -> Transaction:
+    """A funded seat buys one delayed-use item and has not used it.
 
-    - Active teacher class == the issue's class_public_id (issue is visible,
-      passing the resolve route's class-scoped 404 gate).
-    - The referenced POSTED transaction is owned by the issue submitter's seat
-      (transaction.seat_id == submitter_seat.id), so the reversal proceeds.
-
-    Only one classroom is provisioned, so nothing repoints the teacher's
-    last_active_class_id after login.
+    This is the only transaction an issue may REVERSE or REFUND: FEAT-LED-002 §I
+    resolves an eligible pre-use Store purchase, and SPEC-OPS-001 §3.7 makes
+    everything else ineligible by default.
     """
-    classroom = initialize_as_teacher("chemistry_p1", client, app)
-    student = classroom.students[0]
-    category = _seed_reverse_category("issue_reverse_success:category")
+    from app.feats.store_purchase_feat import execute_store_purchase
+    from tests.helpers.ledger import create_ledger_idempotent_transaction
+    from tests.helpers.store_products import publish_store_product
 
-    with FEATContext("FEAT-LED-001", idempotency_key="issue_reverse_success:posted_tx"):
-        tx = Transaction(
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"{key}:fund"):
+        create_ledger_idempotent_transaction(
+            idempotency_key=f"{key}-fund",
+            seat_id=student.seat.id,
+            class_id=classroom.class_id,
+            user_id=student.user.id,
+            amount=Decimal("100.00"),
+            account_type="checking",
+            type="payroll",
+            description="Issue reversal test funding",
+        )
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"{key}:publish"):
+        product = publish_store_product(
+            class_id=classroom.class_id,
+            entitlement_type="DELAYED_USE",
+            user_id=classroom.teacher_user.id,
+            name=f"Issue item {key}",
+            price=price,
+        )
+    db.session.commit()
+    result = execute_store_purchase(
+        canonical_context=CanonicalContext(
             user_id=student.user.id,
             class_id=classroom.class_id,
             seat_id=student.seat.id,
-            target_seat_id=student.seat.id,
-            actor_seat_id=student.seat.id,
-            mechanism="self",
-            amount=Decimal("30.00"),
-            account_type="checking",
-            status=TransactionStatus.POSTED,
-            type="deposit",
-            description="Posted deposit",
+            actor_role="student",
+        ),
+        policy_uuid=product.policy_uuid,
+        quantity=1,
+        idempotency_key=f"{key}:buy",
+    )
+    assert result.success, result.error_message
+    db.session.commit()
+    return (
+        Transaction.query.filter_by(
+            class_id=classroom.class_id, seat_id=student.seat.id, type="purchase",
         )
-        db.session.add(tx)
-        db.session.flush()
+        .order_by(Transaction.id.desc())
+        .first()
+    )
+
+
+def issue_for_transaction(classroom, student, tx, *, key: str) -> Issue:
+    """The submitting student's issue about ``tx``."""
+    category = _seed_reverse_category(f"{key}:category")
+    with FEATContext("FEAT-LED-001", idempotency_key=f"{key}:issue"):
         issue = Issue(
             actor_public_id=student.seat.public_id,
             class_public_id=classroom.economy.class_public_id,
@@ -185,6 +211,25 @@ def issue_reverse_success_state(client, app):
         db.session.add(issue)
         db.session.flush()
     db.session.commit()
+    return issue
+
+
+def issue_reverse_success_state(client, app):
+    """Success scenario: an unused Store purchase, in scope for the active teacher.
+
+    - Active teacher class == the issue's class_public_id (issue is visible,
+      passing the resolve route's class-scoped 404 gate).
+    - The referenced purchase is owned by the issue submitter's seat
+      (transaction.seat_id == submitter_seat.id) and its item is unused, so
+      the reversal proceeds.
+
+    Only one classroom is provisioned, so nothing repoints the teacher's
+    last_active_class_id after login.
+    """
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    student = classroom.students[0]
+    tx = unused_store_purchase(classroom, student, key="issue_reverse_success")
+    issue = issue_for_transaction(classroom, student, tx, key="issue_reverse_success")
     return classroom, student, issue, tx
 
 

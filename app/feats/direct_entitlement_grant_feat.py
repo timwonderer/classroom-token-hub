@@ -279,6 +279,27 @@ def _execute_direct_grant_impl(
                 product_id=policy_config.product_id,
             )
 
+    # The holding limit binds a teacher grant exactly as it binds a purchase
+    # (DOM-STORE-001 §VIII.A). The target seat row is locked above.
+    from app.services.entitlement_service import HoldingLimitExceeded, ensure_within_holding_limit
+    try:
+        ensure_within_holding_limit(
+            class_id=canonical_context.class_id,
+            seat_id=target_seat_id,
+            product_lineage_uuid=policy_config.product_id,
+            entitlement_type=policy_config.entitlement_type,
+            holding_limit=policy_config.holding_limit,
+            grant_quantity=quantity,
+        )
+    except HoldingLimitExceeded as exc:
+        return DirectGrantResult(
+            success=False,
+            correlation_id="",
+            quantity_granted=0,
+            error_code="HOLDING_LIMIT_EXCEEDED",
+            error_message=str(exc),
+        )
+
     # =========================================================================
     # PHASE 2: Atomic Entitlement Grants
     # =========================================================================

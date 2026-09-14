@@ -29,6 +29,28 @@ POLICY_TRANSITION_STATUS_CANCELLED = "cancelled"
 POLICY_TRANSITION_STATUS_SUPERSEDED = "superseded"
 
 REBALANCE_DOMAIN_RENT = "rent"
+REBALANCE_DOMAIN_STORE = "store"
+REBALANCE_DOMAIN_BANKING = "banking"
+
+# FEAT-CLASS-005 §XI delegates each rebalance row to its owning command. Every
+# selectable change type must name that owner; an unmapped type is refused
+# rather than skipped, because a skipped row still reported success.
+_CHANGE_TYPE_DOMAINS = {
+    "rent": REBALANCE_DOMAIN_RENT,
+    "rent_late_penalty": REBALANCE_DOMAIN_RENT,
+    "store_item": REBALANCE_DOMAIN_STORE,
+    "overdraft_fee": REBALANCE_DOMAIN_BANKING,
+}
+
+# Store prices change by product-version supersession, which retires the live
+# version at once, and overdraft fees by Economic Engine evolution. Neither
+# owning domain defines a later activation boundary (FEAT-ECON-001 §VIII), so
+# these rows can only be applied immediately; they are never queued.
+IMMEDIATE_ONLY_CHANGE_TYPES = frozenset({"store_item", "overdraft_fee"})
+
+
+class UnsupportedRebalanceChange(ValueError):
+    """A rebalance change has no owning command, or cannot run in the requested mode."""
 
 
 def _serialize_dt(value: datetime | None) -> str | None:
@@ -64,7 +86,9 @@ def prepare_scheduled_rebalance_changes(change_plan, *, rent_settings=None, insu
         enriched_change = dict(change)
         effective_at = None
 
-        if change.get("type") == "rent" and rent_settings is not None:
+        # A late penalty is part of the rent contract, so it activates at the
+        # same rent boundary as the amount it accompanies.
+        if change.get("type") in {"rent", "rent_late_penalty"} and rent_settings is not None:
             effective_at = _get_rent_effective_at(rent_settings, reference_time)
 
         enriched_change["effective_at"] = _serialize_dt(effective_at)
@@ -73,13 +97,14 @@ def prepare_scheduled_rebalance_changes(change_plan, *, rent_settings=None, insu
     return scheduled_changes
 
 
-def _domain_for_change(change: dict[str, Any]) -> str | None:
+def _domain_for_change(change: dict[str, Any]) -> str:
     change_type = (change.get("type") or "").strip().lower()
-    if change_type == "rent":
-        return REBALANCE_DOMAIN_RENT
-    if change_type == "rent_late_penalty":
-        return REBALANCE_DOMAIN_RENT
-    return None
+    try:
+        return _CHANGE_TYPE_DOMAINS[change_type]
+    except KeyError:
+        raise UnsupportedRebalanceChange(
+            f"Rebalance change type {change_type!r} has no owning command."
+        ) from None
 
 
 def _canonical_change_payload(change: dict[str, Any]) -> str:
@@ -88,6 +113,7 @@ def _canonical_change_payload(change: dict[str, Any]) -> str:
         "block",
         "join_code",
         "policy_id",
+        "product_lineage_uuid",
         "title",
         "current_value",
         "new_value",
@@ -98,9 +124,14 @@ def _canonical_change_payload(change: dict[str, Any]) -> str:
 
 
 def _transition_conflict_key(domain: str, change: dict[str, Any]) -> str:
+    # The change type is part of the key: a rent amount and a rent late penalty
+    # are independent terms, and sharing a key let queuing one supersede the other.
+    change_type = (change.get("type") or "").strip().lower()
     if domain == REBALANCE_DOMAIN_RENT:
-        return f"rent:{(change.get('block') or '').strip().upper()}"
-    return domain
+        return f"rent:{change_type}:{(change.get('block') or '').strip().upper()}"
+    if domain == REBALANCE_DOMAIN_STORE:
+        return f"store:{change.get('product_lineage_uuid') or ''}"
+    return f"{domain}:{change_type}"
 
 
 def _next_policy_version_number(class_id: str, domain: str) -> int:
@@ -241,9 +272,13 @@ def _create_policy_transitions_for_changes(
     created: list[PolicyTransition] = []
     for idx, change in enumerate(changes):
         domain = _domain_for_change(change)
-        if not domain:
-            continue
-        correlation_id = f"rebalance:{class_id}:{domain}:{int(reference_time.timestamp())}:{idx}"
+        if status == POLICY_TRANSITION_STATUS_PENDING and change.get("type") in IMMEDIATE_ONLY_CHANGE_TYPES:
+            raise UnsupportedRebalanceChange(
+                f"Rebalance change type {change.get('type')!r} can only be applied immediately."
+            )
+        # policy_transitions.correlation_id is VARCHAR(64). The domain has its own
+        # column; spelling it here pushed store and banking ids past the limit.
+        correlation_id = f"rebalance:{class_id}:{int(reference_time.timestamp())}:{idx}"
         created.append(
             _create_policy_transition(
                 class_id=class_id,
@@ -338,7 +373,7 @@ def _get_effective_rent_settings(class_id: str | None):
     return get_rent_settings(class_id)
 
 
-def _apply_change_list(user_id, class_id, changes, activation_mode, *, reference_time=None):
+def _apply_change_list(user_id, class_id, changes, activation_mode, *, reference_time=None, canonical_context=None):
     """Apply policy changes to a class's economic configuration.
 
     Args:
@@ -400,6 +435,38 @@ def _apply_change_list(user_id, class_id, changes, activation_mode, *, reference
             store_service.supersede_product(current=product, definition=definition)
             applied_labels.append(f"Store: {product.name}")
             applied_changes.append(dict(change))
+        elif change_type == "overdraft_fee":
+            # FEAT-CLASS-005 §XI: overdraft/NSF fees change only through the
+            # Economic Engine evolution command. The rebalance already executes
+            # inside FEAT-CLASS-005 and a nested FEAT context is forbidden, so
+            # the command body is composed within the active context.
+            if canonical_context is None:
+                raise UnsupportedRebalanceChange(
+                    "An overdraft fee change requires the acting teacher's canonical context."
+                )
+            from app.feats.class_configuration.feat_class_005_economic_engine_evolution import (
+                _execute_evolve_economic_engine_impl,
+            )
+            from app.models import ClassFeature
+            from app.services.class_configuration_query_service import is_feature_enabled
+
+            result = _execute_evolve_economic_engine_impl.__wrapped__(
+                canonical_context=canonical_context,
+                class_id=class_id,
+                updates={"flat_overdraft_fee": Decimal(str(change.get("new_value")))},
+                feature_list=[
+                    feature for feature in ClassFeature.feature_names()
+                    if is_feature_enabled(class_id, feature)
+                ],
+            )
+            if not result.success:
+                raise ValueError(f"The overdraft fee could not be updated: {result.error_message}")
+            applied_labels.append("Banking: Overdraft / NSF fee")
+            applied_changes.append(dict(change))
+        else:
+            raise UnsupportedRebalanceChange(
+                f"Rebalance change type {change_type!r} has no owning command."
+            )
 
     return applied_labels, applied_changes
 
@@ -424,7 +491,7 @@ def _activate_pending_policy_version(transition: PolicyTransition, *, reference_
     return activated_version
 
 
-def apply_rebalance_changes(user_id, class_id, change_plan, activation_mode, *, reference_time=None):
+def apply_rebalance_changes(user_id, class_id, change_plan, activation_mode, *, reference_time=None, canonical_context=None):
     """Apply rebalance changes for a class.
 
     Refactored in Phase 2 to remove FeatureSettings dependency (table dropped).
@@ -447,6 +514,7 @@ def apply_rebalance_changes(user_id, class_id, change_plan, activation_mode, *, 
         change_plan,
         activation_mode,
         reference_time=reference_time,
+        canonical_context=canonical_context,
     )
     if applied_changes:
         _create_policy_transitions_for_changes(

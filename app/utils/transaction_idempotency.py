@@ -29,7 +29,36 @@ IDEMPOTENT_TRANSACTION_TYPES = frozenset({
 
 IDEMPOTENCY_KEY_PREFIX = "txn"
 MAX_IDEMPOTENCY_KEY_LENGTH = 128
-FINGERPRINT_VERSION = 1
+
+# Version 1 fingerprinted every effect's amount. Version 2 is byte-identical
+# except that an Interest effect's amount is encoded as null: interest is a
+# period-keyed command recomputed from a live balance on every retry, and
+# SPEC-LED-002 §4.1 requires values that legitimately change across retries to
+# be excluded. §4.2 makes that serializer change a new version, and a
+# reservation accepted under version 1 is still compared under version 1.
+FINGERPRINT_VERSION = 2
+SUPPORTED_FINGERPRINT_VERSIONS = frozenset({1, 2})
+_AMOUNT_EXCLUDED_FROM_FINGERPRINT_TYPES = frozenset({"Interest"})
+
+
+def amount_is_fingerprinted(type, version):
+    """Whether an effect's amount participates in the version's fingerprint."""
+    if version not in SUPPORTED_FINGERPRINT_VERSIONS:
+        raise ValueError(f"Unsupported Ledger fingerprint version: {version!r}")
+    return version < 2 or type not in _AMOUNT_EXCLUDED_FROM_FINGERPRINT_TYPES
+
+
+def fingerprint_matches_reservation(reservation, fingerprint_for_version):
+    """Compare a replayed command against a reservation under its own version.
+
+    The supplied command is serialized under the version the reservation was
+    accepted with; the stored digest is never re-derived under the current
+    version (SPEC-LED-002 §4.2). An unknown version fails closed (§6.3).
+    """
+    version = reservation.fingerprint_version
+    if version not in SUPPORTED_FINGERPRINT_VERSIONS:
+        return False
+    return reservation.replay_fingerprint == fingerprint_for_version(version)
 
 
 def _normalize_key_part(value):
@@ -88,16 +117,18 @@ def get_idempotent_transaction(idempotency_key, class_id=None, seat_id=None, typ
     return query.first()
 
 
-def _command_fingerprint(*, target_seat_id, actor_seat_id, amount, account_type, type, original_transaction_id, policy_id, correlation_id=None):
+def _command_fingerprint(*, target_seat_id, actor_seat_id, amount, account_type, type, original_transaction_id, policy_id, version=FINGERPRINT_VERSION):
+    # correlation_id is deliberately absent. It is a per-request lineage value
+    # (SPEC-LED-002 §4.1), and the one caller that carries a prior correlation
+    # forward also supplies original_transaction_id, which already pins it.
     representation = {
         "account_type": account_type,
         "actor_seat_id": actor_seat_id,
-        "amount": str(amount),
+        "amount": str(amount) if amount_is_fingerprinted(type, version) else None,
         "original_transaction_id": original_transaction_id,
         "policy_id": policy_id,
         "target_seat_id": target_seat_id,
         "type": type,
-        "correlation_id": correlation_id,
     }
     encoded = json.dumps(representation, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
@@ -150,21 +181,26 @@ def create_idempotent_transaction(
         raise ValueError("FATAL: Idempotent Ledger mutation seats must all belong to the provided class_id.")
 
     feat_code = get_active_feat_name()
-    fingerprint = _command_fingerprint(
-        target_seat_id=target_seat_id,
-        actor_seat_id=actor_seat_id,
-        amount=amount,
-        account_type=account_type,
-        type=transaction_type,
-        original_transaction_id=original_transaction_id,
-        policy_id=policy_id,
-    )
+
+    def fingerprint_for(version):
+        return _command_fingerprint(
+            target_seat_id=target_seat_id,
+            actor_seat_id=actor_seat_id,
+            amount=amount,
+            account_type=account_type,
+            type=transaction_type,
+            original_transaction_id=original_transaction_id,
+            policy_id=policy_id,
+            version=version,
+        )
+
+    fingerprint = fingerprint_for(FINGERPRINT_VERSION)
 
     reservation = LedgerCommandReservation.query.filter_by(
         class_id=class_id, feat_code=feat_code, idempotency_key=idempotency_key
     ).first()
     if reservation:
-        if reservation.fingerprint_version != FINGERPRINT_VERSION or reservation.replay_fingerprint != fingerprint:
+        if not fingerprint_matches_reservation(reservation, fingerprint_for):
             raise ValueError("Replay fingerprint mismatch for existing Ledger command reservation.")
         existing = Transaction.query.filter_by(command_reservation_id=reservation.id).order_by(Transaction.id.asc()).first()
         if existing:
@@ -210,7 +246,7 @@ def create_idempotent_transaction(
                 class_id=class_id, feat_code=feat_code, idempotency_key=idempotency_key
             ).first()
         if existing_reservation:
-            if existing_reservation.replay_fingerprint != fingerprint:
+            if not fingerprint_matches_reservation(existing_reservation, fingerprint_for):
                 raise ValueError("Replay fingerprint mismatch for existing Ledger command reservation.")
             existing = Transaction.query.filter_by(command_reservation_id=existing_reservation.id).order_by(Transaction.id.asc()).first()
             if existing:

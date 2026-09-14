@@ -199,6 +199,25 @@ class EconomyBalanceChecker:
             for role, bounds in self.STORE_ROLE_BANDS.items()
         }
 
+    def _weekly_insurance_premium(self, policy_version) -> Optional[float]:
+        """Weekly premium of one offered insurance policy version, or None.
+
+        A policy version carries its terms in its payload, not in columns. An
+        inactive version is not offered, and a version with no usable premium is
+        skipped rather than priced by guesswork.
+        """
+        import json
+
+        if not getattr(policy_version, "is_active", False):
+            return None
+        try:
+            payload = json.loads(getattr(policy_version, "policy_payload_json", None) or "{}")
+            premium = Decimal(str(payload["premium"]))
+        except (KeyError, TypeError, ValueError, ArithmeticError):
+            return None
+        frequency = str(payload.get("charge_frequency") or "weekly").lower()
+        return float(self._normalize_to_weekly(premium, frequency))
+
     def _normalize_to_weekly(
         self,
         value: Decimal,
@@ -813,15 +832,13 @@ class EconomyBalanceChecker:
         # checker does not re-derive availability.
         weekly_insurance = 0
         if insurance_policies:
-            cheapest_weekly = float('inf')
-            for policy in insurance_policies:
-                premium = float(policy.premium)
-                weekly_equiv = float(self._normalize_to_weekly(premium, policy.charge_frequency))
-
-                if weekly_equiv < cheapest_weekly:
-                    cheapest_weekly = weekly_equiv
-
-            weekly_insurance = cheapest_weekly if cheapest_weekly != float('inf') else 0
+            weekly_premiums = [
+                weekly for weekly in (
+                    self._weekly_insurance_premium(policy) for policy in insurance_policies
+                )
+                if weekly is not None
+            ]
+            weekly_insurance = min(weekly_premiums) if weekly_premiums else 0
 
         # Estimate weekly store spending if not provided
         if average_store_spending is None:

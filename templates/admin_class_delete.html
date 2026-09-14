@@ -127,9 +127,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 {% if deletes_account %}
                 'This is your LAST class, so your own teacher account is deleted with it — login, credentials, and recovery material included.',
                 {% else %}
-                'Your own teacher account will not deleted because you still have one or more seats in other classes.',
+                'Your own teacher account will not be deleted, because you still have a seat in another class.',
                 {% endif %}
-
             ],
         }).then(gatePayload => {
             if (!gatePayload) {

@@ -7,6 +7,7 @@ This module owns the append-only monetary correction; the caller owns the
 domain-specific entitlement outcome.
 """
 
+from dataclasses import dataclass
 from decimal import Decimal
 
 from app.extensions import db
@@ -16,6 +17,75 @@ from app.models import Transaction, _quantize_currency
 # FEAT-LED-002 §III.2.1: a compensating transaction persists REVERSAL as its
 # type, never the business reason it was raised for.
 REVERSAL_TRANSACTION_TYPE = "REVERSAL"
+
+_TERMINAL_ENTITLEMENT_EVENTS = ("CONSUMED", "EXPIRED", "REVOKED")
+
+
+@dataclass(frozen=True)
+class PurchaseResolutionEligibility:
+    """Whether a transaction may take the REVERSE or REFUND issue outcome."""
+
+    eligible: bool
+    reason: str | None = None
+    grants: tuple = ()
+
+
+def resolve_purchase_resolution_eligibility(transaction) -> PurchaseResolutionEligibility:
+    """Decide whether an issue may REVERSE or REFUND this transaction.
+
+    Reversal is not universally available, and the absence of a prohibition is
+    not authorization (SPEC-OPS-001 §3.7). The authorization that exists is
+    narrow: FEAT-LED-002 §I resolves an eligible pre-use Store purchase, and
+    DOM-SUP-001 §IX offers REVERSE and REFUND only for an unused or pending
+    item. So the transaction must be a Store purchase that has not been
+    reversed, carries no obligation provenance (§3.7.4), and whose grants to the
+    buying seat are all still active (§6.1). Anything else takes a manual credit.
+
+    Read-only: a GET may call this.
+    """
+    from app.models import EntitlementEvent
+    from app.services import obligations_service
+
+    if transaction is None or transaction.type != "purchase":
+        return PurchaseResolutionEligibility(
+            False, "Only a Store purchase can be reversed or refunded from an issue."
+        )
+    if transaction.reversal_transaction_id is not None:
+        return PurchaseResolutionEligibility(False, "This transaction has already been reversed.")
+    if obligations_service.is_obligation_related_transaction(transaction.id):
+        return PurchaseResolutionEligibility(
+            False, "An obligation-related transaction cannot be reversed or refunded."
+        )
+    if not transaction.correlation_id:
+        return PurchaseResolutionEligibility(False, "This purchase has no traceable item grant.")
+
+    grants = (
+        EntitlementEvent.query.filter_by(
+            class_id=transaction.class_id,
+            target_seat_id=transaction.seat_id,
+            correlation_id=transaction.correlation_id,
+            acquisition_type="PURCHASE",
+            event_type="GRANTED",
+        )
+        .order_by(EntitlementEvent.timestamp.asc())
+        .all()
+    )
+    if not grants:
+        return PurchaseResolutionEligibility(False, "This purchase has no traceable item grant.")
+    if any(grant.entitlement_type == "INSURANCE" for grant in grants):
+        # Coverage is never revoked or refunded; it expires (FEAT-STOR-002 §IX.C).
+        return PurchaseResolutionEligibility(False, "Insurance coverage cannot be reversed or refunded.")
+    terminal = EntitlementEvent.query.filter(
+        EntitlementEvent.class_id == transaction.class_id,
+        EntitlementEvent.entitlement_id.in_([grant.entitlement_id for grant in grants]),
+        EntitlementEvent.event_type.in_(_TERMINAL_ENTITLEMENT_EVENTS),
+    ).first()
+    if terminal is not None:
+        return PurchaseResolutionEligibility(
+            False,
+            "A used, expired or removed item cannot be reversed or refunded. Use a manual credit instead.",
+        )
+    return PurchaseResolutionEligibility(True, None, tuple(grants))
 
 
 class TransactionAlreadyReversed(Exception):
@@ -65,7 +135,6 @@ def check_reversal_authorization(actor_seat_id, transaction) -> None:
 def reverse_transaction(
     transaction, *, description: str, compensation_type: str = "refund",
     idempotency_key: str | None = None, actor_seat_id: int | None = None,
-    preserve_correlation: bool = False,
 ):
     """Counteract a monetary transaction by appending a compensating one.
 
@@ -91,6 +160,14 @@ def reverse_transaction(
         actor_seat_id if actor_seat_id is not None else transaction.actor_seat_id,
         transaction,
     )
+
+    # A reversal is terminal: neither it nor its original may be reversed again
+    # (SPEC-OPS-001 §3.6, §3.7.3). The link below marks the original; this marks
+    # the compensating row, which carries no reversal link of its own.
+    if transaction.type == REVERSAL_TRANSACTION_TYPE:
+        raise ReversalNotAuthorized(
+            f"Transaction #{transaction.id} is itself a reversal and cannot be reversed."
+        )
 
     # INV-LED-013 / INV-OPS-005: one reversal per transaction, owned here rather
     # than by each caller. Idempotency only dedupes an identical key, and the
@@ -124,7 +201,12 @@ def reverse_transaction(
         compensation_subtype=compensation_type,
         description=description, original_transaction_id=transaction.id,
         policy_id=transaction.policy_id,
-        correlation_id=transaction.correlation_id if preserve_correlation else None,
+        # The compensating row inherits the original's economic correlation, on
+        # every path: FEAT-LED-002 §II.2 requires it to inherit or extend the
+        # original, and SPEC-OPS-001 §3.1A requires REVERSE and REFUND to share
+        # it. Leaving it unset let the active FEAT's correlation stand in, which
+        # for a scheduled collective-goal refund named an unrelated operation.
+        correlation_id=transaction.correlation_id,
     )
     reversal_tx, _created = create_idempotent_transaction(
         idempotency_key=idempotency_key, **kwargs

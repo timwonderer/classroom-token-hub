@@ -226,7 +226,7 @@ prices, and it MUST be re-evaluated as each product's coverage economics are set
 - `PRODUCTIVITY` — coverage model is now sufficiently settled (§ 4.4.4) that the envelope
   can be tested against real exposure. The hard weekly boundaries in § 4.4.4 bound exposure
   independently of the premium.
-- `TRANSACTION` — coverage economics remain unresolved (§ 4.5.6); the envelope is
+- `TRANSACTION` — coverage economics remain unresolved (§ 4.4.3); the envelope is
   provisional for this product until they are settled.
 - `NON_MONETARY` — the envelope is **affordability guidance only**, not an exposure-based
   price (§ 4.4.5).
@@ -361,7 +361,7 @@ The **period** capacity is the insurance-contract ceiling (derived from
 `maximum_policy_payout`, period-normalized per § 4.4.2) and is the monetary ceiling on any
 single approval's payout. Approval-time payout bounding — including the two-resource rule
 (remaining claim allowance and remaining period payout capacity) — is execution semantics
-owned by `FEAT-STOR-003` per the scope boundary in § 4.5; this specification states the
+owned by `FEAT-STOR-003` per the scope boundary in § 4.4; this specification states the
 CWI-relative economic reference values only and does not impose an additional approval-time
 weekly payout clamp.
 
@@ -693,9 +693,9 @@ Multipacks remain one Store unit under existing Store semantics. Scenarios MUST
 NOT predict student behavior.
 
 The economic role carries no purchase authority. When overdue-rent Store gating
-is enabled, the product's own `essential_when_overdue` flag decides access, per
-DOM-STORE-001 §XII, which outranks this specification on Store entitlement
-authority. Necessity is the role a teacher SHOULD select for a product they also
+is enabled, the product's own `available_with_overdue_obligations` flag decides access, per
+SPEC-STORE-001 §IV.D; DOM-STORE-001 §XII, which outranks this specification on
+Store entitlement authority, makes the role configuration guidance only. Necessity is the role a teacher SHOULD select for a product they also
 mark essential, and the Helper MAY report a mismatch between the two as guidance;
 selecting Necessity MUST NOT grant the exemption, and selecting Convenience or
 Add-on MUST NOT withhold it.

@@ -558,6 +558,12 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
     if target.amount is not None:
         target.amount_cents = int(_quantize_currency(target.amount) * 100)
 
+    # A compensating Ledger effect carries the correlation of the transaction it
+    # corrects (FEAT-LED-002 §II.2, SPEC-OPS-001 §3.1A): a new row in the current
+    # FEAT whose provenance stays linked to the original. Decided once and applied
+    # to both correlation checks below, which previously disagreed about it.
+    is_compensating_effect = False
+
     # 2. FEAT Context Enforcement
     if is_feat_active():
         feat_name = get_active_feat_name()
@@ -580,22 +586,21 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
         _target_state = sa.inspect(target)
         _is_new_insert = _target_state.transient or _target_state.pending
         session = db.session.object_session(target)
+        if _is_new_insert and target.original_transaction_id and target.correlation_id:
+            linked_corr = _connection.execute(
+                sa.text("SELECT correlation_id FROM ledger_transaction WHERE id = :id"),
+                {"id": target.original_transaction_id},
+            ).scalar()
+            is_compensating_effect = linked_corr == target.correlation_id
         if session and _is_new_insert:
             active_corr = session.info.get("active_correlation_id")
-            if active_corr and target.correlation_id != active_corr:
-                # A compensating Ledger effect intentionally preserves the
-                # original economic correlation. It is a new row in the
-                # current FEAT, but its provenance must remain linked to the
-                # original transaction (FEAT-LED-002 / SPEC-OPS-001).
-                linked_corr = None
-                if target.original_transaction_id:
-                    linked_corr = _connection.execute(
-                        sa.text("SELECT correlation_id FROM ledger_transaction WHERE id = :id"),
-                        {"id": target.original_transaction_id},
-                    ).scalar()
-                if linked_corr != target.correlation_id:
-                    raise ValueError(f"FATAL: Mixed correlation in flush. Context={active_corr}, Object={target.correlation_id}")
-            session.info["active_correlation_id"] = target.correlation_id
+            if active_corr and target.correlation_id != active_corr and not is_compensating_effect:
+                raise ValueError(f"FATAL: Mixed correlation in flush. Context={active_corr}, Object={target.correlation_id}")
+            # The session tracks the active operation's correlation. A
+            # compensating row carries historical provenance, so it must not
+            # become the yardstick for the rows that follow it in this flush.
+            if not is_compensating_effect:
+                session.info["active_correlation_id"] = target.correlation_id
     else:
         from app.feats.base import FEATContextError
         raise FEATContextError("MANDATORY FEAT CONSTITUTIONAL VIOLATION: Ledger mutation outside of FEAT context.")
@@ -663,7 +668,7 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
          # Firing this on UPDATE made every cross-FEAT ledger mutation (settlement
          # under FEAT-LED-003, void under FEAT-LED-002, reversal linkage)
          # impossible; that contradiction was previously masked by FEATBypass.
-         if is_new and target.correlation_id != get_correlation_id():
+         if is_new and not is_compensating_effect and target.correlation_id != get_correlation_id():
               raise ValueError(f"FATAL: Correlation mismatch in {feat_name}. Record={target.correlation_id}, Context={get_correlation_id()}")
 
          # 2. Assert Identity Anchors (seat_id + class_id are the clean-break authority)
@@ -1135,7 +1140,7 @@ class StoreProduct(db.Model):
     # Configuration guidance, not entitlement authority (DOM-STORE-001 §XII).
     # It selects which CWI reference band the Helper reports the price against;
     # it never authorizes a purchase. The overdue-obligation gate is carried by
-    # essential_when_overdue alone.
+    # available_with_overdue_obligations alone.
     economic_role = db.Column(db.String(20), nullable=False, default='necessity') # necessity, convenience, add_on
     item_type = db.Column(db.String(20), nullable=False, default='delayed') # immediate, delayed, collective
     # Configured ceiling, not a balance. NULL = unlimited. Units remaining are
@@ -1144,7 +1149,7 @@ class StoreProduct(db.Model):
     inventory_total = db.Column(db.Integer, nullable=True)
     holding_limit = db.Column(db.Integer, nullable=True) # absolute active-entitlement cap
     direct_purchase_allowed = db.Column(db.Boolean, default=True, nullable=False)
-    essential_when_overdue = db.Column(db.Boolean, default=False, nullable=False)
+    available_with_overdue_obligations = db.Column(db.Boolean, default=False, nullable=False)
     activation_at = db.Column(db.DateTime(timezone=True), nullable=True)
     auto_delist_date = db.Column(db.DateTime(timezone=True), nullable=True)
     auto_expiry_days = db.Column(db.Integer, nullable=True) # days student has to use the item
@@ -1247,7 +1252,7 @@ class StoreProduct(db.Model):
 _STORE_PRODUCT_IMMUTABLE_FIELDS = frozenset({
     'policy_uuid', 'product_lineage_uuid', 'class_id', 'user_id', 'name',
     'description', 'price', 'economic_role', 'item_type', 'inventory_total',
-    'holding_limit', 'direct_purchase_allowed', 'essential_when_overdue', 'activation_at', 'auto_delist_date', 'auto_expiry_days',
+    'holding_limit', 'direct_purchase_allowed', 'available_with_overdue_obligations', 'activation_at', 'auto_delist_date', 'auto_expiry_days',
     'is_long_term_goal', 'bypass_cwi_warnings', 'is_bundle', 'bundle_quantity',
     'bulk_discount_enabled', 'bulk_discount_quantity', 'bulk_discount_percentage',
     'collective_goal_type', 'collective_goal_target', 'collective_goal_expires_at',

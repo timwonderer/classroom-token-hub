@@ -1988,10 +1988,17 @@ def shop():
     now_db = ensure_utc(now)
     # Only IN_USE versions are sellable, and the partial unique index
     # guarantees at most one per lineage — so this cannot show a student two
-    # prices for the same product.
+    # prices for the same product. A grant-only product is not purchasable
+    # and is never offered here (SPEC-STORE-001 §IV.D, §V.A), and a future
+    # start date gates sellability at read time (§IV.C).
     items_query = StoreProduct.query.filter(
         StoreProduct.class_id == class_id,
         StoreProduct.availability_state == store_service.IN_USE,
+        StoreProduct.direct_purchase_allowed.is_(True),
+        or_(
+            StoreProduct.activation_at == None,
+            StoreProduct.activation_at <= now_db,
+        ),
         or_(
             StoreProduct.auto_delist_date == None,
             StoreProduct.auto_delist_date > now_db,

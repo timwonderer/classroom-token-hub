@@ -67,13 +67,13 @@ class StorePolicyConfig:
     entitlement_type: str  # IMMEDIATE_USE | DELAYED_USE | HALL_PASS | PRIVILEGE | INSURANCE | COLLECTIVE_GOAL
 
     # Advisory pricing guidance, never an authorization input (SPEC-STORE-001
-    # §IV.D). Purchase gating reads essential_when_overdue, not this.
+    # §IV.D). Purchase gating reads available_with_overdue_obligations, not this.
     economic_role: str  # necessity | convenience | add_on
 
     # Optional fields per SPEC-STORE-001 §IV.C
     holding_limit: Optional[int] = None
     direct_purchase_allowed: bool = True
-    essential_when_overdue: bool = False
+    available_with_overdue_obligations: bool = False
     auto_expiry_days: Optional[int] = None
     name: Optional[str] = None
     description: Optional[str] = None
@@ -158,7 +158,7 @@ class StorePolicyResolver:
             economic_role=product.economic_role,
             holding_limit=product.holding_limit,
             direct_purchase_allowed=bool(product.direct_purchase_allowed),
-            essential_when_overdue=bool(product.essential_when_overdue),
+            available_with_overdue_obligations=bool(product.available_with_overdue_obligations),
             auto_expiry_days=product.auto_expiry_days,
             name=product.name,
             description=product.description,

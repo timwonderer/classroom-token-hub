@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Authority Level |
 |------------------|---------|----------------|-----------------|
-| SPEC-STORE-001 | 1.2 | 2026-09-13 | Normative |
+| SPEC-STORE-001 | 1.3 | 2026-09-14 | Normative |
 
 ## I. Purpose
 
@@ -53,7 +53,7 @@ This approach provides JSON storage flexibility (fields can change) without surr
   "product_id": <integer>,
   "is_purchasable": <boolean>,
   "supports_direct_grants": <boolean>,
-  "price": <decimal string>,
+  "price": <decimal string | null>,
   "entitlement_type": <enum>,
   "economic_role": <enum>
 }
@@ -66,7 +66,7 @@ This approach provides JSON storage flexibility (fields can change) without surr
 | `product_id` | integer | Stable product identifier | Must match policy_id in policy_versions |
 | `is_purchasable` | boolean | Can students purchase this product? | Required for FEAT-STOR-001 validation |
 | `supports_direct_grants` | boolean | Can teachers grant directly? | Required for FEAT-STOR-004 validation |
-| `price` | decimal (string) | Cost per unit | Must be ≥ 0; decimal with 2 scale |
+| `price` | decimal (string) \| null | Cost per unit of direct Store purchase | Must be ≥ 0; decimal with 2 scale. Required when `direct_purchase_allowed` is true; MUST be null when it is false (a grant-only product, Section V.A) |
 | `entitlement_type` | enum | Entitlement lifecycle type | See Section IV.B for valid values |
 | `economic_role` | enum | Required Store economic role | One of `necessity`, `convenience`, `add_on`; advisory only (see Section IV.D) |
 
@@ -180,6 +180,7 @@ different reason, given below.
 **Acquisition and holding rules:**
 - `holding_limit` is the absolute post-acquisition cap across all lawful acquisition sources.
 - `direct_purchase_allowed` controls only student-initiated Store purchase.
+- A product with `direct_purchase_allowed = false` is grant-only. It carries `price = null`, is not purchasable (Section IV.D), and MUST NOT be offered in the student purchase catalog; students receive it only through a lawful grant.
 - A lawful grant MUST satisfy `on_hand + grant_quantity ≤ holding_limit` when a holding limit applies.
 - A failed rent-linked grant does not itself reverse or invalidate the qualifying rent outcome; rent satisfaction and entitlement grant are separate coordinated results.
 
@@ -243,7 +244,7 @@ different reason, given below.
 
 ### C. Value Range Rules
 
-1. **Price:** Must be ≥ 0 (Decimal with 2 scale)
+1. **Price:** If set, must be ≥ 0 (Decimal with 2 scale). Presence follows `direct_purchase_allowed` (Section IV.A): required when true, null when false
 2. **economic_role:** MUST be exactly one of `necessity`, `convenience`, `add_on`. A value outside the enum is a validation failure; a price outside the role's reference band is not — pricing position is reported by the Helper, never enforced here.
 3. **item_type:** MUST be exactly one of `immediate`, `delayed`, `hall_pass`, `privilege`, `collective`
 4. **inventory_total:** If set, must be > 0
@@ -435,6 +436,7 @@ If any validation step fails, raise an exception immediately. Do not attempt rec
 | 1.0 | 2026-07-28 | Initial specification |
 | 1.1 | 2026-09-13 | Retired the Store pricing tier. Added required `economic_role` (`necessity`, `convenience`, `add_on`) per SPEC-ECON-003 §4.7 |
 | 1.2 | 2026-09-13 | Declared the persisted fields Section V.D already depended on (`item_type`, `inventory_total`, `activation_at`, `auto_delist_date`, `redemption_prompt`), closing a Section III.A governance gap. Added Section IV.D distinguishing persisted inputs from derived projections and fixing `economic_role` as advisory per DOM-STORE-001 §XII. Replaced the stale `is_active` reference with the `availability_state` projection. Added `economic_role` to Examples 2-4 and corrected malformed JSON in Example 2. Renumbered Section V.C and restored A/B/C/D section order |
+| 1.3 | 2026-09-14 | `price` is nullable: required when `direct_purchase_allowed` is true and null for a grant-only product, which is not purchasable and is excluded from the student purchase catalog. Aligns Sections IV.A, V.A and V.C with the grant-only product the acquisition rules already permitted |
 
 ## IX. Amendment Process
 

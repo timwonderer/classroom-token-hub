@@ -2345,7 +2345,11 @@ def _build_rebalance_preview(canonical_context, class_id, checker, cwi, rent_set
             except (InvalidOperation, ValueError):
                 continue
             product = normalize_insurance_type(payload.get('insurance_type') or payload.get('claim_type'))
-            recommendation = resolve_insurance(product=product, cwi=cwi, mode=getattr(checker, 'mode', 'default'))
+            recommendation = resolve_insurance(
+                product=product,
+                cwi=cwi,
+                mode=getattr(checker, 'policy_mode', 'default'),
+            )
             if recommendation.cwi is None:
                 continue
             rate_min, rate_max = recommendation.recommended_ranges['premium_rate']
@@ -2499,7 +2503,10 @@ def _load_economy_rebalance_context(canonical_context, class_id):
 def _apply_rebalance_plan(canonical_context, class_id, change_plan, activation_mode):
     """Apply rebalance plan for a class (wrapper for economy_rebalance function)."""
     user_id = canonical_context.user_id
-    applied_labels = apply_rebalance_changes(user_id, class_id, change_plan, activation_mode)
+    applied_labels = apply_rebalance_changes(
+        user_id, class_id, change_plan, activation_mode,
+        canonical_context=canonical_context,
+    )
     current_app.logger.info(
         "Applied economy rebalance for teacher=%s class_id=%s activation=%s changes=%s",
         user_id,
@@ -4919,12 +4926,18 @@ def generate_collective_goal_instance_code():
     return str(uuid.uuid4())
 
 
-# Store item type -> the entitlement type a rent grant of it produces.
-_RENT_LINK_ENTITLEMENT_TYPES = {
-    'immediate': 'IMMEDIATE_USE',
-    'delayed': 'DELAYED_USE',
-    'hall_pass': 'HALL_PASS',
-}
+def _rent_link_entitlement_type(item_type: str) -> str | None:
+    """The entitlement type a rent grant of this item type produces, if rent-linkable.
+
+    Derived from the Store's rent-linkable set and the resolver's one item-type
+    mapping, so the form, the publication seam and this translation cannot
+    disagree about which types rent may grant (SPEC-STORE-001 §V.A).
+    """
+    from app.services.store_policy_resolver import StorePolicyResolver
+
+    if item_type not in store_service._RENT_LINKABLE_ITEM_TYPES:
+        return None
+    return StorePolicyResolver._ITEM_TYPE_TO_ENTITLEMENT_TYPE.get(item_type)
 
 
 def _store_definition_from_form(form) -> dict:
@@ -4946,12 +4959,20 @@ def _store_definition_from_form(form) -> dict:
         # Non-rent-linked products are always directly purchasable. This option
         # only has meaning when Rent provisions the same lineage.
         'direct_purchase_allowed': bool(form.direct_purchase_allowed.data) if form.is_rent_linked.data else True,
-        'essential_when_overdue': bool(form.essential_when_overdue.data) if form.is_rent_linked.data and form.direct_purchase_allowed.data else False,
+        'available_with_overdue_obligations': (
+            bool(form.available_with_overdue_obligations.data)
+            if (not form.is_rent_linked.data or form.direct_purchase_allowed.data)
+            else False
+        ),
         'activation_at': (
             datetime.combine(form.activation_date.data, datetime.min.time(), tzinfo=timezone.utc)
             if form.activation_date.data else None
         ),
-        'auto_delist_date': None,
+        'auto_delist_date': (
+            _end_of_day_utc(form.auto_delist_date.data)
+            if form.auto_delist_date.data and (not form.is_rent_linked.data or form.direct_purchase_allowed.data)
+            else None
+        ),
         'auto_expiry_days': form.auto_expiry_days.data if form.item_type.data in {'delayed', 'privilege', 'hall_pass'} else None,
         'is_long_term_goal': bool(form.is_long_term_goal.data),
         'bypass_cwi_warnings': bool(form.bypass_cwi_warnings.data),
@@ -4969,13 +4990,14 @@ def _store_definition_from_form(form) -> dict:
         'collective_goal_expires_at': (
             _end_of_day_utc(form.collective_goal_expires_at.data) if is_collective else None
         ),
-        'collective_goal_instance_code': (
-            generate_collective_goal_instance_code()
-            if is_collective and (not form.activation_date.data or form.activation_date.data <= utc_now().date())
-            else None
-        ),
+        # Issued at publication. A future start date no longer hides the version
+        # (activation_at gates sellability at read time), so nothing would ever
+        # come back later to issue a code that was withheld here.
+        'collective_goal_instance_code': generate_collective_goal_instance_code() if is_collective else None,
         'redemption_prompt': (
-            form.redemption_prompt.data if form.redemption_prompt_enabled.data and form.item_type.data in {'delayed', 'collective'} else None
+            form.redemption_prompt.data
+            if form.redemption_prompt_enabled.data and form.item_type.data in store_service._PROMPTABLE_ITEM_TYPES
+            else None
         ),
     }
 
@@ -5019,7 +5041,7 @@ def _apply_rent_link_from_form(form, *, class_id: str, product_lineage_uuid: str
             return
         updated = others
     else:
-        entitlement_type = _RENT_LINK_ENTITLEMENT_TYPES.get(form.item_type.data)
+        entitlement_type = _rent_link_entitlement_type(form.item_type.data)
         if entitlement_type is None:
             raise StoreServiceError(
                 f"'{form.item_type.data}' items cannot be granted for paying rent."
@@ -5033,13 +5055,6 @@ def _apply_rent_link_from_form(form, *, class_id: str, product_lineage_uuid: str
     supersede_rent_settings(
         class_id=class_id,
         updates={'satisfaction_benefits': updated or None},
-        effective_at=(
-            datetime.combine(
-            form.activation_date.data,
-                datetime.min.time(),
-                tzinfo=timezone.utc,
-            ) if form.activation_date.data else utc_now()
-        ),
     )
 
 
@@ -5062,11 +5077,16 @@ def _validate_rent_link_effective_date(form, class_id: str) -> None:
 
 
 def _validate_essential_overdue_access(form, class_id: str) -> None:
-    """Re-check the live Rent gate before allowing Essential access."""
-    if not form.essential_when_overdue.data:
+    """Re-check the live overdue-purchase policy before allowing overdue access.
+
+    SPEC-STORE-001 §IV.C: the permission applies to a directly purchasable
+    product under the class's specified-item policy, whether or not it is also
+    rent-linked.
+    """
+    if not form.available_with_overdue_obligations.data:
         return
-    if not form.is_rent_linked.data or not form.direct_purchase_allowed.data:
-        raise ValueError('Essential purchase access requires a rent-linked, directly purchasable item.')
+    if form.is_rent_linked.data and not form.direct_purchase_allowed.data:
+        raise ValueError('Essential purchase access requires an item students can purchase directly.')
     settings = get_rent_settings(class_id)
     if not settings or not settings.prevent_purchase_when_late:
         raise ValueError('Essential purchase access is available only while Rent prevents overdue purchases.')
@@ -5139,15 +5159,15 @@ def store_management():
                 # One row, published once. There is no longer a catalog record
                 # to create and a policy to publish afterwards — the version IS
                 # the record, so an item can no longer exist unsellable.
+                # Always IN_USE. A future start date is carried by activation_at,
+                # which gates sellability at read time (SPEC-STORE-001 §IV.C);
+                # HIDDEN is a teacher's withdrawal, and nothing un-hides a row
+                # when its start date arrives.
                 new_item = publish_product(
                     user_id=user_id,
                     class_id=selected_scope['class_id'],
                     definition=_store_definition_from_form(form),
-                    availability_state=(
-                        store_service.IN_USE
-                        if not form.activation_date.data or form.activation_date.data <= utc_now().date()
-                        else store_service.HIDDEN
-                    ),
+                    availability_state=store_service.IN_USE,
                 )
                 _apply_rent_link_from_form(
                     form,
@@ -5550,12 +5570,17 @@ def edit_store_item(product_lineage_uuid):
     if item is None:
         abort(404)
 
-    form = StoreItemForm(obj=item)
+    # Persisted values seed the form on GET only. On POST a field the browser
+    # did not send (a control hidden and disabled for this item type) must read
+    # as absent, not fall back to the stored value and be refused as an
+    # inapplicable field.
+    form = StoreItemForm(obj=item) if request.method == 'GET' else StoreItemForm()
 
     rent_link = _rent_link_for_lineage(selected_scope['class_id'], product_lineage_uuid)
 
     if request.method == 'GET':
         form.activation_date.data = item.activation_at.date() if item.activation_at else None
+        form.auto_delist_date.data = item.auto_delist_date.date() if item.auto_delist_date else None
         form.inventory.data = item.inventory_total
         form.holding_limit.data = item.holding_limit
         form.direct_purchase_allowed.data = bool(item.direct_purchase_allowed)
@@ -5618,7 +5643,7 @@ def edit_store_item(product_lineage_uuid):
                 # a fresh one is issued only when the goal is being restarted
                 # (revived from hidden, or newly made collective), because the
                 # code is what separates one run of the goal from the next.
-                if form.item_type.data == 'collective' and (not form.activation_date.data or form.activation_date.data <= utc_now().date()):
+                if form.item_type.data == 'collective':
                     was_live = current.availability_state == store_service.IN_USE
                     if was_live and current.collective_goal_instance_code:
                         definition['collective_goal_instance_code'] = (
@@ -5626,8 +5651,6 @@ def edit_store_item(product_lineage_uuid):
                         )
 
                 successor = supersede_product(current=current, definition=definition)
-                if form.activation_date.data and form.activation_date.data > utc_now().date():
-                    store_service.hide_product(successor)
                 _apply_rent_link_from_form(
                     form,
                     class_id=selected_scope['class_id'],
@@ -7102,7 +7125,11 @@ def apply_economy_rebalance():
     ]
 
     for change in change_plan:
-        key = next(item['key'] for item in preview_items if item['change'] is change or item['change'] == change)
+        # Advisory rows (insurance) carry no change, so read it with .get.
+        key = next(
+            item['key'] for item in preview_items
+            if item.get('change') is change or item.get('change') == change
+        )
         safe_key = key.replace(':', '-')
         mode = request.form.get(f"rebalance_mode_{safe_key}", "midpoint")
         if mode == "custom":
@@ -7125,6 +7152,17 @@ def apply_economy_rebalance():
         flash("No rebalance changes were selected.", "warning")
         return redirect(url_for('admin.economic_engine', review_rebalance=1))
 
+    from app.utils.economy_rebalance import IMMEDIATE_ONLY_CHANGE_TYPES
+    if activation_mode != REBALANCE_ACTIVATION_IMMEDIATE and any(
+        change.get('type') in IMMEDIATE_ONLY_CHANGE_TYPES for change in change_plan
+    ):
+        flash(
+            "Store prices and the overdraft fee have no later cycle to wait for. "
+            "Apply them immediately, or schedule them separately from rent.",
+            "warning",
+        )
+        return redirect(url_for('admin.economic_engine', review_rebalance=1))
+
     if activation_mode == REBALANCE_ACTIVATION_IMMEDIATE and request.form.get('confirm_immediate') != 'yes':
         flash("Confirm the immediate change warning before applying now.", "warning")
         return redirect(url_for('admin.economic_engine', review_rebalance=1))
@@ -7135,7 +7173,11 @@ def apply_economy_rebalance():
     # wraps only the mutation section.
     choice_fingerprint = []
     for change in change_plan:
-        key = next(item['key'] for item in preview_items if item['change'] is change or item['change'] == change)
+        # Advisory rows (insurance) carry no change, so read it with .get.
+        key = next(
+            item['key'] for item in preview_items
+            if item.get('change') is change or item.get('change') == change
+        )
         safe_key = key.replace(':', '-')
         mode = request.form.get(f"rebalance_mode_{safe_key}", "midpoint")
         choice_fingerprint.append(f"{key}:{mode}:{change.get('new_value')}")
@@ -10974,10 +11016,26 @@ def view_issue(issue_ref):
     # Template checks resolution_actions count via len()
     issue_view['_resolution_actions_count'] = len(issue_view['resolution_actions'])
 
+    # Offer REVERSE/REFUND only where resolve_issue would accept them: the
+    # related transaction must be the submitter's, in this class, and an
+    # eligible pre-use Store purchase.
+    purchase_resolution = None
+    if issue.related_transaction_id and class_id:
+        from app.models import Transaction
+        from app.services.ledger_correction_service import resolve_purchase_resolution_eligibility
+
+        related = db.session.get(Transaction, issue.related_transaction_id)
+        submitter_seat = Seat.query.filter_by(
+            public_id=issue.actor_public_id, class_id=class_id
+        ).first()
+        if related and related.class_id == class_id and submitter_seat and related.seat_id == submitter_seat.id:
+            purchase_resolution = resolve_purchase_resolution_eligibility(related)
+
     return render_template('admin_view_issue.html',
                          current_page='issues',
                          page_title=f'Issue #{issue.id}',
                          issue=issue_view,
+                         purchase_resolution=purchase_resolution,
                          issue_ref=make_opaque_ref('issue', issue.id),
                          format_utc_iso=format_utc_iso)
 
@@ -11071,29 +11129,20 @@ def resolve_issue(issue_ref):
                 flash("The related transaction could not be resolved for this issue.", "error")
                 return redirect(url_for('admin.view_issue', issue_ref=issue_ref))
 
-            # Store purchases may be resolved only before use. A pending
-            # redemption has no terminal entitlement event yet and remains
-            # eligible; a CONSUMED event makes the purchase terminal for this
-            # workflow and routes the teacher to manual credit instead.
-            item_events = EntitlementEvent.query.filter_by(
-                class_id=transaction.class_id,
-                correlation_id=transaction.correlation_id,
-                acquisition_type='PURCHASE',
-                event_type='GRANTED',
-            ).all()
-            used_item = any(
-                EntitlementEvent.query.filter(
-                    EntitlementEvent.class_id == transaction.class_id,
-                    EntitlementEvent.entitlement_id == event.entitlement_id,
-                    EntitlementEvent.event_type == 'CONSUMED',
-                ).first() is not None
-                for event in item_events
+            # Only an unused or pending Store purchase may take either outcome
+            # (SPEC-OPS-001 §3.7, DOM-SUP-001 §IX). The same predicate decides
+            # which options the issue page offers, so the form cannot promise an
+            # outcome this handler would refuse.
+            from app.services.ledger_correction_service import (
+                resolve_purchase_resolution_eligibility,
+                reverse_transaction,
             )
-            if used_item:
-                flash("A used item cannot be reversed or refunded. Use a manual credit instead.", "error")
+            eligibility = resolve_purchase_resolution_eligibility(transaction)
+            if not eligibility.eligible:
+                flash(eligibility.reason, "error")
                 return redirect(url_for('admin.view_issue', issue_ref=issue_ref))
+            item_events = eligibility.grants
 
-            from app.services.ledger_correction_service import reverse_transaction
             from app.utils.transaction_idempotency import build_transaction_idempotency_key
             outcome = 'issue_reversal' if action_type == 'reverse_transaction' else 'issue_refund'
             reversal_tx = reverse_transaction(
@@ -11108,7 +11157,6 @@ def resolve_issue(issue_ref):
                     "issue", action_type, issue.id, transaction.id
                 ),
                 actor_seat_id=acting_seat.id if acting_seat else None,
-                preserve_correlation=True,
             )
 
             if action_type == 'reverse_transaction':

@@ -5,6 +5,7 @@ The publication seam remains authoritative for mutation validation.
 """
 from dataclasses import dataclass
 
+from app.services.store_service import _PROMPTABLE_ITEM_TYPES, _RENT_LINKABLE_ITEM_TYPES
 from app.utils.economy_policy import get_policy_profile
 
 
@@ -38,8 +39,10 @@ _PURCHASABLE = frozenset({'immediate', 'delayed', 'hall_pass', 'privilege'})
 _INVENTORY = frozenset({'immediate', 'delayed', 'hall_pass'})
 _HOLDING = frozenset({'immediate', 'delayed', 'hall_pass'})
 _EXPIRING = frozenset({'delayed', 'privilege', 'hall_pass'})
-_PROMPTABLE = frozenset({'delayed', 'collective'})
-_RENT_LINKABLE = frozenset({'immediate', 'delayed', 'hall_pass', 'privilege'})
+_PROMPTABLE = _PROMPTABLE_ITEM_TYPES
+# One rent-linkable set, owned by the publication seam; a local copy here is how
+# the form came to offer rent links the save path then refused.
+_RENT_LINKABLE = _RENT_LINKABLE_ITEM_TYPES
 
 
 def resolve_store_form_contract(*, item_type: str, rent_linked: bool,
@@ -50,8 +53,13 @@ def resolve_store_form_contract(*, item_type: str, rent_linked: bool,
     """Resolve the complete lawful field set for one form state."""
     basic: list[FormField] = [
         FormField('item_type', 'select', 'Item Type', True),
-        FormField('is_long_term_goal', 'hidden', 'Long-Term Goal'),
     ]
+    # A teacher's choice, defaulting to false (SPEC-STORE-001 §IV.C, §V.D). It
+    # modifies the CWI check on a price, so it is offered wherever a price is.
+    long_term_goal = FormField(
+        'is_long_term_goal', 'checkbox', 'Long-Term Goal',
+        help_text='Exclude this item from CWI balance checks, for something students save toward over several pay periods.',
+    )
     details: list[FormField] = [
         FormField('name', 'text', 'Item Name', True),
         FormField('description', 'markdown', 'Description'),
@@ -75,14 +83,18 @@ def resolve_store_form_contract(*, item_type: str, rent_linked: bool,
     if rent_linked and item_type in _RENT_LINKABLE:
         acquisition.append(FormField('rent_linked_quantity', 'number', 'Quantity granted per rent payment', True))
         acquisition.append(FormField('direct_purchase_allowed', 'checkbox', 'Students can purchase this item directly'))
-        if direct_purchase and rent_prevents_purchase_when_late:
-            acquisition.append(FormField('essential_when_overdue', 'checkbox', 'Essential: allow purchase when rent is overdue'))
+    if direct_purchase and rent_prevents_purchase_when_late:
+        # SPEC-STORE-001 §IV.C: the permission belongs to any product a student
+        # may buy directly under the specified-item policy. Rent linkage is not
+        # part of the condition.
+        acquisition.append(FormField('available_with_overdue_obligations', 'checkbox', 'Essential: allow purchase when rent is overdue'))
     if item_type in _PURCHASABLE and direct_purchase:
         purchase.append(FormField('price', 'currency', 'Price', True))
         purchase.append(FormField(
             'bypass_cwi_warnings', 'checkbox', 'Bypass CWI Warnings',
             help_text='Suppress CWI warnings for this directly purchasable item.',
         ))
+        purchase.append(long_term_goal)
     if item_type == 'collective':
         # The band is read from policy authority, never restated here. A literal
         # pair lived at this line and had drifted to 1×–8×, a range no policy mode
@@ -115,6 +127,7 @@ def resolve_store_form_contract(*, item_type: str, rent_linked: bool,
                 f"expected weekly hours to see this range in dollars."
             )
         purchase.append(FormField('collective_goal_guidance', 'info', guidance))
+        purchase.append(long_term_goal)
     if item_type in _INVENTORY and direct_purchase:
         purchase.append(FormField('inventory', 'number', 'Inventory'))
     if item_type in _HOLDING and direct_purchase:
@@ -132,6 +145,13 @@ def resolve_store_form_contract(*, item_type: str, rent_linked: bool,
             FormField('redemption_prompt_enabled', 'checkbox', 'Students need to provide extra information'),
             FormField('redemption_prompt', 'markdown', 'Prompt for students to answer when redeeming', depends_on='redemption_prompt_enabled'),
         ])
+    if direct_purchase:
+        # SPEC-STORE-001 §IV.C: when the product stops being offered. Delisting
+        # ends sales only; it never terminates an entitlement already held (§V.A).
+        lifecycle.append(FormField(
+            'auto_delist_date', 'date', 'Delist date',
+            help_text='The item leaves the store at the end of this day. Items students already hold are unaffected.',
+        ))
     if not (rent_linked and not direct_purchase):
         lifecycle.insert(0, FormField('activation_date', 'date', 'Start date'))
     elif item_type in _RENT_LINKABLE:

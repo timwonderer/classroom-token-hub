@@ -29,8 +29,9 @@ class StoreItemForm(FlaskForm):
     inventory = IntegerField('Inventory (leave blank for unlimited)', validators=[Optional()])
     holding_limit = IntegerField('Holding Limit per Student (leave blank for unlimited)', validators=[Optional()])
     direct_purchase_allowed = BooleanField('Students may purchase this item directly', default=True)
-    essential_when_overdue = BooleanField('Essential: allow purchase when rent is overdue', default=False)
+    available_with_overdue_obligations = BooleanField('Essential: allow purchase when rent is overdue', default=False)
     activation_date = DateField('Start date (optional)', format='%Y-%m-%d', validators=[Optional()])
+    auto_delist_date = DateField('Delist date (optional)', format='%Y-%m-%d', validators=[Optional()])
     auto_expiry_days = IntegerField('Item Expiry in Days (optional, for delayed-use items)', validators=[Optional()])
     is_long_term_goal = BooleanField('Long-Term Goal Item (exclude from CWI balance checks)', default=False)
     bypass_cwi_warnings = BooleanField('Bypass CWI Warnings', default=False)
@@ -148,7 +149,7 @@ class StoreItemForm(FlaskForm):
             direct_purchase=direct_purchase,
             rent_prevents_purchase_when_late=False,
         )
-        ignored_default_fields = {'direct_purchase_allowed', 'essential_when_overdue'}
+        ignored_default_fields = {'direct_purchase_allowed', 'available_with_overdue_obligations'}
         for name, field in self._fields.items():
             # A contract is a vocabulary of item-configuration fields, so the
             # CSRF token and the submit button can never appear in one. A

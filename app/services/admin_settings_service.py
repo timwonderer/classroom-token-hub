@@ -23,7 +23,7 @@ def create_rent_settings(*, class_id: str) -> RentSettings:
     return settings
 
 
-def supersede_rent_settings(*, class_id: str, updates: dict, effective_at=None) -> RentSettings:
+def supersede_rent_settings(*, class_id: str, updates: dict) -> RentSettings:
     """Record a new immutable rent policy version for ``class_id``.
 
     This is the ONLY lawful way to change a class's rent terms. Per DOM-POL-001
@@ -57,7 +57,12 @@ def supersede_rent_settings(*, class_id: str, updates: dict, effective_at=None) 
 
     successor = RentSettings(class_id=class_id, **carried)
     successor.rent_configured_at = utc_now()
-    successor.rent_effective_at = effective_at or utc_now()
+    # The successor is in force for new work the moment it is recorded, because
+    # its predecessor is retired in the same flush. A later activation is not
+    # expressed by dating this row forward; deferred economic changes are
+    # PolicyTransitions activated at an operational boundary (FEAT-ECON-001
+    # §VII-VIII), and a cycle already underway keeps the policy_uuid it froze.
+    successor.rent_effective_at = successor.rent_configured_at
     successor.availability_state = 'IN_USE'
     db.session.add(successor)
 

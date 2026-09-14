@@ -485,12 +485,12 @@ class TestEconomicRoleIsAdvisory:
     """``economic_role`` selects a reference band; it authorizes nothing.
 
     DOM-STORE-001 outranks SPEC-ECON-003, so the overdue-obligation gate is
-    carried by ``essential_when_overdue`` alone. The two fields are therefore
+    carried by ``available_with_overdue_obligations`` alone. The two fields are therefore
     independent: a Necessity product is not implicitly essential, and an Add-on
     product may be marked essential.
     """
 
-    def test_necessity_role_does_not_imply_essential_when_overdue(
+    def test_necessity_role_does_not_imply_availability_with_overdue_obligations(
         self, app, test_class, teacher_seat
     ):
         with app.app_context():
@@ -506,9 +506,9 @@ class TestEconomicRoleIsAdvisory:
 
             resolved = StorePolicyResolver.resolve_store_item(product.policy_uuid)
             assert resolved.economic_role == "necessity"
-            assert resolved.essential_when_overdue is False
+            assert resolved.available_with_overdue_obligations is False
 
-    def test_add_on_role_may_still_be_essential_when_overdue(
+    def test_add_on_role_may_still_be_available_with_overdue_obligations(
         self, app, test_class, teacher_seat
     ):
         with app.app_context():
@@ -519,13 +519,13 @@ class TestEconomicRoleIsAdvisory:
                     name="Field Trip Slot",
                     price="80.00",
                     economic_role="add_on",
-                    essential_when_overdue=True,
+                    available_with_overdue_obligations=True,
                     created_by_seat_id=teacher_seat["seat_id"],
                 )
 
             resolved = StorePolicyResolver.resolve_store_item(product.policy_uuid)
             assert resolved.economic_role == "add_on"
-            assert resolved.essential_when_overdue is True
+            assert resolved.available_with_overdue_obligations is True
 
     @pytest.mark.parametrize("item_type,entitlement_type,price", [
         ("delayed", "DELAYED_USE", "5.00"),

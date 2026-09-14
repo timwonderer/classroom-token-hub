@@ -231,7 +231,7 @@
               <tr>
                 <td>{{ entitlement.student_name }}</td>
                 <td>{{ entitlement.store_item.name }}</td>
-                <td>${{ "%.2f"|format(entitlement.store_item.price) }}</td>
+                <td>{% if entitlement.store_item.price is not none %}${{ "%.2f"|format(entitlement.store_item.price) }}{% else %}Grant only{% endif %}</td>
                 <td><small class="text-muted">{{ entitlement.purchased_at|fmt_timestamp if entitlement.purchased_at else 'N/A' }}</small></td>
                 <td>
                   {% if entitlement.status == 'purchased' %}
@@ -278,7 +278,7 @@
               <div>
                 <h3 class="mb-1 h5">{{ item.name }}</h3>
                 <div class="text-muted small">
-                  ${{ "%.2f"|format(item.price) }} · {{ item.item_type.replace('_', ' ')|title }}
+                  {% if item.price is not none %}${{ "%.2f"|format(item.price) }}{% else %}Grant only{% endif %} · {{ item.item_type.replace('_', ' ')|title }}
                 </div>
               </div>
               <div class="text-end">
@@ -404,38 +404,8 @@
               {% endif %}
               <div id="economy-data" data-expected-weekly-hours="{{ view.economic.display_context.get('expected_weekly_hours', 5.0) | float }}" class="visually-hidden"></div>
 
-              <div id="store-form-contract-renderer">
-                {% for section in form_field_catalog %}
-                  <section class="card mb-3" data-contract-section="{{ section.key }}">
-                    <div class="card-header bg-light"><h3 class="mb-0 h6">{{ section.title }}</h3></div>
-                    <div class="card-body">
-                      {% for field in section.fields %}
-                        <div class="mb-3" data-contract-field="{{ field.name }}"{% if field.depends_on and (':' not in field.depends_on and not form[field.depends_on].data or ':' in field.depends_on and form[field.depends_on.split(':')[0]].data != field.depends_on.split(':')[1]) %} hidden{% endif %}>
-                        {% if field.kind == 'info' %}
-                          <div class="alert alert-info mb-0">{{ field.label }}</div>
-                        {% else %}
-                        {% set control = form[field.name] %}
-                        {% if field.kind == 'hidden' %}
-                          {{ control(type="hidden") }}
-                        {% elif field.kind == 'checkbox' %}
-                            <div class="form-check">
-                              {{ control(class="form-check-input") }}
-                              {{ control.label(class="form-check-label fw-bold") }}
-                            </div>
-                          {% else %}
-                            {{ control.label(class="form-label fw-bold") }}
-                            {{ control(class="form-control" if field.kind != 'select' else "form-select", **({'data-economic-role-select': 'true', 'data-economy-trigger': '[data-economy-validate]'} if field.name == 'economic_role' else {})) }}
-                          {% endif %}
-                          {% if field.name == 'economic_role' %}<div id="role-recommendation" class="alert alert-info mt-2" hidden><small><strong>Reference range:</strong> <span id="role-range-text"></span></small></div>{% endif %}
-                          {% if field.help_text %}<small class="text-muted d-block mt-1">{{ field.help_text }}</small>{% endif %}
-                          {% for error in control.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
-                        {% endif %}
-                        </div>
-                      {% endfor %}
-                    </div>
-                  </section>
-                {% endfor %}
-              </div>
+              {% import 'macros/store_item_form.html' as store_item_form %}
+              {{ store_item_form.render_store_item_contract(form, form_field_catalog) }}
               <div class="text-end">
                 {{ form.submit(class="btn btn-primary btn-lg") }}
               </div>

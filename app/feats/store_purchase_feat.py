@@ -88,19 +88,6 @@ def _calculate_debit(policy_config, quantity: int) -> tuple[Decimal, bool]:
     return discounted, True
 
 
-def _holding_quantity(class_id: str, seat_id: int, product_id: str) -> int:
-    """Derive current possession from immutable grant and terminal events."""
-    events = EntitlementEvent.query.filter_by(
-        class_id=class_id, target_seat_id=seat_id, product_id=product_id
-    ).all()
-    granted = {event.entitlement_id for event in events if event.event_type == 'GRANTED'}
-    terminal = {
-        event.entitlement_id for event in events
-        if event.event_type in {'CONSUMED', 'EXPIRED', 'REVOKED'}
-    }
-    return len(granted - terminal)
-
-
 def execute_store_purchase(
     *,
     canonical_context: CanonicalContext,
@@ -233,10 +220,12 @@ def _execute_store_purchase_impl(
         )
 
     # Rent policy owns the late-purchase consequence. Resolve lateness from the
-    # canonical obligation projection, and allow only products explicitly linked
-    # as rent satisfaction benefits when the policy says non-covered purchases
-    # are blocked. The check is server-side so a hidden/disabled UI control
-    # cannot bypass the class policy.
+    # canonical obligation projection; while it is late, only a product the
+    # teacher explicitly marked as available despite overdue rent may be bought
+    # (SPEC-STORE-001 §IV.D). Being rent-linked is not that authorization: a
+    # rent perk is granted through its own path and never reaches this FEAT
+    # (FEAT-OBL-003 §IV.4). The check is server-side so a hidden or disabled UI
+    # control cannot bypass the class policy.
     rent_settings = get_rent_settings(canonical_context.class_id)
     if rent_settings and rent_settings.prevent_purchase_when_late:
         rent_view = build_student_obligation_view(
@@ -246,13 +235,7 @@ def _execute_store_purchase_impl(
         )
         current_period = rent_view.current_period if rent_view else {}
         is_late = bool(current_period.get("is_late") or current_period.get("is_past_due"))
-        linked_lineages = {
-            benefit.get("product_lineage_uuid")
-            for benefit in rent_settings.get_satisfaction_benefit_grants()
-            if benefit.get("product_lineage_uuid")
-        }
-        if (is_late and policy_config.product_lineage_uuid not in linked_lineages
-                and not policy_config.essential_when_overdue):
+        if is_late and not policy_config.available_with_overdue_obligations:
             return StorePurchaseResult(
                 success=False,
                 correlation_id="",
@@ -346,20 +329,24 @@ def _execute_store_purchase_impl(
     units_per_purchase = policy_config.bundle_quantity or 1
     units_to_grant = quantity * units_per_purchase
 
-    if policy_config.holding_limit is not None:
-        holding_quantity = _holding_quantity(
-            canonical_context.class_id,
-            canonical_context.seat_id,
-            policy_config.product_id,
+    from app.services.entitlement_service import HoldingLimitExceeded, ensure_within_holding_limit
+    try:
+        ensure_within_holding_limit(
+            class_id=canonical_context.class_id,
+            seat_id=canonical_context.seat_id,
+            product_lineage_uuid=policy_config.product_id,
+            entitlement_type=policy_config.entitlement_type,
+            holding_limit=policy_config.holding_limit,
+            grant_quantity=units_to_grant,
         )
-        if holding_quantity + units_to_grant > policy_config.holding_limit:
-            return StorePurchaseResult(
-                success=False,
-                correlation_id="",
-                quantity_granted=0,
-                error_code="HOLDING_LIMIT_EXCEEDED",
-                error_message=f"This purchase would exceed the holding limit of {policy_config.holding_limit}",
-            )
+    except HoldingLimitExceeded as exc:
+        return StorePurchaseResult(
+            success=False,
+            correlation_id="",
+            quantity_granted=0,
+            error_code="HOLDING_LIMIT_EXCEEDED",
+            error_message=f"This purchase would exceed the holding limit of {exc.holding_limit}",
+        )
 
     # Generate or use provided correlation ID
     corr_id = correlation_id or get_correlation_id() or f"store_purchase_{uuid.uuid4().hex}"

@@ -180,20 +180,24 @@
                 <td>{{ item.current }}</td>
                 <td>
                   {{ item.recommended }}
-                  {% if item.advisory_only %}<div class="small text-muted mt-2">{{ item.message }}</div>{% else %}<div class="small fw-bold mt-2">Choose action</div>
-                  <div class="form-check form-check-inline">
-                    <input class="form-check-input" type="radio" name="rebalance_mode_{{ item.key|replace(':', '-') }}" value="midpoint" checked>
-                    <label class="form-check-label small">Set midpoint ({{ item.recommended_value }})</label>
-                  </div>
-                  <div class="form-check form-check-inline">
-                    <input class="form-check-input" type="radio" name="rebalance_mode_{{ item.key|replace(':', '-') }}" value="custom">
-                    <label class="form-check-label small">Custom</label>
-                  </div>
-                  <div class="input-group input-group-sm" style="max-width: 230px;">
+                  {% if item.advisory_only %}<div class="small text-muted mt-2">{{ item.message }}</div>{% else %}
+                  <fieldset class="mt-2">
+                    <legend class="small fw-bold mb-1">Choose action for {{ item.label }}</legend>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" id="rebalance-mode-{{ loop.index }}-midpoint" name="rebalance_mode_{{ item.key|replace(':', '-') }}" value="midpoint" checked>
+                      <label class="form-check-label small" for="rebalance-mode-{{ loop.index }}-midpoint">Set midpoint ({{ item.recommended_value }})</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" id="rebalance-mode-{{ loop.index }}-custom" name="rebalance_mode_{{ item.key|replace(':', '-') }}" value="custom">
+                      <label class="form-check-label small" for="rebalance-mode-{{ loop.index }}-custom">Custom</label>
+                    </div>
+                  </fieldset>
+                  <label class="visually-hidden" for="rebalance-amount-{{ loop.index }}">Custom amount for {{ item.label }}</label>
+                  <div class="input-group input-group-sm">
                     <span class="input-group-text">$</span>
-                    <input class="form-control" type="number" name="rebalance_amount_{{ item.key|replace(':', '-') }}" min="{{ item.recommended_min }}" max="{{ item.recommended_max }}" step="0.01" placeholder="Custom amount">
+                    <input class="form-control" type="number" id="rebalance-amount-{{ loop.index }}" name="rebalance_amount_{{ item.key|replace(':', '-') }}" min="{{ item.recommended_min }}" max="{{ item.recommended_max }}" step="0.01" placeholder="Custom amount" aria-describedby="rebalance-amount-{{ loop.index }}-help">
                   </div>
-                  <div class="form-text">Choose any amount within the recommended range.</div>
+                  <div class="form-text" id="rebalance-amount-{{ loop.index }}-help">Choose any amount within the recommended range.</div>
                   {% endif %}
                 </td>
               </tr>
@@ -202,8 +206,8 @@
           </table>
         </div>
         <div class="row g-3 mt-1">
-          <div class="col-lg-6">
-            <label class="form-label">Effective Date</label>
+          <fieldset class="col-lg-6">
+            <legend class="form-label fs-6">Effective Date</legend>
             <div class="form-check">
               <input class="form-check-input" type="radio" name="activation_mode" id="activationNextCycle" value="next_renewal" checked>
               <label class="form-check-label" for="activationNextCycle">Next Cycle (Recommended)</label>
@@ -212,8 +216,8 @@
               <input class="form-check-input" type="radio" name="activation_mode" id="activationImmediate" value="immediate">
               <label class="form-check-label" for="activationImmediate">Apply Immediately</label>
             </div>
-            <div class="form-text">Rent is billed per cycle, so a new amount takes effect on the cycle after the upcoming bill. Store prices are not cycle-based and change immediately on the store page.</div>
-          </div>
+            <div class="form-text">Rent is billed per cycle, so a new amount takes effect on the cycle after the upcoming bill. Store prices and the overdraft fee have no cycle to wait for, so they can only be applied immediately.</div>
+          </fieldset>
           <div class="col-lg-6" id="immediateChangeWarning" hidden>
             <div class="alert alert-warning mb-2">
               Applying a cycle-based change immediately re-prices rent part-way through a cycle, so students can be billed a different amount than the one they were told at the start of it.
