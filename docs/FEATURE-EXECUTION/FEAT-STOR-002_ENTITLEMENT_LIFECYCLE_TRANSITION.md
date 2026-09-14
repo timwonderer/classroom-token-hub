@@ -156,14 +156,18 @@ The original grant remains immutable history.
 
 ### B. Ordinary purchase
 
-An ordinary purchased entitlement may be revoked only through a lawful coordinated Ledger reversal/refund workflow when that entitlement type permits revocation.
+An ordinary purchased entitlement may be revoked only through a lawful
+coordinated `REVERSE` workflow when that entitlement remains unused or pending.
+An authorized `REFUND` workflow may compensate the purchase while retaining the
+entitlement. The two outcomes MUST NOT be collapsed into one generic
+"compensation" action.
 
 The FEAT SHALL require:
 
 - the entitlement remains unused;
 - the capability is refundable;
 - the capability is not insurance or otherwise explicitly non-revocable;
-- the corresponding Ledger reversal/refund is authorized;
+- the corresponding Ledger reversal is authorized;
 - entitlement revocation and monetary reversal participate in the required coordinated transaction.
 
 A route or teacher action SHALL NOT directly revoke an ordinary purchased entitlement independently of Ledger reversal authority.
@@ -208,7 +212,9 @@ Every terminal event SHALL carry a lawful `correlation_id`.
 
 For manual consumption or revocation, the correlation identifies that lifecycle.
 
-For purchase reversal, correlation SHALL preserve lineage to the coordinated Ledger reversal/refund workflow.
+For purchase reverse or refund, correlation SHALL preserve the original
+purchase's `correlation_id` across the terminal Ledger compensation and any
+resulting entitlement event.
 
 For expiration, correlation SHALL identify the lawful expiration operation or batch lifecycle without converting audit lineage into business authority.
 

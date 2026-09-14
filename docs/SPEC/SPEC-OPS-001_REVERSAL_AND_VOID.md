@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-001 | 1.0 | 2026-08-22 | None | Normative |
+| SPEC-OPS-001 | 1.1 | 2026-09-12 | 1.0 | Normative |
 
 ---
 ## I. Purpose
@@ -82,6 +82,24 @@ REVERSAL                 +$20
 ```
 
 The resulting monetary effect is zero, and the grant can no longer be exercised.
+
+### 3.1A Pre-use refund without entitlement revocation
+
+For an unused or pending Store entitlement, an authorized issue resolution MAY
+choose a **REFUND** outcome instead of a **REVERSE** outcome. Both outcomes
+create a positive `REVERSAL` Ledger transaction for the exact amount spent and
+share the original transaction's `correlation_id`.
+
+The distinction is downstream entitlement state:
+
+- `REVERSE` appends `REVOKED` for every still-active entitlement derived from
+  the purchase;
+- `REFUND` retains the entitlement and does not append `REVOKED`.
+
+The compensating Ledger transaction is terminal in either case. It MUST NOT be
+voided, reversed, or used as an insurance claim basis. The original purchase
+also becomes non-claimable after either outcome, while the entitlement remains
+usable only under `REFUND`.
 
 ### 3.2 Historical Preservation
 
@@ -221,7 +239,8 @@ The relationship between monetary reversal and grant void is:
 
 | Starting artifact/state | Requested operation | Money returned? | Grant remains exercisable? | Legal? |
 |---|---|---:|---:|---:|
-| Active purchased grant | **REVERSAL** | **Yes** | **No — invalidated by reversal** | **Yes, if otherwise authorized** |
+| Active purchased grant | **REVERSE** | **Yes** | **No — invalidated by reversal** | **Yes, if otherwise authorized** |
+| Active purchased grant | **REFUND** | **Yes** | **Yes — retained** | **Yes, if otherwise authorized** |
 | Active purchased grant | **VOID** | No | **No — voided** | **Yes, if otherwise authorized** |
 | USED purchased grant | REVERSAL | No| No | **NO** |
 | EXPIRED purchased grant | REVERSAL | No | No | **NO** |

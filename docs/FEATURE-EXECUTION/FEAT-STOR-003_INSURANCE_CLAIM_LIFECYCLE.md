@@ -146,6 +146,14 @@ entitlement must have been purchased **and used** (a `CONSUMED` event exists) an
 must **not** be `REVOKED` or `EXPIRED` — an item that never delivered lasting
 value, or was clawed back, is not an insurable loss.
 
+A transaction with a terminal pre-use `REVERSE` or `REFUND` outcome is not an
+insurable loss, even when the entitlement was retained by `REFUND`. The claim
+predicate MUST inspect the append-only reversal linkage and compensation
+subtype, not merely the sign or type of the selected Ledger row. A used item
+cannot be reversed or refunded; it remains eligible under the ordinary
+purchase-and-used rules. Any later teacher manual credit is a separate Ledger
+transaction and MUST NOT alter the original purchase's insurance eligibility.
+
 The **filing window** is evaluated in class-local calendar dates: a transaction on
 class-local date `D` under a frozen `claim_window_days = N` may be filed through
 the end of class-local date `D + N`.
