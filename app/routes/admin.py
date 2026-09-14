@@ -4920,6 +4920,24 @@ def _end_of_day_utc(date_obj):
     )
     return bounds.boundary_end_utc
 
+
+def _local_date_of_end_of_day(instant):
+    """Recover the local date ``_end_of_day_utc`` was given.
+
+    The day boundary's end is exclusive — the next local day's midnight — so the
+    instant is stepped back a microsecond before its SLE local day is read. Taking
+    ``.date()`` of the stored datetime instead depends on the database session's
+    timezone, and on a UTC server shows the following day, which a save then
+    persists: each edit moved the date a day later.
+    """
+    if not instant:
+        return None
+    return canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION,
+        primitive="current_evaluation_day",
+        reference_time_utc=ensure_utc(instant) - timedelta(microseconds=1),
+    ).result["evaluation_date"]
+
 import uuid
 
 def generate_collective_goal_instance_code():
@@ -5579,8 +5597,12 @@ def edit_store_item(product_lineage_uuid):
     rent_link = _rent_link_for_lineage(selected_scope['class_id'], product_lineage_uuid)
 
     if request.method == 'GET':
-        form.activation_date.data = item.activation_at.date() if item.activation_at else None
-        form.auto_delist_date.data = item.auto_delist_date.date() if item.auto_delist_date else None
+        # activation_at is written as UTC midnight of the chosen date; read it back
+        # in UTC, not in whatever timezone the database session returned it in.
+        form.activation_date.data = (
+            ensure_utc(item.activation_at).astimezone(timezone.utc).date() if item.activation_at else None
+        )
+        form.auto_delist_date.data = _local_date_of_end_of_day(item.auto_delist_date)
         form.inventory.data = item.inventory_total
         form.holding_limit.data = item.holding_limit
         form.direct_purchase_allowed.data = bool(item.direct_purchase_allowed)
@@ -5589,7 +5611,7 @@ def edit_store_item(product_lineage_uuid):
         form.rent_linked_quantity.data = rent_link['quantity'] if rent_link else None
         # Convert stored datetimes to dates for the DateFields
         if item.collective_goal_expires_at:
-            form.collective_goal_expires_at.data = item.collective_goal_expires_at.date()
+            form.collective_goal_expires_at.data = _local_date_of_end_of_day(item.collective_goal_expires_at)
 
     edit_policy_profile = get_policy_profile(get_active_policy_mode_for_class(selected_scope['class_id']))
     edit_form_contract = StoreFormContract(
