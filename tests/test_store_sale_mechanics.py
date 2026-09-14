@@ -221,7 +221,7 @@ class TestVersionedProductDerivations:
                 buyer,
                 "Editable Goal",
                 entitlement_type="COLLECTIVE_GOAL",
-                price=None,
+                price="6.00",
                 collective_goal_type="fixed",
                 collective_goal_target=10,
                 collective_goal_expires_at=utc_now() + timedelta(days=30),
@@ -233,7 +233,7 @@ class TestVersionedProductDerivations:
                 quantity=1,
             )
             assert result.success is True
-            assert _checking(buyer) == before
+            assert before - _checking(buyer) == Decimal("6.00")
 
             current = StoreProduct.query.filter_by(policy_uuid=product.policy_uuid).one()
             with FEATContext(
@@ -244,7 +244,7 @@ class TestVersionedProductDerivations:
                     current=current,
                     definition={
                         "name": "Editable Goal Revised",
-                        "price": None,
+                        "price": "6.00",
                         "item_type": "collective",
                         "economic_role": "necessity",
                         "collective_goal_type": "fixed",
@@ -416,7 +416,7 @@ class TestCollectiveGoalDeadline:
             product = _publish(
                 buyer, "Lapsed Pizza Party",
                 entitlement_type="COLLECTIVE_GOAL",
-                price=None,
+                price="8.00",
                 collective_goal_type="fixed",
                 collective_goal_target=100,
                 collective_goal_expires_at=utc_now() - timedelta(days=1),
@@ -441,7 +441,7 @@ class TestCollectiveGoalDeadline:
             product = _publish(
                 buyer, "Open Pizza Party",
                 entitlement_type="COLLECTIVE_GOAL",
-                price=None,
+                price="8.00",
                 collective_goal_type="fixed",
                 collective_goal_target=100,
                 collective_goal_expires_at=utc_now() + timedelta(days=30),
@@ -456,4 +456,4 @@ class TestCollectiveGoalDeadline:
 
             assert result.success is True
             assert len(_granted_units(buyer, product)) == 1
-            assert _checking(buyer) == before
+            assert before - _checking(buyer) == Decimal("8.00")

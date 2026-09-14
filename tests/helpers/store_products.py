@@ -96,12 +96,9 @@ def publish_store_product(
 
     definition.setdefault('economic_role', 'necessity')
 
-    if item_type == 'collective':
-        price = None
-    else:
-        definition.setdefault('direct_purchase_allowed', True)
-        if item_type == 'privilege':
-            definition.setdefault('auto_expiry_days', 30)
+    definition.setdefault('direct_purchase_allowed', True)
+    if item_type == 'privilege':
+        definition.setdefault('auto_expiry_days', 30)
 
     product = store_service.publish_product(
         user_id=user_id,

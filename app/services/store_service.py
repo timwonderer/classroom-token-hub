@@ -192,18 +192,16 @@ def _validate_definition(definition: dict) -> None:
     if item_type not in {'delayed', 'collective'} and definition.get('redemption_prompt'):
         raise InvalidDefinition("redemption prompts are only supported for delayed or collective items")
 
-    if is_collective and definition.get('price') is not None:
-        raise InvalidDefinition("collective goals do not use Store prices")
     if definition.get('essential_when_overdue') and not direct_purchase_allowed:
         raise InvalidDefinition("essential purchase access requires a purchasable item")
 
     price = definition.get('price')
     if price is not None and Decimal(str(price)) < 0:
         raise InvalidDefinition("price cannot be negative")
-    if direct_purchase_allowed and not is_collective:
+    if direct_purchase_allowed:
         if price is None:
             raise InvalidDefinition("directly purchasable items require a price")
-    elif not is_collective and price is not None:
+    elif price is not None:
         raise InvalidDefinition("grant-only items cannot carry a Store price")
 
     inventory_total = definition.get('inventory_total')

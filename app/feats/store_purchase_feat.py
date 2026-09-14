@@ -280,7 +280,7 @@ def _execute_store_purchase_impl(
             error_message="This item is not available for direct student purchase",
         )
 
-    if policy_config.price is None and policy_config.entitlement_type != 'COLLECTIVE_GOAL':
+    if policy_config.price is None:
         return StorePurchaseResult(
             success=False,
             correlation_id="",
@@ -363,43 +363,6 @@ def _execute_store_purchase_impl(
 
     # Generate or use provided correlation ID
     corr_id = correlation_id or get_correlation_id() or f"store_purchase_{uuid.uuid4().hex}"
-
-    # Collective Goals are participation actions, not priced Store purchases.
-    # They intentionally have no price, tier, inventory, or holding limit and
-    # therefore must not enter the paid Ledger path. The participation is the
-    # immutable GRANTED event and nothing else: DOM-STORE-001 §VIII.E.5 gives the
-    # type no pending-action step, and collective progress is a projection over
-    # policy plus qualifying events (FEAT-STOR-001 §VII.E), never a per-seat row.
-    if policy_config.entitlement_type == 'COLLECTIVE_GOAL':
-        temporal_eval = canonical_temporal_resolver(
-            CLASS_LEVEL_EVALUATION,
-            canonical_execution_context=canonical_context,
-            primitive="current_time",
-        )
-        timestamp_utc = temporal_eval.canonical_now_utc
-        entitlement_id = str(uuid.uuid4())
-        db.session.add(EntitlementEvent(
-            event_id=str(uuid.uuid4()),
-            entitlement_id=entitlement_id,
-            class_id=canonical_context.class_id,
-            target_seat_id=canonical_context.seat_id,
-            actor_seat_id=canonical_context.seat_id,
-            product_id=policy_config.product_id,
-            entitlement_type=policy_config.entitlement_type,
-            acquisition_type="PURCHASE",
-            event_type="GRANTED",
-            correlation_id=corr_id,
-            payload={"policy_uuid": policy_config.policy_uuid, "collective_participation": True},
-            timestamp=timestamp_utc,
-        ))
-        db.session.flush()
-        return StorePurchaseResult(
-            success=True,
-            correlation_id=corr_id,
-            quantity_granted=1,
-            entitlement_ids=[entitlement_id],
-            product_id=policy_config.product_id,
-        )
 
     # =========================================================================
     # PHASE 2: Ledger Execution

@@ -196,7 +196,7 @@ class TestPublicationValidation:
         with app.app_context():
             goal = dict(
                 entitlement_type="COLLECTIVE_GOAL",
-                price=None,
+                price="5.00",
                 collective_goal_type="fixed",
                 collective_goal_target=100,
                 collective_goal_expires_at=utc_now() + timedelta(days=30),
