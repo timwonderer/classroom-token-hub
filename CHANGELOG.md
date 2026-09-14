@@ -140,6 +140,22 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 
+- **Saving a store item did nothing, and said nothing (2026-09-13)** — Editing an item's price through `/admin/store/edit/<product_lineage_uuid>` re-rendered the form unchanged. Creating an item was broken the same way. Two defects compounded.
+
+  `StoreItemForm.validate()` checks every submitted field against the form contract's `legal_fields` and rejects anything outside it, which is the right rule applied to the wrong set: it walked `self._fields`, which includes WTForms plumbing. `legal_fields` is derived from the contract's item-configuration sections, so `submit` and `csrf_token` can never appear in it. A browser sends both on every POST, so every real save was refused with "This field is not applicable to the selected item configuration" against the submit button. The guard now skips `SubmitField` and `CSRFTokenField` and is otherwise unchanged — an illegal configuration field is still caught.
+
+  The reason this reached a teacher is the second defect: neither `templates/admin_edit_item.html` nor `templates/admin_store.html` rendered form errors at all. `StoreServiceError` was flashed, so a service-layer refusal was visible, but a validation refusal produced a blank re-render indistinguishable from a no-op. Both templates now render per-field errors inline and a form-level summary, the latter because errors on unrendered fields — exactly this case — otherwise have nowhere to appear.
+
+  Covered by `tests/test_admin_store_edit_route.py::test_admin_store_edit_post_changes_the_price`, which posts `submit` as a browser does. No prior test did, which is why a form that rejected every browser submission had a green suite. It was watched failing with the `forms.py` fix removed.
+
+- **Collective goals were bought for free and could not be refunded when they expired (2026-09-13)** — `execute_store_purchase` returned early for `COLLECTIVE_GOAL`, writing the `GRANTED` entitlement event and skipping the Ledger entirely, so participation cost nothing. `collective_goal_expiry_feat` then failed with `sqlalchemy.exc.NoResultFound` on every unmet goal, because it looked for the purchase transaction that the early return never wrote — a class whose goal lapsed could not be unwound.
+
+  The specs decide against the early return on both counts, and the comment justifying it cited them inverted. `DOM-STORE-001` §VIII.E.5 requires an expiring goal to coordinate a lawful refund, which presupposes a payment. `FEAT-STOR-001` §VII.E puts goals on the ordinary purchase path, and §XIV prohibits special-casing them into a separate entitlement-persistence path by name. The early return is gone; goals debit and refund like any other purchase.
+
+  The same premise had been written into the publish seam, where `_validate_definition` both forbade a collective goal from carrying a price and exempted it from the "directly purchasable items require a price" rule. That was already contradicted by the form contract, which renders `price` as a required "Goal Amount" for collective goals — so a teacher could set a goal amount the catalog then refused to store. Both exemptions are removed.
+
+  `tests/test_collective_goal_expiry.py` goes from 4 failed to 6 passed; the store and entitlement suites pass at 120. Four test fixtures that hard-coded `price=None` for collective goals were corrected, including two assertions that a purchase left the buyer's balance untouched.
+
 - **Economy analysis 500'd for any class with a store product (2026-09-12)** — `POST /admin/api/economy/analyze` raised `'StoreProduct' object has no attribute 'is_active'`. `EconomyBalanceChecker.check_store_items_balance` re-filtered the products it was handed on a v1 `is_active` column; the catalog carries `availability_state` now. Any class with both `expected_weekly_hours` configured and one product in the catalog lost the whole analysis — CWI, recommendations and all.
 
   Availability is the caller's decision, not the checker's: every call site already resolves the sellable set through `store_service.list_products(..., states=(IN_USE,))`. The re-derivation is gone. The same stale filter was removed from the fines loop and from the cheapest-policy selection in the budget survival test, where `InsurancePolicy` likewise carries `availability_state`. `is_long_term_goal` stays — that is a pricing intent the teacher declares, not an availability state.

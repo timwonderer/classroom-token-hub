@@ -18,12 +18,14 @@ toggle. There is no longer a class of field the store may not edit.
 import pytest
 from types import SimpleNamespace
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.models import BillCycle
 from app.routes.admin import _apply_rent_link_from_form
 from app.services.admin_settings_service import get_rent_settings
+from app.services.store_service import get_current_version
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import initialize_as_teacher
 from tests.helpers.store_products import publish_store_product
@@ -77,6 +79,40 @@ def test_admin_store_edit_get_rejects_foreign_class_item(client):
     response = client.get(f"/admin/store/edit/{foreign_item.product_lineage_uuid}")
 
     assert response.status_code == 404
+
+
+def test_admin_store_edit_post_changes_the_price(app, client):
+    """Editing the price publishes a successor carrying the new price.
+
+    The payload includes ``submit``, which is what a browser sends and what no
+    prior test sent. The field-legality guard policed every field on the form,
+    so the submit button itself was reported as inapplicable and the save was
+    refused — silently, because neither store template rendered form errors.
+    """
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    enable_class_feature(class_id=classroom.class_id, feature="store")
+    db.session.commit()
+
+    item = _make_store_item(classroom, name="Repriced Pass")
+
+    response = client.post(
+        f"/admin/store/edit/{item.product_lineage_uuid}",
+        data={
+            "name": "Repriced Pass",
+            "description": "Skip one homework assignment",
+            "item_type": "immediate",
+            "economic_role": "necessity",
+            "price": "31.00",
+            "submit": "Save Item",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+
+    with app.app_context():
+        current = get_current_version(classroom.class_id, item.product_lineage_uuid)
+        assert current.price == Decimal("31.00")
 
 
 def test_rent_link_toggle_updates_benefit_without_rewriting_the_existing_policy(

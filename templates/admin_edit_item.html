@@ -55,6 +55,18 @@
     <div class="card-body">
         <form method="POST" action="{{ url_for('admin.edit_store_item', product_lineage_uuid=item.product_lineage_uuid) }}" data-store-item-form data-rent-prevents-late-purchase="{{ 'true' if rent_prevents_purchase_when_late else 'false' }}">
             {{ form.hidden_tag() }}
+            {% if form.errors %}
+            {# Also lists errors on fields this catalog does not render (CSRF, submit),
+               which would otherwise make a rejected save look like nothing happened. #}
+            <div class="alert alert-danger" role="alert">
+                <strong>This item could not be saved.</strong>
+                <ul class="mb-0 mt-2">
+                    {% for field_name, field_errors in form.errors.items() %}
+                    {% for error in field_errors %}<li>{{ form[field_name].label.text }}: {{ error }}</li>{% endfor %}
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
             <div id="economy-data" data-expected-weekly-hours="{{ expected_weekly_hours or 5.0 }}" class="visually-hidden"></div>
 
             <div id="store-form-contract-renderer">
@@ -81,6 +93,7 @@
                           {% endif %}
                           {% if field.name == 'economic_role' %}<div id="role-recommendation" class="alert alert-info mt-2" hidden><small><strong>Reference range:</strong> <span id="role-range-text"></span></small></div>{% endif %}
                           {% if field.help_text %}<small class="text-muted d-block mt-1">{{ field.help_text }}</small>{% endif %}
+                          {% for error in control.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
                         {% endif %}
                         </div>
                     {% endfor %}

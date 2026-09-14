@@ -5,6 +5,7 @@ from wtforms import HiddenField, TextAreaField, FloatField, SelectField, Integer
 from wtforms.validators import Optional
 
 from wtforms import SubmitField
+from wtforms.csrf.core import CSRFTokenField
 from datetime import date
 from app.services.store.form_contract import resolve_store_form_contract
 
@@ -149,6 +150,12 @@ class StoreItemForm(FlaskForm):
         )
         ignored_default_fields = {'direct_purchase_allowed', 'essential_when_overdue'}
         for name, field in self._fields.items():
+            # A contract is a vocabulary of item-configuration fields, so the
+            # CSRF token and the submit button can never appear in one. A
+            # browser sends both on every POST; policing them rejected every
+            # real submission while tests, which post neither, stayed green.
+            if isinstance(field, (SubmitField, CSRFTokenField)):
+                continue
             if name in contract.legal_fields or name in ignored_default_fields:
                 continue
             value = field.data
