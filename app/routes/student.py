@@ -80,6 +80,7 @@ from app.services.entitlement_read_service import (
     get_entitlement_history,
     get_active_entitlements,
     get_entitlement_status,
+    derive_display_status,
 )
 from app.services.insurance_policy_service import list_insurance_policy_versions
 from app.services import insurance_definition_service as insurance_defs
@@ -2017,7 +2018,7 @@ def shop():
             seat_id=seat.id,
             class_id=class_id,
             store_item=item,
-            status=get_entitlement_status(entry["entitlement_id"], class_id),
+            status=derive_display_status(entry["entitlement_id"]),
             purchase_date=datetime.fromisoformat(entry["timestamp"]),
             expiry_date=None,
             is_from_bundle=False,

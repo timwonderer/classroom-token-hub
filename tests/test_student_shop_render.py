@@ -75,4 +75,9 @@ def test_shop_page_renders_with_an_owned_entitlement(client, app):
     response = client.get("/student/shop")
 
     assert response.status_code == 200, response.get_data(as_text=True)[:2000]
-    assert "Homework Pass" in response.get_data(as_text=True)
+    body = response.get_data(as_text=True)
+    assert "Homework Pass" in body
+    # An owned, unconsumed delayed item must be actionable. The route fed the
+    # card builder the domain status ('GRANTED') where the builder branches on
+    # the display vocabulary ('purchased'), so every card rendered inert.
+    assert "Request Redemption" in body

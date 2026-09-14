@@ -34,7 +34,7 @@ from app.feats.ledger_resolution_feat import (
     resolve_intended_ledger_plan,
     apply_resolved_ledger_plan,
 )
-from app.models import Seat, EntitlementEvent, ClassEconomy, PendingAction
+from app.models import Seat, EntitlementEvent, ClassEconomy
 from app.services.context_resolver import CanonicalContext
 from app.services.class_configuration_query_service import get_current_economic_engine
 from app.services.class_configuration_query_service import get_rent_settings
@@ -366,9 +366,10 @@ def _execute_store_purchase_impl(
 
     # Collective Goals are participation actions, not priced Store purchases.
     # They intentionally have no price, tier, inventory, or holding limit and
-    # therefore must not enter the paid Ledger path. The participation itself
-    # is still an immutable entitlement event and gets the same Pending Action
-    # lifecycle as the other action-producing item types.
+    # therefore must not enter the paid Ledger path. The participation is the
+    # immutable GRANTED event and nothing else: DOM-STORE-001 §VIII.E.5 gives the
+    # type no pending-action step, and collective progress is a projection over
+    # policy plus qualifying events (FEAT-STOR-001 §VII.E), never a per-seat row.
     if policy_config.entitlement_type == 'COLLECTIVE_GOAL':
         temporal_eval = canonical_temporal_resolver(
             CLASS_LEVEL_EVALUATION,
@@ -390,15 +391,6 @@ def _execute_store_purchase_impl(
             correlation_id=corr_id,
             payload={"policy_uuid": policy_config.policy_uuid, "collective_participation": True},
             timestamp=timestamp_utc,
-        ))
-        db.session.add(PendingAction(
-            class_id=canonical_context.class_id,
-            seat_id=canonical_context.seat_id,
-            entitlement_id=entitlement_id,
-            correlation_id=f"{corr_id}:pending:{entitlement_id}",
-            authoritative_feat="FEAT-STOR-002",
-            payload={"trigger": "collective_goal_participation", "entitlement_type": "COLLECTIVE_GOAL"},
-            submitted_at=timestamp_utc,
         ))
         db.session.flush()
         return StorePurchaseResult(
@@ -566,6 +558,13 @@ def _execute_store_purchase_impl(
             db.session.add(consumed_event)
 
         db.session.flush()
+
+    # No pending action is written here, for any entitlement type. FEAT-STOR-001
+    # §II excludes "pending request storage" from this FEAT's authority, and a
+    # `pending_actions` row asserts that a request was *submitted* and awaits
+    # resolution (DOM-STORE-001 §IX) — acquiring an item is not submitting one.
+    # The lawful writer is FEAT-STOR-002 `execute_use_item_request`, reached when
+    # the student acts on the item.
 
     return StorePurchaseResult(
         success=True,
