@@ -1659,6 +1659,27 @@ def _class_delete_confirmation_phrase(class_row):
     return f"DELETE {_class_display_label(class_row)}".upper()
 
 
+def _class_deletion_destroys_principal(user_id, class_id):
+    """True when destroying ``class_id`` leaves this principal with no seat.
+
+    Class teardown destroys the class's seats, including the teacher's
+    administrative one. A ``users`` row holding no seat anywhere is an invariant
+    violation, so the last seat going means the principal goes with it
+    (DOM-IDEN-005 §V.6, §VI — no exception exists for teachers). Deleting a
+    teacher's final class is therefore terminal account destruction rather than
+    single-class destruction: a different FEAT, and only one may run per request.
+
+    The test is "any seat in any other class", not "any other owned class": a
+    teacher seated as a student elsewhere still has a seat to justify existence.
+    """
+    retained_seat = (
+        db.session.query(Seat.id)
+        .filter(Seat.user_id == user_id, Seat.class_id != class_id)
+        .first()
+    )
+    return retained_seat is None
+
+
 def _get_seat_or_404(seat_id, include_unassigned=True):
     """Fetch a seat the current admin can access or 404."""
     class_id = (getattr(getattr(g, "canonical_context", None), "class_id", None) or "").strip() or None
@@ -2095,12 +2116,19 @@ def _resolve_rent_settings_for_class_id(class_id, policy_uuid=None):
             return scoped_policy
     if not class_id:
         return None
-    from app.models import BillCycle
-    current_cycle = (
-        BillCycle.query.filter_by(class_id=class_id)
-        .order_by(BillCycle.cycle_number.desc(), BillCycle.id.desc())
-        .first()
-    )
+    # Economic Engine guidance evaluates the latest configured policy. A bill
+    # cycle may still point at an older frozen policy, but that historical
+    # snapshot must not keep warning against a configuration the teacher has
+    # already superseded. Historical obligations resolve their own policy_uuid
+    # and do not use this helper.
+    latest_policy = get_rent_settings(class_id)
+    if latest_policy:
+        return latest_policy
+    # bill_cycles carries every obligation family, discriminated by internal_ref.
+    # Selecting the class's newest cycle row picks up insurance cycles too, and
+    # their policy_uuid names an InsurancePolicy that no rent lookup can resolve.
+    from app.services.obligations_service import get_latest_bill_cycle
+    current_cycle = get_latest_bill_cycle(f"rent:{class_id}")
     if current_cycle and current_cycle.policy_uuid:
         cycled = RentSettings.query.filter_by(policy_uuid=current_cycle.policy_uuid).first()
         if cycled:
@@ -2462,7 +2490,8 @@ def _load_economy_rebalance_context(canonical_context, class_id):
 
     payroll_settings = _resolve_payroll_settings_for_class_id(canonical_context, selected_class_id)
     rent_settings = _resolve_rent_settings_for_class_id(selected_class_id)
-    insurance_policies = []
+    from app.services.insurance_policy_service import list_insurance_policy_versions
+    insurance_policies = list_insurance_policy_versions(selected_class_id)
 
     return payroll_settings, rent_settings, insurance_policies
 
@@ -4592,6 +4621,28 @@ def delete_join_code():
         return gate_error
 
     try:
+        if _class_deletion_destroys_principal(user_id, class_id):
+            # This class holds the principal's last seat, so the principal cannot
+            # survive it (DOM-IDEN-005 §VI). That is FEAT-IDEN-007, not
+            # FEAT-CLASS-001.
+            _hard_delete_teacher_account_scope(
+                canonical_context=g.canonical_context,
+                admin_user=db.session.get(User, user_id),
+                correlation_id=generate_correlation_id(),
+                idempotency_key=f"account:destroy:{user_id}",
+            )
+            session.pop("user_id", None)
+            session.pop("last_activity", None)
+            return jsonify({
+                "status": "success",
+                "account_deleted": True,
+                "redirect": url_for("admin.login"),
+                "message": (
+                    f"{display_label} was your last class. It, your teacher account, "
+                    "and every record belonging to them were permanently deleted."
+                ),
+            })
+
         _hard_delete_class_scope(
             class_id=class_id,
             canonical_context=g.canonical_context,
@@ -9332,6 +9383,7 @@ def class_delete():
         class_confirmation_phrase=_class_delete_confirmation_phrase(active_class_row),
         class_display_label=_class_display_label(active_class_row),
         class_join_code=get_display_join_code(active_class_id),
+        deletes_account=_class_deletion_destroys_principal(user_id, active_class_id),
     )
 
 
@@ -11006,7 +11058,7 @@ def resolve_issue(issue_ref):
             else None
         )
 
-        if action_type == 'reverse_transaction' and issue.related_transaction_id:
+        if action_type in {'reverse_transaction', 'refund_transaction'} and issue.related_transaction_id:
             transaction = db.session.get(Transaction, issue.related_transaction_id)
             if (
                 not transaction
@@ -11016,74 +11068,84 @@ def resolve_issue(issue_ref):
                 or transaction.seat_id != submitter_seat.id
                 or transaction.status == TransactionStatus.VOID
             ):
-                flash("The related transaction could not be reversed for this issue.", "error")
+                flash("The related transaction could not be resolved for this issue.", "error")
+                return redirect(url_for('admin.view_issue', issue_ref=issue_ref))
+
+            # Store purchases may be resolved only before use. A pending
+            # redemption has no terminal entitlement event yet and remains
+            # eligible; a CONSUMED event makes the purchase terminal for this
+            # workflow and routes the teacher to manual credit instead.
+            item_events = EntitlementEvent.query.filter_by(
+                class_id=transaction.class_id,
+                correlation_id=transaction.correlation_id,
+                acquisition_type='PURCHASE',
+                event_type='GRANTED',
+            ).all()
+            used_item = any(
+                EntitlementEvent.query.filter(
+                    EntitlementEvent.class_id == transaction.class_id,
+                    EntitlementEvent.entitlement_id == event.entitlement_id,
+                    EntitlementEvent.event_type == 'CONSUMED',
+                ).first() is not None
+                for event in item_events
+            )
+            if used_item:
+                flash("A used item cannot be reversed or refunded. Use a manual credit instead.", "error")
                 return redirect(url_for('admin.view_issue', issue_ref=issue_ref))
 
             from app.services.ledger_correction_service import reverse_transaction
             from app.utils.transaction_idempotency import build_transaction_idempotency_key
+            outcome = 'issue_reversal' if action_type == 'reverse_transaction' else 'issue_refund'
             reversal_tx = reverse_transaction(
                 transaction,
-                description=f"Issue #{issue.id} reversal for transaction #{transaction.id}",
-                compensation_type='issue_reversal',
+                description=(
+                    f"Issue #{issue.id} reversal for transaction #{transaction.id}"
+                    if action_type == 'reverse_transaction'
+                    else f"Issue #{issue.id} refund for transaction #{transaction.id}"
+                ),
+                compensation_type=outcome,
                 idempotency_key=build_transaction_idempotency_key(
-                    "issue", "reversal", issue.id, transaction.id
+                    "issue", action_type, issue.id, transaction.id
                 ),
                 actor_seat_id=acting_seat.id if acting_seat else None,
+                preserve_correlation=True,
             )
 
-            issue.teacher_resolution = 'Transaction Reversed'
+            if action_type == 'reverse_transaction':
+                for event in item_events:
+                    db.session.add(EntitlementEvent(
+                        class_id=event.class_id,
+                        entitlement_id=event.entitlement_id,
+                        target_seat_id=event.target_seat_id,
+                        actor_seat_id=acting_seat.id if acting_seat else event.actor_seat_id,
+                        product_id=event.product_id,
+                        entitlement_type=event.entitlement_type,
+                        acquisition_type=event.acquisition_type,
+                        event_type='REVOKED',
+                        correlation_id=event.correlation_id,
+                        payload={'reason': 'issue_reversal', 'reversed_transaction_id': reversal_tx.id},
+                        timestamp=utc_now(),
+                    ))
+                db.session.flush()
+
+            issue.teacher_resolution = (
+                'Transaction Reversed' if action_type == 'reverse_transaction'
+                else 'Transaction Refunded'
+            )
             record_resolution_action(
                 issue,
-                'reverse_transaction',
+                action_type,
                 'teacher',
                 teacher_public_id,
-                action_description=f"Reversed transaction #{transaction.id} with reversal #{reversal_tx.id}",
+                action_description=(
+                    f"Reversed transaction #{transaction.id} with reversal #{reversal_tx.id}"
+                    if action_type == 'reverse_transaction'
+                    else f"Refunded transaction #{transaction.id} with reversal #{reversal_tx.id}"
+                ),
                 related_transaction_id=reversal_tx.id,
                 amount_changed=float(reversal_tx.amount),
                 before_value=str(transaction.amount),
                 after_value=str(reversal_tx.amount),
-            )
-
-        elif action_type == 'compensating_transaction' and issue.related_transaction_id:
-            # Append-only correction: create a compensating ledger entry.
-            transaction = db.session.get(Transaction, issue.related_transaction_id)
-            # Same two conditions as the reversal branch above: a compensating
-            # entry moves money just as a reversal does, so it needs the same
-            # tenancy and issue-binding guarantees.
-            if (
-                not transaction
-                or not class_id
-                or transaction.class_id != class_id
-                or not submitter_seat
-                or transaction.seat_id != submitter_seat.id
-                or transaction.status == TransactionStatus.VOID
-            ):
-                flash("The related transaction could not be found for this issue.", "error")
-                return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
-
-            from app.services.ledger_correction_service import reverse_transaction
-            from app.utils.transaction_idempotency import build_transaction_idempotency_key
-            compensating_tx = reverse_transaction(
-                transaction,
-                description=f"Issue #{issue.id} compensating entry for transaction #{transaction.id}",
-                compensation_type='issue_compensation',
-                idempotency_key=build_transaction_idempotency_key(
-                    "issue", "compensation", issue.id, transaction.id
-                ),
-                actor_seat_id=acting_seat.id if acting_seat else None,
-            )
-
-            issue.teacher_resolution = 'Compensating Transaction Posted'
-            record_resolution_action(
-                issue,
-                'compensating_transaction',
-                'teacher',
-                teacher_public_id,
-                action_description=f"Posted compensating transaction #{compensating_tx.id} for transaction #{transaction.id}",
-                related_transaction_id=compensating_tx.id,
-                amount_changed=float(compensating_tx.amount),
-                before_value=str(transaction.amount),
-                after_value=str(compensating_tx.amount),
             )
 
         elif action_type == 'manual_adjustment':

@@ -18,6 +18,7 @@ def create_pending_transaction(
     type: str, description: str, original_transaction_id: int | None = None,
     policy_id: int | None = None, idempotency_key: str | None = None,
     command_reservation=None, compensation_subtype: str | None = None,
+    correlation_id: str | None = None,
 ) -> Transaction:
     """Create one pending Ledger effect inside the caller-owned FEAT.
 
@@ -34,7 +35,7 @@ def create_pending_transaction(
             mechanism=mechanism, user_id=user_id, amount=_quantize_currency(amount),
             account_type=account_type, type=type, description=description,
             original_transaction_id=original_transaction_id, policy_id=policy_id,
-            compensation_subtype=compensation_subtype,
+            compensation_subtype=compensation_subtype, correlation_id=correlation_id,
         )
         return transaction
     if not class_id or not seat_id or not target_seat_id or not actor_seat_id:
@@ -61,7 +62,7 @@ def create_pending_transaction(
         account_type=account_type, status=TransactionStatus.PENDING,
         mechanism=mechanism, type=type, description=description,
         original_transaction_id=original_transaction_id, policy_id=policy_id,
-        compensation_subtype=compensation_subtype,
+        compensation_subtype=compensation_subtype, correlation_id=correlation_id,
     )
     db.session.add(transaction)
     if command_reservation is not None:
@@ -76,6 +77,7 @@ def create_pending_transaction_idempotent(
     actor_seat_id: int, mechanism: str, user_id: int | None = None, amount,
     account_type: str, type: str, description: str,
     original_transaction_id: int | None = None, policy_id: int | None = None,
+    correlation_id: str | None = None,
 ):
     transaction, created = create_idempotent_transaction(
         idempotency_key=idempotency_key, seat_id=seat_id, class_id=class_id,
@@ -83,6 +85,7 @@ def create_pending_transaction_idempotent(
         mechanism=mechanism, user_id=user_id, amount=_quantize_currency(amount),
         account_type=account_type, type=type, description=description,
         original_transaction_id=original_transaction_id, policy_id=policy_id,
+        correlation_id=correlation_id,
     )
     return transaction, created
 

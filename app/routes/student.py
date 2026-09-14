@@ -434,12 +434,11 @@ def get_rent_settings_for_context(context):
             return scoped_policy
     if not class_id:
         return None
-    from app.models import BillCycle
-    current_cycle = (
-        BillCycle.query.filter_by(class_id=class_id)
-        .order_by(BillCycle.cycle_number.desc(), BillCycle.id.desc())
-        .first()
-    )
+    # bill_cycles carries every obligation family, discriminated by internal_ref.
+    # Selecting the class's newest cycle row picks up insurance cycles too, and
+    # their policy_uuid names an InsurancePolicy that no rent lookup can resolve.
+    from app.services.obligations_service import get_latest_bill_cycle
+    current_cycle = get_latest_bill_cycle(f"rent:{class_id}")
     if not current_cycle or not current_cycle.policy_uuid:
         # Fallback: no BillCycle yet. `rent_settings` is append-only, so this
         # resolves the class's newest IN_USE policy, not an arbitrary row.
@@ -3486,7 +3485,7 @@ def report_transaction_issue(transaction_id):
     transaction = Transaction.query.filter_by(
         id=transaction_id,
         seat_id=student.id,
-        join_code=get_display_join_code(class_context.class_id)
+        class_id=class_context.class_id,
     ).first_or_404()
 
     form = TransactionIssueSubmissionForm()

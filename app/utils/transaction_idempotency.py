@@ -88,7 +88,7 @@ def get_idempotent_transaction(idempotency_key, class_id=None, seat_id=None, typ
     return query.first()
 
 
-def _command_fingerprint(*, target_seat_id, actor_seat_id, amount, account_type, type, original_transaction_id, policy_id):
+def _command_fingerprint(*, target_seat_id, actor_seat_id, amount, account_type, type, original_transaction_id, policy_id, correlation_id=None):
     representation = {
         "account_type": account_type,
         "actor_seat_id": actor_seat_id,
@@ -97,6 +97,7 @@ def _command_fingerprint(*, target_seat_id, actor_seat_id, amount, account_type,
         "policy_id": policy_id,
         "target_seat_id": target_seat_id,
         "type": type,
+        "correlation_id": correlation_id,
     }
     encoded = json.dumps(representation, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()

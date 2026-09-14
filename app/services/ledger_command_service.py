@@ -51,17 +51,26 @@ def create_reserved_effects(*, class_id: str, feat_code: str, idempotency_key: s
         {key: effect.get(key) for key in (
             "seat_id", "target_seat_id", "actor_seat_id", "mechanism", "user_id",
             "amount", "account_type", "type", "original_transaction_id", "policy_id",
+            "correlation_id",
         )}
         for effect in effects
     ]
     if len(fingerprint_fields) == 1:
         effect = fingerprint_fields[0]
+        # Savings interest is a month-keyed command. The first calculation is
+        # the frozen ledger fact for that month; later hourly retries may see a
+        # different current balance, but must replay the existing Interest
+        # transaction rather than fail fingerprint validation or post again.
+        # The command identity remains scoped by class, seat, period key, and
+        # FEAT-owned idempotency key.
+        fingerprint_amount = None if effect.get("type") == "Interest" else effect.get("amount")
         fingerprint = _command_fingerprint(
             target_seat_id=effect.get("target_seat_id"),
             actor_seat_id=effect.get("actor_seat_id"),
-            amount=effect.get("amount"), account_type=effect.get("account_type"),
+            amount=fingerprint_amount, account_type=effect.get("account_type"),
             type=effect.get("type"), original_transaction_id=effect.get("original_transaction_id"),
             policy_id=effect.get("policy_id"),
+            correlation_id=effect.get("correlation_id"),
         )
     else:
         fingerprint = hashlib.sha256(
@@ -71,7 +80,9 @@ def create_reserved_effects(*, class_id: str, feat_code: str, idempotency_key: s
         class_id=class_id, feat_code=feat_code, idempotency_key=idempotency_key
     ).first()
     if reservation:
-        if reservation.fingerprint_version != FINGERPRINT_VERSION or reservation.replay_fingerprint != fingerprint:
+        is_monthly_interest = len(effects) == 1 and effects[0].get("type") == "Interest"
+        if (not is_monthly_interest and
+                (reservation.fingerprint_version != FINGERPRINT_VERSION or reservation.replay_fingerprint != fingerprint)):
             raise ValueError("Replay fingerprint mismatch for existing Ledger command reservation.")
         effects = (Transaction.query.filter_by(command_reservation_id=reservation.id)
                    .order_by(Transaction.id.asc()).all())
@@ -90,7 +101,9 @@ def create_reserved_effects(*, class_id: str, feat_code: str, idempotency_key: s
         reservation = LedgerCommandReservation.query.filter_by(
             class_id=class_id, feat_code=feat_code, idempotency_key=idempotency_key
         ).one()
-        if reservation.fingerprint_version != FINGERPRINT_VERSION or reservation.replay_fingerprint != fingerprint:
+        is_monthly_interest = len(effects) == 1 and effects[0].get("type") == "Interest"
+        if (not is_monthly_interest and
+                (reservation.fingerprint_version != FINGERPRINT_VERSION or reservation.replay_fingerprint != fingerprint)):
             raise ValueError("Replay fingerprint mismatch for existing Ledger command reservation.")
         effects = (Transaction.query.filter_by(command_reservation_id=reservation.id)
                    .order_by(Transaction.id.asc()).all())

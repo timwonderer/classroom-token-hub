@@ -371,7 +371,13 @@ def test_nav_places_each_deletion_under_its_own_scope(client, app):
 
 
 def test_class_delete_clears_the_destroyed_canonical_pointer(client, app):
-    """INV-ARC-012 §V: the destroyed class must not survive as a pointer."""
+    """INV-ARC-012 §V: the destroyed class must not survive as a pointer.
+
+    The teacher needs a second class here: deleting their *last* one destroys the
+    principal itself (DOM-IDEN-005 §VI), and a destroyed principal has no
+    pointers left to clear.
+    """
+    initialize("ap_csp_p3", client.application)
     classroom = initialize_as_teacher("chemistry_p1", client, app)
     class_id = classroom.class_id
     user_id = classroom.teacher_user.id

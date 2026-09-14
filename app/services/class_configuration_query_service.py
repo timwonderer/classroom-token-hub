@@ -421,7 +421,14 @@ def get_rent_settings(class_id: str) -> Optional[RentSettings]:
     return (
         RentSettings.query
         .filter_by(class_id=class_id, availability_state='IN_USE')
-        .order_by(RentSettings.rent_configured_at.desc(), RentSettings.id.desc())
+        # Economic guidance follows the newest configured policy, including a
+        # future rent_effective_at row. Historical assessments resolve their
+        # frozen policy_uuid separately and never use this query.
+        .order_by(
+            RentSettings.rent_effective_at.desc().nullslast(),
+            RentSettings.rent_configured_at.desc(),
+            RentSettings.id.desc(),
+        )
         .first()
     )
 

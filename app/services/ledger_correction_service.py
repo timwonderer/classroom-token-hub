@@ -1,9 +1,10 @@
 """Ledger-owned append-only correction boundary.
 
-Money is reversed. Grants are voided. SPEC-OPS-001 §II.3 forbids treating the
-two as interchangeable forms of undo, and INV-OPS-001 states the prohibition
-directly: a monetary transaction MUST NOT be voided. So this module offers one
-operation, and voiding lives with the grants in the Entitlements domain.
+Money is reversed. Entitlements are resolved separately. SPEC-OPS-001 §II.3
+forbids treating the two as interchangeable forms of undo, and INV-OPS-001
+states the prohibition directly: a monetary transaction MUST NOT be voided.
+This module owns the append-only monetary correction; the caller owns the
+domain-specific entitlement outcome.
 """
 
 from decimal import Decimal
@@ -64,6 +65,7 @@ def check_reversal_authorization(actor_seat_id, transaction) -> None:
 def reverse_transaction(
     transaction, *, description: str, compensation_type: str = "refund",
     idempotency_key: str | None = None, actor_seat_id: int | None = None,
+    preserve_correlation: bool = False,
 ):
     """Counteract a monetary transaction by appending a compensating one.
 
@@ -78,8 +80,9 @@ def reverse_transaction(
     would leave the balance snapshot permanently at odds with a rebuild from
     history that INV-LED-006 requires to agree.
 
-    Callers may present the result to users as a refund; §8.2 allows the word,
-    and the operation underneath remains a reversal.
+    ``compensation_type`` records the governing reason (for example,
+    ``issue_reversal`` or ``issue_refund``); the persisted ledger type remains
+    ``REVERSAL``. The entitlement outcome is deliberately not performed here.
     """
     if not idempotency_key:
         raise ValueError("Ledger corrections require a command idempotency reservation.")
@@ -121,6 +124,7 @@ def reverse_transaction(
         compensation_subtype=compensation_type,
         description=description, original_transaction_id=transaction.id,
         policy_id=transaction.policy_id,
+        correlation_id=transaction.correlation_id if preserve_correlation else None,
     )
     reversal_tx, _created = create_idempotent_transaction(
         idempotency_key=idempotency_key, **kwargs
