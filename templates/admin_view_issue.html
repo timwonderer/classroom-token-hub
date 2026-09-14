@@ -282,14 +282,23 @@
 
                         <div class="mb-3">
                             <label class="form-label fw-bold" for="actionType">Resolution Action</label>
-                            <select class="form-select" name="action_type" id="actionType" required>
+                            <select class="form-select" name="action_type" id="actionType" required{% if purchase_resolution and not purchase_resolution.eligible %} aria-describedby="actionTypeHelp"{% endif %}>
                                 <option value="">Select an action...</option>
                                 {% if issue.related_transaction_id %}
-                                <option value="compensating_transaction">Post Compensating Transaction</option>
+                                {% if purchase_resolution and purchase_resolution.eligible %}
+                                <option value="reverse_transaction">Reverse and remove item</option>
+                                <option value="refund_transaction">Refund and retain item</option>
                                 {% endif %}
+                                <option value="manual_adjustment">Manual Credit</option>
+                                {% endif %}
+                                {% if not issue.related_transaction_id %}
                                 <option value="manual_adjustment">Manual Adjustment (I'll handle it)</option>
+                                {% endif %}
                                 <option value="deny_issue">Deny Issue</option>
                             </select>
+                            {% if purchase_resolution and not purchase_resolution.eligible %}
+                            <div class="form-text" id="actionTypeHelp">{{ purchase_resolution.reason }}</div>
+                            {% endif %}
                         </div>
 
                         <div class="mb-3" id="denialReasonDiv" hidden>

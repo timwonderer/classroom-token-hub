@@ -42,6 +42,7 @@ from app.services.class_configuration_query_service import (
     get_effective_economic_engine,
     get_payroll_settings,
 )
+from app.utils.economy_policy import POLICY_MODES
 
 # --------------------------------------------------------------------------- #
 # Canonical constants (SPEC-ECON-003 §4.5)
@@ -552,10 +553,11 @@ def _scale_allowance(weekly_allowance: int, week_equiv: Decimal) -> int:
 # --------------------------------------------------------------------------- #
 
 # Weekly savings target as a fraction of CWI, per economic mode (SPEC §4.2 / §8).
+# Read from POLICY_MODES rather than restated: the teacher-facing savings figure
+# and the interest ceiling derived from it must move together (INV-ARC-022).
 _SAVINGS_RATES: dict[str, Decimal] = {
-    "tight": Decimal("0.05"),
-    "default": Decimal("0.10"),
-    "comfortable": Decimal("0.15"),
+    mode: Decimal(str(profile["ratios"]["savings_weekly"]["target"]))
+    for mode, profile in POLICY_MODES.items()
 }
 
 # Minimum doubling time in years, per economic mode (SPEC §5.2). Interest rates and
@@ -575,14 +577,24 @@ _COMPOUND_FREQ_PER_YEAR: dict[str, int] = {
 }
 _SUPPORTED_COMPOUND_FREQUENCIES = ("never", "daily", "weekly", "monthly")
 
-# Internal-fine band as a fraction of CWI, per economic mode (SPEC §4.6 / §8).
+# Internal-fine band as a fraction of CWI, per economic mode (SPEC §4.5 / §8).
+# Same single source as the teacher-facing fine band on the settings page.
 _FINE_BANDS: dict[str, dict[str, Decimal]] = {
-    "tight": {"lower": Decimal("0.07"), "upper": Decimal("0.18")},
-    "default": {"lower": Decimal("0.05"), "upper": Decimal("0.15")},
-    "comfortable": {"lower": Decimal("0.04"), "upper": Decimal("0.12")},
+    mode: {
+        "lower": Decimal(str(profile["ratios"]["fine_weekly"]["min"])),
+        "upper": Decimal(str(profile["ratios"]["fine_weekly"]["max"])),
+    }
+    for mode, profile in POLICY_MODES.items()
 }
 
-# Progressive (tiered) internal-fine schedule as fractions of CWI (SPEC §4.6.1).
+# Progressive (tiered) internal-fine schedule as fractions of CWI (SPEC §4.5.1).
+#
+# Deliberately NOT derived from POLICY_MODES. Unlike the flat fee above, this is a
+# self-contained reference set: §4.5.1 states the tiers are not a subdivision of the
+# §4.5 generic band, so tier 3 sits above that band's ceiling and tier 1 may sit
+# below its floor. It also orders the modes the other way — escalation bites hardest
+# under `tight` — because repeat-occurrence pressure is the lever a leaner economy
+# uses. Do not clamp or validate these against _FINE_BANDS.
 _PROGRESSIVE_FINE_TIERS: dict[str, tuple[Decimal, Decimal, Decimal]] = {
     "tight": (Decimal("0.07"), Decimal("0.125"), Decimal("0.18")),
     "default": (Decimal("0.05"), Decimal("0.10"), Decimal("0.15")),

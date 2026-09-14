@@ -11,7 +11,11 @@
 {% call help.topic('class-del-target', 'my_location', 'What gets deleted, and what does not') %}
 <ul class="ps-3 mb-0">
     <li class="mb-2"><strong>Only the open class can be deleted here.</strong> The target is taken from the class you are working in, never from anything you type. To delete a different one, switch to it first.</li>
+    {% if deletes_account %}
+    <li class="mb-2"><strong>This is your only class, so your teacher account goes with it.</strong> Your account exists through the seat this class gives you. Destroy the class and no seat is left to hold it.</li>
+    {% else %}
     <li class="mb-2"><strong>Your teacher account survives.</strong> So do your other classes. This removes one class, not you.</li>
+    {% endif %}
     <li class="mb-0"><strong>Students linked to another class keep their account</strong> and simply lose this one. Students who exist only here are deleted with it.</li>
 </ul>
 {% endcall %}
@@ -22,7 +26,11 @@
 
 {% call help.topic('class-del-gate', 'lock_clock', 'The confirmation gate') %}
 <p><strong>The confirmation gate is deliberately slow.</strong> A countdown, a phrase you must type by hand, then a ten-second hold. It is friction on purpose, and you can cancel at any point.</p>
+{% if deletes_account %}
+<p class="mb-0 text-muted">Because this is your last class, finishing the gate deletes your teacher account as well. You will be signed out and your login will no longer work.</p>
+{% else %}
 <p class="mb-0 text-muted">Deleting your teacher account instead is a separate action, under Settings &rsaquo; Account Deletion.</p>
+{% endif %}
 {% endcall %}
 {% endblock %}
 
@@ -49,17 +57,22 @@
                         <li>If your students have only joined  <strong>{{ class_display_label }}</strong>, their accounts will be deleted entirely.</li>
                         <li>This action is permanent, irreversible, and unrecoverable.</li>
                     </ul>
+                    {% if deletes_account %}
+                    <p class="alert alert-danger">
+                        <strong>This is your only class, so your teacher account is deleted too.</strong>
+                        Your account exists through the seat this class gives you; with the class
+                        gone there is no seat left to hold it. Your login, credentials, and recovery
+                        material are destroyed with it, and you will be signed out. If you meant to
+                        keep teaching, create another class first.
+                    </p>
+                    {% else %}
                     <p class="alert alert-warning">
                         <strong>Your teacher account is not deleted by this.</strong>
-                        That is true even if this is the only class you own. To delete your
+                        You own other classes, and each one gives you a seat. To delete your
                         account, use Settings &rsaquo; Account Deletion.
                     </p>
-                    <p class="alert alert-secondary mb-3">
-                        <strong>One thing is not erased.</strong> Each token transaction wrote a
-                        tamper-evident audit entry when it happened, and those entries cannot be
-                        edited or deleted by anyone, including us. They record identifiers and
-                        cryptographic digests — not names, and not readable transaction detail.
-                    </p>
+                    {% endif %}
+                  
 
                     <form id="class-delete-form"
                           data-confirmation-phrase="{{ class_confirmation_phrase }}"
@@ -111,8 +124,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 'Every transaction, payroll, and purchase record for this class will be destroyed.',
                 'Recovery of this class is not possible.',
                 'Any student account not linked to another class will be deleted as well.',
-                'Your own teacher account is NOT deleted by this, even if this is your only class.',
-                'Tamper-evident audit entries for this class’s transactions are kept permanently and cannot be deleted. They hold identifiers and digests, not names.',
+                {% if deletes_account %}
+                'This is your LAST class, so your own teacher account is deleted with it — login, credentials, and recovery material included.',
+                {% else %}
+                'Your own teacher account will not be deleted, because you still have a seat in another class.',
+                {% endif %}
             ],
         }).then(gatePayload => {
             if (!gatePayload) {
@@ -130,7 +146,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        window.location.assign('{{ url_for("admin.dashboard") }}');
+                        // Deleting a last class also destroys the principal, which
+                        // leaves no dashboard to return to.
+                        window.location.assign(data.redirect || '{{ url_for("admin.dashboard") }}');
                         return;
                     }
                     reportFailure('Error: ' + (data.message || 'Class deletion failed.'));

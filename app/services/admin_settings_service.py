@@ -57,6 +57,12 @@ def supersede_rent_settings(*, class_id: str, updates: dict) -> RentSettings:
 
     successor = RentSettings(class_id=class_id, **carried)
     successor.rent_configured_at = utc_now()
+    # The successor is in force for new work the moment it is recorded, because
+    # its predecessor is retired in the same flush. A later activation is not
+    # expressed by dating this row forward; deferred economic changes are
+    # PolicyTransitions activated at an operational boundary (FEAT-ECON-001
+    # §VII-VIII), and a cycle already underway keeps the policy_uuid it froze.
+    successor.rent_effective_at = successor.rent_configured_at
     successor.availability_state = 'IN_USE'
     db.session.add(successor)
 

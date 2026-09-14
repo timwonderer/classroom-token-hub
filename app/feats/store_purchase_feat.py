@@ -220,10 +220,12 @@ def _execute_store_purchase_impl(
         )
 
     # Rent policy owns the late-purchase consequence. Resolve lateness from the
-    # canonical obligation projection, and allow only products explicitly linked
-    # as rent satisfaction benefits when the policy says non-covered purchases
-    # are blocked. The check is server-side so a hidden/disabled UI control
-    # cannot bypass the class policy.
+    # canonical obligation projection; while it is late, only a product the
+    # teacher explicitly marked as available despite overdue rent may be bought
+    # (SPEC-STORE-001 §IV.D). Being rent-linked is not that authorization: a
+    # rent perk is granted through its own path and never reaches this FEAT
+    # (FEAT-OBL-003 §IV.4). The check is server-side so a hidden or disabled UI
+    # control cannot bypass the class policy.
     rent_settings = get_rent_settings(canonical_context.class_id)
     if rent_settings and rent_settings.prevent_purchase_when_late:
         rent_view = build_student_obligation_view(
@@ -233,12 +235,7 @@ def _execute_store_purchase_impl(
         )
         current_period = rent_view.current_period if rent_view else {}
         is_late = bool(current_period.get("is_late") or current_period.get("is_past_due"))
-        linked_lineages = {
-            benefit.get("product_lineage_uuid")
-            for benefit in rent_settings.get_satisfaction_benefit_grants()
-            if benefit.get("product_lineage_uuid")
-        }
-        if is_late and policy_config.product_lineage_uuid not in linked_lineages:
+        if is_late and not policy_config.available_with_overdue_obligations:
             return StorePurchaseResult(
                 success=False,
                 correlation_id="",
@@ -255,6 +252,24 @@ def _execute_store_purchase_impl(
             quantity_granted=0,
             error_code="PRODUCT_NOT_PURCHASABLE",
             error_message=f"Product {policy_config.product_id} is not purchasable",
+        )
+
+    if not policy_config.direct_purchase_allowed:
+        return StorePurchaseResult(
+            success=False,
+            correlation_id="",
+            quantity_granted=0,
+            error_code="DIRECT_PURCHASE_NOT_ALLOWED",
+            error_message="This item is not available for direct student purchase",
+        )
+
+    if policy_config.price is None:
+        return StorePurchaseResult(
+            success=False,
+            correlation_id="",
+            quantity_granted=0,
+            error_code="PRICE_NOT_CONFIGURED",
+            error_message="This product has no configured purchase price",
         )
 
     # Insurance is NOT a store product. It is acquired through FEAT-OBL-004
@@ -314,28 +329,24 @@ def _execute_store_purchase_impl(
     units_per_purchase = policy_config.bundle_quantity or 1
     units_to_grant = quantity * units_per_purchase
 
-    # Validate per-student limit (if configured)
-    if policy_config.limit_per_student is not None:
-        # Count existing GRANTED entitlements for this seat and product
-        existing_count = db.session.query(EntitlementEvent).filter_by(
+    from app.services.entitlement_service import HoldingLimitExceeded, ensure_within_holding_limit
+    try:
+        ensure_within_holding_limit(
             class_id=canonical_context.class_id,
-            target_seat_id=canonical_context.seat_id,
-            product_id=policy_config.product_id,
-            event_type='GRANTED',
-        ).count()
-
-        # The teacher configures a *purchase* limit, but grants are counted in
-        # units, so convert the limit into the same unit before comparing —
-        # otherwise a bundle of five would exhaust a limit of five in one buy.
-        granted_units_allowed = policy_config.limit_per_student * units_per_purchase
-        if existing_count + units_to_grant > granted_units_allowed:
-            return StorePurchaseResult(
-                success=False,
-                correlation_id="",
-                quantity_granted=0,
-                error_code="LIMIT_EXCEEDED",
-                error_message=f"Purchasing {quantity} would exceed per-student limit of {policy_config.limit_per_student}",
-            )
+            seat_id=canonical_context.seat_id,
+            product_lineage_uuid=policy_config.product_id,
+            entitlement_type=policy_config.entitlement_type,
+            holding_limit=policy_config.holding_limit,
+            grant_quantity=units_to_grant,
+        )
+    except HoldingLimitExceeded as exc:
+        return StorePurchaseResult(
+            success=False,
+            correlation_id="",
+            quantity_granted=0,
+            error_code="HOLDING_LIMIT_EXCEEDED",
+            error_message=f"This purchase would exceed the holding limit of {exc.holding_limit}",
+        )
 
     # Generate or use provided correlation ID
     corr_id = correlation_id or get_correlation_id() or f"store_purchase_{uuid.uuid4().hex}"
@@ -497,6 +508,13 @@ def _execute_store_purchase_impl(
             db.session.add(consumed_event)
 
         db.session.flush()
+
+    # No pending action is written here, for any entitlement type. FEAT-STOR-001
+    # §II excludes "pending request storage" from this FEAT's authority, and a
+    # `pending_actions` row asserts that a request was *submitted* and awaits
+    # resolution (DOM-STORE-001 §IX) — acquiring an item is not submitting one.
+    # The lawful writer is FEAT-STOR-002 `execute_use_item_request`, reached when
+    # the student acts on the item.
 
     return StorePurchaseResult(
         success=True,

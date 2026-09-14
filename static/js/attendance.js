@@ -158,9 +158,9 @@ function updateAttendanceUI(isActive, duration, projectedPay, hallPass = null) {
   rememberAttendanceState({ active: isActive, duration, projected_pay: projectedPay, hall_pass: hallPass });
 
   statusCell.textContent = isActive ? "Active" : "Inactive";
-  statusCell.classList.toggle("text-success", isActive);
+  statusCell.classList.toggle("attendance-status-active", isActive);
+  statusCell.classList.toggle("attendance-status-neutral", !isActive);
   statusCell.classList.toggle("fw-bold", isActive);
-  statusCell.classList.toggle("text-muted", !isActive);
 
   durationCell.textContent = formatDuration(duration);
   if (payCell) {

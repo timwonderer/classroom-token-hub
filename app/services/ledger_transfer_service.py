@@ -7,6 +7,7 @@ canonical service boundary for transfer creation and proof.
 
 from app.services.ledger_balance_query_service import TransferProofResult, verify_transfer
 from app.services.ledger_command_service import FINGERPRINT_VERSION, _command_fingerprint
+from app.utils.transaction_idempotency import fingerprint_matches_reservation
 from app.services.ledger_posting_service import create_pending_transaction
 from app.extensions import db
 from app.models import LedgerCommandReservation, Transaction
@@ -34,16 +35,19 @@ def create_transfer_pair(
     quantized_amount = _quantize_currency(amount)
     if quantized_amount <= 0:
         raise ValueError("Internal transfer amount must be greater than zero.")
-    fingerprint = _command_fingerprint(
-        target_seat_id=seat_id, actor_seat_id=seat_id, amount=quantized_amount,
-        account_type=f"{from_account}->{to_account}", type="internal_transfer",
-        original_transaction_id=None, policy_id=None,
-    )
+    def fingerprint_for(version):
+        return _command_fingerprint(
+            target_seat_id=seat_id, actor_seat_id=seat_id, amount=quantized_amount,
+            account_type=f"{from_account}->{to_account}", type="internal_transfer",
+            original_transaction_id=None, policy_id=None, version=version,
+        )
+
+    fingerprint = fingerprint_for(FINGERPRINT_VERSION)
     reservation = LedgerCommandReservation.query.filter_by(
         class_id=class_id, feat_code=feat_code, idempotency_key=idempotency_key
     ).first()
     if reservation:
-        if reservation.fingerprint_version != FINGERPRINT_VERSION or reservation.replay_fingerprint != fingerprint:
+        if not fingerprint_matches_reservation(reservation, fingerprint_for):
             raise ValueError("Replay fingerprint mismatch for existing transfer reservation.")
         effects = Transaction.query.filter_by(command_reservation_id=reservation.id).order_by(Transaction.id.asc()).all()
         if len(effects) != 2:

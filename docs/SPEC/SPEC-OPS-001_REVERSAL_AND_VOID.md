@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-001 | 1.0 | 2026-08-22 | None | Normative |
+| SPEC-OPS-001 | 1.2 | 2026-09-14 | 1.1 | Normative |
 
 ---
 ## I. Purpose
@@ -67,7 +67,7 @@ A **REVERSAL** is an atomic append-only corrective operation originating from an
 A lawful reversal:
 
 1. creates a compensating monetary transaction that counteracts the monetary effect of the original transaction; and
-2. invalidates eligible downstream grants whose authority derives from the reversed transaction.
+2. invalidates eligible downstream grants whose authority derives from the reversed transaction, except where the governing domain has chosen the `REFUND` outcome of §3.1A.
 
 The original monetary transaction and all downstream grant history remain historical fact.
 
@@ -82,6 +82,24 @@ REVERSAL                 +$20
 ```
 
 The resulting monetary effect is zero, and the grant can no longer be exercised.
+
+### 3.1A Pre-use refund without entitlement revocation
+
+For an unused or pending Store entitlement, an authorized issue resolution MAY
+choose a **REFUND** outcome instead of a **REVERSE** outcome. Both outcomes
+create a positive `REVERSAL` Ledger transaction for the exact amount spent and
+share the original transaction's `correlation_id`.
+
+The distinction is downstream entitlement state:
+
+- `REVERSE` appends `REVOKED` for every still-active entitlement derived from
+  the purchase;
+- `REFUND` retains the entitlement and does not append `REVOKED`.
+
+The compensating Ledger transaction is terminal in either case. It MUST NOT be
+voided, reversed, or used as an insurance claim basis. The original purchase
+also becomes non-claimable after either outcome, while the entitlement remains
+usable only under `REFUND`.
 
 ### 3.2 Historical Preservation
 
@@ -102,6 +120,8 @@ When a grant derives its authority from the monetary transaction being reversed,
 This invalidation is a consequence of reversal provenance. Therefore, the capability bestowed by the transaction is revoked.
 
 The resulting grant state SHOULD therefore report as `REVOKED`
+
+The one exception is the `REFUND` outcome of §3.1A, where the governing domain has explicitly chosen to retain the entitlement. Propagation is a property of the `REVERSE` outcome, not of every Ledger row whose `type` is `REVERSAL`: both outcomes write that row, and only `REVERSE` invalidates the derived grant.
 
 
 
@@ -221,7 +241,8 @@ The relationship between monetary reversal and grant void is:
 
 | Starting artifact/state | Requested operation | Money returned? | Grant remains exercisable? | Legal? |
 |---|---|---:|---:|---:|
-| Active purchased grant | **REVERSAL** | **Yes** | **No — invalidated by reversal** | **Yes, if otherwise authorized** |
+| Active purchased grant | **REVERSE** | **Yes** | **No — invalidated by reversal** | **Yes, if otherwise authorized** |
+| Active purchased grant | **REFUND** | **Yes** | **Yes — retained** | **Yes, if otherwise authorized** |
 | Active purchased grant | **VOID** | No | **No — voided** | **Yes, if otherwise authorized** |
 | USED purchased grant | REVERSAL | No| No | **NO** |
 | EXPIRED purchased grant | REVERSAL | No | No | **NO** |
@@ -319,9 +340,9 @@ Teacher monetary remediation, where authorized, MUST occur through a new indepen
 
 ### 8.1 Refund Is a Business Meaning, Not a Third Primitive
 
-CTH does not require a generic REFUND ledger primitive.
+CTH does not require a generic REFUND ledger primitive. Both issue outcomes of §3.1A are recorded as a `REVERSAL` Ledger transaction; `REFUND` names the outcome that retains the grant, not a separate ledger type.
 
-For an eligible Store purchase with an active downstream grant, ordinary REVERSAL already provides the canonical refund-like behavior:
+For an eligible Store purchase with an active downstream grant, the `REVERSE` outcome provides the canonical refund-like behavior:
 
 ```text
 Purchase                 -$20
@@ -333,13 +354,15 @@ REVERSAL                 +$20
 
 The participant receives the money back and the purchased grant loses its authority atomically.
 
+Where the governing domain explicitly authorizes it, the `REFUND` outcome of §3.1A instead returns the money and retains the grant.
+
 ### 8.2 Refund Terminology
 
 A domain or user interface MAY describe an eligible reversal as a **refund** where that language is appropriate for users.
 
 Such terminology MUST NOT alter the canonical semantics.
 
-The underlying operation remains REVERSAL.
+The underlying operation remains REVERSAL. The `REFUND` outcome of §3.1A is the one place the word names distinct semantics — a retained grant — and it is available only where the governing domain authorizes it.
 
 ### 8.3 Void Is Not Refund
 
@@ -467,7 +490,7 @@ Grants MUST NOT be reversed.
 A lawful reversal MUST atomically:
 
 1. counteract the monetary effect of the eligible originating transaction; and
-2. invalidate all eligible downstream grants whose authority derives from that transaction.
+2. invalidate all eligible downstream grants whose authority derives from that transaction, unless the governing domain has chosen the `REFUND` outcome of §3.1A, which retains them.
 
 Downstream invalidation caused by reversal reports as `REVOKED` (§3.3). The reported state does not separate it from a directly authorized grant void, because the resulting authority is the same: the capability is gone and MUST NOT be exercised.
 

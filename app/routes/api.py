@@ -399,8 +399,8 @@ def use_item():
         action_payload = {
             "action": "REQUEST",
             "item_type": store_item.item_type,
-            "product_id": store_item.id,
-            "policy_uuid": str(store_item.id),
+            "product_id": store_item.product_lineage_uuid,
+            "policy_uuid": store_item.policy_uuid,
             "details": details or None,
             "destination": details or "Hall Pass",
         }
@@ -408,8 +408,8 @@ def use_item():
         action_payload = {
             "action": "REQUEST",
             "item_type": store_item.item_type,
-            "product_id": store_item.id,
-            "policy_uuid": str(store_item.id),
+            "product_id": store_item.product_lineage_uuid,
+            "policy_uuid": store_item.policy_uuid,
             "details": details or None,
         }
 

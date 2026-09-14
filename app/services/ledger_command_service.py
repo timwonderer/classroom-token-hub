@@ -12,8 +12,42 @@ from app.models import LedgerCommandReservation, Transaction
 from sqlalchemy.exc import IntegrityError
 from app.utils.transaction_idempotency import (
     FINGERPRINT_VERSION, IDEMPOTENT_TRANSACTION_TYPES, MAX_IDEMPOTENCY_KEY_LENGTH,
-    _command_fingerprint,
+    _command_fingerprint, amount_is_fingerprinted, fingerprint_matches_reservation,
 )
+
+_FINGERPRINT_EFFECT_KEYS = (
+    "seat_id", "target_seat_id", "actor_seat_id", "mechanism", "user_id",
+    "amount", "account_type", "type", "original_transaction_id", "policy_id",
+)
+
+
+def _replay_fingerprint(effects: list[dict], version: int) -> str:
+    """Serialize a command's effect plan under one fingerprint version."""
+    if len(effects) == 1:
+        effect = effects[0]
+        return _command_fingerprint(
+            target_seat_id=effect.get("target_seat_id"),
+            actor_seat_id=effect.get("actor_seat_id"),
+            amount=effect.get("amount"), account_type=effect.get("account_type"),
+            type=effect.get("type"), original_transaction_id=effect.get("original_transaction_id"),
+            policy_id=effect.get("policy_id"), version=version,
+        )
+    fields = []
+    for effect in effects:
+        field = {key: effect.get(key) for key in _FINGERPRINT_EFFECT_KEYS}
+        if not amount_is_fingerprinted(field["type"], version):
+            field["amount"] = None
+        fields.append(field)
+    return hashlib.sha256(
+        json.dumps(fields, sort_keys=True, separators=(",", ":"), default=str).encode()
+    ).hexdigest()
+
+
+def _assert_replay_matches(reservation, effects: list[dict]) -> None:
+    if not fingerprint_matches_reservation(
+        reservation, lambda version: _replay_fingerprint(effects, version)
+    ):
+        raise ValueError("Replay fingerprint mismatch for existing Ledger command reservation.")
 
 
 def create_idempotent_transaction(**kwargs):
@@ -47,32 +81,12 @@ def create_reserved_effects(*, class_id: str, feat_code: str, idempotency_key: s
         raise ValueError("Idempotency key must be a non-empty string.")
     if len(idempotency_key) > MAX_IDEMPOTENCY_KEY_LENGTH:
         raise ValueError("Idempotency key exceeds the maximum allowed length.")
-    fingerprint_fields = [
-        {key: effect.get(key) for key in (
-            "seat_id", "target_seat_id", "actor_seat_id", "mechanism", "user_id",
-            "amount", "account_type", "type", "original_transaction_id", "policy_id",
-        )}
-        for effect in effects
-    ]
-    if len(fingerprint_fields) == 1:
-        effect = fingerprint_fields[0]
-        fingerprint = _command_fingerprint(
-            target_seat_id=effect.get("target_seat_id"),
-            actor_seat_id=effect.get("actor_seat_id"),
-            amount=effect.get("amount"), account_type=effect.get("account_type"),
-            type=effect.get("type"), original_transaction_id=effect.get("original_transaction_id"),
-            policy_id=effect.get("policy_id"),
-        )
-    else:
-        fingerprint = hashlib.sha256(
-            json.dumps(fingerprint_fields, sort_keys=True, separators=(",", ":"), default=str).encode()
-        ).hexdigest()
+    fingerprint = _replay_fingerprint(effects, FINGERPRINT_VERSION)
     reservation = LedgerCommandReservation.query.filter_by(
         class_id=class_id, feat_code=feat_code, idempotency_key=idempotency_key
     ).first()
     if reservation:
-        if reservation.fingerprint_version != FINGERPRINT_VERSION or reservation.replay_fingerprint != fingerprint:
-            raise ValueError("Replay fingerprint mismatch for existing Ledger command reservation.")
+        _assert_replay_matches(reservation, effects)
         effects = (Transaction.query.filter_by(command_reservation_id=reservation.id)
                    .order_by(Transaction.id.asc()).all())
         if not effects:
@@ -90,8 +104,7 @@ def create_reserved_effects(*, class_id: str, feat_code: str, idempotency_key: s
         reservation = LedgerCommandReservation.query.filter_by(
             class_id=class_id, feat_code=feat_code, idempotency_key=idempotency_key
         ).one()
-        if reservation.fingerprint_version != FINGERPRINT_VERSION or reservation.replay_fingerprint != fingerprint:
-            raise ValueError("Replay fingerprint mismatch for existing Ledger command reservation.")
+        _assert_replay_matches(reservation, effects)
         effects = (Transaction.query.filter_by(command_reservation_id=reservation.id)
                    .order_by(Transaction.id.asc()).all())
         if not effects:

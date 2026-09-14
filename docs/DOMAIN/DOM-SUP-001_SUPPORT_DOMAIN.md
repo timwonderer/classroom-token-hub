@@ -311,7 +311,7 @@ Rules:
 - Issue status transitions must atomically produce a history row.
 - The Support domain reads ledger, attendance, and identity data for context but does
   not mutate those domains directly.
-- Corrective money effects (e.g., transaction reversals) must be executed via FEAT,
+- Corrective money effects (e.g., transaction reverse or refund outcomes) must be executed via FEAT,
   which invokes Ledger. The resolution action row records the declaration; Ledger owns
   the resulting transaction row.
 - Sysadmin-accessible actor references use UUID-encoded `seats.public_id`, carried as
@@ -349,6 +349,11 @@ Constraints:
 - When a resolution action involves a transaction reversal, FEAT coordinates the
   Ledger reversal and the Support resolution action row in a single operation. Ledger
   owns the resulting transaction rows; Support owns the resolution action row.
+- For an unused or pending item, the teacher resolution MUST explicitly choose
+  `REVERSE` (revoke entitlement and compensate money) or `REFUND` (retain
+  entitlement and compensate money). Both are terminal and preserve the original
+  `correlation_id`. A used item cannot take either path; a teacher manual credit
+  is a separate new transaction.
 - `related_transaction_id` on `issue_resolution_actions` is a read-only reference to
   the Ledger domain for audit traceability. It does not transfer ledger write authority.
 - Sysadmin reward delivery for `user_reports` is initiated via FEAT; the resulting

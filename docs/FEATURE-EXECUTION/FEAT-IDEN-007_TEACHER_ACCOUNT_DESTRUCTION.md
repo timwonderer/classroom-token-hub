@@ -41,9 +41,16 @@ rolls back the entire account deletion rather than leaving a half-destroyed
 principal.
 
 `FEAT-CLASS-001` remains the entry point for destroying **one** class while the
-owning account survives (`POST /admin/join-code/delete`). The two entry points
-are not interchangeable; a caller already holding a context must use the domain
-command.
+owning account survives. The two entry points are not interchangeable; a caller
+already holding a context must use the domain command.
+
+`POST /admin/join-code/delete` therefore dispatches between them. A class
+teardown destroys that class's seats, including the teacher's administrative
+one, and a principal holding no seat anywhere cannot exist — DOM-IDEN-005 §V.6
+and §VI, which grant teachers no exception. So when the target class holds the
+acting principal's last seat, the request is not single-class destruction at
+all: the route executes **this** FEAT instead, and the surviving-account
+assurance on the confirmation surface must not be shown.
 
 ## Boundary
 

@@ -12,7 +12,8 @@ shown is the band they are judged against*, byte for byte, at every frequency.
 import pytest
 from decimal import Decimal
 
-from app.utils.economy_balance import EconomyBalanceChecker, PricingTier
+from app.services.store.form_contract import resolve_store_form_contract
+from app.utils.economy_balance import EconomicRole, EconomyBalanceChecker
 from app.utils.economy_policy import (
     POLICY_MODES,
     get_price_recommendation_context,
@@ -153,9 +154,9 @@ def test_engine_card_band_matches_the_rent_page_band(mode, cwi):
 def test_fine_band_honours_the_policy_mode(mode, cwi):
     """Fine validation must read the class's policy mode, not a hardcoded constant.
 
-    ``validate_fine_value`` used ``FINE_MIN_RATIO`` directly, so a class on the
-    tight or comfortable policy was judged against the default band while the
-    Economic Engine card showed it the band for its actual mode.
+    ``validate_fine_value`` used a class-level fallback constant directly, so a
+    class on the tight or comfortable policy was judged against the default band
+    while the Economic Engine card showed it the band for its actual mode.
     """
     checker = _checker(mode)
     _, recommendations, _ = checker.validate_fine_value(fine_amount=1.0, cwi=cwi)
@@ -183,33 +184,161 @@ def test_fine_at_recommended_minimum_is_accepted(mode, cwi):
 
 @pytest.mark.parametrize("mode", MODES)
 @pytest.mark.parametrize("cwi", [100.00, 337.50, 300.01, 999.99])
-def test_store_tier_band_matches_the_engine_card(mode, cwi):
+def test_store_role_band_matches_the_engine_card(mode, cwi):
     checker = _checker(mode)
     _, recommendations, _ = checker.validate_store_item_value(price=1.0, cwi=cwi)
     card = get_price_recommendation_context(mode, cwi)
 
-    for tier in PricingTier:
-        page = recommendations["tiers"][tier.value]
-        engine = card["store_tiers"][tier.value]
-        assert page["min"] == pytest.approx(engine["min"]), f"{mode}@{cwi} {tier.value} min"
-        assert page["max"] == pytest.approx(engine["max"]), f"{mode}@{cwi} {tier.value} max"
+    for role in EconomicRole:
+        page = recommendations["roles"][role.value]
+        engine = card["store_roles"][role.value]
+        assert page["min"] == pytest.approx(engine["min"]), f"{mode}@{cwi} {role.value} min"
+        assert page["max"] == pytest.approx(engine["max"]), f"{mode}@{cwi} {role.value} max"
+
+
+@pytest.mark.parametrize("cwi", [100.00, 337.50, 300.01, 999.99])
+def test_store_role_bands_do_not_vary_by_policy_mode(cwi):
+    """SPEC-ECON-003 §4.7's role table has no policy-mode axis."""
+    bands = [
+        _checker(mode).validate_store_item_value(price=1.0, cwi=cwi)[1]["roles"]
+        for mode in MODES
+    ]
+    assert all(band == bands[0] for band in bands), f"role bands diverged across modes @{cwi}"
 
 
 @pytest.mark.parametrize("mode", MODES)
 @pytest.mark.parametrize("cwi", [100.00, 337.50, 300.01, 999.99])
-def test_store_item_priced_at_a_tier_boundary_is_accepted(mode, cwi):
-    """A price copied from a displayed tier band must land inside that tier."""
+def test_store_item_priced_at_its_role_boundary_is_within_range(mode, cwi):
+    """A price copied from a displayed role band must read as inside that band."""
     checker = _checker(mode)
     _, recommendations, _ = checker.validate_store_item_value(price=1.0, cwi=cwi)
 
-    for tier in PricingTier:
-        band = recommendations["tiers"][tier.value]
+    for role in EconomicRole:
+        band = recommendations["roles"][role.value]
         for bound in ("min", "max"):
-            warnings, _, _ = checker.validate_store_item_value(band[bound], cwi)
-            levels = {w["level"] for w in warnings}
-            assert "critical" not in levels, (
-                f"{mode}@{cwi}: {tier.value} {bound} ({band[bound]}) rejected: {warnings}"
+            warnings, _, _ = checker.validate_store_item_value(
+                band[bound], cwi, economic_role=role.value
             )
+            levels = {w["level"] for w in warnings}
+            assert "warning" not in levels and "critical" not in levels, (
+                f"{mode}@{cwi}: {role.value} {bound} ({band[bound]}) read as out of range: {warnings}"
+            )
+
+
+@pytest.mark.parametrize("cwi", [100.00, 337.50])
+def test_store_price_outside_its_role_band_stays_valid(cwi):
+    """SPEC-ECON-003 §4.7: an out-of-band price is reported, never rejected."""
+    checker = _checker("default")
+    _, recommendations, _ = checker.validate_store_item_value(price=1.0, cwi=cwi)
+    necessity_max = recommendations["roles"]["necessity"]["max"]
+
+    warnings, _, _ = checker.validate_store_item_value(
+        necessity_max * 3, cwi, economic_role="necessity"
+    )
+    levels = {w["level"] for w in warnings}
+    assert "critical" not in levels, f"out-of-band necessity price was rejected: {warnings}"
+    assert "warning" in levels, f"out-of-band necessity price went unreported: {warnings}"
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("cwi", [100.00, 337.50, 300.01, 999.99])
+def test_collective_goal_guidance_quotes_currency_from_the_policy_band(mode, cwi):
+    """The goal-amount hint must price the §4.6 band, not restate the ratio.
+
+    A teacher types a goal in dollars. This surface previously rendered only
+    "1×–8× CWI" — a ratio no policy mode defines, and one that left the teacher
+    doing the arithmetic. Both halves are asserted here: the dollar endpoints
+    must equal ``cwi × band`` read from ``POLICY_MODES``, and the ratio must
+    still be shown, because that is what Rebalance re-derives the goal from.
+    """
+    band = POLICY_MODES[mode]["ratios"]["collective_goal"]
+    contract = resolve_store_form_contract(
+        item_type="collective",
+        rent_linked=False,
+        direct_purchase=True,
+        rent_prevents_purchase_when_late=False,
+        collective_goal_band=band,
+        cwi=cwi,
+    )
+    guidance = next(
+        field.label
+        for section in contract.sections
+        for field in section.fields
+        if field.name == "collective_goal_guidance"
+    )
+
+    expected = (
+        f"Recommended range: ${cwi * band['min']:,.2f}–${cwi * band['max']:,.2f} "
+        f"({band['min']:g}×–{band['max']:g}× CWI)."
+    )
+    assert guidance == expected, f"{mode}@{cwi}: {guidance!r}"
+    # The currency half is the point; a ratio-only string must not pass.
+    assert "$" in guidance
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_collective_goal_guidance_without_a_cwi_admits_it(mode):
+    """No pay rate configured means no dollar band exists to quote.
+
+    The honest answer is to say the CWI is missing. Silently falling back to a
+    bare ratio reads like the recommendation itself, which is how the drifted
+    1×–8× text survived unnoticed.
+    """
+    band = POLICY_MODES[mode]["ratios"]["collective_goal"]
+    contract = resolve_store_form_contract(
+        item_type="collective",
+        rent_linked=False,
+        direct_purchase=True,
+        rent_prevents_purchase_when_late=False,
+        collective_goal_band=band,
+        cwi=None,
+    )
+    guidance = next(
+        field.label
+        for section in contract.sections
+        for field in section.fields
+        if field.name == "collective_goal_guidance"
+    )
+    assert "$" not in guidance
+    assert "pay rate" in guidance
+    assert f"{band['min']:g}×–{band['max']:g}× CWI" in guidance
+
+
+def test_collective_goal_guidance_band_is_not_restated_in_the_store_service():
+    """The form must carry no collective-goal band of its own.
+
+    The regression: ``form_contract`` held ``{'min': 1.0, 'max': 8.0}``, so the
+    range a teacher read while naming a goal was not the range the engine judged
+    it against. An omitted band must resolve policy authority's default mode.
+    """
+    from app.utils.economy_policy import POLICY_MODE_DEFAULT
+
+    default_band = POLICY_MODES[POLICY_MODE_DEFAULT]["ratios"]["collective_goal"]
+    omitted = resolve_store_form_contract(
+        item_type="collective",
+        rent_linked=False,
+        direct_purchase=True,
+        rent_prevents_purchase_when_late=False,
+        cwi=100.0,
+    )
+    explicit = resolve_store_form_contract(
+        item_type="collective",
+        rent_linked=False,
+        direct_purchase=True,
+        rent_prevents_purchase_when_late=False,
+        collective_goal_band=default_band,
+        cwi=100.0,
+    )
+
+    def _guidance(contract):
+        return next(
+            field.label
+            for section in contract.sections
+            for field in section.fields
+            if field.name == "collective_goal_guidance"
+        )
+
+    assert _guidance(omitted) == _guidance(explicit)
 
 
 def test_average_weeks_per_month_has_one_definition():
@@ -252,3 +381,31 @@ def test_rebalance_preview_proposes_the_band_the_page_recommends(
     expected = checker.rent_band(cwi, frequency, custom_value, custom_unit)["recommended"]
     rent_item = next(item for item in items if item["key"] == "rent")
     assert Decimal(rent_item["change"]["new_value"]) == expected
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("cwi", [100.00, 337.50, 999.99])
+def test_overdraft_fine_band_is_the_same_band_the_fine_page_shows(mode, cwi):
+    """The Economic Engine and the settings page must derive fines from one table.
+
+    They used to hold separate per-mode fine dictionaries, which had already
+    drifted: the engine judged an overdraft fee against tight 7%-18% while the
+    settings page recommended tight 5%-10% for the same class.
+    """
+    from app.services.economic_engine import resolve_overdraft_fine
+
+    page = _checker(mode).fine_band(cwi)
+    engine = resolve_overdraft_fine(cwi=Decimal(str(cwi)), mode=mode)
+
+    assert engine.flat_fee_lower == page["min"], f"{mode}@{cwi} fine minimum"
+    assert engine.flat_fee_upper == page["max"], f"{mode}@{cwi} fine maximum"
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_savings_target_has_one_source(mode):
+    """The interest ceiling and the teacher-facing savings target share a rate."""
+    from app.services.economic_engine import _SAVINGS_RATES
+
+    assert _SAVINGS_RATES[mode] == Decimal(
+        str(POLICY_MODES[mode]["ratios"]["savings_weekly"]["target"])
+    )

@@ -250,26 +250,6 @@ def _execute_direct_grant_impl(
             error_message=f"Product {policy_config.product_id} does not support direct grants",
         )
 
-    # Validate per-student limit (if configured)
-    if policy_config.limit_per_student is not None:
-        # Count existing GRANTED entitlements for this target seat and product
-        # Product_id comes from resolved policy, not inference
-        existing_count = db.session.query(EntitlementEvent).filter_by(
-            class_id=canonical_context.class_id,
-            target_seat_id=target_seat_id,
-            product_id=policy_config.product_id,
-            event_type='GRANTED',
-        ).count()
-
-        if existing_count + quantity > policy_config.limit_per_student:
-            return DirectGrantResult(
-                success=False,
-                correlation_id="",
-                quantity_granted=0,
-                error_code="LIMIT_EXCEEDED",
-                error_message=f"Granting {quantity} would exceed per-student limit of {policy_config.limit_per_student}",
-            )
-
     # Generate or use provided correlation ID
     corr_id = correlation_id or idempotency_key or f"direct_grant_{uuid.uuid4().hex}"
 
@@ -298,6 +278,27 @@ def _execute_direct_grant_impl(
                 entitlement_ids=entitlement_ids,
                 product_id=policy_config.product_id,
             )
+
+    # The holding limit binds a teacher grant exactly as it binds a purchase
+    # (DOM-STORE-001 §VIII.A). The target seat row is locked above.
+    from app.services.entitlement_service import HoldingLimitExceeded, ensure_within_holding_limit
+    try:
+        ensure_within_holding_limit(
+            class_id=canonical_context.class_id,
+            seat_id=target_seat_id,
+            product_lineage_uuid=policy_config.product_id,
+            entitlement_type=policy_config.entitlement_type,
+            holding_limit=policy_config.holding_limit,
+            grant_quantity=quantity,
+        )
+    except HoldingLimitExceeded as exc:
+        return DirectGrantResult(
+            success=False,
+            correlation_id="",
+            quantity_granted=0,
+            error_code="HOLDING_LIMIT_EXCEEDED",
+            error_message=str(exc),
+        )
 
     # =========================================================================
     # PHASE 2: Atomic Entitlement Grants

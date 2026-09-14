@@ -54,6 +54,13 @@ from app.utils.canonical_temporal_resolver import utc_now
 CANONICAL_ITEM_TYPES = frozenset(StorePolicyResolver._ITEM_TYPE_TO_ENTITLEMENT_TYPE)
 
 
+# Closed role vocabulary (SPEC-ECON-003 §4.7). Required on every product,
+# including grant-only and collective ones, because the Helper reports a
+# price's position against the role's reference band and a product with no
+# role has no band to be positioned against.
+CANONICAL_ECONOMIC_ROLES = frozenset({'necessity', 'convenience', 'add_on'})
+
+
 # Canonical availability projection states (DOM-POL-001 §IX).
 IN_USE = "IN_USE"
 HIDDEN = "HIDDEN"
@@ -64,8 +71,8 @@ AVAILABILITY_STATES = frozenset({IN_USE, HIDDEN, RETIRED})
 # Definition fields a caller may supply when publishing a version. Structural
 # allow-list only — semantic validation belongs to the calling FEAT.
 _DEFINITION_FIELDS = frozenset({
-    "name", "description", "price", "tier", "item_type", "inventory_total",
-    "limit_per_student", "auto_delist_date", "auto_expiry_days",
+    "name", "description", "price", "economic_role", "item_type", "inventory_total",
+    "holding_limit", "direct_purchase_allowed", "available_with_overdue_obligations", "activation_at", "auto_delist_date", "auto_expiry_days",
     "is_long_term_goal", "bypass_cwi_warnings", "is_bundle", "bundle_quantity",
     "bulk_discount_enabled", "bulk_discount_quantity", "bulk_discount_percentage",
     "collective_goal_type", "collective_goal_target", "collective_goal_expires_at",
@@ -106,18 +113,43 @@ def _reject_unknown_fields(fields: dict) -> None:
         )
 
 
-# Both sale mechanics that scale a purchase — bundling and the bulk discount —
-# presuppose that owning several at once means something. That is only true of a
-# type which can hold more than one unexercised unit. An immediate item is
-# redeemed on the spot, and a privilege is a standing state rather than a count,
-# so neither has a second unit to hold; a collective goal is a shared pot, where
-# a single student's quantity is not the thing being counted at all. All three
-# are therefore excluded from bundles and bulk discounts alike
-# (SPEC-STORE-001 §V.A).
-_MULTI_UNIT_ITEM_TYPES = frozenset({'delayed', 'hall_pass'})
+# Bundles create multiple held units, while a bulk discount only changes the
+# price of one immediate-use transaction. They therefore have different type
+# contracts.
+_BUNDLE_ITEM_TYPES = frozenset({'delayed', 'hall_pass'})
+_BULK_DISCOUNT_ITEM_TYPES = frozenset({'immediate', 'delayed', 'hall_pass'})
 
 # Types with no post-purchase window to expire.
-_NON_EXPIRING_ITEM_TYPES = frozenset({'immediate', 'privilege'})
+_NON_EXPIRING_ITEM_TYPES = frozenset({'immediate'})
+
+# A collective goal is the one type rent cannot grant: satisfaction benefits are
+# per-seat entitlements, and COLLECTIVE_GOAL is absent from
+# models._SATISFACTION_BENEFIT_ENTITLEMENT_TYPES.
+_RENT_LINKABLE_ITEM_TYPES = CANONICAL_ITEM_TYPES - {'collective'}
+
+
+# SPEC-STORE-001 §IV.C: a redemption prompt is for DELAYED_USE and HALL_PASS only.
+_PROMPTABLE_ITEM_TYPES = frozenset({'delayed', 'hall_pass'})
+
+
+def item_type_field_rules() -> dict[str, dict[str, bool]]:
+    """Which configuration groups each catalog type may legally carry.
+
+    Derived from the same sets ``_validate_definition`` enforces so the editor
+    cannot offer a control the publish seam will refuse. A field the UI hides
+    here is a field the server would have rejected on submit.
+    """
+    return {
+        item_type: {
+            'multi_unit': item_type in _BUNDLE_ITEM_TYPES,
+            'bulk_discountable': item_type in _BULK_DISCOUNT_ITEM_TYPES,
+            'expiring': item_type in {'delayed', 'privilege', 'hall_pass'},
+            'collective': item_type == 'collective',
+            'rent_linkable': item_type in _RENT_LINKABLE_ITEM_TYPES,
+            'promptable': item_type in _PROMPTABLE_ITEM_TYPES,
+        }
+        for item_type in sorted(CANONICAL_ITEM_TYPES)
+    }
 
 
 def _validate_definition(definition: dict) -> None:
@@ -136,19 +168,54 @@ def _validate_definition(definition: dict) -> None:
             f"item_type {item_type!r} is not a catalog type; expected one of "
             + ", ".join(sorted(CANONICAL_ITEM_TYPES))
         )
+    economic_role = definition.get('economic_role')
+    if economic_role not in CANONICAL_ECONOMIC_ROLES:
+        raise InvalidDefinition(
+            f"economic_role {economic_role!r} is not a Store economic role; expected "
+            "one of " + ", ".join(sorted(CANONICAL_ECONOMIC_ROLES))
+        )
+
     is_collective = item_type == 'collective'
+    is_privilege = item_type == 'privilege'
+    direct_purchase_allowed = definition.get('direct_purchase_allowed', True)
+
+    if is_privilege:
+        if definition.get('holding_limit') not in (None, 1):
+            raise InvalidDefinition("privilege holding_limit is fixed at one")
+        if definition.get('inventory_total') is not None:
+            raise InvalidDefinition("privileges do not use Store inventory")
+        if definition.get('is_bundle') or definition.get('bulk_discount_enabled'):
+            raise InvalidDefinition("privileges cannot be bundled or bulk discounted")
+        if definition.get('redemption_prompt'):
+            raise InvalidDefinition("privileges do not use redemption prompts")
+        # The resolved flag, not the raw key: an omitted key means directly purchasable.
+        if direct_purchase_allowed and not definition.get('auto_expiry_days'):
+            raise InvalidDefinition("purchased privileges require an expiration duration")
+
+    if item_type == 'immediate' and definition.get('redemption_prompt'):
+        raise InvalidDefinition("immediate-use items do not use redemption prompts")
+    if item_type not in _PROMPTABLE_ITEM_TYPES and definition.get('redemption_prompt'):
+        raise InvalidDefinition("redemption prompts are only supported for delayed-use and hall-pass items")
+
+    if definition.get('available_with_overdue_obligations') and not direct_purchase_allowed:
+        raise InvalidDefinition("essential purchase access requires a purchasable item")
 
     price = definition.get('price')
     if price is not None and Decimal(str(price)) < 0:
         raise InvalidDefinition("price cannot be negative")
+    if direct_purchase_allowed:
+        if price is None:
+            raise InvalidDefinition("directly purchasable items require a price")
+    elif price is not None:
+        raise InvalidDefinition("grant-only items cannot carry a Store price")
 
     inventory_total = definition.get('inventory_total')
     if inventory_total is not None and inventory_total < 0:
         raise InvalidDefinition("inventory_total cannot be negative")
 
-    limit_per_student = definition.get('limit_per_student')
-    if limit_per_student is not None and limit_per_student <= 0:
-        raise InvalidDefinition("limit_per_student must be greater than zero if set")
+    holding_limit = definition.get('holding_limit')
+    if holding_limit is not None and holding_limit <= 0:
+        raise InvalidDefinition("holding_limit must be greater than zero if set")
 
     auto_expiry_days = definition.get('auto_expiry_days')
     if auto_expiry_days is not None:
@@ -157,21 +224,13 @@ def _validate_definition(definition: dict) -> None:
         if auto_expiry_days <= 0:
             raise InvalidDefinition("auto_expiry_days must be greater than zero if set")
 
-    scales_with_quantity = (
-        definition.get('is_bundle') or definition.get('bulk_discount_enabled')
-    )
-    if scales_with_quantity and item_type not in _MULTI_UNIT_ITEM_TYPES:
-        # A goal is refused for a different reason than the rest, so it says so.
-        if is_collective:
-            raise InvalidDefinition(
-                "a collective goal cannot carry bundle or bulk discount settings — "
-                "a goal is a shared pot, and these price one student's order"
-            )
+    if definition.get('is_bundle') and item_type not in _BUNDLE_ITEM_TYPES:
         raise InvalidDefinition(
-            f"{item_type} items cannot be bundled or given a bulk discount — both "
-            "sell several at once, and only delayed and hall pass items can hold "
-            "more than one unexercised unit"
+            f"{item_type} items cannot be bundled — only delayed-use and hall-pass "
+            "items can hold multiple bundled units"
         )
+    if definition.get('bulk_discount_enabled') and item_type not in _BULK_DISCOUNT_ITEM_TYPES:
+        raise InvalidDefinition(f"{item_type} items cannot be given a bulk discount")
 
     if definition.get('is_bundle'):
         bundle_quantity = definition.get('bundle_quantity')

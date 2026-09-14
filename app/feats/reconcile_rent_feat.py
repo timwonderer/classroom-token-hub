@@ -111,13 +111,13 @@ def _assess_cycle(settings: RentSettings, class_id: str, cycle) -> int:
 
 
 def _expire_prior_cycle_perks(class_id: str, prior_cycle, actor_seat_id: int) -> int:
-    """Expire PERK hall passes granted under the prior cycle's assessments."""
+    """Expire every PERK entitlement granted under the prior cycle's assessments."""
     expired = 0
     prior_assessments = obligations_service.get_assessments_for_bill_cycle(
         prior_cycle.id, obligation_type="RENT"
     )
     for assessment in prior_assessments:
-        expired += entitlement_service.expire_rent_hall_passes(
+        expired += entitlement_service.expire_rent_perks(
             correlation_id=assessment.correlation_id,
             class_id=class_id,
             actor_seat_id=actor_seat_id,

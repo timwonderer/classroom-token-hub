@@ -1,6 +1,7 @@
 {% extends "layout_admin.html" %}
 {% set page_title = "Rent Management" %}
 {% set current_page = "rent" %}
+{% import 'macros/cards.html' as cards %}
 {% block title %}Rent Management{% endblock %}
 {% block page_icon %}home{% endblock %}
 {% block contextual_help_body %}
@@ -8,9 +9,9 @@
 
 {% call help.topic('rent-enable', 'toggle_on', 'Enable / Disable Rent') %}
 <p>Rent is enabled from <strong>Feature Settings</strong>. This page manages the rent rules after rent is enabled.</p>
-<div class="alert alert-warning mb-0">
+{% call cards.alert_card('warning', 'Rent is managed from Feature Settings', icon='toggle_on', body_class='mb-0') %}
   <strong>To turn rent off:</strong> go to Feature Settings and disable the Rent feature. Students will immediately stop seeing rent or rent notifications.
-</div>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('rent-settings', 'tune', 'Settings Breakdown') %}
@@ -30,9 +31,9 @@
   <li><strong>Incremental payments:</strong> allows partial payments instead of a single full payment.</li>
   <li><strong>Block purchases when late:</strong> prevents store purchases if rent is overdue.</li>
 </ul>
-<div class="alert alert-info mt-3 mb-0">
+{% call cards.alert_card('info', 'Billing timing can change', icon='info', body_class='mt-3 mb-0') %}
   <strong>Side effects:</strong> Changing frequency or due dates can shift when students are billed next.
-</div>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('rent-overview', 'insights', 'Review Overview') %}
@@ -302,7 +303,7 @@
         {% endif %}
 
         {% if not current_students and not behind_students %}
-        <div class="alert alert-light mb-0">No students in class yet.</div>
+        {% call cards.alert_card('info', 'No students in class yet.', icon='groups', body_class='mb-0') %}{% endcall %}
         {% endif %}
       </div>
     </div>
@@ -342,7 +343,12 @@
           <div class="card-body">
             {# CWI helper lives at the top of the card so the recommendation
                is always visible, not gated by the accordion open state. #}
-            <div id="cwi-info" class="mb-3"></div>
+            <div id="cwi-info" class="mb-3"
+              {% if canonical_rent_band %}
+              data-canonical-min="{{ canonical_rent_band.min }}"
+              data-canonical-max="{{ canonical_rent_band.max }}"
+              data-canonical-period="{{ canonical_rent_band.period_label }}"
+              {% endif %}></div>
 
             <div class="accordion accordion-rent-settings" id="rentSettingsAccordion">
 
@@ -596,14 +602,14 @@
             <div id="collapseItemization" class="accordion-collapse collapse" aria-labelledby="headingItemization"
               data-bs-parent="#rentSettingsAccordion">
               <div class="accordion-body">
-                <div class="alert alert-info">
+                {% call cards.alert_card('info', 'Rent-linked item timing', icon='schedule') %}
                   <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>
                   <strong>What students receive for paying rent.</strong><br>
                   These are set in the Store: open an item and turn on
                   <em>&ldquo;Students receive this item when they pay rent&rdquo;</em>. A change there
                   applies from the <strong>next</strong> rent cycle, so a cycle already underway is
                   never altered.
-                </div>
+                {% endcall %}
 
                 {% if rent_items|length == 0 %}
                 <div class="text-center text-muted py-4">
@@ -965,6 +971,17 @@
 
   const renderCWIInfo = () => {
     if (!cachedCWIAnalysis) return;
+    const info = document.querySelector('#cwi-info');
+    const canonicalMin = Number(info?.dataset.canonicalMin);
+    const canonicalMax = Number(info?.dataset.canonicalMax);
+    if (Number.isFinite(canonicalMin) && Number.isFinite(canonicalMax)) {
+      economyChecker.displayCWIInfo(cachedCWIAnalysis, '#cwi-info', {
+        min: canonicalMin,
+        max: canonicalMax,
+        period_label: info.dataset.canonicalPeriod,
+      });
+      return;
+    }
     const { frequency, customValue, customUnit } = currentFrequency();
     economyChecker.fetchRentBand(frequency, customValue, customUnit)
       .then(band => economyChecker.displayCWIInfo(cachedCWIAnalysis, '#cwi-info', band))
@@ -973,11 +990,14 @@
 
   economyChecker.analyzeEconomy().then(analysis => {
     cachedCWIAnalysis = analysis;
+    // The initial server-rendered band is authoritative. The async validator
+    // is only a refresh path for frequency edits; it must not replace a valid
+    // canonical result with an incomplete response.
     renderCWIInfo();
   }).catch(err => {
     console.warn('CWI analysis unavailable; rent guidance will remain unavailable.', err);
     const info = document.querySelector('#cwi-info');
-    if (info) info.textContent = 'CWI guidance is temporarily unavailable. Please try again.';
+    if (info && !info.children.length) info.textContent = 'CWI guidance is temporarily unavailable. Please try again.';
   });
 
   // Re-render the CWI recommendation box whenever any rent-frequency input
@@ -992,7 +1012,15 @@
   cwiFrequencyWatchers.forEach(({ id, event }) => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.addEventListener(event, renderCWIInfo);
+    el.addEventListener(event, () => {
+      const info = document.querySelector('#cwi-info');
+      if (info) {
+        delete info.dataset.canonicalMin;
+        delete info.dataset.canonicalMax;
+        delete info.dataset.canonicalPeriod;
+      }
+      renderCWIInfo();
+    });
   });
 
   // Re-validate rent when frequency changes

@@ -5,33 +5,36 @@ from wtforms import HiddenField, TextAreaField, FloatField, SelectField, Integer
 from wtforms.validators import Optional
 
 from wtforms import SubmitField
+from wtforms.csrf.core import CSRFTokenField
+from datetime import date
+from app.services.store.form_contract import resolve_store_form_contract
 
 
 class StoreItemForm(FlaskForm):
     name = StringField('Item Name', validators=[DataRequired()])
     description = TextAreaField('Description')
-    price = FloatField('Price', validators=[DataRequired()])
-    tier = SelectField('Pricing Tier (optional)', choices=[
-        ('', 'No Tier'),
-        ('basic', 'Basic (2-5% of CWI)'),
-        ('standard', 'Standard (5-10% of CWI)'),
-        ('premium', 'Premium (10-25% of CWI)'),
-        ('luxury', 'Luxury (25-50% of CWI)')
-    ], validators=[Optional()])
+    price = FloatField('Price', validators=[Optional()])
+    economic_role = SelectField('Economic Role', choices=[
+        ('necessity', 'Necessity (1-10% of CWI)'),
+        ('convenience', 'Convenience (11-20% of CWI)'),
+        ('add_on', 'Add-on (21-30% of CWI)')
+    ], validators=[DataRequired()])
     item_type = SelectField('Item Type', choices=[
         ('immediate', 'Immediate Use'),
         ('delayed', 'Delayed Use'),
         ('collective', 'Collective Goal'),
-        ('hall_pass', 'Hall Pass')
+        ('hall_pass', 'Hall Pass'),
+        ('privilege', 'Privilege')
     ], validators=[DataRequired()])
     inventory = IntegerField('Inventory (leave blank for unlimited)', validators=[Optional()])
-    limit_per_student = IntegerField('Purchase Limit per Student (leave blank for no limit)', validators=[Optional()])
-    auto_delist_date = DateField('Auto-Delist Date (optional)', format='%Y-%m-%d', validators=[Optional()])
+    holding_limit = IntegerField('Holding Limit per Student (leave blank for unlimited)', validators=[Optional()])
+    direct_purchase_allowed = BooleanField('Students may purchase this item directly', default=True)
+    available_with_overdue_obligations = BooleanField('Essential: allow purchase when rent is overdue', default=False)
+    activation_date = DateField('Start date (optional)', format='%Y-%m-%d', validators=[Optional()])
+    auto_delist_date = DateField('Delist date (optional)', format='%Y-%m-%d', validators=[Optional()])
     auto_expiry_days = IntegerField('Item Expiry in Days (optional, for delayed-use items)', validators=[Optional()])
-    is_active = BooleanField('Item is Active', default=True)
     is_long_term_goal = BooleanField('Long-Term Goal Item (exclude from CWI balance checks)', default=False)
     bypass_cwi_warnings = BooleanField('Bypass CWI Warnings', default=False)
-    blocks = SelectMultipleField('Visible to Periods/Blocks (leave empty for all)', choices=[], validators=[Optional()])
 
     # Bundle settings
     is_bundle = BooleanField('This is a Bundled Item', default=False)
@@ -52,7 +55,8 @@ class StoreItemForm(FlaskForm):
     collective_goal_expires_at = DateField('Goal Expiration Date (optional)', format='%Y-%m-%d', validators=[Optional()])
 
     # Redemption settings (for delayed-use items)
-    redemption_prompt = TextAreaField('Redemption Prompt (optional, for delayed-use items)', validators=[Optional()])
+    redemption_prompt = TextAreaField('Prompt for students to answer when redeeming', validators=[Optional()])
+    redemption_prompt_enabled = BooleanField('Students need to provide extra information', default=False)
 
     # Rent linkage. The store owns this, not Rent Settings: the teacher decides
     # here whether paying rent hands the student this item, and how many. The
@@ -80,7 +84,13 @@ class StoreItemForm(FlaskForm):
                 field.errors = list(field.errors) + [message]
                 valid = False
 
+        if self.activation_date.data and self.activation_date.data < date.today():
+            self.activation_date.errors = list(self.activation_date.errors) + ['Start date cannot be before today.']
+            valid = False
+
         if self.is_rent_linked.data:
+            if self.item_type.data == 'privilege':
+                self.rent_linked_quantity.data = 1
             require_positive(
                 self.rent_linked_quantity,
                 'Quantity is required and must be greater than 0 for a rent-linked item.',
@@ -108,6 +118,11 @@ class StoreItemForm(FlaskForm):
                 valid = False
 
         if self.item_type.data == 'collective':
+            if self.price.data is None:
+                self.price.errors = list(self.price.errors) + [
+                    'Goal amount is required for a Collective Goal.'
+                ]
+                valid = False
             if not self.collective_goal_type.data:
                 self.collective_goal_type.errors = list(
                     self.collective_goal_type.errors
@@ -121,6 +136,34 @@ class StoreItemForm(FlaskForm):
                     'Target number of purchases is required and must be greater than 0 '
                     'when using Fixed collective goal type.',
                 )
+
+        direct_purchase = (not self.is_rent_linked.data) or bool(self.direct_purchase_allowed.data)
+        if direct_purchase and self.item_type.data != 'collective':
+            if self.price.data is None:
+                self.price.errors = list(self.price.errors) + ['Price is required when students may purchase this item.']
+                valid = False
+
+        contract = resolve_store_form_contract(
+            item_type=self.item_type.data,
+            rent_linked=bool(self.is_rent_linked.data),
+            direct_purchase=direct_purchase,
+            rent_prevents_purchase_when_late=False,
+        )
+        ignored_default_fields = {'direct_purchase_allowed', 'available_with_overdue_obligations'}
+        for name, field in self._fields.items():
+            # A contract is a vocabulary of item-configuration fields, so the
+            # CSRF token and the submit button can never appear in one. A
+            # browser sends both on every POST; policing them rejected every
+            # real submission while tests, which post neither, stayed green.
+            if isinstance(field, (SubmitField, CSRFTokenField)):
+                continue
+            if name in contract.legal_fields or name in ignored_default_fields:
+                continue
+            value = field.data
+            meaningful = bool(value) if isinstance(value, bool) else value not in (None, '', [])
+            if meaningful:
+                field.errors = list(field.errors) + ['This field is not applicable to the selected item configuration.']
+                valid = False
 
         return valid
 

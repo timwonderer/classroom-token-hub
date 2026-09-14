@@ -110,29 +110,44 @@ def _award_satisfaction_perks(settings: RentSettings, seat: Seat, correlation_id
             )
             continue
 
-        if grant["entitlement_type"] == "HALL_PASS":
-            entitlement_service.grant_hall_passes(
-                seat,
-                grant["quantity"],
-                actor_seat_id=actor_seat_id,
-                correlation_id=correlation_id,
-                acquisition_type="PERK",
-                trigger_id=f"rent-perk:{correlation_id}",
-                product_lineage_uuid=lineage,
-                policy_uuid=product.policy_uuid if product else None,
+        try:
+            if grant["entitlement_type"] == "HALL_PASS":
+                entitlement_service.grant_hall_passes(
+                    seat,
+                    grant["quantity"],
+                    actor_seat_id=actor_seat_id,
+                    correlation_id=correlation_id,
+                    acquisition_type="PERK",
+                    trigger_id=f"rent-perk:{correlation_id}",
+                    product_lineage_uuid=lineage,
+                    policy_uuid=product.policy_uuid if product else None,
+                )
+            else:
+                entitlement_service.grant_store_entitlements(
+                    seat,
+                    grant["quantity"],
+                    entitlement_type=grant["entitlement_type"],
+                    product_lineage_uuid=lineage,
+                    policy_uuid=product.policy_uuid,
+                    actor_seat_id=actor_seat_id,
+                    correlation_id=correlation_id,
+                    acquisition_type="PERK",
+                    trigger_id=f"rent-perk:{correlation_id}",
+                )
+        except entitlement_service.HoldingLimitExceeded as exc:
+            # FEAT-OBL-003 §IV.4: the refused grant is its own outcome. Rent
+            # stays satisfied, and the perk is neither issued nor trimmed.
+            logger.warning(
+                "Rent perk refused by holding limit lineage=%s class=%s seat=%s "
+                "limit=%s on_hand=%s requested=%s",
+                lineage,
+                seat.class_id,
+                seat.id,
+                exc.holding_limit,
+                exc.on_hand,
+                exc.grant_quantity,
             )
-        else:
-            entitlement_service.grant_store_entitlements(
-                seat,
-                grant["quantity"],
-                entitlement_type=grant["entitlement_type"],
-                product_lineage_uuid=lineage,
-                policy_uuid=product.policy_uuid,
-                actor_seat_id=actor_seat_id,
-                correlation_id=correlation_id,
-                acquisition_type="PERK",
-                trigger_id=f"rent-perk:{correlation_id}",
-            )
+            continue
         awarded += grant["quantity"]
     return awarded
 

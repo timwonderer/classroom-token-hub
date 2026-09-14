@@ -37,6 +37,13 @@ Claim activity does not consume the insurance entitlement.
 
 This FEAT does not create or satisfy debt. If an insurance product requires premium assessment or renewal settlement, that work belongs to Obligations and Ledger through the canonical debt lifecycle.
 
+Insurance premium guidance SHALL consume the Economic Engine Helper contract in
+`SPEC-ECON-003`. Economic Mode may change premium guidance, but it MUST NOT
+change coverage parameters such as reimbursement percentage, payout multiple,
+claim allowance, waiting period, or coverage boundary. Insurance rebalance is
+review-only when a premium change would alter downstream payout; policy edits
+remain owned by the Insurance Management workflow.
+
 ## II. Authority
 
 Store and Entitlements owns:
@@ -145,6 +152,14 @@ nor narrow it. If the source transaction is **item-related**, the associated
 entitlement must have been purchased **and used** (a `CONSUMED` event exists) and
 must **not** be `REVOKED` or `EXPIRED` — an item that never delivered lasting
 value, or was clawed back, is not an insurable loss.
+
+A transaction with a terminal pre-use `REVERSE` or `REFUND` outcome is not an
+insurable loss, even when the entitlement was retained by `REFUND`. The claim
+predicate MUST inspect the append-only reversal linkage and compensation
+subtype, not merely the sign or type of the selected Ledger row. A used item
+cannot be reversed or refunded; it remains eligible under the ordinary
+purchase-and-used rules. Any later teacher manual credit is a separate Ledger
+transaction and MUST NOT alter the original purchase's insurance eligibility.
 
 The **filing window** is evaluated in class-local calendar dates: a transaction on
 class-local date `D` under a frozen `claim_window_days = N` may be filed through

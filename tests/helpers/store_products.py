@@ -48,7 +48,7 @@ class PublishedProduct:
     product_lineage_uuid: str
     class_id: str
     name: str
-    price: Decimal
+    price: Decimal | None
     item_type: str
 
 
@@ -69,7 +69,7 @@ def publish_store_product(
     created_by_seat_id: Optional[int] = None,
     user_id: Optional[int] = None,
     name: Optional[str] = None,
-    price: str = "0.00",
+    price: str | None = "0.00",
     availability_state: str = store_service.IN_USE,
     product_lineage_uuid: Optional[str] = None,
     **definition,
@@ -94,6 +94,12 @@ def publish_store_product(
         seat = db_seat(created_by_seat_id)
         user_id = seat.user_id
 
+    definition.setdefault('economic_role', 'necessity')
+
+    definition.setdefault('direct_purchase_allowed', True)
+    if item_type == 'privilege':
+        definition.setdefault('auto_expiry_days', 30)
+
     product = store_service.publish_product(
         user_id=user_id,
         class_id=class_id,
@@ -112,7 +118,7 @@ def publish_store_product(
         product_lineage_uuid=product.product_lineage_uuid,
         class_id=product.class_id,
         name=product.name,
-        price=Decimal(str(product.price)),
+        price=Decimal(str(product.price)) if product.price is not None else None,
         item_type=product.item_type,
     )
 

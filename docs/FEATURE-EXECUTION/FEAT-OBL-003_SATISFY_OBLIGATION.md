@@ -84,6 +84,33 @@ The FEAT SHALL NOT persist:
 
 Those states are projections over immutable assessment and satisfaction history.
 
+### 4. Coordinated rent-linked entitlement effect
+
+After the obligation satisfaction mutation is lawfully established, the
+coordinating FEAT MAY evaluate a configured rent-linked Store benefit. This is
+not part of the monetary satisfaction event and MUST use the lawful Store grant
+surface rather than the Store purchase path.
+
+The coordinated grant MUST:
+
+- use `acquisition_type = GRANT`;
+- preserve the satisfaction correlation lineage;
+- evaluate the product's source-independent holding limit;
+- obtain rent-cycle timing from the Obligations temporal authority; and
+- remain idempotent under replay of the same obligation action.
+
+The following checks MUST NOT be reused for the rent-linked grant:
+
+- direct-purchase permission;
+- purchase limit;
+- overdue direct-purchase policy; or
+- purchase funding and price resolution.
+
+If the holding limit prevents the grant, the FEAT MUST preserve the lawful
+obligation outcome and record the grant result as a separate coordinated
+outcome. It MUST NOT manufacture a purchase, reverse the satisfaction, or
+create a Store entitlement exceeding the holding limit.
+
 ---
 
 ## V. Invariants

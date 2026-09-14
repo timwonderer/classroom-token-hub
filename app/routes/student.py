@@ -80,6 +80,7 @@ from app.services.entitlement_read_service import (
     get_entitlement_history,
     get_active_entitlements,
     get_entitlement_status,
+    derive_display_status,
 )
 from app.services.insurance_policy_service import list_insurance_policy_versions
 from app.services import insurance_definition_service as insurance_defs
@@ -434,12 +435,11 @@ def get_rent_settings_for_context(context):
             return scoped_policy
     if not class_id:
         return None
-    from app.models import BillCycle
-    current_cycle = (
-        BillCycle.query.filter_by(class_id=class_id)
-        .order_by(BillCycle.cycle_number.desc(), BillCycle.id.desc())
-        .first()
-    )
+    # bill_cycles carries every obligation family, discriminated by internal_ref.
+    # Selecting the class's newest cycle row picks up insurance cycles too, and
+    # their policy_uuid names an InsurancePolicy that no rent lookup can resolve.
+    from app.services.obligations_service import get_latest_bill_cycle
+    current_cycle = get_latest_bill_cycle(f"rent:{class_id}")
     if not current_cycle or not current_cycle.policy_uuid:
         # Fallback: no BillCycle yet. `rent_settings` is append-only, so this
         # resolves the class's newest IN_USE policy, not an arbitrary row.
@@ -1988,10 +1988,17 @@ def shop():
     now_db = ensure_utc(now)
     # Only IN_USE versions are sellable, and the partial unique index
     # guarantees at most one per lineage — so this cannot show a student two
-    # prices for the same product.
+    # prices for the same product. A grant-only product is not purchasable
+    # and is never offered here (SPEC-STORE-001 §IV.D, §V.A), and a future
+    # start date gates sellability at read time (§IV.C).
     items_query = StoreProduct.query.filter(
         StoreProduct.class_id == class_id,
         StoreProduct.availability_state == store_service.IN_USE,
+        StoreProduct.direct_purchase_allowed.is_(True),
+        or_(
+            StoreProduct.activation_at == None,
+            StoreProduct.activation_at <= now_db,
+        ),
         or_(
             StoreProduct.auto_delist_date == None,
             StoreProduct.auto_delist_date > now_db,
@@ -2018,7 +2025,7 @@ def shop():
             seat_id=seat.id,
             class_id=class_id,
             store_item=item,
-            status=get_entitlement_status(entry["entitlement_id"], class_id),
+            status=derive_display_status(entry["entitlement_id"]),
             purchase_date=datetime.fromisoformat(entry["timestamp"]),
             expiry_date=None,
             is_from_bundle=False,
@@ -3486,7 +3493,7 @@ def report_transaction_issue(transaction_id):
     transaction = Transaction.query.filter_by(
         id=transaction_id,
         seat_id=student.id,
-        join_code=get_display_join_code(class_context.class_id)
+        class_id=class_context.class_id,
     ).first_or_404()
 
     form = TransactionIssueSubmissionForm()

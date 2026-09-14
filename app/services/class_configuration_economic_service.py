@@ -89,6 +89,7 @@ def build_economic_view(class_id: str) -> EconomicView:
         display_context["policy_mode"] = policy_mode
 
     if cwi is not None and cwi > 0:
+        display_context["cwi"] = cwi
         pricing = {
             tier: round(cwi / divisor, 2)
             for tier, divisor in _CWI_PRICING_DIVISORS.items()

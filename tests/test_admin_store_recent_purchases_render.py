@@ -12,6 +12,7 @@ one route reaching into another.
 
 from __future__ import annotations
 
+import uuid
 from decimal import Decimal
 
 import pytest
@@ -19,7 +20,9 @@ import pytest
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.feats.store_purchase_feat import execute_store_purchase
+from app.models import Seat
 from app.services.context_resolver import CanonicalContext
+from app.services.entitlement_service import grant_insurance_entitlement
 from tests.helpers.canonical_classroom import login_teacher, provision_classroom
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.ledger import create_ledger_idempotent_transaction
@@ -78,3 +81,29 @@ def test_store_page_renders_with_a_recent_purchase(client, app):
 
     assert response.status_code == 200, response.get_data(as_text=True)[:2000]
     assert "Homework Pass" in response.get_data(as_text=True)
+
+
+def test_store_page_ignores_insurance_grants(client, app):
+    """An insurance grant is GRANTED/PURCHASE but names no store product.
+
+    ``grant_insurance_entitlement`` writes ``product_id=None`` on purpose --
+    ``product_id`` names a *store* product lineage. The recent-purchases query
+    selected on event/acquisition type alone, so the grant was rendered as a
+    store purchase and ``store_item.price`` raised on ``None``.
+    """
+    with app.app_context():
+        classroom = provision_classroom("ap_csp_p3")
+        student = classroom.students[0]
+        class_id = classroom.class_id
+        enable_class_feature(class_id=class_id, feature="store")
+
+        seat = db.session.get(Seat, student.seat_id)
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"ins-grant:{student.seat_id}"):
+            grant_insurance_entitlement(seat, policy_uuid=str(uuid.uuid4()))
+        db.session.commit()
+
+        login_teacher(client, classroom)
+
+    response = client.get("/admin/store")
+
+    assert response.status_code == 200, response.get_data(as_text=True)[:2000]

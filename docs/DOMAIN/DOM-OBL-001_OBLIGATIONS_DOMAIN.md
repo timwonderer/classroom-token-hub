@@ -294,6 +294,10 @@ status == OUTSTANDING and canonical_now > due_at
 8. Rent waiver is lawful only for rent assessments.
 9. At a rent boundary, previously granted rent perks expire regardless of whether the current policy UUID remains the same.
 10. Current rent is determined by the latest bill cycle that invoked assessment, not by a mutable current flag.
+11. A qualifying rent outcome MAY coordinate a Store entitlement grant, but the
+    grant is a separate cross-domain effect with `acquisition_type = GRANT`.
+    Obligations does not create, count, expire, or otherwise mutate the Store
+    entitlement lifecycle.
 
 ---
 
@@ -309,6 +313,16 @@ Obligations may consume authoritative inputs from:
 Obligations does not own those upstream facts.
 
 Where an upstream domain supplies the lawful inputs for an assessment, Obligations records the liability and its resolution while preserving the upstream lineage.
+
+When rent satisfaction or another qualifying rent outcome produces a configured
+Store benefit, the coordinating FEAT SHALL invoke the lawful Store grant
+surface after evaluating the rent-owned condition. The Store grant is not a
+purchase, does not use purchase-limit or overdue-purchase checks, and remains
+subject to the product's source-independent holding limit. If the holding limit
+prevents the grant, the entitlement grant may fail or be skipped without
+rewriting the already-established obligation outcome. The coordination MUST be
+idempotent and preserve one correlation lineage across the obligation and any
+resulting Store event.
 
 ---
 

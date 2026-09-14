@@ -16,7 +16,7 @@ from app.feats.base import FEATContext
 from app.models import EntitlementEvent, Seat
 from app.services.entitlement_service import (
     consume_hall_pass,
-    expire_rent_hall_passes,
+    expire_rent_perks,
     get_hall_pass_balance,
     grant_hall_passes,
     remove_hall_passes,
@@ -187,7 +187,7 @@ def test_consume_fails_when_no_passes(app, classroom):
 
 
 # ---------------------------------------------------------------------------
-# expire_rent_hall_passes
+# expire_rent_perks
 # ---------------------------------------------------------------------------
 
 
@@ -203,7 +203,7 @@ def test_expire_by_correlation_id(app, classroom):
             )
 
         with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="expire-exec"):
-            expired_count = expire_rent_hall_passes(
+            expired_count = expire_rent_perks(
                 correlation_id="rent-cycle-001",
                 class_id=seat.class_id,
                 actor_seat_id=classroom.teacher_seat_id,
@@ -220,6 +220,45 @@ def test_expire_by_correlation_id(app, classroom):
         assert all(e.correlation_id == "rent-cycle-001" for e in expired_events)
 
 
+def test_expire_rent_perks_covers_every_rent_grantable_type(app, classroom):
+    """DOM-OBL-001 §IX.9 expires rent perks, not only hall-pass perks.
+
+    A delayed-use or privilege item granted for paying rent carries the same
+    rent-cycle boundary (SPEC-STORE-001 §V.A); only hall passes used to expire.
+    """
+    from app.services.entitlement_service import grant_store_entitlements
+
+    with app.app_context():
+        seat = _seat(app, classroom)
+        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="expire-typed-setup"):
+            grant_hall_passes(seat, 1, acquisition_type="PERK", correlation_id="rent-cycle-typed")
+            for entitlement_type in ("DELAYED_USE", "PRIVILEGE"):
+                grant_store_entitlements(
+                    seat, 1,
+                    entitlement_type=entitlement_type,
+                    product_lineage_uuid=f"lineage-{entitlement_type}",
+                    policy_uuid=f"policy-{entitlement_type}",
+                    acquisition_type="PERK",
+                    correlation_id="rent-cycle-typed",
+                )
+
+        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="expire-typed-exec"):
+            expired_count = expire_rent_perks(
+                correlation_id="rent-cycle-typed",
+                class_id=seat.class_id,
+                actor_seat_id=classroom.teacher_seat_id,
+            )
+
+        assert expired_count == 3
+        expired_types = {
+            event.entitlement_type
+            for event in EntitlementEvent.query.filter_by(
+                target_seat_id=seat.id, event_type="EXPIRED", correlation_id="rent-cycle-typed",
+            )
+        }
+        assert expired_types == {"HALL_PASS", "DELAYED_USE", "PRIVILEGE"}
+
+
 def test_expire_does_not_affect_non_perk_passes(app, classroom):
     """Only PERK passes expire; GRANT passes are untouched."""
     with app.app_context():
@@ -229,7 +268,7 @@ def test_expire_does_not_affect_non_perk_passes(app, classroom):
             grant_hall_passes(seat, 3, acquisition_type="PERK", correlation_id="rent-cycle-002")
 
         with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="expire-mixed-exec"):
-            expired_count = expire_rent_hall_passes(
+            expired_count = expire_rent_perks(
                 correlation_id="rent-cycle-002",
                 class_id=seat.class_id,
                 actor_seat_id=classroom.teacher_seat_id,
@@ -250,7 +289,7 @@ def test_expire_skips_already_consumed(app, classroom):
             consume_hall_pass(seat.id, seat.class_id, trigger_id="hp-used")
 
         with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="expire-consumed-exec"):
-            expired_count = expire_rent_hall_passes(
+            expired_count = expire_rent_perks(
                 correlation_id="rent-cycle-003",
                 class_id=seat.class_id,
                 actor_seat_id=classroom.teacher_seat_id,
@@ -269,7 +308,7 @@ def test_expire_different_correlation_ids_isolated(app, classroom):
             grant_hall_passes(seat, 3, acquisition_type="PERK", correlation_id="cycle-B")
 
         with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="expire-iso-exec"):
-            expired_count = expire_rent_hall_passes(
+            expired_count = expire_rent_perks(
                 correlation_id="cycle-A",
                 class_id=seat.class_id,
                 actor_seat_id=classroom.teacher_seat_id,
@@ -291,7 +330,7 @@ def test_expire_entitlement_id_lineage(app, classroom):
         ).first()
 
         with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="expire-lineage-exec"):
-            expire_rent_hall_passes(
+            expire_rent_perks(
                 correlation_id="rent-cycle-lin",
                 class_id=seat.class_id,
                 actor_seat_id=classroom.teacher_seat_id,
@@ -311,14 +350,14 @@ def test_double_expire_produces_single_expired_event(app, classroom):
             grant_hall_passes(seat, 2, acquisition_type="PERK", correlation_id="rent-double")
 
         with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="double-expire-1"):
-            count1 = expire_rent_hall_passes(
+            count1 = expire_rent_perks(
                 correlation_id="rent-double",
                 class_id=seat.class_id,
                 actor_seat_id=classroom.teacher_seat_id,
             )
 
         with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="double-expire-2"):
-            count2 = expire_rent_hall_passes(
+            count2 = expire_rent_perks(
                 correlation_id="rent-double",
                 class_id=seat.class_id,
                 actor_seat_id=classroom.teacher_seat_id,
@@ -356,7 +395,7 @@ def test_unique_index_rejects_duplicate_terminal_events(app, classroom):
 
         # First EXPIRED event succeeds.
         with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="dup-terminal-1"):
-            expire_rent_hall_passes(
+            expire_rent_perks(
                 correlation_id="rent-dup",
                 class_id=seat.class_id,
                 actor_seat_id=classroom.teacher_seat_id,

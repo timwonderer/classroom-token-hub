@@ -15,29 +15,28 @@ document.addEventListener('DOMContentLoaded', function() {
     .then((analysis) => {
       // NOTE: the rent CWI renderer produces a rent-specific "Pricing
       // Recommendation" card and has no lawful place on the Store surface. Store
-      // pricing guidance is expressed exclusively through the tier recommendation
-      // below (SPEC-ECON-003 §4.8 store tiers). Do NOT mount the rent panel here.
-      const tierSelect = document.querySelector('[data-tier-select]');
-      const tierRecommendation = document.getElementById('tier-recommendation');
-      const tierRangeText = document.getElementById('tier-range-text');
+      // pricing guidance is expressed exclusively through the economic role
+      // reference range below (SPEC-ECON-003 §4.7). Do NOT mount the rent panel here.
+      const roleSelect = document.querySelector('[data-economic-role-select]');
+      const roleRecommendation = document.getElementById('role-recommendation');
+      const roleRangeText = document.getElementById('role-range-text');
 
-      const tierRanges = analysis?.recommendations?.store_tiers;
+      const roleRanges = analysis?.recommendations?.store_roles;
 
-      if (tierSelect && tierRecommendation && tierRangeText && tierRanges) {
-        function updateTierRecommendation() {
-          const selectedTier = tierSelect.value;
-          const range = tierRanges[selectedTier];
+      if (roleSelect && roleRecommendation && roleRangeText && roleRanges) {
+        function updateRoleRecommendation() {
+          const range = roleRanges[roleSelect.value];
 
           if (range && typeof range.min === 'number' && typeof range.max === 'number') {
-            tierRangeText.textContent = `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
-            tierRecommendation.hidden = false;
+            roleRangeText.textContent = `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
+            roleRecommendation.hidden = false;
           } else {
-            tierRecommendation.hidden = true;
+            roleRecommendation.hidden = true;
           }
         }
 
-        tierSelect.addEventListener('change', updateTierRecommendation);
-        updateTierRecommendation();
+        roleSelect.addEventListener('change', updateRoleRecommendation);
+        updateRoleRecommendation();
       }
     })
     .catch(() => {

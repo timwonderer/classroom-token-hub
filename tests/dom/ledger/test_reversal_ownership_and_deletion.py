@@ -143,3 +143,57 @@ def test_deleting_a_refunded_student_removes_both_ends_of_the_pair(app, client):
         "cascade — leaving it behind would strand a financial fact whose "
         "counterparty no longer exists."
     )
+
+
+def test_reversal_inherits_the_original_correlation_under_a_ledger_feat(app, client):
+    """FEAT-LED-002 §II.2 / SPEC-OPS-001 §3.1A: the compensating row keeps the
+    original's economic correlation, not the active FEAT's.
+
+    Left unset, it took the active correlation, so a scheduled collective-goal
+    refund named an unrelated operation. Setting it under a Tier-1 Ledger FEAT
+    also has to pass the insert-time correlation check, which used to accept a
+    compensating row in one place and reject it in the other.
+    """
+    classroom = provision_ledger_classroom("chemistry_p1", app)
+    student = classroom.students[0]
+    original = _funded_transaction(classroom, student, key="rev-corr:seed")
+
+    with FEATContext("FEAT-LED-002", idempotency_key="rev-corr:reverse"):
+        reversal = reverse_transaction(
+            original,
+            description="Refund",
+            idempotency_key="rev-corr:reverse",
+            actor_seat_id=classroom.teacher_seat_id,
+        )
+    db.session.commit()
+
+    assert reversal.correlation_id == original.correlation_id
+
+
+def test_a_reversal_cannot_itself_be_reversed(app, client):
+    """SPEC-OPS-001 §3.6: a reversal is terminal. The original carries the link;
+    the compensating row carries none, so its type is what must refuse."""
+    from app.services.ledger_correction_service import ReversalNotAuthorized
+
+    classroom = provision_ledger_classroom("chemistry_p1", app)
+    student = classroom.students[0]
+    original = _funded_transaction(classroom, student, key="rev-terminal:seed")
+    with FEATContext("FEAT-LED-002", idempotency_key="rev-terminal:reverse"):
+        reversal = reverse_transaction(
+            original,
+            description="Refund",
+            idempotency_key="rev-terminal:reverse",
+            actor_seat_id=classroom.teacher_seat_id,
+        )
+    db.session.commit()
+
+    with FEATContext("FEAT-LED-002", idempotency_key="rev-terminal:again"):
+        with pytest.raises(ReversalNotAuthorized):
+            reverse_transaction(
+                reversal,
+                description="Refund the refund",
+                idempotency_key="rev-terminal:again",
+                actor_seat_id=classroom.teacher_seat_id,
+            )
+    db.session.rollback()
+    assert Transaction.query.filter_by(original_transaction_id=reversal.id).count() == 0

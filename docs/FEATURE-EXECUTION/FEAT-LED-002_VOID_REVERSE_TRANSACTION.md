@@ -8,7 +8,12 @@
 
 ## I. Purpose
 
-This FEAT is a **Core Orchestrator** for reversing a previous monetary operation. It is governed by `SPEC-OPS-001`: money is reversed, grants are voided, and obligation-related facts permit neither. The original transaction remains historical fact; the correction is a new compensating monetary transaction.
+This FEAT is a **Core Orchestrator** for resolving an eligible pre-use Store
+purchase. It is governed by `SPEC-OPS-001` and supports two explicit outcomes:
+`REVERSE` (money is reversed and active grants are revoked) and `REFUND` (money
+is reversed while the active entitlement is retained). The original transaction
+remains historical fact; the correction is a new terminal compensating monetary
+transaction.
 
 The original transaction remains immutable. Voiding is represented by a new compensating ledger fact rather than mutation of the original row.
 
@@ -35,7 +40,7 @@ The original transaction remains immutable. Voiding is represented by a new comp
     * Exists in `DOM-LED`.
     * Has not already been compensated by a later reversal transaction.
     * Is not itself a terminal compensating transaction.
-2. **Authorization Guard**: Call `DOM-OPS.check_reversal_authorization(actor_id, original_transaction_id)`.
+2. **Authorization Guard**: Call `DOM-OPS.check_reversal_authorization(actor_id, original_transaction_id)` and resolve the explicit outcome (`REVERSE` or `REFUND`).
 3. **Linked State Identification**: Identify any downstream effects that must be reversed (e.g., linked `Entitlements` in `DOM-STORE` or `Obligation` status in `DOM-OBL`).
 
 ### 2. Mutation Phase (Atomic Transaction)
@@ -49,7 +54,7 @@ The original transaction remains immutable. Voiding is represented by a new comp
         * `correlation_id`: The current extended correlation chain.
 2. **Audit Finalization**:
     * Record the compensation as a new immutable ledger transaction linked through `correlation_id` and transaction type.
-3. **Linked State Reversal**:
+3. **Linked State Resolution**:
     * If linked to an `Entitlement`: Call `DOM-STORE` to set `status = REVOKED`.
     * If linked to an `Obligation`: Call `DOM-OBL` to set `status = VOIDED`.
 4. **Audit Trace**:
@@ -59,9 +64,10 @@ The original transaction remains immutable. Voiding is represented by a new comp
 
 ## IV. Invariants & Constraints
 
-1. **Exact Reversal**: A reversal MUST counteract the exact integer amount of the original. Partial corrections require a separately authorized correction operation; they are not represented as a transaction void.
+1. **Exact Reversal**: A reversal or refund MUST counteract the exact integer amount of the original. Partial corrections require a separately authorized correction operation; they are not represented as a transaction void.
 2. **Chain Integrity**: The original transaction record is permanent; it MUST NOT be updated to represent the reversal.
-3. **No Double-Reversal**: Idempotency MUST ensure that multiple reversal requests for the same transaction result in only one compensating reversal.
+3. **No Double-Resolution**: Idempotency MUST ensure that multiple resolution requests for the same transaction result in only one terminal compensating transaction. A compensating transaction itself cannot be voided or reversed.
+4. **Correlation Preservation**: The compensating transaction MUST use the original transaction's `correlation_id`.
 
 ---
 

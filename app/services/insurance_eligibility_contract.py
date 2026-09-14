@@ -72,6 +72,7 @@ DISALLOWED_CATEGORY = "DISALLOWED_CATEGORY"
 GOAL = "GOAL_NOT_INSURABLE"
 ITEM_NOT_USED = "ITEM_NOT_YET_USED"
 ITEM_REVOKED_OR_EXPIRED = "ITEM_REVOKED_OR_EXPIRED"
+ALREADY_COMPENSATED = "TRANSACTION_ALREADY_COMPENSATED"
 
 
 @dataclass(frozen=True)
@@ -139,6 +140,26 @@ def evaluate_transaction_claim_basis(
     if transaction.seat_id != covered_seat_id:
         return EligibilityVerdict(
             False, WRONG_SEAT, "Transaction does not belong to the covered seat"
+        )
+
+    # Compensation settles the monetary loss without invalidating the
+    # entitlement. The original transaction is therefore still historical
+    # truth, but it is no longer an insurable loss. Check both sides of the
+    # append-only lineage so this remains true for either loaded row.
+    compensated = bool(transaction.reversal_transaction_id) or (
+        db.session.query(Transaction.id)
+        .filter(
+            Transaction.original_transaction_id == transaction.id,
+            Transaction.compensation_subtype.isnot(None),
+        )
+        .first()
+        is not None
+    )
+    if compensated:
+        return EligibilityVerdict(
+            False,
+            ALREADY_COMPENSATED,
+            "The transaction already has a compensating Ledger entry",
         )
 
     amount = transaction.amount
