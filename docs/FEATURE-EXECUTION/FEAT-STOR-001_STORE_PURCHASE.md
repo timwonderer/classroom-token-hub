@@ -119,6 +119,11 @@ Validate, as applicable:
 - the requested quantity is permitted;
 - class-level feature enablement allows the product;
 - any product-specific eligibility rules permit purchase;
+- direct purchase is enabled for the product;
+- the requested quantity remains within the product's purchase-acquisition
+  limit, independent of current holding quantity;
+- the requested grant would not cause the student's active holding quantity to
+  exceed the product's source-independent holding limit;
 - the product has not been prospectively disabled for new acquisition.
 
 The FEAT SHALL NOT copy product configuration into Store and Entitlements persistence merely to make later reads convenient.
@@ -143,6 +148,11 @@ Call the lawful Obligations read surface when the product acquisition is conditi
 If purchase is blocked by an outstanding obligation rule, abort before monetary mutation.
 
 The exact denial reason SHALL come from Obligations authority rather than being reconstructed in Store code.
+
+The overdue purchasing policy is evaluated only for this student-initiated
+purchase path. It may permit all products, only products explicitly marked as
+available under the specified-item policy, or no products. It MUST NOT be
+applied to a rent-triggered grant, which is a separate FEAT acquisition path.
 
 ### E. Financial resolution
 

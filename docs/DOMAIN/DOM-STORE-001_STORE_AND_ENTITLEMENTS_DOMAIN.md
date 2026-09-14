@@ -229,6 +229,18 @@ Rules:
 
 ### A. Grant semantics
 
+An entitlement grant is not synonymous with a purchase. `acquisition_type` is
+the authoritative provenance of the grant and MUST distinguish at least
+`PURCHASE`, `GRANT`, and `PERK`. Source-specific eligibility and limits belong
+to the coordinating FEAT and the owning policy domain; Store and Entitlements
+records the resulting immutable entitlement lifecycle.
+
+For products that expose a holding limit, the limit is source-independent:
+the student's active quantity for the product lineage MUST NOT exceed the
+holding limit after any lawful grant. A purchase limit governs only
+`acquisition_type = PURCHASE` and MUST NOT be used as a proxy for current
+possession.
+
 `GRANTED` records that the seat acquired the entitlement.
 
 The grant payload MAY be small and need only preserve the minimal authoritative facts required by the entitlement type.
@@ -403,6 +415,13 @@ Store and Entitlements may read Productivity or Attendance facts only when a pro
 The authoritative attendance or productivity record SHALL remain in the owning domain.
 
 ### E. Obligations
+
+Obligations may lawfully trigger a Store entitlement through a FEAT
+coordination path. An obligation-triggered grant is not a purchase, MUST retain
+its grant provenance, and MUST be evaluated against the product's
+source-independent holding limit. Obligations remains authoritative for
+obligation satisfaction and overdue state; Store and Entitlements remains
+authoritative for the resulting entitlement lifecycle.
 
 Obligations may cause entitlement grants or coordinated entitlement effects.
 

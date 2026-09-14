@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Authority Level |
 |------------------|---------|----------------|-----------------|
-| SPEC-STORE-001 | 1.0 | 2026-07-28 | Normative |
+| SPEC-STORE-001 | 1.1 | 2026-09-13 | Normative |
 
 ## I. Purpose
 
@@ -54,7 +54,8 @@ This approach provides JSON storage flexibility (fields can change) without surr
   "is_purchasable": <boolean>,
   "supports_direct_grants": <boolean>,
   "price": <decimal string>,
-  "entitlement_type": <enum>
+  "entitlement_type": <enum>,
+  "economic_role": <enum>
 }
 ```
 
@@ -67,6 +68,7 @@ This approach provides JSON storage flexibility (fields can change) without surr
 | `supports_direct_grants` | boolean | Can teachers grant directly? | Required for FEAT-STOR-004 validation |
 | `price` | decimal (string) | Cost per unit | Must be ≥ 0; decimal with 2 scale |
 | `entitlement_type` | enum | Entitlement lifecycle type | See Section IV.B for valid values |
+| `economic_role` | enum | Required Store economic role | One of `necessity`, `convenience`, `add_on` |
 
 ### B. Entitlement Type Values
 
@@ -85,11 +87,14 @@ COLLECTIVE_GOAL   - Threshold/deadline purchase (group goal completion)
 
 ```json
 {
-  "limit_per_student": <integer | null>,
+  "holding_limit": <integer | null>,
+  "rent_grant_quantity": <integer | null>,
+  "direct_purchase_allowed": <boolean>,
+  "available_with_overdue_obligations": <boolean | null>,
+  "rent_linked": <boolean>,
   "auto_expiry_days": <integer | null>,
   "name": <string | null>,
   "description": <string | null>,
-  "tier": <string | null>,
   "bypass_cwi_warnings": <boolean>,
   "is_long_term_goal": <boolean>,
   "bundle_quantity": <integer | null>,
@@ -105,15 +110,18 @@ COLLECTIVE_GOAL   - Threshold/deadline purchase (group goal completion)
 
 | Field | Type | Description | Constraints |
 |-------|------|-------------|-------------|
-| `limit_per_student` | int \| null | Max purchasable per student | If set, must be > 0; null = unlimited |
+| `holding_limit` | int \| null | Absolute maximum active entitlements held by one student, regardless of acquisition source | Required for countable products; if set, must be > 0 |
+| `rent_grant_quantity` | int \| null | Number of entitlements attempted by a qualifying rent event | Required when `rent_linked` is true; if set, must be > 0 |
+| `direct_purchase_allowed` | boolean | Whether a student may acquire the product through direct Store purchase | Required; independent of rent linkage |
+| `available_with_overdue_obligations` | boolean \| null | Whether this product is permitted under `SPECIFIED_ITEMS_ONLY` | Required only for products subject to the specified-item policy; does not restrict rent grants |
+| `rent_linked` | boolean | Whether qualifying rent may grant this product | If true, rent-grant rules below apply |
 | `auto_expiry_days` | int \| null | Days until entitlement expires | If set, must be > 0; null = never expires |
 | `name` | string \| null | Display name (UI only) | Max 100 chars; informational only |
 | `description` | string \| null | Product description (UI only) | Informational only |
-| `tier` | string \| null | Organizational category | Values: "basic", "standard", "premium", "luxury" |
 | `bypass_cwi_warnings` | boolean | Override CWI balance warnings? | Default: false |
 | `is_long_term_goal` | boolean | Exclude from CWI balance checks? | Default: false |
 | `bundle_quantity` | int \| null | Items in bundle | If set, must be > 1; DELAYED_USE and HALL_PASS only; mutually exclusive with collective_goal |
-| `bulk_discount_quantity` | int \| null | Min quantity for discount | If set, must be > 1; only DELAYED_USE and HALL_PASS products may use bulk discounts |
+| `bulk_discount_quantity` | int \| null | Min quantity for discount | If set, must be > 1; IMMEDIATE_USE, DELAYED_USE, and HALL_PASS may use bulk discounts |
 | `bulk_discount_percentage` | float \| null | Discount percentage | Range: 0-100; paired with bulk_discount_quantity |
 | `collective_goal_type` | string \| null | Goal threshold type | Values: "fixed" or "whole_class"; mutually exclusive with bundle fields |
 | `collective_goal_target` | int \| null | Required purchases for goal | If set, must be > 0; requires collective_goal_type and collective_goal_expires_at |
@@ -133,12 +141,26 @@ different reason, given below.
 
 **IMMEDIATE_USE:**
 - `auto_expiry_days` MUST be null (or will be ignored)
-- `limit_per_student` optional
 - Cannot be bundled or part of collective goal
+- MAY use a bulk discount; the discount changes the price of a single immediate-use transaction
+
+**Acquisition and holding rules:**
+- `holding_limit` is the absolute post-acquisition cap across all lawful acquisition sources.
+- `direct_purchase_allowed` controls only student-initiated Store purchase.
+- A lawful grant MUST satisfy `on_hand + grant_quantity ≤ holding_limit` when a holding limit applies.
+- A failed rent-linked grant does not itself reverse or invalidate the qualifying rent outcome; rent satisfaction and entitlement grant are separate coordinated results.
+
+**Rent-linked products:**
+- `rent_linked` MUST be true when `rent_grant_quantity` is set.
+- A rent-linked entitlement's expiration boundary is derived from the applicable rent cycle and is not independently configurable through Store.
+- A rent-linked product MUST NOT use Store auto-delist as its entitlement termination mechanism.
+- A product that is not rent-linked is always directly purchasable; the teacher-facing direct-purchase choice is only meaningful when `rent_linked` is true.
+- For a rent-linked product, `direct_purchase_allowed` remains independently configurable.
+- The class-level overdue purchase policy (`ALL_ITEMS`, `SPECIFIED_ITEMS_ONLY`, or `NO_ITEMS`) is read from its owning domain through the lawful FEAT coordination path. It is not copied into product payload or Store/Entitlements state.
+- The overdue purchase policy applies only to direct Store purchase and MUST NOT block a lawful rent-triggered grant.
 
 **DELAYED_USE:**
 - `auto_expiry_days` optional but recommended (null = perpetual entitlement)
-- `limit_per_student` optional
 - MAY be bundled; a purchase of `quantity` writes `quantity × bundle_quantity`
   `GRANTED` events, each its own lifecycle, all sharing the purchase's
   `correlation_id`. The debit is per pack, not per unit.
@@ -147,13 +169,13 @@ different reason, given below.
 **HALL_PASS:**
 - `supports_direct_grants` MUST be true
 - `auto_expiry_days` optional
-- `limit_per_student` optional
 - MAY be bundled, on the same terms as DELAYED_USE
 - Cannot be part of a collective goal
 
 **PRIVILEGE:**
-- `auto_expiry_days` MUST be null (expires by revocation only)
-- `limit_per_student` optional
+- `auto_expiry_days` is required for direct purchase and determines purchased expiry
+- rent grants expire at the applicable rent-cycle boundary
+- holding limit is hard-set to 1
 - `supports_direct_grants` MUST be true
 - Cannot be bundled or part of collective goal
 
@@ -161,7 +183,6 @@ different reason, given below.
 - Recurring premium product
 - `price` is per premium cycle
 - `auto_expiry_days` typically null (managed by Obligations bill cycles)
-- `limit_per_student` typically null or 1
 - Additional insurance-specific fields (see SPEC-OBL-001)
 - **Not sold through the store.** Enrollment is purchased through the insurance
   interface under FEAT-CLASS-003, not through the store purchase command, so
@@ -173,6 +194,50 @@ different reason, given below.
 - `collective_goal_expires_at` MUST be valid future datetime
 - Bundle fields MUST all be null
 - Cannot coexist with bundle/bulk discount
+
+### D. Teacher-facing creation sequence and gates
+
+Blank optional inputs resolve as follows: `holding_limit`,
+`inventory_total`, `auto_expiry_days`, `redemption_prompt`, and
+`auto_delist_date` remain unlimited, perpetual, empty, or unset as applicable;
+boolean options default to `false`, except `is_active` and the mandatory
+direct-purchase behavior for non-rent-linked products, which default to
+`true`.
+
+The creation form follows this order because each decision narrows the legal
+configuration surface that follows it:
+
+```text
+REQUIRED: item type
+        |
+        v
+ITEM TYPE GATE
+  immediate  -> no redemption prompt, expiry, bundle, or goal; bulk discount allowed
+  delayed    -> redemption prompt and expiry become available
+  hall_pass  -> delayed-style holding settings; grant lifecycle applies
+  collective -> goal settings become available; bundle/bulk settings disappear
+        |
+        v
+RENT LINK GATE
+  not rent-linked -> direct purchase is mandatory; no direct-purchase toggle
+  rent-linked     -> show direct-purchase toggle and rent quantity
+                    -> rent grant quantity is required and positive
+        |
+        v
+ACQUISITION / HOLDING
+  inventory blank       -> unlimited inventory
+  holding limit blank   -> unlimited active holdings
+        |
+        v
+LIFECYCLE / ADVANCED
+  auto-expiry blank     -> no Store expiry for applicable types
+  redemption blank      -> no redemption prompt
+  auto-delist blank     -> no automatic delisting date
+  boolean options blank -> their documented false default applies
+```
+
+The UI MAY hide fields before this sequence reaches them, but the server MUST
+reapply every gate and reject an otherwise hidden illegal field combination.
 
 ### B. Mutual Exclusion Rules
 
@@ -190,12 +255,11 @@ different reason, given below.
 ### C. Value Range Rules
 
 1. **Price:** Must be ≥ 0 (Decimal with 2 scale)
-2. **limit_per_student:** If set, must be > 0
 3. **auto_expiry_days:** If set, must be > 0
 4. **bundle_quantity:** If set, must be > 1
 5. **bulk_discount_quantity:** If set, must be > 1
 6. **bulk_discount_percentage:** If set, must be in range [0, 100]
-7. **Bulk discounts:** If either bulk-discount field is set, `entitlement_type` MUST be `DELAYED_USE` or `HALL_PASS`. Immediate-use and privilege products cannot hold multiple unexercised units, and collective goals are shared pots rather than individual multi-unit purchases.
+7. **Bulk discounts:** If either bulk-discount field is set, `entitlement_type` MUST be `IMMEDIATE_USE`, `DELAYED_USE`, or `HALL_PASS`. Privilege and collective-goal products cannot use bulk discounts.
 7. **collective_goal_target:** If set, must be > 0
 8. **collective_goal_expires_at:** If set, must be a valid future datetime
 
@@ -213,7 +277,7 @@ different reason, given below.
   "name": "Hall Pass - Bathroom",
   "description": "Valid for 30 days",
   "auto_expiry_days": 30,
-  "tier": "basic"
+  "economic_role": "necessity"
 }
 ```
 
@@ -229,7 +293,7 @@ different reason, given below.
   "name": "Hall Pass - Bathroom",
   "description": "Valid for 30 days",
   "auto_expiry_days": 30,
-  "tier": "basic"
+  "economic_role": "necessity"
 }
 ```
 
@@ -244,7 +308,6 @@ different reason, given below.
   "entitlement_type": "PRIVILEGE",
   "name": "Seat Selection",
   "description": "Choose your own seat for one term",
-  "limit_per_student": 1
 }
 ```
 
