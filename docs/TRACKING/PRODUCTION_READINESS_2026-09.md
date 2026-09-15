@@ -779,13 +779,18 @@ Two defects, one of which only the repository owner can clear because it is a se
   application is never reached. A first check on 2026-09-15 went through a local resolver that
   still answered with Cloudflare addresses, where the TLS handshake failed. Public resolvers and a
   retry showed the load balancer, so that earlier result is withdrawn.
-  **A signed-in request gets past IAP and then fails.** On 2026-09-15 the owner's browser, already
-  signed in to Google, got a plain `Service Unavailable` 503 from the same address, and
-  `status.classroomtokenhub.com` returns the identical 503 (`via: 1.1 google`) through Cloudflare.
-  Both Cloud Run services were Ready and serving at the time (run 34929999750). The load balancer is
-  therefore most likely not reaching them, for example because a serverless NEG names the wrong
-  service or region. This has not been diagnosed. The load balancer's request logs (`statusDetails`
-  on the 503s) and the backend services' serverless NEGs will show the cause.
+  **A signed-in request got past IAP and then failed, and the cause was the image.** On 2026-09-15
+  the owner's browser, signed in to Google, got a plain `Service Unavailable` 503 from this address,
+  and `status.classroomtokenhub.com` returned the identical 503. The workflow built the image with
+  `status_service/` as its context, so it never contained the sibling `status/` package that
+  `status_service/app.py` imports, and both services failed to boot with `ModuleNotFoundError: No
+  module named 'status'`. A guess recorded here earlier, that a serverless NEG named the wrong
+  service, was wrong. The build context was fixed in `de8b49649` (#1389, carried into #1388). A
+  manual deploy of the corrected image brought the public `/health` to 200 through Cloudflare and
+  the load balancer, and the authenticated operator page rendered (reported in #1389). The deploy
+  checks did not catch the failure: run 34929999750 found both revisions Ready and serving, because
+  a revision can report Ready while the application inside it fails to import. Revision readiness
+  is not evidence that the application boots.
 
 Clears only when all of the following hold:
 
