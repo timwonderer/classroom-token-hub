@@ -55,7 +55,7 @@ jobs:
       - name: Run focused status tests
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/classroom_economy_v2_test
-        run: pytest -q tests/test_status_contracts.py tests/test_status_projection.py tests/test_status_telemetry.py
+        run: pytest -q tests/test_status_contracts.py tests/test_status_projection.py tests/test_status_telemetry.py tests/test_status_identity.py tests/test_status_deploy_workflow.py
 
   deploy:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -78,30 +78,129 @@ jobs:
         env:
           IMAGE_URI: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
         run: |
-          docker build -t "$IMAGE_URI" status_service
+          docker build -f status_service/Dockerfile -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
           echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
+      # Both deploys use the --update-* forms. --set-env-vars and --set-secrets
+      # remove every env var and secret they do not list, and the operator's
+      # auth configuration (IAP_AUDIENCE, STATUS_OPERATOR_ALLOWLIST,
+      # IAP_TRUSTED_EMAIL_HEADER) is held on the service, not in this file. A
+      # --set-* deploy empties the allowlist, and then both operator auth paths
+      # refuse everyone. tests/test_status_deploy_workflow.py holds this.
       - name: Deploy public status service
         run: >-
           gcloud run deploy cth-status-public
           --image "$IMAGE_URI"
           --region "$GCP_REGION"
           --project "$GCP_PROJECT_ID"
-          --set-env-vars "STATUS_SERVICE_MODE=public,FIRESTORE_DATABASE=cth-status-prod"
+          --update-env-vars "STATUS_SERVICE_MODE=public,FIRESTORE_DATABASE=cth-status-prod"
           --quiet
       - name: Deploy operator status service
+        id: deploy_operator
         run: >-
           gcloud run deploy cth-status-operator
           --image "$IMAGE_URI"
           --region "$GCP_REGION"
           --project "$GCP_PROJECT_ID"
-          --set-env-vars "STATUS_SERVICE_MODE=operator,FIRESTORE_DATABASE=cth-status-prod"
-          --set-secrets "STATUS_SESSION_SECRET=status-session-secret:latest"
+          --update-env-vars "STATUS_SERVICE_MODE=operator,FIRESTORE_DATABASE=cth-status-prod"
+          --update-secrets "STATUS_SESSION_SECRET=status-session-secret:latest"
           --quiet
-      # `/health/status` is the application's endpoint, not this service's. The
-      # status service exposes `/health`, so asking it for the other path would
-      # 404 and fail the deploy after both revisions had already gone live.
-      - name: Verify public status service is answering
+      # Inspects the services rather than requesting them. Both run with
+      # restricted ingress, so their run.app URLs answer a GitHub runner with
+      # Google's 404 (run 34928799354) and an HTTP probe from here cannot pass.
+      # Each service must report Ready, have no newer revision that failed to
+      # become ready, route all traffic to its ready revision, and run this
+      # commit's image.
+      - name: Verify both services are serving this commit
         run: |
-          URL="$(gcloud run services describe cth-status-public --region "$GCP_REGION" --project "$GCP_PROJECT_ID" --format='value(status.url)')/health"
-          curl --fail --silent --show-error "$URL"
+          for service in cth-status-public cth-status-operator; do
+            gcloud run services describe "$service" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" --format=json > "$RUNNER_TEMP/$service.json"
+          done
+          python3 - "$RUNNER_TEMP/cth-status-public.json" "$RUNNER_TEMP/cth-status-operator.json" <<'PY'
+          import json
+          import os
+          import sys
+
+          failed = False
+          for path in sys.argv[1:]:
+              with open(path) as handle:
+                  service = json.load(handle)
+              name = service["metadata"]["name"]
+              status = service.get("status", {})
+              revision = status.get("latestReadyRevisionName")
+              conditions = {condition.get("type"): condition.get("status") for condition in status.get("conditions", [])}
+              images = {container.get("image") for container in service["spec"]["template"]["spec"]["containers"]}
+              traffic = sum(target.get("percent", 0) for target in status.get("traffic", []) if target.get("revisionName") == revision)
+              checks = (
+                  (conditions.get("Ready") == "True", "is not Ready"),
+                  (bool(revision) and revision == status.get("latestCreatedRevisionName"), "has a newer revision that did not become ready"),
+                  (bool(revision) and traffic == 100, "does not route all traffic to its ready revision"),
+                  (images == {os.environ["IMAGE_URI"]}, "is not running this commit's image"),
+              )
+              problems = [problem for passed, problem in checks if not passed]
+              print(f"{name}: {revision or '<no ready revision>'}", "NOT serving" if problems else "serving")
+              for problem in problems:
+                  print(f"::error::{name} {problem}.")
+              failed = failed or bool(problems)
+          sys.exit(1 if failed else 0)
+          PY
+      # Runs whenever the operator deploy succeeded, even when the check above
+      # failed. Steps after a failure are skipped by default, which is how run
+      # 34928799354 went live without this check ever running. Prints names and
+      # states only, never values: this repository's Actions logs are public,
+      # and the allowlist is operator email addresses. A Secret Manager
+      # reference names a secret without proving it holds anything, so its
+      # payload is read to check it is not blank; a secret this job cannot read
+      # fails as unverified rather than passing.
+      - name: Verify operator auth configuration survived the deploy
+        if: ${{ !cancelled() && steps.deploy_operator.outcome == 'success' }}
+        run: |
+          gcloud run services describe cth-status-operator --region "$GCP_REGION" --project "$GCP_PROJECT_ID" --format=json > "$RUNNER_TEMP/operator-service.json"
+          python3 - "$RUNNER_TEMP/operator-service.json" <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          CONSEQUENCE = {
+              "STATUS_OPERATOR_ALLOWLIST": "every operator request is refused",
+              "IAP_AUDIENCE": "the signed IAP assertion is never verified",
+          }
+
+          with open(sys.argv[1]) as handle:
+              containers = json.load(handle)["spec"]["template"]["spec"]["containers"]
+          env = {entry["name"]: entry for container in containers for entry in container.get("env", [])}
+
+
+          def secret_payload(ref):
+              if not ref.get("name"):
+                  return None
+              result = subprocess.run(
+                  ["gcloud", "secrets", "versions", "access", str(ref.get("key", "latest")),
+                   "--secret", ref["name"], "--project", os.environ["GCP_PROJECT_ID"]],
+                  capture_output=True, text=True, check=False,
+              )
+              return result.stdout if result.returncode == 0 else None
+
+
+          def state(name):
+              entry = env.get(name, {})
+              if "valueFrom" in entry:
+                  payload = secret_payload(entry["valueFrom"].get("secretKeyRef", {}))
+                  if payload is None:
+                      return "UNREADABLE"
+                  return "configured" if payload.strip() else "MISSING"
+              return "configured" if str(entry.get("value", "")).strip() else "MISSING"
+
+
+          header = str(env.get("IAP_TRUSTED_EMAIL_HEADER", {}).get("value", "")).strip().lower()
+          print("IAP_TRUSTED_EMAIL_HEADER fallback:", "on" if header == "true" else "off")
+          states = {name: state(name) for name in CONSEQUENCE}
+          for name, current in states.items():
+              print(f"{name}: {current}")
+              if current == "MISSING":
+                  print(f"::error::cth-status-operator has no {name}: {CONSEQUENCE[name]}.")
+              elif current == "UNREADABLE":
+                  print(f"::error::cth-status-operator reads {name} from Secret Manager, and this job could not read it to confirm it is not blank. The deploy service account needs secretmanager.versions.access on that secret.")
+          sys.exit(0 if all(current == "configured" for current in states.values()) else 1)
+          PY
