@@ -7,10 +7,20 @@ import time
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from google.auth import jwt
-from google.auth.crypt import es256
 
-from status_service import identity
+# google-auth belongs to the separately deployed status service
+# (status_service/requirements.txt), not to the application. Installing it
+# beside requirements.txt downgrades the protobuf the application's
+# OpenTelemetry exporter runs on, so environments built from requirements.txt
+# alone (Full Test Suite, Schema Change Gate) skip this module rather than fail
+# collection for every other test. deploy-status.yml installs both files and
+# runs this module by name.
+pytest.importorskip("google.auth", reason="status_service/requirements.txt is not installed")
+
+from google.auth import jwt  # noqa: E402
+from google.auth.crypt import es256  # noqa: E402
+
+from status_service import identity  # noqa: E402
 
 
 AUDIENCE = "/projects/123456789012/locations/us-west2/services/cth-status-operator"
