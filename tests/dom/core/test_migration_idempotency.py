@@ -17,14 +17,18 @@ from sqlalchemy import inspect, text
 from app import db
 from app.feats.base import FEATContext
 from app.feats.class_configuration import configure_insurance_definition
+from app.feats.direct_entitlement_grant_feat import execute_direct_grant
 from app.feats.insurance_claim_feat import submit_insurance_claim
 from app.feats.purchase_insurance_feat import execute_purchase_insurance
 from app.models import IssueCategory
 from app.services.context_resolver import CanonicalContext
+from app.services.store_service import set_product_visibility
 from app.utils.issue_helpers import create_issue
+from tests.helpers.canonical_classroom import provision_classroom
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import initialize
 from tests.helpers.ledger import create_ledger_idempotent_transaction
+from tests.helpers.store_products import publish_store_product
 from tests.helpers.support_domain import seed_support_issue_categories
 
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations" / "versions"
@@ -175,10 +179,18 @@ def test_store_products_consolidation_is_idempotent(migrated_db):
     """The canonical store migration survives a second application.
 
     The migration chain runs first, then ``b7c41e9a2f30.upgrade()`` runs again
-    over the schema it just produced. This used to be exercised against a
+    over the schema the whole chain produced. This used to be exercised against a
     throwaway ``test_store_items`` table, so the test passed whether or not the
     real migration was idempotent — or even whether it produced ``store_products``
     at all.
+
+    Matching columns are not enough. Each destructive step was guarded by bare
+    existence, so a re-application dropped and recreated ``store_products``,
+    cleared ``store_item_visibility`` and NULLed ``entitlement_events.product_id``.
+    Until later Store revisions changed the table's shape, the recreated table
+    had the same columns and the data loss passed unseen. So a product, a
+    visibility restriction and a grant are written through their canonical paths
+    first, and all three must survive.
     """
     inspector = inspect(db.engine)
     assert "store_products" in inspector.get_table_names()
@@ -188,8 +200,59 @@ def test_store_products_consolidation_is_idempotent(migrated_db):
     assert "teacher_id" not in columns
     assert "product_lineage_uuid" in columns
 
+    classroom = provision_classroom("chemistry_p1")
+    student_seat_id = classroom.students[0].seat_id
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key="reapply-b7c41e9a2f30:product"):
+        product = publish_store_product(
+            class_id=classroom.class_id,
+            entitlement_type="HALL_PASS",
+            name="Reapplied Hall Pass",
+            created_by_seat_id=classroom.teacher_seat_id,
+        )
+        set_product_visibility(product.product_lineage_uuid, [student_seat_id])
+    db.session.commit()
+    granted = execute_direct_grant(
+        canonical_context=CanonicalContext(
+            user_id=classroom.teacher_user_id,
+            class_id=classroom.class_id,
+            seat_id=classroom.teacher_seat_id,
+            actor_role="teacher",
+        ),
+        target_seat_id=student_seat_id,
+        policy_uuid=product.policy_uuid,
+    )
+    assert granted.success is True
+    db.session.commit()
+
+    def _store_state():
+        with db.engine.connect() as conn:
+            return {
+                "products": conn.execute(
+                    text("SELECT policy_uuid, product_lineage_uuid, name FROM store_products")
+                ).all(),
+                "visibility": conn.execute(
+                    text("SELECT product_lineage_uuid, seat_id FROM store_item_visibility")
+                ).all(),
+                "event_products": conn.execute(
+                    text("SELECT event_id, product_id FROM entitlement_events ORDER BY event_id")
+                ).all(),
+            }
+
+    before = _store_state()
+    assert before["products"] == [
+        (product.policy_uuid, product.product_lineage_uuid, "Reapplied Hall Pass")
+    ]
+    assert before["visibility"] == [(product.product_lineage_uuid, student_seat_id)]
+    assert before["event_products"]
+    assert {product_id for _, product_id in before["event_products"]} == {
+        product.product_lineage_uuid
+    }
+
+    db.session.remove()
     _reapply("b7c41e9a2f30")
 
+    # Data first: it is the loss that matching columns used to hide.
+    assert _store_state() == before
     inspector = inspect(db.engine)
     assert "store_products" in inspector.get_table_names()
     columns_after = [col["name"] for col in inspector.get_columns("store_products")]

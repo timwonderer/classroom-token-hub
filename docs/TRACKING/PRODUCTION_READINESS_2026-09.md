@@ -745,6 +745,76 @@ Unlike the findings above, these are *not* post-ship backlog. Each one is a rele
 that domain readiness does not cover, and every item was confirmed against the working tree rather
 than recalled.
 
+**Status service must not launch until its operator environment is verified — OPEN 2026-09-14.**
+Two defects, one of which only the repository owner can clear because it is a setting, not a file:
+
+- **The `production` environment's deployment branch policy allowed only `codex/v2.0`,** retired on
+  2026-09-07 — **retargeted to `main` by the owner on 2026-09-15.** Until then every job bound to
+  that environment (`deploy-status.yml`, `release-v2.yml`, `toggle-maintenance.yml`,
+  `tailscale-ssh-smoke-test.yml`) was rejected from `main` before its first step, and
+  `deploy-status.yml` ran from a push exactly once (2026-09-07) and died this way. It is the
+  matches-nothing class again, in the one place no workflow file shows: the filter lives in
+  repository settings. **With the policy open, the next push to `main` that touches the status
+  paths deploys both services.** Until the `--update-*` fix below is on `main`, such a push still
+  runs the old workflow and would strip the operator configuration. So nothing else should land in
+  `status/**`, `status_service/**`, `tests/test_status_*.py` or `deploy-status.yml` first.
+- **`deploy-status.yml` deployed with `--set-env-vars` / `--set-secrets`,** which remove everything
+  they do not list. The operator's auth configuration (`IAP_AUDIENCE`, `STATUS_OPERATOR_ALLOWLIST`,
+  `IAP_TRUSTED_EMAIL_HEADER`) is not in the repository, so the first deploy past the policy would
+  have emptied the allowlist and locked out every operator. Fixed in #1385: `--update-*` flags, plus
+  a final deploy step that fails when the operator service lacks the allowlist or audience.
+- **The first deploy (2026-09-15, run 34928799354, triggered by merging #1385) verified neither
+  service.** Both revisions went live with the `--update-*` flags, so CI stripped nothing. But its
+  public health check curled the service's `run.app` URL, which restricted ingress answers with
+  Google's 404 from any GitHub runner. That check failed, so the operator auth check after it was
+  skipped, and the operator service's configuration went uninspected. Fixed in #1386: a readiness
+  check that describes both services instead of requesting them, and an auth check that runs
+  whenever the operator deploy succeeded. The deploy from #1386's merge (run 34929999750) passed both:
+  both services serving that commit, `STATUS_OPERATOR_ALLOWLIST` and `IAP_AUDIENCE` present and not
+  blank, header fallback on.
+- **The operator console's front door is `operator.status.classroomtokenhub.com`,** served by a
+  Google Cloud load balancer (`136.68.93.205`, with a Google-managed certificate for that name). An
+  unauthenticated request to `/operator/notices` or `/health` gets IAP's own 302 to Google sign-in
+  (`x-goog-iap-generated-response: true`, body "Invalid IAP credentials: empty token"); the
+  application is never reached. A first check on 2026-09-15 went through a local resolver that
+  still answered with Cloudflare addresses, where the TLS handshake failed. Public resolvers and a
+  retry showed the load balancer, so that earlier result is withdrawn.
+  **A signed-in request got past IAP and then failed, and the cause was the image.** On 2026-09-15
+  the owner's browser, signed in to Google, got a plain `Service Unavailable` 503 from this address,
+  and `status.classroomtokenhub.com` returned the identical 503. The workflow built the image with
+  `status_service/` as its context, so it never contained the sibling `status/` package that
+  `status_service/app.py` imports, and both services failed to boot with `ModuleNotFoundError: No
+  module named 'status'`. A guess recorded here earlier, that a serverless NEG named the wrong
+  service, was wrong. The build context was fixed in `de8b49649` (#1389, carried into #1388). A
+  manual deploy of the corrected image brought the public `/health` to 200 through Cloudflare and
+  the load balancer, and the authenticated operator page rendered (reported in #1389). The deploy
+  checks did not catch the failure: run 34929999750 found both revisions Ready and serving, because
+  a revision can report Ready while the application inside it fails to import. Revision readiness
+  is not evidence that the application boots.
+
+Clears only when all of the following hold:
+
+1. **Met 2026-09-15 (run 34929999750).** The deploy's `Verify both services are serving this commit`
+   and `Verify operator auth configuration survived the deploy` steps pass. If either auth value is
+   held in Secret Manager, the auth step reads its payload to confirm it is not blank, so the deploy
+   service account needs `secretmanager.versions.access` on that secret or the step fails as
+   unverified.
+2. `IAP_AUDIENCE` equals the audience of the IAP resource actually fronting the service, and
+   `IAP_TRUSTED_EMAIL_HEADER` is as decided (currently `true`). Presence is verified; the value is
+   not. Every operator request logs `status operator authenticated via=<path>` with the signed
+   assertion's result, so one real sign-in settles it: `via=iap_assertion` means the audience is
+   right, and `via=trusted_header assertion=wrong_audience` means it is wrong.
+3. The service's ingress and IAP enablement match what the header fallback assumes.
+   `status_service/identity.py` trusts `X-Goog-Authenticated-User-Email` only because direct requests
+   cannot reach the container, and `gcloud run deploy` does not pin `--ingress`. Partial evidence
+   (2026-09-15): unauthenticated requests from the internet to both services' `run.app` URLs, the
+   operator's `/operator/notices` included, get Google's ingress 404 rather than the application.
+   That shows the direct path is closed from outside. On the path that is open, the front door
+   answers an unauthenticated request with IAP's redirect to Google sign-in (see above), so IAP is
+   enforced there too. What remains is the real sign-in in item 4.
+4. An allowlisted operator loads `/operator/notices`, and a signed-in account that is not on the
+   allowlist gets 401.
+
 **CI gates on a branch that does not exist — CLOSED 2026-09-05 (`00fdcecf3`).** Three workflows
 filtered on `codex/v2.0`, a ref absent locally *and* on the remote. `actionlint.yml` was degraded
 only; `policy-guardrails.yml`'s `guardrails-push` job was `if: github.ref ==
