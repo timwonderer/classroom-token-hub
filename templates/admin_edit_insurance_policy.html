@@ -39,6 +39,13 @@
 {% set current_freq = cur('charge_frequency', 'WEEKLY')|trim %}
 
 {% block content %}
+{#- Recommendation state mirrors the form script: a policy is "tiered" when its
+    group is one the group select offers, and its tier comes from tier_level. -#}
+{% set reco = insurance_reco %}
+{% set reco_tiered = (cur('tier_group')|trim) in (tier_groups | map(attribute='name') | list) %}
+{% set reco_tier = ({'1': 'basic', '2': 'mid', '3': 'premium'}.get(cur('tier_level')|trim) if reco_tiered else 'single') %}
+{% set reco_selection = reco_tier or 'tiered' %}
+{% set reco_tier_headers = {'single': 'Suggested', 'basic': 'Basic', 'mid': 'Mid', 'premium': 'Premium'} %}
 <div class="container-fluid">
   <nav aria-label="breadcrumb" class="mb-3">
     <ol class="breadcrumb">
@@ -81,6 +88,70 @@
           <div class="col-12">
             <label class="form-label fw-bold" for="description">Description <span class="text-muted fw-normal">(optional)</span></label>
             <textarea class="form-control" id="description" name="description" rows="3">{{ cur('description') }}</textarea>
+          </div>
+
+          <!-- Economic Engine recommendation (advisory; SPEC-ECON-003 §4.4) -->
+          <div class="col-12">
+            <section id="insurance-reco" class="border rounded p-3" aria-labelledby="insurance-reco-heading">
+              <div class="d-flex flex-wrap align-items-baseline justify-content-between gap-2">
+                <h3 class="h6 mb-1" id="insurance-reco-heading">Economic Engine recommendation</h3>
+                {% if reco.ready %}
+                <span class="small text-muted">CWI ${{ reco.cwi }} · {{ reco.mode|capitalize }} mode</span>
+                {% endif %}
+              </div>
+              <p class="small text-muted mb-2">Advisory only: suggested starting values for this class. You may enter any value within the hard limits below.</p>
+
+              {% if not reco.ready %}
+              <p class="small mb-2" data-reco-not-ready>
+                Premium and payout figures need a class wage index (CWI). Set a pay rate on <a class="text-decoration-underline" href="{{ url_for('admin.payroll') }}">Payroll</a> and expected weekly hours on the <a class="text-decoration-underline" href="{{ url_for('admin.economic_engine') }}">Economic Engine</a> page. Coverage terms below do not depend on it.
+              </p>
+              {% endif %}
+
+              <p class="small mb-2" id="insurance-reco-summary" aria-live="polite" aria-atomic="true">{{ reco.summaries.get(current_type ~ '|' ~ reco_selection ~ '|' ~ current_freq, '') }}</p>
+
+              {% for product, product_label in insurance_type_choices %}
+              {% set reco_product = reco.products[product] %}
+              {% for layout in ('single', 'tiered') %}
+              {% set layout_tiers = ['single'] if layout == 'single' else ['basic', 'mid', 'premium'] %}
+              <div class="table-responsive">
+                <table class="table table-sm small align-middle mb-2"
+                       data-reco-product="{{ product }}" data-reco-layout="{{ layout }}"
+                       {% if not (product == current_type and ((layout == 'tiered') == reco_tiered)) %}hidden{% endif %}>
+                  <caption class="visually-hidden">{{ product_label }} insurance, {{ 'single plan' if layout == 'single' else 'tier group' }}: suggested values per week-equivalent</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Term</th>
+                      {% for tier in layout_tiers %}
+                      <th scope="col">{{ reco_tier_headers[tier] }}{% if layout == 'tiered' %}<span class="fw-normal text-muted" data-reco-selected-marker="{{ tier }}" {% if reco_tier != tier %}hidden{% endif %}> (selected)</span>{% endif %}</th>
+                      {% endfor %}
+                      <th scope="col">Recommended range</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in reco_product.rows %}
+                    <tr>
+                      <th scope="row" class="fw-normal">{{ row.label }}</th>
+                      {% for tier in layout_tiers %}
+                      <td>{{ row['values'][tier] }}{% if row.secondary %}<span class="d-block text-muted">{{ row.secondary[tier] }}</span>{% endif %}</td>
+                      {% endfor %}
+                      <td class="text-muted">{{ row.range }}</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              {% endfor %}
+              {% if product == 'NON_MONETARY' %}
+              <p class="small text-muted mb-2" data-reco-product="NON_MONETARY" {% if current_type != 'NON_MONETARY' %}hidden{% endif %}>
+                The premium is affordability guidance only: CTH cannot estimate the value of a benefit that happens outside CTH, so weigh that value when you set the price.
+              </p>
+              {% endif %}
+              {% endfor %}
+
+              <p class="small text-muted mb-0" data-reco-monthly-note {% if current_freq != 'MONTHLY' %}hidden{% endif %}>
+                Shown per week-equivalent. A monthly premium covers one calendar month from the day a student buys, and the Economic Engine scales it by that month's days ÷ 7 (28–31 days). The month is not known until a student buys, so no monthly total is shown.
+              </p>
+            </section>
           </div>
 
           <!-- Common: premium + coverage period -->
@@ -180,6 +251,8 @@
 
         {# Map of existing group name -> ranks already taken (IN_USE), for the UI cap. #}
         <script type="application/json" id="tier-taken-data">{{ tier_groups | tojson }}</script>
+        {# Advisory Economic Engine figures for every type × tier (read by insurance-recommendation.js). #}
+        <script type="application/json" id="insurance-reco-data">{{ insurance_reco | tojson }}</script>
 
         <p class="text-muted small mt-3 mb-0">
           Only the fields that apply to the selected insurance type are submitted. Values may fall outside the Economic Engine's recommended ranges, but hard limits (premium ≥ 0, reimbursement ≤ 100%, non-negative terms) are enforced.
@@ -277,4 +350,5 @@
     applyGroup();
   })();
 </script>
+<script src="{{ static_url('js/insurance-recommendation.js') }}"></script>
 {% endblock %}

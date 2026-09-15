@@ -6461,6 +6461,185 @@ def _existing_tier_groups(class_id):
     ]
 
 
+# Engine tiers the policy form can select (SPEC-ECON-003 §4.4.8): an ungrouped
+# policy is the ``single`` offering; tier_level 1/2/3 are basic/mid/premium.
+_INSURANCE_RECO_TIERS = ("single", "basic", "mid", "premium")
+_INSURANCE_RECO_TIER_NAMES = {"basic": "Basic", "mid": "Mid", "premium": "Premium"}
+
+# (view key, form label, value format, range format, engine range key, scale).
+# Labels mirror the policy form's field labels so a teacher can map each row.
+_INSURANCE_RECO_TERM_ROWS = (
+    ("reimbursement_percent", "Reimbursement %", "{}%", "{}–{}%", "reimbursement_pct", 100),
+    ("payout_multiple", "Payout Multiple", "{}×", "{}×–{}×", "payout_multiple", 1),
+    ("claims_per_week_equivalent", "Claims / week-equiv.", "{}", "{}–{}", "claims_per_week", 1),
+    ("claimable_dates_per_week_equivalent", "Claimable dates / week-equiv.", "{}", "{}–{}", "claimable_days_per_week", 1),
+    ("claim_window_days", "Claim Window (days)", "{}", "{}–{}", "claim_window_days", 1),
+    ("waiting_period_days", "Waiting Period (days)", "{}", "{}–{}", "waiting_period_days", 1),
+)
+
+
+def _reco_number(value):
+    """A Decimal as plain text, no exponent or trailing zeros: ``60``, ``8.5``, ``4``."""
+    text = format(Decimal(str(value)), "f")
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def _reco_money(value):
+    return None if value is None else f"{Decimal(str(value)):.2f}"
+
+
+def _insurance_recommendation_view(class_id):
+    """Advisory Economic Engine recommendation for the insurance policy form.
+
+    Consumes FEAT-CLASS-003 ``recommend_insurance_terms`` for every insurance type ×
+    tier the form can select; no engine math happens here. Read-only: no FEAT
+    context and no writes (INV-ARC-007), and nothing returned constrains a
+    submission — FEAT-CLASS-003 enforces hard bounds only.
+
+    Coverage is resolved weekly. A monthly premium covers one class-local calendar
+    month from purchase, so its week-equivalent depends on which month (SPEC-ECON-003
+    §4.4.2) — a fact the definition form does not have. The template therefore
+    labels monthly figures as per week-equivalent instead of guessing a month.
+
+    Returns a JSON-safe dict: money as ``"0.00"`` strings, percentages and
+    multiples as plain decimal strings (reimbursement in percent, matching the form
+    field), allowances and day counts as ints. Currency figures are ``None`` when
+    the class has no resolvable CWI (``ready`` is False).
+    """
+    resolved_by_product = {
+        product: {
+            tier: recommend_insurance_terms(class_id=class_id, insurance_type=product, tier=tier)
+            for tier in _INSURANCE_RECO_TIERS
+        }
+        for product, _label in _INSURANCE_TYPE_CHOICES
+    }
+    reference = resolved_by_product[_INSURANCE_TYPE_CHOICES[0][0]]["single"]
+    ready = reference.cwi is not None and reference.cwi > 0
+
+    products = {}
+    summaries = {}
+    for product, label in _INSURANCE_TYPE_CHOICES:
+        resolved = resolved_by_product[product]
+        engine_ranges = resolved["single"].recommended_ranges
+
+        tiers = {
+            tier: {
+                "weekly_premium": _reco_money(res.weekly_premium) if ready else None,
+                "premium_rate_percent": _reco_number(res.recommended_premium_rate * 100),
+                "maximum_policy_payout": _reco_money(res.maximum_policy_payout) if ready else None,
+                "reimbursement_percent": (
+                    None if res.reimbursement_percentage is None
+                    else _reco_number(res.reimbursement_percentage * 100)
+                ),
+                "payout_multiple": None if res.payout_multiple is None else _reco_number(res.payout_multiple),
+                "claims_per_week_equivalent": res.claims_allowance_period,
+                "claimable_dates_per_week_equivalent": res.claimable_days_period,
+                "claim_window_days": res.claim_window_days,
+                "waiting_period_days": res.waiting_period_days,
+            }
+            for tier, res in resolved.items()
+        }
+
+        def _span(engine_key, scale):
+            low, high = engine_ranges[engine_key]
+            return [_reco_number(Decimal(str(low)) * scale), _reco_number(Decimal(str(high)) * scale)]
+
+        rate_low, rate_high = engine_ranges["premium_rate"]
+        ranges = {"premium_rate_percent": _span("premium_rate", 100), "weekly_premium": None}
+        # The band's currency ends are the engine's own Basic and Premium figures,
+        # which sit at the band bottom and top (§4.4.8). Only quote them while that
+        # still holds; otherwise show the band as a CWI fraction alone.
+        if (
+            ready
+            and resolved["basic"].recommended_premium_rate == rate_low
+            and resolved["premium"].recommended_premium_rate == rate_high
+        ):
+            ranges["weekly_premium"] = [tiers["basic"]["weekly_premium"], tiers["premium"]["weekly_premium"]]
+        for key, _row_label, _value_fmt, _range_fmt, engine_key, scale in _INSURANCE_RECO_TERM_ROWS:
+            if engine_key in engine_ranges:
+                ranges[key] = _span(engine_key, scale)
+
+        # Display rows: currency first, CWI fraction as secondary context (§4.4.7).
+        rate_span = "–".join(ranges["premium_rate_percent"]) + "% of CWI"
+        rows = [{
+            "label": "Premium",
+            "values": {
+                tier: (f"${t['weekly_premium']}" if ready else f"{t['premium_rate_percent']}% of CWI")
+                for tier, t in tiers.items()
+            },
+            "secondary": (
+                {tier: f"{t['premium_rate_percent']}% of CWI" for tier, t in tiers.items()} if ready else None
+            ),
+            "range": (
+                f"${ranges['weekly_premium'][0]}–${ranges['weekly_premium'][1]} ({rate_span})"
+                if ranges["weekly_premium"] else rate_span
+            ),
+        }]
+        monetary = tiers["single"]["payout_multiple"] is not None
+        if monetary:
+            rows.append({
+                "label": "Max payout",
+                "values": {
+                    tier: (f"${t['maximum_policy_payout']}" if ready else "Needs CWI")
+                    for tier, t in tiers.items()
+                },
+                "secondary": None,
+                "range": "Premium × multiple",
+            })
+        for key, row_label, value_fmt, range_fmt, _engine_key, _scale in _INSURANCE_RECO_TERM_ROWS:
+            if tiers["single"][key] is None:
+                continue
+            rows.append({
+                "label": row_label,
+                "values": {tier: value_fmt.format(t[key]) for tier, t in tiers.items()},
+                "secondary": None,
+                "range": range_fmt.format(*ranges[key]) if key in ranges else "",
+            })
+
+        products[product] = {"label": label, "tiers": tiers, "ranges": ranges, "rows": rows}
+
+        # One sentence per control state, announced by the panel's live region.
+        for frequency in ("WEEKLY", "MONTHLY"):
+            per = "per week" if frequency == "WEEKLY" else "per week-equivalent"
+            for selection in ("single", "tiered", "basic", "mid", "premium"):
+                if selection == "single":
+                    scope = "single plan"
+                elif selection == "tiered":
+                    scope = "tier group"
+                else:
+                    scope = f"{_INSURANCE_RECO_TIER_NAMES[selection]} tier"
+                text = f"{label} insurance, {scope}: "
+                if not ready:
+                    text += "coverage terms only. " + (
+                        "Premium and payout figures need a class wage index."
+                        if monetary else "Premium figures need a class wage index."
+                    )
+                elif selection == "tiered":
+                    text += "suggested premiums " + ", ".join(
+                        f"${tiers[tier]['weekly_premium']} ({_INSURANCE_RECO_TIER_NAMES[tier]})"
+                        for tier in ("basic", "mid", "premium")
+                    ) + f" {per}."
+                else:
+                    t = tiers[selection]
+                    text += (
+                        f"suggested premium ${t['weekly_premium']} {per} "
+                        f"({t['premium_rate_percent']}% of CWI)"
+                    )
+                    text += (
+                        f", maximum payout ${t['maximum_policy_payout']}."
+                        if monetary else ", as affordability guidance."
+                    )
+                summaries[f"{product}|{selection}|{frequency}"] = text
+
+    return {
+        "ready": ready,
+        "cwi": _reco_money(reference.cwi) if ready else None,
+        "mode": reference.mode,
+        "products": products,
+        "summaries": summaries,
+    }
+
+
 @admin_bp.route('/insurance', methods=['GET'])
 @admin_required
 def insurance_management():
@@ -6537,6 +6716,7 @@ def new_insurance_policy():
                 insurance_type_choices=_INSURANCE_TYPE_CHOICES,
                 charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
                 tier_groups=_existing_tier_groups(class_id),
+                insurance_reco=_insurance_recommendation_view(class_id),
             )
         flash(f"Insurance policy '{row.title or row.policy_uuid}' created.", "success")
         return redirect(url_for("admin.insurance_management"))
@@ -6550,6 +6730,7 @@ def new_insurance_policy():
         insurance_type_choices=_INSURANCE_TYPE_CHOICES,
         charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
         tier_groups=_existing_tier_groups(class_id),
+        insurance_reco=_insurance_recommendation_view(class_id),
     )
 
 
@@ -6592,6 +6773,7 @@ def edit_insurance_policy(policy_uuid):
                 insurance_type_choices=_INSURANCE_TYPE_CHOICES,
                 charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
                 tier_groups=_existing_tier_groups(class_id),
+                insurance_reco=_insurance_recommendation_view(class_id),
             )
         flash(f"Insurance policy '{new_row.title or new_row.policy_uuid}' updated (new version).", "success")
         return redirect(url_for("admin.insurance_management"))
@@ -6605,6 +6787,7 @@ def edit_insurance_policy(policy_uuid):
         insurance_type_choices=_INSURANCE_TYPE_CHOICES,
         charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
         tier_groups=_existing_tier_groups(class_id),
+        insurance_reco=_insurance_recommendation_view(class_id),
     )
 
 
