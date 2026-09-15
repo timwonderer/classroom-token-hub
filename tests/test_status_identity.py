@@ -1,4 +1,4 @@
-"""Operator identity: IAP signed-assertion verification and the trusted-header fallback."""
+"""Operator identity: IAP signed-assertion verification, its key cache, and the trusted-header fallback."""
 
 import base64
 import json
@@ -17,6 +17,10 @@ AUDIENCE = "/projects/123456789012/locations/us-west2/services/cth-status-operat
 OPERATOR = "operator@example.com"
 KEY_ID = "test-iap-key"
 IAP_KEY = ec.generate_private_key(ec.SECP256R1())
+ROTATED_KEY_ID = "rotated-iap-key"
+ROTATED_KEY = ec.generate_private_key(ec.SECP256R1())
+# What IAP's key endpoint actually sends.
+MAX_AGE = 3000
 
 
 def _public_pem(key):
@@ -47,23 +51,43 @@ def _b64(value):
 
 
 class _Response:
-    def __init__(self, status, body):
+    def __init__(self, status, body, headers):
         self.status = status
         self.data = body
-        self.headers = {}
+        self.headers = headers
 
 
 class _IapKeyEndpoint:
     """Stands in for the HTTP transport; serves IAP's ``{kid: PEM}`` key set."""
 
     def __init__(self, keys, status=200):
-        self.body = json.dumps(keys).encode()
+        self.keys = dict(keys)
         self.status = status
+        self.headers = {"Cache-Control": f"public, max-age={MAX_AGE}"}
         self.urls = []
 
     def __call__(self, url, method="GET", body=None, headers=None, timeout=None, **kwargs):
         self.urls.append(url)
-        return _Response(self.status, self.body)
+        return _Response(self.status, json.dumps(self.keys).encode(), self.headers)
+
+
+class _Clock:
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self):
+        return self.now
+
+    def advance(self, seconds):
+        self.now += seconds
+
+
+@pytest.fixture(autouse=True)
+def key_clock(monkeypatch):
+    # The key cache is module state, so every test starts from an empty one.
+    clock = _Clock()
+    monkeypatch.setattr(identity, "_IAP_KEYS", identity._IapKeyCache(clock=clock))
+    return clock
 
 
 @pytest.fixture
@@ -132,6 +156,15 @@ def test_status_identity_assertion_naming_another_algorithm_is_rejected(operator
     _assert_rejected(f"{header}.{payload}.{signature}")
 
 
+@pytest.mark.parametrize("key_id", [[KEY_ID], {"kid": KEY_ID}], ids=["list", "object"])
+def test_status_identity_non_string_key_id_is_rejected(operator_env, iap_keys, key_id):
+    # google-auth looks the kid up in the key set, where an unhashable one
+    # raises TypeError instead of rejecting.
+    _, payload, signature = _sign(_claims()).split(".")
+    header = _b64({"alg": "ES256", "typ": "JWT", "kid": key_id})
+    _assert_rejected(f"{header}.{payload}.{signature}")
+
+
 def test_status_identity_unreachable_key_endpoint_is_rejected(operator_env, monkeypatch):
     endpoint = _IapKeyEndpoint({}, status=503)
     monkeypatch.setattr(identity.requests, "Request", lambda *args, **kwargs: endpoint)
@@ -140,12 +173,88 @@ def test_status_identity_unreachable_key_endpoint_is_rejected(operator_env, monk
 
 
 def test_status_identity_programming_errors_are_not_read_as_rejection(operator_env, iap_keys, monkeypatch):
-    def broken_verify(*args, **kwargs):
+    def broken_decode(*args, **kwargs):
         raise TypeError("defect in the verification call")
 
-    monkeypatch.setattr(identity.id_token, "verify_token", broken_verify)
+    monkeypatch.setattr(identity.jwt, "decode", broken_decode)
     with pytest.raises(TypeError):
         identity.authenticated_operator_email(_sign(_claims()))
+
+
+def test_status_identity_key_set_is_reused_while_fresh(operator_env, iap_keys, key_clock):
+    assert identity.authenticated_operator_email(_sign(_claims())) == OPERATOR
+    key_clock.advance(MAX_AGE - 1)
+    assert identity.authenticated_operator_email(_sign(_claims())) == OPERATOR
+    assert iap_keys.urls == [identity.IAP_CERTS_URL]
+
+
+def test_status_identity_key_set_is_refetched_once_stale(operator_env, iap_keys, key_clock):
+    assert identity.authenticated_operator_email(_sign(_claims())) == OPERATOR
+    key_clock.advance(MAX_AGE)
+    assert identity.authenticated_operator_email(_sign(_claims())) == OPERATOR
+    assert len(iap_keys.urls) == 2
+
+
+def test_status_identity_age_header_counts_against_freshness(operator_env, iap_keys, key_clock):
+    # A CDN-served response that is already 1240s old has 1760s left, not 3000.
+    iap_keys.headers = {"Cache-Control": f"public, max-age={MAX_AGE}", "Age": "1240"}
+    assert identity.authenticated_operator_email(_sign(_claims())) == OPERATOR
+    key_clock.advance(MAX_AGE - 1240)
+    assert identity.authenticated_operator_email(_sign(_claims())) == OPERATOR
+    assert len(iap_keys.urls) == 2
+
+
+@pytest.mark.parametrize(
+    "cache_control",
+    ["no-store", f"no-cache, max-age={MAX_AGE}", "public"],
+    ids=["no-store", "no-cache", "no-max-age"],
+)
+def test_status_identity_uncacheable_key_set_is_fetched_every_time(operator_env, iap_keys, cache_control):
+    iap_keys.headers = {"Cache-Control": cache_control}
+    assert identity.authenticated_operator_email(_sign(_claims())) == OPERATOR
+    assert identity.authenticated_operator_email(_sign(_claims())) == OPERATOR
+    assert len(iap_keys.urls) == 2
+
+
+def test_status_identity_unknown_key_id_forces_refetch(operator_env, iap_keys):
+    assert identity.authenticated_operator_email(_sign(_claims())) == OPERATOR
+    iap_keys.keys[ROTATED_KEY_ID] = _public_pem(ROTATED_KEY)
+    # The cached set is still fresh, so only the unknown key id can explain a
+    # second fetch, and without it the rotated key would be rejected.
+    rotated = _sign(_claims(), key=ROTATED_KEY, key_id=ROTATED_KEY_ID)
+    assert identity.authenticated_operator_email(rotated) == OPERATOR
+    assert len(iap_keys.urls) == 2
+
+
+def test_status_identity_key_id_still_unknown_after_refetch_is_rejected(operator_env, iap_keys):
+    _assert_rejected(_sign(_claims(), key=ROTATED_KEY, key_id=ROTATED_KEY_ID))
+    # One forced fetch for the unknown key id, not a retry loop.
+    assert len(iap_keys.urls) == 2
+
+
+def test_status_identity_failed_refresh_fails_closed_and_is_retried(operator_env, iap_keys, key_clock):
+    # Starts from a cached set, so a failed refresh could otherwise be papered
+    # over by serving the stale keys or by treating the failure as fresh.
+    assert identity.authenticated_operator_email(_sign(_claims())) == OPERATOR
+    key_clock.advance(MAX_AGE)
+    iap_keys.status = 503
+    assert identity.authenticated_operator_email(_sign(_claims())) is None
+    iap_keys.status = 200
+    assert identity.authenticated_operator_email(_sign(_claims())) == OPERATOR
+    assert len(iap_keys.urls) == 3
+
+
+def test_status_identity_key_fetch_is_bounded_by_a_short_timeout(operator_env, monkeypatch):
+    timeouts = []
+    endpoint = _IapKeyEndpoint({KEY_ID: _public_pem(IAP_KEY)})
+
+    def recording_endpoint(url, method="GET", body=None, headers=None, timeout=None, **kwargs):
+        timeouts.append(timeout)
+        return endpoint(url, method=method)
+
+    monkeypatch.setattr(identity.requests, "Request", lambda *args, **kwargs: recording_endpoint)
+    assert identity.authenticated_operator_email(_sign(_claims())) == OPERATOR
+    assert timeouts == [identity.KEY_FETCH_TIMEOUT_SECONDS]
 
 
 def test_status_identity_trusted_header_authenticates_when_enabled(operator_env, monkeypatch):

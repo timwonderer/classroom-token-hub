@@ -748,12 +748,16 @@ than recalled.
 **Status service must not launch until its operator environment is verified — OPEN 2026-09-14.**
 Two defects, one of which only the repository owner can clear because it is a setting, not a file:
 
-- **The `production` environment's deployment branch policy allows only `codex/v2.0`,** retired on
-  2026-09-07. Every job bound to that environment — `deploy-status.yml`, `release-v2.yml`,
-  `toggle-maintenance.yml`, `tailscale-ssh-smoke-test.yml` — is rejected from `main` before its
-  first step. `deploy-status.yml` has run from a push exactly once (2026-09-07) and died this way.
-  It is the matches-nothing class again, in the one place no workflow file shows: the filter lives
-  in repository settings. Retarget the policy to `main`.
+- **The `production` environment's deployment branch policy allowed only `codex/v2.0`,** retired on
+  2026-09-07 — **retargeted to `main` by the owner on 2026-09-15.** Until then every job bound to
+  that environment (`deploy-status.yml`, `release-v2.yml`, `toggle-maintenance.yml`,
+  `tailscale-ssh-smoke-test.yml`) was rejected from `main` before its first step, and
+  `deploy-status.yml` ran from a push exactly once (2026-09-07) and died this way. It is the
+  matches-nothing class again, in the one place no workflow file shows: the filter lives in
+  repository settings. **With the policy open, the next push to `main` that touches the status
+  paths deploys both services.** Until the `--update-*` fix below is on `main`, such a push still
+  runs the old workflow and would strip the operator configuration. So nothing else should land in
+  `status/**`, `status_service/**`, `tests/test_status_*.py` or `deploy-status.yml` first.
 - **`deploy-status.yml` deployed with `--set-env-vars` / `--set-secrets`,** which remove everything
   they do not list. The operator's auth configuration (`IAP_AUDIENCE`, `STATUS_OPERATOR_ALLOWLIST`,
   `IAP_TRUSTED_EMAIL_HEADER`) is not in the repository, so the first deploy past the policy would
@@ -762,7 +766,7 @@ Two defects, one of which only the repository owner can clear because it is a se
   when the operator service lacks the allowlist or audience. Because no deploy has ever run, nothing
   has been wiped — and nothing on either Cloud Run service has been inspected either.
 
-Clears only when all of the following hold, after the policy is retargeted and a deploy has run:
+Clears only when all of the following hold, after a deploy with the fixed workflow has run:
 
 1. The deploy's `Verify operator auth configuration survived the deploy` step passes. If either value
    is held in Secret Manager, the step reads its payload to confirm it is not blank, so the deploy
