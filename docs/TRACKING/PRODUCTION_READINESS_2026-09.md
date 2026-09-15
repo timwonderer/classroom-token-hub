@@ -745,6 +745,35 @@ Unlike the findings above, these are *not* post-ship backlog. Each one is a rele
 that domain readiness does not cover, and every item was confirmed against the working tree rather
 than recalled.
 
+**Status service must not launch until its operator environment is verified — OPEN 2026-09-14.**
+Two defects, one of which only the repository owner can clear because it is a setting, not a file:
+
+- **The `production` environment's deployment branch policy allows only `codex/v2.0`,** retired on
+  2026-09-07. Every job bound to that environment — `deploy-status.yml`, `release-v2.yml`,
+  `toggle-maintenance.yml`, `tailscale-ssh-smoke-test.yml` — is rejected from `main` before its
+  first step. `deploy-status.yml` has run from a push exactly once (2026-09-07) and died this way.
+  It is the matches-nothing class again, in the one place no workflow file shows: the filter lives
+  in repository settings. Retarget the policy to `main`.
+- **`deploy-status.yml` deployed with `--set-env-vars` / `--set-secrets`,** which remove everything
+  they do not list. The operator's auth configuration (`IAP_AUDIENCE`, `STATUS_OPERATOR_ALLOWLIST`,
+  `IAP_TRUSTED_EMAIL_HEADER`) is not in the repository, so the first deploy past the policy would
+  have emptied the allowlist and locked out every operator. Fixed alongside the IAP assertion
+  verification fix (CHANGELOG, 2026-09-14): `--update-*` flags, plus a final deploy step that fails
+  when the operator service lacks the allowlist or audience. Because no deploy has ever run, nothing
+  has been wiped — and nothing on either Cloud Run service has been inspected either.
+
+Clears only when all of the following hold, after the policy is retargeted and a deploy has run:
+
+1. The deploy's `Verify operator auth configuration survived the deploy` step passes.
+2. `gcloud run services describe cth-status-operator` shows the allowlist, an `IAP_AUDIENCE` equal to
+   the audience of the IAP resource actually fronting the service, and `IAP_TRUSTED_EMAIL_HEADER` as
+   decided (currently `true`).
+3. The service's ingress and IAP enablement match what the header fallback assumes.
+   `status_service/identity.py` trusts `X-Goog-Authenticated-User-Email` only because direct requests
+   cannot reach the container, and `gcloud run deploy` does not pin `--ingress`.
+4. An allowlisted operator loads `/operator/notices`, and a signed-in account that is not on the
+   allowlist gets 401.
+
 **CI gates on a branch that does not exist — CLOSED 2026-09-05 (`00fdcecf3`).** Three workflows
 filtered on `codex/v2.0`, a ref absent locally *and* on the remote. `actionlint.yml` was degraded
 only; `policy-guardrails.yml`'s `guardrails-push` job was `if: github.ref ==
