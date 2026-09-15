@@ -78,7 +78,7 @@ jobs:
         env:
           IMAGE_URI: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
         run: |
-          docker build -t "$IMAGE_URI" status_service
+          docker build -f status_service/Dockerfile -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
           echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
       # Both deploys use the --update-* forms. --set-env-vars and --set-secrets

@@ -166,6 +166,8 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 
+- **Status deployment now includes its shared projection package (2026-09-14)** — The workflow built `status_service/Dockerfile` with `status_service/` as its context, so the deployed image omitted the sibling `status/` package imported by `status_service.app`. Both Cloud Run services consequently failed to boot with `ModuleNotFoundError: No module named 'status'`. The image now builds from the repository root and explicitly copies only `status/` and `status_service/`; a workflow regression test holds the context and package-copy contract.
+
 - **The first status deploy verified neither service it deployed (2026-09-15)** — Merging #1385 ran `deploy-status.yml` against production for the first time (run 34928799354). Both Cloud Run revisions went live with the `--update-*` flags, so no configuration was stripped. The job still failed, and in the way that mattered most. Its public health check curled the service's `run.app` URL, but the services run with restricted ingress, so a request from a GitHub runner gets Google's own 404 page, never the Flask app. That check predates #1385 and could never have passed from CI; no deploy had reached it before. The operator auth check sat after it, and steps after a failure are skipped by default, so the deploy that most needed that check skipped it. The operator service's `IAP_AUDIENCE` and allowlist are still unverified.
 
   The curl is replaced by a check that describes both services and requires, for each:
