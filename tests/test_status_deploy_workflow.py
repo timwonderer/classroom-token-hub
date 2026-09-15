@@ -12,6 +12,7 @@ import yaml
 
 
 WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "deploy-status.yml"
+DOCKERFILE = Path(__file__).resolve().parent.parent / "status_service" / "Dockerfile"
 SERVICES = {"cth-status-public", "cth-status-operator"}
 # Each removes every env var or secret on the service that it does not name.
 REPLACING_FLAGS = ("--set-env-vars", "--set-secrets", "--env-vars-file", "--clear-env-vars", "--clear-secrets")
@@ -44,6 +45,15 @@ sys.stdout.write(payloads[name])
 
 def _deploy_steps():
     return yaml.safe_load(WORKFLOW.read_text())["jobs"]["deploy"]["steps"]
+
+
+def test_status_image_contains_shared_projection_package():
+    build = _step("Build and push status image")["run"]
+    dockerfile = DOCKERFILE.read_text()
+
+    assert 'docker build -f status_service/Dockerfile -t "$IMAGE_URI" .' in build
+    assert "COPY status /app/status" in dockerfile
+    assert "COPY status_service /app/status_service" in dockerfile
 
 
 def _step(name):
