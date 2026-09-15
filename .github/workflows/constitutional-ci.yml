@@ -20,7 +20,6 @@ jobs:
   constitutional-evidence:
     name: Constitutional evidence classifier and runner
     runs-on: ubuntu-latest
-    environment: testing
     services:
       postgres:
         image: public.ecr.aws/docker/library/postgres:15
@@ -92,9 +91,15 @@ jobs:
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
           FLASK_APP: app
           FLASK_ENV: testing
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
-          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-          PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
+          # No SECRET_KEY, ENCRYPTION_KEY, PEPPER_KEY or AUDIT_HMAC_KEY, on
+          # purpose. Every evidence command is a pytest module under tests/, so
+          # conftest.py supplies deterministic test values for all four, and
+          # the auxiliary validators never import the app. Reading them from
+          # secrets made the result depend on who opened the PR: Dependabot
+          # and fork PRs receive no Actions or environment secrets, an unset
+          # secret expands to an empty string, and an empty string defeats the
+          # setdefault() conftest.py relies on — so app/__init__.py refused to
+          # start and every evidence family failed.
         run: |
           set -o pipefail
           python scripts/ci_evidence_runner.py \
