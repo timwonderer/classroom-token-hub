@@ -2,7 +2,13 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-011       | 1.0     | 2026-03-01     | N/A        | Normative                 |
+| SOP-DB-011       | 1.1     | 2026-09-14     | 1.0        | Normative                 |
+
+> [!NOTE]
+> v1.1 (2026-09-14) adds §V.A, a single named exception to Golden Rule 3. Rule 3 is not weakened:
+> merged migrations are still never edited. §V.A defines the one circumstance in which following
+> Rule 3 literally would preserve an execution path that destroys state protected by a superior
+> `INV` or `DOM` document, and it prohibits every other use. No other rule changed.
 
 > [!IMPORTANT]
 > This is the **Single Source of Truth** for all database migration policies, best practices, and workflows in the Classroom Economy project. All contributors must adhere to these standards.
@@ -20,17 +26,76 @@ Normative (SOP Tier). Subordinate to INV-CORE-000.
 
 ## IV. Dependencies
 - `INV-CORE-000_CORE_INVARIANTS.md`
+- `INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
+- `INV-ARC-017_GENERAL_TESTING_INVARIANTS.md`
+- `SOP-DB-015_Schema_Change_Proposals.md`
 
 ## V. The Golden Rules
 
 1.  **NEVER modify `app/models.py` without creating a migration.**
 2.  **ALWAYS test migrations before committing** (upgrade AND downgrade).
-3.  **NEVER edit old migrations after they're merged to main.**
+3.  **NEVER edit old migrations after they're merged to main.** The sole exception is a Replay-Safety Correction under §V.A. There is no other.
 4.  **ALWAYS review auto-generated migrations** before committing.
 5.  **NEVER skip migrations** - each schema change needs its own migration.
 6.  **ALWAYS include idempotency helpers** in every migration (`table_exists`, `column_exists`, etc.).
 7.  **NEVER use hardcoded constraint names** - discover dynamically via inspection.
 8.  **ALWAYS check existence before CREATE operations** (tables, columns, indexes, foreign keys).
+
+### V.A Replay-Safety Correction (Sole Exception to Rule 3)
+
+A merged migration MUST NOT otherwise be modified.
+
+`INV-CORE-000` §II places all migrations within its scope, and its invariants are cumulative. Rule 3
+therefore cannot require preserving an execution path that destroys state a superior `INV` or `DOM`
+document protects (`INV-CORE-001` §III). A migration whose existence checks cannot distinguish its
+historical input from its own output presents exactly that path when it is re-applied.
+
+A merged migration MAY receive a replay-safety correction, meaning a change that makes it strictly
+less destructive on replay. It qualifies only when **all** of the following are proven:
+
+1. **Protected state is at risk.** Its existing replay behavior can destroy, rewrite, or invalidate
+   state protected by an `INV` or `DOM` document, and the protecting clause is cited. A replay that
+   is merely untidy, that errors, or that adds drift without destroying, rewriting, or invalidating
+   protected state does not qualify.
+2. **No forward remedy exists.** No forward corrective migration can eliminate the behavior, because
+   the defect exists within execution of the historical revision itself.
+3. **First execution is unchanged.** The correction does not alter the migration's behavior when it
+   is applied to its intended predecessor schema.
+4. **The intended transformation is unchanged.** A fresh upgrade through the corrected revision
+   produces the same intended schema and data transformation as the merged revision.
+5. **The destructive replay is gone.** Replay and re-upgrade prove the destructive behavior has been
+   eliminated.
+6. **The exception is acknowledged.** The exception and its production risk are explicitly recorded
+   under `SOP-DB-015` §IX.
+
+This exception MUST NOT be used to change a historical migration's intended schema, introduce new
+application behavior, correct ordinary forward migration defects that can be repaired by a
+subsequent revision, or avoid creating a corrective migration.
+
+#### Evidence
+
+Each condition is proven by execution, not by argument, and reported with its exact command and
+scope (`INV-ARC-017` §V). At minimum:
+
+- **Conditions 3 and 4:** the merged and corrected revisions, run against the intended predecessor
+  schema, emit the same mutating statements and leave the same schema and rows; and a fresh upgrade
+  through the full chain yields a schema identical to the one the merged revision yields.
+- **Condition 5:** a test seeds the protected state through its canonical write paths, re-applies
+  the corrected revision over the migrated schema, and asserts the state survives. The test is
+  watched failing against the merged revision.
+- Upgrade, downgrade, re-upgrade, and head validation, per `INV-ARC-017` §VI.
+
+#### Recording
+
+- The corrected migration carries a comment naming this section and the date of the correction.
+- The PR description and `CHANGELOG.md` cite the protecting clause, the evidence for each condition,
+  and the production-risk acknowledgment required by `SOP-DB-015` §IX.
+
+#### Independent Evaluation
+
+Each candidate is evaluated on its own evidence. Resemblance to a migration already corrected under
+this section is not evidence that a candidate qualifies, and a prior correction is not precedent
+for another.
 
 ---
 
