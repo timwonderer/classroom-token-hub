@@ -35,6 +35,14 @@ tables are dropped and recreated rather than converted:
 
 The user authorized wiping the development database for this change.
 
+Replay-safety correction under SOP-DB-011 §V.A (2026-09-14). Steps 1-3 were
+keyed on bare existence, so re-applying this revision over its own output
+dropped the versioned store_products table, cleared store_item_visibility, and
+NULLed entitlement_events.product_id: state protected by DOM-POL-001 §VI.0 and
+§VI.1, DOM-CORE-002 §V.2 and §V.11, and DOM-STORE-001 §VII.A. Each step now
+acts only on the legacy shape. Against its predecessor 97e131ddb211 the
+corrected revision emits the same statements as the merged one.
+
 Revision ID: b7c41e9a2f30
 Revises: 97e131ddb211
 Create Date: 2026-09-07
@@ -137,6 +145,19 @@ def get_foreign_keys_by_column(table_name, column_name):
         return []
 
 
+def column_type(table_name, column_name):
+    """Return a column's reflected type, or None when the column is absent."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        for col in inspector.get_columns(table_name):
+            if col['name'] == column_name:
+                return col['type']
+    except Exception:
+        return None
+    return None
+
+
 # ============================================================================
 # MIGRATION FUNCTIONS
 # ============================================================================
@@ -149,8 +170,12 @@ def upgrade():
     # the new one names a product lineage; there is no mapping between them
     # once the catalog is dropped. An event pointing at a lineage that does
     # not exist would resolve to nothing anyway, so the honest value is NULL.
+    #
+    # Only while the column still holds the integer key. Once retyped, its
+    # values are lineages this revision wrote, and clearing them again on a
+    # re-application would detach every entitlement from its product.
     # ------------------------------------------------------------------
-    if column_exists('entitlement_events', 'product_id'):
+    if isinstance(column_type('entitlement_events', 'product_id'), sa.Integer):
         op.execute("UPDATE entitlement_events SET product_id = NULL")
         op.alter_column(
             'entitlement_events',
@@ -179,22 +204,26 @@ def upgrade():
     # Rows are cleared because their integer target is going away, and the
     # FK goes with the column — the lineage is a locator shared by many
     # rows, following the same non-FK-UUID discipline as policy_uuid.
+    #
+    # Rows are cleared only while the table is still keyed by store_item_id.
+    # Once rekeyed they name lineages this revision keeps, and clearing them
+    # again on a re-application would silently lift every section restriction.
     # ------------------------------------------------------------------
     if table_exists('store_item_visibility'):
-        op.execute("DELETE FROM store_item_visibility")
-
-        for fk in get_foreign_keys_by_column('store_item_visibility', 'store_item_id'):
-            op.drop_constraint(fk['name'], 'store_item_visibility', type_='foreignkey')
-
-        # Declared as a UniqueConstraint, so it owns its backing index and
-        # must be dropped as a constraint; DROP INDEX is refused. Discovered
-        # by column rather than by name, which varies across environments.
-        for uq in get_unique_constraints_by_column('store_item_visibility', 'store_item_id'):
-            op.drop_constraint(uq['name'], 'store_item_visibility', type_='unique')
-        if index_exists('store_item_visibility', 'ix_store_item_visibility_store_item_id'):
-            op.drop_index('ix_store_item_visibility_store_item_id', table_name='store_item_visibility')
-
         if column_exists('store_item_visibility', 'store_item_id'):
+            op.execute("DELETE FROM store_item_visibility")
+
+            for fk in get_foreign_keys_by_column('store_item_visibility', 'store_item_id'):
+                op.drop_constraint(fk['name'], 'store_item_visibility', type_='foreignkey')
+
+            # Declared as a UniqueConstraint, so it owns its backing index and
+            # must be dropped as a constraint; DROP INDEX is refused. Discovered
+            # by column rather than by name, which varies across environments.
+            for uq in get_unique_constraints_by_column('store_item_visibility', 'store_item_id'):
+                op.drop_constraint(uq['name'], 'store_item_visibility', type_='unique')
+            if index_exists('store_item_visibility', 'ix_store_item_visibility_store_item_id'):
+                op.drop_index('ix_store_item_visibility_store_item_id', table_name='store_item_visibility')
+
             op.drop_column('store_item_visibility', 'store_item_id')
 
         if not column_exists('store_item_visibility', 'product_lineage_uuid'):
@@ -218,8 +247,20 @@ def upgrade():
 
     # ------------------------------------------------------------------
     # 3. Drop both legacy product tables.
+    #
+    # store_products names both the legacy JSON-payload table and the
+    # versioned table that replaces it, so existence alone cannot tell them
+    # apart. Keyed on bare existence, a re-application dropped the versioned
+    # table with every product in it and recreated it in this revision's
+    # shape, discarding the columns later Store revisions added.
+    #
+    # The legacy table is recognised by lacking product_lineage_uuid: the
+    # column this revision introduces and no later revision removes. Do not
+    # re-key this on a column a later revision drops or renames (tier,
+    # limit_per_student, essential_when_overdue) -- a re-run meets the head
+    # schema, not the shape this revision created.
     # ------------------------------------------------------------------
-    if table_exists('store_products'):
+    if table_exists('store_products') and not column_exists('store_products', 'product_lineage_uuid'):
         op.drop_table('store_products')
         print("❌ Dropped legacy JSON-payload store_products")
     if table_exists('store_items'):

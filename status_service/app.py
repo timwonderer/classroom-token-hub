@@ -11,6 +11,7 @@ from flask import Flask, abort, jsonify, redirect, render_template, request, ses
 
 from .contracts import ExternalStatusNoticeEvent, NoticeState, RecoveryExpectationState
 from .identity import authenticated_operator_email
+from .log_setup import configure_logging
 from status.projection import derive_capability_cards, derive_platform_checks
 from .store import FirestoreNoticeStore
 
@@ -42,6 +43,7 @@ def derive_overall_status(notices: list[dict]) -> dict[str, str]:
 
 
 def create_app(store=None) -> Flask:
+    configure_logging()
     app = Flask(__name__, static_folder="static", template_folder="templates")
     app.config["STATUS_SERVICE_MODE"] = os.environ.get("STATUS_SERVICE_MODE", "operator").strip().lower()
     if app.config["STATUS_SERVICE_MODE"] not in {"public", "operator"}:
