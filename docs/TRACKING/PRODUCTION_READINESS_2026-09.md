@@ -767,27 +767,51 @@ Two defects, one of which only the repository owner can clear because it is a se
   service.** Both revisions went live with the `--update-*` flags, so CI stripped nothing. But its
   public health check curled the service's `run.app` URL, which restricted ingress answers with
   Google's 404 from any GitHub runner. That check failed, so the operator auth check after it was
-  skipped, and the operator service's configuration is still uninspected. Fixed in a follow-up PR: a
-  readiness check that describes both services instead of requesting them, and an auth check that
-  runs whenever the operator deploy succeeded. Until a deploy includes that, check the configuration
-  by hand with `gcloud run services describe cth-status-operator`.
+  skipped, and the operator service's configuration went uninspected. Fixed in #1386: a readiness
+  check that describes both services instead of requesting them, and an auth check that runs
+  whenever the operator deploy succeeded. The deploy from #1386's merge (run 34929999750) passed both:
+  both services serving that commit, `STATUS_OPERATOR_ALLOWLIST` and `IAP_AUDIENCE` present and not
+  blank, header fallback on.
+- **The operator console's front door is `operator.status.classroomtokenhub.com`,** served by a
+  Google Cloud load balancer (`136.68.93.205`, with a Google-managed certificate for that name). An
+  unauthenticated request to `/operator/notices` or `/health` gets IAP's own 302 to Google sign-in
+  (`x-goog-iap-generated-response: true`, body "Invalid IAP credentials: empty token"); the
+  application is never reached. A first check on 2026-09-15 went through a local resolver that
+  still answered with Cloudflare addresses, where the TLS handshake failed. Public resolvers and a
+  retry showed the load balancer, so that earlier result is withdrawn.
+  **A signed-in request got past IAP and then failed, and the cause was the image.** On 2026-09-15
+  the owner's browser, signed in to Google, got a plain `Service Unavailable` 503 from this address,
+  and `status.classroomtokenhub.com` returned the identical 503. The workflow built the image with
+  `status_service/` as its context, so it never contained the sibling `status/` package that
+  `status_service/app.py` imports, and both services failed to boot with `ModuleNotFoundError: No
+  module named 'status'`. A guess recorded here earlier, that a serverless NEG named the wrong
+  service, was wrong. The build context was fixed in `de8b49649` (#1389, carried into #1388). A
+  manual deploy of the corrected image brought the public `/health` to 200 through Cloudflare and
+  the load balancer, and the authenticated operator page rendered (reported in #1389). The deploy
+  checks did not catch the failure: run 34929999750 found both revisions Ready and serving, because
+  a revision can report Ready while the application inside it fails to import. Revision readiness
+  is not evidence that the application boots.
 
-Clears only when all of the following hold, after a deploy that includes the follow-up has run:
+Clears only when all of the following hold:
 
-1. The deploy's `Verify both services are serving this commit` and `Verify operator auth
-   configuration survived the deploy` steps pass. If either auth value is held in Secret Manager, the
-   auth step reads its payload to confirm it is not blank, so the deploy service account needs
-   `secretmanager.versions.access` on that secret or the step fails as unverified.
-2. `gcloud run services describe cth-status-operator` shows the allowlist, an `IAP_AUDIENCE` equal to
-   the audience of the IAP resource actually fronting the service, and `IAP_TRUSTED_EMAIL_HEADER` as
-   decided (currently `true`).
+1. **Met 2026-09-15 (run 34929999750).** The deploy's `Verify both services are serving this commit`
+   and `Verify operator auth configuration survived the deploy` steps pass. If either auth value is
+   held in Secret Manager, the auth step reads its payload to confirm it is not blank, so the deploy
+   service account needs `secretmanager.versions.access` on that secret or the step fails as
+   unverified.
+2. `IAP_AUDIENCE` equals the audience of the IAP resource actually fronting the service, and
+   `IAP_TRUSTED_EMAIL_HEADER` is as decided (currently `true`). Presence is verified; the value is
+   not. Every operator request logs `status operator authenticated via=<path>` with the signed
+   assertion's result, so one real sign-in settles it: `via=iap_assertion` means the audience is
+   right, and `via=trusted_header assertion=wrong_audience` means it is wrong.
 3. The service's ingress and IAP enablement match what the header fallback assumes.
    `status_service/identity.py` trusts `X-Goog-Authenticated-User-Email` only because direct requests
    cannot reach the container, and `gcloud run deploy` does not pin `--ingress`. Partial evidence
    (2026-09-15): unauthenticated requests from the internet to both services' `run.app` URLs, the
    operator's `/operator/notices` included, get Google's ingress 404 rather than the application.
-   That shows the direct path is closed from outside. It does not show IAP is enforced on the path
-   that is open.
+   That shows the direct path is closed from outside. On the path that is open, the front door
+   answers an unauthenticated request with IAP's redirect to Google sign-in (see above), so IAP is
+   enforced there too. What remains is the real sign-in in item 4.
 4. An allowlisted operator loads `/operator/notices`, and a signed-in account that is not on the
    allowlist gets 401.
 
