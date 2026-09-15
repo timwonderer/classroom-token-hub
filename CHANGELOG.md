@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Documentation
+
+- **Public district and privacy descriptions reconciled with v2 code (2026-09-15)** — Corrected authentication, hashing, shared accounts, claim retention, recovery, deletion, administrative access, exports, hall-pass disclosure, cookies, and external-service claims. Both pages now disclose unresolved privacy requirements and distinguish implementation from deployment or legal certification. The evidence and launch review findings are recorded in `docs/TRACKING/PUBLIC_PRIVACY_DISTRICT_AUDIT_20260915.md`. Existing section links and layout are preserved; structural checks passed for both pages, and the rendered public-page axe audit passed. No new accessibility violations were found.
+
 ### Security
 
 - **Docs-site dependency advisories cleared to the ecosystem floor (2026-09-12)** — Seven of the nine open Dependabot advisories against `docs-site/package-lock.json` (`svgo` ×2, `joi` ×2, `qs` ×2, `colord`) are resolved by the `overrides` block and regenerated lockfile on this branch: `svgo` 3.3.5, `joi` 17.13.7, `qs` 6.16.0, `colord` 2.10.0. All four are transitive under `@docusaurus/*`; pinning them through `overrides` is the mechanism Docusaurus documents for transitive advisories, and it needs no Docusaurus version change. Verified with `npm ci` followed by `npm run build`: the site builds clean at 30 pages, so nothing was traded for the patches.

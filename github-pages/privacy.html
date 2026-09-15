@@ -32,7 +32,7 @@
                 </div>
                 <div class="landing-welcome">
                     <h1>Privacy &amp; Data Handling Policies</h1>
-                    <small>Last Updated: July 31, 2026</small>
+                    <small>Last reviewed for v2: September 15, 2026</small>
                     <a href="index.html" target="_self" class="floating-back-widget">
                         <span class="material-symbols-outlined" aria-hidden="true">arrow_circle_left</span>
                         <span>Return to Home</span>
@@ -48,145 +48,114 @@
                         <h2>Contents</h2>
                         <ul>
                             <li><a href="#purpose">Purpose</a></li>
-                            <li><a href="#no-sharing">Our Data Collection and Handling Principles</a></li>
-                            <li><a href="#what-you-provide">What you must provide</a></li>
-                            <li><a href="#how-we-use">How we use your data</a></li>
-                            <li><a href="#activity-data">Educational activity data</a></li>
+                            <li><a href="#no-sharing">Use &amp; sharing</a></li>
+                            <li><a href="#what-you-provide">Information you provide</a></li>
+                            <li><a href="#how-we-use">Names, notes &amp; content</a></li>
+                            <li><a href="#activity-data">Activity &amp; support records</a></li>
                             <li><a href="#data-minimization">Data minimization &amp; retention</a></li>
-                            <li><a href="#encryption">Encryption &amp; storage</a></li>
-                            <li><a href="#recovery">Account recovery</a></li>
-                            <li><a href="#isolation">Class-level isolation</a></li>
-                            <li><a href="#logging">Error logging & monitoring</a></li>
-                            <li><a href="#what-not">What CTH does not do</a></li>
-                            <li><a href="#contact">Contact information</a></li>
+                            <li><a href="#encryption">Encryption &amp; sessions</a></li>
+                            <li><a href="#recovery">Sign-in &amp; recovery</a></li>
+                            <li><a href="#isolation">Who can access information</a></li>
+                            <li><a href="#logging">Technical data &amp; service providers</a></li>
+                            <li><a href="#what-not">Limits &amp; school review</a></li>
+                            <li><a href="#contact">Questions &amp; data requests</a></li>
                         </ul>
                     </nav>
                     <div>
 
                     <section class="public-section" id="purpose">
-                        <h2>Purpose</h2>
-                        <p>
-                            This document explains what information you must provide to use this application, how we handle that information, and the steps we take to protect your data and privacy. This policy describes the most current application behaviors that are validated and supersedes previous versions unless otherwise noted.
-                        </p>
-
-                        <p>
-                            If you are reviewing Classroom Token Hub for an educational institution, please visit <a href="./district.html">For District Partners</a> for more information.
-                        </p>
-
-                        <p>
-                            If you are a student, your teacher has chosen this application on behalf of your class to facilitate classroom activities. If you and/or your families have any questions or concerns, please talk to your teacher.</p>
+                        <h2>Purpose and Scope</h2>
+                        <p>This page explains the information handled by Classroom Token Hub (CTH), who can see it, and the current limits of its privacy controls. It describes the v2 code reviewed on September 15, 2026 while release preparation is ongoing. It does not certify the live hosting configuration or completion of every privacy requirement.</p>
+                        <p>CTH helps teachers run classroom activities and a simulated economy. District reviewers should also read <a href="./district.html">For District Partners</a>. Students and families can ask their teacher or school about classroom use, access to records, corrections, or removal.</p>
                     </section>
 
                     <section class="public-section" id="no-sharing">
-                        <h2>
-                            Our Data Collection and Handling Principles
-                        </h2>
-                        <p>
-                            Classroom Token Hub is a self-funded, independently-operated platform supported by a single current full-time high school teacher. As such, we are not an edtech company nor are we incentivized to become one. Data collected by this platform is used solely for the operation of the platform and the useability of the application. This means we do not ask you to provide any identifying information unless absolutely necessary. We also do not display ads, use third-party tracking tools, or sell your information to third parties.
-                        </p>
-                        <p>
-                            From day one, we operate on these three foundational principles:
-                            <ol>
-                                <li>I don't know you</li>
-                                <li>I don't need to know you</li>
-                                <li>I don't want to know you</li>
-                            </ol>
-                        </p>
+                        <h2>How We Use and Share Information</h2>
+                        <p>CTH is developed and maintained by a classroom teacher. We use information to establish accounts, run classroom activities, display records, secure access, and investigate problems. We do not display advertisements or sell user data.</p>
+                        <p>Information is available through classroom views, support review, and the shared hall-pass verification feature described below. Hosting, security, and content-delivery providers also process technical requests. The application is not anonymous merely because records use identifiers instead of names.</p>
                     </section>
 
                     <section class="public-section" id="what-you-provide">
-                        <h2>Information Classroom Token Hub Collects</h2>
-
-                        <h3 style="color:var(--primary);">If you are a teacher user</h3>
-                        <ul>
-                            <li><strong>Display name</strong>: A front-facing name that will be visible on your dashboard and on student accounts.</li>
-                            <li><strong>Class Identifier</strong>: A descriptive name for each class you manage (e.g., "Period 3 Economics").</li>
-                        </ul>
-
-                        <h3 style="color:var(--steward-blue);">If you are a student user</h3>
-                        <p>Your teacher has provided this information on your behalf to create your account:</p>
-                        <ul>
-                            <li><strong>First and Last Name (or any two-part display name)</strong>: Used to claim your account and display your name in the greetings and teacher roster</li>
-                            <li><strong>Notes</strong>: Optional notes provided by your teacher.</li>
-                        </ul>
-                    Any potentially identifying information is encrypted at rest. 
+                        <h2>Information You and Your Teacher Provide</h2>
+                        <h3>Teachers</h3>
+                        <ul><li>A username and authenticator setup, plus passkey registration information if a passkey is added.</li><li>A two-part display name, class name, optional section label, and class time zone.</li><li>Roster entries, class settings, store items, announcements, and other classroom content.</li></ul>
+                        <h3>Students</h3>
+                        <ul><li>Your teacher supplies first and last name fields for roster display and account claiming. Use the full or partial names entered by your teacher.</li><li>The current roster also supports optional encrypted teacher notes. Avoid unnecessary personal or sensitive information in these notes.</li><li>During claiming, you provide the class join code, matching names, and a teacher-provided distinguishing code if needed. You then create a username, a 4–6 digit PIN, and a passphrase.</li></ul>
+                        <p>Account registration does not ask for email addresses, phone numbers, home addresses, dates of birth, parent contact details, government IDs, or district student ID numbers. Support reports and other free-text fields store what you submit; do not use them for contact information, medical details, disciplinary case records, or other unnecessary personal information.</p>
                     </section>
                    
 
 
                     <section class="public-section" id="how-we-use">
-                        <h2>How We Use Your Data</h2>
-                        <h3>Student Name</h3>
-                        <p>Student name is used to claim student accounts and to display a user-friendly name in the greetings and teacher roster. This information is only visible to the student themselves and the teacher who owns the class.</p>
-                        <h3>Notes</h3>
-                        <p>Notes are optional text field for teacher to provide additional context for a particular student. This field is encrypted at rest and only accessible by the teacher owning the class. Classroom Token Hub does not interpret or use the notes field in any features.</p>
-                        <h3>Teacher Display Name, Class Display Name, Class Sections</h3>
-                        <p>These fields are used for display purposes within the bounded class universe and are visible to both teachers and students within the class.</p>
+                        <h2>Display Names, Notes, and Classroom Content</h2>
+                        <p>Names help students claim the correct roster entry and help teachers recognize students. Encrypted display names are decrypted for authorized application views, including the teacher roster and the student’s own interface. Teachers’ display names and class labels can be visible to students in that class.</p>
+                        <p>Roster notes are stored with the student’s display profile using field encryption and are available in teacher roster workflows. They are different from support explanations, transaction descriptions, announcements, and other ordinary text fields, which do not all receive that encryption.</p>
+                        <p>Teachers can export class roster or student information. Downloaded files are held outside CTH and need to be handled under the school’s own access and retention practices.</p>
                     </section>
 
                     <section class="public-section" id="activity-data">
-                        <h2>Other Non-Personally Identifiable Data</h2>
-                        <p class="small">This includes teacher-created store items, rent perks, and other classroom economy-related data.</p>
-                        <ul>
-                            <li><strong>Attendance Records</strong>: Tap-in/out timestamps and calculated active/inactive duration.</li>
-                            <li><strong>Account Balances</strong>: Checking and savings balances, updated from transaction history.</li>
-                            <li><strong>Transaction History</strong>: Records of bonuses, payroll, rent, expenses, and store purchases.</li>
-                            <li><strong>Class Settings</strong>: Payroll rates, rent amounts, economic policies, and other classroom configuration options.</li>
-                        </ul>
-                        <p>These information are stored using an internal reference ID that links them to the corresponding student without using names directly.</p>
+                        <h2>Classroom Activity and Support Records</h2>
+                        <ul><li><strong>Attendance and hall passes:</strong> event timestamps, work or break periods, pass destinations, approval and use records.</li><li><strong>Simulated finances:</strong> checking and savings activity, payroll, bonuses and fines, transfers, rent, obligations, insurance purchases and claims, and store purchases or item use.</li><li><strong>Class settings and summaries:</strong> prices, rates, economic policy, enabled features, and class-level economic summaries.</li><li><strong>Support:</strong> submitted explanations, expected outcomes, review notes, related activity snapshots, and technical diagnostics.</li></ul>
+                        <p>Activity is linked to a class and student participation record. This remains student-related information, even without a name on each transaction. CTH currency is simulated; there are no real bank or payment-card connections.</p>
                     </section>
 
                     <section class="public-section" id="data-minimization">
-                        <h2>Data Minimization &amp; Retention</h2>
-                        <p>We collect only the data necessary to support classroom activities and educational objectives. Student names are encrypted at rest and are visible only to their teacher. When a class ends or is deleted, all associated student data is permanently removed from our system.</p>
+                        <h2>Retention and Deletion</h2>
+                        <p>Teachers can remove a student from a class, delete a class, or delete their teacher account through the application. These are hard-deletion workflows, with no user-facing archive or undelete option. Deleting one membership does not remove a student’s participation in other classes.</p>
+                        <p>The project’s rules require removal of deleted class data and accounts with no remaining class participation. Complete enforcement across all related records, logs, and backups remains a release-review item.</p>
+                        <p><strong>A school term ending or 180 days of inactivity does not establish that your data has been deleted.</strong> A scheduled class-inactivity purge has not been established in the current application. Ask the teacher to explicitly delete a class when it is no longer needed.</p>
+                        <p>The current code retains roster-name matching hashes after account claiming. The earlier statement that all claiming information is immediately deleted is not an implemented guarantee.</p>
+                        <p>Application deletion does not prove immediate erasure from infrastructure backups, external logs, downloaded exports, or email correspondence. Their retention must be confirmed with the operator or, for school-held copies, the school. Backups are not offered as an account-recovery method.</p>
                     </section>
 
                     <section class="public-section" id="encryption">
-                        <h2>Data Encryption &amp; Storage</h2>
-                        <ul>
-                            <li><strong>Encryption at Rest</strong>: All sensitive data (names, notes) is encrypted using industry-standard AES encryption before storage in our database.</li>
-                            <li><strong>Secure Hashing</strong>: PINs and passphrases are hashed using bcrypt with an additional application secret. Hashes are not reversible, even if the database is compromised.</li>
-                            <li><strong>Encrypted Transit</strong>: All data transmitted between your device and our servers is protected using HTTPS/TLS encryption.</li>
-                            <li><strong>Secure Session Management</strong>: The application enforces session timeouts and uses secure, HTTP-only cookies.</li>
-                        </ul>
+                        <h2>Encryption, Credentials, and Sessions</h2>
+                        <ul><li><strong>Protected database fields:</strong> display names, roster notes, and authenticator secrets use Fernet encryption. The application decrypts them when needed. This does not encrypt every activity record, support report, or diagnostic field.</li><li><strong>Lookup fields:</strong> usernames and roster-name matching values use keyed HMAC-SHA256 digests.</li><li><strong>PINs and passphrases:</strong> stored as salted scrypt hashes, not plaintext passwords or bcrypt hashes. The password-hashing process does not add the application’s lookup secret.</li><li><strong>Passkeys:</strong> the application stores the registered public key and credential metadata. Passkey authentication does not send your private key to CTH.</li><li><strong>Session cookies:</strong> the application uses signed, HTTP-only, SameSite=Lax cookies and enables the Secure flag in production. Signed cookies protect against alteration; they are not encrypted and can contain display or setup information on your device.</li><li><strong>Session expiry:</strong> students have a ten-minute limit from login; teachers have a ten-minute inactivity timeout. Sign out when finished, especially on a shared device.</li></ul>
+                        <p>HTTPS/TLS protects connections when configured on the deployed service. Infrastructure access, backups, and key custody require their own controls. Someone with both stored encrypted data and the application’s encryption key can decrypt it.</p>
                     </section>
 
                     <section class="public-section" id="recovery">
-                        <h2>Account Recovery</h2>
-                        <p>If you lose access to your account, your teacher can issue a recovery code. Recovery uses only your class join code and the recovery code. No personal information, such as your name, is required or transmitted during recovery.</p>
+                        <h2>Sign-In and Account Recovery</h2>
+                        <h3>Student sign-in and recovery</h3>
+                        <p>Students sign in with their username and passphrase. A PIN is used for attendance, checking/savings transfers, and hall passes. Purchases, rent, insurance payments and cancellation, and other entitlement use require the passphrase.</p>
+                        <p>If you lose access, your teacher can generate an eight-character recovery code that expires after ten minutes. The student recovery form asks for that code; it does not ask for a name or join code. A valid code is cleared when accepted, and you are directed to create a new username, PIN, and passphrase. If you use the account in multiple classes, the changed credentials apply to that shared account.</p>
+                        <p>The current implementation temporarily stores the student recovery code in readable database form. Do not share it with anyone other than the intended student. Its storage and class binding are under review against the project’s security requirements.</p>
+                        <h3>Teacher sign-in and recovery</h3>
+                        <p>Teachers sign in with a username and authenticator code, or an enrolled passkey. Teacher recovery uses class join codes and a student username from each class, followed by verification codes supplied by the participating students. Requests have a five-day window. It does not use email reset links.</p>
+                        <p>Recovery depends on the required class and student verification being available. It is not guaranteed if that verification cannot be completed; the teacher recovery flow also remains subject to reconciliation with its governing requirements.</p>
                     </section>
 
                     <section class="public-section" id="isolation">
-                        <h2>Class-Level Data Isolation</h2>
-                        <p>Each class operates as a completely independent system. Your data is strictly isolated within your class:</p>
-                        <ul>
-                            <li>No cross-class visibility or data sharing</li>
-                            <li>Teachers can only access classes they create</li>
-                            <li>Student data is never aggregated or shared across classes</li>
-                            <li>The system does not maintain student identity across classes</li>
-                        </ul>
+                        <h2>Who Can Access Information</h2>
+                        <h3>Classroom accounts</h3>
+                        <p>Teachers access their owned classes, and students access classes they have joined. A signed-in student can add another class after matching its roster, using the same account credentials. Classroom balances, attendance, and purchases remain separate.</p>
+                        <h3>Platform support</h3>
+                        <p>System administrators have an application console for operational logs, teacher reports, and escalated student issues. Review can include report text and related diagnostic or activity snapshots. Structured participant fields use opaque identifiers. A class label is shared with this console only when the teacher enables that option. Anything typed into a report can still identify someone, so omit unnecessary personal details.</p>
+                        <h3>Hall-pass verification</h3>
+                        <p>A person who has a teacher’s shared verification link can select a class and enter a student’s first and last name without signing in. A matching result can show that student’s display name, class, destination, pass status, and departure or return details for the current day. The link does not provide a student roster or multi-day history. Teachers should share it only with intended school staff.</p>
+                        <p>These support and verification features mean it would be inaccurate to promise that information is visible only to the student and classroom teacher. Administrative access and isolation controls remain part of release review.</p>
                     </section>
 
                     <section class="public-section" id="logging">
-                        <h2>Error Logging &amp; Monitoring</h2>
-                        <p>To maintain system reliability and quickly resolve technical issues, our application automatically logs errors and technical failures. Error logs do not include personal names or identifiable information.</p>
+                        <h2>Technical Data, Cookies, and Service Providers</h2>
+                        <p>The application records operational events and request traces to investigate errors and support reports. These can contain timestamps, request identifiers, endpoints, outcomes, and pseudonymous participant references. Support snapshots currently include the page URL, IP address, browser user-agent, balances, and related recent transactions. The earlier promise that all diagnostic records exclude identifiable information was too broad.</p>
+                        <p>The application uses session and security cookies. Its public pages also request external resources:</p>
+                        <ul><li><strong>GitHub Pages:</strong> serves the public information site.</li><li><strong>Google Fonts:</strong> supplies the public site’s fonts and icon font.</li><li><strong>jsDelivr:</strong> supplies public-page styling and application assets.</li><li><strong>Cloudflare Turnstile:</strong> provides bot checks on selected application forms when configured. Server verification sends a challenge token and can include your IP address.</li></ul>
+                        <p>External requests disclose network and browser information to the receiving provider. Hosting and monitoring services can also process request and diagnostic data depending on deployment. No advertising analytics script is embedded in the reviewed public pages, but that does not establish the absence of provider-side logging or deployment-added analytics.</p>
+                        <p>Technical data collection, log sanitization, and retention need to be reconciled with the project’s stricter privacy requirements. Contact the operator for the actual deployment’s service-provider and retention details.</p>
                     </section>
 
                     <section class="public-section" id="what-not">
-                        <h2>What CTH Does Not Do</h2>
-                        <ul>
-                            <li>No advertising or data selling</li>
-                            <li>No third-party analytics or tracking</li>
-                            <li>No behavioral profiling or data mining</li>
-                            <li>No cross-class tracking or data aggregation</li>
-                            <li>No integration with external identity systems (e.g., SSO)</li>
-                            <li>No long-term data retention beyond active class lifecycle</li>
-                        </ul>
+                        <h2>Limits and School Review</h2>
+                        <p>CTH does not display advertisements, sell user data, provide district SSO, or connect to real banks. It does provide classroom summaries, support diagnostics, and operational monitoring.</p>
+                        <p>The current application has unresolved privacy requirements, including claim-data cleanup, student recovery-code protection and scope, automatic stale-class deletion, and support-data boundaries. These descriptions disclose current behavior; they do not waive those requirements or certify the service for launch.</p>
+                        <p>Schools and districts should review student-data use and any required notices, consent, agreements, and retention arrangements before adoption. CTH does not provide a parent-consent collection workflow. See <a href="./district.html#compliance">institutional review guidance</a>.</p>
                     </section>
 
                     <section class="public-section" id="contact">
-                        <h2>Contact Information</h2>
-                        <p>For questions or concerns about privacy and data handling, please reach out to <a href="mailto:support@classroomtokenhub.com">support@classroomtokenhub.com</a>.</p>
+                        <h2>Questions, Access, Corrections, and Deletion</h2>
+                        <p>Students and families should contact their teacher or school about classroom records, corrections, or removal. Teachers and district reviewers can contact <a href="mailto:support@classroomtokenhub.com">support@classroomtokenhub.com</a>. Security concerns can be sent to <a href="mailto:security@classroomtokenhub.com">security@classroomtokenhub.com</a>.</p>
+                        <p>Email correspondence is separate from application registration and includes the sender address and message content. Do not send PINs, passphrases, recovery codes, or unnecessary student information. We will update this page as the implementation and verified operational practices change.</p>
                     </section>
                     </div>
                 </div>
@@ -210,7 +179,7 @@
             </div>
             <div class="landing-footer-meta">
                 <p>&copy; <span id="current-year"></span> Classroom Token Hub. Licensed under PolyForm Noncommercial v1.0.0</p>
-                <p><em>This app is developed, operated, maintained, and self-funded by a full-time high school teacher. As such, we do not display advertisements, use third-party tracking tools, or collect information about you unless it is necessary for the operation of the platform.</em></p>
+                <p><em>Classroom Token Hub is developed and maintained by a classroom teacher. We do not display advertisements or sell user data. Hosting, security, and content-delivery services process technical request data; see the Privacy &amp; Data Handling policy for details.</em></p>
                 <p><a class="text-decoration-none text-white" href="mailto:support@classroomtokenhub.com">Need help? Reach us at support@classroomtokenhub.com</a></p>
             </div>
         </div>
