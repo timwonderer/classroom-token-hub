@@ -121,6 +121,24 @@ def upgrade():
         """))
         print("✅ Backfilled issues.class_public_id from classes")
 
+    # Replay-safety correction under SOP-DB-011 §V.A, 2026-09-14.
+    #
+    # class_label was the cached name of the internal class_id this step
+    # removes. a1c4e7d92f30 later adds a class_label of its own: the class name
+    # frozen at submission, which DOM-SUP-001 §VI forbids re-fetching live from
+    # ClassEconomy. Keyed on bare existence, a re-application dropped that
+    # column and every frozen label in it.
+    #
+    # The drop is now skipped only when it could lose a frozen label: issues no
+    # longer carries class_id, and holds rows. Both predecessors this revision
+    # meets are unaffected. The historical one still carries class_id, and the
+    # one a fresh chain presents here (0001 materializes today's ORM) holds no
+    # rows. A re-application over an issues table with no rows still drops the
+    # column, because that table is indistinguishable from the fresh one.
+    drop_class_label = column_exists('issues', 'class_id') or (
+        op.get_bind().execute(sa.text("SELECT 1 FROM issues LIMIT 1")).first() is None
+    )
+
     # Drop internal identity FKs and columns
     for fk in get_foreign_keys_by_column('issues', 'user_id'):
         if fk['name']:
@@ -155,7 +173,7 @@ def upgrade():
         op.drop_column('issues', 'class_id')
         print("✅ Dropped issues.class_id")
 
-    if column_exists('issues', 'class_label'):
+    if drop_class_label and column_exists('issues', 'class_label'):
         op.drop_column('issues', 'class_label')
         print("✅ Dropped issues.class_label")
 

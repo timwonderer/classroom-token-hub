@@ -5,6 +5,7 @@ These tests run against the shared Postgres test database rather than SQLite.
 """
 
 import importlib.util
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -15,11 +16,20 @@ from sqlalchemy import inspect, text
 
 from app import db
 from app.feats.base import FEATContext
+from app.feats.class_configuration import configure_insurance_definition
 from app.feats.direct_entitlement_grant_feat import execute_direct_grant
+from app.feats.insurance_claim_feat import submit_insurance_claim
+from app.feats.purchase_insurance_feat import execute_purchase_insurance
+from app.models import IssueCategory
 from app.services.context_resolver import CanonicalContext
 from app.services.store_service import set_product_visibility
+from app.utils.issue_helpers import create_issue
 from tests.helpers.canonical_classroom import provision_classroom
+from tests.helpers.class_domain import enable_class_feature
+from tests.helpers.classroom_initializer import initialize
+from tests.helpers.ledger import create_ledger_idempotent_transaction
 from tests.helpers.store_products import publish_store_product
+from tests.helpers.support_domain import seed_support_issue_categories
 
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations" / "versions"
 
@@ -55,6 +65,34 @@ def _reapply(revision_prefix):
         context = MigrationContext.configure(conn)
         with Operations.context(context):
             module.upgrade()
+
+
+def _rows(sql):
+    """Read committed rows on a fresh connection, outside the ORM session."""
+    with db.engine.connect() as conn:
+        return conn.execute(text(sql)).all()
+
+
+def _column_names(table_name):
+    return sorted(col["name"] for col in inspect(db.engine).get_columns(table_name))
+
+
+def _submit_issue(classroom):
+    """File a support issue through the production helper; returns its id."""
+    student = classroom.students[0]
+    seed_support_issue_categories()
+    category = IssueCategory.query.order_by(IssueCategory.id.asc()).first()
+    issue = create_issue(
+        student.seat,
+        student.user_id,
+        classroom.class_id,
+        category.id,
+        "Balance looks wrong.",
+        correlation_id=f"test:reapply:corr:{student.seat_id}",
+        idempotency_key=f"test:reapply:issue:{student.seat_id}",
+    )
+    db.session.commit()
+    return issue.id
 
 
 def _reset_schema():
@@ -250,6 +288,153 @@ def test_compensation_subtype_migration_is_idempotent(migrated_db):
     assert sorted(
         col["name"] for col in inspector.get_columns("ledger_transaction")
     ) == sorted(columns)
+
+
+def test_issue_deidentification_reapplied_over_head_keeps_frozen_class_label(
+    app, migrated_db
+):
+    """``6b2c3d4e5f6a`` re-applies without dropping ``issues.class_label``.
+
+    The revision dropped ``class_label`` as the cached name of the internal
+    ``class_id`` it removes, keyed on bare existence. ``a1c4e7d92f30`` later adds
+    a ``class_label`` of its own, the class name frozen at submission
+    (DOM-SUP-001 §VI), so a re-application dropped that live column and every
+    frozen name in it.
+    """
+    classroom = initialize("chemistry_p1", app)
+    class_name = classroom.economy.display_name
+    assert class_name
+    issue_id = _submit_issue(classroom)
+
+    columns = _column_names("issues")
+    assert "class_label" in columns
+    assert "class_id" not in columns
+    before = _rows("SELECT id, class_label FROM issues ORDER BY id")
+    assert before == [(issue_id, class_name)]
+
+    db.session.remove()
+    _reapply("6b2c3d4e5f6a")
+
+    assert _rows("SELECT id, class_label FROM issues ORDER BY id") == before
+    assert _column_names("issues") == columns
+
+
+_INSURANCE_TABLES = (
+    "insurance_policies",
+    "insurance_claims",
+    "insurance_claim_productivity_dates",
+)
+
+
+def test_unauthorized_table_purge_reapplied_over_head_keeps_insurance(app, migrated_db):
+    """``7c3d4e5f6a7b`` re-applies without dropping the v2 insurance tables.
+
+    The revision removes the v1 insurance system, and the v2 insurance domain
+    reuses its table names (a7b8c9d0e1f3, b2c3d4e5f6a7, c3d4e5f6a7b8). Its drops
+    were keyed on bare existence, so a re-application dropped every live
+    policy, claim and claimed productivity date. A policy, a purchase and a
+    claim are written through their FEATs first, and must survive along with
+    all three tables' columns.
+
+    No productivity-date row is seeded. A PRODUCTIVITY claim needs a READY
+    Economic Engine, and no FEAT sets ``expected_weekly_hours``, so seeding one
+    would mean hand-inserting engine versions. That table's survival is
+    asserted by its columns.
+    """
+    classroom = initialize("chemistry_p1", app)
+    student = classroom.students[0]
+    teacher_context = CanonicalContext(
+        user_id=classroom.teacher_user_id,
+        class_id=classroom.class_id,
+        seat_id=classroom.teacher_seat_id,
+        actor_role="teacher",
+    )
+    student_context = CanonicalContext(
+        user_id=student.user_id,
+        class_id=classroom.class_id,
+        seat_id=student.seat_id,
+        actor_role="student",
+    )
+
+    enable_class_feature(class_id=classroom.class_id, feature="insurance")
+    policy_uuid = configure_insurance_definition(
+        class_id=classroom.class_id,
+        submission=dict(
+            insurance_type="TRANSACTION", premium="10.00", charge_frequency="WEEKLY",
+            reimbursement_percentage="80", payout_multiple="3",
+            claims_per_week_equivalent="1", claim_window_days="7",
+            title="Reapplied Cover",
+        ),
+        canonical_context=teacher_context,
+        correlation_id="reapply-7c3d4e5f6a7b:policy",
+        idempotency_key="reapply-7c3d4e5f6a7b:policy",
+    ).policy_uuid
+    db.session.commit()
+
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key="reapply-7c3d4e5f6a7b:fund"):
+        create_ledger_idempotent_transaction(
+            idempotency_key="reapply-7c3d4e5f6a7b:fund",
+            seat_id=student.seat_id,
+            class_id=classroom.class_id,
+            user_id=student.user_id,
+            amount=Decimal("100.00"),
+            account_type="checking",
+            type="payroll",
+            description="Test funding",
+            actor_seat_id=student.seat_id,
+        )
+    db.session.commit()
+
+    purchase = execute_purchase_insurance(
+        canonical_context=student_context,
+        policy_uuid=policy_uuid,
+        idempotency_key="reapply-7c3d4e5f6a7b:buy",
+    )
+    assert purchase.success is True, purchase.error_message
+    db.session.commit()
+
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key="reapply-7c3d4e5f6a7b:loss"):
+        loss, _ = create_ledger_idempotent_transaction(
+            idempotency_key="reapply-7c3d4e5f6a7b:loss",
+            seat_id=student.seat_id,
+            class_id=classroom.class_id,
+            user_id=student.user_id,
+            amount=Decimal("-12.34"),
+            account_type="checking",
+            type="purchase",
+            description="Insurance claim source loss",
+            actor_seat_id=student.seat_id,
+        )
+        loss_id = loss.id
+    db.session.commit()
+
+    claim = submit_insurance_claim(
+        canonical_context=student_context,
+        entitlement_id=purchase.entitlement_id,
+        claim_subject={"transaction_id": loss_id},
+    )
+    assert claim.success is True, claim.error_message
+    db.session.commit()
+
+    columns = {table: _column_names(table) for table in _INSURANCE_TABLES}
+
+    def _insurance_state():
+        return {
+            "policies": _rows("SELECT policy_uuid, title FROM insurance_policies"),
+            "claims": _rows("SELECT claim_id, entitlement_id, status FROM insurance_claims"),
+        }
+
+    before = _insurance_state()
+    assert before == {
+        "policies": [(policy_uuid, "Reapplied Cover")],
+        "claims": [(claim.claim_id, purchase.entitlement_id, "SUBMITTED")],
+    }
+
+    db.session.remove()
+    _reapply("7c3d4e5f6a7b")
+
+    assert _insurance_state() == before
+    assert {table: _column_names(table) for table in _INSURANCE_TABLES} == columns
 
 
 def test_migration_w2x3y4z5a6b7_idempotency(test_db):
