@@ -72,7 +72,7 @@
                     <section class="public-section" id="no-sharing">
                         <h2>How We Use and Share Information</h2>
                         <p>CTH is developed and maintained by a classroom teacher. We use information to establish accounts, run classroom activities, display records, secure access, and investigate problems. We do not display advertisements or sell user data.</p>
-                        <p>Information is available through classroom views, support review, and the shared hall-pass verification feature described below. Hosting, security, and content-delivery providers also process technical requests. The application is not anonymous merely because records use identifiers instead of names.</p>
+                        <p>Information is available through classroom views, support review, and the shared hall-pass verification feature described below. Hosting, security, and content-delivery providers also process technical requests. Names are direct identifiers. Activity linked through an opaque student reference is pseudonymous: authorized application views can associate it with a student. That differs from both a name stored on every record and anonymous data with no identifying link.</p>
                     </section>
 
                     <section class="public-section" id="what-you-provide">
@@ -96,16 +96,16 @@
                     <section class="public-section" id="activity-data">
                         <h2>Classroom Activity and Support Records</h2>
                         <ul><li><strong>Attendance and hall passes:</strong> event timestamps, work or break periods, pass destinations, approval and use records.</li><li><strong>Simulated finances:</strong> checking and savings activity, payroll, bonuses and fines, transfers, rent, obligations, insurance purchases and claims, and store purchases or item use.</li><li><strong>Class settings and summaries:</strong> prices, rates, economic policy, enabled features, and class-level economic summaries.</li><li><strong>Support:</strong> submitted explanations, expected outcomes, review notes, related activity snapshots, and technical diagnostics.</li></ul>
-                        <p>Activity is linked to a class and student participation record. This remains student-related information, even without a name on each transaction. CTH currency is simulated; there are no real bank or payment-card connections.</p>
+                        <p>Activity is linked to a class and student participation record. These are pseudonymous student-related records when they use an opaque reference instead of a name; an amount or timestamp does not itself directly identify a student. CTH currency is simulated; there are no real bank or payment-card connections.</p>
                     </section>
 
                     <section class="public-section" id="data-minimization">
                         <h2>Retention and Deletion</h2>
                         <p>Teachers can remove a student from a class, delete a class, or delete their teacher account through the application. These are hard-deletion workflows, with no user-facing archive or undelete option. Deleting one membership does not remove a student’s participation in other classes.</p>
-                        <p>The project’s rules require removal of deleted class data and accounts with no remaining class participation. Complete enforcement across all related records, logs, and backups remains a release-review item.</p>
+                        <p>Class deletion removes records through the application’s deletion workflows, and the project’s rules require removal of accounts with no remaining class participation. This page does not report a new end-to-end verification of every related application artifact.</p>
                         <p><strong>A school term ending or 180 days of inactivity does not establish that your data has been deleted.</strong> A scheduled class-inactivity purge has not been established in the current application. Ask the teacher to explicitly delete a class when it is no longer needed.</p>
                         <p>The current code retains roster-name matching hashes after account claiming. The earlier statement that all claiming information is immediately deleted is not an implemented guarantee.</p>
-                        <p>Application deletion does not prove immediate erasure from infrastructure backups, external logs, downloaded exports, or email correspondence. Their retention must be confirmed with the operator or, for school-held copies, the school. Backups are not offered as an account-recovery method.</p>
+                        <p>Infrastructure backups, external logs, and email correspondence have separate retention arrangements to confirm with the operator. Teacher-downloaded exports are school-controlled copies: CTH’s class deletion does not remove files already downloaded to school devices. Backups are not offered as an account-recovery method.</p>
                     </section>
 
                     <section class="public-section" id="encryption">
@@ -119,10 +119,10 @@
                         <h3>Student sign-in and recovery</h3>
                         <p>Students sign in with their username and passphrase. A PIN is used for attendance, checking/savings transfers, and hall passes. Purchases, rent, insurance payments and cancellation, and other entitlement use require the passphrase.</p>
                         <p>If you lose access, your teacher can generate an eight-character recovery code that expires after ten minutes. The student recovery form asks for that code; it does not ask for a name or join code. A valid code is cleared when accepted, and you are directed to create a new username, PIN, and passphrase. If you use the account in multiple classes, the changed credentials apply to that shared account.</p>
-                        <p>The current implementation temporarily stores the student recovery code in readable database form. Do not share it with anyone other than the intended student. Its storage and class binding are under review against the project’s security requirements.</p>
+                        <p>The current implementation temporarily stores the student recovery code in readable database form. Do not share it with anyone other than the intended student. This code restores access to the shared account; it is separate from permission to act within a particular class.</p>
                         <h3>Teacher sign-in and recovery</h3>
-                        <p>Teachers sign in with a username and authenticator code, or an enrolled passkey. Teacher recovery uses class join codes and a student username from each class, followed by verification codes supplied by the participating students. Requests have a five-day window. It does not use email reset links.</p>
-                        <p>Recovery depends on the required class and student verification being available. It is not guaranteed if that verification cannot be completed; the teacher recovery flow also remains subject to reconciliation with its governing requirements.</p>
+                        <p>Teachers sign in with a username and a time-based one-time password (TOTP) from an authenticator, or an enrolled passkey. Teacher recovery requires one selected student confirmation for every class belonging to that teacher’s account. The teacher provides each class join code and a student username from that class, then collects verification codes from those selected students. Requests have a five-day window. It does not use email reset links.</p>
+                        <p>Recovery depends on the required class and student verification being available. It cannot proceed if the required student confirmation for a class is unavailable.</p>
                     </section>
 
                     <section class="public-section" id="isolation">
@@ -133,7 +133,7 @@
                         <p>System administrators have an application console for operational logs, teacher reports, and escalated student issues. Review can include report text and related diagnostic or activity snapshots. Structured participant fields use opaque identifiers. A class label is shared with this console only when the teacher enables that option. Anything typed into a report can still identify someone, so omit unnecessary personal details.</p>
                         <h3>Hall-pass verification</h3>
                         <p>A person who has a teacher’s shared verification link can select a class and enter a student’s first and last name without signing in. A matching result can show that student’s display name, class, destination, pass status, and departure or return details for the current day. The link does not provide a student roster or multi-day history. Teachers should share it only with intended school staff.</p>
-                        <p>These support and verification features mean it would be inaccurate to promise that information is visible only to the student and classroom teacher. Administrative access and isolation controls remain part of release review.</p>
+                        <p>These support and verification features mean it would be inaccurate to promise that information is visible only to the student and classroom teacher. Diagnostic observation and support review do not by themselves grant authority to change a classroom’s balances or accounts.</p>
                     </section>
 
                     <section class="public-section" id="logging">
@@ -142,13 +142,13 @@
                         <p>The application uses session and security cookies. Its public pages also request external resources:</p>
                         <ul><li><strong>GitHub Pages:</strong> serves the public information site.</li><li><strong>Google Fonts:</strong> supplies the public site’s fonts and icon font.</li><li><strong>jsDelivr:</strong> supplies public-page styling and application assets.</li><li><strong>Cloudflare Turnstile:</strong> provides bot checks on selected application forms when configured. Server verification sends a challenge token and can include your IP address.</li></ul>
                         <p>External requests disclose network and browser information to the receiving provider. Hosting and monitoring services can also process request and diagnostic data depending on deployment. No advertising analytics script is embedded in the reviewed public pages, but that does not establish the absence of provider-side logging or deployment-added analytics.</p>
-                        <p>Technical data collection, log sanitization, and retention need to be reconciled with the project’s stricter privacy requirements. Contact the operator for the actual deployment’s service-provider and retention details.</p>
+                        <p>Technical identifiers and submitted text need different handling from pseudonymous amounts and timestamps. Contact the operator for the actual deployment’s service-provider and retention details.</p>
                     </section>
 
                     <section class="public-section" id="what-not">
                         <h2>Limits and School Review</h2>
                         <p>CTH does not display advertisements, sell user data, provide district SSO, or connect to real banks. It does provide classroom summaries, support diagnostics, and operational monitoring.</p>
-                        <p>The current application has unresolved privacy requirements, including claim-data cleanup, student recovery-code protection and scope, automatic stale-class deletion, and support-data boundaries. These descriptions disclose current behavior; they do not waive those requirements or certify the service for launch.</p>
+                        <p>This page describes current behavior, including retained name-matching fields, recovery-code handling, and the absence of an established automatic class-inactivity purge. Deployment-specific access and retention arrangements require separate confirmation with the operator.</p>
                         <p>Schools and districts should review student-data use and any required notices, consent, agreements, and retention arrangements before adoption. CTH does not provide a parent-consent collection workflow. See <a href="./district.html#compliance">institutional review guidance</a>.</p>
                     </section>
 
