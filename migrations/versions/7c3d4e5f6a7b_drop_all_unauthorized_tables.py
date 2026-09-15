@@ -80,6 +80,29 @@ def drop_constraint_if_exists(table_name, constraint_name):
         op.drop_constraint(constraint_name, table_name, type_='foreignkey')
         print(f"✅ Dropped constraint {constraint_name}")
 
+
+# Each v2 insurance table and the column only its v2 shape carries.
+_V2_INSURANCE_KEYS = (
+    ('insurance_policies', 'policy_uuid'),
+    ('insurance_claims', 'claim_id'),
+    ('insurance_claim_productivity_dates', 'claim_id'),
+)
+
+
+def _has_rows(table_name):
+    if not table_exists(table_name):
+        return False
+    return op.get_bind().execute(
+        sa.text(f'SELECT 1 FROM "{table_name}" LIMIT 1')  # noqa: S608 — fixed literals
+    ).first() is not None
+
+
+def _drop_unless_live_v2(table_name, v2_key, v2_insurance_holds_rows):
+    if v2_insurance_holds_rows and column_exists(table_name, v2_key):
+        print(f"⚠️  {table_name} is the live v2 table and insurance state exists, skipping")
+        return
+    drop_table_if_exists(table_name)
+
 # ============================================================================
 
 revision = '7c3d4e5f6a7b'
@@ -102,13 +125,33 @@ def upgrade():
     # c3d4e5f6a7b8, but at this point it exists (empty) and its FK would block the
     # ``insurance_claims`` drop. Drop the child first — it is a dependent of claims,
     # so this preserves the stated "dependents first" order.
+    #
+    # Replay-safety correction under SOP-DB-011 §V.A, 2026-09-14.
+    #
+    # The v2 insurance domain reuses these names: a7b8c9d0e1f3 creates
+    # insurance_claims, b2c3d4e5f6a7 creates insurance_policies, and c3d4e5f6a7b8
+    # creates insurance_claim_productivity_dates. Keyed on bare existence, a
+    # re-application dropped all three with every row in them. That includes
+    # insurance definitions, which DOM-POL-001 §VI.1 lets be deleted only once
+    # retired and drained of live dependencies.
+    #
+    # A table carrying its v2 key is now kept whenever any v2 insurance table
+    # holds rows. Both predecessors this revision meets are unaffected. The
+    # historical v1 tables lack the v2 keys, and the v2 tables a fresh chain
+    # presents here are the empty ORM copies described above. A re-application
+    # over v2 insurance tables that hold no rows still drops them, because they
+    # are indistinguishable from those fresh copies.
     # =========================================================================
-    drop_table_if_exists('insurance_claim_productivity_dates')
-    drop_table_if_exists('insurance_claims')
+    v2_insurance_holds_rows = any(
+        column_exists(table_name, v2_key) and _has_rows(table_name)
+        for table_name, v2_key in _V2_INSURANCE_KEYS
+    )
+    _drop_unless_live_v2('insurance_claim_productivity_dates', 'claim_id', v2_insurance_holds_rows)
+    _drop_unless_live_v2('insurance_claims', 'claim_id', v2_insurance_holds_rows)
     drop_table_if_exists('insurance_enrollments')
     drop_table_if_exists('insurance_policy_blocks')
     drop_constraint_if_exists('ledger_transaction', 'ledger_transaction_policy_id_fkey')
-    drop_table_if_exists('insurance_policies')
+    _drop_unless_live_v2('insurance_policies', 'policy_uuid', v2_insurance_holds_rows)
 
     # =========================================================================
     # GROUP B: Rent derived state
