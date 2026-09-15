@@ -1,8 +1,11 @@
-"""Operator identity: IAP signed-assertion verification, its key cache, and the trusted-header fallback."""
+"""Operator identity: IAP signed-assertion verification, its key cache, the trusted-header fallback, and its log line."""
 
+import ast
 import base64
 import json
+import logging
 import time
+from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -10,10 +13,11 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from google.auth import jwt
 from google.auth.crypt import es256
 
-from status_service import identity
+from status_service import identity, log_setup
 
 
 AUDIENCE = "/projects/123456789012/locations/us-west2/services/cth-status-operator"
+OTHER_AUDIENCE = "/projects/999/locations/us-west2/services/other-service"
 OPERATOR = "operator@example.com"
 KEY_ID = "test-iap-key"
 IAP_KEY = ec.generate_private_key(ec.SECP256R1())
@@ -48,6 +52,11 @@ def _sign(claims, key=IAP_KEY, key_id=KEY_ID):
 
 def _b64(value):
     return base64.urlsafe_b64encode(json.dumps(value).encode()).rstrip(b"=").decode()
+
+
+def _with_header(assertion, header):
+    _, payload, signature = assertion.split(".")
+    return f"{_b64(header)}.{payload}.{signature}"
 
 
 class _Response:
@@ -104,6 +113,12 @@ def iap_keys(monkeypatch):
     return endpoint
 
 
+@pytest.fixture
+def auth_log(caplog):
+    caplog.set_level(logging.INFO, logger="status_service")
+    return lambda: [(record.levelname, record.getMessage()) for record in caplog.records if record.name == identity.__name__]
+
+
 def _assert_rejected(assertion):
     # A verifier that rejects everything passes every negative case by itself,
     # so each one first proves an untampered assertion is accepted in the same
@@ -118,7 +133,7 @@ def test_status_identity_valid_assertion_for_allowlisted_operator_authenticates(
 
 
 def test_status_identity_wrong_audience_is_rejected(operator_env, iap_keys):
-    _assert_rejected(_sign(_claims(aud="/projects/999/locations/us-west2/services/other-service")))
+    _assert_rejected(_sign(_claims(aud=OTHER_AUDIENCE)))
 
 
 def test_status_identity_wrong_issuer_is_rejected(operator_env, iap_keys):
@@ -151,18 +166,14 @@ def test_status_identity_assertion_signed_by_another_key_is_rejected(operator_en
 def test_status_identity_assertion_naming_another_algorithm_is_rejected(operator_env, iap_keys):
     # A header claiming RS256 would otherwise reach an RSA verifier holding an
     # EC key, which raises TypeError instead of rejecting.
-    _, payload, signature = _sign(_claims()).split(".")
-    header = _b64({"alg": "RS256", "typ": "JWT", "kid": KEY_ID})
-    _assert_rejected(f"{header}.{payload}.{signature}")
+    _assert_rejected(_with_header(_sign(_claims()), {"alg": "RS256", "typ": "JWT", "kid": KEY_ID}))
 
 
 @pytest.mark.parametrize("key_id", [[KEY_ID], {"kid": KEY_ID}], ids=["list", "object"])
 def test_status_identity_non_string_key_id_is_rejected(operator_env, iap_keys, key_id):
     # google-auth looks the kid up in the key set, where an unhashable one
     # raises TypeError instead of rejecting.
-    _, payload, signature = _sign(_claims()).split(".")
-    header = _b64({"alg": "ES256", "typ": "JWT", "kid": key_id})
-    _assert_rejected(f"{header}.{payload}.{signature}")
+    _assert_rejected(_with_header(_sign(_claims()), {"alg": "ES256", "typ": "JWT", "kid": key_id}))
 
 
 def test_status_identity_unreachable_key_endpoint_is_rejected(operator_env, monkeypatch):
@@ -272,3 +283,112 @@ def test_status_identity_trusted_header_is_ignored_when_disabled(operator_env, m
     if setting is not None:
         monkeypatch.setenv("IAP_TRUSTED_EMAIL_HEADER", setting)
     assert identity.authenticated_operator_email(None, f"accounts.google.com:{OPERATOR}") is None
+
+
+def test_status_identity_logs_authentication_by_signed_assertion(operator_env, iap_keys, auth_log):
+    assert identity.authenticated_operator_email(_sign(_claims())) == OPERATOR
+    assert auth_log() == [("INFO", "status operator authenticated via=iap_assertion")]
+
+
+def test_status_identity_logs_why_the_assertion_failed_when_the_header_admits(operator_env, iap_keys, auth_log, monkeypatch):
+    # The case the log line exists for: a wrong IAP_AUDIENCE is otherwise
+    # invisible, because the header fallback still lets the operator in.
+    monkeypatch.setenv("IAP_TRUSTED_EMAIL_HEADER", "true")
+    assertion = _sign(_claims(aud=OTHER_AUDIENCE))
+    assert identity.authenticated_operator_email(assertion, f"accounts.google.com:{OPERATOR}") == OPERATOR
+    assert auth_log() == [("INFO", "status operator authenticated via=trusted_header assertion=wrong_audience")]
+
+
+def _expired():
+    now = int(time.time())
+    return _sign(_claims(iat=now - 1200, exp=now - 600))
+
+
+def _audience_not_configured(monkeypatch):
+    monkeypatch.delenv("IAP_AUDIENCE")
+    return _sign(_claims())
+
+
+def _key_endpoint_down(iap_keys):
+    iap_keys.status = 503
+    return _sign(_claims())
+
+
+REFUSALS = [
+    ("absent", lambda keys, env: None),
+    ("audience_not_configured", lambda keys, env: _audience_not_configured(env)),
+    ("wrong_audience", lambda keys, env: _sign(_claims(aud=OTHER_AUDIENCE))),
+    ("wrong_issuer", lambda keys, env: _sign(_claims(iss="https://accounts.google.com"))),
+    ("not_allowlisted", lambda keys, env: _sign(_claims(email="intruder@example.com"))),
+    ("invalid_token", lambda keys, env: _sign(_claims(), key=ec.generate_private_key(ec.SECP256R1()))),
+    ("invalid_token", lambda keys, env: _expired()),
+    ("invalid_token", lambda keys, env: "a.b.c"),
+    ("wrong_algorithm", lambda keys, env: _with_header(_sign(_claims()), {"alg": "RS256", "typ": "JWT", "kid": KEY_ID})),
+    ("invalid_key_id", lambda keys, env: _with_header(_sign(_claims()), {"alg": "ES256", "typ": "JWT", "kid": [KEY_ID]})),
+    ("key_fetch_failed", lambda keys, env: _key_endpoint_down(keys)),
+]
+
+
+@pytest.mark.parametrize(
+    "reason, build",
+    REFUSALS,
+    ids=["absent", "audience-not-configured", "wrong-audience", "wrong-issuer", "not-allowlisted",
+         "forged", "expired", "malformed", "wrong-algorithm", "invalid-key-id", "key-fetch-failed"],
+)
+def test_status_identity_logs_why_a_request_was_refused(operator_env, iap_keys, auth_log, monkeypatch, reason, build):
+    assert identity.authenticated_operator_email(build(iap_keys, monkeypatch)) is None
+    assert auth_log() == [("WARNING", f"status operator refused assertion={reason} header=disabled")]
+
+
+@pytest.mark.parametrize(
+    "header, state",
+    [(None, "absent"), ("accounts.google.com:intruder@example.com", "not_allowlisted")],
+    ids=["no-header", "not-allowlisted"],
+)
+def test_status_identity_logs_header_refusals(operator_env, auth_log, monkeypatch, header, state):
+    monkeypatch.setenv("IAP_TRUSTED_EMAIL_HEADER", "true")
+    assert identity.authenticated_operator_email(None, header) is None
+    assert auth_log() == [("WARNING", f"status operator refused assertion=absent header={state}")]
+
+
+def test_status_identity_logs_an_empty_allowlist(operator_env, auth_log, monkeypatch):
+    monkeypatch.setenv("STATUS_OPERATOR_ALLOWLIST", " , ")
+    assert identity.authenticated_operator_email(None, f"accounts.google.com:{OPERATOR}") is None
+    assert auth_log() == [("WARNING", "status operator refused: STATUS_OPERATOR_ALLOWLIST is empty")]
+
+
+def test_status_identity_log_never_contains_the_email_or_token(operator_env, iap_keys, caplog, monkeypatch):
+    caplog.set_level(logging.DEBUG)
+    monkeypatch.setenv("IAP_TRUSTED_EMAIL_HEADER", "true")
+    valid = _sign(_claims())
+    mismatched = _sign(_claims(aud=OTHER_AUDIENCE))
+    # google-auth's own message for this token quotes the token back.
+    malformed = "not-a-jwt-but-long-enough-to-spot-in-a-log"
+    identity.authenticated_operator_email(valid)
+    identity.authenticated_operator_email(mismatched, f"accounts.google.com:{OPERATOR}")
+    identity.authenticated_operator_email(malformed, "accounts.google.com:intruder@example.com")
+    assert caplog.records, "nothing was logged, so this test would prove nothing"
+    for secret in (OPERATOR, "intruder@example.com", valid, mismatched, malformed):
+        assert secret not in caplog.text
+
+
+def test_status_identity_configure_logging_emits_info_to_stderr(capsys):
+    service_logger = logging.getLogger("status_service")
+    saved_handlers, saved_level = list(service_logger.handlers), service_logger.level
+    service_logger.handlers = []
+    try:
+        log_setup.configure_logging()
+        logging.getLogger(identity.__name__).info("status operator authenticated via=iap_assertion")
+        assert "INFO status_service.identity: status operator authenticated via=iap_assertion" in capsys.readouterr().err
+    finally:
+        service_logger.handlers = saved_handlers
+        service_logger.setLevel(saved_level)
+
+
+def test_status_identity_create_app_configures_logging():
+    # app.py builds a Firestore client at import, so this reads the source
+    # instead of importing it.
+    tree = ast.parse((Path(identity.__file__).parent / "app.py").read_text())
+    create_app = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "create_app")
+    called = {node.func.id for node in ast.walk(create_app) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
+    assert "configure_logging" in called
