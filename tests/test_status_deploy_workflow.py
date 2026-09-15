@@ -1,4 +1,4 @@
-"""deploy-status.yml must not strip the operator service's auth configuration."""
+"""deploy-status.yml must not strip the operator service's auth configuration, and must verify the deploy it made."""
 
 import json
 import os
@@ -16,10 +16,12 @@ SERVICES = {"cth-status-public", "cth-status-operator"}
 # Each removes every env var or secret on the service that it does not name.
 REPLACING_FLAGS = ("--set-env-vars", "--set-secrets", "--env-vars-file", "--clear-env-vars", "--clear-secrets")
 AUTH_CHECK_STEP = "Verify operator auth configuration survived the deploy"
+READINESS_STEP = "Verify both services are serving this commit"
 PROJECT = "cth-production-status"
 AUDIENCE = "/projects/123456789012/locations/us-west2/services/cth-status-operator"
 OPERATOR = "operator@example.com"
 ALLOWLIST_SECRET = {"secretKeyRef": {"name": "status-operator-allowlist", "key": "latest"}}
+IMAGE = f"us-west2-docker.pkg.dev/{PROJECT}/status/cth-status:1eeaaa8e346c74a6a64493fb81954c045db571ed"
 
 # Stands in for `gcloud secrets versions access`: serves the payloads it is
 # given, and refuses any other secret, project or command the way a missing
@@ -44,6 +46,10 @@ def _deploy_steps():
     return yaml.safe_load(WORKFLOW.read_text())["jobs"]["deploy"]["steps"]
 
 
+def _step(name):
+    return next(step for step in _deploy_steps() if step.get("name") == name)
+
+
 def _gcloud_deploys():
     deploys = {}
     for step in _deploy_steps():
@@ -53,13 +59,12 @@ def _gcloud_deploys():
     return deploys
 
 
-def _auth_check_script():
-    step = next(step for step in _deploy_steps() if step.get("name") == AUTH_CHECK_STEP)
-    assert "gcloud run services describe cth-status-operator" in step["run"]
-    return re.search(r"<<'PY'\n(.*?)\nPY\s*$", step["run"], re.S).group(1)
+def _step_script(name):
+    return re.search(r"<<'PY'\n(.*?)\nPY\s*$", _step(name)["run"], re.S).group(1)
 
 
 def _run_auth_check(tmp_path, env, secrets=None):
+    assert "gcloud run services describe cth-status-operator" in _step(AUTH_CHECK_STEP)["run"]
     described = tmp_path / "operator-service.json"
     described.write_text(json.dumps({"spec": {"template": {"spec": {"containers": [{"image": "cth-status", "env": env}]}}}}))
     bin_dir = tmp_path / "bin"
@@ -71,8 +76,32 @@ def _run_auth_check(tmp_path, env, secrets=None):
     gcloud.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{fake}" "$@"\n')
     gcloud.chmod(0o755)
     return subprocess.run(
-        [sys.executable, "-", str(described)], input=_auth_check_script(), capture_output=True, text=True, check=False,
+        [sys.executable, "-", str(described)], input=_step_script(AUTH_CHECK_STEP), capture_output=True, text=True, check=False,
         env={**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}", "GCP_PROJECT_ID": PROJECT},
+    )
+
+
+def _described(name, revision="00016-abc", created=None, ready="True", traffic=None, image=IMAGE):
+    revision_name = f"{name}-{revision}" if revision else None
+    status = {
+        "conditions": [{"type": "Ready", "status": ready}, {"type": "RoutesReady", "status": ready}],
+        "latestCreatedRevisionName": f"{name}-{created}" if created else revision_name,
+        "traffic": [{"revisionName": revision_name, "percent": 100, "latestRevision": True}] if traffic is None else traffic,
+    }
+    if revision_name:
+        status["latestReadyRevisionName"] = revision_name
+    return {"metadata": {"name": name}, "spec": {"template": {"spec": {"containers": [{"image": image}]}}}, "status": status}
+
+
+def _run_readiness_check(tmp_path, public, operator):
+    paths = []
+    for service in (public, operator):
+        path = tmp_path / f"{service['metadata']['name']}.json"
+        path.write_text(json.dumps(service))
+        paths.append(str(path))
+    return subprocess.run(
+        [sys.executable, "-", *paths], input=_step_script(READINESS_STEP), capture_output=True, text=True, check=False,
+        env={**os.environ, "IMAGE_URI": IMAGE},
     )
 
 
@@ -100,6 +129,68 @@ def test_status_deploy_workflow_checks_operator_auth_after_operator_deploy():
     operator_deploy = next(i for i, step in enumerate(steps) if "gcloud run deploy cth-status-operator" in step.get("run", ""))
     assert AUTH_CHECK_STEP in names
     assert names.index(AUTH_CHECK_STEP) > operator_deploy
+
+
+def test_status_deploy_workflow_operator_auth_check_runs_after_an_earlier_check_fails():
+    # Steps after a failure are skipped unless their condition says otherwise;
+    # run 34928799354 deployed the operator service and never checked it.
+    operator_deploy = next(step for step in _deploy_steps() if "gcloud run deploy cth-status-operator" in step.get("run", ""))
+    condition = _step(AUTH_CHECK_STEP).get("if", "")
+    assert operator_deploy.get("id") == "deploy_operator"
+    assert "!cancelled()" in condition
+    assert "steps.deploy_operator.outcome == 'success'" in condition
+
+
+def test_status_deploy_workflow_does_not_probe_services_over_http():
+    # Both services run with restricted ingress, so a request from a GitHub
+    # runner gets Google's 404 whatever the service's health.
+    for step in _deploy_steps():
+        assert "curl" not in step.get("run", ""), step.get("name")
+
+
+def test_status_deploy_workflow_checks_readiness_after_both_deploys():
+    steps = _deploy_steps()
+    names = [step.get("name") for step in steps]
+    last_deploy = max(i for i, step in enumerate(steps) if "gcloud run deploy" in step.get("run", ""))
+    assert names.index(READINESS_STEP) > last_deploy
+    for service in SERVICES:
+        assert f"$RUNNER_TEMP/{service}.json" in _step(READINESS_STEP)["run"]
+
+
+def test_status_deploy_workflow_readiness_passes_when_both_services_serve_this_commit(tmp_path):
+    result = _run_readiness_check(tmp_path, _described("cth-status-public"), _described("cth-status-operator"))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.count(" serving") == 2
+
+
+@pytest.mark.parametrize(
+    "operator, problem",
+    [
+        (_described("cth-status-operator", ready="False"), "is not Ready"),
+        (_described("cth-status-operator", created="00017-new"), "has a newer revision that did not become ready"),
+        (_described("cth-status-operator", revision=None), "has a newer revision that did not become ready"),
+        (
+            _described("cth-status-operator", traffic=[
+                {"revisionName": "cth-status-operator-00016-abc", "percent": 50},
+                {"revisionName": "cth-status-operator-00015-old", "percent": 50},
+            ]),
+            "does not route all traffic to its ready revision",
+        ),
+        (
+            _described("cth-status-operator", traffic=[{"revisionName": "cth-status-operator-00015-old", "percent": 100}]),
+            "does not route all traffic to its ready revision",
+        ),
+        (_described("cth-status-operator", image=IMAGE.replace("1eeaaa8e3", "0000000")), "is not running this commit's image"),
+    ],
+    ids=["not-ready", "newer-revision-failed", "no-ready-revision", "traffic-split", "traffic-on-old-revision", "old-image"],
+)
+def test_status_deploy_workflow_readiness_fails_for_a_service_not_serving_this_commit(tmp_path, operator, problem):
+    result = _run_readiness_check(tmp_path, _described("cth-status-public"), operator)
+    assert result.returncode == 1
+    errors = re.findall(r"::error::(\S+) (.+)\.$", result.stdout, re.M)
+    assert ("cth-status-operator", problem) in errors
+    # The healthy service is not blamed for the other one.
+    assert not any(service == "cth-status-public" for service, _ in errors)
 
 
 def test_status_deploy_workflow_auth_check_passes_for_configured_service(tmp_path):

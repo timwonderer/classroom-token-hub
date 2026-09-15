@@ -761,23 +761,33 @@ Two defects, one of which only the repository owner can clear because it is a se
 - **`deploy-status.yml` deployed with `--set-env-vars` / `--set-secrets`,** which remove everything
   they do not list. The operator's auth configuration (`IAP_AUDIENCE`, `STATUS_OPERATOR_ALLOWLIST`,
   `IAP_TRUSTED_EMAIL_HEADER`) is not in the repository, so the first deploy past the policy would
-  have emptied the allowlist and locked out every operator. Fixed alongside the IAP assertion
-  verification fix (CHANGELOG, 2026-09-14): `--update-*` flags, plus a final deploy step that fails
-  when the operator service lacks the allowlist or audience. Because no deploy has ever run, nothing
-  has been wiped — and nothing on either Cloud Run service has been inspected either.
+  have emptied the allowlist and locked out every operator. Fixed in #1385: `--update-*` flags, plus
+  a final deploy step that fails when the operator service lacks the allowlist or audience.
+- **The first deploy (2026-09-15, run 34928799354, triggered by merging #1385) verified neither
+  service.** Both revisions went live with the `--update-*` flags, so CI stripped nothing. But its
+  public health check curled the service's `run.app` URL, which restricted ingress answers with
+  Google's 404 from any GitHub runner. That check failed, so the operator auth check after it was
+  skipped, and the operator service's configuration is still uninspected. Fixed in a follow-up PR: a
+  readiness check that describes both services instead of requesting them, and an auth check that
+  runs whenever the operator deploy succeeded. Until a deploy includes that, check the configuration
+  by hand with `gcloud run services describe cth-status-operator`.
 
-Clears only when all of the following hold, after a deploy with the fixed workflow has run:
+Clears only when all of the following hold, after a deploy that includes the follow-up has run:
 
-1. The deploy's `Verify operator auth configuration survived the deploy` step passes. If either value
-   is held in Secret Manager, the step reads its payload to confirm it is not blank, so the deploy
-   service account needs `secretmanager.versions.access` on that secret or the step fails as
-   unverified.
+1. The deploy's `Verify both services are serving this commit` and `Verify operator auth
+   configuration survived the deploy` steps pass. If either auth value is held in Secret Manager, the
+   auth step reads its payload to confirm it is not blank, so the deploy service account needs
+   `secretmanager.versions.access` on that secret or the step fails as unverified.
 2. `gcloud run services describe cth-status-operator` shows the allowlist, an `IAP_AUDIENCE` equal to
    the audience of the IAP resource actually fronting the service, and `IAP_TRUSTED_EMAIL_HEADER` as
    decided (currently `true`).
 3. The service's ingress and IAP enablement match what the header fallback assumes.
    `status_service/identity.py` trusts `X-Goog-Authenticated-User-Email` only because direct requests
-   cannot reach the container, and `gcloud run deploy` does not pin `--ingress`.
+   cannot reach the container, and `gcloud run deploy` does not pin `--ingress`. Partial evidence
+   (2026-09-15): unauthenticated requests from the internet to both services' `run.app` URLs, the
+   operator's `/operator/notices` included, get Google's ingress 404 rather than the application.
+   That shows the direct path is closed from outside. It does not show IAP is enforced on the path
+   that is open.
 4. An allowlisted operator loads `/operator/notices`, and a signed-in account that is not on the
    allowlist gets 401.
 
