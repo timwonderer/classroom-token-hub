@@ -113,12 +113,17 @@ jobs:
           curl --fail --silent --show-error "$URL"
       # Last, so the public check above still reports when this one fails.
       # Prints names and states only, never values: this repository's Actions
-      # logs are public, and the allowlist is operator email addresses.
+      # logs are public, and the allowlist is operator email addresses. A
+      # Secret Manager reference names a secret without proving it holds
+      # anything, so its payload is read to check it is not blank; a secret this
+      # job cannot read fails as unverified rather than passing.
       - name: Verify operator auth configuration survived the deploy
         run: |
           gcloud run services describe cth-status-operator --region "$GCP_REGION" --project "$GCP_PROJECT_ID" --format=json > "$RUNNER_TEMP/operator-service.json"
           python3 - "$RUNNER_TEMP/operator-service.json" <<'PY'
           import json
+          import os
+          import subprocess
           import sys
 
           CONSEQUENCE = {
@@ -131,17 +136,35 @@ jobs:
           env = {entry["name"]: entry for container in containers for entry in container.get("env", [])}
 
 
-          def configured(name):
+          def secret_payload(ref):
+              if not ref.get("name"):
+                  return None
+              result = subprocess.run(
+                  ["gcloud", "secrets", "versions", "access", str(ref.get("key", "latest")),
+                   "--secret", ref["name"], "--project", os.environ["GCP_PROJECT_ID"]],
+                  capture_output=True, text=True, check=False,
+              )
+              return result.stdout if result.returncode == 0 else None
+
+
+          def state(name):
               entry = env.get(name, {})
-              return bool(str(entry.get("value", "")).strip()) or "valueFrom" in entry
+              if "valueFrom" in entry:
+                  payload = secret_payload(entry["valueFrom"].get("secretKeyRef", {}))
+                  if payload is None:
+                      return "UNREADABLE"
+                  return "configured" if payload.strip() else "MISSING"
+              return "configured" if str(entry.get("value", "")).strip() else "MISSING"
 
 
           header = str(env.get("IAP_TRUSTED_EMAIL_HEADER", {}).get("value", "")).strip().lower()
           print("IAP_TRUSTED_EMAIL_HEADER fallback:", "on" if header == "true" else "off")
-          missing = [name for name in CONSEQUENCE if not configured(name)]
-          for name in CONSEQUENCE:
-              print(f"{name}:", "MISSING" if name in missing else "configured")
-          for name in missing:
-              print(f"::error::cth-status-operator has no {name}: {CONSEQUENCE[name]}.")
-          sys.exit(1 if missing else 0)
+          states = {name: state(name) for name in CONSEQUENCE}
+          for name, current in states.items():
+              print(f"{name}: {current}")
+              if current == "MISSING":
+                  print(f"::error::cth-status-operator has no {name}: {CONSEQUENCE[name]}.")
+              elif current == "UNREADABLE":
+                  print(f"::error::cth-status-operator reads {name} from Secret Manager, and this job could not read it to confirm it is not blank. The deploy service account needs secretmanager.versions.access on that secret.")
+          sys.exit(0 if all(current == "configured" for current in states.values()) else 1)
           PY

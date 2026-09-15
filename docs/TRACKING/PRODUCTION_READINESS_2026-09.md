@@ -764,7 +764,10 @@ Two defects, one of which only the repository owner can clear because it is a se
 
 Clears only when all of the following hold, after the policy is retargeted and a deploy has run:
 
-1. The deploy's `Verify operator auth configuration survived the deploy` step passes.
+1. The deploy's `Verify operator auth configuration survived the deploy` step passes. If either value
+   is held in Secret Manager, the step reads its payload to confirm it is not blank, so the deploy
+   service account needs `secretmanager.versions.access` on that secret or the step fails as
+   unverified.
 2. `gcloud run services describe cth-status-operator` shows the allowlist, an `IAP_AUDIENCE` equal to
    the audience of the IAP resource actually fronting the service, and `IAP_TRUSTED_EMAIL_HEADER` as
    decided (currently `true`).
