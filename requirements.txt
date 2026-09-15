@@ -1,5 +1,5 @@
 
-alembic==1.18.5
+alembic==1.19.2
 beautifulsoup4==4.15.0
 bcrypt==5.0.0
 bleach==6.4.0
