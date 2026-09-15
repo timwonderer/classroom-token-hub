@@ -672,6 +672,11 @@ fails against the pre-fix commit; full pytest suite green; `flask db heads` show
 
 Carried as post-ship backlog unless a track happens to touch the same code.
 
+> **Closure status for the post-ship items in this section now lives in
+> [`POST_LAUNCH_TODO.md`](POST_LAUNCH_TODO.md) (2026-09-14).** Each was re-verified against `main`
+> there, and the ones already resolved are listed in its appendix. The reasoning below stays; record
+> closures in that file, not here. The launch checklist further down is unaffected.
+
 **Identity** — teardown helpers still physically live in `app/routes/admin.py` even though they are
 now proper FEAT/domain commands (`FEAT-IDEN-007` and `_destroy_class_scope_rows`); they should move
 into `app/feats/`. 7 `print()` calls in `context_resolver.py`; residual `Seat.block` property.
@@ -744,6 +749,44 @@ it should be done deliberately rather than discovered again from a rising number
 Unlike the findings above, these are *not* post-ship backlog. Each one is a release-mechanics defect
 that domain readiness does not cover, and every item was confirmed against the working tree rather
 than recalled.
+
+**Sysadmin dashboard and log viewer fail on a table that does not exist — OPEN 2026-09-14.**
+`system_admin.dashboard` (`app/routes/system_admin.py:521`) and `combined_logs` (`:563`) read
+`operational_events` through raw SQL in `app/services/operational_event_service.py:53-86`, unguarded.
+No model or migration creates that table. `7c3d4e5f6a7b` dropped `error_logs` and `error_events`
+pending `operational_events`, and `DOM-OPS-001` §5 was never built. Reproduced 2026-09-14 on an isolated
+database migrated to head `b4c5d6e7f8a9`: an authenticated sysadmin `GET /sysadmin/dashboard` raises
+`UndefinedTable: relation "operational_events" does not exist` and reaches the unhandled-exception
+handler. The read arrived in `9cf7f46d6` (2026-08-29), which is in no release tag. No test reaches it:
+the only dashboard test (`tests/dom/operation/test_sysadmin_grafana_auth.py`) uses an expired session
+and asserts the login redirect. Building the `DOM-OPS-001` tables is post-launch work
+(`POST_LAUNCH_TODO.md` PL-OPS-01); launch needs only these reads not to crash, as
+`tlcp.has_recent_error_for_actor` already degrades for the absent `error_events`. Clears when both routes
+render for an authenticated sysadmin, with a regression test that fails against the pre-fix tree.
+
+**Four tests red on `main` since #1369 — OPEN 2026-09-14.** Three in
+`tests/dom/class/test_store_surface_no_rent_panel.py` still assert the `tier-recommendation` container
+that `493b19285` retired in favor of declared economic roles.
+`tests/dom/core/test_migration_idempotency.py::test_store_products_consolidation_is_idempotent`
+re-applies `b7c41e9a2f30` over head. That re-adds `tier`, `limit_per_student` and `auto_delist_date`
+after `046dccd4451e` and `f2b3c4d5e6` dropped them, so the column lists differ. Reproduced 2026-09-14 on
+an isolated database. #1383's CHANGELOG entry recorded all four as predating that batch. No workflow has
+reported them: the nightly Full Test Suite last ran on `16fecbd87` (2026-09-14 15:19 UTC), before #1369
+merged, and Constitutional CI selects neither file for the paths #1369 touched. Clears when the full
+suite is green on `main`.
+
+**Insurance policy form shows Economic Engine recommendations — PLANNED 2026-09-14.** Owner decision:
+integrate before launch, on its own branch. The create and edit policy forms (`/admin/insurance/new`,
+`/admin/insurance/edit/<policy_uuid>`) show only a footnote (`templates/admin_edit_insurance_policy.html:185`).
+Teachers see insurance ranges only on the Economic Engine page and in the rebalance preview's out-of-band
+notice. The producer, `recommend_insurance_terms` (`FEAT-CLASS-003`), is imported at
+`app/routes/admin.py:126` and never called. `insurance/recommendation-card` @ `84b677b7f` built a card on
+2026-09-02, but it is a record, not a merge candidate. Its tier-group picker, grouped marketplace and
+cancel route have since landed on `main` independently, with the same tests. It also conflicts with
+`main` in 7 files, and its template adds inline styles the `SPEC-DES-001` gate rejects. Rebuild the card
+on a fresh branch from `main`. Clears when the card lands advisory-only, consuming
+`recommend_insurance_terms` rather than a route-local recomputation, passing the template gate, with
+render tests. Then delete `insurance/recommendation-card`. Moved from `POST_LAUNCH_TODO.md` PL-STORE-04.
 
 **Status service must not launch until its operator environment is verified — OPEN 2026-09-14.**
 Two defects, one of which only the repository owner can clear because it is a setting, not a file:
@@ -1119,6 +1162,14 @@ A 2026-09-04 sweep of 53 local branches and 15 worktrees found three bodies of w
 nowhere on this branch. They are recorded here so the source branches can be deleted. **Nothing else
 across those branches was unported** — every other unmerged branch was verified superseded by
 content already present on HEAD.
+
+> **Backlog items in this section are tracked to closure in
+> [`POST_LAUNCH_TODO.md`](POST_LAUNCH_TODO.md) (2026-09-14).** The support-content registry is
+> PL-SUP-01; its source commit `fe3e3e0d` no longer exists, so it must be rebuilt rather than ported. The
+> bug-hunter badge system is PL-OPS-04, preserved at tag `archive/bug-hunter-badges-20260914` (on
+> `origin`). `insurance/recommendation-card` is superseded except for the card itself: its tier-group
+> picker, grouped marketplace and cancel route all landed on `main` independently, with the same tests.
+> The card itself is pre-launch work on its own branch, tracked in the launch checklist in §V.
 
 | Item | Source | Disposition |
 |---|---|---|
