@@ -6611,8 +6611,8 @@ def _insurance_recommendation_view(class_id):
                 text = f"{label} insurance, {scope}: "
                 if not ready:
                     text += "coverage terms only. " + (
-                        "Premium and payout figures need a class wage index."
-                        if monetary else "Premium figures need a class wage index."
+                        "Premium and payout figures need a Classroom Wage Index (CWI)."
+                        if monetary else "Premium figures need a Classroom Wage Index (CWI)."
                     )
                 elif selection == "tiered":
                     text += "suggested premiums " + ", ".join(
