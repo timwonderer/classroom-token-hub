@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import logging
 import os
 import re
 import threading
@@ -13,6 +14,8 @@ from google.auth import exceptions as google_auth_exceptions
 from google.auth import jwt
 from google.auth.transport import requests
 
+
+logger = logging.getLogger(__name__)
 
 IAP_ISSUER = "https://cloud.google.com/iap"
 IAP_CERTS_URL = "https://www.gstatic.com/iap/verify/public_key"
@@ -72,9 +75,12 @@ class _IapKeyCache:
         response = request(url=IAP_CERTS_URL, method="GET", timeout=KEY_FETCH_TIMEOUT_SECONDS)
         if response.status != http.client.OK:
             raise google_auth_exceptions.TransportError(f"Could not fetch IAP keys: HTTP {response.status}")
-        keys = json.loads(response.data.decode("utf-8"))
+        try:
+            keys = json.loads(response.data.decode("utf-8"))
+        except ValueError as exc:
+            raise google_auth_exceptions.TransportError("IAP key set is not valid JSON") from exc
         if not isinstance(keys, dict):
-            raise ValueError("IAP key set is not a JSON object")
+            raise google_auth_exceptions.TransportError("IAP key set is not a JSON object")
         self._keys = keys
         self._fresh_until = self._clock() + _fresh_for_seconds(response.headers)
 
@@ -82,46 +88,80 @@ class _IapKeyCache:
 _IAP_KEYS = _IapKeyCache()
 
 
-def _verified_iap_claims(assertion: str, audience: str) -> dict | None:
-    """Claims of an IAP assertion whose signature, expiry, audience and issuer verify.
+def _verify_iap_assertion(assertion: str, audience: str) -> tuple[dict | None, str]:
+    """An IAP assertion's claims if its signature, expiry, audience and issuer verify; else why not.
 
     Only a failed verification means "not authenticated". Any other exception
     is a defect here and propagates, rather than reading as a rejected operator.
+    The reason is always one of a fixed set of codes, never exception text:
+    google-auth's messages can quote the token itself.
     """
     try:
         header = jwt.decode_header(assertion)
         key_id = header.get("kid")
+        if header.get("alg") != IAP_ALGORITHM:
+            return None, "wrong_algorithm"
         # google-auth looks the kid up in the key set, where an unhashable one
         # (a list or object) raises TypeError instead of rejecting.
-        if header.get("alg") != IAP_ALGORITHM or not isinstance(key_id, (str, type(None))):
-            return None
+        if not isinstance(key_id, (str, type(None))):
+            return None, "invalid_key_id"
         keys = _IAP_KEYS.keys_for(key_id, requests.Request())
-        claims = jwt.decode(assertion, certs=keys, audience=audience)
+        # Signature and expiry here; the audience below, so that a mismatch,
+        # the likeliest misconfiguration, gets its own reason code.
+        claims = jwt.decode(assertion, certs=keys, audience=None)
+    except google_auth_exceptions.TransportError:
+        return None, "key_fetch_failed"
     except (ValueError, google_auth_exceptions.GoogleAuthError):
-        return None
-    return claims if claims.get("iss") == IAP_ISSUER else None
+        return None, "invalid_token"
+    if claims.get("aud") != audience:
+        return None, "wrong_audience"
+    if claims.get("iss") != IAP_ISSUER:
+        return None, "wrong_issuer"
+    return claims, "verified"
 
 
 def authenticated_operator_email(assertion: str | None, authenticated_email: str | None = None) -> str | None:
+    """The allowlisted operator a request authenticates as, or None.
+
+    Logs one line per call naming the path that admitted the operator, or why
+    both refused. The signed assertion's result is logged even when the header
+    fallback admits, so a wrong IAP_AUDIENCE shows up as
+    `via=trusted_header assertion=wrong_audience` rather than going unnoticed.
+    Neither the email nor the token is logged.
+    """
     audience = os.environ.get("IAP_AUDIENCE", "").strip()
     allowlist = {value.strip().lower() for value in os.environ.get("STATUS_OPERATOR_ALLOWLIST", "").split(",") if value.strip()}
     if not allowlist:
+        logger.warning("status operator refused: STATUS_OPERATOR_ALLOWLIST is empty")
         return None
 
-    if assertion and audience:
-        claims = _verified_iap_claims(assertion, audience)
+    assertion_result = "absent"
+    if assertion and not audience:
+        assertion_result = "audience_not_configured"
+    elif assertion:
+        claims, assertion_result = _verify_iap_assertion(assertion, audience)
         if claims:
             operator = _allowlisted_email(claims.get("email"), allowlist)
             if operator:
+                logger.info("status operator authenticated via=iap_assertion")
                 return operator
+            assertion_result = "not_allowlisted"
 
     # Cloud Run's direct IAP integration supplies the authenticated email header
     # after enforcing IAP at the service boundary. The operator service is
     # deployed with internal-and-cloud-load-balancing ingress, so direct public
     # requests cannot supply this trusted header to the container.
-    if os.environ.get("IAP_TRUSTED_EMAIL_HEADER", "").strip().lower() == "true":
-        value = authenticated_email or ""
-        if value.startswith("accounts.google.com:"):
-            value = value.split(":", 1)[1]
-        return _allowlisted_email(value, allowlist)
-    return None
+    if os.environ.get("IAP_TRUSTED_EMAIL_HEADER", "").strip().lower() != "true":
+        logger.warning("status operator refused assertion=%s header=disabled", assertion_result)
+        return None
+    value = authenticated_email or ""
+    if value.startswith("accounts.google.com:"):
+        value = value.split(":", 1)[1]
+    operator = _allowlisted_email(value, allowlist)
+    if operator:
+        logger.info("status operator authenticated via=trusted_header assertion=%s", assertion_result)
+    else:
+        logger.warning(
+            "status operator refused assertion=%s header=%s", assertion_result, "not_allowlisted" if value.strip() else "absent"
+        )
+    return operator
