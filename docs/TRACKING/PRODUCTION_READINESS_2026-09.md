@@ -772,12 +772,20 @@ Two defects, one of which only the repository owner can clear because it is a se
   whenever the operator deploy succeeded. The deploy from #1386's merge (run 34929999750) passed both:
   both services serving that commit, `STATUS_OPERATOR_ALLOWLIST` and `IAP_AUDIENCE` present and not
   blank, header fallback on.
-- **The operator console's front door is not established.** `operator.status.classroomtokenhub.com`
-  has a real DNS record (Cloudflare-proxied; not a wildcard), but every HTTPS request to it fails the
-  TLS handshake at Cloudflare. The edge certificate covers `*.classroomtokenhub.com` and
-  `classroomtokenhub.com` only, and a second-level name needs a certificate of its own. Until the
-  hostname operators will actually use serves, neither IAP enforcement nor a real sign-in can be
-  checked.
+- **The operator console's front door is `operator.status.classroomtokenhub.com`,** served by a
+  Google Cloud load balancer (`136.68.93.205`, with a Google-managed certificate for that name). An
+  unauthenticated request to `/operator/notices` or `/health` gets IAP's own 302 to Google sign-in
+  (`x-goog-iap-generated-response: true`, body "Invalid IAP credentials: empty token"); the
+  application is never reached. A first check on 2026-09-15 went through a local resolver that
+  still answered with Cloudflare addresses, where the TLS handshake failed. Public resolvers and a
+  retry showed the load balancer, so that earlier result is withdrawn.
+  **A signed-in request gets past IAP and then fails.** On 2026-09-15 the owner's browser, already
+  signed in to Google, got a plain `Service Unavailable` 503 from the same address, and
+  `status.classroomtokenhub.com` returns the identical 503 (`via: 1.1 google`) through Cloudflare.
+  Both Cloud Run services were Ready and serving at the time (run 34929999750). The load balancer is
+  therefore most likely not reaching them, for example because a serverless NEG names the wrong
+  service or region. This has not been diagnosed. The load balancer's request logs (`statusDetails`
+  on the 503s) and the backend services' serverless NEGs will show the cause.
 
 Clears only when all of the following hold:
 
@@ -796,8 +804,9 @@ Clears only when all of the following hold:
    cannot reach the container, and `gcloud run deploy` does not pin `--ingress`. Partial evidence
    (2026-09-15): unauthenticated requests from the internet to both services' `run.app` URLs, the
    operator's `/operator/notices` included, get Google's ingress 404 rather than the application.
-   That shows the direct path is closed from outside. It does not show IAP is enforced on the path
-   that is open.
+   That shows the direct path is closed from outside. On the path that is open, the front door
+   answers an unauthenticated request with IAP's redirect to Google sign-in (see above), so IAP is
+   enforced there too. What remains is the real sign-in in item 4.
 4. An allowlisted operator loads `/operator/notices`, and a signed-in account that is not on the
    allowlist gets 401.
 
