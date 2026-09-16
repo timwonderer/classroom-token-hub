@@ -3006,7 +3006,7 @@ def signup():
 
     Step 1 (GET /signup): Class creation form (class name, section, teacher display name).
     Step 1 (POST /signup with signup_step=class_setup): Validates and stages
-        class/display data in session; no database row is created.
+        encrypted class/display data on the server; no identity is created.
     Step 2 (POST /signup with username, no totp_code): Username validation, generates TOTP secret,
         shows QR code.
     Step 3 (POST /signup with totp_code): Validates TOTP, atomically creates
@@ -3060,13 +3060,13 @@ def signup():
 
             # Stage only. The class, teacher, seat, and profile are created
             # together after username and TOTP verification.
-            for stale_key in ("signup_class_id", "signup_seat_id"):
-                session.pop(stale_key, None)
-            session["signup_class_display_name"] = class_display_name
-            session["signup_section"] = section
-            session["signup_teacher_first_name"] = teacher_first_name
-            session["signup_teacher_last_name"] = teacher_last_name
-            session["signup_class_timezone"] = class_timezone
+            from app.feats.teacher_signup_feat import stage_signup
+            session['teacher_signup_nonce'] = stage_signup(
+                previous_nonce=session.get('teacher_signup_nonce'),
+                metadata=dict(class_display_name=class_display_name, section=section,
+                    teacher_first_name=teacher_first_name, teacher_last_name=teacher_last_name,
+                    class_timezone=class_timezone),
+                correlation_id=generate_correlation_id(), idempotency_key='teacher-signup:stage')
 
             # Render step 2 (username form)
             form = AdminSignupForm()
@@ -3085,11 +3085,9 @@ def signup():
         )
 
     # ---- Guard: steps 2/3 require class context from step 1 ----
-    if (
-        not session.get("signup_class_display_name")
-        or not session.get("signup_teacher_first_name")
-        or not session.get("signup_class_timezone")
-    ):
+    from app.feats.teacher_signup_feat import read_signup, prepare_totp, complete_signup
+    pending = read_signup(session.get('teacher_signup_nonce'))
+    if pending is None:
         flash("Please start by creating your class.", "error")
         return redirect(url_for("admin.signup"))
 
@@ -3107,13 +3105,11 @@ def signup():
                     turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
                 )
 
-            # Generate TOTP secret
-            if "admin_totp_secret" not in session or session.get("admin_totp_username") != username:
-                totp_secret = pyotp.random_base32()
-                session["admin_totp_secret"] = totp_secret
-                session["admin_totp_username"] = username
-            else:
-                totp_secret = session["admin_totp_secret"]
+            totp_secret = prepare_totp(nonce=session.get('teacher_signup_nonce'), username=username,
+                correlation_id=generate_correlation_id(), idempotency_key='teacher-signup:totp')
+            if not totp_secret:
+                flash("Session expired. Please start over.", "error")
+                return redirect(url_for("admin.signup"))
 
             totp_uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(name=username, issuer_name="Classroom Economy Admin")
             img = qrcode.make(totp_uri)
@@ -3146,9 +3142,9 @@ def signup():
 
     username = normalize_auth_username(form.username.data)
     totp_code = form.totp_code.data.strip()
-    totp_secret = session.get("admin_totp_secret")
+    totp_secret = pending.get("totp_secret")
 
-    if not totp_secret or session.get("admin_totp_username") != username:
+    if not totp_secret or pending.get("username") != username:
         flash("Session expired. Please start over.", "error")
         return redirect(url_for("admin.signup"))
 
@@ -3178,46 +3174,18 @@ def signup():
         flash("You must agree to the Terms of Service and Privacy Policy.", "error")
         return redirect(url_for("admin.signup"))
 
-    # Re-check username uniqueness (race condition guard)
-    if _auth_username_exists(username):
-        flash("Username is not available. Please choose another.", "error")
-        session.pop("admin_totp_secret", None)
-        session.pop("admin_totp_username", None)
-        return redirect(url_for("admin.signup"))
-
-    # Atomically create the teacher identity and class boundary.
-    from app.services.classroom_setup import create_class
-    from app.utils.join_code import generate_join_code
-    signup_idempotency_key = f"feat:iden:admin-signup:{username}"
     try:
-        with FEATContext("FEAT-IDEN-001", idempotency_key=signup_idempotency_key):
-            new_user = create_teacher(username, totp_secret=totp_secret)
-            economy = create_class(
-                new_user.id,
-                join_code=generate_join_code(),
-                display_name=session["signup_class_display_name"],
-                section=session.get("signup_section"),
-                class_timezone=session["signup_class_timezone"],
-                teacher_first_name=session["signup_teacher_first_name"],
-                teacher_last_name=session.get("signup_teacher_last_name"),
-            )
+        completed = complete_signup(nonce=session.get('teacher_signup_nonce'),
+            username=username, totp_code=totp_code, correlation_id=generate_correlation_id(),
+            idempotency_key='teacher-signup:complete')
     except ValueError:
-        db.session.rollback()
         flash("Username is not available. Please choose another.", "error")
-        session.pop("admin_totp_secret", None)
-        session.pop("admin_totp_username", None)
         return redirect(url_for("admin.signup"))
+    if not completed:
+        flash("Session expired. Please start over.", "error")
+        return redirect(url_for("admin.signup"))
+    session.pop('teacher_signup_nonce', None)
 
-    # Clean up signup session keys
-    session.pop("admin_totp_secret", None)
-    session.pop("admin_totp_username", None)
-    session.pop("signup_class_display_name", None)
-    session.pop("signup_section", None)
-    session.pop("signup_teacher_first_name", None)
-    session.pop("signup_teacher_last_name", None)
-    session.pop("signup_class_timezone", None)
-
-    current_app.logger.info(f"Teacher signup complete: user={new_user.id}, class={economy.class_id}")
     flash("Account created successfully! Please log in with your username and authenticator.", "success")
     return redirect(url_for("admin.login"))
 
