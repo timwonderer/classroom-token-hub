@@ -277,7 +277,6 @@ def execute_purchase_insurance(
         target_seat_id=authority_seat_id,
         actor_seat_id=seat_id,
         mechanism="self",
-        user_id=seat.user_id,
         amount=-premium,
         account_type="checking",
         type="insurance_premium",

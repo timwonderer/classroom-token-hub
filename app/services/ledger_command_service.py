@@ -16,7 +16,7 @@ from app.utils.transaction_idempotency import (
 )
 
 _FINGERPRINT_EFFECT_KEYS = (
-    "seat_id", "target_seat_id", "actor_seat_id", "mechanism", "user_id",
+    "seat_id", "target_seat_id", "actor_seat_id", "mechanism",
     "amount", "account_type", "type", "original_transaction_id", "policy_id",
 )
 
@@ -32,6 +32,8 @@ def _replay_fingerprint(effects: list[dict], version: int) -> str:
             type=effect.get("type"), original_transaction_id=effect.get("original_transaction_id"),
             policy_id=effect.get("policy_id"), version=version,
         )
+    if version < 3:
+        raise ValueError("Legacy multi-effect reservations require the seat-ownership migration.")
     fields = []
     for effect in effects:
         field = {key: effect.get(key) for key in _FINGERPRINT_EFFECT_KEYS}

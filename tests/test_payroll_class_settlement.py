@@ -51,7 +51,7 @@ def _seed(classroom, *, attend=("A", "B")):
         for key in attend:
             seat = seat_map[key]
             db.session.add(AttendanceSession(
-                target_seat_id=seat.seat_id, class_id=cid, target_user_id=seat.user.id,
+                target_seat_id=seat.seat_id, class_id=cid,
                 actor_seat_id=teacher_seat_id, reason_code="start_work",
                 timestamp=now - timedelta(minutes=30),
             ))
@@ -111,7 +111,7 @@ def test_manual_credits_and_reversals_are_not_cycle_events(app):
     with FEATContext("FEAT-PROD-003", correlation_id=f"mc:{cid}", idempotency_key=f"mc:{cid}"):
         policy = PolicyVersion.query.filter_by(class_id=cid, domain="payroll", is_active=True).first()
         db.session.add(PayrollEvent(
-            class_id=cid, target_seat_id=sC.seat_id, target_user_id=sC.user.id,
+            class_id=cid, target_seat_id=sC.seat_id,
             actor_seat_id=classroom.teacher_seat_id, correlation_id=f"corr_mc:{cid}",
             idempotency_key=f"mc:{cid}:evt", policy_version_id=policy.id,
             policy_uuid=policy.policy_uuid, mechanism="TEACHER",

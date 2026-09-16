@@ -58,7 +58,6 @@ def _fund(student, class_id, amount, key):
             idempotency_key=f"inv-led-015-fund:{key}:{student.seat.id}",
             seat_id=student.seat.id,
             class_id=class_id,
-            user_id=student.user.id,
             amount=Decimal(amount),
             account_type="checking",
             type="payroll",

@@ -27,7 +27,6 @@ def _add_store_item(class_id: str, user_id: int, name: str) -> str:
         product = publish_store_product(
             class_id=class_id,
             entitlement_type="IMMEDIATE_USE",
-            user_id=user_id,
             name=name,
             price="5.00",
         )

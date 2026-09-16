@@ -172,6 +172,7 @@ from app.services.class_configuration_query_service import (
 from app.services.class_configuration_view_models import (
     build_feature_settings_page_view,
 )
+from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.admin_identity_service import delete_admin_account_rows
 from app.services.admin_settings_service import (
     create_rent_settings,
@@ -476,7 +477,6 @@ def _handle_mismatched_admin_class_context():
     current_app.logger.error(
         "Blocked admin write with mismatched class context",
         extra={
-            'user_id': user_id,
             'endpoint': request.endpoint,
             'method': request.method,
             'path': request.path,
@@ -507,7 +507,6 @@ def _handle_missing_admin_class_context():
     current_app.logger.error(
         "Blocked admin write without class context",
         extra={
-            'user_id': user_id,
             'endpoint': request.endpoint,
             'method': request.method,
             'path': request.path,
@@ -1250,7 +1249,6 @@ def _destroy_class_scope_rows(*, class_id, canonical_context, **_ignored):
     PayrollEvent.query.filter(PayrollEvent.class_id == class_id).delete(synchronize_session=False)
     LedgerBalanceSnapshot.query.filter(LedgerBalanceSnapshot.class_id == class_id).delete(synchronize_session=False)
     Announcement.query.filter(
-        Announcement.user_id == user_id,
         Announcement.class_id == class_id,
     ).delete(synchronize_session=False)
 
@@ -1304,7 +1302,8 @@ def _destroy_class_scope_rows(*, class_id, canonical_context, **_ignored):
     ).delete(synchronize_session=False)
 
     # Seats/ownership for this class
-    Seat.query.filter(Seat.class_id == class_id).delete(synchronize_session=False)
+    # One class cascade removes seats and mutually linked policy lineage together.
+    # Deleting author seats first would strand policy-version references mid-command.
     ClassEconomy.query.filter_by(class_id=class_id).delete(synchronize_session=False)
 
     # Principals that held a seat only in this class are now parentless and must
@@ -1360,9 +1359,8 @@ def _delete_teacher_settings_activity_and_audit_rows(canonical_context):
         PayrollSettings.class_id.in_(sa.select(class_ids_subq))
     ).delete(synchronize_session=False)
     Announcement.query.filter(
-        Announcement.user_id == user_id
+        Announcement.class_id.in_(sa.select(class_ids_subq))
     ).delete(synchronize_session=False)
-    Transaction.query.filter_by(user_id=user_id).delete(synchronize_session=False)
     PendingAction.query.filter(
         PendingAction.authoritative_feat == "FEAT-STOR-002",
         PendingAction.class_id.in_(sa.select(class_ids_subq)),
@@ -1420,24 +1418,6 @@ def _delete_teacher_recovery_and_credentials_rows(canonical_context):
     delete_recovery_rows_for_user(user_id)
     delete_admin_credentials_for_user(user_id)
 
-
-def _delete_teacher_store_rows(canonical_context):
-    """Delete store rows owned by the teacher user."""
-    user_id = canonical_context.user_id
-    # Entitlements point at the lineage, not at any one version, so the subquery
-    # collects lineages rather than primary keys.
-    lineages_subq = (
-        db.session.query(StoreProduct.product_lineage_uuid)
-        .filter_by(user_id=user_id)
-        .subquery()
-    )
-    StoreItemVisibility.query.filter(
-        StoreItemVisibility.product_lineage_uuid.in_(sa.select(lineages_subq))
-    ).delete(synchronize_session=False)
-    EntitlementEvent.query.filter(
-        EntitlementEvent.product_id.in_(sa.select(lineages_subq))
-    ).delete(synchronize_session=False)
-    StoreProduct.query.filter_by(user_id=user_id).delete(synchronize_session=False)
 
 
 def _delete_orphan_students(affected_student_ids):
@@ -1507,7 +1487,6 @@ def _destroy_teacher_account_rows(*, canonical_context, admin_user=None):
     _delete_teacher_insurance_rows(canonical_context)
     _delete_teacher_issue_rows(canonical_context)
     _delete_teacher_recovery_and_credentials_rows(canonical_context)
-    _delete_teacher_store_rows(canonical_context)
     _delete_orphan_students(affected_student_ids)
 
     # The principal itself. Terminal — the users row does not survive.
@@ -2507,7 +2486,7 @@ def _apply_rebalance_plan(canonical_context, class_id, change_plan, activation_m
     """Apply rebalance plan for a class (wrapper for economy_rebalance function)."""
     user_id = canonical_context.user_id
     applied_labels = apply_rebalance_changes(
-        user_id, class_id, change_plan, activation_mode,
+        canonical_context.seat_id, class_id, change_plan, activation_mode,
         canonical_context=canonical_context,
     )
     current_app.logger.info(
@@ -2938,7 +2917,6 @@ def give_bonus_all():
     for seat in seats:
         adjustments.append({
             'seat': seat,
-            'user_id': user_id,
             'amount': amount,
             'type': tx_type,
             'description': title,
@@ -5059,7 +5037,7 @@ def store_management():
                 # HIDDEN is a teacher's withdrawal, and nothing un-hides a row
                 # when its start date arrives.
                 new_item = publish_product(
-                    user_id=user_id,
+                    actor_seat_id=resolve_teacher_seat_for_class(selected_scope["class_id"]).id,
                     class_id=selected_scope['class_id'],
                     definition=_store_definition_from_form(form),
                     availability_state=store_service.IN_USE,
@@ -6942,7 +6920,7 @@ def update_economy_policy():
         settings_row = get_feature_settings_row_for_class(class_id, create=True)
         if settings_row:
             settings_row.economy_policy_updated_at = utc_now()
-        cancel_pending_policy_transitions(class_id, actor_id=user_id)
+        cancel_pending_policy_transitions(class_id, actor_seat_id=resolve_teacher_seat_for_class(class_id).id)
 
     current_app.logger.info(
         "Economy policy mode changed teacher=%s class_id=%s mode=%s",
@@ -7102,7 +7080,7 @@ def apply_economy_rebalance():
                 insurance_policies=insurance_policies,
             )
             queued_transition_count = queue_scheduled_policy_transitions(
-                g.canonical_context.user_id,
+                resolve_teacher_seat_for_class(selected_scope["class_id"]).id,
                 selected_scope['class_id'],
                 scheduled_changes,
                 activation_mode=activation_mode,
@@ -9617,7 +9595,7 @@ def announcement_create():
     if form.validate_on_submit():
         try:
             announcement = create_class_announcement(
-                user_id=user_id,
+                created_by_seat_id=resolve_teacher_seat_for_class(selected_class_id).id,
                 class_id=selected_class_id,
                 title=form.title.data,
                 message=form.message.data,
@@ -10082,7 +10060,6 @@ def api_economy_analyze():
                 severity="warning",
                 domain="economy",
                 route=request.path,
-                actor_id=user_id,
                 class_id=None,
                 correlation_id=get_correlation_id(),
                 details={
@@ -10192,7 +10169,6 @@ def api_economy_validate(feature):
                 severity="warning",
                 domain="economy",
                 route=request.path,
-                actor_id=user_id,
                 class_id=None,
                 correlation_id=get_correlation_id(),
                 details={

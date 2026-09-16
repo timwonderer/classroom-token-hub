@@ -34,7 +34,6 @@ def _posted_transaction(
 ):
     with FEATContext("FEAT-LED-001", idempotency_key=idempotency_key):
         tx = Transaction(
-            user_id=seat.user_id,
             class_id=seat.class_id,
             seat_id=seat.id,
             target_seat_id=seat.id,
@@ -312,7 +311,7 @@ def test_INV_LED_002__database_guard_covers_exactly_the_fields_the_orm_guard_doe
         Path(__file__).resolve().parents[3]
         / "migrations"
         / "versions"
-        / "f1a9c3e60b72_enforce_ledger_immutability_in_database.py"
+        / "c7a7b8c9d0e1_seat_owned_records.py"
     )
     assert path.exists(), f"migration not found at {path}"
     spec = spec_from_file_location("_ledger_immutability_migration", path)

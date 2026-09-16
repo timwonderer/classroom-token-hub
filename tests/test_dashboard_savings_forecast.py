@@ -28,7 +28,6 @@ def _fund_savings(classroom, student, app, amount="200.00"):
                 idempotency_key=key,
                 seat_id=student.seat.id,
                 class_id=classroom.class_id,
-                user_id=student.user.id,
                 amount=Decimal(amount),
                 account_type="savings",
                 type="payroll",

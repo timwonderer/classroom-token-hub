@@ -14,7 +14,6 @@ from app.models import (
     PendingAction,
     AttendanceSession,
     PayrollEvent,
-    PolicyTransition,
     RecoveryRequest,
     Transaction,
     Seat,
@@ -236,24 +235,10 @@ def delete_orphaned_users(user_ids):
     if not orphan_ids:
         return []
 
-    # Clear or remove the references that would otherwise block the delete.
-    # `attendance_sessions.target_user_id` is ON DELETE SET NULL against a
-    # NOT NULL column, so surviving rows must go rather than be nulled.
-    AttendanceSession.query.filter(
-        AttendanceSession.target_user_id.in_(orphan_ids)
-    ).delete(synchronize_session=False)
+    # Only authentication-owned artifacts depend on the detached principal.
     RecoveryRequest.query.filter(
         RecoveryRequest.user_id.in_(orphan_ids)
     ).delete(synchronize_session=False)
-    Transaction.query.filter(Transaction.user_id.in_(orphan_ids)).update(
-        {Transaction.user_id: None}, synchronize_session=False
-    )
-    Issue.query.filter(Issue.sysadmin_id.in_(orphan_ids)).update(
-        {Issue.sysadmin_id: None}, synchronize_session=False
-    )
-    PolicyTransition.query.filter(PolicyTransition.created_by.in_(orphan_ids)).update(
-        {PolicyTransition.created_by: None}, synchronize_session=False
-    )
 
     User.query.filter(User.id.in_(orphan_ids)).delete(synchronize_session=False)
     return orphan_ids

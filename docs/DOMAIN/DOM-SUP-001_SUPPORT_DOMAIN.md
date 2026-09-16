@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-SUP-001 | 1.3 | 2026-09-15 | 1.2 | Normative |
+| DOM-SUP-001 | 1.5 | 2026-09-15 | 1.4 | Normative |
 
 ## I. Purpose
 
@@ -117,7 +117,7 @@ Key fields:
 - `id`
 - `seat_id` — FK to seats (the student seat that filed the issue)
 - `class_id` — FK to `classes`
-- `escalated_by_user_id` — nullable FK to `users`; set if issue is escalated
+- `escalated_by_public_id` — teacher seat public reference scoped to the issue class
 - `category_id` — FK to issue_categories
 - `status` — `OPEN` | `TEACHER_REVIEW` | `ESCALATED_TO_DEV` | `DEV_RESOLVED` | `TEACHER_FINAL_REVIEW` | `CLOSED`
 - `issue_type` — `transaction` | `general`
@@ -199,7 +199,7 @@ Key fields:
 - `issue_id` — FK to issues (CASCADE)
 - `action_type` — `reverse_transaction` | `correct_amount` | `waive_fee` | or other enumerated types
 - `action_description`
-- `performed_by_user_id` — FK to `users`; the teacher or sysadmin who took the action
+- `performed_by_type` and `performed_by_public_id` — role plus class-scoped teacher seat public reference; external operator review has no participant identifier
 - `related_transaction_id` — nullable FK to transaction (cross-domain reference)
 - `amount_changed`
 - `before_value` / `after_value`
@@ -278,12 +278,8 @@ Rules:
 Key fields:
 
 - `id`
-- `created_by_user_id` — nullable FK to `users`; the teacher or sysadmin who authored
-  the announcement
-- `target_user_id` — nullable FK to `users`; set for announcements directed at a
-  specific teacher
-- `audience_type` — `class` | `system_wide` | `all_teachers` | `all_students` | `teacher_all_classes` | `specific_class`
-- `join_code` — nullable; present when `audience_type` is class-scoped
+- `created_by_seat_id` — teacher seat author, FK to `seats`
+- `class_id` — required class boundary, FK to `classes`
 - `title`
 - `message`
 - `is_active`
@@ -295,12 +291,11 @@ Rules:
 
 - Announcements are informational only. They do not grant permissions, alter capability
   state, change configuration, or affect any other domain's tables.
-- Class-scoped announcements (`audience_type = 'class'` or `'specific_class'`) must
-  carry a `join_code`. System-wide announcements must not carry a `join_code`.
+- These announcements are class-scoped. Authentication principal IDs are neither authors nor audiences.
 - `expires_at` is a display hint. The announcement row is not deleted when it expires;
   display logic uses `expires_at` to suppress rendering.
 - A teacher may only create announcements for classes they hold a teacher seat in
-  (`join_code` must resolve to a class where `created_by_user_id` holds a teacher seat).
+  (`created_by_seat_id` must resolve to a teacher seat in the explicit `class_id`).
   FEAT enforces this; the domain stores the result.
 
 ## VII. Constraints

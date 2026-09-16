@@ -21,7 +21,6 @@ from sqlalchemy.orm import Session, validates, synonym
 from sqlalchemy import event
 from sqlalchemy.dialects.postgresql import JSONB
 from app.extensions import db
-from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.utils.encryption import PIIEncryptedType, normalize_totp_for_storage
 from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
 
@@ -164,8 +163,8 @@ class User(db.Model):
         'Seat',
         backref='user',
         lazy='dynamic',
-        cascade='all, delete-orphan',
-        passive_deletes=True,
+        cascade='save-update, merge',
+        passive_deletes='all',
         foreign_keys='Seat.user_id',
     )
     last_active_seat = db.relationship('Seat', foreign_keys=[last_active_seat_id], post_update=True)
@@ -233,7 +232,7 @@ class Seat(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     public_id = db.Column(db.String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'), nullable=True, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     role = db.Column(db.String(20), nullable=False, default='student')
 
@@ -460,7 +459,6 @@ class Transaction(db.Model):
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     target_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     # CRITICAL: class_id is the canonical anchor for class isolation.
     # join_code is ingress/display metadata only and may resolve to class_id
@@ -528,7 +526,6 @@ class Transaction(db.Model):
     )
 
     # Relationship to track which actor and target seat the transaction binds to
-    teacher = db.relationship('User', backref=db.backref('transactions', lazy='dynamic'))
     seat = db.relationship('Seat', backref=db.backref('transactions', lazy='dynamic'), foreign_keys=[seat_id])
     target_seat = db.relationship('Seat', foreign_keys=[target_seat_id], post_update=True)
     actor_seat = db.relationship('Seat', foreign_keys=[actor_seat_id], post_update=True)
@@ -690,7 +687,7 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
 # arrive as new linked rows rather than edits — so a reversal that rewrote
 # `amount` in place would erase the very history the ledger exists to keep.
 _LEDGER_IMMUTABLE_FIELDS = frozenset({
-    'seat_id', 'target_seat_id', 'actor_seat_id', 'user_id', 'class_id',
+    'seat_id', 'target_seat_id', 'actor_seat_id', 'class_id',
     'join_code', 'mechanism', 'amount', 'amount_cents', 'timestamp',
     'account_type', 'effective_at', 'date_funds_available', 'description',
     'correlation_id', 'original_transaction_id',
@@ -805,18 +802,6 @@ def _guard_ledger_immutability(_mapper, connection, target):
         )
 
 
-def _resolve_seat_id(connection, student_id, *, class_id=None):
-    """Lookup seat ID for a student in a class universe."""
-    if not student_id or not class_id:
-        return None
-
-    seat_id = connection.execute(
-        sa.text("SELECT id FROM seats WHERE user_id = :student_id AND class_id = :class_id LIMIT 1"),
-        {"student_id": student_id, "class_id": class_id},
-    ).scalar()
-    return int(seat_id) if seat_id else None
-
-
 class LedgerBalanceSnapshot(db.Model):
     """
     Authorized snapshot of posted balances (ledger_balance_snapshot — DOM-LED-001 §2).
@@ -887,7 +872,6 @@ class AttendanceSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     target_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
-    target_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=False, index=True)
     actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=False, index=True)
     mechanism = db.Column(db.String(20), nullable=False, default="self")
     status = db.Column(db.String(20), nullable=False, default="active")
@@ -897,7 +881,6 @@ class AttendanceSession(db.Model):
     timestamp = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
 
     target_seat = db.relationship("Seat", foreign_keys=[target_seat_id], backref=db.backref("attendance_sessions", passive_deletes=True))
-    target_user = db.relationship("User", foreign_keys=[target_user_id], post_update=True)
     actor_seat = db.relationship("Seat", foreign_keys=[actor_seat_id], post_update=True)
 
 
@@ -933,7 +916,6 @@ class PayrollEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     target_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
-    target_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=False, index=True)
     correlation_id = db.Column(db.String(100), nullable=False, index=True)
     idempotency_key = db.Column(db.String(255), nullable=False, index=True)
@@ -1135,7 +1117,6 @@ class StoreProduct(db.Model):
         db.String(36), nullable=False, index=True, default=lambda: str(uuid.uuid4())
     )
 
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
@@ -1192,7 +1173,6 @@ class StoreProduct(db.Model):
     retired_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Relationships
-    teacher = db.relationship('User', backref=db.backref('store_products', lazy='dynamic'))
     # Seat-level visibility keys off the LINEAGE, not this version, so a teacher
     # edit does not silently drop every per-seat visibility grant.
     visible_seats = db.relationship(
@@ -1253,7 +1233,7 @@ class StoreProduct(db.Model):
 # (DOM-POL-001 §VI.0). Only the availability projection and its retirement
 # metadata may change on a persisted row.
 _STORE_PRODUCT_IMMUTABLE_FIELDS = frozenset({
-    'policy_uuid', 'product_lineage_uuid', 'class_id', 'user_id', 'name',
+    'policy_uuid', 'product_lineage_uuid', 'class_id', 'name',
     'description', 'price', 'economic_role', 'item_type', 'inventory_total',
     'holding_limit', 'direct_purchase_allowed', 'available_with_overdue_obligations', 'activation_at', 'auto_delist_date', 'auto_expiry_days',
     'is_long_term_goal', 'bypass_cwi_warnings', 'is_bundle', 'bundle_quantity',
@@ -2067,7 +2047,6 @@ class Issue(db.Model):
     eligible_for_reward = db.Column(db.Boolean, default=False, nullable=False)  # Marks if student may receive reward for a legitimate bug
 
     # Sysadmin review and resolution
-    sysadmin_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     sysadmin_reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
     sysadmin_notes = db.Column(db.Text, nullable=True)  # Separate from student content, visible to teacher only
     sysadmin_resolved_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -2081,7 +2060,6 @@ class Issue(db.Model):
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
     # Relationships
-    sysadmin = db.relationship('User', foreign_keys=[sysadmin_id], backref=db.backref('reviewed_issues', lazy='dynamic'))
     related_transaction = db.relationship('Transaction', backref='related_issues')
     status_history = db.relationship('IssueStatusHistory', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueStatusHistory.changed_at.desc()')
     resolution_actions = db.relationship('IssueResolutionAction', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueResolutionAction.created_at.desc()')
@@ -2608,7 +2586,7 @@ class PolicyTransition(db.Model):
     activation_mode = db.Column(db.String(32), nullable=False)
     status = db.Column(db.String(32), nullable=False, default='pending')
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_by_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=True)
     applied_at = db.Column(db.DateTime(timezone=True), nullable=True)
     correlation_id = db.Column(db.String(64), nullable=True, index=True)
     superseded_by_transition_id = db.Column(db.Integer, db.ForeignKey('policy_transitions.id'), nullable=True)
@@ -2845,7 +2823,7 @@ class Announcement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     # Author
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    created_by_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False)
 
     # Class scope
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
@@ -2864,10 +2842,10 @@ class Announcement(db.Model):
     expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Relationships
-    teacher = db.relationship('User', foreign_keys=[user_id], backref=db.backref('announcements', lazy='dynamic', passive_deletes=True))
+    author_seat = db.relationship('Seat', foreign_keys=[created_by_seat_id])
 
     def __repr__(self):
-        return f'<Announcement {self.id} - {self.title[:30]} (Teacher {self.user_id}, class {self.class_id})>'
+        return f'<Announcement {self.id} - {self.title[:30]} (Seat {self.created_by_seat_id}, class {self.class_id})>'
 
     def is_expired(self):
         if self.expires_at is None:
@@ -2927,7 +2905,6 @@ class AuditEvent(db.Model):
     actor_id_hash    = db.Column(db.String(64), nullable=True)
     class_id         = db.Column(db.String(36), nullable=True)
     seat_id          = db.Column(db.Integer, nullable=True)
-    teacher_id       = db.Column(db.Integer, nullable=True)
     feat_id          = db.Column(db.String(32), nullable=True)
     idempotency_key  = db.Column(db.String(128), nullable=True)
     correlation_id   = db.Column(db.String(64), nullable=True)

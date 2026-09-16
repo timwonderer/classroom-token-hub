@@ -44,7 +44,6 @@ def test_store_page_renders_with_a_recent_purchase(client, app):
                 idempotency_key=f"store-render-fund:{student.seat_id}",
                 seat_id=student.seat_id,
                 class_id=class_id,
-                user_id=student.user_id,
                 amount=Decimal("500.00"),
                 account_type="checking",
                 type="payroll",

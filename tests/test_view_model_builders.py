@@ -54,7 +54,6 @@ def classroom(app):
             create_ledger_pending_transaction(
                 seat_id=student.seat_id,
                 class_id=classroom.class_id,
-                user_id=student.user_id,
                 amount=Decimal("100.00"),
                 account_type="checking",
                 type="payroll",

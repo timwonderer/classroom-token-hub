@@ -34,7 +34,6 @@ def _fund(student, class_id, amount):
             idempotency_key=f"fund-seat:{student.seat.id}",
             seat_id=student.seat.id,
             class_id=class_id,
-            user_id=student.user.id,
             amount=amount,
             account_type="checking",
             type="payroll",

@@ -557,7 +557,6 @@ class TestEconomicRoleIsAdvisory:
                     idempotency_key=f"role-required:{item_type}",
                 ):
                     store_service.publish_product(
-                        user_id=test_user["user_id"],
                         class_id=test_class["class_id"],
                         definition=definition,
                         actor_seat_id=teacher_seat["seat_id"],

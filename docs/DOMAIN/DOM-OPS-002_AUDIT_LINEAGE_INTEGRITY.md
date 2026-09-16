@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |:---|:---|:---|:---|:---|
-| DOM-OPS-002 | 1.0 | 2026-05-10 | N/A | Constitutional |
+| DOM-OPS-002 | 1.1 | 2026-09-15 | 1.0 | Constitutional |
 
 ---
 
@@ -71,10 +71,9 @@ Constitutional. Subordinate to `INV-ARC-016` and `DOM-OPS-001`. Supersedes any p
 | `row_pk` | String(64) | No | String-cast primary key of the protected row |
 | `operation` | String(16) | No | `INSERT` / `UPDATE` / `DELETE` / `TRANSITION` |
 | `actor_type` | String(32) | Yes | `"teacher"` / `"student"` / `"system"` |
-| `actor_id_hash` | String(64) | Yes | Hashed actor identifier |
+| `actor_id_hash` | String(64) | Yes | Hashed seat actor identifier; never a User identifier |
 | `class_id` | String(36) | Yes | UUID of the owning class |
 | `seat_id` | Integer | Yes | Seat anchor if applicable |
-| `teacher_id` | Integer | Yes | Teacher anchor if applicable |
 | `feat_id` | String(32) | Yes | Active FEAT name at emit time |
 | `idempotency_key` | String(128) | Yes | Caller-provided idempotency key |
 | `correlation_id` | String(64) | Yes | Propagated from the active FEAT context |
@@ -348,3 +347,7 @@ This taxonomy is defined as canonical in `INV-ARC-016`. The operational semantic
 ## 9. Amendment
 
 Revisions must preserve the append-only guarantee for `audit_events`, the HMAC chain integrity algorithm, the `UNVERIFIED ≠ INVALID` distinction, and the two-path lawful write model. Any change to the canonical payload format or HMAC message structure shall increment `signature_version`.
+
+Audit metadata must not copy authentication principal IDs, including a teacher alias.
+The removed `teacher_id` was outside the signed event/context inputs; removing that
+column preserves accepted chain hashes. Class attribution remains `seat_id` and `class_id`.

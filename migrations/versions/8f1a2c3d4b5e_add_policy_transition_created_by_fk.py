@@ -33,7 +33,10 @@ def foreign_key_exists(table_name, fk_name):
 
 
 def upgrade():
-    if table_exists("policy_transitions") and not foreign_key_exists(
+    # Fresh bootstrap creates current ORM metadata, which has no legacy author column.
+    if table_exists("policy_transitions") and "created_by" in {
+        c["name"] for c in sa.inspect(op.get_bind()).get_columns("policy_transitions")
+    } and not foreign_key_exists(
         "policy_transitions",
         "fk_policy_transitions_created_by",
     ):

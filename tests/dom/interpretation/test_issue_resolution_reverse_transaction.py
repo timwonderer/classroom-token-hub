@@ -131,7 +131,6 @@ def test_SPEC_OPS_001__payroll_cannot_be_reversed_or_refunded_from_an_issue(clie
             idempotency_key="issue-payroll-seed",
             seat_id=student.seat.id,
             class_id=classroom.class_id,
-            user_id=student.user.id,
             amount=Decimal("25.00"),
             account_type="checking",
             type="payroll",

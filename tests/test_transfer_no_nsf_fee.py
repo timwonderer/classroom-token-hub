@@ -86,7 +86,6 @@ def test_successful_transfer_moves_funds_under_feat_context(client, app):
                 idempotency_key=f"fund-seat:{seat_id}",
                 seat_id=seat_id,
                 class_id=class_id,
-                user_id=student.user.id,
                 amount=Decimal("50.00"),
                 account_type="checking",
                 type="payroll",

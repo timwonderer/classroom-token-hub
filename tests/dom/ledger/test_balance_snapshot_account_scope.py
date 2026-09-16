@@ -39,7 +39,6 @@ def _snapshots(seat_id, class_id):
 
 def _pending(seat, amount, account_type, description):
     return Transaction(
-        user_id=seat.user_id,
         class_id=seat.class_id,
         seat_id=seat.id,
         target_seat_id=seat.id,

@@ -999,7 +999,6 @@ def update_user_report(report_ref):
         )
         report.sysadmin_notes = admin_notes or None
         report.sysadmin_reviewed_at = utc_now()
-        report.sysadmin_id = g.canonical_context.user_id
         # FEATContext.__exit__ owns the commit (INV-ARC FEAT atomicity). A direct
         # commit here trips enforce_feat_context_on_commit and rolls the update back.
         flash(f"Report #{report_id} updated successfully.", "success")
@@ -1391,7 +1390,6 @@ def resolve_escalated_issue(issue_ref):
         issue.status = Issue.STATUS_DEV_RESOLVED
         issue.sysadmin_resolved_at = utc_now()
         issue.sysadmin_notes = resolution_note
-        issue.sysadmin_id = sysadmin_user_id
         issue.eligible_for_reward = eligible_for_reward
 
         if reward_amount_value is not None:
@@ -1419,7 +1417,6 @@ def resolve_escalated_issue(issue_ref):
                 target_seat_id=reward_seat.id,
                 actor_seat_id=reward_seat.id,
                 mechanism="system",
-                user_id=reward_seat.user_id,
                 amount=reward_amount_value,
                 account_type='checking',
                 description=f"Bug Reward (Issue #{issue.id})",
@@ -1451,7 +1448,7 @@ def resolve_escalated_issue(issue_ref):
             old_status,
             Issue.STATUS_DEV_RESOLVED,
             'sysadmin',
-            None,  # sysadmin acts outside class scope; identified by issue.sysadmin_id
+            None,  # sysadmin review records a role, not a classroom actor or principal
             notes=f"{resolution_note}{reward_note}",
         )
         if reward_amount_value is not None:

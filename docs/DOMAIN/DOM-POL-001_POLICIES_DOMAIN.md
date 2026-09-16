@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-POL-001 | 2.0 | 2026-07-28 | 1.0 | Constitutional |
+| DOM-POL-001 | 2.1 | 2026-09-15 | 2.0 | Constitutional |
 
 ## I. Purpose
 
@@ -219,3 +219,8 @@ This means Class Configuration decides whether a capability exists in the class,
 ## XI. Amendment
 
 Revisions must remain consistent with `DOM-CLASS-001`, the consuming operational domain, and the governing FEAT and temporal invariants.
+
+### Seat attribution (INV-ARC-019)
+
+Policy/product authors and transition initiators are recorded as `created_by_seat_id`
+within the explicit `class_id`. No User foreign key or principal author alias is permitted.

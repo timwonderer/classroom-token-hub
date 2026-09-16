@@ -33,7 +33,7 @@ def test_projection_verification_compares_against_canonical_history(client, app)
         create_pending_transaction(
             seat_id=seat.id, class_id=classroom.class_id,
             target_seat_id=seat.id, actor_seat_id=seat.id,
-            mechanism="self", user_id=seat.user_id, amount=12,
+            mechanism="self",  amount=12,
             account_type="checking", type="Deposit", description="proof projection",
         )
         settle_balances(seat.id, classroom.class_id)
@@ -63,7 +63,6 @@ def test_verify_transfer_passes_for_posted_two_leg_transfer(client, app):
         withdrawal, deposit = create_ledger_transfer_pair(
             seat_id=seat.id,
             class_id=classroom.class_id,
-            user_id=seat.user_id,
             amount=10,
             from_account="checking",
             to_account="savings",
@@ -92,7 +91,6 @@ def test_reconstruct_posted_balance_does_not_depend_on_snapshot(client, app):
             target_seat_id=seat.id,
             actor_seat_id=seat.id,
             mechanism="self",
-            user_id=seat.user_id,
             amount=12,
             account_type="checking",
             type="Deposit",

@@ -137,7 +137,6 @@ def _seed_source_loss(classroom, student, *, idem, amount=Decimal("-10.00")):
         idempotency_key=f"insurance-source-loss:{idem}",
         seat_id=student.seat.id,
         class_id=classroom.class_id,
-        user_id=student.user.id,
         amount=amount,
         account_type="checking",
         type="purchase",
@@ -505,7 +504,6 @@ class TestInsuranceClaimResolution:
                 idempotency_key=f"insurance-source:{idem}",
                 seat_id=student.seat.id,
                 class_id=classroom.class_id,
-                user_id=student.user.id,
                 amount=loss,
                 account_type="checking",
                 type="purchase",
@@ -1232,7 +1230,6 @@ def _seed_worked_interval(classroom, student, *, ctx, evaluation_date, hours: fl
     common = dict(
         target_seat_id=student.seat.id,
         class_id=classroom.class_id,
-        target_user_id=student.user.id,
         actor_seat_id=student.seat.id,
         reason_code="start_work",
     )

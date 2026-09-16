@@ -65,7 +65,7 @@ def _fund(seat, amount="100.00"):
         create_idempotent_transaction(
             idempotency_key=f"fund:{seat.id}:{uuid4().hex}",
             seat_id=seat.id, class_id=seat.class_id, target_seat_id=seat.id,
-            actor_seat_id=seat.id, mechanism="self", user_id=seat.user_id,
+            actor_seat_id=seat.id, mechanism="self",
             amount=Decimal(amount), account_type="checking", type="payroll",
             description="test funding",
         )

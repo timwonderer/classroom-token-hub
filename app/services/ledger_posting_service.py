@@ -14,7 +14,7 @@ _TRANSACTION_AUDIT_FIELDS = [
 
 def create_pending_transaction(
     *, seat_id: int, class_id: str, target_seat_id: int, actor_seat_id: int,
-    mechanism: str, user_id: int | None = None, amount, account_type: str,
+    mechanism: str, amount, account_type: str,
     type: str, description: str, original_transaction_id: int | None = None,
     policy_id: int | None = None, idempotency_key: str | None = None,
     command_reservation=None, compensation_subtype: str | None = None,
@@ -32,7 +32,7 @@ def create_pending_transaction(
         transaction, _created = create_idempotent_transaction(
             idempotency_key=idempotency_key, seat_id=seat_id, class_id=class_id,
             target_seat_id=target_seat_id, actor_seat_id=actor_seat_id,
-            mechanism=mechanism, user_id=user_id, amount=_quantize_currency(amount),
+            mechanism=mechanism, amount=_quantize_currency(amount),
             account_type=account_type, type=type, description=description,
             original_transaction_id=original_transaction_id, policy_id=policy_id,
             compensation_subtype=compensation_subtype, correlation_id=correlation_id,
@@ -58,7 +58,7 @@ def create_pending_transaction(
     # The idempotent path returns before reaching here.
     transaction = Transaction(  # FEAT-AUTHORIZED-DIRECT-TX
         seat_id=seat_id, target_seat_id=target_seat_id, actor_seat_id=actor_seat_id,
-        class_id=class_id, user_id=user_id, amount=_quantize_currency(amount),
+        class_id=class_id, amount=_quantize_currency(amount),
         account_type=account_type, status=TransactionStatus.PENDING,
         mechanism=mechanism, type=type, description=description,
         original_transaction_id=original_transaction_id, policy_id=policy_id,
@@ -74,7 +74,7 @@ def create_pending_transaction(
 
 def create_pending_transaction_idempotent(
     *, idempotency_key: str, seat_id: int, class_id: str, target_seat_id: int,
-    actor_seat_id: int, mechanism: str, user_id: int | None = None, amount,
+    actor_seat_id: int, mechanism: str, amount,
     account_type: str, type: str, description: str,
     original_transaction_id: int | None = None, policy_id: int | None = None,
     correlation_id: str | None = None,
@@ -82,7 +82,7 @@ def create_pending_transaction_idempotent(
     transaction, created = create_idempotent_transaction(
         idempotency_key=idempotency_key, seat_id=seat_id, class_id=class_id,
         target_seat_id=target_seat_id, actor_seat_id=actor_seat_id,
-        mechanism=mechanism, user_id=user_id, amount=_quantize_currency(amount),
+        mechanism=mechanism, amount=_quantize_currency(amount),
         account_type=account_type, type=type, description=description,
         original_transaction_id=original_transaction_id, policy_id=policy_id,
         correlation_id=correlation_id,

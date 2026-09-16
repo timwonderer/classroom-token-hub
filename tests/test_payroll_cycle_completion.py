@@ -55,7 +55,7 @@ def _seed_payroll_event(classroom, *, recorded_at, event_type="payroll"):
             db.session.add(policy)
             db.session.flush()
         db.session.add(PayrollEvent(
-            class_id=cid, target_seat_id=seat.seat_id, target_user_id=seat.user.id,
+            class_id=cid, target_seat_id=seat.seat_id,
             actor_seat_id=classroom.teacher_seat_id, correlation_id=f"corr_win:{recorded_at.isoformat()}",
             idempotency_key=f"win:{recorded_at.isoformat()}", policy_version_id=policy.id,
             policy_uuid=policy.policy_uuid, mechanism="TEACHER",

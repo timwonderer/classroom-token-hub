@@ -63,10 +63,10 @@ def test_seat_deletion_removes_the_identity_profile_in_the_same_transaction(clie
 def test_seat_deletion_removes_the_claim_verification_hashes(client):
     """The hashes live on `seats`, so their deletion is the row's deletion."""
     classroom = initialize("chemistry_p1", db)
-    from app.hash_utils import hash_username_lookup
+    from app.hash_utils import hash_claim_name
     from app.services.classroom_setup import create_roster_student_seat
     with FEATContext("FEAT-IDEN-006", idempotency_key="arc018:unclaimed"):
-        seat = create_roster_student_seat(class_id=classroom.class_id, first_name="Pending", last_name="Student", claim_first_name_hash=hash_username_lookup("pending"), claim_last_name_hash=hash_username_lookup("student"))
+        seat = create_roster_student_seat(class_id=classroom.class_id, first_name="Pending", last_name="Student", claim_first_name_hash=hash_claim_name("pending", class_id=classroom.class_id, field="first"), claim_last_name_hash=hash_claim_name("student", class_id=classroom.class_id, field="last"))
     seat_id = seat.id
     _assert_pii_is_present(seat)
     assert seat.claim_first_name_hash and seat.claim_last_name_hash

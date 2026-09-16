@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-PROD-001 | 1.1 | 2026-08-30 | 1.0 | Constitutional |
+| DOM-PROD-001 | 1.2 | 2026-09-15 | 1.1 | Constitutional |
 
 ---
 
@@ -290,7 +290,6 @@ Key fields:
 - `actor_seat_id` — FK to `seats`
 - `target_seat_id` - FK to `seats`
 - `mechanism` - `self` | `teacher` | `system`
-- `target_user_id` - FK to `users`
 - `class_id` — FK to `classes`; canonical isolation boundary
 - `status` — `active` | `inactive`
 - `timestamp` — UTC
@@ -306,11 +305,11 @@ Rules:
 - There is no canonical attendance-row deletion, soft-deletion, or correction API.
 - Teacher correction of an already-paid attendance outcome is performed by reversing the affected payroll event, not by changing attendance history.
 - Every session is scoped to exactly one `class_id`.
-- At most one active session may exist for a given `target_user_id` without a corresponding inactive event.
+- At most one active session may exist for a given `(class_id, target_seat_id)` without a corresponding inactive event.
 - The platform SHALL execute the following state transition automatically:
-    - Starting an active session SHALL automatically generate an `inactive` row for any `active` session under the same `target_user_id` with the `reason_code = done_for_day`
+    - Starting an active session SHALL automatically generate an `inactive` row for any `active` session under the same `(class_id, target_seat_id)` with the `reason_code = done_for_day`
     - Any `active` sessions SHALL automatically terminate by end of day at canonical class timezone with the `reason_code = done_for_day`. Timestamp for the `inactive` entry SHALL be recorded using the same date as the originating `active` entry.
-    - An `inactive` state with `reason_code = hall_pass` exist without a corresponding `active` row (known as "hanging hall pass") SHALL automatically generate an `active` row and an `inactive` + `reason_code = done_for_day` using the same timestamp when the following occurs: the day ends in the canonical class timezone OR when a new `active` session is created under the same `user_id` but with different `class_id`, whichever occurs first.
+    - An `inactive` state with `reason_code = hall_pass` exist without a corresponding `active` row (known as "hanging hall pass") SHALL automatically generate an `active` row and an `inactive` + `reason_code = done_for_day` using the same timestamp when the following occurs: the day ends in the canonical class timezone. Activity in another class never selects or closes this seat's timeline.
     - An `active` session reaching or exceeding the set daily limit SHALL generate an `inactive` row with `reason_code = done_for_day`. If the session exceeds the set limit, the closing row shall correct the timestamp so the accumulated time is equal to the set limit.
 - System-generated transitions MUST use the canonical teacher seat for the explicit class_id, resolved through the Identity domain’s canonical seat-resolution operation.
 - Current attendance state and accumulated daily minutes are derived from this timeline and are not stored here. 
