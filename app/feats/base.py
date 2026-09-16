@@ -195,6 +195,7 @@ class InvariantViolation(Exception):
 
 # Canonical FEAT Registry
 FEAT_REGISTRY = {
+    "FEAT-IDEN-101": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Initial Signup and TOTP Setup"},
     "FEAT-IDEN-103": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Recovery Initiation"},
     "FEAT-IDEN-104": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Student Confirmation for Teacher Recovery"},
     "FEAT-IDEN-105": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Recovery Code Validation"},

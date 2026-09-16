@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-003 | 2.6 | 2026-09-15 | 2.5 | Constitutional |
+| DOM-IDEN-003 | 2.7 | 2026-09-16 | 2.6 | Constitutional |
 
 ---
 
@@ -170,6 +170,11 @@ Teacher account provisioning follows DOM-IDEN-005 §VI. The constitutional provi
 Teacher-specific credential setup (TOTP enrollment, optional passkey enrollment) occurs within this sequence. TOTP setup is required before `has_completed_setup = true`.
 
 Per DOM-IDEN-005 §VI, the initial Class and administrative Seat MUST be provisioned atomically with the User. Failure to provision the initial Class SHALL invalidate the entire teacher provisioning transaction.
+
+Initial provisioning stages submitted metadata and the pending credential in an
+encrypted, expiring server record per INV-ARC-018 and FEAT-IDEN-101. The browser
+holds only a random nonce. Staging grants no identity or classroom authority;
+successful atomic provisioning consumes it.
 
 ### Session Establishment
 

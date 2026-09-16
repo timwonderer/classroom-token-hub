@@ -857,7 +857,21 @@ def purge_stale_teacher_accounts_job():
     return purge_stale_teacher_accounts()
 
 
+def purge_expired_teacher_signups_job():
+    from app.feats.teacher_signup_feat import purge_expired_signups
+    from app.feats.base import generate_correlation_id
+    return purge_expired_signups(correlation_id=generate_correlation_id(),
+        idempotency_key='teacher-signup:purge')
+
+
 SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
+    ScheduledJobSpec(
+        id='expired_teacher_signups',
+        name='Delete expired teacher signup staging',
+        func=purge_expired_teacher_signups_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
     ScheduledJobSpec(
         id='stale_teacher_accounts',
         name='Delete stale teacher accounts',

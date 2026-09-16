@@ -3007,3 +3007,11 @@ class InterpretationCycleRecord(db.Model):
 
     def __repr__(self):
         return f'<InterpretationCycleRecord class={self.class_id} cycle={self.payroll_cycle_id}>'
+
+
+class TeacherSignupAttempt(db.Model):
+    """Temporary encrypted initial provisioning, owned by FEAT-IDEN-101."""
+    __tablename__ = 'teacher_signup_attempts'
+    nonce_hash = db.Column(db.String(64), primary_key=True)
+    payload_encrypted = db.Column(db.Text, nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-018      | 1.2     | 2026-09-15     | 1.1        | Constitutional |
+| INV-ARC-018      | 1.3     | 2026-09-16     | 1.2        | Constitutional |
 
 ---
 
@@ -103,6 +103,7 @@ Only the following PII fields are permitted in the v2 schema. Any PII column not
 | Teacher-entered seat context (`notes`) | `identity_profiles` | Encrypted | Class-scoped contextual display for the teacher; free text with no assertion about its contents |
 | First name hash | `seats` | HMAC-hashed | Roster claim verification |
 | Last name hash | `seats` | HMAC-hashed | Roster claim verification |
+| Pending signup class/display metadata and username | `teacher_signup_attempts.payload_encrypted` | Encrypted | Temporary initial provisioning only; no lookup or actor authority |
 | Username hash | `users` | HMAC-hashed | Login lookup |
 
 ---
@@ -130,6 +131,17 @@ PII retention is governed by the lifecycle of its owning identity record:
 ---
 
 ## IX. Domain Responsibilities
+
+### Temporary teacher signup
+
+Before a User, Class or Seat exists, Identity may stage only the submitted class
+label, section, time zone, teacher first/last display names, username and pending
+TOTP seed in the encrypted signup payload. A hashed random capability binds that
+staging row to its browser. No plaintext staging values may enter the session
+cookie. The row is not an identity or participant and has no user_id or seat_id.
+It expires 30 minutes after creation without extension. Completion and restart
+delete it atomically; an hourly Identity cleanup deletes expired rows.
+No staging value is copied to logs or authority context.
 
 ### Identity Domain (DOM-IDEN)
 

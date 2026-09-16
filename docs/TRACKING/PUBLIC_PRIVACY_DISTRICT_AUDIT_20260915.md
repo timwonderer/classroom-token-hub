@@ -675,3 +675,42 @@ status and malformed JSON handling. Artifacts:
 Python compilation and scoped diff checks passed. The concurrent district.html
 edit remains untouched. No full suite, interactive browser assessment, commit or
 deployment was performed for this revision.
+
+## Authentication cookie contents: initial teacher signup (2026-09-16)
+
+Disposition: remedied in the prelaunch branch. Initial signup previously placed
+teacher display names, class metadata, username and the pending TOTP seed in the
+signed browser session. That is a storage/disclosure issue; it does not establish
+an exploit or a production incident.
+
+INV-ARC-018 now explicitly governs temporary encrypted signup storage;
+DOM-IDEN-003 and FEAT-IDEN-101 define its lifecycle. A random 256-bit browser
+nonce addresses a server row through a purpose-separated SHA-256 verifier.
+The row contains encrypted class/display metadata, username and pending seed,
+with a fixed 30-minute deadline. It has no User or Seat reference and grants no
+participation authority. Each step checks server state. Restart deletes the old
+attempt; an hourly job deletes expired attempts. Username changes replace the
+pending seed without extending the deadline.
+
+Final completion locks the attempt, rechecks username and TOTP, creates User,
+Class, Seat and IdentityProfile together, and deletes staging in the same
+transaction. Failure preserves the attempt and rolls back new identity records.
+Cookies contain the nonce and ordinary session controls, not the staged values.
+Migration a1e1f2a3b4c5 introduces the staging table.
+
+Eight targeted tests passed (6 in 22.65 seconds and 2 in 11.34 seconds): cookie
+contents and encrypted database representation, normal completion/replay,
+restart/expiry/purge, wrong nonce/username/TOTP, username replacement without
+deadline extension, cross-browser rejection, injected class-creation rollback,
+concurrent completion, username collision and migration creation/repetition.
+Artifacts:
+- pytest_result/20260916_pytest_test_teacher_signup_staging_summary.md
+- pytest_result/20260916_pytest_test_teacher_signup_staging_summary_1.md
+
+Python compilation and scoped diff checks passed. The existing PII storage
+validator also passed; its static inventory does not inspect the new encrypted
+payload, whose stored representation is exercised by the targeted test.
+The separate district.html edit remains untouched. No full suite, interactive
+browser assessment, commit, deployment or production migration was performed.
+This closes initial signup staging only; it does not certify all other cookie
+contents, authenticated credential changes or hosting configuration.
