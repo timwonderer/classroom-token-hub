@@ -291,7 +291,7 @@ whole-roster quorum. INV-CORE-000 §III.6 prohibits interpreting "active" as an
 extra class lifecycle state. No runtime or public-page edits are part of this
 correction; no new runtime tests were necessary for these documentation changes.
 
-**Remaining separate review:** the downstream FEATs also contain older code
+**Separate review identified at the quorum checkpoint:** the downstream FEATs also contained older code
 format/hashing, consumed-state, and credential-completion language. This quorum
 reconciliation does not certify those other contracts or their runtime. They
 must be checked against DOM-IDEN-003 §IX and incorporated SPEC-SEC-001 before any
@@ -591,3 +591,87 @@ Python compilation and scoped diff checks passed. No full suite, data migration,
 old-digest fallback, commit or deployment was performed. Unused obsolete claim/name
 calculations were removed from the manual-add route; teacher-recovery capability
 hashing/lifecycle remains a distinct follow-up, not certified by these checks.
+
+
+## Teacher recovery completion remediation (2026-09-15)
+
+Reconciled FEAT-IDEN-103/104/105/106 against DOM-IDEN-003 §IX and incorporated
+SPEC-SEC-001. Preserve one selected student per owned class, six-digit numeric
+confirmation codes, a five-day total window, and saved partial progress. The old
+FEAT bcrypt/alphanumeric-code instructions and consumed-at-generation interpretation
+were stale specification conflicts; generation records student confirmation, while
+successful full submission consumes the code verifiers into a server-owned setup grant.
+
+Registered FEAT commands now serialize initiation, confirmation, submission and
+completion through the teacher User and request locks. Submission checks exact
+nonempty class coverage and the full multiset of generated codes; failures clear
+all confirmations and saved/setup material. Recovery codes and resume PINs use
+separate purpose labels; confirmation digests are request-bound. Ambiguous resume
+PIN lookups fail closed. Saved codes and username are encrypted, with no plaintext
+fallback. A saved-progress route/service naming collision was removed.
+
+Migration e9c9d0e1f2a3 adds server-held setup authorization: nonce verifier,
+encrypted pending TOTP seed and encrypted pending username. The signed session
+contains the nonce and request reference only. Completion checks live pending state,
+original expiry, nonce, current participant/class coverage and the newly enrolled
+TOTP. Credential replacement, all passkey deletion, login-session revocation,
+completion state and clearing saved/setup material commit atomically. It uses
+canonical User fields rather than the removed User.salt/username attributes.
+Enrollment can be redisplayed through the same valid nonce for a mistyped TOTP;
+request IDs and resume PINs never independently authorize credential replacement.
+
+This is application remediation and specification reconciliation. It does not
+certify provider infrastructure or unrelated authenticated TOTP-rotation UI.
+
+Verification: final focused run passed 22 tests in 153.06 seconds, covering successful
+completion and replay, expiry/cancellation/wrong nonce, missing participants, generic
+all-code invalidation, encrypted progress/resume, setup-cookie contents, one-time and
+concurrent issuance, concurrent completion, repeated-code multiplicity, initiation
+coverage/reuse, enrollment retry, username collision, injected transaction rollback,
+Unclaim cancellation and student recovery regression. Artifact:
+`pytest_result/20260916_pytest_test_teacher_recovery_completion_summary_3.md`.
+The initial run exposed missing FEAT registry entries, which were registered and
+retested. Python compilation and scoped diff checks passed. No full suite,
+interactive browser assessment, commit, deployment or production migration.
+
+## Teacher recovery protocol revision: hidden witnesses and aggregate feedback
+
+This revision supersedes the nominated-recipient and saved-code behavior described
+in the preceding remediation entry. DOM-IDEN-003 IX and FEAT-IDEN-103–106 now
+separate User-owned attempt coordination from individual class-scoped proof,
+selection, issuance and confirmation commands.
+
+Each class has two randomly selected eligible claimed student seats (one when
+only one is eligible), simultaneously notified and hidden from the teacher.
+Selection is frozen for the five-day attempt. Each student can regenerate their
+own 30-minute code without changing recipients; new issuance replaces that
+student's previous code. Either code privately confirms the class and invalidates
+both outstanding codes. Accepted class proofs survive ordinary code expiration
+and resume for the remainder of the attempt.
+
+Code-entry responses and teacher status disclose receipt only. Correct and
+incorrect inputs have identical response bodies and status-page output. Only the
+complete set receives an aggregate result. Failed aggregate verification advances
+the submission round, invalidating all prior-round codes and confirmations without
+rerolling recipients or sweeping across class records. Resume rotates the attempt
+nonce; credential completion retains the server nonce and atomic replacement
+checks. Browser responses use public class references instead of internal IDs.
+Unclaim removes only that seat's participation; the other fixed recipient remains
+eligible and an already accepted class proof persists.
+
+Migration f0d0e1f2a3b4 adds the class challenge records, access nonce verifier,
+selection/confirmation state and separate code-expiration/submission-round fields.
+No production migration has been performed.
+
+Verification: 23 targeted tests passed in 169.24 seconds, including concurrent
+confirmation/completion, rollback, expiry/regeneration, fixed selection, one-seat
+classes, generic feedback, resume, Unclaim and student reset regression.
+After the public-reference response adjustment, both affected route tests passed
+again (2 tests, 13.56 seconds), including identical validity-independent rendered
+status and malformed JSON handling. Artifacts:
+- pytest_result/20260916_pytest_test_teacher_recovery_completion_summary_5.md
+- pytest_result/20260916_pytest_test_teacher_recovery_completion_summary_6.md
+
+Python compilation and scoped diff checks passed. The concurrent district.html
+edit remains untouched. No full suite, interactive browser assessment, commit or
+deployment was performed for this revision.

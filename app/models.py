@@ -2216,11 +2216,31 @@ class RecoveryRequest(db.Model):
     # Partial progress - allows teacher to save progress and resume later
     partial_codes = db.Column(db.JSON, nullable=True)  # Array of entered codes (not yet validated)
     resume_pin_hash = db.Column(db.String(64), nullable=True)  # Hashed PIN to resume progress
-    resume_new_username = db.Column(db.String(100), nullable=True)  # Temporary storage for new username
+    resume_new_username = db.Column(db.Text, nullable=True)  # Temporary storage for new username
+
+    submission_round = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    required_class_ids = db.Column(db.JSON, nullable=False, default=list)
+    attempt_nonce_hash = db.Column(db.String(64), nullable=True)
+    selection_started_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    setup_nonce_hash = db.Column(db.String(64), nullable=True)
+    setup_totp_encrypted = db.Column(db.Text, nullable=True)
+    setup_username = db.Column(db.Text, nullable=True)
 
     # Relationships
     user = db.relationship('User', backref=db.backref('recovery_requests', lazy='dynamic'))
     verification_codes = db.relationship('StudentRecoveryCode', backref='recovery_request', lazy='dynamic', cascade='all, delete-orphan')
+
+
+class RecoveryClassChallenge(db.Model):
+    __tablename__ = 'recovery_class_challenges'
+    recovery_request_id = db.Column(db.Integer, db.ForeignKey('recovery_requests.id', ondelete='CASCADE'), primary_key=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), primary_key=True)
+    proof_verified_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    selected_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    selected_count = db.Column(db.Integer, nullable=True)
+    satisfied_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    satisfied_round = db.Column(db.Integer, nullable=True)
+    received_round = db.Column(db.Integer, nullable=True)
 
 
 class StudentRecoveryCode(db.Model):
@@ -2232,6 +2252,8 @@ class StudentRecoveryCode(db.Model):
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id'), nullable=False, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
 
+    issued_round = db.Column(db.Integer, nullable=True)
+    code_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     code_hash = db.Column(db.String(64), nullable=True)
     verified_at = db.Column(db.DateTime(timezone=True), nullable=True)
 

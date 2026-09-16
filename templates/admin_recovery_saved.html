@@ -64,8 +64,8 @@
             <h1 id="recovery-saved-heading" class="status-header"><span class="material-symbols-outlined me-2" aria-hidden="true">check_circle</span>Progress Saved!</h1>
 
             <div class="alert alert-success">
-                <h5 class="alert-heading">Your recovery codes have been saved</h5>
-                <p class="mb-0">You've saved {{ codes_saved }} recovery code(s). You can come back anytime before {{ recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }} to continue.</p>
+                <h5 class="alert-heading">Your recovery attempt can be resumed</h5>
+                <p class="mb-0">Your code-entry receipts and private class confirmations stay with this attempt. No code validity is revealed. You can come back anytime before {{ recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }} to continue.</p>
             </div>
 
             <div class="resume-pin-display">

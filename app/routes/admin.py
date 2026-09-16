@@ -215,7 +215,7 @@ from app.feats.transaction_void_feat import (
     execute_void_transaction,
     execute_void_transactions,
 )
-from app.hash_utils import hash_hmac, hash_username_lookup
+from app.hash_utils import hash_username_lookup
 from app.attendance import (
     get_last_payroll_time,
     calculate_unpaid_attendance_seconds,
@@ -239,15 +239,12 @@ from app.services.admin_identity_service import (
     touch_admin_credentials_last_used,
 )
 from app.services.recovery_service import (
-    create_recovery_request_with_seats,
     delete_recovery_rows_for_user,
     find_recovery_request_by_resume_pin,
     get_active_recovery_request_for_user,
     get_recovery_request_by_id,
     invalidate_recovery_codes,
     list_recovery_codes_for_request,
-    mark_recovery_request_verified,
-    save_recovery_progress,
 )
 # TODO (Phase 4): insurance_eligibility deleted; use canonical tools + FEAT-STOR-003
 # from app.utils.insurance_eligibility import (
@@ -3228,210 +3225,83 @@ def signup():
 @admin_bp.route('/recover', methods=['GET', 'POST'])
 @limiter.limit("5 per hour")
 def recover():
-    """
-    Account recovery - Step 1: Roster verification.
-
-    Teacher submits one (join_code, student_username) pair per class taught.
-    Lookup order (enforced):
-      1. Resolve join_code -> ClassEconomy -> class_id (establishes user_id and class scope)
-      2. Find the seat by username_lookup_hash *within* the resolved class roster
-    All pairs must resolve to the same teacher and must cover all active class_ids.
-    No DOB is used.
-
-    Generic errors only — do not reveal which pair failed.
-    Rate limited to prevent brute-force enumeration.
-    """
+    from app.feats.teacher_recovery_feat import begin_attempt
     form = AdminRecoveryForm()
-    _GENERIC_ERROR = "Unable to verify identity. Please check your entries and try again."
-
     if request.method == 'POST' and form.validate_on_submit():
-        recovery_join_codes = request.form.getlist('join_code[]')
-        recovery_usernames = request.form.getlist('student_username[]')
+        joins, usernames = request.form.getlist('join_code[]'), request.form.getlist('student_username[]')
+        if joins and len(joins)==len(usernames) and all(x.strip() for x in joins+usernames) and len(set(joins))==len(joins):
+            result = begin_attempt(join_code=joins[0], current_request_id=session.get('recovery_request_id'),
+                attempt_nonce=session.get('teacher_recovery_attempt_nonce'), correlation_id=generate_correlation_id(),
+                idempotency_key='teacher-recovery:begin')
+            if result:
+                session['recovery_request_id'] = result['id']
+                session['teacher_recovery_attempt_nonce'] = result['nonce']
+                if result['existing']:
+                    return redirect(url_for('admin.recovery_status'))
+                return render_template('admin_recovery_prepare.html', pairs=[dict(join_code=j, username=u) for j,u in zip(joins,usernames)])
+        flash('Unable to begin recovery. Check all entries or resume your existing recovery attempt.', 'error')
+    return render_template('admin_recover.html', form=form)
 
-        # Strip and filter empty entries
-        recovery_pairs = [
-            (jc.strip().upper(), un.strip())
-            for jc, un in zip(recovery_join_codes, recovery_usernames)
-            if jc.strip() and un.strip()
-        ]
 
-        if not recovery_pairs:
-            flash(_GENERIC_ERROR, "error")
-            return render_template("admin_recover.html", form=form)
+@admin_bp.route('/recovery/class-proof', methods=['POST'])
+@limiter.limit('30 per hour')
+def recovery_class_proof():
+    from app.feats.teacher_recovery_feat import prove_class
+    data = request.get_json(silent=True)
+    data = data if isinstance(data, dict) else {}
+    join = str(data.get('join_code', '')).strip().upper()
+    prove_class(request_id=session.get('recovery_request_id'), attempt_nonce=session.get('teacher_recovery_attempt_nonce'),
+        join_code=join, username=str(data.get('username','')), correlation_id=generate_correlation_id(),
+        idempotency_key='teacher-recovery:class-proof')
+    classroom = ClassEconomy.query.filter_by(join_code=join).first()
+    # No username/proof validity feedback. The complete proof set is evaluated later.
+    return jsonify(received=True, class_ref=classroom.class_public_id if classroom else None)
 
-        # ----------------------------------------------------------------
-        # Step 1: Establish class authority from the first explicit ingress boundary
-        # ----------------------------------------------------------------
-        display_join_code = recovery_pairs[0][0]
-        normalized_code = display_join_code.strip().upper() if display_join_code else display_join_code
-        first_class = ClassEconomy.query.filter_by(join_code=normalized_code).first()
-        if not first_class:
-            current_app.logger.warning(
-                f"Admin recovery: initial join_code '{display_join_code}' not found"
-            )
-            flash(_GENERIC_ERROR, "error")
-            return render_template("admin_recover.html", form=form)
 
-        recovered_account_id = first_class.teacher_user_id
-        # NOTE (INV-ARC-004): this is a PRE-AUTH, account-level identity challenge —
-        # not a class-local runtime capability. Enumerating the account's classes is
-        # intrinsic to verifying "you own this account" (the applicant must reproduce
-        # the full class set exactly, below). No class-scoped data is read or written
-        # across boundaries here, so the one-tenant-per-request rule for class-local
-        # operations does not apply to this identity-verification path.
-        active_classes = get_all_classes_by_teacher(recovered_account_id)
-        class_by_id = {c.class_id: c for c in active_classes if c.class_id}
+@admin_bp.route('/recovery/select-class', methods=['POST'])
+@limiter.limit('30 per hour')
+def recovery_select_class():
+    from app.feats.teacher_recovery_feat import select_class_recipients
+    data = request.get_json(silent=True)
+    data = data if isinstance(data, dict) else {}
+    classroom = ClassEconomy.query.filter_by(class_public_id=str(data.get('class_ref', ''))).first()
+    success = select_class_recipients(request_id=session.get('recovery_request_id'),
+        attempt_nonce=session.get('teacher_recovery_attempt_nonce'), class_id=classroom.class_id if classroom else None,
+        correlation_id=generate_correlation_id(), idempotency_key='teacher-recovery:select-class')
+    return jsonify(ready=success)
 
-        resolved_pairs = []
-        for recovery_join_code, recovery_username in recovery_pairs:
-            resolved_class = next((c for c in active_classes if c.join_code == recovery_join_code), None)
-            if not resolved_class:
-                current_app.logger.warning(
-                    f"Admin recovery: join_code '{recovery_join_code}' not found in recovered account scope"
-                )
-                flash(_GENERIC_ERROR, "error")
-                return render_template("admin_recover.html", form=form)
-            resolved_pairs.append((resolved_class.class_id, recovery_username))
 
-        # ----------------------------------------------------------------
-        # Step 2: Verify submitted class_ids exactly match the active class records
-        # ----------------------------------------------------------------
-        all_active_class_ids = set(class_by_id)
-        submitted_class_ids = set(class_id for class_id, _ in resolved_pairs)
-
-        # Must exactly match backend list
-        if all_active_class_ids != submitted_class_ids:
-            current_app.logger.warning(
-                f"Admin recovery: class_id set mismatch for recovered account {recovered_account_id}"
-            )
-            flash(_GENERIC_ERROR, "error")
-            return render_template("admin_recover.html", form=form)
-
-        # Reject duplicates (e.g. submitting the same valid class 3 times)
-        if len(submitted_class_ids) != len(resolved_pairs):
-            current_app.logger.warning(
-                f"Admin recovery: duplicate class_ids submitted"
-            )
-            flash(_GENERIC_ERROR, "error")
-            return render_template("admin_recover.html", form=form)
-
-        # ----------------------------------------------------------------
-        # Step 3: Verify each recovered seat belongs in the correct class scope
-        # ----------------------------------------------------------------
-        resolved_seats = {}   # class_id -> seat record
-
-        # Group seat IDs by class for quick lookup
-        seats_by_class_id = {}
-        for c in active_classes:
-            if c.class_id:
-                jc_seats = (
-                    Seat.query
-                    .join(User, User.id == Seat.user_id)
-                    .filter(
-                        Seat.class_id == c.class_id,
-                        Seat.claimed_at.isnot(None),
-                    )
-                    .with_entities(Seat.id, User.id)
-                    .all()
-                )
-                seats_by_class_id[c.class_id] = jc_seats
-
-        for recovery_class_id, recovery_username in resolved_pairs:
-            # We already know this class is in scope from the set comparison.
-            recovery_lookup_hash = hash_username_lookup(recovery_username)
-
-            # Get all seat IDs associated with this specific class
-            seats_for_jc = seats_by_class_id.get(recovery_class_id, [])
-            seat_ids_in_class = [seat_id for seat_id, _student_id in seats_for_jc if seat_id]
-
-            seat = (
-                Seat.query
-                .join(User, User.id == Seat.user_id)
-                .filter(
-                    Seat.id.in_(seat_ids_in_class),
-                    User.username_lookup_hash == recovery_lookup_hash,
-                )
-                .first()
-            )
-
-            if not seat:
-                current_app.logger.warning(
-                    f"Admin recovery: recovered seat not found in recovery scope"
-                )
-                flash(_GENERIC_ERROR, "error")
-                return render_template("admin_recover.html", form=form)
-
-            resolved_seats[recovery_class_id] = seat
-
-        # ----------------------------------------------------------------
-        # Step 4: Check for existing active recovery request
-        # ----------------------------------------------------------------
-        existing_request = get_active_recovery_request_for_user(recovered_account_id, utc_now())
-
-        if existing_request:
-            flash("You already have an active recovery request. Please check back or wait for it to expire.", "info")
-            session['recovery_request_id'] = existing_request.id
-            return redirect(url_for('admin.recovery_status'))
-
-        # ----------------------------------------------------------------
-        # Step 4: Create recovery request (5-day expiration)
-        # ----------------------------------------------------------------
-        expires_at = utc_now() + timedelta(days=5)
-        recovery_request = create_recovery_request_with_seats(
-            user_id=recovered_account_id,
-            seat_class_pairs=[(seat.id, class_id) for class_id, seat in resolved_seats.items()],
-            expires_at=expires_at,
-        )
-
-        session['recovery_request_id'] = recovery_request.id
-        current_app.logger.info(
-            f"Admin recovery: request created for recovered account {recovered_account_id}, expires {expires_at}"
-        )
-
-        flash("Recovery request created! Your students have been notified. You have 5 days to complete this process.", "success")
-        return redirect(url_for('admin.recovery_status'))
-
-    return render_template("admin_recover.html", form=form)
-
+@admin_bp.route('/recovery/submit-class-code', methods=['POST'])
+@limiter.limit('10 per hour')
+def recovery_submit_class_code():
+    from app.feats.teacher_recovery_feat import confirm_class
+    data = request.get_json(silent=True)
+    data = data if isinstance(data, dict) else {}
+    classroom = ClassEconomy.query.filter_by(class_public_id=str(data.get('class_ref', ''))).first()
+    received = confirm_class(request_id=session.get('recovery_request_id'),
+        attempt_nonce=session.get('teacher_recovery_attempt_nonce'), class_id=classroom.class_id if classroom else None,
+        code=str(data.get('code','')).strip(), correlation_id=generate_correlation_id(),
+        idempotency_key='teacher-recovery:submit-class-code')
+    return jsonify(received=received)
 
 
 @admin_bp.route('/recovery-status', methods=['GET'])
 def recovery_status():
-    """
-    Show status of recovery request and collected codes.
-    """
-    recovery_request_id = session.get('recovery_request_id')
-    if not recovery_request_id:
-        flash("No active recovery request found.", "error")
+    from app.feats.teacher_recovery_feat import attempt_status
+    status = attempt_status(session.get('recovery_request_id'), session.get('teacher_recovery_attempt_nonce'))
+    if status is None:
+        flash('Recovery is unavailable. Resume or begin recovery again.', 'error')
         return redirect(url_for('admin.recover'))
+    return render_template('admin_recovery_status.html', status=status)
 
-    recovery_request = get_recovery_request_by_id(recovery_request_id)
-    if not recovery_request:
-        flash("Recovery request not found.", "error")
-        session.pop('recovery_request_id', None)
-        return redirect(url_for('admin.recover'))
 
-    # Check if expired (handle timezone-naive datetimes from SQLite)
-    expires_at = ensure_utc(recovery_request.expires_at)
-    if expires_at < utc_now():
-        flash("Your recovery request has expired. Please start a new recovery.", "error")
-        session.pop('recovery_request_id', None)
-        return redirect(url_for('admin.recover'))
-
-    # Get verification codes
-    codes = list_recovery_codes_for_request(recovery_request.id)
-    verified_count = sum(1 for c in codes if c.code_hash is not None)
-    total_count = len(codes)
-
-    # Check if all verified
-    all_verified = verified_count == total_count and total_count > 0
-
-    return render_template("admin_recovery_status.html",
-                         recovery_request=recovery_request,
-                         codes=codes,
-                         verified_count=verified_count,
-                         total_count=total_count,
-                         all_verified=all_verified)
+def _render_teacher_recovery_setup(form, authorized):
+    secret, username = authorized['secret'], authorized['username']
+    uri = pyotp.TOTP(secret).provisioning_uri(name=username, issuer_name="Classroom Economy Admin")
+    buf = io.BytesIO()
+    qrcode.make(uri).save(buf, format='PNG')
+    return render_template('admin_reset_credentials.html', form=form, show_qr=True,
+        qr_b64=base64.b64encode(buf.getvalue()).decode('utf-8'), totp_secret=secret, new_username=username)
 
 
 @admin_bp.route('/reset-credentials', methods=['GET', 'POST'])
@@ -3448,214 +3318,63 @@ def reset_credentials():
         return redirect(url_for('admin.recover'))
 
     recovery_request = get_recovery_request_by_id(recovery_request_id)
-    if not recovery_request or recovery_request.status != 'pending':
+    if not recovery_request or recovery_request.status != 'pending' or ensure_utc(recovery_request.expires_at) <= utc_now():
         flash("Invalid or expired recovery request.", "error")
         return redirect(url_for('admin.recover'))
 
     form = AdminResetCredentialsForm()
     if request.method == 'POST' and form.validate_on_submit():
-        # Get recovery codes from dynamic fields
-        entered_codes = request.form.getlist('recovery_code')
-        entered_codes = [c.strip() for c in entered_codes if c.strip()]
-        new_username = form.new_username.data.strip()
-
-        # Get all student recovery codes for this request
-        student_codes = list_recovery_codes_for_request(recovery_request.id)
-
-        # Verify all students have generated codes
-        if any(sc.code_hash is None for sc in student_codes):
-            flash("Not all students have verified yet. Please wait for all students to generate their recovery codes.", "error")
+        from app.feats.teacher_recovery_feat import authorize_setup
+        result = authorize_setup(request_id=recovery_request.id,
+            attempt_nonce=session.get('teacher_recovery_attempt_nonce'),
+            username=form.new_username.data, correlation_id=generate_correlation_id(),
+            idempotency_key=f"teacher-recovery:authorize:{recovery_request.id}")
+        if not result:
+            session.pop('teacher_recovery_setup_nonce', None)
+            flash("Recovery could not be verified. Collect fresh codes for every class and try again, or restart if the attempt expired.", "error")
             return redirect(url_for('admin.recovery_status'))
+        totp_secret, new_username = result['secret'], result['username']
+        session['teacher_recovery_setup_nonce'] = result['nonce']
+        return _render_teacher_recovery_setup(form, result)
 
-        # Verify count matches
-        if len(entered_codes) != len(student_codes):
-            current_app.logger.warning(f"Admin recovery: code count mismatch for request {recovery_request.id} - expected {len(student_codes)}, got {len(entered_codes)}")
-            # Invalidate ALL codes
-            _invalidate_all_recovery_codes(recovery_request.id)
-            flash(f"Wrong number of codes entered. All codes have been invalidated. Your students must generate new codes.", "error")
-            return redirect(url_for('admin.recovery_status'))
+    from app.feats.teacher_recovery_feat import read_setup
+    authorized = read_setup(recovery_request.id, session.get('teacher_recovery_setup_nonce'))
+    if authorized:
+        return _render_teacher_recovery_setup(form, authorized)
 
-        # Verify entered codes match (in any order)
-        entered_hashes = set()
-        for code in entered_codes:
-            # Validate format
-            if not code.isdigit() or len(code) != 6:
-                current_app.logger.warning(f"Admin recovery: invalid code format for request {recovery_request.id}")
-                _invalidate_all_recovery_codes(recovery_request.id)
-                flash("Invalid code format detected. All codes have been invalidated. Your students must generate new codes.", "error")
-                return redirect(url_for('admin.recovery_status'))
-            # Hash the entered code (no salt for recovery codes - they're already random)
-            code_hash = hash_hmac(code.encode(), b'')
-            entered_hashes.add(code_hash)
-
-        stored_hashes = set(sc.code_hash for sc in student_codes)
-
-        if entered_hashes != stored_hashes:
-            current_app.logger.warning(f"Admin recovery: code mismatch for request {recovery_request.id}")
-            # Invalidate ALL codes on failed attempt
-            _invalidate_all_recovery_codes(recovery_request.id)
-            flash("Recovery codes do not match. All codes have been invalidated. Your students must generate new codes.", "error")
-            return redirect(url_for('admin.recovery_status'))
-
-        # Check username uniqueness
-        if _auth_username_exists(new_username, exclude_admin_id=recovery_request.user_id):
-            flash("Username already exists. Please choose a different username.", "error")
-            return render_template("admin_reset_credentials.html", form=form, show_qr=False)
-
-        # Generate new TOTP secret
-        totp_secret = pyotp.random_base32()
-        totp_uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(name=new_username, issuer_name="Classroom Economy Admin")
-
-        # Generate QR code
-        img = qrcode.make(totp_uri)
-        buf = io.BytesIO()
-        img.save(buf, format='PNG')
-        buf.seek(0)
-        img_b64 = base64.b64encode(buf.read()).decode('utf-8')
-
-        # Store in session for TOTP verification
-        session['reset_totp_secret'] = totp_secret
-        session['reset_new_username'] = new_username
-
-        return render_template("admin_reset_credentials.html", form=form, show_qr=True, qr_b64=img_b64, totp_secret=totp_secret, new_username=new_username)
-
-    # Check if resuming from saved progress
-    resume_mode = session.get('resume_mode', False)
-    saved_codes = recovery_request.partial_codes if resume_mode else []
-    saved_username = recovery_request.resume_new_username if resume_mode else ''
-
-    # Clear resume mode flag
-    if resume_mode:
-        session.pop('resume_mode', None)
-
-    return render_template("admin_reset_credentials.html",
-                         form=form,
-                         show_qr=False,
-                         saved_codes=saved_codes,
-                         saved_username=saved_username)
-
-
-def _invalidate_all_recovery_codes(recovery_request_id: int):
-    """
-    Invalidate all recovery codes forcing students to regenerate new ones.
-    This prevents attackers from testing codes individually.
-    """
-    invalidated_count = invalidate_recovery_codes(recovery_request_id)
-    current_app.logger.info(
-        f"Invalidated {invalidated_count} recovery codes - students must regenerate"
-    )
+    return redirect(url_for('admin.recovery_status'))
 
 
 @admin_bp.route('/confirm-reset', methods=['POST'])
 @limiter.limit("10 per hour")
 def confirm_reset():
-    """
-    Confirm TOTP code and complete the account reset.
-    Rate limited to prevent brute force attacks on TOTP codes.
-    """
-    recovery_request_id = session.get('recovery_request_id')
-    if not recovery_request_id:
-        flash("Invalid recovery session.", "error")
-        return redirect(url_for('admin.recover'))
-
-    recovery_request = get_recovery_request_by_id(recovery_request_id)
-    if not recovery_request:
-        flash("Invalid recovery session.", "error")
-        return redirect(url_for('admin.recover'))
-
-    teacher = db.session.get(User, recovery_request.user_id)
-    if not teacher:
-        flash("Invalid recovery session.", "error")
-        return redirect(url_for('admin.recover'))
-
-    totp_code = request.form.get('totp_code', '').strip()
-    totp_secret = session.get('reset_totp_secret')
-    new_username = session.get('reset_new_username')
-
-    if not totp_code or not totp_secret or not new_username:
-        flash("Invalid reset session.", "error")
+    from app.feats.teacher_recovery_feat import complete_setup
+    request_id = session.get('recovery_request_id')
+    success = complete_setup(request_id=request_id,
+        nonce=session.get('teacher_recovery_setup_nonce'),
+        totp_code=request.form.get('totp_code', '').strip(),
+        correlation_id=generate_correlation_id(),
+        idempotency_key=f"teacher-recovery:complete:{request_id}") if request_id else False
+    if not success:
+        flash("Recovery could not be completed. Check the authenticator code or restart recovery.", "error")
         return redirect(url_for('admin.reset_credentials'))
-
-    # Verify TOTP code
-    totp = pyotp.TOTP(totp_secret)
-    if not totp.verify(totp_code):
-        flash("Invalid TOTP code. Please try again.", "error")
-        return redirect(url_for('admin.reset_credentials'))
-
-    # Update admin account
-    previous_username_lookup_hash = teacher.username_lookup_hash
-    user = User.query.filter_by(username_lookup_hash=previous_username_lookup_hash).first()
-    if not user:
-        flash("Canonical account identity is missing. Contact support.", "error")
-        return redirect(url_for('admin.recover'))
-
-    salt, username_hash, username_lookup_hash = _build_admin_auth_fields(new_username, existing_salt=teacher.salt)
-    teacher.salt = salt
-    teacher.username = None
-    teacher.username_hash = username_hash
-    teacher.username_lookup_hash = username_lookup_hash
-    encrypted_totp_secret = encrypt_totp(totp_secret)
-    user.username_hash = username_hash
-    user.username_lookup_hash = username_lookup_hash
-    user.totp_secret_encrypted = encrypted_totp_secret
-
-    # Mark recovery request as completed
-    mark_recovery_request_verified(recovery_request.id, utc_now())
-
-    # Clear recovery session
-    session.pop('reset_totp_secret', None)
-    session.pop('reset_new_username', None)
-
-    flash("Your account has been successfully reset! Please log in with your new username and TOTP.", "success")
+    session.clear()
+    flash("Your account has been reset. Sign in with your new username and authenticator code.", "success")
     return redirect(url_for('admin.login'))
 
 
 @admin_bp.route('/save-recovery-progress', methods=['POST'])
 @limiter.limit("10 per hour")
 def save_recovery_progress():
-    """
-    Save partial recovery progress and generate a resume PIN.
-    Allows teachers to enter codes gradually without needing all students at once.
-    """
-    recovery_request_id = session.get('recovery_request_id')
-    if not recovery_request_id:
-        flash("No active recovery request found.", "error")
+    from app.feats.teacher_recovery_feat import save_progress
+    request_id = session.get('recovery_request_id')
+    pin = save_progress(request_id=request_id, attempt_nonce=session.get('teacher_recovery_attempt_nonce'),
+        username='', correlation_id=generate_correlation_id(), idempotency_key='teacher-recovery:save')
+    if pin is None:
+        flash('Recovery progress could not be saved.', 'error')
         return redirect(url_for('admin.recover'))
-
-    recovery_request = get_recovery_request_by_id(recovery_request_id)
-    if not recovery_request or recovery_request.status != 'pending':
-        flash("Invalid or expired recovery request.", "error")
-        return redirect(url_for('admin.recover'))
-
-    # Get entered codes and new username
-    entered_codes = request.form.getlist('recovery_code')
-    entered_codes = [c.strip() for c in entered_codes if c.strip()]
-    new_username = request.form.get('new_username', '').strip()
-
-    if not entered_codes:
-        flash("Please enter at least one recovery code before saving progress.", "error")
-        return redirect(url_for('admin.reset_credentials'))
-
-    # Generate a 6-digit resume PIN using cryptographically secure randomness
-    resume_pin = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
-
-    # Hash the PIN
-    resume_pin_hash = hash_hmac(resume_pin.encode(), b'')
-
-    # Save partial progress
-    save_recovery_progress(
-        recovery_request.id,
-        partial_codes=entered_codes,
-        resume_pin_hash=resume_pin_hash,
-        resume_new_username=new_username,
-    )
-    current_app.logger.info(f"Admin recovery: saved partial progress for request {recovery_request.id}")
-
-    # Show the PIN to the teacher
-    return render_template("admin_recovery_saved.html",
-                         resume_pin=resume_pin,
-                         codes_saved=len(entered_codes),
-                         recovery_request=recovery_request)
+    return render_template('admin_recovery_saved.html', resume_pin=pin, codes_saved=0,
+        recovery_request=get_recovery_request_by_id(request_id))
 
 
 @admin_bp.route('/resume-credentials', methods=['GET', 'POST'])
@@ -3675,23 +3394,15 @@ def resume_credentials():
         flash("Please enter a valid 6-digit resume PIN.", "error")
         return render_template("admin_resume_credentials.html")
 
-    # Find recovery request with matching PIN
-    resume_pin_hash = hash_hmac(resume_pin.encode(), b'')
-
-    recovery_request = find_recovery_request_by_resume_pin(resume_pin_hash, utc_now())
-
-    if not recovery_request:
-        current_app.logger.warning("Admin recovery: invalid resume PIN attempt")
-        flash("Invalid or expired resume PIN. Please check your PIN or start a new recovery.", "error")
-        return render_template("admin_resume_credentials.html")
-
-    # Set session and redirect to reset credentials with saved progress
-    session['recovery_request_id'] = recovery_request.id
-    session['resume_mode'] = True
-
-    current_app.logger.info(f"Admin recovery: resumed progress for request {recovery_request.id}")
-    flash(f"Progress resumed! You have {len(recovery_request.partial_codes or [])} code(s) already saved.", "info")
-    return redirect(url_for('admin.reset_credentials'))
+    from app.feats.teacher_recovery_feat import resume_attempt
+    result = resume_attempt(pin=resume_pin, correlation_id=generate_correlation_id(), idempotency_key='teacher-recovery:resume')
+    if not result:
+        flash('Invalid or expired resume PIN.', 'error')
+        return render_template('admin_resume_credentials.html')
+    session['recovery_request_id'] = result['id']
+    session['teacher_recovery_attempt_nonce'] = result['nonce']
+    session.pop('teacher_recovery_setup_nonce', None)
+    return redirect(url_for('admin.recovery_status'))
 
 
 @admin_bp.route('/setup-recovery', methods=['GET', 'POST'])

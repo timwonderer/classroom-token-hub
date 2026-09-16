@@ -56,8 +56,8 @@ One FEAT transaction validates/locks teacher ownership, class, detached principa
 and Seat; writes only Identity state; clears the binding and claimed_at; increments
 claim_generation; preserves profile names and notes; uses the entered names only to regenerate
 normal seat claim hashes/fingerprint/code; and clears that principal's active context
-when it points at the detached Seat. Cancel unfinished teacher-recovery requests
-whose student confirmation depended on this Seat, and erase its old confirmation.
+when it points at the detached Seat. Revoke this Seat’s outstanding teacher-recovery code without rerolling recipients;
+preserve accepted class confirmation and any remaining selected recipient.
 Delete the old User only if no surviving Seat/class ownership remains. Preserve
 Seat/public_id/class_id, profile, balances, transactions, attendance, items, support
 records, and other Seat-owned facts. Unclaim does not invoke last-student deletion.

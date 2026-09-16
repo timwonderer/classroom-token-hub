@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-SEC-001 | 1.3 | 2026-09-15 | 1.2 | Technical Specification |
+| SPEC-SEC-001 | 1.5 | 2026-09-15 | 1.4 | Technical Specification |
 
 ## I. Purpose
 
@@ -141,3 +141,22 @@ Implementations MUST NOT select or substitute cryptographic algorithms or parame
 ## VIII. Amendment
 
 Revisions require a version increment, updated effective date, explicit derivation from the dependencies in Section IV, reconciliation with affected `DOM-*` and `FEAT-*` contracts, and focused verification of every changed invariant boundary.
+
+
+## Teacher recovery capability encoding
+
+Under DOM-IDEN-003 §IX, confirmation codes are six-digit ASCII numeric values.
+Use HMAC-SHA-256 under PEPPER_KEY over compact UTF-8 JSON
+`["teacher-recovery-code:v2", request_id, class_id, code]`, with integer request_id.
+Rows also require issued_round equal to the attempt submission_round and a live
+code_expires_at (30 minutes from issuance, capped by attempt expiry).
+
+Resume PINs use UTF-8 `teacher-recovery-resume:v1\0` + PIN under HMAC-SHA-256.
+Attempt access nonces have 32 random bytes encoded URL-safe; store SHA-256 of
+UTF-8 `teacher-recovery-attempt:v1\0` + nonce. Setup nonces use the distinct prefix
+`teacher-recovery-setup:v1\0`. Here `\0` denotes one NUL byte. Compare nonce
+verifiers in constant time. No plaintext code is saved for resume. Pending setup
+username and TOTP seed use the approved encryption facility; neither is stored in
+the signed cookie. Receipt responses reveal no code/class validity; only complete
+set validation returns a generic result. Failed rounds invalidate earlier-round
+codes/proofs while preserving recipient selection.

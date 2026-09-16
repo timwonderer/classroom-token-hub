@@ -195,6 +195,10 @@ class InvariantViolation(Exception):
 
 # Canonical FEAT Registry
 FEAT_REGISTRY = {
+    "FEAT-IDEN-103": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Recovery Initiation"},
+    "FEAT-IDEN-104": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Student Confirmation for Teacher Recovery"},
+    "FEAT-IDEN-105": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Recovery Code Validation"},
+    "FEAT-IDEN-106": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Recovery Credential Completion"},
     "FEAT-BYPASS-LEGACY": {"domain": "Test", "blast_radius": "LOW", "desc": "Legacy fixture bypass"},
     "FEAT-LED-000": {"domain": "Ledger", "blast_radius": "HIGH", "desc": "Canonical Monetary Resolution"},
     "FEAT-LED-001": {"domain": "Ledger", "blast_radius": "HIGH", "desc": "Overdraft Fee Application"},
